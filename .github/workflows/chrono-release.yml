@@ -69,9 +69,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_runner"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_runner/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.runner
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -150,9 +158,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_instructions"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_instructions/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.instructions
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -231,9 +247,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_ci"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_ci/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-ci
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -312,9 +336,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_ci"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_ci/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.ci
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -393,9 +425,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_registration"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_registration/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-registration
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -474,9 +514,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_filemap"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_filemap/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-filemap
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -555,9 +603,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_routes"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_routes/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-routes
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -636,9 +692,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_projects"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_projects/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-projects
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -717,9 +781,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_cost"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_cost/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-cost
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -798,9 +870,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_mixed"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_mixed/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-mixed
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -879,9 +959,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_workflow"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_workflow/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-workflow
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -960,9 +1048,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_inputs"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_inputs/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.inputs
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1041,9 +1137,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_distribution"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_distribution/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.distribution
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1122,9 +1226,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_cargo"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cargo' '--unit' 'build_judge_cargo'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_cargo/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.judge-cargo
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1203,9 +1315,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_worktree"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_worktree/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.worktree
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1293,9 +1413,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_distribution_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_distribution_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.distribution-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1399,9 +1527,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_worktree_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_worktree_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.worktree-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1482,9 +1618,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_runner_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_runner_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.runner-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1629,9 +1773,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_inputs_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_inputs_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.inputs-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1723,9 +1875,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_ci_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_ci_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.ci-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1807,9 +1967,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_ci_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_ci_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-ci-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1891,9 +2059,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_registration_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_registration_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-registration-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1980,9 +2156,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_projects_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_projects_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-projects-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2073,9 +2257,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_workflow_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_workflow_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-workflow-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2172,9 +2364,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_cargo_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cargo_tests' '--unit' 'verify_judge_cargo_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_cargo_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-cargo-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2253,9 +2453,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_instructions_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_instructions_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.instructions-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2340,9 +2548,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_filemap_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_filemap_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-filemap-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2421,9 +2637,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_routes_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_routes_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-routes-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2507,9 +2731,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_cost_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_cost_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-cost-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2594,9 +2826,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_mixed_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_mixed_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.judge-mixed-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2903,9 +3143,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_runner"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_runner/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.runner
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2984,9 +3232,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_instructions"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_instructions/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.instructions
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3065,9 +3321,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_ci"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_ci/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-ci
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3146,9 +3410,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_ci"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_ci/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.ci
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3227,9 +3499,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_registration"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_registration/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-registration
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3308,9 +3588,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_filemap"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_filemap/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-filemap
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3389,9 +3677,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_routes"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_routes/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-routes
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3470,9 +3766,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_projects"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_projects/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-projects
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3551,9 +3855,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_cost"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_cost/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-cost
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3632,9 +3944,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_mixed"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_mixed/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-mixed
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3713,9 +4033,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_workflow"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_workflow/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-workflow
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3794,9 +4122,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_inputs"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_inputs/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.inputs
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3875,9 +4211,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_distribution"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_distribution/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.distribution
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3956,9 +4300,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_cargo"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cargo' '--unit' 'build_judge_cargo'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_cargo/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.judge-cargo
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4037,9 +4389,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_worktree"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_worktree/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.worktree
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4127,9 +4487,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_distribution_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_distribution_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.distribution-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4233,9 +4601,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_worktree_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_worktree_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.worktree-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4316,9 +4692,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_runner_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_runner_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.runner-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4463,9 +4847,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_inputs_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_inputs_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.inputs-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4557,9 +4949,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_ci_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_ci_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.ci-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4641,9 +5041,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_ci_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_ci_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-ci-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4725,9 +5133,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_registration_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_registration_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-registration-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4814,9 +5230,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_projects_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_projects_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-projects-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4907,9 +5331,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_workflow_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_workflow_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-workflow-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5006,9 +5438,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_cargo_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cargo_tests' '--unit' 'verify_judge_cargo_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_cargo_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-cargo-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5087,9 +5527,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_instructions_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_instructions_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.instructions-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5174,9 +5622,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_filemap_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_filemap_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-filemap-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5255,9 +5711,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_routes_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_routes_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-routes-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5341,9 +5805,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_cost_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_cost_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-cost-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5428,9 +5900,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_mixed_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_mixed_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.judge-mixed-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6079,9 +6559,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_diagnostics_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_diagnostics_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.diagnostics-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6160,9 +6648,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_diagnostics_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_diagnostics_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.diagnostics-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6329,9 +6825,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_cache"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_cache/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.release.cache
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6412,9 +6916,17 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_cache_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_cache_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.linux.verify.cache-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6493,9 +7005,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_cache"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_cache/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.release.cache
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6576,9 +7096,17 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_cache_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_cache_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache release.macos.verify.cache-tests
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:

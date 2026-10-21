@@ -6029,6 +6029,38 @@
           "to": "test:judge-projects-migration"
         }
       ]
+    },
+    {
+      "path": "crates/cache/src/content.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache/src/acceptance.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
     }
   ],
   "project_edges": [

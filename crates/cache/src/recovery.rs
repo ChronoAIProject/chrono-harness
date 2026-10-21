@@ -148,7 +148,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         for (index, (id, cache)) in caches.into_iter().enumerate() {
             let restore = &steps[format!("cache_{index}_restore")];
             let reason = super::report::restore_status(cache, restore);
-            let discard = match restore["outcome"].as_str() {
+            let mut discard = match restore["outcome"].as_str() {
                 Some("failure") => true,
                 Some("success") if config.recover_unconfirmed_restores => {
                     let outputs = &restore["outputs"];
@@ -171,6 +171,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 }
             };
             report["caches"][id] = json!({"restore":restore,"reason":reason,"status":if discard {"pending"} else {"not-required"},"artifacts":[]});
+            if cache["content_verification"] == super::content::METHOD
+                && matches!(reason, "exact" | "compatible")
+            {
+                let verification = super::content::verify(
+                    &root,
+                    &directory,
+                    id,
+                    cache,
+                    restore["outputs"]["cache-matched-key"].as_str().unwrap(),
+                )?;
+                discard = verification["status"] != "matched";
+                report["caches"][id]["verification"] = verification;
+                if discard {
+                    report["caches"][id]["status"] = json!("pending");
+                }
+            }
             if !discard {
                 continue;
             }

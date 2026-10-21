@@ -35,6 +35,9 @@ pub struct Consumer {
     pub save_after_bootstrap: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence_directory: Option<String>,
+    /// A named, explicitly registered pre-save native acceptance fixture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acceptance_fixture: Option<String>,
 }
 
 fn name(s: &str) -> bool {
@@ -62,6 +65,13 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
     let mut saving_jobs = BTreeMap::new();
     for (job, consumer) in &c.jobs {
         let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
+        if consumer.acceptance_fixture.as_ref().is_some_and(|id| {
+            !name(id) || saves.is_empty() || !consumer.save_after_bootstrap.is_empty()
+        }) {
+            return Err(format!(
+                "E_CACHE_ACCEPTANCE: invalid fixture consumer {job}"
+            ));
+        }
         if let Some(directory) = &consumer.evidence_directory {
             relative_path(directory.trim_end_matches('/'))?;
             if ![".chrono-harness/state/", ".chrono-harness/cache/"]
@@ -134,6 +144,39 @@ pub(crate) fn validate_registry(root: &Path, c: Option<&Config>) -> Result<(), S
         .as_object()
         .ok_or("persistent cache registry needs caches")?;
     for consumer in c.jobs.values() {
+        if let Some(id) = &consumer.acceptance_fixture {
+            let fixture = &registry["acceptance_fixtures"][id];
+            let ids = fixture["caches"]
+                .as_array()
+                .ok_or_else(|| format!("E_CACHE_ACCEPTANCE: undeclared fixture {id}"))?;
+            let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
+            if fixture["method"] != "remove-producer-manifest/v1"
+                || fixture["consumer"] != consumer.consumer
+                || ids.is_empty()
+                || registry["recover_failed_restores"] != true
+                || registry["schema"] != "chrono-cache/v2"
+                || ids.iter().map(Value::as_str).collect::<BTreeSet<_>>().len() != ids.len()
+                || ids.iter().any(|id| {
+                    id.as_str().is_none_or(|id| {
+                        !saves.iter().any(|s| s == id)
+                            || caches.get(id).is_none_or(|c| {
+                                c["verify_contents"] != true
+                                    || c["artifacts"].as_array().is_none_or(|artifacts| {
+                                        artifacts.iter().any(|a| {
+                                            a.as_str().is_none_or(|a| {
+                                                registry["artifacts"][a]["external"] != false
+                                            })
+                                        })
+                                    })
+                            })
+                    })
+                })
+            {
+                return Err(format!(
+                    "E_CACHE_ACCEPTANCE: fixture {id} differs from saving consumer"
+                ));
+            }
+        }
         let selected = caches
             .iter()
             .filter(|(_, c)| {
@@ -221,7 +264,12 @@ pub(crate) fn project(
         } else {
             work_id
         };
-        suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {step}_save\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.{producer_step}.outcome == 'success' && steps.{step}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
+        let fixture_guard = if consumer.acceptance_fixture.is_some() {
+            " && (vars.CHRONO_CACHE_ACCEPTANCE == '' || steps.chrono_cache_acceptance.outcome == 'success')"
+        } else {
+            ""
+        };
+        suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {step}_save\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.{producer_step}.outcome == 'success' && steps.{step}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key && (steps.chrono_cache_plan.outputs.{key}_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.{key}_sealed == 'true'){fixture_guard} }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
     }
     prefix.push_str(&format!("      - name: Recover failed cache restores\n        if: ${{{{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_RESTORE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} recover --host-root . --config {} --plan {} --steps-env CHRONO_CACHE_RESTORE_STEPS\n", shell(&c.program), shell(&c.config), shell(&plan_path)));
     let bootstrap_arg = if consumer.save_after_bootstrap.is_empty() {
@@ -239,6 +287,25 @@ pub(crate) fn project(
             )
         })
         .unwrap_or_default();
+    let bootstrap_seal_arg = if consumer.save_after_bootstrap.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " --bootstrap {bootstrap_id} --save-after-bootstrap {}",
+            shell(&serde_json::to_string(&consumer.save_after_bootstrap).unwrap())
+        )
+    };
+    let mut seal = format!(
+        "      - name: Seal producer cache contents\n        id: chrono_cache_seal\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_PRODUCER_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} seal --host-root . --config {} --plan {} --steps-env CHRONO_CACHE_PRODUCER_STEPS --work {}{bootstrap_seal_arg}{saves_arg} --github-output \"$GITHUB_OUTPUT\"\n",
+        shell(&c.program),
+        shell(&c.config),
+        shell(&plan_path),
+        shell(work_id)
+    );
+    if let Some(fixture) = &consumer.acceptance_fixture {
+        seal.push_str(&format!("      - name: Apply selected native cache acceptance fixture\n        id: chrono_cache_acceptance\n        if: ${{{{ success() && vars.CHRONO_CACHE_ACCEPTANCE != '' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_ACCEPTANCE: ${{{{ vars.CHRONO_CACHE_ACCEPTANCE }}}}\n          CHRONO_CACHE_ACCEPTANCE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} acceptance-fixture --host-root . --config {} --plan {} --fixture {} --steps-env CHRONO_CACHE_ACCEPTANCE_STEPS --work {}\n", shell(&c.program), shell(&c.config), shell(&plan_path), shell(fixture), shell(work_id)));
+    }
+    suffix.insert_str(0, &seal);
     suffix.push_str(&format!("      - name: Record original cache transport observations\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_STEPS: ${{{{ toJSON(steps) }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {} report --host-root . --plan {} --report-directory {} --steps-env CHRONO_CACHE_STEPS --work {}{bootstrap_arg}{saves_arg}\n", shell(&c.program), shell(&plan_path), shell(&evidence_directory), shell(work_id)));
     let marker = format!("      - name: {before}\n");
     let work_marker = format!("      - name: {work}\n");
