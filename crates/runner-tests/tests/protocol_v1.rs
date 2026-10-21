@@ -774,15 +774,22 @@ fn prelaunch_diagnostics_retain_native_causes_and_unstarted_context() {
             _ => unreachable!(),
         }
         let (status, rows) = chrono_harness::full::execute(
-            &request, std::slice::from_ref(&binding), &Default::default(),
-            FIXTURE_TIMEOUT_SECONDS, 8192,
-        ).unwrap();
+            &request,
+            std::slice::from_ref(&binding),
+            &Default::default(),
+            FIXTURE_TIMEOUT_SECONDS,
+            8192,
+        )
+        .unwrap();
         assert_eq!(status, wire::Status::Error);
         assert_eq!(rows[0]["state"], "error");
         assert!(rows[0]["process"].is_null());
         assert!(rows[0]["exit_code"].is_null());
         let diagnostic = &rows[0]["transport_diagnostic"];
-        assert_eq!(diagnostic["schema"], "chrono-runner-transport-failure/v1", "{case}: {rows:#?}");
+        assert_eq!(
+            diagnostic["schema"], "chrono-runner-transport-failure/v1",
+            "{case}: {rows:#?}"
+        );
         assert_eq!(diagnostic["error"]["schema"], "chrono-error/v1");
         let error = &diagnostic["error"]["error"];
         assert_eq!(error["context"]["request_id"], rows[0]["request_id"]);
@@ -790,20 +797,203 @@ fn prelaunch_diagnostics_retain_native_causes_and_unstarted_context() {
         assert_eq!(error["context"]["operation"], "judge.invoke");
         assert_eq!(error["context"]["operation_started"], false);
         let cause = &error["source"];
-        assert_eq!(cause["code"], match case {
-            "missing" => "E_PROCESS_EXECUTABLE_READ",
-            "permission" => "E_PROCESS_SPAWN",
-            _ => "E_PROCESS_EXECUTABLE_DIGEST",
-        });
+        assert_eq!(
+            cause["code"],
+            match case {
+                "missing" => "E_PROCESS_EXECUTABLE_READ",
+                "permission" => "E_PROCESS_SPAWN",
+                _ => "E_PROCESS_EXECUTABLE_DIGEST",
+            }
+        );
         if case == "digest" {
             assert!(cause["source"].is_null());
         } else {
             assert_eq!(cause["source"]["source"]["type"], "std::io::Error");
-            assert_eq!(cause["source"]["source"]["native_code"], if case == "missing" {libc::ENOENT} else {libc::EACCES});
+            assert_eq!(
+                cause["source"]["source"]["native_code"],
+                if case == "missing" {
+                    libc::ENOENT
+                } else {
+                    libc::EACCES
+                }
+            );
+        }
+        let failure = wire::invoke_detailed(
+            &request,
+            &binding,
+            &Default::default(),
+            FIXTURE_TIMEOUT_SECONDS,
+            8192,
+        )
+        .unwrap_err();
+        let mut source: &dyn std::error::Error = &failure;
+        let mut native = None;
+        while let Some(next) = source.source() {
+            source = next;
+            if let Some(io) = source.downcast_ref::<std::io::Error>() {
+                native = io.raw_os_error();
+            }
+        }
+        assert_eq!(
+            native,
+            match case {
+                "missing" => Some(libc::ENOENT),
+                "permission" => Some(libc::EACCES),
+                _ => None,
+            }
+        );
+        for (pointer, changed) in [
+            ("/schema", value!("chrono-runner-transport-failure/v2")),
+            ("/error/error/context/judge_id", value!("other")),
+            ("/error/error/context/operation_started", value!(true)),
+            ("/error/schema", value!("chrono-error/v2")),
+        ] {
+            let mut bad = rows.clone();
+            *bad[0]["transport_diagnostic"].pointer_mut(pointer).unwrap() = changed;
+            assert!(
+                chrono_harness::full::validate_execution(
+                    &request,
+                    std::slice::from_ref(&binding),
+                    &status,
+                    &bad
+                )
+                .is_err(),
+                "{pointer}"
+            );
         }
         chrono_harness::full::validate_execution(&request, &[binding], &status, &rows).unwrap();
         assert!(!dir.path().join("must-not-run").exists());
     }
+}
+
+#[test]
+fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
+    use std::process::Command;
+    for case in ["missing", "digest", "healthy"] {
+        let (dir, _, mut binding) = fixture(value!({}));
+        let root = dir.path();
+        let git = |args: &[&str]| {
+            let output = Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args([
+                    "-c",
+                    "user.name=Fixture",
+                    "-c",
+                    "user.email=fixture@example.invalid",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                ])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:?}");
+            String::from_utf8(output.stdout).unwrap().trim().to_string()
+        };
+        fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
+        fs::write(root.join(".gitignore"), ".chrono-harness/state/\n").unwrap();
+        if case == "missing" {
+            binding.executable = "unstarted-judge".into();
+        }
+        if case == "digest" {
+            binding.sha256 = Some("0".repeat(64));
+        }
+        let mut blocked = binding.clone();
+        blocked.id = "dependent".into();
+        blocked.after = vec![binding.id.clone()];
+        for (name, bytes) in [
+            (
+                "config",
+                value!({"schema_version":2,"registries":{"judges":".chrono-harness/judges.json","projects":".chrono-harness/projects.json","filemap":".chrono-harness/filemap.json","workflow":".chrono-harness/workflow.json"},"environment":{"inherit":[],"values":{}},"protocol":{"id":"chrono-judge/v1","encoding":"UTF-8","timeout_seconds":30,"stdout_limit_bytes":16384},"artifacts":[{"path":".chrono-harness/state/"}]}),
+            ),
+            ("judges", value!({"judges":[binding,blocked]})),
+            ("projects", value!({})),
+            ("filemap", value!({})),
+            ("workflow", value!({})),
+        ] {
+            fs::write(
+                root.join(format!(".chrono-harness/{name}.json")),
+                serde_json::to_vec(&bytes).unwrap(),
+            )
+            .unwrap();
+        }
+        fs::write(root.join(".chrono-harness/state/context.json"), b"{}").unwrap();
+        git(&["init", "-q"]);
+        git(&["add", "."]);
+        git(&["commit", "-qm", "base"]);
+        let base = git(&["rev-parse", "HEAD"]);
+        git(&["commit", "--allow-empty", "-qm", "candidate"]);
+        let candidate = git(&["rev-parse", "HEAD"]);
+        let (exit, text) = chrono_harness::full::check(
+            root,
+            ".chrono-harness/config.json",
+            &base,
+            &candidate,
+            std::path::Path::new(".chrono-harness/state/context.json"),
+        )
+        .unwrap();
+        assert_eq!(exit, if case == "healthy" { 0 } else { 2 }, "{text}");
+        let report: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join(report["report_path"].as_str().unwrap())).unwrap(),
+            text
+        );
+        assert_eq!(
+            fs::read_to_string(root.join(".chrono-harness/state/report.json")).unwrap(),
+            text
+        );
+        let judge = &report["judges"][0];
+        if case == "healthy" {
+            assert!(judge.get("transport_diagnostic").is_none());
+            let process = chrono_harness::full::expand_process(&judge["process"]).unwrap();
+            assert_eq!(process["stdin_sha256"], judge["request_digest"]);
+            assert_eq!(process["exit_code"], 0);
+        } else {
+            assert_eq!(
+                judge["transport_diagnostic"]["error"]["error"]["context"]["request_id"],
+                judge["request_id"]
+            );
+            assert_eq!(
+                judge["transport_diagnostic"]["error"]["error"]["context"]["operation_started"],
+                false
+            );
+            assert_eq!(report["judges"][1]["state"], "blocked");
+            assert!(report["judges"][1].get("process").is_none());
+        }
+    }
+}
+
+#[test]
+fn prelaunch_diagnostics_keep_executed_originals_and_strict_judge_v1() {
+    let (_dir, request, binding) = fixture(
+        value!({"kind":"raw","consume_request":true,"stdout":[255,0,10],"stderr":[254,0,10],"exit":17}),
+    );
+    let (status, rows) = chrono_harness::full::execute(
+        &request,
+        std::slice::from_ref(&binding),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    let row = &rows[0];
+    assert_eq!(row["state"], "executed");
+    assert_eq!(row["exit_code"], 17);
+    assert_eq!(row["process"]["stdout_bytes"], value!([255, 0, 10]));
+    assert_eq!(row["process"]["stderr_bytes"], value!([254, 0, 10]));
+    assert_eq!(
+        row["transport_diagnostic"]["error"]["error"]["context"]["operation_started"],
+        true
+    );
+    chrono_harness::full::validate_execution(&request, &[binding], &status, &rows).unwrap();
+    let mut response = value!(request.response(wire::Status::Pass));
+    response["transport_diagnostic"] = row["transport_diagnostic"].clone();
+    assert!(
+        serde_json::from_value::<wire::Response>(response).is_err(),
+        "the report extension must not widen strict judge-v1"
+    );
 }
 
 #[test]
@@ -1420,6 +1610,35 @@ fn retained_stream_publication_failure_preserves_bytes_after_partial_write() {
     for source in ["stdout original:", "stderr original:"] {
         assert!(failure.contains(source), "{failure}");
     }
+    let record = result.failure_record.as_ref().unwrap();
+    assert_eq!(record.error.code, "E_PROCESS_EVIDENCE");
+    assert_eq!(
+        record
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .native_code,
+        Some(libc::EFBIG.into())
+    );
+    assert_eq!(record.error.related.len(), 1);
+    assert_eq!(record.error.related[0].role, "process_evidence");
+    assert_eq!(record.error.related[0].error.context["stream"], "stderr");
+    assert_eq!(
+        record.error.related[0]
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .native_code,
+        Some(libc::EFBIG.into())
+    );
     assert!(chrono_harness::observation::process_success(&result).is_err());
     assert_eq!(
         fs::read(dir.path().join("original.stdout")).unwrap(),

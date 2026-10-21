@@ -1,5 +1,6 @@
 //! Unix runner-owned launch tree. Anonymous inherited descriptors carry ownership,
 //! never argv/environment policy. Each launcher reaps its own children on cancellation.
+use crate::ProcessFailure;
 use std::{
     collections::BTreeMap,
     fs::File,
@@ -247,8 +248,9 @@ impl Tree {
     fn slots(&self) -> &[Slot; CAPACITY] {
         unsafe { &self.memory.as_ref().slots }
     }
-    fn map(file: File, registration: File) -> Result<Arc<Self>, String> {
-        if file.metadata().map_err(|e| e.to_string())?.len() != std::mem::size_of::<Shared>() as u64
+    fn map(file: File, registration: File) -> Result<Arc<Self>, ProcessFailure> {
+        if file.metadata().map_err(ProcessFailure::from)?.len()
+            != std::mem::size_of::<Shared>() as u64
         {
             return Err("process ownership descriptor size mismatch".into());
         }
@@ -263,9 +265,11 @@ impl Tree {
             )
         };
         if p == libc::MAP_FAILED {
-            return Err(format!(
-                "process ownership map: {}",
-                std::io::Error::last_os_error()
+            let error = std::io::Error::last_os_error();
+            return Err(ProcessFailure::native(
+                "E_PROCESS_OWNERSHIP_MAP",
+                format!("process ownership map: {error}"),
+                error,
             ));
         }
         Ok(Arc::new(Self {
@@ -275,12 +279,12 @@ impl Tree {
             observer: None,
         }))
     }
-    fn create() -> Result<Arc<Self>, String> {
-        let file = high_descriptor(tempfile::tempfile().map_err(|e| e.to_string())?)?;
+    fn create() -> Result<Arc<Self>, ProcessFailure> {
+        let file = high_descriptor(tempfile::tempfile().map_err(ProcessFailure::from)?)?;
         file.set_len(std::mem::size_of::<Shared>() as u64)
-            .map_err(|e| e.to_string())?;
+            .map_err(ProcessFailure::from)?;
         let (sender, receiver) =
-            std::os::unix::net::UnixDatagram::pair().map_err(|e| e.to_string())?;
+            std::os::unix::net::UnixDatagram::pair().map_err(ProcessFailure::from)?;
         let mut tree = Self::map(
             file,
             high_descriptor(File::from(std::os::fd::OwnedFd::from(sender)))?,
@@ -340,46 +344,56 @@ fn descendant(slots: &[Slot; CAPACITY], mut index: usize, ancestor: usize) -> bo
     false
 }
 
-fn high_descriptor(file: File) -> Result<File, String> {
+fn high_descriptor(file: File) -> Result<File, ProcessFailure> {
     let fd = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };
     if fd < 0 {
-        return Err(std::io::Error::last_os_error().to_string());
+        return Err(std::io::Error::last_os_error().into());
     }
     Ok(unsafe { File::from_raw_fd(fd) })
 }
-fn inherited() -> Result<Option<(Arc<Tree>, usize, usize)>, String> {
-    static INHERITED: OnceLock<Result<Option<(Arc<Tree>, usize, usize)>, String>> = OnceLock::new();
+fn inherited() -> Result<Option<(Arc<Tree>, usize, usize)>, ProcessFailure> {
+    static INHERITED: OnceLock<Result<Option<(Arc<Tree>, usize, usize)>, Arc<ProcessFailure>>> =
+        OnceLock::new();
     INHERITED
         .get_or_init(|| {
-            let mut magic = 0u64;
-            let n = unsafe { libc::pread(TREE_FD, (&mut magic as *mut u64).cast(), 8, 0) };
-            if n < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EBADF) {
-                return Ok(None);
-            }
-            if n != 8 || magic != MAGIC {
-                return Err("process ownership descriptor collision".into());
-            }
-            let mut context = [CAPACITY as u64, 0];
-            if unsafe { libc::pread(CONTEXT_FD, context.as_mut_ptr().cast(), 16, 0) } != 16
-                || context[0] >= CAPACITY as u64
-            {
-                return Err("process ownership context missing".into());
-            }
-            let fd = unsafe { libc::fcntl(TREE_FD, libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };
-            if fd < 0 {
-                return Err(std::io::Error::last_os_error().to_string());
-            }
-            let observer_fd =
-                unsafe { libc::fcntl(OBSERVER_FD, libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };
-            if observer_fd < 0 {
-                return Err("process ownership exit observer missing".into());
-            }
-            let tree = Tree::map(unsafe { File::from_raw_fd(fd) }, unsafe {
-                File::from_raw_fd(observer_fd)
-            })?;
-            Ok(Some((tree, context[0] as usize, context[1] as usize)))
+            (|| -> Result<_, ProcessFailure> {
+                let mut magic = 0u64;
+                let n = unsafe { libc::pread(TREE_FD, (&mut magic as *mut u64).cast(), 8, 0) };
+                if n < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EBADF) {
+                    return Ok(None);
+                }
+                if n != 8 || magic != MAGIC {
+                    return Err("process ownership descriptor collision".into());
+                }
+                let mut context = [CAPACITY as u64, 0];
+                if unsafe { libc::pread(CONTEXT_FD, context.as_mut_ptr().cast(), 16, 0) } != 16
+                    || context[0] >= CAPACITY as u64
+                {
+                    return Err("process ownership context missing".into());
+                }
+                let fd = unsafe { libc::fcntl(TREE_FD, libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };
+                if fd < 0 {
+                    return Err(std::io::Error::last_os_error().into());
+                }
+                let observer_fd =
+                    unsafe { libc::fcntl(OBSERVER_FD, libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };
+                if observer_fd < 0 {
+                    let error = std::io::Error::last_os_error();
+                    return Err(ProcessFailure::native(
+                        "E_PROCESS_OWNERSHIP_OBSERVER",
+                        "process ownership exit observer missing",
+                        error,
+                    ));
+                }
+                let tree = Tree::map(unsafe { File::from_raw_fd(fd) }, unsafe {
+                    File::from_raw_fd(observer_fd)
+                })?;
+                Ok(Some((tree, context[0] as usize, context[1] as usize)))
+            })()
+            .map_err(Arc::new)
         })
         .clone()
+        .map_err(ProcessFailure::shared)
 }
 pub(crate) struct Launch {
     tree: Arc<Tree>,
@@ -403,7 +417,7 @@ impl Drop for Launch {
     }
 }
 impl Launch {
-    pub(crate) fn prepare() -> Result<Self, String> {
+    pub(crate) fn prepare() -> Result<Self, ProcessFailure> {
         let (tree, parent, parent_generation) = match inherited()? {
             Some(v) => v,
             None => (Tree::create()?, CAPACITY, 0),
@@ -416,9 +430,9 @@ impl Launch {
         }
         // Acquire fallible resources before publishing a reservation. A failed
         // descriptor allocation has no launched child and must not strand a slot.
-        let context = high_descriptor(tempfile::tempfile().map_err(|e| e.to_string())?)?;
+        let context = high_descriptor(tempfile::tempfile().map_err(ProcessFailure::from)?)?;
         let (acknowledgement, acknowledgement_sender) =
-            std::os::unix::net::UnixStream::pair().map_err(|e| e.to_string())?;
+            std::os::unix::net::UnixStream::pair().map_err(ProcessFailure::from)?;
         let acknowledgement =
             high_descriptor(File::from(std::os::fd::OwnedFd::from(acknowledgement)))?;
         let acknowledgement_sender = high_descriptor(File::from(std::os::fd::OwnedFd::from(
@@ -458,7 +472,7 @@ impl Launch {
         launch
             .context
             .write_all_at(&(index as u64).to_ne_bytes(), 0)
-            .map_err(|e| e.to_string())?;
+            .map_err(ProcessFailure::from)?;
         launch
             .context
             .write_all_at(
@@ -468,7 +482,7 @@ impl Launch {
                     .to_ne_bytes(),
                 8,
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(ProcessFailure::from)?;
         if launch.cancelled()
             || (parent != CAPACITY
                 && launch.tree.slots()[parent]
@@ -575,6 +589,39 @@ impl Launch {
                 std::io::Error::from_raw_os_error(errno)
             )
         }
+    }
+    /// The parent records raw observations separately from the spawn cause.
+    /// Shared receive counters cannot establish attribution to this child.
+    pub(crate) fn spawn_observation(&self) -> serde_json::Value {
+        use std::os::unix::fs::FileExt;
+        let now = ReceiveSnapshot::read(self.tree.memory());
+        let mut bytes = [0u8; 12];
+        let pre_exec = match self.context.read_exact_at(&mut bytes, 16) {
+            Ok(()) => {
+                let [stage, reason, errno] = std::array::from_fn(|i| {
+                    i32::from_ne_bytes(bytes[i * 4..i * 4 + 4].try_into().unwrap())
+                });
+                serde_json::json!({"stage":stage,"reason":reason,"errno":errno})
+            }
+            Err(error) => serde_json::json!({
+                "unavailable": chrono_diagnostics::error::Failure::wrap(
+                    "E_PROCESS_OWNERSHIP_DIAGNOSTIC_READ", "pre-exec diagnostic unavailable",
+                    chrono_diagnostics::error::NativeIoError::new(error),
+                ).record()
+            }),
+        };
+        serde_json::json!({
+            "pre_exec": pre_exec,
+            "observer": {
+                "attributed_to_child": false,
+                "receive_errors_before": self.receive_before.errors >> 32,
+                "receive_errors_after": now.errors >> 32,
+                "last_receive_errno": if now.errors != self.receive_before.errors { Some(now.errors as i32) } else { None },
+                "incomplete_handoffs_before": self.receive_before.incomplete >> 32,
+                "incomplete_handoffs_after": now.incomplete >> 32,
+                "last_msg_flags": if now.incomplete != self.receive_before.incomplete { Some(now.incomplete as i32) } else { None },
+            }
+        })
     }
     pub(crate) fn cancelled(&self) -> bool {
         self.tree.cancelled(self.index)
@@ -693,7 +740,7 @@ impl ExitObserver {
             let _ = thread.join();
         }
     }
-    fn start(receiver: File, memory: usize) -> Result<Self, String> {
+    fn start(receiver: File, memory: usize) -> Result<Self, ProcessFailure> {
         let flags = unsafe { libc::fcntl(receiver.as_raw_fd(), libc::F_GETFL) };
         if flags < 0
             || unsafe {
@@ -704,7 +751,7 @@ impl ExitObserver {
                 )
             } < 0
         {
-            return Err(std::io::Error::last_os_error().to_string());
+            return Err(std::io::Error::last_os_error().into());
         }
         let mut identities = ExitIdentities::new()?;
         let stop = Arc::new(AtomicBool::new(false));
@@ -839,7 +886,7 @@ impl ExitObserver {
                     identities.wait(receiver.as_raw_fd());
                 }
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(ProcessFailure::from)?;
         Ok(Self {
             stop,
             thread: Some(thread),
@@ -963,7 +1010,7 @@ fn register_exit(
 struct ExitIdentities(Vec<(File, usize)>);
 #[cfg(target_os = "macos")]
 impl ExitIdentities {
-    fn new() -> Result<Self, String> {
+    fn new() -> Result<Self, ProcessFailure> {
         Ok(Self(Vec::new()))
     }
     fn register(&mut self, pid: i32, launcher: i32, cookie: usize) -> std::io::Result<()> {
@@ -1065,7 +1112,7 @@ impl ExitIdentities {
 }
 #[cfg(target_os = "linux")]
 impl ExitIdentities {
-    fn new() -> Result<Self, String> {
+    fn new() -> Result<Self, ProcessFailure> {
         Ok(Self(Vec::new()))
     }
     fn register(&mut self, pid: i32, launcher: i32, cookie: usize) -> std::io::Result<()> {

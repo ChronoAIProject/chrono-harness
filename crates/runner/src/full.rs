@@ -601,7 +601,8 @@ pub fn execute(
             Err(e) => {
                 status = Status::Error;
                 let exit = e.process.as_ref().map(|p| p.exit_code);
-                records.push(value!({"id":b.id,"binding":b,"state":if e.process.is_some(){"executed"}else{"error"},"request_id":req.request().request_id,"transport_failure":e.message,"exit_code":exit,"process":e.process}));
+                let diagnostic = e.diagnostic();
+                records.push(value!({"id":b.id,"binding":b,"state":if e.process.is_some(){"executed"}else{"error"},"request_id":req.request().request_id,"transport_failure":e.message,"transport_diagnostic":diagnostic,"exit_code":exit,"process":e.process}));
             }
         }
     }
@@ -663,6 +664,33 @@ pub fn validate_execution(
         let state = record["state"]
             .as_str()
             .ok_or_else(|| format!("E_SELF_DIAGNOSTIC: record {id} has no string state"))?;
+        if let Some(diagnostic) = record.get("transport_diagnostic") {
+            let diagnostic: wire::TransportDiagnostic = serde_json::from_value(diagnostic.clone())
+                .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} transport diagnostic: {e}"))?;
+            let error = &diagnostic.error.error;
+            if error.message != record["transport_failure"].as_str().unwrap_or_default()
+                || error.context.get("request_id") != record.get("request_id")
+                || error.context.get("judge_id") != Some(&value!(id))
+                || error.context.get("operation") != Some(&value!("judge.invoke"))
+                || error.context.get("operation_started") != Some(&value!(state == "executed"))
+                || !matches!(state, "executed" | "error")
+            {
+                return Err(format!(
+                    "E_SELF_DIAGNOSTIC: record {id} transport diagnostic context differs from invocation"
+                ));
+            }
+            if let Some(process_error) = record["process"].get("failure_record") {
+                let expected: chrono_diagnostics::error::ErrorRecord =
+                    serde_json::from_value(process_error.clone()).map_err(|e| {
+                        format!("E_SELF_DIAGNOSTIC: record {id} process failure record: {e}")
+                    })?;
+                if error.source.as_deref() != Some(&expected.error) {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} transport cause differs from process evidence"
+                    ));
+                }
+            }
+        }
         match state {
             "executed" => {
                 let process = record.get("process").ok_or_else(|| {
