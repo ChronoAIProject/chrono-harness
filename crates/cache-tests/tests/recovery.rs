@@ -813,11 +813,11 @@ fn acceptance_host() -> (Host, Value, Value) {
     );
     let activation = json!({"schema":"chrono-cache-acceptance/v1","fixture":"native-unusable",
         "consumer":"check.one","keys":{"project":prepared["caches"]["project"]["key"]},
-        "git_ref":"refs/pull/1/merge","run_id":"1234","run_attempt":"2","source_commit":"1234567890123456789012345678901234567890"});
+        "git_ref":"refs/pull/1/merge","run_id":"1234","run_attempt":"2","source_commit":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"});
     (root, activation, prepared)
 }
 
-fn acceptance(root: &Path, activation: Option<&Value>, steps: &Value) -> std::process::Output {
+fn acceptance_command(root: &Path, activation: Option<&Value>, steps: &Value) -> Command {
     let mut command = Command::new(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"),
     );
@@ -842,6 +842,7 @@ fn acceptance(root: &Path, activation: Option<&Value>, steps: &Value) -> std::pr
         .env("GITHUB_RUN_ATTEMPT", "2")
         .env("GITHUB_REF", "refs/pull/1/merge")
         .env("GITHUB_SHA", "1234567890123456789012345678901234567890")
+        .env("CHRONO_CACHE_SOURCE_COMMIT", "abcdefabcdefabcdefabcdefabcdefabcdefabcd")
         .env_remove("CHRONO_CACHE_ACCEPTANCE");
     if let Some(activation) = activation {
         command.env(
@@ -849,7 +850,34 @@ fn acceptance(root: &Path, activation: Option<&Value>, steps: &Value) -> std::pr
             serde_json::to_string(activation).unwrap(),
         );
     }
-    command.output().unwrap()
+    command
+}
+
+fn acceptance(root: &Path, activation: Option<&Value>, steps: &Value) -> std::process::Output {
+    acceptance_command(root, activation, steps).output().unwrap()
+}
+
+#[test]
+fn native_acceptance_binds_checkout_head_separately_from_event_merge_sha() {
+    let (root, activation, _) = acceptance_host();
+    let marker = root.path().join("out/project/.chrono-cache-content-v1.json");
+    let preimage = fs::read(&marker).unwrap();
+    let steps = json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"success"}});
+    let missing = acceptance_command(root.path(), Some(&activation), &steps)
+        .env_remove("CHRONO_CACHE_SOURCE_COMMIT").output().unwrap();
+    assert!(!missing.status.success());
+    for source in ["", "invalid", "1234567890123456789012345678901234567890"] {
+        let wrong = acceptance_command(root.path(), Some(&activation), &steps)
+            .env("CHRONO_CACHE_SOURCE_COMMIT", source).output().unwrap();
+        assert!(!wrong.status.success());
+        assert_eq!(fs::read(&marker).unwrap(), preimage);
+    }
+    let applied = acceptance(root.path(), Some(&activation), &steps);
+    assert!(applied.status.success(), "{}", String::from_utf8_lossy(&applied.stderr));
+    let result: Value = serde_json::from_slice(&applied.stdout).unwrap();
+    assert_eq!(result["observation"]["native"]["GITHUB_SHA"], "1234567890123456789012345678901234567890");
+    assert_eq!(result["observation"]["native"]["CHRONO_CACHE_SOURCE_COMMIT"], activation["source_commit"]);
+    assert!(!marker.exists());
 }
 
 #[test]
@@ -1077,7 +1105,7 @@ fn native_acceptance_preflights_both_scopes_and_can_select_one_or_both() {
             keys.insert((*id).into(), prepared["caches"][id]["key"].clone());
         }
         let activation = json!({"schema":"chrono-cache-acceptance/v1","fixture":"native-unusable",
-            "consumer":"check.one","keys":keys,"git_ref":"refs/pull/1/merge","run_id":"1234","run_attempt":"2","source_commit":"1234567890123456789012345678901234567890"});
+            "consumer":"check.one","keys":keys,"git_ref":"refs/pull/1/merge","run_id":"1234","run_attempt":"2","source_commit":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"});
         let steps = json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"success"}});
         let marker = root
             .path()

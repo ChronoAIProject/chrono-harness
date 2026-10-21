@@ -557,17 +557,28 @@ fn selected_native_acceptance_runs_between_seal_and_save_and_preserves_other_con
     assert!(position("chrono_cache_seal") < position("chrono_cache_acceptance"));
     for id in ["cache_0_save", "cache_1_save"] {
         assert!(position("chrono_cache_acceptance") < position(id));
-        assert!(steps[position(id)]["if"].as_str().unwrap().contains("vars.CHRONO_CACHE_ACCEPTANCE == '' || steps.chrono_cache_acceptance.outcome == 'success'"));
+        assert!(steps[position(id)]["if"].as_str().unwrap().contains("vars[format('CHRONO_CACHE_ACCEPTANCE_{0}_{1}', github.run_id, github.run_attempt)] == '' || steps.chrono_cache_acceptance.outcome == 'success'"));
     }
     let fixture = &steps[position("chrono_cache_acceptance")];
     assert_eq!(
         fixture["if"],
-        "${{ success() && vars.CHRONO_CACHE_ACCEPTANCE != '' }}"
+        "${{ success() && vars[format('CHRONO_CACHE_ACCEPTANCE_{0}_{1}', github.run_id, github.run_attempt)] != '' }}"
     );
     assert_eq!(
         fixture["env"]["CHRONO_CACHE_ACCEPTANCE"],
-        "${{ vars.CHRONO_CACHE_ACCEPTANCE }}"
+        "${{ vars[format('CHRONO_CACHE_ACCEPTANCE_{0}_{1}', github.run_id, github.run_attempt)] }}"
     );
+    assert_eq!(
+        fixture["env"]["CHRONO_CACHE_SOURCE_COMMIT"],
+        "${{ github.event.pull_request.head.sha || github.event.after || github.sha }}"
+    );
+    // A variable for R/2 is absent to ordinary concurrent R2/2 and R/3 jobs.
+    let variable_name = |run: &str, attempt: &str| format!("CHRONO_CACHE_ACCEPTANCE_{run}_{attempt}");
+    let variables = std::collections::BTreeMap::from([(variable_name("1234", "2"), "selected")]);
+    assert_eq!(variables.get(&variable_name("1234", "2")), Some(&"selected"));
+    for (run, attempt) in [("5678", "2"), ("1234", "3"), ("1234", "1")] {
+        assert_eq!(variables.get(&variable_name(run, attempt)), None);
+    }
     assert_eq!(
         fixture["env"]["CHRONO_CACHE_ACCEPTANCE_STEPS"],
         "${{ toJSON(steps) }}"
