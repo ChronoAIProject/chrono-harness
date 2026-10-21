@@ -43,6 +43,8 @@ pub struct Policy {
     pub facts_config: Option<String>,
     #[serde(default)]
     pub registration_config: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub causal_consumption: Option<Value>,
     pub filemap: String,
     pub projects: String,
     pub tools: BTreeMap<String, String>,
@@ -1091,6 +1093,7 @@ fn inventory(
         &p.filemap,
         &p.projects,
         p.registration_config.as_deref(),
+        &req.config_path,
         &paths,
         &affected,
     )?;

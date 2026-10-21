@@ -6,7 +6,7 @@ The dependency direction is `judge-ci → judge-filemap → judge-mixed → judg
 
 ## Bounded internal causal consumption
 
-FILEMAP v2 may opt in with `causal_consumption.schema` equal to
+The current scoped check policy may opt in with `causal_consumption.schema` equal to
 `chrono-internal-causal-consumption/v1`. Its nonempty `shared_startup` array
 contains unique `{id, units, startup, consumer, producer, caller, evidence}`
 references; `evidence` is `{test, operation}`. Paths name existing registered host

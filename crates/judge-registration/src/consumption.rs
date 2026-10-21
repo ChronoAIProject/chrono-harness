@@ -33,13 +33,10 @@ pub struct Evidence {
     pub operation: String,
 }
 
-pub fn contract(filemap: &Value) -> Result<BTreeMap<String, Chain>, String> {
-    let Some(value) = filemap.get("causal_consumption") else {
+pub fn contract(value: Option<&Value>) -> Result<BTreeMap<String, Chain>, String> {
+    let Some(value) = value else {
         return Ok(BTreeMap::new());
     };
-    if filemap["schema_version"] != 2 {
-        return Err("E_CONSUMPTION_SCHEMA: FILEMAP v2 required".into());
-    }
     let c: Contract =
         serde_json::from_value(value.clone()).map_err(|e| format!("E_CONSUMPTION_SCHEMA: {e}"))?;
     if c.schema != "chrono-internal-causal-consumption/v1" || c.shared_startup.is_empty() {
@@ -77,6 +74,7 @@ pub fn contract(filemap: &Value) -> Result<BTreeMap<String, Chain>, String> {
 /// Fixed endpoint data. Only paths explicitly referenced by the adopted chain
 /// are loaded; unavailable bytes remain unavailable until that chain is checked.
 pub struct Endpoint {
+    pub adoption: Option<Value>,
     pub filemap: Value,
     pub projects: Value,
     pub config: Value,
@@ -180,10 +178,10 @@ pub fn validate_delta(
     affected: &BTreeSet<String>,
 ) -> Result<Checked, String> {
     let before = old
-        .map(|s| contract(&s.filemap))
+        .map(|s| contract(s.adoption.as_ref()))
         .transpose()?
         .unwrap_or_default();
-    let after = contract(&new.filemap)?;
+    let after = contract(new.adoption.as_ref())?;
     let mut result = Checked::default();
     for id in before.keys().chain(after.keys()).collect::<BTreeSet<_>>() {
         let a = before.get(id);
@@ -363,6 +361,26 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
         }
     }
     let runner = nonempty(&s.config["runner"]["path"])?;
+    for role in [
+        &units["collection"]["generator"],
+        &check["judge"]["program"],
+        &units["persistent_cache"]["program"],
+    ] {
+        let path = nonempty(role)?;
+        if !installed.contains(path) {
+            return Err(format!("missing installed current tool {path}"));
+        }
+    }
+    let participant = nonempty(&s.config["canonical_check"]["participation"]["tool"])?;
+    let tool = s.config["tools"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|t| t["id"] == participant)
+        .ok_or("missing canonical participation tool")?;
+    if !installed.contains(nonempty(&tool["program"])?) {
+        return Err("missing installed canonical participation tool".into());
+    }
     if !installed.contains(runner)
         || units["collection"]["runner"] != runner
         || argv(&s.config["canonical_check"]["argv"])? != [runner, "check"]
@@ -413,6 +431,7 @@ pub fn check_scoped(
     filemap: &str,
     projects: &str,
     config: Option<&str>,
+    profile: &str,
     changed: &BTreeSet<String>,
     affected: &BTreeSet<String>,
 ) -> Result<Checked, String> {
@@ -421,7 +440,9 @@ pub fn check_scoped(
             relative_path(p)?;
             json(&reader.blob(root, oid, p)?)
         };
+        let check = read(profile)?;
         let mut s = Endpoint {
+            adoption: check["policy"].get("causal_consumption").cloned(),
             filemap: read(filemap)?,
             projects: read(projects)?,
             config: Value::Null,
@@ -429,7 +450,7 @@ pub fn check_scoped(
             documents: BTreeMap::new(),
             unavailable: BTreeMap::new(),
         };
-        let chains = contract(&s.filemap)?;
+        let chains = contract(s.adoption.as_ref())?;
         if chains.is_empty() {
             return Ok(s);
         }
@@ -438,7 +459,7 @@ pub fn check_scoped(
         let snapshot = reader.registry_snapshot(root, oid, cfg)?;
         s.config = snapshot.values[&snapshot.effective_path].clone();
         s.config_paths
-            .extend([cfg.to_owned(), snapshot.effective_path]);
+            .extend([cfg.to_owned(), snapshot.effective_path, profile.to_owned()]);
         let mut paths: BTreeSet<_> = chains
             .values()
             .flat_map(|c| [c.units.clone(), c.startup.clone()])

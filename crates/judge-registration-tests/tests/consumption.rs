@@ -21,6 +21,7 @@ fn host() -> Endpoint {
         serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap()
     };
     Endpoint {
+        adoption: read(CHECK)["policy"].get("causal_consumption").cloned(),
         filemap: read(FM),
         projects: read(PROJECTS),
         config: read(POLICY),
@@ -54,11 +55,7 @@ fn real_registered_startup_chain_requires_original_consumer_evidence() {
     assert_eq!(result.checked, paths(&["runner-startup"]));
     assert_eq!(result.required_tests, paths(&["test:host-bootstrap-tests"]));
     let mut legacy = host();
-    legacy
-        .filemap
-        .as_object_mut()
-        .unwrap()
-        .remove("causal_consumption");
+    legacy.adoption = None;
     assert!(
         consumption::validate_delta(
             Some(&legacy),
@@ -82,6 +79,7 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
         "unit",
         "profiles",
         "output",
+        "missing-output",
         "source",
         "duplicate-output",
         "check",
@@ -122,6 +120,12 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
             "output" => {
                 s.documents.get_mut(CORE).unwrap()["install"][0]["destination"] =
                     json!("unrelated/tool")
+            }
+            "missing-output" => {
+                s.documents.get_mut(CORE).unwrap()["install"]
+                    .as_array_mut()
+                    .unwrap()
+                    .remove(1);
             }
             "source" => {
                 s.documents.get_mut(CORE).unwrap()["install"][0]["source"] = json!("unrelated/tool")
@@ -218,10 +222,7 @@ fn both_endpoints_select_removed_inputs_and_old_owners_without_global_rejudgment
 fn retired_contract_and_unknown_versions_fail_while_legacy_consumers_keep_meaning() {
     let old = host();
     let mut new = host();
-    new.filemap
-        .as_object_mut()
-        .unwrap()
-        .remove("causal_consumption");
+    new.adoption = None;
     assert!(
         consumption::validate_delta(Some(&old), &new, &BTreeSet::new(), &BTreeSet::new())
             .unwrap_err()
@@ -232,8 +233,8 @@ fn retired_contract_and_unknown_versions_fail_while_legacy_consumers_keep_meanin
         json!({"schema":"chrono-internal-causal-consumption/v2","shared_startup":[]}),
         json!({"schema":"chrono-internal-causal-consumption/v1","shared_startup":[]}),
     ] {
-        new.filemap["causal_consumption"] = value;
-        assert!(consumption::contract(&new.filemap).is_err());
+        new.adoption = Some(value);
+        assert!(consumption::contract(new.adoption.as_ref()).is_err());
     }
     let mut new = host();
     new.documents.get_mut(UNITS).unwrap()["job_gating"]["startup"]["consumers"]["unit_ci"]["need"] =
@@ -292,6 +293,7 @@ fn scoped_adapter_reads_fixed_native_git_endpoints_and_retains_original_failure(
             FM,
             PROJECTS,
             Some(POLICY),
+            CHECK,
             changed,
             &BTreeSet::new(),
         )

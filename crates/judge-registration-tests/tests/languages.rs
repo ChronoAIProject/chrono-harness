@@ -3,22 +3,6 @@ mod support;
 use chrono_judge_registration::Registrations;
 use serde_json::{Value, json};
 
-#[test]
-fn versioned_internal_consumption_is_explicitly_opted_in() {
-    let mut values = support::values();
-    values.get_mut(support::FM).unwrap()["schema_version"] = json!(2);
-    values.get_mut(support::FM).unwrap()["execution_plans"] = json!({});
-    values.get_mut(support::FM).unwrap()["causal_consumption"] = json!({
-        "schema":"chrono-internal-causal-consumption/v1", "shared_startup":[{
-            "id":"runner-startup", "units":".chrono-harness/ci/units.json",
-            "startup":".chrono-harness/ci/bootstrap-shared.json", "consumer":"unit_runner",
-            "producer":"host.bootstrap-shared-produce", "caller":"host.bootstrap-shared-install-unit_runner",
-            "evidence":{"test":"test:host-bootstrap-tests","operation":"host.bootstrap-real-consumer"}
-        }]
-    });
-    Registrations::load(&values, support::CONFIG).unwrap();
-}
-
 fn validate(projects: &Value) -> Result<(), String> {
     let mut values = support::values();
     values.insert(support::PROJECTS.into(), projects.clone());
