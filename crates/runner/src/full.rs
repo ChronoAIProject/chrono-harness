@@ -1565,8 +1565,51 @@ pub fn check_prepared(
         }
         None => no_symlink_parents(root, &format!("{report_directory}report.json"))?,
     };
-    fs::write(retained_report, &text).map_err(|e| e.to_string())?;
-    fs::write(path, &text).map_err(|e| e.to_string())?;
+    let mut publication_failures = Vec::new();
+    let mut published = Vec::new();
+    for path in [&retained_report, &path] {
+        match fs::write(path, &text) {
+            Ok(()) => published
+                .push(value!({"path":path,"sha256":sha256(text.as_bytes()),"length":text.len()})),
+            Err(error) => publication_failures.push(
+                chrono_diagnostics::error::Failure::wrap(
+                    "E_FULL_REPORT_PUBLISH",
+                    "full report publication failed",
+                    chrono_diagnostics::error::NativeIoError::new(error),
+                )
+                .at("path", path.to_string_lossy().into_owned())
+                .at("phase", "write"),
+            ),
+        }
+    }
+    if !publication_failures.is_empty() {
+        let original = report["judges"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find_map(|row| row.get("transport_diagnostic"))
+            .map(|value| serde_json::from_value::<wire::TransportDiagnostic>(value.clone()))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let mut failure = match original {
+            Some(original) => chrono_diagnostics::error::Failure::wrap(
+                "E_FULL_REPORT_EVIDENCE",
+                "full report publication failed after judge failure",
+                chrono_diagnostics::error::ReceivedError::from(original.error),
+            ),
+            None => publication_failures.remove(0),
+        };
+        for error in publication_failures {
+            failure = failure.with_related("report_publication", error);
+        }
+        return Err(format!(
+            "E_REPORT_EVIDENCE: {}",
+            value!({
+                "schema":"chrono-full-report-publication-failure/v1",
+                "error":failure.record(),"report":report,"published":published,
+            })
+        ));
+    }
     Ok((status.exit_code() as u8, text))
 }
 

@@ -359,16 +359,30 @@ fn inherited() -> Result<Option<(Arc<Tree>, usize, usize)>, ProcessFailure> {
             (|| -> Result<_, ProcessFailure> {
                 let mut magic = 0u64;
                 let n = unsafe { libc::pread(TREE_FD, (&mut magic as *mut u64).cast(), 8, 0) };
-                if n < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EBADF) {
-                    return Ok(None);
+                if n < 0 {
+                    let error = std::io::Error::last_os_error();
+                    if error.raw_os_error() == Some(libc::EBADF) {
+                        return Ok(None);
+                    }
+                    return Err(ProcessFailure::native(
+                        "E_PROCESS_OWNERSHIP_READ",
+                        "process ownership descriptor read",
+                        error,
+                    ));
                 }
                 if n != 8 || magic != MAGIC {
                     return Err("process ownership descriptor collision".into());
                 }
                 let mut context = [CAPACITY as u64, 0];
-                if unsafe { libc::pread(CONTEXT_FD, context.as_mut_ptr().cast(), 16, 0) } != 16
-                    || context[0] >= CAPACITY as u64
-                {
+                let n = unsafe { libc::pread(CONTEXT_FD, context.as_mut_ptr().cast(), 16, 0) };
+                if n < 0 {
+                    return Err(ProcessFailure::native(
+                        "E_PROCESS_OWNERSHIP_CONTEXT_READ",
+                        "process ownership context missing",
+                        std::io::Error::last_os_error(),
+                    ));
+                }
+                if n != 16 || context[0] >= CAPACITY as u64 {
                     return Err("process ownership context missing".into());
                 }
                 let fd = unsafe { libc::fcntl(TREE_FD, libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };

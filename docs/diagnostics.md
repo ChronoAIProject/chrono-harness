@@ -148,6 +148,13 @@ diagnostic/error schemas and fields; the full audit checks invocation context
 and the relationship to the retained process cause. Judge-v1 requests and
 responses remain strict and do not acquire a new error field.
 
+Late full-report publication attempts both existing destinations. Failure returns
+`E_REPORT_EVIDENCE` with the explicit
+`chrono-full-report-publication-failure/v1` record, the unchanged attempted
+report and only the writes that actually succeeded. An original judge transport
+failure remains the source; failed report writes are related native IO errors.
+The boundary does not claim durable retention when both destinations fail.
+
 Rust behavior regressions exercise real missing executables, permission-denied
 spawn, digest rejection, native source downcasts, serialized version/context
 mutations, actual full reports with both stored copies, healthy execution,

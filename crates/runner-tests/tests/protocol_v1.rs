@@ -869,8 +869,22 @@ fn prelaunch_diagnostics_retain_native_causes_and_unstarted_context() {
 #[test]
 fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
     use std::process::Command;
-    for case in ["missing", "digest", "healthy"] {
-        let (dir, _, mut binding) = fixture(value!({}));
+    for case in [
+        "missing",
+        "digest",
+        "healthy",
+        "publication",
+        "publication-both",
+        "publication-healthy",
+    ] {
+        let child_case = if matches!(case, "publication" | "publication-both") {
+            value!({"kind":"raw","consume_request":true,"stdout":[255,0,10],"stderr":[254,0,10],"exit":17,"block_report":".chrono-harness/state/report.json","block_retained_report":case == "publication-both"})
+        } else if case == "publication-healthy" {
+            value!({"block_report":".chrono-harness/state/report.json"})
+        } else {
+            value!({})
+        };
+        let (dir, _, mut binding) = fixture(child_case);
         let root = dir.path();
         let git = |args: &[&str]| {
             let output = Command::new("git")
@@ -926,14 +940,72 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
         let base = git(&["rev-parse", "HEAD"]);
         git(&["commit", "--allow-empty", "-qm", "candidate"]);
         let candidate = git(&["rev-parse", "HEAD"]);
-        let (exit, text) = chrono_harness::full::check(
+        let result = chrono_harness::full::check(
             root,
             ".chrono-harness/config.json",
             &base,
             &candidate,
             std::path::Path::new(".chrono-harness/state/context.json"),
-        )
-        .unwrap();
+        );
+        if case.starts_with("publication") {
+            let error = result.unwrap_err();
+            let retained: serde_json::Value =
+                serde_json::from_str(error.strip_prefix("E_REPORT_EVIDENCE: ").expect(
+                    "the original judge failure must survive report publication IO failure",
+                ))
+                .unwrap();
+            assert_eq!(
+                retained["schema"],
+                "chrono-full-report-publication-failure/v1"
+            );
+            let report = &retained["report"];
+            if case == "publication-healthy" {
+                assert_eq!(report["status"], "pass");
+                assert_eq!(
+                    retained["error"]["error"]["source"]["source"]["native_code"],
+                    libc::EISDIR
+                );
+            } else {
+                assert_eq!(
+                    retained["error"]["error"]["source"],
+                    report["judges"][0]["transport_diagnostic"]["error"]["error"]
+                );
+                assert_eq!(
+                    retained["error"]["error"]["related"]
+                        .as_array()
+                        .unwrap()
+                        .len(),
+                    if case == "publication-both" { 2 } else { 1 }
+                );
+                for error in retained["error"]["error"]["related"].as_array().unwrap() {
+                    assert_eq!(error["role"], "report_publication");
+                    assert_eq!(
+                        error["error"]["source"]["source"]["native_code"],
+                        libc::EISDIR
+                    );
+                }
+            }
+            assert_eq!(
+                retained["published"].as_array().unwrap().len(),
+                if case == "publication-both" { 0 } else { 1 }
+            );
+            if case != "publication-both" {
+                let original: serde_json::Value = serde_json::from_slice(
+                    &fs::read(root.join(report["report_path"].as_str().unwrap())).unwrap(),
+                )
+                .unwrap();
+                assert_eq!(&original, report);
+            }
+            let process =
+                chrono_harness::full::expand_process(&report["judges"][0]["process"]).unwrap();
+            if case != "publication-healthy" {
+                assert_eq!(process["stdout_bytes"], value!([255, 0, 10]));
+                assert_eq!(process["stderr_bytes"], value!([254, 0, 10]));
+                assert_eq!(process["exit_code"], 17);
+            }
+            continue;
+        }
+        let (exit, text) = result.unwrap();
         assert_eq!(exit, if case == "healthy" { 0 } else { 2 }, "{text}");
         let report: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(
