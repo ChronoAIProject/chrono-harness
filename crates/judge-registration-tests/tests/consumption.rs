@@ -194,16 +194,25 @@ fn both_endpoints_select_removed_inputs_and_old_owners_without_global_rejudgment
         .is_err()
     );
     // Removed old profile input must select even after the new declaration no longer references it.
-    old.documents.get_mut(STARTUP).unwrap()["profiles"]["core"]["config"] =
-        json!("old-profile.json");
+    let old_core = ".chrono-harness/ci/old-core.json";
+    old.documents
+        .insert(old_core.into(), old.documents[CORE].clone());
+    let mut registration = old.filemap["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["path"] == CORE)
+        .unwrap()
+        .clone();
+    registration["path"] = json!(old_core);
+    old.filemap["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(registration);
+    old.documents.get_mut(STARTUP).unwrap()["profiles"]["core"]["config"] = json!(old_core);
     assert!(
-        consumption::validate_delta(
-            Some(&old),
-            &new,
-            &paths(&["old-profile.json"]),
-            &BTreeSet::new()
-        )
-        .is_err()
+        consumption::validate_delta(Some(&old), &new, &paths(&[old_core]), &BTreeSet::new())
+            .is_err()
     );
     // Old operation owners select a defect even after the candidate moves that action.
     action(&mut new, "build.runner")["operation"] = json!("retired.runner");
