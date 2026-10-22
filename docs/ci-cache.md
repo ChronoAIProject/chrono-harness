@@ -22,11 +22,51 @@ transport report recorded `current_executable_verification: matched`,
 and `verdict: not-a-judgment`. The canonical bootstrap and check still ran after
 the hits, and no save was attempted for the exact-hit attempt.
 
-This proves the registered consumer's bounded cold miss/save and exact-hit
+This historical observation proves the registered consumer's bounded cold miss/save and exact-hit
 restore path, including current cache executable identity and recovery evidence.
 It does not prove changed-source reuse, incompatible-input partitioning, corrupt
 or unavailable archive handling, concurrent producers/reruns, complete backend
 lifecycle protection, or cache completeness for other consumers.
+
+The current `producer-manifest/v1` domain has additional bounded native evidence
+on macos-26, Rust/Cargo 1.95.0, under PR #207's `refs/pull/207/merge` scope:
+
+| Scenario, both `check.cache` and `check.cache-tests` | Fixed native observation |
+| --- | --- |
+| Cold production domain | [39688684172/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172/attempts/1), seed `98615238`: original Cargo work, seal/save and collection passed |
+| Compatible source change | [39690377913/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/1), production `72b1d08`: equal compatibility prefixes, distinct source suffixes, seed-key restores and matched producer inventories, retained incremental data and current registered rebuild/tests passed |
+| Healthy exact hit | [39690377913/2](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/2): both primary keys matched, inventories verified and original canonical work/collection passed; detector/startup retain their original attempt 1 identities |
+| Incompatible producer environment | [39695762671/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671/attempts/1), scenario `c515cd05`: both domains changed, neither restore matched a key, and original optimized Cargo builds/tests, seals and collection passed |
+| Unusable contents, recovery, persistent repair and repaired exact hit | Not executed: repository Variables GET/list returned HTTP 403, so activation ownership/value could not be established; no variable or cache was mutated |
+
+In the incompatible scenario the only changed selected observation was
+`check.environment`; all other selected runtime/probe/absence observations and
+producer argv matched production. Compatibility digests changed from
+`d24c19748a988bdb5732af429ed07932e5e4ac25774ef4d4613b5be87ce34c6f` to
+`b9653959eb2bc10a7a166822f4e59c4374d31105acf865a8b980c372c4af7987`
+for `check.cache`, and from
+`070f000f3499ba497fc6d1c4eac347720586017d61c114954293f69c21964228` to
+`17b22e6e2b9ea72b6eb2afdc98a63075b62fe778baba507511337f259b317cbc`
+for `check.cache-tests`. Each restore exposed only its new domain prefix;
+production fallback was impossible through that declared key set. Both actual
+Cargo producers received `CARGO_INCREMENTAL=1` and the two optimization values,
+and reported optimized dev/test output. The transport retained
+`miss-or-unavailable`, successful original work and matched current planner
+identity; backend entries `9310328424` / `9310330849` were observed, with creator
+unestablished. This is partition/rebuild evidence, not an exact-restore test of
+those scenario archives.
+
+Original scenario artifacts are cache `12391316467`, detector `12391201225`,
+startup `12391076536`, runner `12390726564` and collection `12391598633`, all from
+attempt 1. Collection verified 26 unit originals and passed all 27 result rows.
+The cache and collection jobs measured 113 and 106 seconds respectively from
+native start/completion timestamps; these windows are not billing, speedup or
+complete lifecycle costs. Transfer/storage and total incremental costs remain
+unknown. An ordinary revert `c72c141` restores the exact production `72b1d08`
+tree and removes both temporary optimization settings while preserving the
+scenario commit. Unusable-content acceptance remains required; the access gap
+does not waive it or authorize another activation path. Other consumers,
+concurrency, linked ownership and complete compiler/SDK/input closure remain open.
 
 The planner prepares identities; the GitHub provider projects pinned native
 restore/save actions around the original bootstrap and check/release command.
@@ -260,15 +300,15 @@ verification evidence into the existing upload directory.
 Hashing cost is additional: sealing and restore verification record wall-clock
 seconds per selected cache, with the measured window in each observation; the
 native step is classified `cache-verification`. Total transfer/storage/runner
-cost and native acceptance remain unmeasured. Local Rust regressions include an
+cost remains unknown; bounded native acceptance is recorded above. Local Rust regressions include an
 actual Cargo invocation read from the unchanged registered producer action on a
 small fixture: compatible source changes produce the candidate binary and retain
 incremental data, while changed producer settings partition the compatibility
 domain. This fixture is compiler evidence, not a native archive acceptance run.
 Content manifests are consistency evidence from trusted but fallible producers,
-not archive authentication or proof of complete build inputs. Cold/save, exact,
-compatible changed-source, incompatible-input and recovery scenarios require new
-native observations for this adopted domain before acceptance is claimed.
+not archive authentication or proof of complete build inputs. The native results
+above cover cold/save, exact, compatible changed-source and incompatible-input
+scenarios for these two entries. Unusable-content recovery remains unverified.
 
 ## Actual provider consumers
 

@@ -44,8 +44,15 @@ the host opts in one existing chain. Additional fixed input reads, regression
 tests and execution of the already registered evidence test are the validation
 cost; complete build/CI/storage costs remain unknown. The contract cannot prove
 usefulness or fidelity to a real need: those remain accountable engineering
-judgments. External/all-consumer adoption, full-path causal enforcement, native
-acceptance of this candidate and complete SPEC activation remain pending.
+judgments. External/all-consumer adoption, full-path causal enforcement and
+complete SPEC activation remain pending. The existing macos-26 path was observed
+at production `72b1d08` in run `39690377913` attempt 1 and scenario `c515cd05` in
+run `39695762671` attempt 1: current detector manifests and clean source-bound
+cache/core reports were imported, `unit_runner` installed/verified the tools,
+the canonical runner unit passed and original collection verified its report.
+Scenario startup artifact `12391076536`, runner `12390726564` and collection
+`12391598633` retain the actual producer/attempt and matching manifest/tool
+identities. These observations establish this internal chain on Darwin only.
 
 Native handoff uses the existing PR-to-dev macos-26 parent workflow. Require the
 detector's current shared artifact, original clean producer reports and manifest,

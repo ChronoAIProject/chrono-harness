@@ -179,6 +179,15 @@ subprocess context transfer and non-Rust adapters remain required. Failed
 diagnostic publication must not be reported as successful evidence retention.
 
 
+The existing macos-26 path was observed at production `72b1d08` in run
+`39690377913/1` and scenario `c515cd05` in run `39695762671/1`. Both canonical
+runner originals record 166 passing tests and one existing ignored test across
+six binaries, including the three `prelaunch_diagnostics_*` regressions and
+`execution_self_diagnostic_rejects_mutated_prelaunch_error_records`. Current
+startup imports, installed tool identities, original unit process streams and
+passing collection are retained. This is bounded Darwin test/consumer evidence;
+it does not establish general persisted diagnostic publication or Linux behavior.
+
 For native candidate acceptance, the existing macos-26 `unit_runner` path must
 execute the canonical runner unit after current shared-startup install/verify.
 Retain actual full invocation regression outputs, original process/stream/error
