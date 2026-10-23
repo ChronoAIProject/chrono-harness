@@ -83,8 +83,11 @@ impl HostDirectory {
     fn retain_diagnostic(&self, reason: &str) -> Result<(), String> {
         if let Self::Retained(host) = self {
             chrono_worktree::RetainedArtifact::resume(
-                host.path().parent().unwrap(), "worktree-test-host", host.path(),
-            )?.acquire("fixture-diagnostic", reason)?;
+                host.path().parent().unwrap(),
+                "worktree-test-host",
+                host.path(),
+            )?
+            .acquire("fixture-diagnostic", reason)?;
         }
         Ok(())
     }
@@ -190,11 +193,18 @@ impl Host {
     }
     fn retained(layout: &str) -> Self {
         let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
-            &source(), POLICY, "worktree-test-host",
-        ).unwrap();
+            &source(),
+            POLICY,
+            "worktree-test-host",
+        )
+        .unwrap();
         let host = chrono_worktree::TemporaryHost::allocate(
-            &store, "worktree-test-host", &outputs, "worktree fixture λ ",
-        ).unwrap();
+            &store,
+            "worktree-test-host",
+            &outputs,
+            "worktree fixture λ ",
+        )
+        .unwrap();
         Self::in_directory(layout, HostDirectory::Retained(host))
     }
     fn in_directory(layout: &str, dir: HostDirectory) -> Self {
@@ -293,14 +303,21 @@ impl Host {
     fn copied_fixture_input(&self, root: &Path, source: &Path, destination: &Path) {
         if let HostDirectory::Retained(host) = &self._dir {
             chrono_worktree::TemporaryHost::register_copy(
-                host.path().parent().unwrap(), "worktree-test-host", source, destination,
-                Some(root), "crates/worktree-tests/tests/creation.rs::copied_fixture_input",
-            ).unwrap();
+                host.path().parent().unwrap(),
+                "worktree-test-host",
+                source,
+                destination,
+                Some(root),
+                "crates/worktree-tests/tests/creation.rs::copied_fixture_input",
+            )
+            .unwrap();
         }
     }
     fn invoke(&self, kind: &str, name: &str, target: &Path) -> (i32, Value, String) {
-        let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
-        command.current_dir("/")
+        let mut command =
+            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        command
+            .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("UNDECLARED_WORKTREE_ENV", "must-not-leak")
@@ -377,11 +394,15 @@ impl Host {
         use std::os::unix::fs::PermissionsExt;
         let p = self.root.join(".git/hooks/post-checkout");
         self.copied_fixture_input(
-            &self.root, Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-hook")), &p,
+            &self.root,
+            Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-hook")),
+            &p,
         );
-        let copied = self.native_output(Command::new("/bin/cp")
-            .arg(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"))
-            .arg(&p));
+        let copied = self.native_output(
+            Command::new("/bin/cp")
+                .arg(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"))
+                .arg(&p),
+        );
         assert!(copied.status.success(), "native hook copy: {copied:?}");
         fs::write(
             p.with_extension("json"),

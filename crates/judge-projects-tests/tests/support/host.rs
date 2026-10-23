@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 #[path = "temporary.rs"]
 mod temporary;
-pub use temporary::{FixtureDirectory, fixture_directory, tool_directory};
-pub use temporary::{capture_native, copied_fixture_input, retain_diagnostic};
 use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
+pub use temporary::{FixtureDirectory, fixture_directory, tool_directory};
+pub use temporary::{capture_native, copied_fixture_input, retain_diagnostic};
 
 pub enum FixtureProbe {
     Version,
@@ -22,10 +22,7 @@ pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureP
     // A joined copy owns all writable descriptors before concurrent test
     // children can inherit them. Each host retains its own executable file.
     copied_fixture_input(root, &source, &destination);
-    let copied = capture_native(root, Command::new("/bin/cp")
-        .arg(source)
-        .arg(&destination)
-    );
+    let copied = capture_native(root, Command::new("/bin/cp").arg(source).arg(&destination));
     assert!(copied.status.success(), "fixture installation: {copied:?}");
     let digest = sha256(&fs::read(&destination).unwrap());
     let mut command = Command::new(&destination);
@@ -146,8 +143,10 @@ impl Host {
         let version = capture_native(&root, Command::new(&tool).arg("--version"));
         let input_directory = dir.temporary_path().join("fixture-inputs");
         fs::create_dir(&input_directory).unwrap();
-        let external = tempfile::Builder::new().disable_cleanup(true)
-            .tempfile_in(input_directory).unwrap();
+        let external = tempfile::Builder::new()
+            .disable_cleanup(true)
+            .tempfile_in(input_directory)
+            .unwrap();
         fs::write(external.path(), b"bounded input\n").unwrap();
         v.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] = json!([
             ".chrono-harness/bin/chrono-harness",
@@ -335,7 +334,9 @@ impl Host {
             self.last_result.replace(Some(evidence));
             return;
         };
-        let protection = self.dir.retain_diagnostic("requested full-test originals are still consumed");
+        let protection = self
+            .dir
+            .retain_diagnostic("requested full-test originals are still consumed");
         static NUMBER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let number = NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let destination = std::path::Path::new(&directory)
@@ -352,7 +353,11 @@ impl Host {
     pub fn capture_native(&self, command: &mut Command) -> std::process::Output {
         self.dir.capture_output(command).unwrap()
     }
-    pub fn capture_native_input(&self, command: &mut Command, input: &[u8]) -> std::process::Output {
+    pub fn capture_native_input(
+        &self,
+        command: &mut Command,
+        input: &[u8],
+    ) -> std::process::Output {
         self.dir.capture_input(command, input).unwrap()
     }
 }

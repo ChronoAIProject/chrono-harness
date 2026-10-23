@@ -354,7 +354,10 @@ fn generated_paths(paths: &[String]) -> Result<(), String> {
             return Err("generated producer outputs require unique literal directories".into());
         }
         relative_path(path.trim_end_matches('/'))?;
-        if Path::new(path).components().any(|part| part.as_os_str() == ".git") {
+        if Path::new(path)
+            .components()
+            .any(|part| part.as_os_str() == ".git")
+        {
             return Err("generated outputs cannot include Git identity or objects".into());
         }
         if [
@@ -364,12 +367,10 @@ fn generated_paths(paths: &[String]) -> Result<(), String> {
             "configuration",
             ".chrono-harness/state/command-captures",
         ]
-            .iter()
-            .any(|p| {
-                Path::new(p).starts_with(path.trim_end_matches('/'))
-                    || Path::new(path).starts_with(p)
-            })
-            || paths.iter().any(|p| p != path && path.starts_with(p))
+        .iter()
+        .any(|p| {
+            Path::new(p).starts_with(path.trim_end_matches('/')) || Path::new(path).starts_with(p)
+        }) || paths.iter().any(|p| p != path && path.starts_with(p))
         {
             return Err(
                 "generated producer outputs overlap protected evidence or one another".into(),
@@ -865,10 +866,7 @@ impl TemporaryHost {
             }),
             true,
         )?;
-        command
-            .stdin(stdin)
-            .stdout(out)
-            .stderr(err);
+        command.stdin(stdin).stdout(out).stderr(err);
         let mut child = command.spawn().map_err(|e| e.to_string())?;
         let started = write_json(
             &capture.join("started.json"),
@@ -1014,10 +1012,13 @@ impl ProducerPolicy {
                 Err(error) => {
                     let path = format!("{}{}", self.directory, snapshot.path);
                     failures.push(format!("{path}: {error}"));
-                    report["producer_objects"].as_array_mut().unwrap().push(value!({
-                        "producer":self.id,"path":path,"status":"failed","error":error,
-                        "evidence":"retained","consumers":snapshot.consumers
-                    }));
+                    report["producer_objects"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(value!({
+                            "producer":self.id,"path":path,"status":"failed","error":error,
+                            "evidence":"retained","consumers":snapshot.consumers
+                        }));
                     drop(store.take());
                     continue;
                 }

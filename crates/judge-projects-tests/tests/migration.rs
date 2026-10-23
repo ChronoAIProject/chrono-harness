@@ -1,9 +1,9 @@
 #[path = "support/history.rs"]
 mod history;
-#[path = "support/temporary.rs"]
-mod temporary;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
+#[path = "support/temporary.rs"]
+mod temporary;
 use chrono_harness::{facts, observation, wire};
 use chrono_judge_registration::{execution, interpret};
 use chrono_judge_routes::{execute_actions, prepare_scoped};
@@ -607,7 +607,12 @@ fn adopt_fixture_bindings(_root: &std::path::Path, config: &mut Value) {
         .unwrap();
     *input = fixture.git_input.clone();
 }
-fn migration_host() -> (temporary::FixtureDirectory, std::path::PathBuf, String, String) {
+fn migration_host() -> (
+    temporary::FixtureDirectory,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     migration_host_with_alias_collision(false)
 }
 fn copy_nested_receipts(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
@@ -693,7 +698,12 @@ fn execution_failure(
 }
 fn migration_host_with_alias_collision(
     collision: bool,
-) -> (temporary::FixtureDirectory, std::path::PathBuf, String, String) {
+) -> (
+    temporary::FixtureDirectory,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     let source = fs::canonicalize(source()).unwrap();
     let dir = temporary::migration_directory("migration actual host ");
     let root = fs::canonicalize(dir.path()).unwrap();
@@ -767,8 +777,7 @@ fn migration_host_with_alias_collision(
         let original = source.join(format!("crates/{project}/target/debug/{name}"));
         let destination = root.join(format!(".chrono-harness/bin/{name}"));
         temporary::copied_fixture_input(&root, &original, &destination);
-        fs::copy(original, destination)
-        .unwrap();
+        fs::copy(original, destination).unwrap();
     }
     // The copied candidate is a test host on the executing native platform.
     // Preserve the historical snapshot; install only the explicitly selected
@@ -1022,14 +1031,15 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         "{}",
         execution_failure(&root, "ci.verify did not diagnose drift", &result)
     );
-    let output = temporary::capture_native(&root, Command::new(root.join(".chrono-harness/bin/chrono-ci"))
-        .args([
+    let output = temporary::capture_native(
+        &root,
+        Command::new(root.join(".chrono-harness/bin/chrono-ci")).args([
             "generate",
             "--host-root",
             root.to_str().unwrap(),
             "--config",
             ".chrono-harness/ci/units.json",
-        ])
+        ]),
     );
     assert!(
         output.status.success(),
@@ -1070,7 +1080,10 @@ fn migration_binding_failure_retains_expected_and_observed_version() {
         .iter_mut()
         .find(|t| t["id"] == "python3")
         .unwrap();
-    let observed = temporary::capture_native(&root, Command::new(tool["program"].as_str().unwrap()).arg("--version"));
+    let observed = temporary::capture_native(
+        &root,
+        Command::new(tool["program"].as_str().unwrap()).arg("--version"),
+    );
     tool["expected_version"] = json!("Python deliberately-wrong");
     let env: BTreeMap<String, String> = std::env::vars().collect();
     let error = interpret(&root, &base, &candidate, CONFIG, raw, new, &env)

@@ -104,12 +104,18 @@ impl ShortHost {
         let root = parent.join("arbitrary non Cargo layout");
         fs::create_dir(&root).unwrap();
         git(&root, &["clone", "-q", old.path().to_str().unwrap(), "."]);
-        install_retained_tools(&root, &[
-            ("runner", "chrono-harness", ToolProbe::Version),
-            ("judge-ci", "chrono-judge-ci", ToolProbe::JudgeEof),
-            ("ci", "chrono-ci", ToolProbe::Version),
-        ]);
-        install_retained_tools(&root, &[("worktree", "chrono-worktree", ToolProbe::Version)]);
+        install_retained_tools(
+            &root,
+            &[
+                ("runner", "chrono-harness", ToolProbe::Version),
+                ("judge-ci", "chrono-judge-ci", ToolProbe::JudgeEof),
+                ("ci", "chrono-ci", ToolProbe::Version),
+            ],
+        );
+        install_retained_tools(
+            &root,
+            &[("worktree", "chrono-worktree", ToolProbe::Version)],
+        );
         git(&root, &["config", "user.name", "Fixture"]);
         git(&root, &["config", "user.email", "fixture@example.invalid"]);
         let remote = parent.join("explicit target.git");
@@ -222,7 +228,10 @@ impl ShortHost {
         command
     }
     fn run(&self, args: &[&str], exit: i32) -> Value {
-        let out = self._dir.capture_output(&mut self.prepared_command(args)).unwrap();
+        let out = self
+            ._dir
+            .capture_output(&mut self.prepared_command(args))
+            .unwrap();
         if out.status.code() != Some(exit) {
             let argv = std::iter::once(".chrono-harness/bin/chrono-harness".to_owned())
                 .chain(args.iter().map(|arg| (*arg).to_owned()))
@@ -1734,9 +1743,12 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     }
     // Original absolute paths are unavailable. Only the selected uploaded roots are delivered.
     chrono_worktree::TemporaryHost::relocate_copies(
-        h._dir.path().parent().unwrap(), "ci-test-host", &h.root,
+        h._dir.path().parent().unwrap(),
+        "ci-test-host",
+        &h.root,
         &h._dir.path().join("unavailable original checkout"),
-    ).unwrap();
+    )
+    .unwrap();
     fs::rename(&h.root, h._dir.path().join("unavailable original checkout")).unwrap();
     install_mock_transport(&consumer, "success", &h.candidate);
     json_file(&consumer, ".chrono-harness/state/event.json", &payload);
@@ -2083,8 +2095,12 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
     fs::create_dir_all(&long_parent).unwrap();
     let long_root = long_parent.join("host");
     chrono_worktree::TemporaryHost::relocate_copies(
-        h._dir.path().parent().unwrap(), "ci-test-host", &h.root, &long_root,
-    ).unwrap();
+        h._dir.path().parent().unwrap(),
+        "ci-test-host",
+        &h.root,
+        &long_root,
+    )
+    .unwrap();
     fs::rename(&h.root, &long_root).unwrap();
     h.root = long_root;
     h.modify(".chrono-harness/ci/check.json", |c| {

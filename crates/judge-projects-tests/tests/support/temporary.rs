@@ -148,10 +148,8 @@ pub fn retain_diagnostic(path: &Path, reason: &str) -> Result<(), String> {
         .components()
         .next()
         .ok_or("diagnostic allocation missing")?;
-    RetainedArtifact::resume(directory, producer, &directory.join(allocation.as_os_str()))?.acquire(
-        "fixture-diagnostic",
-        reason,
-    )
+    RetainedArtifact::resume(directory, producer, &directory.join(allocation.as_os_str()))?
+        .acquire("fixture-diagnostic", reason)
 }
 
 // Consult only stores actually initialized by these explicit publishers. The

@@ -180,16 +180,22 @@ fn main() -> ExitCode {
         }
         "custody-holder" => {
             use std::io::Read;
-            let root = std::path::PathBuf::from(std::env::var_os("CHRONO_TEMPORARY_CARGO_ROOT").unwrap());
+            let root =
+                std::path::PathBuf::from(std::env::var_os("CHRONO_TEMPORARY_CARGO_ROOT").unwrap());
             assert!(root.is_absolute());
             assert_eq!(std::env::temp_dir(), root);
-            let mut stream = std::net::TcpStream::connect(std::env::var("CHRONO_TEMPORARY_SYNC").unwrap()).unwrap();
+            let mut stream =
+                std::net::TcpStream::connect(std::env::var("CHRONO_TEMPORARY_SYNC").unwrap())
+                    .unwrap();
             stream.write_all(b"ready").unwrap();
             stream.read_exact(&mut [0]).unwrap();
             if let Some(member) = std::env::var_os("CHRONO_TEMPORARY_MEMBER") {
                 assert!(!fs::read(root.join(member)).unwrap().is_empty());
             } else {
-                assert_eq!(fs::read(root.join("cache 空白/output")).unwrap(), b"rebuildable");
+                assert_eq!(
+                    fs::read(root.join("cache 空白/output")).unwrap(),
+                    b"rebuildable"
+                );
             }
         }
         "capture-once" => {

@@ -162,10 +162,17 @@ fn moved_checkout_carries_body_membership_and_retains_its_original_commit() {
         )
         .is_err()
     );
-    assert!(chrono_worktree::TemporaryHost::register_copy(
-        &store, "test-allocation", hook_source, &checkout.join(".git/HEAD"), None,
-        "omitted Git root grants no metadata disposal authority",
-    ).is_err());
+    assert!(
+        chrono_worktree::TemporaryHost::register_copy(
+            &store,
+            "test-allocation",
+            hook_source,
+            &checkout.join(".git/HEAD"),
+            None,
+            "omitted Git root grants no metadata disposal authority",
+        )
+        .is_err()
+    );
     git(&checkout, &["checkout", "--detach", "HEAD"]);
     assert_eq!(
         fs::read(checkout.join("native-hook-read")).unwrap(),

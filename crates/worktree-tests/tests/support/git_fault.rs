@@ -107,12 +107,16 @@ fn main() {
             if std::env::current_dir().unwrap() == Path::new(config["root"].as_str().unwrap())
                 && arg(1, "ls-tree")
             {
-                let claim = fs::OpenOptions::new().write(true).create_new(true)
+                let claim = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
                     .open(config["synchronization_claim"].as_str().unwrap());
                 match claim {
                     Ok(_claim) => {
                         use std::io::Read;
-                        let mut stream = std::net::TcpStream::connect(config["synchronize"].as_str().unwrap()).unwrap();
+                        let mut stream =
+                            std::net::TcpStream::connect(config["synchronize"].as_str().unwrap())
+                                .unwrap();
                         stream.write_all(b"ready").unwrap();
                         stream.read_exact(&mut [0]).unwrap();
                     }

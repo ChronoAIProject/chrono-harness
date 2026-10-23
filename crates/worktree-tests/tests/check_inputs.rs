@@ -43,7 +43,13 @@ fn install_owned(root: &Path, owner: Option<&Host>) {
         ("worktree", "chrono-worktree"),
     ] {
         let built = source().join(format!("crates/{project}/target/debug/{name}"));
-        install_readonly_file_owned(root, &built, name, format!("{name} 0.1.0\n").as_bytes(), owner);
+        install_readonly_file_owned(
+            root,
+            &built,
+            name,
+            format!("{name} 0.1.0\n").as_bytes(),
+            owner,
+        );
     }
     install_readonly_file_owned(
         root,
@@ -60,12 +66,14 @@ pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str
 pub(super) fn ready_version_program(root: &Path, program: &Path, expected: &[u8]) {
     ready_version_program_owned(root, program, expected, None);
 }
-pub(super) fn ready_version_program_owned(root: &Path, program: &Path, expected: &[u8], owner: Option<&Host>) {
+pub(super) fn ready_version_program_owned(
+    root: &Path,
+    program: &Path,
+    expected: &[u8],
+    owner: Option<&Host>,
+) {
     let mut command = Command::new(program);
-    command
-        .current_dir(root)
-        .env_clear()
-        .arg("--version");
+    command.current_dir(root).env_clear().arg("--version");
     let ready = match owner {
         Some(host) => host.native_output(&mut command),
         None => command.output().unwrap(),
@@ -83,7 +91,13 @@ pub(super) fn ready_version_program_owned(root: &Path, program: &Path, expected:
 pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str, version: &[u8]) {
     install_readonly_file_owned(root, built, name, version, None);
 }
-fn install_readonly_file_owned(root: &Path, built: &Path, name: &str, version: &[u8], owner: Option<&Host>) {
+fn install_readonly_file_owned(
+    root: &Path,
+    built: &Path,
+    name: &str,
+    version: &[u8],
+    owner: Option<&Host>,
+) {
     let installed = root.join(format!(".chrono-harness/bin/{name}"));
     assert_eq!(
         fs::symlink_metadata(&installed).unwrap_err().kind(),
@@ -96,9 +110,7 @@ fn install_readonly_file_owned(root: &Path, built: &Path, name: &str, version: &
         host.copied_fixture_input(root, built, &installed);
     }
     let mut command = Command::new("/bin/cp");
-    command
-        .arg(built)
-        .arg(&installed);
+    command.arg(built).arg(&installed);
     let copied = match owner {
         Some(host) => host.native_output(&mut command),
         None => command.output().unwrap(),
@@ -143,7 +155,10 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
 fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
     inputs_owned(root, None)
 }
-fn inputs_owned(root: &Path, owner: Option<&Host>) -> (std::process::Output, Option<PreparedCheck>) {
+fn inputs_owned(
+    root: &Path,
+    owner: Option<&Host>,
+) -> (std::process::Output, Option<PreparedCheck>) {
     let head = git(root, &["rev-parse", "HEAD"]);
     let cfg = json(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
     let req = InputRequest {
@@ -451,23 +466,27 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         serde_json::to_vec(&provider).unwrap(),
     )
     .unwrap();
-    h.copied_fixture_input(&h.root, &source().join("crates/ci/target/debug/chrono-ci"),
-        &h.root.join(".chrono-harness/bin/chrono-ci"));
+    h.copied_fixture_input(
+        &h.root,
+        &source().join("crates/ci/target/debug/chrono-ci"),
+        &h.root.join(".chrono-harness/bin/chrono-ci"),
+    );
     fs::copy(
         source().join("crates/ci/target/debug/chrono-ci"),
         h.root.join(".chrono-harness/bin/chrono-ci"),
     )
     .unwrap();
-    let output = h.native_output(Command::new(h.root.join(".chrono-harness/bin/chrono-ci"))
-        .current_dir(&h.root)
-        .args([
-            "generate",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/ci/full.json",
-        ])
-        );
+    let output = h.native_output(
+        Command::new(h.root.join(".chrono-harness/bin/chrono-ci"))
+            .current_dir(&h.root)
+            .args([
+                "generate",
+                "--host-root",
+                ".",
+                "--config",
+                ".chrono-harness/ci/full.json",
+            ]),
+    );
     assert!(
         output.status.success(),
         "{}",
@@ -487,8 +506,11 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
     let (exit, birth, err) = h.invoke("integration", "native", &dest);
     assert_eq!(exit, 0, "{} {err}", birth["error"]);
     install_owned(&dest, Some(&h));
-    h.copied_fixture_input(&dest, &source().join("crates/ci/target/debug/chrono-ci"),
-        &dest.join(".chrono-harness/bin/chrono-ci"));
+    h.copied_fixture_input(
+        &dest,
+        &source().join("crates/ci/target/debug/chrono-ci"),
+        &dest.join(".chrono-harness/bin/chrono-ci"),
+    );
     fs::copy(
         source().join("crates/ci/target/debug/chrono-ci"),
         dest.join(".chrono-harness/bin/chrono-ci"),
@@ -521,14 +543,15 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         .find(|l| l.contains("'check'"))
         .unwrap()
         .trim();
-    let o = h.native_output(Command::new("/bin/bash")
-        .current_dir(&dest)
-        .args(["-c", line])
-        .env(prepared::SOURCE, "ci")
-        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
-        .env("GITHUB_EVENT_PATH", &payload)
-        .env("CHRONO_WORKFLOW_REVISION", &revision)
-        );
+    let o = h.native_output(
+        Command::new("/bin/bash")
+            .current_dir(&dest)
+            .args(["-c", line])
+            .env(prepared::SOURCE, "ci")
+            .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+            .env("GITHUB_EVENT_PATH", &payload)
+            .env("CHRONO_WORKFLOW_REVISION", &revision),
+    );
     if !o.status.success() {
         // The console points to the complete producer evidence. Preserve that
         // specific failure before the fixture's temporary host is dropped.
@@ -576,14 +599,15 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         .unwrap(),
     )
     .unwrap();
-    let repeated = h.native_output(Command::new("/bin/bash")
-        .current_dir(&dest)
-        .args(["-c", line])
-        .env(prepared::SOURCE, "ci")
-        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
-        .env("GITHUB_EVENT_PATH", &payload)
-        .env("CHRONO_WORKFLOW_REVISION", &revision)
-        );
+    let repeated = h.native_output(
+        Command::new("/bin/bash")
+            .current_dir(&dest)
+            .args(["-c", line])
+            .env(prepared::SOURCE, "ci")
+            .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+            .env("GITHUB_EVENT_PATH", &payload)
+            .env("CHRONO_WORKFLOW_REVISION", &revision),
+    );
     assert!(
         repeated.status.success(),
         "{}",
@@ -624,9 +648,12 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         &consumer.join(".chrono-harness/state/native evidence λ"),
     );
     chrono_worktree::TemporaryHost::relocate_copies(
-        h.parent.parent().unwrap(), "worktree-test-host", &dest,
+        h.parent.parent().unwrap(),
+        "worktree-test-host",
+        &dest,
         &h.parent.join("original full paths unavailable"),
-    ).unwrap();
+    )
+    .unwrap();
     fs::rename(&dest, h.parent.join("original full paths unavailable")).unwrap();
     prepared::validate_portable_binding(&consumer, &r["preparation"], None).unwrap();
     prepared::validate_portable_binding(&consumer, &next["preparation"], None).unwrap();

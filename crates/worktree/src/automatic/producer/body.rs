@@ -147,7 +147,11 @@ fn register(
             .strip_prefix(".git/hooks/")
             .is_some_and(|leaf| !leaf.is_empty() && Path::new(leaf).components().count() == 1);
     }
-    if Path::new(member).components().any(|part| part.as_os_str() == ".git") && !hook_leaf {
+    if Path::new(member)
+        .components()
+        .any(|part| part.as_os_str() == ".git")
+        && !hook_leaf
+    {
         return Err("Git identity and unretained commits cannot be fixture bodies".into());
     }
     let (name, digest, length) = original(store, source)?;

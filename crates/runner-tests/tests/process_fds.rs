@@ -353,17 +353,22 @@ fn overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_ha
         let mut commands = Vec::new();
         for _ in 0..2 {
             let mut command = std::process::Command::new(std::env::current_exe().unwrap());
-            command.args(["--exact", "held_native_capability_helper", "--nocapture"])
-                .env_clear().env("CHRONO_FD_HELD", "1")
+            command
+                .args(["--exact", "held_native_capability_helper", "--nocapture"])
+                .env_clear()
+                .env("CHRONO_FD_HELD", "1")
                 .env("CHRONO_FD_EXPECT", (inherited_count() + 1).to_string())
-                .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped());
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped());
             chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
             commands.push(command);
         }
         drop(scope);
         drop(file);
         let mut first = commands.remove(0);
-        let mut first = std::thread::spawn(move || first.spawn().unwrap()).join().unwrap();
+        let mut first = std::thread::spawn(move || first.spawn().unwrap())
+            .join()
+            .unwrap();
         let mut second_command = commands.remove(0);
         let mut second = second_command.spawn().unwrap();
         drop(second_command);
@@ -373,18 +378,29 @@ fn overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_ha
             let mut line = String::new();
             loop {
                 assert_ne!(reader.read_line(&mut line).unwrap(), 0);
-                if line.contains("READY") { break; }
+                if line.contains("READY") {
+                    break;
+                }
                 line.clear();
             }
             readers.push(reader);
         }
         let exclusion = fs::File::open(&path).unwrap();
-        assert_ne!(unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) }, 0);
+        assert_ne!(
+            unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
         assert_eq!(unsafe { libc::kill(first.id() as i32, signal) }, 0);
         assert!(!first.wait().unwrap().success());
-        assert_ne!(unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) }, 0);
+        assert_ne!(
+            unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
         second.stdin.take().unwrap().write_all(b"r").unwrap();
         assert!(second.wait().unwrap().success());
-        assert_eq!(unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) }, 0);
+        assert_eq!(
+            unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
     }
 }

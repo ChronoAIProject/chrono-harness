@@ -18,7 +18,10 @@ fn host_mode(mode: &str) -> Host {
 }
 
 fn capture_directory(root: &Path) -> PathBuf {
-    let captures: Vec<_> = fs::read_dir(root.join(".chrono-harness/state/command-captures")).unwrap().map(|e| e.unwrap().path()).collect();
+    let captures: Vec<_> = fs::read_dir(root.join(".chrono-harness/state/command-captures"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
     assert_eq!(captures.len(), 1);
     captures[0].clone()
 }
@@ -209,13 +212,23 @@ fn native_capture_preserves_actual_nonzero_exit_and_raw_bytes() {
 #[test]
 fn native_protocol_capture_preserves_exact_input_bytes_and_eof() {
     let h = host();
-    let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation").unwrap();
-    let allocation = chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "protocol λ ").unwrap();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "protocol λ ",
+    )
+    .unwrap();
     let input = b"\xffrequest\0\n";
     let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
     command.arg("capture-input").env_clear();
     allocation.bind_command(&mut command).unwrap();
-    let output = chrono_worktree::TemporaryHost::capture_bound_input(allocation.path(), &mut command, input).unwrap();
+    let output =
+        chrono_worktree::TemporaryHost::capture_bound_input(allocation.path(), &mut command, input)
+            .unwrap();
     assert_eq!(output.status.code(), Some(9));
     assert_eq!(output.stdout, input);
     assert_eq!(output.stderr, b"\xfeinput\0\n");
@@ -275,7 +288,6 @@ fn declared_nested_git_root_preserves_committed_and_staged_source_under_outputs(
     }
 }
 
-
 #[test]
 fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnostic() {
     use std::io::{Read, Write};
@@ -285,12 +297,16 @@ fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnosti
     policy["retained_producers"][0]["source_roots"] = value!(["."]);
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
     commit(&h.root);
-    let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
-        &h.root, POLICY, "test-allocation",
-    ).unwrap();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
     let allocation = chrono_worktree::TemporaryHost::allocate(
-        &store, "test-allocation", &outputs, "excluded λ ",
-    ).unwrap();
+        &store,
+        "test-allocation",
+        &outputs,
+        "excluded λ ",
+    )
+    .unwrap();
     let root = allocation.path().to_owned();
     git(&root, &["init", "-q"]);
     fs::write(root.join("source.rs"), "retained source").unwrap();
@@ -298,28 +314,48 @@ fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnosti
     fs::create_dir(root.join("cache 空白")).unwrap();
     fs::write(root.join("cache 空白/output"), "generated").unwrap();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    super::automatic::native_git(&h, "temporary-source-check", value!({
-        "root":root, "synchronize":listener.local_addr().unwrap().to_string(),
-        "synchronization_claim":h.parent.join("temporary-source-check-once"),
-    }));
+    super::automatic::native_git(
+        &h,
+        "temporary-source-check",
+        value!({
+            "root":root, "synchronize":listener.local_addr().unwrap().to_string(),
+            "synchronization_claim":h.parent.join("temporary-source-check-once"),
+        }),
+    );
     drop(allocation);
     let mut command = h.auto_command("maintain", &[]);
     let maintenance = std::thread::spawn(move || command.output().unwrap());
     let (mut stream, _) = listener.accept().unwrap();
     stream.read_exact(&mut [0; 5]).unwrap();
     let unrelated = chrono_worktree::TemporaryHost::allocate(
-        &store, "test-allocation", &outputs, "unrelated λ ",
-    ).unwrap();
-    let reference = chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
-    assert!(reference.acquire("late-diagnostic", "must not read excluded output")
-        .unwrap_err().contains("reference not acquired"));
+        &store,
+        "test-allocation",
+        &outputs,
+        "unrelated λ ",
+    )
+    .unwrap();
+    let reference =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    assert!(
+        reference
+            .acquire("late-diagnostic", "must not read excluded output")
+            .unwrap_err()
+            .contains("reference not acquired")
+    );
     stream.write_all(b"r").unwrap();
     let output = maintenance.join().unwrap();
     assert!(output.status.success(), "{output:?}");
     assert!(!root.join("cache 空白").exists());
-    assert_eq!(fs::read(root.join("source.rs")).unwrap(), b"retained source");
+    assert_eq!(
+        fs::read(root.join("source.rs")).unwrap(),
+        b"retained source"
+    );
     let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
-    assert!(registry["objects"][0]["consumers"].get("late-diagnostic").is_none());
+    assert!(
+        registry["objects"][0]["consumers"]
+            .get("late-diagnostic")
+            .is_none()
+    );
     assert!(unrelated.path().is_dir());
 }
 
@@ -334,32 +370,69 @@ fn actual_cargo_native_descendant_uses_absolute_allocation_from_varying_working_
         policy["retained_producers"][0]["generated_outputs"] = value!(outputs);
         fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
         commit(&h.root);
-        let (store, _) = chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation").unwrap();
-        let allocation = chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "Cargo λ ").unwrap();
+        let (store, _) =
+            chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+                .unwrap();
+        let allocation = chrono_worktree::TemporaryHost::allocate(
+            &store,
+            "test-allocation",
+            &outputs,
+            "Cargo λ ",
+        )
+        .unwrap();
         let root = allocation.path().to_owned();
         let project = root.join("cargo 空白");
         fs::create_dir_all(project.join("src")).unwrap();
-        fs::write(project.join("Cargo.toml"), include_bytes!("support/native_cargo/Cargo.toml")).unwrap();
-        fs::write(project.join("src/lib.rs"), include_bytes!("support/native_cargo/src/lib.rs")).unwrap();
+        fs::write(
+            project.join("Cargo.toml"),
+            include_bytes!("support/native_cargo/Cargo.toml"),
+        )
+        .unwrap();
+        fs::write(
+            project.join("src/lib.rs"),
+            include_bytes!("support/native_cargo/src/lib.rs"),
+        )
+        .unwrap();
         fs::create_dir(root.join("cache 空白")).unwrap();
         fs::write(root.join("cache 空白/output"), "rebuildable").unwrap();
-        let cwd = if vary { root.join("different cwd λ") } else { root.clone() };
+        let cwd = if vary {
+            root.join("different cwd λ")
+        } else {
+            root.clone()
+        };
         fs::create_dir_all(&cwd).unwrap();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let mut command = Command::new("cargo");
-        command.current_dir(&cwd).env_remove("CARGO_TARGET_DIR")
+        command
+            .current_dir(&cwd)
+            .env_remove("CARGO_TARGET_DIR")
             .env("CHRONO_TEMPORARY_CARGO_ROOT", &root)
-            .env("CHRONO_TEMPORARY_HELPER", env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"))
-            .env("CHRONO_TEMPORARY_SYNC", listener.local_addr().unwrap().to_string())
+            .env(
+                "CHRONO_TEMPORARY_HELPER",
+                env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
+            )
+            .env(
+                "CHRONO_TEMPORARY_SYNC",
+                listener.local_addr().unwrap().to_string(),
+            )
             .args(["test", "--lib", "--offline", "--manifest-path"])
             .arg(project.join("Cargo.toml"));
         allocation.bind_command(&mut command).unwrap();
         let capture_root = root.clone();
-        let cargo = std::thread::spawn(move || chrono_worktree::TemporaryHost::capture_bound_output(&capture_root, &mut command).unwrap());
+        let cargo = std::thread::spawn(move || {
+            chrono_worktree::TemporaryHost::capture_bound_output(&capture_root, &mut command)
+                .unwrap()
+        });
         let (mut stream, _) = listener.accept().unwrap();
         stream.read_exact(&mut [0; 5]).unwrap();
-        let diagnostic = chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
-        diagnostic.acquire("actual-cargo-assertion", "reads the completed native Cargo output").unwrap();
+        let diagnostic =
+            chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+        diagnostic
+            .acquire(
+                "actual-cargo-assertion",
+                "reads the completed native Cargo output",
+            )
+            .unwrap();
         drop(allocation);
         assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(project.join("target").exists());
@@ -369,7 +442,12 @@ fn actual_cargo_native_descendant_uses_absolute_allocation_from_varying_working_
         assert!(root.join("cargo-native-joined").exists());
         assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(project.join("target").exists());
-        diagnostic.release("actual-cargo-assertion", "native child and Cargo joined; assertions consumed originals").unwrap();
+        diagnostic
+            .release(
+                "actual-cargo-assertion",
+                "native child and Cargo joined; assertions consumed originals",
+            )
+            .unwrap();
         assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(!project.join("target").exists());
         assert!(!root.join("cache 空白").exists());
@@ -381,9 +459,13 @@ fn actual_cargo_native_descendant_uses_absolute_allocation_from_varying_working_
 
 #[test]
 fn capture_interruption_helper() {
-    let Some(root) = std::env::var_os("CHRONO_CAPTURE_ROOT") else { return; };
+    let Some(root) = std::env::var_os("CHRONO_CAPTURE_ROOT") else {
+        return;
+    };
     let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
-    command.arg("capture-once").env("CHRONO_CAPTURE_INTERRUPT", "1");
+    command
+        .arg("capture-once")
+        .env("CHRONO_CAPTURE_INTERRUPT", "1");
     chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
     let _ = chrono_worktree::TemporaryHost::capture_bound_output(Path::new(&root), &mut command);
     panic!("the actual native child must interrupt this capture producer");
@@ -392,15 +474,34 @@ fn capture_interruption_helper() {
 #[test]
 fn interrupted_native_capture_keeps_partial_raw_streams_without_a_join_or_disposal_claim() {
     let h = host();
-    let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation").unwrap();
-    let allocation = chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "interrupted λ ").unwrap();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "interrupted λ ",
+    )
+    .unwrap();
     let root = allocation.path().to_owned();
     fs::create_dir(root.join("cache 空白")).unwrap();
     fs::write(root.join("cache 空白/output"), "rebuildable").unwrap();
-    let diagnostic = chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
-    diagnostic.acquire("interruption-diagnostic", "reads original partial streams; native join remains unknown").unwrap();
+    let diagnostic =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    diagnostic
+        .acquire(
+            "interruption-diagnostic",
+            "reads original partial streams; native join remains unknown",
+        )
+        .unwrap();
     let mut command = Command::new(std::env::current_exe().unwrap());
-    command.args(["--exact", "temporary::capture_interruption_helper", "--nocapture"])
+    command
+        .args([
+            "--exact",
+            "temporary::capture_interruption_helper",
+            "--nocapture",
+        ])
         .env("CHRONO_CAPTURE_ROOT", &root);
     allocation.bind_command(&mut command).unwrap();
     let output = command.output().unwrap();
@@ -408,21 +509,39 @@ fn interrupted_native_capture_keeps_partial_raw_streams_without_a_join_or_dispos
     drop(command);
     drop(allocation);
     let capture = capture_directory(&root);
-    assert_eq!(fs::read(capture.join("stdout.bytes")).unwrap(), b"\xffpartial stdout\0\n");
-    assert_eq!(fs::read(capture.join("stderr.bytes")).unwrap(), b"\xfepartial stderr\0\n");
+    assert_eq!(
+        fs::read(capture.join("stdout.bytes")).unwrap(),
+        b"\xffpartial stdout\0\n"
+    );
+    assert_eq!(
+        fs::read(capture.join("stderr.bytes")).unwrap(),
+        b"\xfepartial stderr\0\n"
+    );
     assert!(!capture.join("result.json").exists());
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(root.join("cache 空白/output").exists());
     let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
-    assert!(!registry["objects"][0]["consumers"]["interruption-diagnostic"]["released"].as_bool().unwrap());
+    assert!(
+        !registry["objects"][0]["consumers"]["interruption-diagnostic"]["released"]
+            .as_bool()
+            .unwrap()
+    );
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
 }
 
 #[test]
 fn native_spawn_failure_keeps_intent_and_empty_original_streams_without_result() {
     let h = host();
-    let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation").unwrap();
-    let allocation = chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "spawn failure λ ").unwrap();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "spawn failure λ ",
+    )
+    .unwrap();
     let mut command = Command::new(allocation.path().join("missing-native-program"));
     assert!(allocation.capture_output(&mut command).is_err());
     let capture = capture_directory(allocation.path());
@@ -436,11 +555,21 @@ fn native_spawn_failure_keeps_intent_and_empty_original_streams_without_result()
 #[test]
 fn overlapping_native_allocations_preserve_output_after_kill_until_join_and_diagnostic_release() {
     use std::io::{Read, Write};
-    unsafe extern "C" { fn kill(pid: i32, signal: i32) -> i32; }
+    unsafe extern "C" {
+        fn kill(pid: i32, signal: i32) -> i32;
+    }
     for signal in [15, 9] {
         let h = host();
-        let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation").unwrap();
-        let allocation = chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "overlapping native λ ").unwrap();
+        let (store, outputs) =
+            chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+                .unwrap();
+        let allocation = chrono_worktree::TemporaryHost::allocate(
+            &store,
+            "test-allocation",
+            &outputs,
+            "overlapping native λ ",
+        )
+        .unwrap();
         let root = allocation.path().to_owned();
         fs::create_dir(root.join("cache 空白")).unwrap();
         fs::write(root.join("cache 空白/output"), "rebuildable").unwrap();
@@ -450,17 +579,28 @@ fn overlapping_native_allocations_preserve_output_after_kill_until_join_and_diag
         let mut streams = vec![];
         for _ in 0..2 {
             let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
-            command.arg("custody-holder").env_clear()
+            command
+                .arg("custody-holder")
+                .env_clear()
                 .env("CHRONO_TEMPORARY_CARGO_ROOT", &root)
-                .env("CHRONO_TEMPORARY_SYNC", listener.local_addr().unwrap().to_string());
+                .env(
+                    "CHRONO_TEMPORARY_SYNC",
+                    listener.local_addr().unwrap().to_string(),
+                );
             allocation.bind_command(&mut command).unwrap();
             children.push(command.spawn().unwrap());
             let (mut stream, _) = listener.accept().unwrap();
             stream.read_exact(&mut [0; 5]).unwrap();
             streams.push(stream);
         }
-        let diagnostic = chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
-        diagnostic.acquire("overlap-diagnostic", "reads exact output after the actual native children join").unwrap();
+        let diagnostic =
+            chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+        diagnostic
+            .acquire(
+                "overlap-diagnostic",
+                "reads exact output after the actual native children join",
+            )
+            .unwrap();
         drop(allocation);
         let mut first = children.remove(0);
         assert_eq!(unsafe { kill(first.id() as i32, signal) }, 0);
@@ -470,8 +610,16 @@ fn overlapping_native_allocations_preserve_output_after_kill_until_join_and_diag
         streams[1].write_all(b"r").unwrap();
         assert!(children[0].wait().unwrap().success());
         assert_eq!(h.auto("maintain", &[]).0, 0);
-        assert_eq!(fs::read(root.join("cache 空白/output")).unwrap(), b"rebuildable");
-        diagnostic.release("overlap-diagnostic", "both native children joined and original assertion completed").unwrap();
+        assert_eq!(
+            fs::read(root.join("cache 空白/output")).unwrap(),
+            b"rebuildable"
+        );
+        diagnostic
+            .release(
+                "overlap-diagnostic",
+                "both native children joined and original assertion completed",
+            )
+            .unwrap();
         assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(!root.join("cache 空白").exists());
         assert_eq!(fs::read(root.join("source.rs")).unwrap(), b"unique source");
@@ -481,33 +629,69 @@ fn overlapping_native_allocations_preserve_output_after_kill_until_join_and_diag
 #[test]
 fn prospective_outputs_cannot_claim_git_identity_or_native_capture_originals() {
     let h = host();
-    let (store, _) = chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation").unwrap();
-    for output in [".git/objects/", "nested/.git/", ".chrono-harness/state/command-captures/", "stdout.bin/"] {
-        assert!(chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &[output.into()], "invalid λ ").is_err());
+    let (store, _) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    for output in [
+        ".git/objects/",
+        "nested/.git/",
+        ".chrono-harness/state/command-captures/",
+        "stdout.bin/",
+    ] {
+        assert!(
+            chrono_worktree::TemporaryHost::allocate(
+                &store,
+                "test-allocation",
+                &[output.into()],
+                "invalid λ "
+            )
+            .is_err()
+        );
     }
 }
 
 #[test]
 fn unavailable_lease_preserves_its_registration_and_allows_an_eligible_allocation() {
     let h = host();
-    let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation").unwrap();
-    let allocation = chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "lost lease λ ").unwrap();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "lost lease λ ",
+    )
+    .unwrap();
     let root = allocation.path().to_owned();
     fs::create_dir(root.join("cache 空白")).unwrap();
     fs::write(root.join("cache 空白/original"), "preserve").unwrap();
     drop(allocation);
-    let before = json(&fs::read(store.join("objects.json")).unwrap()).unwrap()["objects"][0].clone();
+    let before =
+        json(&fs::read(store.join("objects.json")).unwrap()).unwrap()["objects"][0].clone();
     let lease = before["cache_lease"]["path"].as_str().unwrap();
     fs::rename(store.join(lease), store.join("retained-unavailable-lease")).unwrap();
-    let sibling = chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "released sibling λ ").unwrap();
+    let sibling = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "released sibling λ ",
+    )
+    .unwrap();
     let generated = sibling.path().join("cache 空白");
     fs::create_dir(&generated).unwrap();
     fs::write(generated.join("rebuildable"), "generated").unwrap();
     drop(sibling);
     let (exit, report, _) = h.auto("maintain", &[]);
     assert_eq!(exit, 2, "{report}");
-    assert_eq!(json(&fs::read(store.join("objects.json")).unwrap()).unwrap()["objects"][0], before);
-    assert_eq!(fs::read(root.join("cache 空白/original")).unwrap(), b"preserve");
+    assert_eq!(
+        json(&fs::read(store.join("objects.json")).unwrap()).unwrap()["objects"][0],
+        before
+    );
+    assert_eq!(
+        fs::read(root.join("cache 空白/original")).unwrap(),
+        b"preserve"
+    );
     assert!(!generated.exists());
 }
 
@@ -516,39 +700,79 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     use std::io::{Read, Write};
     let coordinator = source();
     let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
-        &coordinator, POLICY, "worktree-test-host",
-    ).unwrap();
+        &coordinator,
+        POLICY,
+        "worktree-test-host",
+    )
+    .unwrap();
     let allocation = chrono_worktree::TemporaryHost::allocate(
-        &store, "worktree-test-host", &outputs, "real coordinator λ ",
-    ).unwrap();
+        &store,
+        "worktree-test-host",
+        &outputs,
+        "real coordinator λ ",
+    )
+    .unwrap();
     let root = allocation.path().to_owned();
     let checkout = root.join("source with spaces");
     let project = checkout.join("independent/producer");
     fs::create_dir_all(project.join("src")).unwrap();
-    fs::write(project.join("Cargo.toml"), include_bytes!("support/cargo_pair/producer/Cargo.toml")).unwrap();
-    fs::write(project.join("Cargo.lock"), include_bytes!("support/cargo_pair/producer/Cargo.lock")).unwrap();
-    fs::write(project.join("src/lib.rs"), include_bytes!("support/cargo_pair/producer/src/lib.rs")).unwrap();
-    fs::write(checkout.join(".gitignore"), "independent/producer/target/\n").unwrap();
+    fs::write(
+        project.join("Cargo.toml"),
+        include_bytes!("support/cargo_pair/producer/Cargo.toml"),
+    )
+    .unwrap();
+    fs::write(
+        project.join("Cargo.lock"),
+        include_bytes!("support/cargo_pair/producer/Cargo.lock"),
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/lib.rs"),
+        include_bytes!("support/cargo_pair/producer/src/lib.rs"),
+    )
+    .unwrap();
+    fs::write(
+        checkout.join(".gitignore"),
+        "independent/producer/target/\n",
+    )
+    .unwrap();
     git(&checkout, &["init", "-q"]);
     let original_head = commit(&checkout);
     let original = fs::read(project.join("src/lib.rs")).unwrap();
     let mut cargo = Command::new("cargo");
-    cargo.current_dir(&checkout).env_remove("CARGO_TARGET_DIR")
-        .args(["build", "--offline", "--locked", "--manifest-path", "independent/producer/Cargo.toml"]);
+    cargo
+        .current_dir(&checkout)
+        .env_remove("CARGO_TARGET_DIR")
+        .args([
+            "build",
+            "--offline",
+            "--locked",
+            "--manifest-path",
+            "independent/producer/Cargo.toml",
+        ]);
     let output = allocation.capture_output(&mut cargo).unwrap();
     assert!(output.status.success(), "{output:?}");
     drop(cargo);
-    let selected = "source with spaces/independent/producer/target/debug/libbounded_cache_producer.rlib";
+    let selected =
+        "source with spaces/independent/producer/target/debug/libbounded_cache_producer.rlib";
     assert!(root.join(selected).is_file());
-    let unknown = store.join(format!("unknown-neighbor-{}", root.file_name().unwrap().to_str().unwrap()));
+    let unknown = store.join(format!(
+        "unknown-neighbor-{}",
+        root.file_name().unwrap().to_str().unwrap()
+    ));
     fs::create_dir(&unknown).unwrap();
     fs::write(unknown.join("original"), [255, 0, 10]).unwrap();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
-    command.arg("custody-holder").env_clear()
+    command
+        .arg("custody-holder")
+        .env_clear()
         .env("CHRONO_TEMPORARY_CARGO_ROOT", &root)
         .env("CHRONO_TEMPORARY_MEMBER", selected)
-        .env("CHRONO_TEMPORARY_SYNC", listener.local_addr().unwrap().to_string());
+        .env(
+            "CHRONO_TEMPORARY_SYNC",
+            listener.local_addr().unwrap().to_string(),
+        );
     allocation.bind_command(&mut command).unwrap();
     let mut child = command.spawn().unwrap();
     drop(command);
@@ -559,17 +783,31 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
         let mut command = Command::new(coordinator.join(".chrono-harness/bin/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-        let output = chrono_worktree::TemporaryHost::capture_bound_output(&root, &mut command).unwrap();
+        let output =
+            chrono_worktree::TemporaryHost::capture_bound_output(&root, &mut command).unwrap();
         let report = json(&output.stdout).unwrap();
         let failures = report["cleanup_failures"].as_array().unwrap();
-        assert_eq!(output.status.code(), Some(if failures.is_empty() { 0 } else { 2 }), "{report}");
+        assert_eq!(
+            output.status.code(),
+            Some(if failures.is_empty() { 0 } else { 2 }),
+            "{report}"
+        );
         report
     };
     let protected = maintain();
     assert!(project.join("target").exists());
-    assert!(protected["producer_objects"].as_array().unwrap().iter().any(|row|
-        row["producer"] == "worktree-test-host" && row["status"] == "protected"
-        && row["path"].as_str().unwrap().ends_with(root.file_name().unwrap().to_str().unwrap())));
+    assert!(
+        protected["producer_objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["producer"] == "worktree-test-host"
+                && row["status"] == "protected"
+                && row["path"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with(root.file_name().unwrap().to_str().unwrap()))
+    );
     stream.write_all(b"r").unwrap();
     assert!(child.wait().unwrap().success());
     let reclaimed = maintain();

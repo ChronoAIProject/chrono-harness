@@ -19,20 +19,32 @@ pub fn fixture_git() -> PathBuf {
 /// Only explicitly selected executing fixtures use the retained producer.
 pub fn temporary_host(prefix: &str) -> FixtureDirectory {
     let (directory, outputs) = temporary_store();
-    FixtureDirectory::Retained(chrono_worktree::TemporaryHost::allocate(directory, "ci-test-host", outputs, prefix).unwrap())
+    FixtureDirectory::Retained(
+        chrono_worktree::TemporaryHost::allocate(directory, "ci-test-host", outputs, prefix)
+            .unwrap(),
+    )
 }
 fn temporary_store() -> &'static (PathBuf, Vec<String>) {
     static STORE: std::sync::OnceLock<(PathBuf, Vec<String>)> = std::sync::OnceLock::new();
-    STORE.get_or_init(|| chrono_worktree::TemporaryHost::registered_store(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
-        ".chrono-harness/worktree.json", "ci-test-host",
-    ).expect("committed selected CI fixture producer"))
+    STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "ci-test-host",
+        )
+        .expect("committed selected CI fixture producer")
+    })
 }
 pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path) {
     chrono_worktree::TemporaryHost::register_copy(
-        &temporary_store().0, "ci-test-host", source, destination, Some(root),
+        &temporary_store().0,
+        "ci-test-host",
+        source,
+        destination,
+        Some(root),
         "crates/ci-tests/tests/units.rs::install_retained_tools",
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 pub enum FixtureDirectory {
@@ -52,7 +64,10 @@ impl FixtureDirectory {
             Self::Retained(host) => host.bind_command(command),
         }
     }
-    pub fn capture_output(&self, command: &mut std::process::Command) -> Result<std::process::Output, String> {
+    pub fn capture_output(
+        &self,
+        command: &mut std::process::Command,
+    ) -> Result<std::process::Output, String> {
         match self {
             Self::Ephemeral(_) => command.output().map_err(|e| e.to_string()),
             Self::Retained(host) => host.capture_output(command),
@@ -61,8 +76,14 @@ impl FixtureDirectory {
     pub fn retain_diagnostic(&self) -> Result<(), String> {
         if let Self::Retained(host) = self {
             chrono_worktree::RetainedArtifact::resume(
-                host.path().parent().unwrap(), "ci-test-host", host.path(),
-            )?.acquire("fixture-diagnostic", "actual failed short fixture diagnostics remain to be consumed")?;
+                host.path().parent().unwrap(),
+                "ci-test-host",
+                host.path(),
+            )?
+            .acquire(
+                "fixture-diagnostic",
+                "actual failed short fixture diagnostics remain to be consumed",
+            )?;
         }
         Ok(())
     }

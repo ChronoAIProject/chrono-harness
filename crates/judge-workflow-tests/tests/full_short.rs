@@ -29,8 +29,7 @@ fn adopt_short_host(
         let original = source().join(format!("crates/{project}/target/debug/{binary}"));
         let destination = root.join(format!(".chrono-harness/bin/{binary}"));
         host::copied_fixture_input(&root, &original, &destination);
-        fs::copy(original, destination)
-        .unwrap();
+        fs::copy(original, destination).unwrap();
     }
     let git_bin = chrono_harness::resolve_program(&root, "git", None).unwrap();
     let cfg = h.values.get_mut(CONFIG).unwrap();
@@ -120,9 +119,12 @@ fn adopt_short_host(
             .push(f);
     }
     h.save();
-    let out = host::capture_native(&root, Command::new(root.join(".chrono-harness/bin/chrono-ci"))
-        .current_dir(&root)
-        .args(["generate", "--host-root", ".", "--config", PROVIDER]));
+    let out = host::capture_native(
+        &root,
+        Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+            .current_dir(&root)
+            .args(["generate", "--host-root", ".", "--config", PROVIDER]),
+    );
     assert!(
         out.status.success(),
         "{}",
@@ -280,7 +282,8 @@ fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
     if !output.status.success() {
         println!("SHORT_FAILURE {}", String::from_utf8_lossy(&output.stderr));
         if source == Some("ci") && args == ["check", "--collect"] && output.stdout.is_empty() {
-            let protection = host::retain_diagnostic(&root, "original native collection failure still consumed");
+            let protection =
+                host::retain_diagnostic(&root, "original native collection failure still consumed");
             let retained = tempfile::Builder::new()
                 .prefix("chrono-native-collection-failure-")
                 .tempdir()
@@ -395,9 +398,12 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
         fs::create_dir_all(input.parent().unwrap()).unwrap();
         fs::write(&input, b"original input bytes").unwrap();
         let before = marker(tools.path());
-        let out = host::capture_native(&root, Command::new(root.join(".chrono-harness/bin/chrono-ci"))
-            .current_dir(&root)
-            .args(["generate", "--host-root", ".", "--config", PROVIDER]));
+        let out = host::capture_native(
+            &root,
+            Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+                .current_dir(&root)
+                .args(["generate", "--host-root", ".", "--config", PROVIDER]),
+        );
         assert!(!out.status.success(), "accepted {case}");
         assert_eq!(fs::read(input).unwrap(), b"original input bytes");
         assert_eq!(marker(tools.path()), before);
@@ -406,7 +412,9 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
         }
     }
 }
-fn local_short_lane(age_seconds: Option<f64>) -> (Host, host::FixtureDirectory, std::path::PathBuf) {
+fn local_short_lane(
+    age_seconds: Option<f64>,
+) -> (Host, host::FixtureDirectory, std::path::PathBuf) {
     local_short_lane_with_governance(age_seconds, false)
 }
 fn local_short_lane_with_governance(
@@ -425,10 +433,13 @@ fn make_local_lane(
     // Finish first execution of the declared fixture images before birth starts
     // the freshness clock. These probes do not execute any business operation.
     for name in ["chrono-harness", "chrono-ci", "chrono-worktree"] {
-        let ready = host::capture_native(&root, Command::new(root.join(format!(".chrono-harness/bin/{name}")))
-            .current_dir(&root)
-            .env_clear()
-            .arg("--version"));
+        let ready = host::capture_native(
+            &root,
+            Command::new(root.join(format!(".chrono-harness/bin/{name}")))
+                .current_dir(&root)
+                .env_clear()
+                .arg("--version"),
+        );
         assert!(
             ready.status.success(),
             "fixture readiness {name}: {ready:?}"
@@ -441,17 +452,20 @@ fn make_local_lane(
     }
     for judge in h.values[JUDGES]["judges"].as_array().unwrap() {
         let name = judge["executable"].as_str().unwrap();
-        let ready = host::capture_native(&root, Command::new(root.join(name))
-            .current_dir(&root)
-            .env_clear()
-            .args(
-                judge["argv"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|v| v.as_str().unwrap()),
-            )
-            .stdin(std::process::Stdio::null()));
+        let ready = host::capture_native(
+            &root,
+            Command::new(root.join(name))
+                .current_dir(&root)
+                .env_clear()
+                .args(
+                    judge["argv"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.as_str().unwrap()),
+                )
+                .stdin(std::process::Stdio::null()),
+        );
         assert_eq!(
             ready.status.code(),
             Some(2),
@@ -508,21 +522,24 @@ fn make_local_lane(
             .to_string()
     };
     let mut timing = json!({"start_requested_ns": timestamp()});
-    let out = host::capture_native(&root, Command::new(root.join(".chrono-harness/bin/chrono-worktree"))
-        .current_dir(&root)
-        .args([
-            "start",
-            "--host-root",
-            root.to_str().unwrap(),
-            "--config",
-            WORKTREE,
-            "--kind",
-            kind,
-            "--name",
-            "short-full",
-            "--path",
-            lane.to_str().unwrap(),
-        ]));
+    let out = host::capture_native(
+        &root,
+        Command::new(root.join(".chrono-harness/bin/chrono-worktree"))
+            .current_dir(&root)
+            .args([
+                "start",
+                "--host-root",
+                root.to_str().unwrap(),
+                "--config",
+                WORKTREE,
+                "--kind",
+                kind,
+                "--name",
+                "short-full",
+                "--path",
+                lane.to_str().unwrap(),
+            ]),
+    );
     timing["start_returned_ns"] = json!(timestamp());
     assert!(
         out.status.success(),
@@ -879,16 +896,19 @@ fn native_command(root: &Path, id: &str, candidate: &str, payload: &Path) -> (i3
         })
         .expect("generated short command")
         .trim();
-    let out = host::capture_native(root, Command::new("/bin/sh")
-        .current_dir(root)
-        .args(["-c", command])
-        .env("CHRONO_CHECK_SOURCE", "ci")
-        .env("GITHUB_EVENT_NAME", "push")
-        .env("GITHUB_EVENT_PATH", payload)
-        .env("CHRONO_WORKFLOW_REVISION", candidate)
-        .env("GITHUB_REPOSITORY", "fixture/full")
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT"));
+    let out = host::capture_native(
+        root,
+        Command::new("/bin/sh")
+            .current_dir(root)
+            .args(["-c", command])
+            .env("CHRONO_CHECK_SOURCE", "ci")
+            .env("GITHUB_EVENT_NAME", "push")
+            .env("GITHUB_EVENT_PATH", payload)
+            .env("CHRONO_WORKFLOW_REVISION", candidate)
+            .env("GITHUB_REPOSITORY", "fixture/full")
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT"),
+    );
     if !out.status.success() {
         println!("GENERATED_FAILURE {}", String::from_utf8_lossy(&out.stderr));
     }
@@ -1178,22 +1198,25 @@ fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_
     // Obtain genuine current captures while retaining the original historical base snapshot.
     let inputs_path = lane.join(".chrono-harness/state/inputs.json");
     let mut inputs: Value = chrono_harness::json(&fs::read(&inputs_path).unwrap()).unwrap();
-    let captured = host::capture_native(&lane, Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir(&lane)
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .env_remove("CHRONO_CHECK_SOURCE")
-        .args([
-            "capture",
-            "--host-root",
-            ".",
-            "--config",
-            CONFIG,
-            "--commit",
-            &git(&lane, &["rev-parse", "HEAD"]),
-            "--output",
-            ".chrono-harness/state/feature-current.json",
-        ]));
+    let captured = host::capture_native(
+        &lane,
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(&lane)
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .env_remove("CHRONO_CHECK_SOURCE")
+            .args([
+                "capture",
+                "--host-root",
+                ".",
+                "--config",
+                CONFIG,
+                "--commit",
+                &git(&lane, &["rev-parse", "HEAD"]),
+                "--output",
+                ".chrono-harness/state/feature-current.json",
+            ]),
+    );
     assert!(
         captured.status.success(),
         "{}",
@@ -1221,22 +1244,25 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     // changes that same location. No historical judge is executed.
     let base_original_path = ".chrono-harness/state/inputs/governance-base.json";
     git(&lane, &["checkout", "--detach", &h.base]);
-    let old_capture = host::capture_native(&lane, Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir(&lane)
-        .env("CHRONO_CHECK_SOURCE", "ci")
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args([
-            "capture",
-            "--host-root",
-            ".",
-            "--config",
-            CONFIG,
-            "--commit",
-            &h.base,
-            "--output",
-            base_original_path,
-        ]));
+    let old_capture = host::capture_native(
+        &lane,
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(&lane)
+            .env("CHRONO_CHECK_SOURCE", "ci")
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "capture",
+                "--host-root",
+                ".",
+                "--config",
+                CONFIG,
+                "--commit",
+                &h.base,
+                "--output",
+                base_original_path,
+            ]),
+    );
     assert!(
         old_capture.status.success(),
         "exit={} stdout={} stderr={}",
@@ -1370,9 +1396,12 @@ else:print(json.dumps(run))
     fs::set_permissions(&mock, fs::Permissions::from_mode(0o755)).unwrap();
     provider["gather"]["program"] = json!(mock);
     fs::write(lane.join(PROVIDER), serde_json::to_vec(&provider).unwrap()).unwrap();
-    let generated = host::capture_native(&lane, Command::new(lane.join(".chrono-harness/bin/chrono-ci"))
-        .current_dir(&lane)
-        .args(["generate", "--host-root", ".", "--config", PROVIDER]));
+    let generated = host::capture_native(
+        &lane,
+        Command::new(lane.join(".chrono-harness/bin/chrono-ci"))
+            .current_dir(&lane)
+            .args(["generate", "--host-root", ".", "--config", PROVIDER]),
+    );
     assert!(
         generated.status.success(),
         "{}",
@@ -1392,24 +1421,27 @@ else:print(json.dumps(run))
         } else {
             "push"
         };
-        let out = host::capture_native(root, Command::new(root.join(".chrono-harness/bin/chrono-ci"))
-            .current_dir(root)
-            .env("GITHUB_EVENT_NAME", event)
-            .env("GITHUB_EVENT_PATH", &payload)
-            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-            .env("GITHUB_REPOSITORY", "fixture/native")
-            .env("GITHUB_RUN_ID", run)
-            .env("GITHUB_RUN_ATTEMPT", "1")
-            .env("GITHUB_JOB", "detect")
-            .args([
-                "detect",
-                "--host-root",
-                ".",
-                "--config",
-                PROVIDER,
-                "--github-output",
-                tools.path().join("detect-output").to_str().unwrap(),
-            ]));
+        let out = host::capture_native(
+            root,
+            Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+                .current_dir(root)
+                .env("GITHUB_EVENT_NAME", event)
+                .env("GITHUB_EVENT_PATH", &payload)
+                .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+                .env("GITHUB_REPOSITORY", "fixture/native")
+                .env("GITHUB_RUN_ID", run)
+                .env("GITHUB_RUN_ATTEMPT", "1")
+                .env("GITHUB_JOB", "detect")
+                .args([
+                    "detect",
+                    "--host-root",
+                    ".",
+                    "--config",
+                    PROVIDER,
+                    "--github-output",
+                    tools.path().join("detect-output").to_str().unwrap(),
+                ]),
+        );
         assert!(
             out.status.success(),
             "{}",
@@ -1483,7 +1515,8 @@ else:print(json.dumps(run))
         }
         let out = host::capture_native(root, &mut c);
         if operation == "publish" && !out.status.success() {
-            let protection = host::retain_diagnostic(root, "original native publication failure still consumed");
+            let protection =
+                host::retain_diagnostic(root, "original native publication failure still consumed");
             let retained = tempfile::Builder::new()
                 .prefix("chrono-native-publication-failure-")
                 .tempdir()
@@ -1557,14 +1590,21 @@ else:print(json.dumps(run))
     fs::write(&metadata,serde_json::to_vec(&json!({"candidate":h.candidate,"upload":uploads,"workflow":lane.join(".github/workflows/collection.yml")})).unwrap()).unwrap();
     let unit_root = host::fixture_directory("workflow native copied host λ ");
     assert!(
-        host::capture_native(unit_root.path(), Command::new("git")
-            .args(["clone", "--quiet", "--no-hardlinks"])
-            .arg(&lane)
-            .arg(unit_root.path()))
-            .status
-            .success()
+        host::capture_native(
+            unit_root.path(),
+            Command::new("git")
+                .args(["clone", "--quiet", "--no-hardlinks"])
+                .arg(&lane)
+                .arg(unit_root.path())
+        )
+        .status
+        .success()
     );
-    copy_program_tree(&lane.join(".chrono-harness/bin"), &unit_root.path().join(".chrono-harness/bin"), &unit_root.path());
+    copy_program_tree(
+        &lane.join(".chrono-harness/bin"),
+        &unit_root.path().join(".chrono-harness/bin"),
+        &unit_root.path(),
+    );
     let before = marker(tools.path());
     for case in [
         "missing",
@@ -1615,24 +1655,27 @@ else:print(json.dumps(run))
         seed
     );
     // Capture the current endpoint in the real business environment with acquisition fields absent.
-    let capture = host::capture_native(unit_root.path(), Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir(unit_root.path())
-        .env("CHRONO_CHECK_SOURCE", "ci")
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args([
-            "capture",
-            "--host-root",
-            ".",
-            "--config",
-            CONFIG,
-            "--commit",
-            &h.candidate,
-            "--unit",
-            "one",
-            "--output",
-            ".chrono-harness/state/candidate-real.json",
-        ]));
+    let capture = host::capture_native(
+        unit_root.path(),
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(unit_root.path())
+            .env("CHRONO_CHECK_SOURCE", "ci")
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "capture",
+                "--host-root",
+                ".",
+                "--config",
+                CONFIG,
+                "--commit",
+                &h.candidate,
+                "--unit",
+                "one",
+                "--output",
+                ".chrono-harness/state/candidate-real.json",
+            ]),
+    );
     assert!(
         capture.status.success(),
         "{}",
@@ -1640,45 +1683,51 @@ else:print(json.dumps(run))
     );
     // The historical original was captured at its explicit checked-out endpoint.
     git(&lane, &["checkout", "--detach", &h.base]);
-    let base = host::capture_native(&lane, Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir(&lane)
-        .env("CHRONO_CHECK_SOURCE", "ci")
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args([
-            "capture",
-            "--host-root",
-            ".",
-            "--config",
-            CONFIG,
-            "--commit",
-            &h.base,
-            "--unit",
-            "one",
-            "--output",
-            ".chrono-harness/state/base-real.json",
-        ]));
+    let base = host::capture_native(
+        &lane,
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(&lane)
+            .env("CHRONO_CHECK_SOURCE", "ci")
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "capture",
+                "--host-root",
+                ".",
+                "--config",
+                CONFIG,
+                "--commit",
+                &h.base,
+                "--unit",
+                "one",
+                "--output",
+                ".chrono-harness/state/base-real.json",
+            ]),
+    );
     assert!(
         base.status.success(),
         "{}",
         String::from_utf8_lossy(&base.stderr)
     );
     git(&lane, &["checkout", "--detach", &h.candidate]);
-    let paired = host::capture_native(unit_root.path(), Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir(unit_root.path())
-        .args([
-            "pair",
-            "--host-root",
-            ".",
-            "--base-root",
-            lane.to_str().unwrap(),
-            "--base-snapshot",
-            ".chrono-harness/state/base-real.json",
-            "--candidate-snapshot",
-            ".chrono-harness/state/candidate-real.json",
-            "--output",
-            ".chrono-harness/state/inputs.json",
-        ]));
+    let paired = host::capture_native(
+        unit_root.path(),
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(unit_root.path())
+            .args([
+                "pair",
+                "--host-root",
+                ".",
+                "--base-root",
+                lane.to_str().unwrap(),
+                "--base-snapshot",
+                ".chrono-harness/state/base-real.json",
+                "--candidate-snapshot",
+                ".chrono-harness/state/candidate-real.json",
+                "--output",
+                ".chrono-harness/state/inputs.json",
+            ]),
+    );
     assert!(
         paired.status.success(),
         "{}",
@@ -1738,14 +1787,21 @@ else:print(json.dumps(run))
     // A second independent checkout contributes its own genuine endpoint pair and unit run.
     let second = host::fixture_directory("workflow native copied host λ ");
     assert!(
-        host::capture_native(second.path(), Command::new("git")
-            .args(["clone", "--quiet", "--no-hardlinks"])
-            .arg(&lane)
-            .arg(second.path()))
-            .status
-            .success()
+        host::capture_native(
+            second.path(),
+            Command::new("git")
+                .args(["clone", "--quiet", "--no-hardlinks"])
+                .arg(&lane)
+                .arg(second.path())
+        )
+        .status
+        .success()
     );
-    copy_program_tree(&lane.join(".chrono-harness/bin"), &second.path().join(".chrono-harness/bin"), &second.path());
+    copy_program_tree(
+        &lane.join(".chrono-harness/bin"),
+        &second.path().join(".chrono-harness/bin"),
+        &second.path(),
+    );
     let acquired = native(second.path(), "acquire", Some("two"), "900");
     assert!(
         acquired.status.success(),
@@ -1757,24 +1813,27 @@ else:print(json.dumps(run))
         seed
     );
     let capture_two = |root: &Path, endpoint: &str, output: &str| {
-        let p = host::capture_native(root, Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-            .current_dir(root)
-            .env("CHRONO_CHECK_SOURCE", "ci")
-            .env("DECLARED_EMPTY", "")
-            .env_remove("DECLARED_ABSENT")
-            .args([
-                "capture",
-                "--host-root",
-                ".",
-                "--config",
-                CONFIG,
-                "--commit",
-                endpoint,
-                "--unit",
-                "two",
-                "--output",
-                output,
-            ]));
+        let p = host::capture_native(
+            root,
+            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                .current_dir(root)
+                .env("CHRONO_CHECK_SOURCE", "ci")
+                .env("DECLARED_EMPTY", "")
+                .env_remove("DECLARED_ABSENT")
+                .args([
+                    "capture",
+                    "--host-root",
+                    ".",
+                    "--config",
+                    CONFIG,
+                    "--commit",
+                    endpoint,
+                    "--unit",
+                    "two",
+                    "--output",
+                    output,
+                ]),
+        );
         assert!(p.status.success(), "{}", String::from_utf8_lossy(&p.stderr));
     };
     capture_two(
@@ -1785,42 +1844,48 @@ else:print(json.dumps(run))
     git(&lane, &["checkout", "--detach", &h.base]);
     capture_two(&lane, &h.base, ".chrono-harness/state/base-two.json");
     git(&lane, &["checkout", "--detach", &h.candidate]);
-    let p = host::capture_native(second.path(), Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir(second.path())
-        .args([
-            "pair",
-            "--host-root",
-            ".",
-            "--base-root",
-            lane.to_str().unwrap(),
-            "--base-snapshot",
-            ".chrono-harness/state/base-two.json",
-            "--candidate-snapshot",
-            ".chrono-harness/state/candidate-two.json",
-            "--output",
-            ".chrono-harness/state/inputs.json",
-        ]));
+    let p = host::capture_native(
+        second.path(),
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(second.path())
+            .args([
+                "pair",
+                "--host-root",
+                ".",
+                "--base-root",
+                lane.to_str().unwrap(),
+                "--base-snapshot",
+                ".chrono-harness/state/base-two.json",
+                "--candidate-snapshot",
+                ".chrono-harness/state/candidate-two.json",
+                "--output",
+                ".chrono-harness/state/inputs.json",
+            ]),
+    );
     assert!(p.status.success(), "{}", String::from_utf8_lossy(&p.stderr));
     let (exit, two) = short(second.path(), &["check", "--unit", "two"], Some("ci"));
     passed(exit, &two);
     let production = |root: &Path, unit: &str| {
-        let out = host::capture_native(root, Command::new(root.join(".chrono-harness/bin/chrono-ci"))
-            .current_dir(root)
-            .env("GITHUB_REPOSITORY", "fixture/native")
-            .env("GITHUB_RUN_ID", "900")
-            .env("GITHUB_RUN_ATTEMPT", "1")
-            .env("GITHUB_JOB", fixture_job_id(unit))
-            .args([
-                "production",
-                "--host-root",
-                ".",
-                "--config",
-                PROVIDER,
-                "--unit",
-                unit,
-                "--github-output",
-                tools.path().join("unit-output").to_str().unwrap(),
-            ]));
+        let out = host::capture_native(
+            root,
+            Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+                .current_dir(root)
+                .env("GITHUB_REPOSITORY", "fixture/native")
+                .env("GITHUB_RUN_ID", "900")
+                .env("GITHUB_RUN_ATTEMPT", "1")
+                .env("GITHUB_JOB", fixture_job_id(unit))
+                .args([
+                    "production",
+                    "--host-root",
+                    ".",
+                    "--config",
+                    PROVIDER,
+                    "--unit",
+                    unit,
+                    "--github-output",
+                    tools.path().join("unit-output").to_str().unwrap(),
+                ]),
+        );
         assert!(
             out.status.success(),
             "{}",
@@ -1877,14 +1942,21 @@ else:print(json.dumps(run))
     // applies a genuinely later current observation to the same context bytes.
     let repeated_root = host::fixture_directory("workflow native copied host λ ");
     assert!(
-        host::capture_native(repeated_root.path(), Command::new("git")
-            .args(["clone", "--quiet", "--no-hardlinks"])
-            .arg(&lane)
-            .arg(repeated_root.path()))
-            .status
-            .success()
+        host::capture_native(
+            repeated_root.path(),
+            Command::new("git")
+                .args(["clone", "--quiet", "--no-hardlinks"])
+                .arg(&lane)
+                .arg(repeated_root.path())
+        )
+        .status
+        .success()
     );
-    copy_program_tree(&lane.join(".chrono-harness/bin"), &repeated_root.path().join(".chrono-harness/bin"), &repeated_root.path());
+    copy_program_tree(
+        &lane.join(".chrono-harness/bin"),
+        &repeated_root.path().join(".chrono-harness/bin"),
+        &repeated_root.path(),
+    );
     let mut rerun: Value = chrono_harness::json(&fs::read(&metadata).unwrap()).unwrap();
     rerun["attempt"] = json!(2);
     rerun["carried"] = json!(true);
@@ -1921,14 +1993,21 @@ else:print(json.dumps(run))
     fs::write(lane.join(base_original_path), &base_original_raw).unwrap();
     let delivery_root = host::fixture_directory("workflow native copied host λ ");
     assert!(
-        host::capture_native(delivery_root.path(), Command::new("git")
-            .args(["clone", "--quiet", "--no-hardlinks"])
-            .arg(&lane)
-            .arg(delivery_root.path()))
-            .status
-            .success()
+        host::capture_native(
+            delivery_root.path(),
+            Command::new("git")
+                .args(["clone", "--quiet", "--no-hardlinks"])
+                .arg(&lane)
+                .arg(delivery_root.path())
+        )
+        .status
+        .success()
     );
-    copy_program_tree(&lane.join(".chrono-harness/bin"), &delivery_root.path().join(".chrono-harness/bin"), &delivery_root.path());
+    copy_program_tree(
+        &lane.join(".chrono-harness/bin"),
+        &delivery_root.path().join(".chrono-harness/bin"),
+        &delivery_root.path(),
+    );
     copy_tree(
         &lane.join(".chrono-harness/state/collection"),
         &delivery_root
@@ -2030,17 +2109,21 @@ fn fixture_job_id(unit: &str) -> String {
 // original processes and report bytes; ordinary dedicated-suite runs need no flag.
 fn repair_short(root: &Path, name: &str, args: &[&str]) -> (i32, Value) {
     let root = fs::canonicalize(root).unwrap();
-    let output = host::capture_native(&root, Command::new(root.join(".chrono-harness/bin/chrono-harness"))
-        .current_dir(&root)
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .env_remove("CHRONO_CHECK_SOURCE")
-        .args(args));
+    let output = host::capture_native(
+        &root,
+        Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+            .current_dir(&root)
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .env_remove("CHRONO_CHECK_SOURCE")
+            .args(args),
+    );
     let runner = sha256(&fs::read(root.join(".chrono-harness/bin/chrono-harness")).unwrap());
     let ci = sha256(&fs::read(root.join(".chrono-harness/bin/chrono-ci")).unwrap());
     assert_ne!(runner, ci, "fixture must have distinct actual producers");
     if let Some(directory) = std::env::var_os("CHRONO_COLLECTION_REPAIR_EVIDENCE") {
-        let protection = host::retain_diagnostic(&root, "requested repair originals are still consumed");
+        let protection =
+            host::retain_diagnostic(&root, "requested repair originals are still consumed");
         let directory = std::path::PathBuf::from(directory).join(name);
         fs::create_dir_all(&directory).unwrap();
         fs::write(directory.join("stdout"), &output.stdout).unwrap();

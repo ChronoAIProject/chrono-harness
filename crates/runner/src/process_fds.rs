@@ -154,7 +154,10 @@ impl Transfer {
 /// The command owns CLOEXEC copies until spawn/drop; only its child inherits them.
 pub fn forward_command(command: &mut Command, fds: &[BorrowedFd<'_>]) -> Result<(), String> {
     if command.get_envs().any(|(key, _)| key == ENV) {
-        return Err("native command already has an ownership binding; configure it before binding once".into());
+        return Err(
+            "native command already has an ownership binding; configure it before binding once"
+                .into(),
+        );
     }
     let _scope = Scope::new(fds)?;
     Transfer::prepare(command)?;

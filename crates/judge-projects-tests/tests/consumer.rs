@@ -269,8 +269,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
     let original = source().join("crates/judge-ci/target/debug/chrono-judge-ci");
     let destination = root.join(".chrono-harness/bin/chrono-judge-ci");
     host::copied_fixture_input(&root, &original, &destination);
-    fs::copy(original, destination)
-    .unwrap();
+    fs::copy(original, destination).unwrap();
     h.values.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] = json!([
         ".chrono-harness/bin/chrono-harness",
         "check",
@@ -1121,9 +1120,11 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         fs::create_dir_all(h.root().join(path).parent().unwrap()).unwrap();
         fs::write(h.root().join(path), body).unwrap();
     }
-    let lock = h.capture_native(Command::new(&cargo)
-        .current_dir(h.root())
-        .args(["generate-lockfile", "--manifest-path", "t/Cargo.toml"]));
+    let lock = h.capture_native(Command::new(&cargo).current_dir(h.root()).args([
+        "generate-lockfile",
+        "--manifest-path",
+        "t/Cargo.toml",
+    ]));
     assert!(lock.status.success(), "{lock:?}");
     let scoped_path = ".chrono-harness/ci/group-check.json";
     let scoped_registration = ".chrono-harness/ci/group-registration.json";
@@ -1183,19 +1184,21 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         for name in ["alpha", "beta"] {
             fs::remove_file(h.root().join(".chrono-harness/state").join(name)).unwrap_or(());
         }
-        let out = h.capture_native(Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
-            .current_dir(h.root())
-            .args([
-                "check",
-                "--config",
-                scoped_path,
-                "--base",
-                &h.base,
-                "--candidate",
-                &h.candidate,
-                "--unit",
-                unit,
-            ]));
+        let out = h.capture_native(
+            Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+                .current_dir(h.root())
+                .args([
+                    "check",
+                    "--config",
+                    scoped_path,
+                    "--base",
+                    &h.base,
+                    "--candidate",
+                    &h.candidate,
+                    "--unit",
+                    unit,
+                ]),
+        );
         h.retain_command_result(&format!("group-unit-{unit}"), &out);
         let report: Value = serde_json::from_slice(&out.stdout).unwrap();
         assert!(out.status.success(), "{}", failure_summary(&report));
@@ -1208,19 +1211,21 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         r#"{"schema":"chrono-ci-collection/v1","reports":[]}"#,
     )
     .unwrap();
-    let out = h.capture_native(Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
-        .current_dir(h.root())
-        .args([
-            "check",
-            "--config",
-            scoped_path,
-            "--base",
-            &h.base,
-            "--candidate",
-            &h.candidate,
-            "--collect",
-            ".chrono-harness/state/missing.json",
-        ]));
+    let out = h.capture_native(
+        Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+            .current_dir(h.root())
+            .args([
+                "check",
+                "--config",
+                scoped_path,
+                "--base",
+                &h.base,
+                "--candidate",
+                &h.candidate,
+                "--collect",
+                ".chrono-harness/state/missing.json",
+            ]),
+    );
     h.retain_command_result("group-missing-collection", &out);
     let report: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(!out.status.success(), "{}", failure_summary(&report));
@@ -1315,7 +1320,10 @@ fn offline_source_and_declared_external_input_survive_the_old_checkout_path() {
     let external = h.external.path().to_owned();
     let retained = h.make_checkout_unavailable();
     assert!(!old_root.exists());
-    assert_eq!(fs::read(retained.join("p/product.py")).unwrap(), source_bytes);
+    assert_eq!(
+        fs::read(retained.join("p/product.py")).unwrap(),
+        source_bytes
+    );
     assert_eq!(git(&retained, &["rev-parse", "HEAD"]), head);
     assert_eq!(fs::read(&external).unwrap(), b"bounded input\n");
     drop(h);
