@@ -10,7 +10,10 @@ use std::process::Command;
 fn pinned_git_package_executes_and_changed_revision_blocks_the_consumer() {
     let mut f = Fixture::new();
     let root = f.root();
-    let upstream = tempfile::Builder::new().prefix("pinned Git 空白 λ ").tempdir().unwrap();
+    let upstream = tempfile::Builder::new()
+        .prefix("pinned Git 空白 λ ")
+        .tempdir()
+        .unwrap();
     write(
         upstream.path(),
         "Cargo.toml",

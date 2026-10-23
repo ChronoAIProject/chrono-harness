@@ -376,8 +376,7 @@ fn registered_chain_preserves_distinct_bounds_and_stops_after_failure() {
             panic!("chain case {first}: cannot decode {output}: {error}; invocation: {result:?}")
         });
         assert_eq!(
-            report["operations"]["produce"]["exit_code"],
-            expected_exit,
+            report["operations"]["produce"]["exit_code"], expected_exit,
             "chain case {first}; invocation: {result:?}"
         );
         if expected_exit == 0 {
