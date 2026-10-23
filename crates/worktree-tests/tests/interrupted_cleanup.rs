@@ -628,9 +628,9 @@ impl CapturedChild {
         self.await_file_bounded(path, Some(Duration::from_secs(10)));
     }
     pub(super) fn await_managed_file(&mut self, path: &Path) {
-        // This handshake follows real cold Cargo builds. Their producer already
-        // has the fixture's registered process bound; consume its actual exit
-        // instead of killing it at an unrelated ten-second readiness deadline.
+        // Cold Cargo builds and canonical input preparation already have the
+        // fixture's registered process bounds. Consume their actual result
+        // instead of killing them at an unrelated ten-second readiness deadline.
         self.await_file_bounded(path, None);
     }
     fn await_file_bounded(&mut self, path: &Path, readiness: Option<Duration>) {
@@ -1462,24 +1462,7 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     );
     let handshake = target.join(".chrono-harness/state/check-holder");
     let began = Instant::now();
-    while !handshake.exists() && began.elapsed() < Duration::from_secs(10) {
-        if check.try_wait().unwrap().is_some() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-    if !handshake.exists() {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        check.record_wait_state(&handshake);
-        let _ = check.kill();
-        let original = check.wait_with_output().unwrap();
-        panic!(
-            "missing check handoff; original exit {:?}; stdout {}; stderr {}",
-            original.status,
-            String::from_utf8_lossy(&original.stdout),
-            String::from_utf8_lossy(&original.stderr)
-        );
-    }
+    check.await_managed_file(&handshake);
     let handoff_seconds = began.elapsed().as_secs_f64();
     assert!(
         !other.join("output λ").exists(),
