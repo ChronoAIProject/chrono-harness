@@ -845,11 +845,13 @@ fn retained_lifecycle_command_preserves_real_allocation_exclusion_after_host_dro
     fs::write(path, serde_json::to_vec(&projects).unwrap()).unwrap();
     commit(&h.root);
     let mut command = h.auto_command("use", &["--operation", "use.consumer"]);
+    let root = h.root.clone();
     drop(h);
-    // Capture is deliberately already-bound: it grants no lifecycle authority.
-    // Only the real adapter's command-owned descriptor can keep this lease held.
-    let output = chrono_worktree::TemporaryHost::capture_bound_output(&allocation, &mut command).unwrap();
+    // This capture adapter does not bind capabilities. Retire the command's
+    // parent copies immediately after spawn: only the actual child can hold it.
+    let mut child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &root);
     drop(command);
+    let output = child.wait_with_output().unwrap();
     let report = json(&output.stdout).unwrap();
     assert!(output.status.success(), "{}", report["error"]);
     assert_eq!(report["managed_process"]["exit_code"], 0);
