@@ -845,3 +845,17 @@ CI bound is increased. The release plan reserves `v0.1.0-beta.27` for the admitt
 Q2 increment plus this correction; it makes no publication, remote-acceptance or
 complete-SPEC claim. Added empty-selection Cargo cost and native total cost remain
 unmeasured until those actual consumer cases run.
+
+
+L1 fixture-custody candidate extends the existing retained producer owner with
+prospective allocation/output and copied-member membership, exact native
+stdin/EOF/stream captures, actual descendant capabilities, nested diagnostic
+references and offline relocation at the worktree, CI, shared projects/workflow
+and historical migration publishers. Git inventory adds diagnostic observations
+without enrollment or deletion. Product and finite host fixture policy change
+together; Git v2 identity selection and worktree v3 remain unchanged. See the
+worktree owner for release/migration contracts. Source adaptation does not prove
+canonical/native acceptance, deployment, physical savings or SPEC 10.1 completion.
+Final-original bounded retention and shared-effect composition, exact compatible
+input/native handoffs, historical release/ci-persistent-cache migration and actual
+landing remain separate obligations. All lifecycle costs remain unknown.

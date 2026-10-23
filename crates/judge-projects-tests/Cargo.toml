@@ -16,6 +16,7 @@ test = false
 bench = false
 
 [dev-dependencies]
+chrono-worktree = { path = "../worktree" }
 chrono-judge-projects = { path = "../judge-projects" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-judge-filemap = { path = "../judge-filemap" }

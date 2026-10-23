@@ -1,5 +1,7 @@
 #[path = "support/history.rs"]
 mod history;
+#[path = "support/temporary.rs"]
+mod temporary;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_harness::{facts, observation, wire};
@@ -605,7 +607,7 @@ fn adopt_fixture_bindings(_root: &std::path::Path, config: &mut Value) {
         .unwrap();
     *input = fixture.git_input.clone();
 }
-fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+fn migration_host() -> (temporary::FixtureDirectory, std::path::PathBuf, String, String) {
     migration_host_with_alias_collision(false)
 }
 fn copy_nested_receipts(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
@@ -631,6 +633,7 @@ fn execution_failure(
     reason: &str,
     result: &chrono_judge_projects::Results,
 ) -> String {
+    let protection = temporary::retain_diagnostic(root, reason);
     let directory = source().join(".chrono-harness/state/migration-tests");
     let retained = (|| -> Result<String, Box<dyn std::error::Error>> {
         fs::create_dir_all(&directory)?;
@@ -662,6 +665,9 @@ fn execution_failure(
     })()
     .unwrap_or_else(|error| format!("original execution retention failed: {error}"));
     let mut summary = format!("{reason}; {retained}");
+    if let Err(error) = protection {
+        summary.push_str(&format!("; diagnostic reference failed: {error}"));
+    }
     for row in result.executed.iter().chain(&result.blocked) {
         if row.status == "passed" {
             continue;
@@ -687,12 +693,9 @@ fn execution_failure(
 }
 fn migration_host_with_alias_collision(
     collision: bool,
-) -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+) -> (temporary::FixtureDirectory, std::path::PathBuf, String, String) {
     let source = fs::canonicalize(source()).unwrap();
-    let dir = tempfile::Builder::new()
-        .prefix("migration actual host ")
-        .tempdir()
-        .unwrap();
+    let dir = temporary::migration_directory("migration actual host ");
     let root = fs::canonicalize(dir.path()).unwrap();
     historical_input().export(&root).unwrap();
     if collision {
@@ -761,10 +764,10 @@ fn migration_host_with_alias_collision(
         ("runner", "chrono-harness"),
         ("judge-ci", "chrono-judge-ci"),
     ] {
-        fs::copy(
-            source.join(format!("crates/{project}/target/debug/{name}")),
-            root.join(format!(".chrono-harness/bin/{name}")),
-        )
+        let original = source.join(format!("crates/{project}/target/debug/{name}"));
+        let destination = root.join(format!(".chrono-harness/bin/{name}"));
+        temporary::copied_fixture_input(&root, &original, &destination);
+        fs::copy(original, destination)
         .unwrap();
     }
     // The copied candidate is a test host on the executing native platform.
@@ -1019,7 +1022,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         "{}",
         execution_failure(&root, "ci.verify did not diagnose drift", &result)
     );
-    let output = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+    let output = temporary::capture_native(&root, Command::new(root.join(".chrono-harness/bin/chrono-ci"))
         .args([
             "generate",
             "--host-root",
@@ -1027,8 +1030,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
             "--config",
             ".chrono-harness/ci/units.json",
         ])
-        .output()
-        .unwrap();
+    );
     assert!(
         output.status.success(),
         "workflow repair failed: {output:?}"
@@ -1068,10 +1070,7 @@ fn migration_binding_failure_retains_expected_and_observed_version() {
         .iter_mut()
         .find(|t| t["id"] == "python3")
         .unwrap();
-    let observed = Command::new(tool["program"].as_str().unwrap())
-        .arg("--version")
-        .output()
-        .unwrap();
+    let observed = temporary::capture_native(&root, Command::new(tool["program"].as_str().unwrap()).arg("--version"));
     tool["expected_version"] = json!("Python deliberately-wrong");
     let env: BTreeMap<String, String> = std::env::vars().collect();
     let error = interpret(&root, &base, &candidate, CONFIG, raw, new, &env)
