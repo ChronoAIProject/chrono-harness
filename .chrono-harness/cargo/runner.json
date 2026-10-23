@@ -37,6 +37,7 @@
       "argv": [
         "check",
         "--locked",
+        "--offline",
         "--manifest-path",
         "crates/runner/Cargo.toml"
       ]
