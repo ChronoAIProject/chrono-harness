@@ -817,3 +817,60 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     assert_eq!(fs::read(unknown.join("original")).unwrap(), [255, 0, 10]);
     assert!(project.join("Cargo.toml").is_file() && project.join("Cargo.lock").is_file());
 }
+
+
+#[test]
+fn retained_lifecycle_command_preserves_real_allocation_exclusion_after_host_drop() {
+    use std::os::fd::AsRawFd;
+    unsafe extern "C" {
+        fn flock(fd: i32, operation: i32) -> i32;
+    }
+    let h = super::bounded_cleanup::configure_main(Host::retained("payload"), "allocation-lease");
+    let allocation = h._dir.path().to_owned();
+    let directory = allocation.parent().unwrap();
+    let registry = json(&fs::read(directory.join("objects.json")).unwrap()).unwrap();
+    let record = registry["objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|object| object["path"] == allocation.file_name().unwrap().to_str().unwrap())
+        .unwrap();
+    let lease_path = directory.join(record["cache_lease"]["path"].as_str().unwrap());
+    let path = h.root.join(PROJECTS);
+    let mut projects = json(&fs::read(&path).unwrap()).unwrap();
+    projects["scripts"][0]["actions"]["execute"]["argv"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!(lease_path));
+    fs::write(path, serde_json::to_vec(&projects).unwrap()).unwrap();
+    commit(&h.root);
+    let mut command = h.auto_command("use", &["--operation", "use.consumer"]);
+    drop(h);
+    // Capture is deliberately already-bound: it grants no lifecycle authority.
+    // Only the real adapter's command-owned descriptor can keep this lease held.
+    let output = chrono_worktree::TemporaryHost::capture_bound_output(&allocation, &mut command).unwrap();
+    drop(command);
+    let report = json(&output.stdout).unwrap();
+    assert!(output.status.success(), "{}", report["error"]);
+    assert_eq!(report["managed_process"]["exit_code"], 0);
+    assert_eq!(report["managed_process"]["stdout_bytes"], value!(b"allocation-live\xff\0".as_slice()));
+    assert_eq!(report["managed_process"]["stderr_bytes"], value!(b"original-native-stderr\xfe".as_slice()));
+    let exclusion = fs::File::open(lease_path).unwrap();
+    assert_eq!(unsafe { flock(exclusion.as_raw_fd(), 2 | 4) }, 0);
+}
+
+#[test]
+fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams() {
+    let h = super::bounded_cleanup::configure_main(Host::retained("payload"), "capture-once");
+    let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
+    assert_eq!(code, 2, "{error}");
+    assert_eq!(report["managed_process"]["exit_code"], 7);
+    assert_eq!(report["managed_process"]["stdout_bytes"], value!(b"\xffpartial stdout\0\n".as_slice()));
+    assert_eq!(report["managed_process"]["stderr_bytes"], value!(b"\xfepartial stderr\0\n".as_slice()));
+    let capture = capture_directory(h._dir.path());
+    assert_eq!(json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap(), report);
+    assert!(fs::read(capture.join("stderr.bytes")).unwrap().is_empty());
+    let joined = json(&fs::read(capture.join("result.json")).unwrap()).unwrap();
+    assert_eq!(joined["exit_code"], 2);
+    assert_eq!(joined["joined"], true);
+}

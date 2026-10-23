@@ -7,7 +7,7 @@ fn main_host() -> Host {
 pub(super) fn main_host_mode(mode: &str) -> Host {
     configure_main(Host::new("payload"), mode)
 }
-fn configure_main(h: Host, mode: &str) -> Host {
+pub(super) fn configure_main(h: Host, mode: &str) -> Host {
     h.kernel_cleanup();
     super::automatic::native_consumer(&h, mode);
     let path = h.root.join(".chrono-harness/cleanup.json");
