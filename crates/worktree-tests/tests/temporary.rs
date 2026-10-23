@@ -848,7 +848,7 @@ fn retained_lifecycle_command_preserves_real_allocation_exclusion_after_host_dro
     drop(h);
     // This capture adapter does not bind capabilities. Retire the command's
     // parent copies immediately after spawn: only the actual child can hold it.
-    let mut child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &root);
+    let child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &root);
     drop(command);
     let output = child.wait_with_output().unwrap();
     let report = json(&output.stdout).unwrap();
