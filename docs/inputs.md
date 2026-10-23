@@ -297,6 +297,8 @@ failed alias domains remain represented. Installation follows successful profile
 operations; a failed acquisition does not imply those binaries were installed.
 The pre-build surviving coordinator is a separate participant, still requiring
 its actual source/policy/toolchain/installed identity and protected linked use.
+Bootstrap forwards the surviving owner's original report path on stderr; the
+owner's retained report remains authoritative for its managed process and lease.
 
 The isolated source path is `inputs.provision-isolated` → the existing worktree
 `use inputs.produce-admit-isolated` → `host.bootstrap-isolated`, the 34 fetches,
