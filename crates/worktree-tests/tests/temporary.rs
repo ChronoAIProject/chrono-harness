@@ -818,7 +818,6 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     assert!(project.join("Cargo.toml").is_file() && project.join("Cargo.lock").is_file());
 }
 
-
 #[test]
 fn retained_lifecycle_command_preserves_real_allocation_exclusion_after_host_drop() {
     use std::os::fd::AsRawFd;
@@ -855,8 +854,14 @@ fn retained_lifecycle_command_preserves_real_allocation_exclusion_after_host_dro
     let report = json(&output.stdout).unwrap();
     assert!(output.status.success(), "{}", report["error"]);
     assert_eq!(report["managed_process"]["exit_code"], 0);
-    assert_eq!(report["managed_process"]["stdout_bytes"], value!(b"allocation-live\xff\0".as_slice()));
-    assert_eq!(report["managed_process"]["stderr_bytes"], value!(b"original-native-stderr\xfe".as_slice()));
+    assert_eq!(
+        report["managed_process"]["stdout_bytes"],
+        value!(b"allocation-live\xff\0".as_slice())
+    );
+    assert_eq!(
+        report["managed_process"]["stderr_bytes"],
+        value!(b"original-native-stderr\xfe".as_slice())
+    );
     let exclusion = fs::File::open(lease_path).unwrap();
     assert_eq!(unsafe { flock(exclusion.as_raw_fd(), 2 | 4) }, 0);
 }
@@ -867,10 +872,19 @@ fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams
     let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 2, "{error}");
     assert_eq!(report["managed_process"]["exit_code"], 7);
-    assert_eq!(report["managed_process"]["stdout_bytes"], value!(b"\xffpartial stdout\0\n".as_slice()));
-    assert_eq!(report["managed_process"]["stderr_bytes"], value!(b"\xfepartial stderr\0\n".as_slice()));
+    assert_eq!(
+        report["managed_process"]["stdout_bytes"],
+        value!(b"\xffpartial stdout\0\n".as_slice())
+    );
+    assert_eq!(
+        report["managed_process"]["stderr_bytes"],
+        value!(b"\xfepartial stderr\0\n".as_slice())
+    );
     let capture = capture_directory(h._dir.path());
-    assert_eq!(json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap(), report);
+    assert_eq!(
+        json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap(),
+        report
+    );
     assert!(fs::read(capture.join("stderr.bytes")).unwrap().is_empty());
     let joined = json(&fs::read(capture.join("result.json")).unwrap()).unwrap();
     assert_eq!(joined["exit_code"], 2);

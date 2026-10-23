@@ -203,13 +203,17 @@ fn main() -> ExitCode {
             unsafe extern "C" {
                 fn flock(fd: i32, operation: i32) -> i32;
             }
-            let path = std::env::args_os().nth(2).expect("actual allocation lease path");
+            let path = std::env::args_os()
+                .nth(2)
+                .expect("actual allocation lease path");
             let lease = fs::File::open(path).unwrap();
             // LOCK_EX | LOCK_NB on both explicitly supported Unix platforms.
             assert_eq!(unsafe { flock(lease.as_raw_fd(), 2 | 4) }, -1);
             assert_eq!(io::Error::last_os_error().kind(), io::ErrorKind::WouldBlock);
             io::stdout().write_all(b"allocation-live\xff\0").unwrap();
-            io::stderr().write_all(b"original-native-stderr\xfe").unwrap();
+            io::stderr()
+                .write_all(b"original-native-stderr\xfe")
+                .unwrap();
         }
         "capture-once" => {
             io::stdout().write_all(b"\xffpartial stdout\0\n").unwrap();
