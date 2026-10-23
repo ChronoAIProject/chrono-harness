@@ -108,10 +108,10 @@ def participate(root, config_path, config):
         process = report["managed_process"]
     except (ValueError, KeyError):
         raise ValueError("bootstrap ownership refused: " + result.stdout.decode("utf-8", "replace") + result.stderr.decode("utf-8", "replace"))
-    print("bootstrap ownership original report: " + str(anchor / report["report_path"]),
-          file=sys.stderr)
     sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
     sys.stderr.buffer.write(bytes(process["stderr_bytes"]))
+    print("bootstrap ownership original report: " + str(anchor / report["report_path"]),
+          file=sys.stderr)
     if report["status"] != "used" and report.get("managed_command_failed") is not True:
         raise ValueError("bootstrap lifecycle failed: " + str(report.get("error")) +
                          "; original report " + str(report.get("report_path")))
