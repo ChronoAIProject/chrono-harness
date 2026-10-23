@@ -65,7 +65,8 @@ complete lifecycle costs. Transfer/storage and total incremental costs remain
 unknown. An ordinary revert `c72c141` restores the exact production `72b1d08`
 tree and removes both temporary optimization settings while preserving the
 scenario commit. Unusable-content acceptance remains required; the access gap
-does not waive it or authorize another activation path. Other consumers,
+does not waive it. The subsequent explicitly authorized continuation adopts the
+PR-body transport documented below; its native behavior remains unverified. Other consumers,
 concurrency, linked ownership and complete compiler/SDK/input closure remain open.
 
 The planner prepares identities; the GitHub provider projects pinned native
@@ -476,18 +477,58 @@ evidence for selected artifacts. Incremental byte cost is unmeasured. End-to-end
 unknown. Rust behavior and provider tests plus DELTA-selected canonical validation
 are required; local tests do not establish native archive acceptance.
 
-Activation uses the existing repository Actions variable facility with the exact
-name `CHRONO_CACHE_ACCEPTANCE_<run_id>_<run_attempt>`, for example
-`CHRONO_CACHE_ACCEPTANCE_1234_2`. The generated step selects only
-`vars[format('CHRONO_CACHE_ACCEPTANCE_{0}_{1}', github.run_id, github.run_attempt)]`.
-An absent/empty value skips the fixture process and leaves ordinary save guards
-unchanged. A variable for R/2 is invisible to another run and to R/1 or R/3;
-only this opted job subscribes within R/2. The old unqualified variable would
-have activated unrelated concurrent cache jobs and is no longer read. The
-facility remains repository configuration, so the caller records any original
-value and restores it (or deletes the newly created exact variable) after the
-selected attempt; it must not overwrite an existing unrelated value. Its value
-is strict JSON, for example:
+**Product and host policy change (native continuation):** providers may register
+`acceptance_source: {"method":"pull-request-body/v1","program":"gh",
+"reader":".chrono-harness/bin/chrono-ci"}` beside
+`acceptance_fixture`. This host selects it only for `unit_cache`. The generated
+job has explicit `contents: read`, `actions: read`, and `pull-requests: read`;
+other jobs retain their original permissions and steps. This is a new transport
+for the same existing fixture, not a change to its CLI activation schema or
+native acceptance obligations. Providers omitting the source preserve the
+per-run/attempt repository Variables transport exactly.
+
+The current host reads the **live** PR body with one bounded, read-only `gh api`
+step after successful work/seal, only when the **original event** PR body contains
+`<!-- chrono-cache-acceptance-source/v1 -->`. This explicit opt-in is only a
+transport read request; it never authorizes manifest removal. Ordinary PRs
+without that event marker and push events run no reader/API/fixture and keep their
+original save conditions. The event snapshot is retained across a rerun; adding
+the marker only after the event cannot enroll that old run. This permits selecting an already observed run's
+next attempt without Variables permissions or a source-SHA self reference.
+The caller owns PR metadata and must retain/restore its original body; no fixture
+code writes PR metadata. Only one dedicated block is recognized:
+
+```text
+<!-- chrono-cache-acceptance/v1
+<the JSON activation below>
+-->
+```
+
+No block or a block for another exact run/attempt produces an empty activation
+and skips the fixture. Duplicate/malformed blocks or a selected activation with
+mismatched native source/ref, PR identity, fixture, consumer or plan keys fail
+before mutation and prevent native saves. Live PR head drift also fails a
+selected activation. Successful selection forwards the original strict JSON bytes through GitHub's
+multiline output protocol to
+`acceptance-fixture`; it still validates every preimage and all original
+work/seal/save prerequisites. The raw API response stays in the existing plan
+and upload directory, with original step stdout/stderr and exit preserved by CI.
+API/reader failure blocks saves rather than treating an unavailable input as empty.
+Push events do not read PR metadata or run this fixture. Nothing is activated in
+production source: the caller must explicitly supply the bounded block.
+
+Registered inputs are the exact `repos/<GITHUB_REPOSITORY>/pulls/<event PR number>`
+response, current event source/ref/run/attempt, existing plan and fixture; the
+producer is the selected API step plus `chrono-ci cache-activation`, consumed only
+by the opted fixture and its save guards. The reader accepts at most 1 MiB and
+retains the original response. The host classifies the new step as
+`cache-verification`; one API request, a reader process and a one-minute step
+bound are added per successful PR job whose event explicitly requests this transport. No marker means no fixture process.
+CPU, transfer, retained bytes and native latency are unknown until measured.
+Response/evidence retention follows the existing CI artifact/plan policy; this
+transport grants no new cache ownership or deletion authority.
+
+The activation value remains strict JSON, for example:
 
 ```json
 {
@@ -518,8 +559,8 @@ caller verifies this original evidence. The fixture records both SHA roles,
 fields/scopes, changed preimages, unsuccessful original work/seal outcomes,
 exact-key restore hits and repeated/unfinished intents. It preflights all selected
 artifacts before removing any manifest. A selected fixture failure fails its step
-and prevents all native saves in this job. Other jobs do not subscribe to the
-selected variable. An unset selected variable skips the fixture step entirely.
+and prevents all native saves in this job. Other jobs do not subscribe to this transport. An empty selected activation
+skips the fixture step entirely.
 
 The fixture registration and activation do not enter cache compatibility or
 source identity. Product/source edits still affect keys through the existing
@@ -532,8 +573,9 @@ local toolchain/SDK environment.
 For an authorized caller, one finite sequence using the existing native workflow
 is:
 
-1. On the committed candidate, run the ordinary selected `unit_cache` job with
-   the selected variable absent/empty (run R, attempt 1). Keep its native plan and both original
+1. Before the candidate's native push/PR event, retain the original PR body and
+   add only the transport opt-in marker above, without an activation block. On
+   the committed candidate, run the ordinary selected `unit_cache` job (R/1). Keep its native plan and both original
    restore/save outcomes. Use the exact two keys from that native plan; keep
    source, producer inputs and workflow ref fixed through the next attempts.
 2. Before attempt 2, ensure both requested keys can be saved: if attempt 1 saved
@@ -544,11 +586,11 @@ is:
    Alternatively an already observed native plan with no exact entry supplies
    the same prerequisite. Backend listing alone does not prove archive health.
 3. Select R's actual next attempt from the original run/jobs API, not an assumed
-   counter. For next attempt 2, preserve/check the exact variable's prior value,
-   then use `gh variable set CHRONO_CACHE_ACCEPTANCE_<R>_2 < activation.json`
-   and `gh run rerun <R> --job <observed unit_cache job database ID>`. Revalidate
+   counter. For next attempt 2, preserve the original PR body, add the one dedicated block
+   containing that exact activation JSON, then use
+   `gh run rerun <R> --job <observed unit_cache job database ID>`. Revalidate
    run/ref/head, selected job identity and both exact keys immediately before
-   mutation. The file contains those native identities and attempt `2` above.
+   mutation. The block contains those native identities and attempt `2` above.
    Use the existing job rerun route; a full workflow rerun is not required.
    If GitHub reports another next attempt, use that actual value in both places.
    No standalone workflow_dispatch exists in this host. The selected current producers
@@ -561,8 +603,7 @@ is:
    keys, native identities and removal outcomes. Retain the originals referenced
    by those records, not just the pointers. A successful fixture or save action
    alone does not prove that the backend stored the deliberately unusable bytes.
-4. Restore the exact selected variable's original value, or use
-   `gh variable delete CHRONO_CACHE_ACCEPTANCE_<R>_2` when this scenario created it.
+4. Restore the original PR body, removing only the scenario activation block.
    Verify cleanup and absence of an activation for the next attempt, then rerun
    only the observed current `unit_cache` job of R for ordinary attempt 3.
    Keep the same checked-out head, keys/ref
@@ -582,7 +623,7 @@ is:
    acceptance evidence and all consumers finish, the caller may revalidate and
    delete only the two owned deliberately bad entries, then use ordinary attempt
    4 to rebuild/seal/save. A separate ordinary attempt 5 must verify healthy exact
-   hits if persistent repair is claimed. Keep each attempt's selected variable absent. The caller owns
+   hits if persistent repair is claimed. Keep each attempt's selected activation absent. The caller owns
    this remote lifecycle and evidence retention/cleanup, following existing
    finite artifact retention; the fixture does not mutate backend entries.
 

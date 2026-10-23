@@ -584,7 +584,8 @@
         "Restore registered cache detect.worktree": "cache-restore",
         "Save registered cache detect.worktree": "cache-save",
         "Seal producer cache contents": "cache-verification",
-        "Apply selected native cache acceptance fixture": "cache-verification"
+        "Apply selected native cache acceptance fixture": "cache-verification",
+        "Read selected native cache activation": "cache-verification"
       },
       "summary_environment": "GITHUB_STEP_SUMMARY",
       "comparisons": {
@@ -1542,7 +1543,12 @@
           "check.cache",
           "check.cache-tests"
         ],
-        "acceptance_fixture": "native-unusable"
+        "acceptance_fixture": "native-unusable",
+        "acceptance_source": {
+          "method": "pull-request-body/v1",
+          "program": "gh",
+          "reader": ".chrono-harness/bin/chrono-ci"
+        }
       },
       "unit_judge-projects-migration": {
         "need": "This job executes the explicitly referenced build and test operations.",

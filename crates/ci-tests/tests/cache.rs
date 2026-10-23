@@ -526,8 +526,280 @@ fn content_sealing_follows_original_work_and_gates_native_saving() {
 }
 
 #[test]
+fn live_pr_activation_selects_only_the_exact_native_binding() {
+    let response = source("crates/ci-tests/fixtures/cache-activation-pr.json");
+    let native = activation_native();
+    let select = |response: &Value, native: &std::collections::BTreeMap<String, String>| {
+        chrono_ci::cache::pull_request_activation(
+            response,
+            native,
+            "native-unusable",
+            "check.unit_cache",
+        )
+    };
+    let selected = select(&response, &native).unwrap().unwrap();
+    let activation: Value = serde_json::from_str(&selected).unwrap();
+    assert_eq!(activation["run_id"], "1234");
+    assert_eq!(activation["keys"].as_object().unwrap().len(), 2);
+    assert!(response["body"].as_str().unwrap().contains(&selected));
+    let duplicated = selected.replacen(
+        "\"run_id\": \"1234\"",
+        "\"run_id\": \"wrong\", \"run_id\": \"1234\"",
+        1,
+    );
+    let mut duplicate_response = response.clone();
+    duplicate_response["body"] = json!(format!(
+        "<!-- chrono-cache-acceptance/v1\n{duplicated}\n-->"
+    ));
+    assert!(
+        select(&duplicate_response, &native).is_err(),
+        "duplicate activation fields must fail before publication"
+    );
+    for body in [Value::Null, json!(""), json!("Unrelated PR text.")] {
+        let mut empty = response.clone();
+        empty["body"] = body;
+        assert_eq!(select(&empty, &native).unwrap(), None);
+    }
+    for (name, actual) in [
+        ("GITHUB_RUN_ID", "5678"),
+        ("GITHUB_RUN_ATTEMPT", "1"),
+        ("GITHUB_RUN_ATTEMPT", "3"),
+    ] {
+        let mut other = native.clone();
+        other.insert(name.into(), actual.into());
+        assert_eq!(select(&response, &other).unwrap(), None);
+    }
+    for (name, actual) in [
+        (
+            "CHRONO_CACHE_SOURCE_COMMIT",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ),
+        ("GITHUB_REF", "refs/pull/208/merge"),
+        ("GITHUB_EVENT_NAME", "push"),
+        ("GITHUB_REPOSITORY", "owner/other"),
+        ("CHRONO_CACHE_PR_NUMBER", "208"),
+        ("GITHUB_RUN_ID", ""),
+        ("GITHUB_RUN_ATTEMPT", "0"),
+    ] {
+        let mut other = native.clone();
+        other.insert(name.into(), actual.into());
+        assert!(select(&response, &other).is_err(), "{name}");
+    }
+    for (pointer, value) in [
+        (
+            "/head/sha",
+            json!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        ),
+        ("/base/repo/full_name", json!("owner/other")),
+        ("/number", json!(208)),
+        ("/body", json!(true)),
+        ("/body", json!("<!-- chrono-cache-acceptance/v1 {}")),
+        (
+            "/body",
+            json!("<!-- chrono-cache-acceptance/v1 not json -->"),
+        ),
+        (
+            "/body",
+            json!(format!(
+                "{}\n{}",
+                response["body"].as_str().unwrap(),
+                response["body"].as_str().unwrap()
+            )),
+        ),
+    ] {
+        let mut wrong = response.clone();
+        *wrong.pointer_mut(pointer).unwrap() = value;
+        assert!(select(&wrong, &native).is_err(), "{pointer}");
+    }
+    assert!(select(&json!({}), &native).is_err());
+    for (field, value) in [
+        ("source_commit", json!("b".repeat(40))),
+        ("git_ref", json!("refs/heads/dev")),
+        ("fixture", json!("other")),
+        ("consumer", json!("other")),
+        ("schema", json!("unknown")),
+    ] {
+        let mut wrong = response.clone();
+        let mut payload = activation.clone();
+        payload[field] = value;
+        wrong["body"] = json!(format!("<!-- chrono-cache-acceptance/v1\n{payload}\n-->"));
+        assert!(select(&wrong, &native).is_err(), "{field}");
+    }
+}
+
+fn activation_native() -> std::collections::BTreeMap<String, String> {
+    [
+        ("GITHUB_RUN_ID", "1234"),
+        ("GITHUB_RUN_ATTEMPT", "2"),
+        ("GITHUB_REF", "refs/pull/207/merge"),
+        ("GITHUB_EVENT_NAME", "pull_request"),
+        ("GITHUB_REPOSITORY", "owner/repository"),
+        ("CHRONO_CACHE_PR_NUMBER", "207"),
+        (
+            "CHRONO_CACHE_SOURCE_COMMIT",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.into(), v.into()))
+    .collect()
+}
+
+#[test]
+fn activation_reader_cli_retains_response_and_publishes_only_after_validation() {
+    let root = tempfile::tempdir().unwrap();
+    let response = ".chrono-harness/state/cache/check.unit_cache/activation-pr.json";
+    fs::create_dir_all(root.path().join(response).parent().unwrap()).unwrap();
+    let raw =
+        fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/cache-activation-pr.json"))
+            .unwrap();
+    fs::write(root.path().join(response), &raw).unwrap();
+    let output = root.path().join("github-output");
+    fs::write(&output, "prior=value\n").unwrap();
+    let command = || {
+        let mut command = Command::new(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"),
+        );
+        command
+            .args([
+                "cache-activation",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--response",
+                response,
+                "--fixture",
+                "native-unusable",
+                "--consumer",
+                "check.unit_cache",
+                "--github-output",
+                output.to_str().unwrap(),
+            ])
+            .envs(activation_native());
+        command
+    };
+    let selected = command().output().unwrap();
+    assert!(
+        selected.status.success(),
+        "{}",
+        String::from_utf8_lossy(&selected.stderr)
+    );
+    assert_eq!(fs::read(root.path().join(response)).unwrap(), raw);
+    let observation: Value = serde_json::from_slice(&selected.stdout).unwrap();
+    assert_eq!(observation["sha256"], chrono_harness::sha256(&raw));
+    let original_output = fs::read(&output).unwrap();
+    assert!(
+        String::from_utf8_lossy(&original_output)
+            .starts_with("prior=value\nactivation<<chrono-cache-")
+    );
+    let failed = command()
+        .env("GITHUB_REF", "refs/heads/dev")
+        .output()
+        .unwrap();
+    assert!(!failed.status.success());
+    assert_eq!(fs::read(&output).unwrap(), original_output);
+    let inactive = command().env("GITHUB_RUN_ATTEMPT", "3").output().unwrap();
+    assert!(inactive.status.success());
+    assert!(
+        fs::read_to_string(&output)
+            .unwrap()
+            .ends_with("activation=\n")
+    );
+    fs::write(root.path().join(response), vec![b' '; 1024 * 1024 + 1]).unwrap();
+    let before = fs::read(&output).unwrap();
+    let oversized = command().output().unwrap();
+    assert!(!oversized.status.success());
+    assert_eq!(fs::read(&output).unwrap(), before);
+}
+
+#[test]
+fn pull_request_activation_transport_is_opted_in_and_keeps_other_jobs_unchanged() {
+    let mut value = source(".chrono-harness/ci/units.json");
+    value["persistent_cache"]["jobs"]["unit_cache"]
+        .as_object_mut()
+        .unwrap()
+        .remove("acceptance_source");
+    let baseline = chrono_ci::units::render(
+        &serde_json::from_value(value.clone()).unwrap(),
+        ".chrono-harness/ci/units.json",
+    )
+    .unwrap();
+    value["persistent_cache"]["jobs"]["unit_cache"]["acceptance_source"] = json!({"method":"pull-request-body/v1","program":"gh","reader":".chrono-harness/bin/chrono-ci"});
+    let candidate = serde_json::from_value(value.clone());
+    assert!(
+        candidate.is_ok(),
+        "registered PR-body transport rejected: {candidate:?}"
+    );
+    let rendered =
+        chrono_ci::units::render(&candidate.unwrap(), ".chrono-harness/ci/units.json").unwrap();
+    let old: Value = serde_yaml_ng::from_str(&baseline[".github/workflows/chrono-ci.yml"]).unwrap();
+    let new: Value = serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    for (id, job) in old["jobs"].as_object().unwrap() {
+        if id != "unit_cache" {
+            assert_eq!(*job, new["jobs"][id], "{id}");
+        }
+    }
+    assert_eq!(
+        new["jobs"]["unit_cache"]["permissions"]["pull-requests"],
+        "read"
+    );
+    let steps = new["jobs"]["unit_cache"]["steps"].as_array().unwrap();
+    let position = |id: &str| steps.iter().position(|s| s["id"] == id).unwrap();
+    assert!(position("chrono_cache_seal") < position("chrono_cache_activation"));
+    assert!(position("chrono_cache_activation") < position("chrono_cache_acceptance"));
+    let reader = &steps[position("chrono_cache_activation")];
+    assert_eq!(
+        reader["if"],
+        "${{ success() && github.event_name == 'pull_request' && contains(github.event.pull_request.body, '<!-- chrono-cache-acceptance-source/v1 -->') }}"
+    );
+    assert_eq!(reader["timeout-minutes"], 1);
+    assert!(reader["run"].as_str().unwrap().contains("'gh' api"));
+    assert!(reader["run"].as_str().unwrap().contains("cache-activation"));
+    assert_eq!(
+        steps[position("chrono_cache_acceptance")]["env"]["CHRONO_CACHE_ACCEPTANCE"],
+        "${{ steps.chrono_cache_activation.outputs.activation }}"
+    );
+    for id in ["cache_0_save", "cache_1_save"] {
+        let guard = steps[position(id)]["if"].as_str().unwrap();
+        assert!(guard.contains("steps.chrono_cache_activation.outcome == 'success'"));
+        assert!(guard.contains("steps.chrono_cache_acceptance.outcome == 'success'"));
+        assert!(guard.contains("cache-matched-key !="));
+        assert!(guard.contains("!contains(github.event.pull_request.body, '<!-- chrono-cache-acceptance-source/v1 -->')"));
+    }
+    assert!(
+        !serde_json::to_string(&new["jobs"]["unit_cache"])
+            .unwrap()
+            .contains("vars[")
+    );
+    for mutation in [
+        json!({"method":"unknown","program":"gh"}),
+        json!({"method":"pull-request-body/v1","program":"","reader":".chrono-harness/bin/chrono-ci"}),
+    ] {
+        value["persistent_cache"]["jobs"]["unit_cache"]["acceptance_source"] = mutation;
+        if let Ok(c) = serde_json::from_value(value.clone()) {
+            assert!(chrono_ci::units::render(&c, ".chrono-harness/ci/units.json").is_err());
+        }
+    }
+    value["persistent_cache"]["jobs"]["unit_cache"]["acceptance_source"] = json!({"method":"pull-request-body/v1","program":"gh","reader":".chrono-harness/bin/chrono-ci"});
+    value["persistent_cache"]["jobs"]["unit_cache"]
+        .as_object_mut()
+        .unwrap()
+        .remove("acceptance_fixture");
+    assert!(
+        chrono_ci::units::render(
+            &serde_json::from_value(value).unwrap(),
+            ".chrono-harness/ci/units.json"
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn selected_native_acceptance_runs_between_seal_and_save_and_preserves_other_consumers() {
     let mut value = source(".chrono-harness/ci/units.json");
+    value["persistent_cache"]["jobs"]["unit_cache"]
+        .as_object_mut()
+        .unwrap()
+        .remove("acceptance_source");
     // Compare the capability with the same host before opting in this one consumer.
     value["persistent_cache"]["jobs"]["unit_cache"]
         .as_object_mut()

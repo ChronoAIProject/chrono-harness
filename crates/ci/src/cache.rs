@@ -38,6 +38,161 @@ pub struct Consumer {
     /// A named, explicitly registered pre-save native acceptance fixture.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acceptance_fixture: Option<String>,
+    /// Omitted retains the original per-run/attempt Variables transport.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acceptance_source: Option<AcceptanceSource>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "method", deny_unknown_fields)]
+pub enum AcceptanceSource {
+    #[serde(rename = "pull-request-body/v1")]
+    PullRequestBody { program: String, reader: String },
+}
+
+/// Select transport data only. The existing cache fixture remains the authority
+/// for the full activation schema, plan keys, producer seal and all mutations.
+pub fn pull_request_activation(
+    response: &Value,
+    native: &BTreeMap<String, String>,
+    fixture: &str,
+    consumer: &str,
+) -> Result<Option<String>, String> {
+    const MARKER: &str = "<!-- chrono-cache-acceptance/v1";
+    let get = |name: &str| -> Result<&str, String> {
+        native
+            .get(name)
+            .map(String::as_str)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| format!("E_CACHE_ACCEPTANCE: missing {name}"))
+    };
+    if !response.as_object().is_some_and(|v| v.contains_key("body"))
+        || get("GITHUB_EVENT_NAME")? != "pull_request"
+        || get("CHRONO_CACHE_PR_NUMBER")?
+            .parse::<u64>()
+            .ok()
+            .is_none_or(|n| n == 0 || response["number"] != n)
+        || response["base"]["repo"]["full_name"] != get("GITHUB_REPOSITORY")?
+        || response["head"]["sha"]
+            .as_str()
+            .is_none_or(|s| s.len() != 40 || !s.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        return Err("E_CACHE_ACCEPTANCE: PR response differs from requested identity".into());
+    }
+    let body = match &response["body"] {
+        Value::Null => "",
+        Value::String(body) => body,
+        _ => return Err("E_CACHE_ACCEPTANCE: PR body is not text".into()),
+    };
+    let Some((_, rest)) = body.split_once(MARKER) else {
+        return Ok(None);
+    };
+    if body.matches(MARKER).count() != 1 {
+        return Err("E_CACHE_ACCEPTANCE: duplicate PR activation block".into());
+    }
+    let (raw, _) = rest
+        .split_once("-->")
+        .ok_or("E_CACHE_ACCEPTANCE: unterminated PR activation block")?;
+    let activation: Value = decode(raw.trim().as_bytes())?;
+    for name in ["GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"] {
+        let actual = get(name)?;
+        if !actual.bytes().all(|b| b.is_ascii_digit()) || actual.bytes().all(|b| b == b'0') {
+            return Err(format!("E_CACHE_ACCEPTANCE: invalid {name}"));
+        }
+    }
+    let run = activation["run_id"]
+        .as_str()
+        .ok_or("E_CACHE_ACCEPTANCE: run_id missing")?;
+    let attempt = activation["run_attempt"]
+        .as_str()
+        .ok_or("E_CACHE_ACCEPTANCE: run_attempt missing")?;
+    if run != get("GITHUB_RUN_ID")? || attempt != get("GITHUB_RUN_ATTEMPT")? {
+        return Ok(None);
+    }
+    let source = get("CHRONO_CACHE_SOURCE_COMMIT")?;
+    if source.len() != 40
+        || !source.bytes().all(|b| b.is_ascii_hexdigit())
+        || response["head"]["sha"] != source
+        || activation["schema"] != "chrono-cache-acceptance/v1"
+        || activation["fixture"] != fixture
+        || activation["consumer"] != consumer
+        || activation["source_commit"] != source
+        || activation["git_ref"] != get("GITHUB_REF")?
+    {
+        return Err(
+            "E_CACHE_ACCEPTANCE: selected PR activation differs from native source/ref/scope"
+                .into(),
+        );
+    }
+    // Forward the original payload; the shared decoder already rejected duplicate
+    // fields, and the existing fixture still owns the full activation contract.
+    Ok(Some(raw.trim().to_owned()))
+}
+
+pub(crate) fn activation_dispatch(args: &[String]) -> Result<String, String> {
+    use std::io::Write;
+    let mut options = BTreeMap::new();
+    for pair in args[1..].chunks(2) {
+        if pair.len() != 2
+            || ![
+                "--host-root",
+                "--response",
+                "--fixture",
+                "--consumer",
+                "--github-output",
+            ]
+            .contains(&pair[0].as_str())
+            || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
+        {
+            return Err("E_CACHE_ACCEPTANCE: unknown/duplicate activation reader option".into());
+        }
+    }
+    let required = |key| {
+        options
+            .get(key)
+            .copied()
+            .ok_or_else(|| format!("E_CACHE_ACCEPTANCE: missing {key}"))
+    };
+    let root = Path::new(required("--host-root")?);
+    let response_path = required("--response")?;
+    if !response_path.starts_with(".chrono-harness/state/cache/") {
+        return Err("E_CACHE_ACCEPTANCE: response must be retained with cache evidence".into());
+    }
+    let raw = chrono_harness::units::read_bounded(root, response_path, 1024 * 1024)?;
+    let native = [
+        "GITHUB_RUN_ID",
+        "GITHUB_RUN_ATTEMPT",
+        "GITHUB_REF",
+        "GITHUB_EVENT_NAME",
+        "GITHUB_REPOSITORY",
+        "CHRONO_CACHE_PR_NUMBER",
+        "CHRONO_CACHE_SOURCE_COMMIT",
+    ]
+    .into_iter()
+    .filter_map(|name| std::env::var(name).ok().map(|value| (name.into(), value)))
+    .collect();
+    let activation = pull_request_activation(
+        &decode(&raw)?,
+        &native,
+        required("--fixture")?,
+        required("--consumer")?,
+    )?;
+    let output = required("--github-output")?;
+    let record = if let Some(value) = &activation {
+        let delimiter = format!("chrono-cache-{}", chrono_harness::sha256(value.as_bytes()));
+        if value.lines().any(|line| line == delimiter) {
+            return Err("E_CACHE_ACCEPTANCE: activation output delimiter collision".into());
+        }
+        format!("activation<<{delimiter}\n{value}\n{delimiter}\n")
+    } else {
+        "activation=\n".into()
+    };
+    fs::OpenOptions::new()
+        .append(true)
+        .open(output)
+        .and_then(|mut file| file.write_all(record.as_bytes()))
+        .map_err(|e| format!("E_CACHE_ACCEPTANCE: activation output: {e}"))?;
+    Ok(serde_json::json!({"response":response_path,"sha256":chrono_harness::sha256(&raw),"selection":if activation.is_some() {"selected"} else {"inactive"}}).to_string() + "\n")
 }
 
 fn name(s: &str) -> bool {
@@ -71,6 +226,19 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
             return Err(format!(
                 "E_CACHE_ACCEPTANCE: invalid fixture consumer {job}"
             ));
+        }
+        if let Some(AcceptanceSource::PullRequestBody { program, reader }) =
+            &consumer.acceptance_source
+        {
+            if consumer.acceptance_fixture.is_none()
+                || [program, reader]
+                    .iter()
+                    .any(|s| s.is_empty() || s.contains(['\0', '\r', '\n']) || s.contains("${{"))
+            {
+                return Err(format!(
+                    "E_CACHE_ACCEPTANCE: invalid activation source for {job}"
+                ));
+            }
         }
         if let Some(directory) = &consumer.evidence_directory {
             relative_path(directory.trim_end_matches('/'))?;
@@ -252,8 +420,11 @@ pub(crate) fn project(
     // Registry validation guarantees the same selected set as the planner.
     let selected: BTreeSet<_> = consumer.caches.iter().collect();
     let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
-    let acceptance_variable =
-        "vars[format('CHRONO_CACHE_ACCEPTANCE_{0}_{1}', github.run_id, github.run_attempt)]";
+    let acceptance_variable = if consumer.acceptance_source.is_some() {
+        "steps.chrono_cache_activation.outputs.activation"
+    } else {
+        "vars[format('CHRONO_CACHE_ACCEPTANCE_{0}_{1}', github.run_id, github.run_attempt)]"
+    };
     for (index, id) in selected.into_iter().enumerate() {
         let key = format!("cache_{index}");
         let step = &key;
@@ -267,9 +438,16 @@ pub(crate) fn project(
             work_id
         };
         let fixture_guard = if consumer.acceptance_fixture.is_some() {
-            format!(
+            let guard = format!(
                 " && ({acceptance_variable} == '' || steps.chrono_cache_acceptance.outcome == 'success')"
-            )
+            );
+            if consumer.acceptance_source.is_some() {
+                format!(
+                    " && (github.event_name != 'pull_request' || !contains(github.event.pull_request.body, '<!-- chrono-cache-acceptance-source/v1 -->') || steps.chrono_cache_activation.outcome == 'success'){guard}"
+                )
+            } else {
+                guard
+            }
         } else {
             String::new()
         };
@@ -307,6 +485,15 @@ pub(crate) fn project(
         shell(work_id)
     );
     if let Some(fixture) = &consumer.acceptance_fixture {
+        if let Some(AcceptanceSource::PullRequestBody { program, reader }) =
+            &consumer.acceptance_source
+        {
+            let response = format!(
+                ".chrono-harness/state/cache/{}/activation-pr.json",
+                consumer.consumer
+            );
+            seal.push_str(&format!("      - name: Read selected native cache activation\n        id: chrono_cache_activation\n        if: ${{{{ success() && github.event_name == 'pull_request' && contains(github.event.pull_request.body, '<!-- chrono-cache-acceptance-source/v1 -->') }}}}\n        timeout-minutes: 1\n        shell: bash\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          CHRONO_CACHE_PR_NUMBER: ${{{{ github.event.pull_request.number }}}}\n          CHRONO_CACHE_SOURCE_COMMIT: ${{{{ github.event.pull_request.head.sha || github.event.after || github.sha }}}}\n        run: |\n          {} api \"repos/$GITHUB_REPOSITORY/pulls/$CHRONO_CACHE_PR_NUMBER\" > {}\n          {} cache-activation --host-root . --response {} --fixture {} --consumer {} --github-output \"$GITHUB_OUTPUT\"\n", shell(program), shell(&response), shell(reader), shell(&response), shell(fixture), shell(&consumer.consumer)));
+        }
         seal.push_str(&format!("      - name: Apply selected native cache acceptance fixture\n        id: chrono_cache_acceptance\n        if: ${{{{ success() && {acceptance_variable} != '' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_ACCEPTANCE: ${{{{ {acceptance_variable} }}}}\n          CHRONO_CACHE_SOURCE_COMMIT: ${{{{ github.event.pull_request.head.sha || github.event.after || github.sha }}}}\n          CHRONO_CACHE_ACCEPTANCE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} acceptance-fixture --host-root . --config {} --plan {} --fixture {} --steps-env CHRONO_CACHE_ACCEPTANCE_STEPS --work {}\n", shell(&c.program), shell(&c.config), shell(&plan_path), shell(fixture), shell(work_id)));
     }
     suffix.insert_str(0, &seal);
@@ -316,6 +503,11 @@ pub(crate) fn project(
     if body.matches(&marker).count() != 1 || body.matches(&work_marker).count() != 1 {
         return Err("persistent cache requires one original bootstrap/work step".into());
     }
+    let body = if consumer.acceptance_source.is_some() {
+        body.replacen("    steps:\n", "    permissions:\n      contents: read\n      actions: read\n      pull-requests: read\n    steps:\n", 1)
+    } else {
+        body
+    };
     let mut body = if existing_work_id.is_none() {
         body.replacen(
             &work_marker,
