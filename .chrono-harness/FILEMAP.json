@@ -10087,6 +10087,10 @@
         "outputs": [
           ".chrono-harness/state/bootstrap-real/"
         ]
+      },
+      "host.bootstrap-provision-tests": {
+        "resources": [],
+        "outputs": []
       }
     }
   }
