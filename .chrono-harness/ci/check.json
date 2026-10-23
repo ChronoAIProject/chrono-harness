@@ -12,8 +12,12 @@
     "projects": ".chrono-harness/projects.json",
     "tools": {
       "cargo": "cargo",
+      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
-      "python3": "/usr/bin/python3"
+      "chrono-inputs": ".chrono-harness/bin/chrono-inputs",
+      "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
+      "python3": "/usr/bin/python3",
+      "rustup": "rustup"
     },
     "artifacts": [
       ".chrono-harness/bin/",
