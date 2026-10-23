@@ -84,6 +84,15 @@
             "--manifest-path",
             "crates/runner/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.runner",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/runner/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -134,6 +143,15 @@
           "argv": [
             "test",
             "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/runner-tests/Cargo.toml"
           ]
@@ -473,6 +491,15 @@
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -670,6 +697,15 @@
             "--offline",
             "--package",
             "chrono-judge-filemap-tests",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-filemap-tests/Cargo.toml"
           ]
@@ -898,6 +934,15 @@
             "--offline",
             "--package",
             "chrono-judge-projects-tests",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-projects-tests/Cargo.toml"
           ]
@@ -1292,6 +1337,15 @@
             "--manifest-path",
             "crates/judge-workflow-tests/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-workflow",
@@ -1400,6 +1454,15 @@
             "--offline",
             "--package",
             "chrono-inputs-tests",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/inputs-tests/Cargo.toml"
           ]
@@ -1603,6 +1666,15 @@
             "--manifest-path",
             "crates/judge-cargo-tests/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-cargo",
@@ -1641,6 +1713,15 @@
           "argv": [
             "fmt",
             "--check",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.worktree",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/worktree/Cargo.toml"
           ]
@@ -1737,6 +1818,15 @@
             "interrupted_cleanup::registered_python_consumers_forward_leases_after_both_wrappers_die",
             "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
             "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect"
+          ]
+        },
+        "format": {
+          "operation": "format.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
           ]
         }
       },
