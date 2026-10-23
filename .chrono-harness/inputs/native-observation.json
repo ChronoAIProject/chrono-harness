@@ -1,0 +1,704 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "CARGO_HOME",
+      "RUSTUP_HOME",
+      "TMPDIR",
+      "SDKROOT",
+      "DEVELOPER_DIR"
+    ],
+    "values": {
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "CARGO_TERM_COLOR": "never",
+      "CARGO_NET_OFFLINE": "true",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": ""
+    }
+  },
+  "operations": [
+    {
+      "id": "selection.cargo",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "cargo"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.rustc",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "rustc"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.rustfmt",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "rustfmt"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "source.commit",
+      "program": "git",
+      "argv": [
+        "rev-parse",
+        "HEAD"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "source.tree",
+      "program": "git",
+      "argv": [
+        "rev-parse",
+        "HEAD^{tree}"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "source.status",
+      "program": "git",
+      "argv": [
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=normal"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.cargo",
+      "program": {
+        "stdout": "selection.cargo"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.rustc",
+      "program": {
+        "stdout": "selection.rustc"
+      },
+      "argv": [
+        "-vV"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.rustfmt",
+      "program": {
+        "stdout": "selection.rustfmt"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "rust.sysroot",
+      "program": {
+        "stdout": "selection.rustc"
+      },
+      "argv": [
+        "--print",
+        "sysroot"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "sdk.root",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--sdk",
+        "macosx",
+        "--show-sdk-path"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "developer.root",
+      "program": "/usr/bin/xcode-select",
+      "argv": [
+        "-p"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.linker",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "clang"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.ar",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "ar"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.git",
+      "program": "/usr/bin/git",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.python",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.executable",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "executable"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.root",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "root"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "cargo.home",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "cargo-home"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "runtime.os",
+      "program": "/usr/bin/sw_vers",
+      "argv": [],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.platstdlib",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "platstdlib"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.extensions",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "extensions"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.shared-library",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "shared-library"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "home",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "home"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "home.parent",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "home-parent"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "rustup.home",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "rustup-home"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.cargo-fmt",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "cargo-fmt"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.cargo-fmt",
+      "program": {
+        "stdout": "selection.cargo-fmt"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.rustup",
+      "program": "rustup",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.native-cc",
+      "program": {
+        "stdout": "tool.linker"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    }
+  ],
+  "registered_operations": {
+    "projects": ".chrono-harness/projects.json",
+    "operations": [
+      "inputs.fetch.runner",
+      "inputs.metadata.runner",
+      "inputs.fetch.runner-tests",
+      "inputs.metadata.runner-tests",
+      "inputs.fetch.instructions",
+      "inputs.metadata.instructions",
+      "inputs.fetch.instructions-tests",
+      "inputs.metadata.instructions-tests",
+      "inputs.fetch.judge-ci",
+      "inputs.metadata.judge-ci",
+      "inputs.fetch.judge-ci-tests",
+      "inputs.metadata.judge-ci-tests",
+      "inputs.fetch.ci",
+      "inputs.metadata.ci",
+      "inputs.fetch.ci-tests",
+      "inputs.metadata.ci-tests",
+      "inputs.fetch.judge-registration",
+      "inputs.metadata.judge-registration",
+      "inputs.fetch.judge-registration-tests",
+      "inputs.metadata.judge-registration-tests",
+      "inputs.fetch.judge-filemap",
+      "inputs.metadata.judge-filemap",
+      "inputs.fetch.judge-filemap-tests",
+      "inputs.metadata.judge-filemap-tests",
+      "inputs.fetch.judge-routes",
+      "inputs.metadata.judge-routes",
+      "inputs.fetch.judge-routes-tests",
+      "inputs.metadata.judge-routes-tests",
+      "inputs.fetch.judge-projects",
+      "inputs.metadata.judge-projects",
+      "inputs.fetch.judge-projects-tests",
+      "inputs.metadata.judge-projects-tests",
+      "inputs.fetch.judge-cost",
+      "inputs.metadata.judge-cost",
+      "inputs.fetch.judge-cost-tests",
+      "inputs.metadata.judge-cost-tests",
+      "inputs.fetch.judge-mixed",
+      "inputs.metadata.judge-mixed",
+      "inputs.fetch.judge-mixed-tests",
+      "inputs.metadata.judge-mixed-tests",
+      "inputs.fetch.judge-workflow",
+      "inputs.metadata.judge-workflow",
+      "inputs.fetch.judge-workflow-tests",
+      "inputs.metadata.judge-workflow-tests",
+      "inputs.fetch.inputs",
+      "inputs.metadata.inputs",
+      "inputs.fetch.inputs-tests",
+      "inputs.metadata.inputs-tests",
+      "inputs.fetch.distribution",
+      "inputs.metadata.distribution",
+      "inputs.fetch.distribution-tests",
+      "inputs.metadata.distribution-tests",
+      "inputs.fetch.judge-cargo",
+      "inputs.metadata.judge-cargo",
+      "inputs.fetch.judge-cargo-tests",
+      "inputs.metadata.judge-cargo-tests",
+      "inputs.fetch.worktree",
+      "inputs.metadata.worktree",
+      "inputs.fetch.worktree-tests",
+      "inputs.metadata.worktree-tests",
+      "inputs.fetch.diagnostics",
+      "inputs.metadata.diagnostics",
+      "inputs.fetch.diagnostics-tests",
+      "inputs.metadata.diagnostics-tests",
+      "inputs.fetch.cache",
+      "inputs.metadata.cache",
+      "inputs.fetch.cache-tests",
+      "inputs.metadata.cache-tests"
+    ],
+    "tools": {
+      "cargo": {
+        "stdout": "selection.cargo"
+      }
+    },
+    "timeout_seconds": 120,
+    "output_limit_bytes": 1048576,
+    "environment": {
+      "RUSTC": {
+        "stdout": "selection.rustc"
+      }
+    }
+  },
+  "files": [
+    {
+      "id": "runtime.system-version",
+      "location": {
+        "path": "/System/Library/CoreServices/SystemVersion.plist"
+      }
+    },
+    {
+      "id": "runtime.dyld",
+      "location": {
+        "path": "/usr/lib/dyld"
+      }
+    },
+    {
+      "id": "tool.native-clang",
+      "location": {
+        "stdout": "tool.linker"
+      }
+    },
+    {
+      "id": "tool.native-ar",
+      "location": {
+        "stdout": "tool.ar"
+      }
+    },
+    {
+      "id": "tool.native-python",
+      "location": {
+        "stdout": "python.executable"
+      }
+    },
+    {
+      "id": "configuration.cargo-home.config",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "config"
+      }
+    },
+    {
+      "id": "configuration.cargo-home.config.toml",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "config.toml"
+      }
+    },
+    {
+      "id": "configuration.checkout.config",
+      "location": {
+        "path": ".cargo/config"
+      }
+    },
+    {
+      "id": "configuration.checkout.config.toml",
+      "location": {
+        "path": ".cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.0a24bcbbe88ebae0",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": "rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.22e1529f27755c5a",
+      "location": {
+        "path": "/rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.4971e26cb7d81352",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": "rust-toolchain.toml"
+      }
+    },
+    {
+      "id": "configuration.53f66258050caac2",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": "rust-toolchain"
+      }
+    },
+    {
+      "id": "configuration.6578aa671e061376",
+      "location": {
+        "stdout": "home",
+        "suffix": ".rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.70d663ddab3591b1",
+      "location": {
+        "path": "/.cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.70f054831d3eb9be",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": ".rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.770c0f688c0d8fc5",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": ".cargo/config"
+      }
+    },
+    {
+      "id": "configuration.98f18b28b308b630",
+      "location": {
+        "path": "/.rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.9cef6b2441aab2d0",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": ".cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.9f2e73c2801230e0",
+      "location": {
+        "path": "/.cargo/config"
+      }
+    },
+    {
+      "id": "configuration.b8e1dc7fc228914e",
+      "location": {
+        "path": "/rust-toolchain"
+      }
+    },
+    {
+      "id": "configuration.c7dc5e26eaf9702a",
+      "location": {
+        "stdout": "home",
+        "suffix": "rust-toolchain.toml"
+      }
+    },
+    {
+      "id": "configuration.cd80172321df8988",
+      "location": {
+        "stdout": "home",
+        "suffix": "rust-toolchain"
+      }
+    },
+    {
+      "id": "configuration.credentials",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "credentials"
+      }
+    },
+    {
+      "id": "configuration.credentials.toml",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "credentials.toml"
+      }
+    },
+    {
+      "id": "configuration.e3e19abc5bd066d6",
+      "location": {
+        "path": "/rust-toolchain.toml"
+      }
+    },
+    {
+      "id": "configuration.eca50d195b820816",
+      "location": {
+        "stdout": "home",
+        "suffix": "rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.rustup-settings",
+      "location": {
+        "stdout": "rustup.home",
+        "suffix": "settings.toml"
+      }
+    },
+    {
+      "id": "runtime.python.shared-library",
+      "location": {
+        "stdout": "python.shared-library"
+      },
+      "resolution": "canonical-target"
+    }
+  ],
+  "directories": [
+    {
+      "id": "rust",
+      "location": {
+        "stdout": "rust.sysroot"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "sdk",
+      "location": {
+        "stdout": "sdk.root"
+      },
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/native/macos/guard-inputs/sdk.json",
+        "root": "/Applications/Xcode_26.6.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+      }
+    },
+    {
+      "id": "developer-toolchain",
+      "location": {
+        "stdout": "developer.root",
+        "suffix": "Toolchains/XcodeDefault.xctoolchain"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "python",
+      "location": {
+        "stdout": "python.root"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "cargo-registry",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "registry"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "runtime.shared-cache",
+      "location": {
+        "path": "/System/Library/dyld"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "runtime.cryptex-cache",
+      "location": {
+        "path": "/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "python.platstdlib",
+      "location": {
+        "stdout": "python.platstdlib"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "python.extensions",
+      "location": {
+        "stdout": "python.extensions"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "developer",
+      "location": {
+        "stdout": "developer.root"
+      },
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/native/macos/guard-inputs/developer.json",
+        "root": "/Applications/Xcode_26.6.app/Contents/Developer"
+      }
+    }
+  ],
+  "platforms": [
+    "macos-aarch64"
+  ]
+}

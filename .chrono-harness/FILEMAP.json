@@ -255,7 +255,7 @@
         },
         {
           "kind": "runtime-input",
-          "to": "script:release-build"
+          "to": "project:release-build"
         }
       ]
     },
@@ -6029,6 +6029,389 @@
           "to": "test:judge-projects-migration"
         }
       ]
+    },
+    {
+      "path": "crates/inputs/src/observation.rs",
+      "owner": "inputs",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/tests/observations.rs",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/tests/support/observe.rs",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/provision_tests.py",
+      "owner": "host-bootstrap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/python_probe.py",
+      "owner": "host-bootstrap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-acquire-macos.json",
+      "owner": "host-bootstrap",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-acquire-linux.json",
+      "owner": "host-bootstrap",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-isolated.json",
+      "owner": "host-bootstrap",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/native-acquisition/action.yml",
+      "owner": "host-bootstrap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/chrono-native-acquisition.yml",
+      "owner": "host-bootstrap",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/acquire-linux.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/acquire-macos.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/isolated-production.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/linux-observation.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/native-observation.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/native-provisioning.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/cargo/observe.json",
+      "owner": "judge-cargo-tests",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/cargo/runner.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/macos/config.json",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/macos/cargo-runner.json",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/input-source-custody.md",
+      "owner": "inputs",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
     }
   ],
   "project_edges": [
@@ -8751,6 +9134,41 @@
       "from": "tool:cargo",
       "kind": "runtime-input",
       "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "project:inputs",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "project:inputs",
+      "kind": "compile",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:inputs",
+      "kind": "test-execution",
+      "to": "test:judge-cargo-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "tool:chrono-inputs",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "tool:chrono-inputs",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "tool:cargo-guard",
+      "kind": "runtime-input",
+      "to": "project:runner"
     }
   ],
   "test_costs": [
@@ -9164,6 +9582,7 @@
     },
     "test:host-bootstrap-tests": {
       "operations": [
+        "host.bootstrap-provision-tests",
         "host.bootstrap-tests",
         "host.bootstrap-real-consumer"
       ],

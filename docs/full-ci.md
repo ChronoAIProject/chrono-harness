@@ -216,3 +216,36 @@ Native consumers, generated workflow execution, host activation, complete input
 closure and local/CI comparison are separate evidence obligations. This manual
 dispatch projection does not orchestrate PR creation, merging, required-check
 publication or landing.
+
+
+## Input successor scope and historical source correction
+
+The bounded input successor retains acquisition/provisioning and Cargo v6/directory
+v3 source at their existing owners, preserving current capture/composition,
+retained execution, exact Git v2 selection and worktree v3. The registered isolated
+runner guard remains proposed with missing current binding/participant/native
+acceptance. It does not activate the historical full policies. The persistent
+SPEC goal remains open; this source increment is only its I1 handoff.
+
+PR163 at `65d577f0c570451b674d271642d385b316c7085b` had actual distribution
+consumers: bootstrap-core.json, bootstrap-detector.json and bootstrap.json each
+selected distribution-release.json, and bootstrap.py/shared startup executed or
+validated the installer/receipt/payload path. The prior successor narrative that
+no committed profile consumed that branch is incorrect for this fixed source.
+The current distribution product already owns installation; preserving the omitted
+host integration does not require another installer or a beta.21 switch.
+
+The PR205 `native/macos/config.json` and `cargo-runner.json` fixtures are also
+**not byte-identical** replacements for PR163's original config and runner policy.
+Their distinct Git blob identities, omitted guard/package/governance/distribution
+source and historical evidence obligations are retained in
+[input source custody](input-source-custody.md). No source omission is declared
+redundant or delivered here. Full native activation, exact endpoint composition,
+current installed consumer participation and stronger parity remain unestablished.
+
+**Product and host policy change together:** observer/Cargo behavior and their
+registered acquisition/isolated consumer declarations are added together; current
+Git/worktree policy meanings remain. The stale FILEMAP edge from the pinned
+policy to `script:release-build` is corrected to its current registered
+`project:release-build` owner. Source-install, native, CI, storage and total
+maintenance costs are unknown until the selected producer actually executes.

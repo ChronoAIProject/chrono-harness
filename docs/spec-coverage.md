@@ -845,3 +845,16 @@ CI bound is increased. The release plan reserves `v0.1.0-beta.27` for the admitt
 Q2 increment plus this correction; it makes no publication, remote-acceptance or
 complete-SPEC claim. Added empty-selection Cargo cost and native total cost remain
 unmeasured until those actual consumer cases run.
+
+
+### Bounded input source reconciliation (I1)
+
+Observer acquisition, explicit native/provisioning source and Cargo v6/directory
+v3 behavior are reconciled with the current transport and process owners. The
+registered host-bootstrap and isolated guarded-runner consumer chain, 14 install
+participants and 34 fetch/metadata pairs remain explicit. Generic Rust behavior
+cases and Python provisioning/runtime/forwarding cases are retained; source
+registration is not their executed verdict. Current host binding/adoption,
+protected installed participant consumption, candidate canonical/native acceptance,
+landing, full input closure and parity remain pending. PR163-only source remains
+preserved/unimplemented as described in [custody](input-source-custody.md).
