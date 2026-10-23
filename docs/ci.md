@@ -168,6 +168,12 @@ Acquisition is preparation of committed input; bootstrap does not download or
 learn expectations, and continues to use existing rustup provisioning.
 
 The profiles use rustup selection directly, with no personal installation path.
+When the caller supplies private Rustup/Cargo homes, its inherited `PATH` must
+put the selected toolchain's `bin` before Rustup proxies. Dedicated consumers
+clear unrelated Rustup variables; their Cargo doctests must still resolve
+`rustdoc` from the same selected installation. Bootstrap changes its child
+environment, not the caller's later canonical-check environment. Record the
+actual paths and identities without changing global toolchain defaults.
 For older inline relocatable bindings, a repeated declared/configured original
 path is a historical location and is not probed, even if stale or absent. A
 separate explicitly configured current executable must still exist and match;
