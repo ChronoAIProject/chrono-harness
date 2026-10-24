@@ -690,7 +690,10 @@ pub(super) fn drain(
             match chrono_harness::artifact_disposal::dispose_entry(
                 &allocation,
                 member,
-                &before_id,
+                // Custody's durable member identity is device:inode. Its
+                // already verified regular-file meaning supplies the shared
+                // effect owner's type tag; keep the old intent unchanged.
+                &format!("{before_id}:file"),
                 || {
                     manager.stable(r)?;
                     lease.stable()?;

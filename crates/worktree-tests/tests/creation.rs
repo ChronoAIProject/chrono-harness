@@ -1907,3 +1907,66 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
         b"preserve existing target"
     );
 }
+
+#[test]
+fn adopted_lifecycle_failure_keeps_large_error_in_original_with_compact_outcome() {
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    let diagnostic = "original failure detail\n".repeat(1000);
+    automatic::native_git(&h, "large-diagnostic", value!({"diagnostic":diagnostic}));
+    let policy = value!({"schema":"chrono-output-retention/v1","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},"keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000});
+    fs::write(
+        h.root.join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let mut filemap = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    filemap["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(POLICY_PATH, value!([])));
+    fs::write(h.root.join(FM), serde_json::to_vec(&filemap).unwrap()).unwrap();
+    commit(&h.root);
+    let activity = Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .report_activity()
+        .unwrap();
+    let target = h.parent.join("large-failed-original");
+    let (code, report, error) = h.invoke("integration", "large-failed-original", &target);
+    assert_ne!(code, 0, "{report} {error}");
+    assert_eq!(report["status"], "failed", "{report} {error}");
+    assert_eq!(
+        report["error"],
+        format!("Git check-ref-format exited 71: {diagnostic}")
+    );
+    let path = report["report_path"].as_str().unwrap();
+    let raw = fs::read(h.root.join(path)).unwrap();
+    assert_eq!(json(&raw).unwrap()["error"], report["error"]);
+    let ledger = json(
+        &fs::read(
+            h.root
+                .join(".chrono-harness/state/output-retention-v1/inventory.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let output = ledger["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == path)
+        .unwrap();
+    assert_eq!(output["outcome"]["status"], "failed");
+    assert_eq!(
+        output["outcome"]["error_original"],
+        value!({"path":path,"sha256":sha256(&raw),"pointer":"/error"})
+    );
+    assert!(serde_json::to_vec(&output["outcome"]).unwrap().len() < 1024);
+    assert_eq!(
+        report["processes"].as_array().unwrap().last().unwrap()["process"]["stderr"],
+        diagnostic
+    );
+    assert!(!target.exists());
+    drop(activity);
+}

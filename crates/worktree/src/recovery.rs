@@ -8,6 +8,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// A compact outcome points to the already published complete diagnostic.
+/// Keeping the error body again in inventory would duplicate the original and
+/// could prevent publication of a legitimate large failure.
+pub(crate) fn publication_outcome(report: &Value, raw: &[u8]) -> Value {
+    let mut outcome = value!({"operation":report["operation"],"status":report["status"]});
+    if !report["error"].is_null() {
+        outcome["error_original"] = value!({"path":report["report_path"],
+            "sha256":sha256(raw),"pointer":"/error"});
+    }
+    outcome
+}
+
 fn state_path(root: &Path, path: &str) -> Result<PathBuf, String> {
     relative_path(path)?;
     if !path.starts_with(".chrono-harness/state/") {

@@ -20,6 +20,8 @@ Readers of original descriptors and external blobs acquire shared use protection
 
 Retained process adoption preserves the existing original stream/launch interfaces. Unadopted hosts retain existing behavior. Adopted stream creation is reserved before writes; a failed spawn keeps its enrolled empty/partial originals and repair state instead of silently removing owner evidence. Native process ownership still joins or excludes actual descendants; no PID/age inference substitutes for capabilities.
 
+Lifecycle outcome metadata records operation/status and an exact report digest plus `/error` pointer for a failure. The complete original keeps the entire error chain. This avoids duplicating a large diagnostic in the finite inventory; existing outcomes remain unchanged.
+
 ## Shared physical effects and overlap
 
 Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then holds final-original admission exclusion across its exact effect. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.

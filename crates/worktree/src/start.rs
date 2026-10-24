@@ -780,9 +780,7 @@ pub(crate) fn with_report(
     output.write_all(&data).map_err(|e| e.to_string())?;
     output.sync_all().map_err(|e| e.to_string())?;
     if let Some(publication) = report_publication {
-        publication.complete(
-            value!({"operation":operation,"status":report["status"],"error":report["error"]}),
-        )?;
+        publication.complete(crate::recovery::publication_outcome(&report, &data))?;
     }
     crate::recovery::settle_report(root, &report)?;
     Ok(report)

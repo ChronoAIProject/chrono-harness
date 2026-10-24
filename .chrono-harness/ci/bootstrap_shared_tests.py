@@ -24,15 +24,58 @@ CONFIG = ".chrono-harness/ci/bootstrap-shared.json"
 
 
 def fixture_host_config(root):
-    """Read the registered policy as fixture data, without selecting a live host.
+    """Use an already admitted policy when preparing a current fixture host.
 
-    Independent fixtures rebind their own tools before committing. The real
-    consumer retains the original selector and delegates admission to Rust.
+    Keep its exact expected Git identity: observing different bytes never edits
+    a binding or falls back to another platform's historical policy.
     """
     value = json.loads((root / ".chrono-harness/config.json").read_bytes())
     if value.get("schema") == "chrono-git-configs/v2":
-        value = json.loads((root / ".chrono-harness/git/pinned-macos.json").read_bytes())
+        operating_system = {"Darwin": "macos", "Linux": "linux"}.get(platform.system())
+        architecture = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64"}.get(platform.machine())
+        host = value["platforms"].get(str(operating_system) + "-" + str(architecture))
+        if host is None:
+            raise ValueError("fixture has no registered native Git platform")
+        observed = hashlib.sha256(Path(host["program"]).read_bytes()).hexdigest()
+        matches = [row for row in host["configurations"] if row["sha256"] == observed]
+        if len(matches) != 1:
+            raise ValueError("fixture has no unique registered Git executable identity")
+        value = json.loads((root / matches[0]["path"]).read_bytes())
     return value
+
+
+class FixtureHostPolicy(unittest.TestCase):
+    def test_exact_registered_identity_selects_current_policy_and_preserves_expected_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".chrono-harness").mkdir()
+            program = root / "fixture-git"
+            program.write_bytes(b"current admitted Git")
+            policy = {"expected": hashlib.sha256(program.read_bytes()).hexdigest()}
+            (root / "current.json").write_text(json.dumps(policy))
+            (root / "historical.json").write_text(json.dumps({"expected": "old admitted Git"}))
+            selector = {"schema": "chrono-git-configs/v2", "platforms": {"macos-aarch64": {
+                "program": str(program), "configurations": [
+                    {"sha256": "0" * 64, "path": "historical.json"},
+                    {"sha256": policy["expected"], "path": "current.json"}]}}}
+            path = root / ".chrono-harness/config.json"
+            path.write_text(json.dumps(selector))
+            original = path.read_bytes()
+            with fixture.mock.patch.object(platform, "system", return_value="Darwin"), fixture.mock.patch.object(platform, "machine", return_value="arm64"):
+                self.assertEqual(fixture_host_config(root), policy)
+                program.write_bytes(b"unadmitted replacement")
+                with self.assertRaisesRegex(ValueError, "no unique registered Git"):
+                    fixture_host_config(root)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_unknown_platform_has_no_historical_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".chrono-harness").mkdir()
+            (root / ".chrono-harness/config.json").write_text(json.dumps({
+                "schema": "chrono-git-configs/v2", "platforms": {}}))
+            with self.assertRaisesRegex(ValueError, "no registered native Git platform"):
+                fixture_host_config(root)
 
 
 def acquire_parent_source(source, root, git, run):

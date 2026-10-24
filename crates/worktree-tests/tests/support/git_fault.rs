@@ -405,6 +405,14 @@ fn main() {
                 }
             }
         }
+        "large-diagnostic" => {
+            if arg(1, "check-ref-format") {
+                io::stderr()
+                    .write_all(config["diagnostic"].as_str().unwrap().as_bytes())
+                    .unwrap();
+                std::process::exit(71);
+            }
+        }
         "batch-failure" => {
             if args.ends_with(&["cat-file".into(), "--batch".into()]) {
                 io::stdout()

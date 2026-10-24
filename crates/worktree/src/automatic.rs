@@ -2666,7 +2666,7 @@ pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> 
         "lifecycle-original",
         path,
         &raw,
-        serde_json::json!({"operation":report["operation"],"status":report["status"],"error":report["error"]}),
+        crate::recovery::publication_outcome(report, &raw),
     )? {
         write_json(&target, report, true)?;
     }
