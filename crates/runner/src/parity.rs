@@ -73,6 +73,10 @@ pub fn update_files(root: &Path, report: &Path, compared: &Path) -> Result<(Valu
     if report.is_absolute() || compared.is_absolute() || report == compared {
         return Err("E_PARITY_INPUT: report paths must be distinct relative paths".into());
     }
+    // The immutable publisher returns canonical addresses. Use the same host
+    // spelling for both input resolution and its returned relative address.
+    let root = fs::canonicalize(root).map_err(|e| format!("E_PARITY_INPUT: {e}"))?;
+    let root = root.as_path();
     let report_path =
         crate::no_symlink_parents(root, report.to_str().ok_or("non UTF-8 report path")?)?;
     let compared_path = crate::no_symlink_parents(

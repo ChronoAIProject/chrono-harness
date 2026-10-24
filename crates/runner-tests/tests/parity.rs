@@ -186,7 +186,10 @@ fn adopted_parity_reads_originals_and_publishes_a_new_original_without_rewriting
     use chrono_harness::retained_artifacts::retention::{self, Inventory};
     use std::{fs, path::Path};
     let host = tempfile::tempdir().unwrap();
-    let root = host.path();
+    // An equivalent spelling must remain compatible with canonical original
+    // addresses on every platform, including a host below a symlinked temp root.
+    let host_root = host.path().join(".");
+    let root = host_root.as_path();
     fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
     fs::write(root.join(retention::POLICY_PATH),serde_json::to_vec(&json!({"schema":"chrono-output-retention/v1","producers":{"full-original":[".chrono-harness/state/"]},"keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000})).unwrap()).unwrap();
     let original = ".chrono-harness/state/current-original.json";

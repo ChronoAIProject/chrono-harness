@@ -123,7 +123,7 @@ impl Lease {
                 }
                 match wait {
                     None => return Ok(None),
-                    Some(bound) if began.elapsed() >= bound => return Err("automatic cleanup admission remains busy; kernel ownership was not expired".into()),
+                    Some(bound) if began.elapsed() >= bound => return Err(format!("automatic cleanup admission remains busy at {}; kernel ownership was not expired", path.display())),
                     Some(_) => std::thread::sleep(Duration::from_millis(10)),
                 }
             }
