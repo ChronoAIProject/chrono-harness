@@ -136,10 +136,7 @@ pub fn invoke(
     };
     let p = run_process_observed(&req.candidate.root, &spec, &wire::canonical(req)?, hash)?;
     if let Some(message) = p.failure.clone() {
-        return Err(TransportFailure {
-            message,
-            process: Some(p),
-        });
+        return Err(TransportFailure::with_process(message, p));
     }
     let response = decode::<Response>(&p.stdout_bytes).and_then(|r| {
         wire::validate_response_at(
@@ -155,10 +152,7 @@ pub fn invoke(
     });
     match response {
         Ok(r) => Ok((r, p)),
-        Err(message) => Err(TransportFailure {
-            message,
-            process: Some(p),
-        }),
+        Err(message) => Err(TransportFailure::with_process(message, p)),
     }
 }
 

@@ -577,3 +577,586 @@ fn partial_cleanup_failure_retains_each_result_and_refuses_a_second_deletion() {
         original["error"]
     );
 }
+
+fn verified_host() -> (Host, Value, Value) {
+    let (root, mut config, _) = recovery_host();
+    config["recover_unconfirmed_restores"] = json!(true);
+    config["caches"]["project"]["verify_contents"] = json!(true);
+    let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+    bind_installed_planner(&mut prepared);
+    fs::write(
+        root.path().join(".chrono-harness/cache.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/state/restore/plan.json"),
+        serde_json::to_vec(&prepared).unwrap(),
+    )
+    .unwrap();
+    (root, config, prepared)
+}
+
+fn seal(root: &Path, steps: &Value) -> std::process::Output {
+    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"))
+        .args([
+            "seal",
+            "--host-root",
+            root.to_str().unwrap(),
+            "--config",
+            ".chrono-harness/cache.json",
+            "--plan",
+            ".chrono-harness/state/restore/plan.json",
+            "--cache",
+            "project",
+            "--steps-env",
+            "CACHE_PRODUCER_STEPS",
+            "--work",
+            "work",
+        ])
+        .env(
+            "CACHE_PRODUCER_STEPS",
+            serde_json::to_string(steps).unwrap(),
+        )
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn verified_hit_requires_producer_seal_and_retains_mismatched_content_before_recovery() {
+    for mutation in [
+        "none",
+        "changed",
+        "missing",
+        "extra",
+        "mode",
+        "wrong-producer",
+        "wrong-key",
+        "malformed-manifest",
+        "missing-manifest",
+    ] {
+        let (root, _, prepared) = verified_host();
+        let sealed = seal(root.path(), &json!({"work":{"outcome":"success"}}));
+        assert!(
+            sealed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&sealed.stderr)
+        );
+        let marker = root
+            .path()
+            .join("out/project/.chrono-cache-content-v1.json");
+        match mutation {
+            "changed" => {
+                fs::write(root.path().join("out/project/partial"), b"altered content").unwrap()
+            }
+            "missing" => fs::remove_file(root.path().join("out/project/partial")).unwrap(),
+            "extra" => fs::write(root.path().join("out/project/extra"), b"unbound output").unwrap(),
+            "mode" => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::set_permissions(
+                        root.path().join("out/project/partial"),
+                        fs::Permissions::from_mode(0o755),
+                    )
+                    .unwrap();
+                }
+            }
+            "wrong-producer" => {
+                let mut value: Value = serde_json::from_slice(&fs::read(&marker).unwrap()).unwrap();
+                value["producer"] = json!("other.operation");
+                fs::write(&marker, serde_json::to_vec(&value).unwrap()).unwrap();
+            }
+            "wrong-key" => {
+                let mut value: Value = serde_json::from_slice(&fs::read(&marker).unwrap()).unwrap();
+                value["key"] = json!("incompatible-source-key");
+                fs::write(&marker, serde_json::to_vec(&value).unwrap()).unwrap();
+            }
+            "malformed-manifest" => fs::write(&marker, b"partial manifest").unwrap(),
+            "missing-manifest" => fs::remove_file(&marker).unwrap(),
+            _ => (),
+        }
+        let steps = json!({"cache_0_restore":{"outcome":"success","outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}}});
+        let recovered = recover(root.path(), &steps);
+        assert!(
+            recovered.status.success(),
+            "{mutation}: {}",
+            String::from_utf8_lossy(&recovered.stderr)
+        );
+        let report = result(root.path());
+        assert_eq!(
+            report["caches"]["project"]["restore"],
+            steps["cache_0_restore"]
+        );
+        assert_eq!(
+            report["caches"]["project"]["verification"]["status"],
+            if mutation == "none" {
+                "matched"
+            } else {
+                "unusable"
+            }
+        );
+        assert_eq!(root.path().join("out/project").exists(), mutation == "none");
+        if mutation != "none" {
+            let original = &report["caches"]["project"]["verification"]["original"];
+            assert!(
+                root.path()
+                    .join(original["path"].as_str().unwrap())
+                    .is_file()
+            );
+            // Completed recovery must preserve the output of the subsequent registered build.
+            fs::create_dir_all(root.path().join("out/project")).unwrap();
+            fs::write(root.path().join("out/project/rebuilt"), b"candidate").unwrap();
+            assert!(recover(root.path(), &steps).status.success());
+            assert!(root.path().join("out/project/rebuilt").is_file());
+            let mut final_steps = steps.clone();
+            final_steps["work"] = json!({"outcome":"failure"});
+            let delivered = transport(root.path(), &final_steps);
+            assert!(
+                delivered.status.success(),
+                "{}",
+                String::from_utf8_lossy(&delivered.stderr)
+            );
+            let delivered: Value = serde_json::from_slice(&delivered.stdout).unwrap();
+            let observed = &delivered["observation"];
+            assert_eq!(
+                observed["caches"]["project"]["restore"]["status"],
+                "unusable-content"
+            );
+            assert_eq!(
+                observed["caches"]["project"]["restore"]["key_status"],
+                "exact"
+            );
+            assert_eq!(observed["work"]["outcome"], "failure");
+            assert!(
+                root.path()
+                    .join(
+                        observed["caches"]["project"]["content_verification"]["upload"]["path"]
+                            .as_str()
+                            .unwrap()
+                    )
+                    .is_file()
+            );
+        }
+    }
+}
+
+#[test]
+fn producer_seal_refuses_failure_and_compatible_restore_checks_original_source_key() {
+    let (root, config, prepared) = verified_host();
+    let rejected = seal(
+        root.path(),
+        &json!({"work":{"outcome":"failure","conclusion":"success"}}),
+    );
+    assert!(!rejected.status.success());
+    assert!(
+        !root
+            .path()
+            .join("out/project/.chrono-cache-content-v1.json")
+            .exists()
+    );
+    assert!(
+        seal(root.path(), &json!({"work":{"outcome":"success"}}))
+            .status
+            .success()
+    );
+    fs::write(root.path().join("source"), b"candidate-source-two").unwrap();
+    let mut candidate = plan(root.path(), &config, "check.one").unwrap();
+    bind_installed_planner(&mut candidate);
+    assert_ne!(
+        prepared["caches"]["project"]["key"],
+        candidate["caches"]["project"]["key"]
+    );
+    assert_eq!(
+        prepared["caches"]["project"]["restore_keys"],
+        candidate["caches"]["project"]["restore_keys"]
+    );
+    fs::write(
+        root.path().join(".chrono-harness/state/restore/plan.json"),
+        serde_json::to_vec(&candidate).unwrap(),
+    )
+    .unwrap();
+    let steps = json!({"cache_0_restore":{"outcome":"success","outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}}});
+    assert!(recover(root.path(), &steps).status.success());
+    assert_eq!(
+        result(root.path())["caches"]["project"]["verification"]["status"],
+        "matched"
+    );
+    assert!(root.path().join("out/project/partial").is_file());
+}
+
+fn acceptance_host() -> (Host, Value, Value) {
+    let (root, mut config, before) = verified_host();
+    config["acceptance_fixtures"] = json!({"native-unusable":{
+        "method":"remove-producer-manifest/v1","consumer":"check.one","caches":["project"]}});
+    let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+    bind_installed_planner(&mut prepared);
+    assert_eq!(
+        before["caches"], prepared["caches"],
+        "fixture policy must not change cache domain or source key"
+    );
+    fs::write(
+        root.path().join(".chrono-harness/cache.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/state/restore/plan.json"),
+        serde_json::to_vec(&prepared).unwrap(),
+    )
+    .unwrap();
+    let sealed = seal(root.path(), &json!({"work":{"outcome":"success"}}));
+    assert!(
+        sealed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&sealed.stderr)
+    );
+    let activation = json!({"schema":"chrono-cache-acceptance/v1","fixture":"native-unusable",
+        "consumer":"check.one","keys":{"project":prepared["caches"]["project"]["key"]},
+        "git_ref":"refs/pull/1/merge","run_id":"1234","run_attempt":"2","source_commit":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"});
+    (root, activation, prepared)
+}
+
+fn acceptance_command(root: &Path, activation: Option<&Value>, steps: &Value) -> Command {
+    let mut command = Command::new(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"),
+    );
+    command
+        .args([
+            "acceptance-fixture",
+            "--host-root",
+            root.to_str().unwrap(),
+            "--config",
+            ".chrono-harness/cache.json",
+            "--plan",
+            ".chrono-harness/state/restore/plan.json",
+            "--fixture",
+            "native-unusable",
+            "--steps-env",
+            "FIXTURE_STEPS",
+            "--work",
+            "work",
+        ])
+        .env("FIXTURE_STEPS", serde_json::to_string(steps).unwrap())
+        .env("GITHUB_RUN_ID", "1234")
+        .env("GITHUB_RUN_ATTEMPT", "2")
+        .env("GITHUB_REF", "refs/pull/1/merge")
+        .env("GITHUB_SHA", "1234567890123456789012345678901234567890")
+        .env(
+            "CHRONO_CACHE_SOURCE_COMMIT",
+            "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        )
+        .env_remove("CHRONO_CACHE_ACCEPTANCE");
+    if let Some(activation) = activation {
+        command.env(
+            "CHRONO_CACHE_ACCEPTANCE",
+            serde_json::to_string(activation).unwrap(),
+        );
+    }
+    command
+}
+
+fn acceptance(root: &Path, activation: Option<&Value>, steps: &Value) -> std::process::Output {
+    acceptance_command(root, activation, steps)
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn native_acceptance_binds_checkout_head_separately_from_event_merge_sha() {
+    let (root, activation, _) = acceptance_host();
+    let marker = root
+        .path()
+        .join("out/project/.chrono-cache-content-v1.json");
+    let preimage = fs::read(&marker).unwrap();
+    let steps = json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"success"}});
+    let missing = acceptance_command(root.path(), Some(&activation), &steps)
+        .env_remove("CHRONO_CACHE_SOURCE_COMMIT")
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    for source in ["", "invalid", "1234567890123456789012345678901234567890"] {
+        let wrong = acceptance_command(root.path(), Some(&activation), &steps)
+            .env("CHRONO_CACHE_SOURCE_COMMIT", source)
+            .output()
+            .unwrap();
+        assert!(!wrong.status.success());
+        assert_eq!(fs::read(&marker).unwrap(), preimage);
+    }
+    let applied = acceptance(root.path(), Some(&activation), &steps);
+    assert!(
+        applied.status.success(),
+        "{}",
+        String::from_utf8_lossy(&applied.stderr)
+    );
+    let result: Value = serde_json::from_slice(&applied.stdout).unwrap();
+    assert_eq!(
+        result["observation"]["native"]["GITHUB_SHA"],
+        "1234567890123456789012345678901234567890"
+    );
+    assert_eq!(
+        result["observation"]["native"]["CHRONO_CACHE_SOURCE_COMMIT"],
+        activation["source_commit"]
+    );
+    assert!(!marker.exists());
+}
+
+#[test]
+fn native_acceptance_retains_preimage_removes_only_manifest_and_enables_ordinary_recovery() {
+    let (root, activation, prepared) = acceptance_host();
+    let marker = root
+        .path()
+        .join("out/project/.chrono-cache-content-v1.json");
+    let preimage = fs::read(&marker).unwrap();
+    let steps = json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"success"}});
+    let applied = acceptance(root.path(), Some(&activation), &steps);
+    assert!(
+        applied.status.success(),
+        "{}",
+        String::from_utf8_lossy(&applied.stderr)
+    );
+    let report: Value = serde_json::from_slice(&applied.stdout).unwrap();
+    let observation = &report["observation"];
+    assert_eq!(observation["status"], "applied");
+    assert_eq!(observation["native"]["GITHUB_RUN_ID"], "1234");
+    assert_eq!(observation["removals"][0]["postimage"], "absent");
+    assert_eq!(
+        fs::read(
+            root.path().join(
+                observation["removals"][0]["preimage"]["path"]
+                    .as_str()
+                    .unwrap()
+            )
+        )
+        .unwrap(),
+        preimage
+    );
+    assert_eq!(
+        fs::read(root.path().join("out/project/partial")).unwrap(),
+        b"partial archive"
+    );
+    assert_eq!(
+        fs::read(root.path().join("out/other/keep")).unwrap(),
+        b"other consumer"
+    );
+    assert!(!marker.exists());
+    assert_eq!(
+        serde_json::from_slice::<Value>(
+            &fs::read(
+                root.path()
+                    .join(observation["native_steps"]["path"].as_str().unwrap())
+            )
+            .unwrap()
+        )
+        .unwrap(),
+        steps
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(
+            &fs::read(root.path().join(report["report"]["path"].as_str().unwrap())).unwrap()
+        )
+        .unwrap(),
+        *observation
+    );
+    let replay = acceptance(root.path(), Some(&activation), &steps);
+    assert!(!replay.status.success());
+    assert!(String::from_utf8_lossy(&replay.stderr).contains("prior intent"));
+    // Local content recovery only: these observations are fixture data, not native archive evidence.
+    let restore = json!({"cache_0_restore":{"outcome":"success","outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}}});
+    assert!(recover(root.path(), &restore).status.success());
+    assert_eq!(
+        result(root.path())["caches"]["project"]["verification"]["status"],
+        "unusable"
+    );
+    assert!(!root.path().join("out/project").exists());
+    assert!(root.path().join("out/other/keep").is_file());
+}
+
+#[test]
+fn native_acceptance_rejects_mismatched_activation_and_unsuccessful_originals_before_mutation() {
+    let (root, activation, prepared) = acceptance_host();
+    let marker = root
+        .path()
+        .join("out/project/.chrono-cache-content-v1.json");
+    let preimage = fs::read(&marker).unwrap();
+    let success = json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"success"}});
+    let mut invalid = Vec::new();
+    for (field, value) in [
+        ("schema", json!("unknown")),
+        ("fixture", json!("unknown")),
+        ("consumer", json!("other")),
+        ("git_ref", json!("refs/heads/dev")),
+        ("run_attempt", json!("1")),
+        ("run_id", json!("5678")),
+        (
+            "source_commit",
+            json!("0000000000000000000000000000000000000000"),
+        ),
+        ("keys", json!({})),
+        ("keys", json!({"other":"key"})),
+        ("keys", json!({"project":"different-domain-or-source"})),
+    ] {
+        let mut bad = activation.clone();
+        bad[field] = value;
+        invalid.push(bad);
+    }
+    let mut extra = activation.clone();
+    extra["unknown"] = json!(true);
+    invalid.push(extra);
+    for bad in &invalid {
+        let out = acceptance(root.path(), Some(bad), &success);
+        assert!(!out.status.success(), "{bad}");
+        assert_eq!(fs::read(&marker).unwrap(), preimage);
+    }
+    assert!(!acceptance(root.path(), None, &success).status.success());
+    for steps in [
+        json!({"work":{"outcome":"failure","conclusion":"success"},"chrono_cache_seal":{"outcome":"success"}}),
+        json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"failure","conclusion":"success"}}),
+        json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"success"},"cache_0_restore":{"outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}}}),
+    ] {
+        assert!(
+            !acceptance(root.path(), Some(&activation), &steps)
+                .status
+                .success()
+        );
+        assert_eq!(fs::read(&marker).unwrap(), preimage);
+    }
+    assert!(
+        !root
+            .path()
+            .join(".chrono-harness/state/restore/acceptance-intent.json")
+            .exists()
+    );
+    fs::write(&marker, b"changed after seal").unwrap();
+    assert!(
+        !acceptance(root.path(), Some(&activation), &success)
+            .status
+            .success()
+    );
+    assert_eq!(fs::read(&marker).unwrap(), b"changed after seal");
+}
+
+#[test]
+fn native_acceptance_registration_requires_verified_primary_recoverable_scopes() {
+    let (root, _, _) = acceptance_host();
+    let original: Value =
+        serde_json::from_slice(&fs::read(root.path().join(".chrono-harness/cache.json")).unwrap())
+            .unwrap();
+    for (pointer, value) in [
+        (
+            "/acceptance_fixtures/native-unusable/method",
+            json!("arbitrary"),
+        ),
+        ("/acceptance_fixtures/native-unusable/caches", json!([])),
+        (
+            "/acceptance_fixtures/native-unusable/caches",
+            json!(["project", "project"]),
+        ),
+        (
+            "/acceptance_fixtures/native-unusable/caches",
+            json!(["unknown"]),
+        ),
+        (
+            "/acceptance_fixtures/native-unusable/consumer",
+            json!("unknown"),
+        ),
+        ("/require_primary_checkout", json!(false)),
+        ("/recover_failed_restores", json!(false)),
+        ("/caches/project/verify_contents", json!(false)),
+        ("/artifacts/target/external", json!(true)),
+    ] {
+        let mut bad = original.clone();
+        *bad.pointer_mut(pointer).unwrap() = value;
+        assert!(plan(root.path(), &bad, "check.one").is_err(), "{pointer}");
+    }
+}
+
+#[test]
+fn native_acceptance_preflights_both_scopes_and_can_select_one_or_both() {
+    for selected in [vec!["project"], vec!["other", "project"]] {
+        let (root, mut config, _) = verified_host();
+        // Two independently registered target directories with the same small fixture producer.
+        config["caches"]["other"] = config["caches"]["project"].clone();
+        config["caches"]["other"]["artifacts"] = json!(["other-target"]);
+        config["caches"]["other"]["owner"] = json!("other");
+        config["consumer_operations"]
+            .as_object_mut()
+            .unwrap()
+            .remove("check.other");
+        config["acceptance_fixtures"] = json!({"native-unusable":{
+            "method":"remove-producer-manifest/v1","consumer":"check.one","caches":["other","project"]}});
+        let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+        bind_installed_planner(&mut prepared);
+        fs::write(
+            root.path().join(".chrono-harness/cache.json"),
+            serde_json::to_vec(&config).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            root.path().join(".chrono-harness/state/restore/plan.json"),
+            serde_json::to_vec(&prepared).unwrap(),
+        )
+        .unwrap();
+        let sealed = Command::new(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"),
+        )
+        .args([
+            "seal",
+            "--host-root",
+            root.path().to_str().unwrap(),
+            "--config",
+            ".chrono-harness/cache.json",
+            "--plan",
+            ".chrono-harness/state/restore/plan.json",
+            "--steps-env",
+            "FIXTURE_STEPS",
+            "--work",
+            "work",
+        ])
+        .env("FIXTURE_STEPS", r#"{"work":{"outcome":"success"}}"#)
+        .output()
+        .unwrap();
+        assert!(
+            sealed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&sealed.stderr)
+        );
+        let mut keys = serde_json::Map::new();
+        for id in &selected {
+            keys.insert((*id).into(), prepared["caches"][id]["key"].clone());
+        }
+        let activation = json!({"schema":"chrono-cache-acceptance/v1","fixture":"native-unusable",
+            "consumer":"check.one","keys":keys,"git_ref":"refs/pull/1/merge","run_id":"1234","run_attempt":"2","source_commit":"abcdefabcdefabcdefabcdefabcdefabcdefabcd"});
+        let steps = json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"success"}});
+        let marker = root
+            .path()
+            .join("out/project/.chrono-cache-content-v1.json");
+        let original = fs::read(&marker).unwrap();
+        fs::write(&marker, b"second scope changed after seal").unwrap();
+        assert!(
+            !acceptance(root.path(), Some(&activation), &steps)
+                .status
+                .success()
+        );
+        assert!(
+            root.path()
+                .join("out/other/.chrono-cache-content-v1.json")
+                .is_file(),
+            "all scopes preflight before first mutation"
+        );
+        fs::write(&marker, original).unwrap();
+        let out = acceptance(root.path(), Some(&activation), &steps);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!marker.exists());
+        assert_eq!(
+            root.path()
+                .join("out/other/.chrono-cache-content-v1.json")
+                .exists(),
+            selected.len() == 1
+        );
+    }
+}

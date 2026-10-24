@@ -601,7 +601,8 @@ pub fn execute(
             Err(e) => {
                 status = Status::Error;
                 let exit = e.process.as_ref().map(|p| p.exit_code);
-                records.push(value!({"id":b.id,"binding":b,"state":if e.process.is_some(){"executed"}else{"error"},"request_id":req.request().request_id,"transport_failure":e.message,"exit_code":exit,"process":e.process}));
+                let diagnostic = e.diagnostic();
+                records.push(value!({"id":b.id,"binding":b,"state":if e.process.is_some(){"executed"}else{"error"},"request_id":req.request().request_id,"transport_failure":e.message,"transport_diagnostic":diagnostic,"exit_code":exit,"process":e.process}));
             }
         }
     }
@@ -663,6 +664,33 @@ pub fn validate_execution(
         let state = record["state"]
             .as_str()
             .ok_or_else(|| format!("E_SELF_DIAGNOSTIC: record {id} has no string state"))?;
+        if let Some(diagnostic) = record.get("transport_diagnostic") {
+            let diagnostic: wire::TransportDiagnostic = serde_json::from_value(diagnostic.clone())
+                .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} transport diagnostic: {e}"))?;
+            let error = &diagnostic.error.error;
+            if error.message != record["transport_failure"].as_str().unwrap_or_default()
+                || error.context.get("request_id") != record.get("request_id")
+                || error.context.get("judge_id") != Some(&value!(id))
+                || error.context.get("operation") != Some(&value!("judge.invoke"))
+                || error.context.get("operation_started") != Some(&value!(state == "executed"))
+                || !matches!(state, "executed" | "error")
+            {
+                return Err(format!(
+                    "E_SELF_DIAGNOSTIC: record {id} transport diagnostic context differs from invocation"
+                ));
+            }
+            if let Some(process_error) = record["process"].get("failure_record") {
+                let expected: chrono_diagnostics::error::ErrorRecord =
+                    serde_json::from_value(process_error.clone()).map_err(|e| {
+                        format!("E_SELF_DIAGNOSTIC: record {id} process failure record: {e}")
+                    })?;
+                if error.source.as_deref() != Some(&expected.error) {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} transport cause differs from process evidence"
+                    ));
+                }
+            }
+        }
         match state {
             "executed" => {
                 let process = record.get("process").ok_or_else(|| {
@@ -1537,8 +1565,51 @@ pub fn check_prepared(
         }
         None => no_symlink_parents(root, &format!("{report_directory}report.json"))?,
     };
-    fs::write(retained_report, &text).map_err(|e| e.to_string())?;
-    fs::write(path, &text).map_err(|e| e.to_string())?;
+    let mut publication_failures = Vec::new();
+    let mut published = Vec::new();
+    for path in [&retained_report, &path] {
+        match fs::write(path, &text) {
+            Ok(()) => published
+                .push(value!({"path":path,"sha256":sha256(text.as_bytes()),"length":text.len()})),
+            Err(error) => publication_failures.push(
+                chrono_diagnostics::error::Failure::wrap(
+                    "E_FULL_REPORT_PUBLISH",
+                    "full report publication failed",
+                    chrono_diagnostics::error::NativeIoError::new(error),
+                )
+                .at("path", path.to_string_lossy().into_owned())
+                .at("phase", "write"),
+            ),
+        }
+    }
+    if !publication_failures.is_empty() {
+        let original = report["judges"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find_map(|row| row.get("transport_diagnostic"))
+            .map(|value| serde_json::from_value::<wire::TransportDiagnostic>(value.clone()))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let mut failure = match original {
+            Some(original) => chrono_diagnostics::error::Failure::wrap(
+                "E_FULL_REPORT_EVIDENCE",
+                "full report publication failed after judge failure",
+                chrono_diagnostics::error::ReceivedError::from(original.error),
+            ),
+            None => publication_failures.remove(0),
+        };
+        for error in publication_failures {
+            failure = failure.with_related("report_publication", error);
+        }
+        return Err(format!(
+            "E_REPORT_EVIDENCE: {}",
+            value!({
+                "schema":"chrono-full-report-publication-failure/v1",
+                "error":failure.record(),"report":report,"published":published,
+            })
+        ));
+    }
     Ok((status.exit_code() as u8, text))
 }
 

@@ -806,6 +806,9 @@ fn store_context(
     Ok(())
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {
+    if args.first().map(String::as_str) == Some("cache-activation") {
+        return cache::activation_dispatch(args);
+    }
     if args.first().map(String::as_str) == Some("native-process") {
         return check_inputs::native_process(args);
     }

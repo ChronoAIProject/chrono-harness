@@ -281,7 +281,84 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                     report["native_steps"]["path"].as_str().unwrap(),
                 ));
             }
+            if let Some(verification) = recovery["caches"][id].get("verification") {
+                let original: prepared::Original =
+                    serde_json::from_value(verification["original"].clone())
+                        .map_err(|e| e.to_string())?;
+                let raw = prepared::read_original(root, &original, None)?;
+                let observation: Value = decode(&raw)?;
+                let mut manifests = Vec::new();
+                for artifact in observation["artifacts"]
+                    .as_object()
+                    .ok_or("E_CACHE_REPORT: content artifacts missing")?
+                    .values()
+                {
+                    if let Some(original) = artifact.get("manifest_original") {
+                        let original: prepared::Original =
+                            serde_json::from_value(original.clone()).map_err(|e| e.to_string())?;
+                        let raw = prepared::read_original(root, &original, None)?;
+                        manifests.push(retain_for_upload(
+                            root,
+                            directory,
+                            "content-manifest",
+                            &raw,
+                        )?);
+                    }
+                }
+                report["caches"][id]["content_verification"] = json!({"result":verification,
+                    "upload":retain_for_upload(root, directory, "content-verification", &raw)?,"manifest_uploads":manifests});
+                if verification["status"] != "matched" {
+                    report["caches"][id]["restore"]["key_status"] =
+                        report["caches"][id]["restore"]["status"].clone();
+                    report["caches"][id]["restore"]["status"] = json!("unusable-content");
+                    report["warnings"].as_array_mut().unwrap().push(json!({"code":"W_CACHE_CONTENT_UNUSABLE","cache":id,"message":"producer-bound content verification failed; registered outputs discarded before original build"}));
+                }
+            }
         }
+    }
+    if steps["chrono_cache_seal"]["outcome"] == "success" {
+        let source_directory = plan_path
+            .rsplit_once('/')
+            .ok_or("E_CACHE_REPORT: plan directory")?
+            .0;
+        let pointer = fs::read(no_symlink_parents(
+            root,
+            &format!("{source_directory}/seal.json"),
+        )?)
+        .map_err(|e| format!("E_CACHE_REPORT: seal result: {e}"))?;
+        let original: prepared::Original = decode(&pointer)?;
+        let raw = prepared::read_original(root, &original, None)?;
+        let sealed: Value = decode(&raw)?;
+        if sealed["schema"] != "chrono-cache-seal/v1" || sealed["plan"] != report["plan"] {
+            return Err("E_CACHE_REPORT: seal belongs to another plan".into());
+        }
+        let steps_original: prepared::Original =
+            serde_json::from_value(sealed["native_steps"].clone()).map_err(|e| e.to_string())?;
+        let original_steps = prepared::read_original(root, &steps_original, None)?;
+        let mut manifests = Vec::new();
+        for cache in sealed["caches"]
+            .as_object()
+            .ok_or("E_CACHE_REPORT: seal caches missing")?
+            .values()
+        {
+            for original in cache["manifests"]
+                .as_object()
+                .ok_or("E_CACHE_REPORT: seal manifests missing")?
+                .values()
+            {
+                let original: prepared::Original =
+                    serde_json::from_value(original.clone()).map_err(|e| e.to_string())?;
+                let raw = prepared::read_original(root, &original, None)?;
+                manifests.push(retain_for_upload(
+                    root,
+                    directory,
+                    "producer-manifest",
+                    &raw,
+                )?);
+            }
+        }
+        report["seal"] = json!({"original":retain_for_upload(root, directory, "producer-seal", &raw)?,
+            "native_steps":retain_for_upload(root,directory,"producer-steps",&original_steps)?,"manifest_uploads":manifests,"caches":sealed["caches"]});
     }
     let mut probes = Vec::new();
     for input in plan["inputs"]
