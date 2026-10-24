@@ -576,13 +576,16 @@ class RealAttempt:
         if evidence.is_symlink():
             raise ValueError("attempt ownership is unknown")
         result = json.loads((evidence / "result.json").read_bytes())
-        if result["status"] != "passed":
-            raise ValueError("producer success is unresolved")
+        if result["status"] not in ("passed", "failed"):
+            raise ValueError("producer completion is unresolved")
         custody, root = result["custody"], Path(result["fixture"])
         reports = {}
         for command in result["commands"]:
-            if command["status"] != "passed" or command["exit_code"] != 0:
-                raise ValueError("producer command did not succeed")
+            code = command["exit_code"]
+            if not isinstance(code, int) or command["status"] != ("passed" if code == 0 else "failed"):
+                raise ValueError("producer command has not joined with its original outcome")
+            if code != 0 and (result["status"] != "failed" or command["name"] != "managed-use"):
+                raise ValueError("producer setup/release did not succeed")
             raw = cls.original(command["stdout"])
             cls.original(command["stderr"])
             reports[command["name"]] = raw
@@ -592,8 +595,16 @@ class RealAttempt:
                 name.startswith("owner-release-") and raw == released for name, raw in reports.items()):
             raise ValueError("owner reports are not retained command originals")
         report = json.loads(managed)
-        if report["status"] != "used" or report["managed_process"]["exit_code"] != 0 or report["managed_process"]["failure"] is not None:
-            raise ValueError("managed producer did not succeed")
+        command = next(row for row in result["commands"] if row["name"] == "managed-use")
+        process = report["managed_process"]
+        if result["status"] == "passed":
+            if command["exit_code"] != 0 or report["status"] != "used" or process["exit_code"] != 0 or process["failure"] is not None:
+                raise ValueError("managed producer success differs from its original")
+        elif command["exit_code"] == 0 or report["status"] != "failed" or not isinstance(process["exit_code"], int):
+            raise ValueError("managed producer failure lacks a joined original")
+        # This releases only the cache-attempt admission slot. Actual exclusive
+        # disposal must already be proved; failed originals and their consumers
+        # remain in place with unchanged outcomes and evidence identities.
         cls.verify_disposal(root, custody["declared_outputs"], json.loads(released))
 
     def publish(self):
@@ -1011,13 +1022,15 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertEqual(attempt.result["custody"]["descendants_quiescent"], True)
                 attempt.finish("passed" if mode == "success" else "failed")
                 originals = {path: path.read_bytes() for path in attempt.evidence.rglob("*") if path.is_file()}
-                for defect in ("running", "failed", "interrupted", "unknown", "missing-release", "altered-release", "missing-stream", "labels-only"):
+                for defect in ("running", "false-outcome", "interrupted", "unknown", "missing-release", "altered-release", "missing-stream", "labels-only"):
                     with self.subTest(defect=defect), tempfile.TemporaryDirectory() as directory:
                         owner = Path(directory)
                         pending = owner / "pending-attempt"
                         pending.mkdir()
                         retained = json.loads((attempt.evidence / "result.json").read_bytes())
-                        if defect in ("running", "failed", "interrupted", "unknown"):
+                        if defect == "false-outcome":
+                            retained["status"] = "failed" if mode == "success" else "passed"
+                        elif defect in ("running", "interrupted", "unknown"):
                             retained["status"] = defect
                         elif defect == "missing-release":
                             del retained["custody"]["release_report"]
@@ -1037,23 +1050,19 @@ class ManagedAttemptCustody(unittest.TestCase):
                             RealAttempt(owner, {}, time.monotonic() + 5, 1048576)
                         self.assertEqual((pending / "result.json").read_bytes(), raw)
                         self.assertEqual(list(owner.iterdir()), [pending])
-                if mode == "success":
-                    with ThreadPoolExecutor(max_workers=2) as workers:
-                        entrants = [workers.submit(RealAttempt, attempt.evidence.parent, {},
-                                                   time.monotonic() + 5, 1048576) for _ in range(2)]
-                    admitted = [entry.result() for entry in entrants if entry.exception() is None]
-                    rejected = [entry.exception() for entry in entrants if entry.exception() is not None]
-                    self.assertEqual(len(admitted), 1)
-                    self.assertEqual(len(rejected), 1)
-                    self.assertIsInstance(rejected[0], ValueError)
-                    self.assertIn("unresolved real-consumer attempt", str(rejected[0]))
-                    next_attempt = admitted[0]
-                    self.assertNotEqual(next_attempt.evidence, attempt.evidence)
-                    with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
-                        RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
-                else:
-                    with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
-                        RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
+                with ThreadPoolExecutor(max_workers=2) as workers:
+                    entrants = [workers.submit(RealAttempt, attempt.evidence.parent, {},
+                                               time.monotonic() + 5, 1048576) for _ in range(2)]
+                admitted = [entry.result() for entry in entrants if entry.exception() is None]
+                rejected = [entry.exception() for entry in entrants if entry.exception() is not None]
+                self.assertEqual(len(admitted), 1)
+                self.assertEqual(len(rejected), 1)
+                self.assertIsInstance(rejected[0], ValueError)
+                self.assertIn("unresolved real-consumer attempt", str(rejected[0]))
+                next_attempt = admitted[0]
+                self.assertNotEqual(next_attempt.evidence, attempt.evidence)
+                with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+                    RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
                 for path, raw in originals.items():
                     self.assertEqual(path.read_bytes(), raw)
 
