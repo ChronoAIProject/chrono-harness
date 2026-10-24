@@ -2193,6 +2193,16 @@ fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retir
     )
     .unwrap();
     assert!(guard.is_some());
+    guard.as_ref().unwrap().stable().unwrap();
+    let mut policy: Value =
+        chrono_harness::json(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(1);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    assert!(guard.as_ref().unwrap().stable().is_err());
     drop(guard);
 }
 

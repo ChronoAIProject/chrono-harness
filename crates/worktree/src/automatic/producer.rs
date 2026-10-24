@@ -1223,6 +1223,9 @@ impl ProducerPolicy {
                                 artifact_disposal::paths(r, root, head, &names)?;
                             }
                             self.protect_sources(r, &allocation, &prospective)?;
+                            for guard in final_original_guards.iter().flatten() {
+                                guard.stable()?;
+                            }
                             for (path, expected) in &object.generated {
                                 let physical = no_symlink_parents(
                                     &directory.join(&object.path),

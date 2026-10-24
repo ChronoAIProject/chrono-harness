@@ -2385,10 +2385,24 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
 /// A second domain may remove a copied body/cache only when the final-original
 /// owner has retired every overlapping publication. Hold admission across its
 /// exact effect, so a concurrent publication cannot acquire the same bytes.
-pub fn external_removal_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
+pub struct RemovalGuard {
+    inventory: Inventory,
+    gate: Lease,
+}
+impl RemovalGuard {
+    /// Recheck the final-original policy immediately before the other owner's effect.
+    /// The held admission capability excludes concurrent reference/publication changes.
+    pub fn stable(&self) -> Result<(), String> {
+        self.inventory.stable(&self.gate)
+    }
+}
+pub fn external_removal_guard(root: &Path, path: &str) -> Result<Option<RemovalGuard>, String> {
     external_removal_guards(root, &[path.to_owned()])
 }
-pub fn external_removal_guards(root: &Path, paths: &[String]) -> Result<Option<Lease>, String> {
+pub fn external_removal_guards(
+    root: &Path,
+    paths: &[String],
+) -> Result<Option<RemovalGuard>, String> {
     for path in paths {
         crate::relative_path(path)?;
     }
@@ -2410,5 +2424,5 @@ pub fn external_removal_guards(root: &Path, paths: &[String]) -> Result<Option<L
         );
     }
     inventory.stable(&gate)?;
-    Ok(Some(gate))
+    Ok(Some(RemovalGuard { inventory, gate }))
 }

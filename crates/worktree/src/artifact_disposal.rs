@@ -109,6 +109,9 @@ pub(crate) fn dispose(
             target,
             name.trim_end_matches('/'),
         )?;
+        if let Some(retention) = &_retention {
+            retention.stable()?;
+        }
         // Internal links are unlinked; their external targets are never traversed.
         if let Err(error) = chrono_harness::artifact_disposal::dispose_directory(path) {
             let effect = report["artifact_disposals"]

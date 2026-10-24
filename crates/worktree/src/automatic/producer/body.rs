@@ -694,7 +694,11 @@ pub(super) fn drain(
                 || {
                     manager.stable(r)?;
                     lease.stable()?;
-                    Store::stable_in(directory, &policy.id, registry_id, object)
+                    Store::stable_in(directory, &policy.id, registry_id, object)?;
+                    if let Some(retention) = &_retention {
+                        retention.stable()?;
+                    }
+                    Ok(())
                 },
             ) {
                 Ok(()) if matches!(fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
