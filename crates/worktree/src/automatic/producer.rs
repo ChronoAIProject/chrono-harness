@@ -1159,7 +1159,7 @@ impl ProducerPolicy {
                         .collect();
                     let allocation = directory.join(&object.path);
                     let mut final_original_guards = Vec::new();
-                    for git_root in &self.git_roots {
+                    for git_root in &self.source_roots {
                         let host = if git_root == "." {
                             allocation.clone()
                         } else {
