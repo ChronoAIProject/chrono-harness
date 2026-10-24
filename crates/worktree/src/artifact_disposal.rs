@@ -1,7 +1,6 @@
 //! Explicit directory disposal shared by legacy checkout cleanup and lifecycle cleanup.
 use crate::start::Runner;
 use chrono_harness::no_symlink_parents;
-use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -59,65 +58,7 @@ pub(crate) fn paths(
         .collect()
 }
 
-#[derive(Default, Serialize)]
-pub struct ArtifactFootprint {
-    pub file_entries: u64,
-    pub logical_bytes: u64,
-    pub allocated_bytes: Option<u64>,
-}
-
-/// Measure only the caller's exact object. Block allocation is not physical savings.
-pub fn artifact_footprint(path: &Path) -> Result<ArtifactFootprint, String> {
-    match fs::symlink_metadata(path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ArtifactFootprint {
-            allocated_bytes: if cfg!(unix) { Some(0) } else { None },
-            ..Default::default()
-        }),
-        Err(e) => Err(e.to_string()),
-        Ok(m) => {
-            #[cfg(unix)]
-            let allocated = {
-                use std::os::unix::fs::MetadataExt;
-                Some(
-                    m.blocks()
-                        .checked_mul(512)
-                        .ok_or("artifact allocation overflow")?,
-                )
-            };
-            #[cfg(not(unix))]
-            let allocated = None;
-            let mut result = ArtifactFootprint {
-                allocated_bytes: allocated,
-                ..Default::default()
-            };
-            if m.is_dir() {
-                for entry in fs::read_dir(path).map_err(|e| e.to_string())? {
-                    let child = artifact_footprint(&entry.map_err(|e| e.to_string())?.path())?;
-                    result.logical_bytes = result
-                        .logical_bytes
-                        .checked_add(child.logical_bytes)
-                        .ok_or("artifact byte count overflow")?;
-                    result.file_entries = result
-                        .file_entries
-                        .checked_add(child.file_entries)
-                        .ok_or("artifact count overflow")?;
-                    result.allocated_bytes = match (result.allocated_bytes, child.allocated_bytes) {
-                        (Some(a), Some(b)) => {
-                            Some(a.checked_add(b).ok_or("artifact allocation overflow")?)
-                        }
-                        _ => None,
-                    };
-                }
-            } else if m.is_file() || m.file_type().is_symlink() {
-                result.logical_bytes = m.len();
-                result.file_entries = 1;
-            } else {
-                return Err("artifact contains a special file; preserve it".into());
-            }
-            Ok(result)
-        }
-    }
-}
+pub use chrono_harness::artifact_disposal::{ArtifactFootprint, artifact_footprint};
 
 pub(crate) fn dispose(
     target: &Path,
@@ -164,8 +105,12 @@ pub(crate) fn dispose(
         if observed == "already-absent" {
             continue;
         }
+        let _retention = chrono_harness::retained_artifacts::retention::external_removal_guard(
+            target,
+            name.trim_end_matches('/'),
+        )?;
         // Internal links are unlinked; their external targets are never traversed.
-        if let Err(error) = fs::remove_dir_all(path) {
+        if let Err(error) = chrono_harness::artifact_disposal::dispose_directory(path) {
             let effect = report["artifact_disposals"]
                 .as_array_mut()
                 .unwrap()

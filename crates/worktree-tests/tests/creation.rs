@@ -1848,3 +1848,62 @@ fn artifact_directory_names_do_not_hide_tracked_changes_files_or_symlinks() {
         fs::remove_file(path).unwrap();
     }
 }
+
+#[test]
+fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_consumer() {
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    let policy = value!({"schema":"chrono-output-retention/v1","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},"keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000});
+    fs::write(
+        h.root.join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let mut filemap = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    filemap["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(POLICY_PATH, value!([])));
+    fs::write(h.root.join(FM), serde_json::to_vec(&filemap).unwrap()).unwrap();
+    commit(&h.root);
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    let activity = inventory.report_activity().unwrap();
+    let occupied = h.parent.join("occupied-for-failure");
+    fs::create_dir(&occupied).unwrap();
+    fs::write(
+        occupied.join("original-source"),
+        b"preserve existing target",
+    )
+    .unwrap();
+    let (code, report, error) = h.invoke("integration", "failed-original-retention", &occupied);
+    assert_ne!(code, 0, "{report} {error}");
+    assert_eq!(report["status"], "failed");
+    let report_path = report["report_path"].as_str().unwrap();
+    let raw = fs::read(h.root.join(report_path)).unwrap();
+    assert_eq!(json(&raw).unwrap()["status"], "failed");
+    let ledger = json(
+        &fs::read(
+            h.root
+                .join(".chrono-harness/state/output-retention-v1/inventory.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let role = format!(
+        "consumer:lifecycle-recheck:{}",
+        sha256(report_path.as_bytes())
+    );
+    assert_eq!(ledger["roots"][&role].as_array().unwrap().len(), 1);
+    assert!(
+        ledger["roots"]
+            .get(format!("recovery:{report_path}"))
+            .is_none()
+    );
+    drop(activity);
+    inventory.maintain().unwrap();
+    assert_eq!(fs::read(h.root.join(report_path)).unwrap(), raw);
+    assert_eq!(
+        fs::read(occupied.join("original-source")).unwrap(),
+        b"preserve existing target"
+    );
+}

@@ -859,3 +859,20 @@ canonical/native acceptance, deployment, physical savings or SPEC 10.1 completio
 Final-original bounded retention and shared-effect composition, exact compatible
 input/native handoffs, historical release/ci-persistent-cache migration and actual
 landing remain separate obligations. All lifecycle costs remain unknown.
+
+
+L2 final-original candidate adapts fixed PR172 source to the current report,
+preparation/blob, scoped native capture, full-check, lifecycle and gather owners.
+Current slots/readers, original-stream dependencies, failure/interruption recheck
+roots and exact upload/recheck release use the shared evolved Lease and physical
+effect owner. Fixture effects check explicit overlapping final-original membership;
+fixture custody remains distinct. Existing PR207 report references, launch/stream
+interfaces and shared native aliases remain. See artifact-retention.md.
+
+**Source and host policy change together:** the candidate selects future zero-second
+retention and bounded 25 ms rounds with unchanged count/byte capacities. This is
+not historical adoption: old outcomes/expiries, unknown/interrupted consumers,
+512/493/19 and OS39/OS54 originals and the ci-persistent-cache migration mismatch
+remain unresolved. Owner-local source/behavior verification, composed input/native
+acceptance, independent review, deployment, landing and full SPEC acceptance are
+distinct claims; actual evidence must establish each. Total costs remain unknown.

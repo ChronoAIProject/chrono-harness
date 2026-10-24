@@ -667,7 +667,36 @@ pub(super) fn drain(
                 dependency.stable()?;
             }
             let mut result = value!({"path":member,"intent":intent,"footprint_before":footprint,"status":"failed","original":body.original,"physical_release_bytes":Value::Null});
-            match fs::remove_file(&path) {
+            let report_root = body
+                .git_root
+                .as_ref()
+                .map(|root| {
+                    if root == "." {
+                        allocation.clone()
+                    } else {
+                        allocation.join(root)
+                    }
+                })
+                .unwrap_or_else(|| allocation.clone());
+            let report_member = path
+                .strip_prefix(&report_root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("report overlap path UTF-8")?;
+            let _retention = chrono_harness::retained_artifacts::retention::external_removal_guard(
+                &report_root,
+                report_member,
+            )?;
+            match chrono_harness::artifact_disposal::dispose_entry(
+                &allocation,
+                member,
+                &before_id,
+                || {
+                    manager.stable(r)?;
+                    lease.stable()?;
+                    Store::stable_in(directory, &policy.id, registry_id, object)
+                },
+            ) {
                 Ok(()) if matches!(fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
                 {
                     result["status"] = value!("verified-absent");

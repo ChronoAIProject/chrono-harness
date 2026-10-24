@@ -322,6 +322,15 @@
             "--manifest-path",
             "crates/judge-ci/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-ci/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -437,6 +446,26 @@
             ".",
             "--config",
             ".chrono-harness/ci/release.json"
+          ]
+        },
+        "generate": {
+          "operation": "ci.generate",
+          "tool": "chrono-ci",
+          "argv": [
+            "generate",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units.json"
+          ]
+        },
+        "format": {
+          "operation": "format.ci",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/ci/Cargo.toml"
           ]
         }
       },
@@ -844,6 +873,15 @@
             "--manifest-path",
             "crates/judge-projects/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1175,6 +1213,15 @@
           "argv": [
             "fmt",
             "--check",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-workflow/Cargo.toml"
           ]

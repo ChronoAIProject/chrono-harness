@@ -29,7 +29,8 @@
     "context_path": ".chrono-harness/state/collection/context.json",
     "artifact_directory": ".chrono-harness/state/",
     "facts_config": ".chrono-harness/config.json",
-    "include_hidden_files": true
+    "include_hidden_files": true,
+    "retention_delivery": true
   },
   "units": {
     "runner": {

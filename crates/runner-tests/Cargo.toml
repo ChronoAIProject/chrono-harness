@@ -70,3 +70,13 @@ name = "chrono-test-git-input"
 path = "tests/support/git_input.rs"
 test = false
 bench = false
+
+[[test]]
+name = "retention"
+path = "tests/retention.rs"
+
+[[bin]]
+name = "chrono-test-retention-child"
+path = "tests/support/retention_child.rs"
+test = false
+bench = false

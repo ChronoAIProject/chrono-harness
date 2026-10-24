@@ -1098,12 +1098,37 @@ pub fn prepare_request(
         reader.checkout_excluding(root, candidate, &facts::artifact_directories(cfg)?)?;
     let state = no_symlink_parents(root, ".chrono-harness/state")?;
     fs::create_dir_all(&state).map_err(|e| e.to_string())?;
-    let snapshot = tempfile::Builder::new()
-        .prefix("base-")
-        .tempdir_in(&state)
-        .map_err(|e| e.to_string())?;
-    reader.export(root, base, &a, snapshot.path())?;
-    let snapshot = snapshot.keep();
+    let snapshot = crate::retained_artifacts::retention::unique_path(&state, "base-", "")?;
+    let snapshot_publication = crate::retained_artifacts::retention::create_adopted_for_consumer(
+        root,
+        "full-original",
+        &snapshot,
+        true,
+        value!({"kind":"base-snapshot","base":base,"outcome":"not-established"}),
+        None,
+        "publication-recheck",
+    )?;
+    reader.export_limited(
+        root,
+        base,
+        &a,
+        &snapshot,
+        snapshot_publication
+            .as_ref()
+            .map(|p| p.byte_limit())
+            .unwrap_or(u64::MAX),
+    )?;
+    if let Some(publication) = snapshot_publication {
+        publication.complete(value!({"kind":"base-snapshot","base":base,"identity":"fixed-source-data","completion":"not-established"}))?;
+    }
+    if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
+        if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
+            inventory.reference_paths(
+                &format!("full-recovery:{}", sha256(config_path.as_bytes())),
+                &[path.into()],
+            )?;
+        }
+    }
     let context = fs::canonicalize(if context.is_absolute() {
         context.to_path_buf()
     } else {
@@ -1209,6 +1234,7 @@ pub fn check_prepared(
     scope: Option<crate::units::Scope>,
     preparation: Option<Value>,
 ) -> Result<(u8, String), String> {
+    let _report_activity = crate::retained_artifacts::retention::report_activity(root)?;
     let (mut req, bindings, reader, cfg) = prepare_request(
         root,
         config_path,
@@ -1240,11 +1266,15 @@ pub fn check_prepared(
         .to_owned()
         + "/";
     let retained_report = crate::prepare_publication(root, &report_path)?;
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&retained_report)
-        .map_err(|e| e.to_string())?;
+    let retained_publication = crate::retained_artifacts::retention::create_adopted_for_consumer(
+        root,
+        "full-original",
+        &retained_report,
+        false,
+        value!({"publication":"started","outcome":"not-established"}),
+        None,
+        "report-recheck",
+    )?;
     let timeout = cfg["protocol"]["timeout_seconds"]
         .as_u64()
         .ok_or("full timeout")?;
@@ -1537,8 +1567,72 @@ pub fn check_prepared(
         }
         None => no_symlink_parents(root, &format!("{report_directory}report.json"))?,
     };
+    if let Some(publication) = &retained_publication {
+        publication.check_length(text.len() as u64)?;
+    }
     fs::write(retained_report, &text).map_err(|e| e.to_string())?;
+    if let Some(publication) = retained_publication {
+        let outcome = value!({"status":report["status"],"request_id":req.request_id,"exit_code":status.exit_code()});
+        if status.exit_code() == 0 {
+            let consumer = format!("report-recheck:{}", publication.id());
+            publication.complete_releasing_consumer(outcome, &consumer)?;
+        } else {
+            publication.complete(outcome)?;
+        }
+    }
+    let mut originals = Vec::new();
+    if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
+        originals.push(path.into());
+    }
+    for map in [&report["artifacts"], &report["artifact_closure"]] {
+        if let Some(map) = map.as_object() {
+            for descriptor in map.values() {
+                if let Some(storage) = descriptor["storage"].as_str() {
+                    originals.push(storage.to_owned());
+                }
+            }
+        }
+    }
+    for name in ["base", "candidate"] {
+        if let Some(files) = req.observations["retained"][name]["files"].as_object() {
+            for file in files.values() {
+                if let Some(blob) = file["blob"].as_str() {
+                    originals.push(blob.to_owned());
+                }
+            }
+        }
+    }
+    if let Some(context) = req
+        .context
+        .path
+        .strip_prefix(root)
+        .ok()
+        .and_then(|p| p.to_str())
+    {
+        originals.push(context.into());
+    }
+    let delivery_id = report["request"]["request_id"]
+        .as_str()
+        .ok_or("full original request identity")?;
+    let pending_native = req.observations["preparation"]["request"]["source"]
+        .as_str()
+        .filter(|s| *s == "ci")
+        .map(|_| delivery_id);
+    let _slot = crate::retained_artifacts::retention::reference_report(
+        root,
+        &publication_path,
+        &report_path,
+        &originals,
+        pending_native,
+    )?;
     fs::write(path, &text).map_err(|e| e.to_string())?;
+    crate::retained_artifacts::retention::settle_report(root, &publication_path, &report_path)?;
+    if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
+        inventory.reference_paths(
+            &format!("full-recovery:{}", sha256(config_path.as_bytes())),
+            &[],
+        )?;
+    }
     Ok((status.exit_code() as u8, text))
 }
 

@@ -974,3 +974,17 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
         assert_eq!(unit["bootstrap"][0], tool["program"]);
     }
 }
+
+#[test]
+fn opted_in_delivery_acknowledgement_uses_the_actual_successful_upload_outputs() {
+    let mut declaration = config();
+    let old = chrono_ci::render(&declaration, ".chrono-harness/ci/workflow.json").unwrap();
+    assert!(!old.contains("Acknowledge delivered"));
+    declaration.retention_delivery = true;
+    let projected = chrono_ci::render(&declaration, ".chrono-harness/ci/workflow.json").unwrap();
+    assert!(projected.contains("id: chrono_evidence_upload"));
+    assert!(projected.contains("always() && steps.chrono_evidence_upload.outcome == 'success'"));
+    assert!(projected.contains("steps.chrono_evidence_upload.outputs.artifact-id"));
+    assert!(projected.contains("steps.chrono_evidence_upload.outputs.artifact-digest"));
+    assert!(projected.contains("retention --host-root . --delivered-check"));
+}

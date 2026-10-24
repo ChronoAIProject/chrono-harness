@@ -1158,6 +1158,34 @@ impl ProducerPolicy {
                         .map(|p| format!("{}{}/{p}", self.directory, object.path))
                         .collect();
                     let allocation = directory.join(&object.path);
+                    let mut final_original_guards = Vec::new();
+                    for git_root in &self.git_roots {
+                        let host = if git_root == "." {
+                            allocation.clone()
+                        } else {
+                            no_symlink_parents(&allocation, git_root)?
+                        };
+                        if !host.exists() {
+                            continue;
+                        }
+                        let paths = prospective
+                            .iter()
+                            .filter_map(|output| {
+                                let destination = allocation.join(output.trim_end_matches('/'));
+                                destination
+                                    .strip_prefix(&host)
+                                    .ok()
+                                    .and_then(|relative| relative.to_str())
+                                    .filter(|relative| !relative.is_empty())
+                                    .map(str::to_owned)
+                            })
+                            .collect::<Vec<_>>();
+                        final_original_guards.push(
+                            chrono_harness::retained_artifacts::retention::external_removal_guards(
+                                &host, &paths,
+                            )?,
+                        );
+                    }
                     self.protect_sources(r, &allocation, &prospective)?;
                     let head = if names.iter().all(|p| !root.join(p).exists()) {
                         None
