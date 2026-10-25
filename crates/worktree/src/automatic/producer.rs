@@ -116,7 +116,12 @@ impl BirthGate {
                 }
                 observer("birth-gate-busy");
                 if began.elapsed() >= bound {
-                    return Err("producer registry birth remains busy; preserve objects".into());
+                    return Err(format!(
+                        "producer registry birth remains busy; preserve objects: directory={} elapsed_millis={} bound_millis={}",
+                        directory.display(),
+                        began.elapsed().as_millis(),
+                        bound.as_millis()
+                    ));
                 }
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
