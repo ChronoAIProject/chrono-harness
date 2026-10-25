@@ -791,11 +791,13 @@ fn retired_acceptance_registration_and_cli_fail_without_changing_outputs() {
     config["acceptance_fixtures"] = json!({"native-unusable":{
         "method":"remove-producer-manifest/v1","consumer":"check.one","caches":["project"]}});
     assert!(serde_json::from_value::<chrono_cache::Config>(config).is_err());
-    let output = Command::new(env!("CARGO_BIN_EXE_chrono-cache"))
-        .args(["acceptance-fixture", "--host-root"])
-        .arg(root.path())
-        .output()
-        .unwrap();
+    let output = Command::new(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"),
+    )
+    .args(["acceptance-fixture", "--host-root"])
+    .arg(root.path())
+    .output()
+    .unwrap();
     assert!(!output.status.success());
     assert!(root.path().join("out/project/partial").is_file());
 }
