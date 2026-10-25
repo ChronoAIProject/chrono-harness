@@ -858,3 +858,12 @@ registration is not their executed verdict. Current host binding/adoption,
 protected installed participant consumption, candidate canonical/native acceptance,
 landing, full input closure and parity remain pending. PR163-only source remains
 preserved/unimplemented as described in [custody](input-source-custody.md).
+
+I3 connects the selected macOS 27 runner guard's 2398 literal input IDs, preserves
+2387 package-file expectations and selects a privately acquired exact Rustup
+1.29.1. Current SDK and encompassing Xcode Contents inventories retain the genuine
+Developer alias topology; the original Developer-only rejection remains failed.
+The source migration does not activate full governance or certify historical
+retained endpoints, native acquisition, guarded consumption, review or landing.
+Actual candidate checks and installed-consumer postconditions need their own
+fixed-source originals; full SPEC and deterministic parity remain incomplete.

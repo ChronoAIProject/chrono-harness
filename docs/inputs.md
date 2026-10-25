@@ -331,3 +331,32 @@ are fixed decoder/test data only; no registered action selects that pair. See
 [input source custody](input-source-custody.md) for the preserved omissions and
 unequal-original correction. Full activation, complete input closure, fixed
 retained endpoint pairs, native acceptance and parity remain incomplete.
+
+### Selected local runner input policy
+
+The macOS 27 direct host policy connects every literal runner v6 input ID to
+`project:runner`. Package file and crate-archive expectations come from preserved
+PR163 source and must match the independently fetched packages; selected private
+Rustup 1.29.1 comes from its official versioned archive and published checksum.
+The previous 1.29.2 observation remains a failed selection, not an expectation.
+Observer, private bootstrap and ordinary guard select the same private homes,
+compiler, empty wrappers, sysroot, linker and SDK environment.
+
+The current Xcode acquisition identifies Xcode 26.5 / 17F42. Its Developer-only
+inventory rejected `usr/bin/altool` because that literal alias reaches the sibling
+SharedFrameworks directory. The selected inventory therefore covers the enclosing
+`Xcode.app/Contents` root with unchanged directory-v3 checks; `DEVELOPER_DIR`
+continues to name Developer and `CHRONO_XCODE_CONTENTS` selects the encompassing
+inventory. SDK, Developer, configuration and runtime scopes remain explicit.
+The original rejected acquisition and successful replacement are retained
+separately. The generated Rust, SDK and Xcode inventories are required original
+inputs under the registered state owner, with digests in the selected policy;
+source declarations alone cannot provision or certify those bytes.
+
+This is a host-policy and registration migration. It changes no Git-v2 or
+worktree-v3 admitted identity and activates no full governance. Guard execution,
+clean candidate bootstrap/canonical DELTA, native acquisition and installed
+consumer evidence must identify their actual source separately. Missing historical
+endpoint originals, complete input closure/parity, other guarded projects, batch
+review and actual delivery remain open. Acquisition/build/check windows and
+retained bytes must be measured separately; total cost and savings are unknown.

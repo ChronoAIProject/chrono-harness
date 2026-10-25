@@ -89,9 +89,9 @@
         "environment": "SDKROOT"
       },
       {
-        "root": "/Applications/Xcode.app/Contents/Developer",
+        "root": "/Applications/Xcode.app/Contents",
         "manifest": "toolchain.developer.inventory",
-        "environment": "DEVELOPER_DIR"
+        "environment": "CHRONO_XCODE_CONTENTS"
       }
     ],
     "build_script_inputs": [
