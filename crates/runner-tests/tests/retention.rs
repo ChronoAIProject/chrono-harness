@@ -37,14 +37,30 @@ fn isolated_capability_test(name: &str) -> bool {
         .env(MARKER, name)
         .output()
         .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let one_passed = stdout
+        .lines()
+        .any(|line| line.starts_with("test result: ok. 1 passed; 0 failed;"));
     assert!(
-        output.status.success(),
+        output.status.success() && one_passed,
         "isolated capability test failed: {}; stdout: {}; stderr: {}",
         output.status,
-        String::from_utf8_lossy(&output.stdout),
+        stdout,
         String::from_utf8_lossy(&output.stderr)
     );
     false
+}
+#[test]
+fn isolated_capability_driver_rejects_a_successful_zero_test_process() {
+    if !isolated_capability_test(
+        "isolated_capability_driver_rejects_a_successful_zero_test_process",
+    ) {
+        return;
+    }
+    assert!(
+        std::panic::catch_unwind(|| { isolated_capability_test("__no_declared_retention_test__") })
+            .is_err()
+    );
 }
 #[test]
 fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
