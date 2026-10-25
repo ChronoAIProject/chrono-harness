@@ -29,11 +29,20 @@ The real-bootstrap fixture's cache-attempt reentry consumes every original strea
 Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then holds final-original admission exclusion across its exact effect. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
 
 Producer registry admission performs one authoritative snapshot decode while
-holding its existing registry lease. The physical directory gate covers lease
-birth/acquisition and releases before that decode; existing registry identities
+holding its existing registry lease. The physical directory gate covers initial
+lease birth and releases before that decode; established registries use their
+named lease without reentering directory birth, even while an independent birth
+capability remains live. Existing registry identities
 still bind the held lease before publication. Missing established leases remain
 missing, and replaced or unknown leases cannot acquire a new binding. The
 30-second acquisition bound is unchanged.
+
+Immediate output creation retains its admitted ledger through reservation and
+materialization, using the same physical admission lease and all original durable
+intent/attachment writes. Standalone plans still release at their existing
+boundary. This removes a duplicate full inventory load and reacquisition between
+the two adjacent creation phases; it does not merge producer completion or expire
+an active capability. The five-second output-admission bound is unchanged.
 
 Retention rounds report the actual retention, report-activity, live-capability or
 identity-error reason for a protected root. A parent closing a capability is not

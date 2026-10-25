@@ -488,6 +488,22 @@ impl Inventory {
         create: Option<bool>,
         requested_limit: Option<u64>,
     ) -> Result<Publication, String> {
+        let (publication, _gate, _ledger) =
+            self.reserve_excluded(producer, path, outcome, roots, create, requested_limit)?;
+        Ok(publication)
+    }
+    // The immediate creation caller can keep this same admitted snapshot through
+    // materialization. All durable intent/attachment writes still occur in order;
+    // returning a standalone plan drops exclusion at the original boundary.
+    fn reserve_excluded(
+        self,
+        producer: &str,
+        path: &str,
+        outcome: Value,
+        roots: &[String],
+        create: Option<bool>,
+        requested_limit: Option<u64>,
+    ) -> Result<(Publication, Lease, Ledger), String> {
         let byte_limit = requested_limit.unwrap_or(self.policy.max_output_bytes);
         if byte_limit == 0 || byte_limit > self.policy.max_output_bytes {
             return Err("declared output reservation exceeds policy ceiling".into());
@@ -624,24 +640,27 @@ impl Inventory {
         }
         .into();
         self.save(&l, &gate)?;
-        drop(gate);
-        Ok(Publication {
-            inventory: self,
-            id,
-            lease,
-            byte_limit,
-            path: path.into(),
-            identity: RefCell::new(
-                l.outputs
-                    .last()
-                    .ok_or("publication missing")?
-                    .identity
-                    .clone(),
-            ),
-            tree,
-            written: Cell::new(0),
-            written_nodes: Cell::new(1),
-        })
+        Ok((
+            Publication {
+                inventory: self,
+                id,
+                lease,
+                byte_limit,
+                path: path.into(),
+                identity: RefCell::new(
+                    l.outputs
+                        .last()
+                        .ok_or("publication missing")?
+                        .identity
+                        .clone(),
+                ),
+                tree,
+                written: Cell::new(0),
+                written_nodes: Cell::new(1),
+            },
+            gate,
+            l,
+        ))
     }
     /// A complete producer/collector operation protects its explicitly adopted report family.
     /// The inherited kernel capability closes on interruption even without a finish callback.
@@ -1674,6 +1693,15 @@ impl Publication {
         self.lease.stable()?;
         let gate = self.inventory.gate()?;
         let mut l = self.inventory.load()?;
+        self.materialize_excluded(&mut l, &gate, consumer)
+    }
+    fn materialize_excluded(
+        &self,
+        l: &mut Ledger,
+        gate: &Lease,
+        consumer: Option<&str>,
+    ) -> Result<(), String> {
+        self.lease.stable()?;
         let o = l
             .outputs
             .iter_mut()
@@ -1684,7 +1712,7 @@ impl Publication {
         if identity(target.parent().ok_or("output parent")?)? != creation.parent_identity {
             return Err("creation parent identity changed; preserve output".into());
         }
-        self.inventory.stable(&gate)?;
+        self.inventory.stable(gate)?;
         let staged = self.inventory.directory.join(&creation.staged);
         if o.tree {
             fs::create_dir(&staged).map_err(|e| e.to_string())?;
@@ -1698,7 +1726,7 @@ impl Publication {
                 .map_err(|e| e.to_string())?;
         }
         o.identity = identity(&staged)?;
-        self.inventory.save(&l, &gate)?;
+        self.inventory.save(l, gate)?;
         crate::artifact_disposal::publish_entry(&staged, &target)?;
         let o = l
             .outputs
@@ -1717,9 +1745,9 @@ impl Publication {
                 return Err("creation consumer role already exists".into());
             }
             self.inventory
-                .reference_locked(&mut l, &role, &[self.id.clone()])?;
+                .reference_locked(l, &role, &[self.id.clone()])?;
         }
-        self.inventory.save(&l, &gate)?;
+        self.inventory.save(l, gate)?;
         *self.identity.borrow_mut() = attached;
         Ok(())
     }
@@ -2026,10 +2054,16 @@ fn create_with_consumer(
             } else {
                 vec![]
             };
-            let publication =
-                inventory.reserve(producer, relative, outcome, &roots, Some(tree), byte_limit)?;
+            let (publication, gate, mut ledger) = inventory.reserve_excluded(
+                producer,
+                relative,
+                outcome,
+                &roots,
+                Some(tree),
+                byte_limit,
+            )?;
             let consumer = consumer_prefix.map(|prefix| format!("{prefix}:{}", publication.id()));
-            publication.materialize_for_consumer(consumer.as_deref())?;
+            publication.materialize_excluded(&mut ledger, &gate, consumer.as_deref())?;
             return Ok(Some(publication));
         }
     }

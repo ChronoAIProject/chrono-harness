@@ -155,14 +155,8 @@ impl Store {
         }
         let began = std::time::Instant::now();
         let bound = std::time::Duration::from_secs(30);
-        observer("birth-gate-entered");
-        let birth = BirthGate::acquire(directory, began, bound, &mut observer)?;
-        observer("birth-gate-acquired");
         let path = no_symlink_parents(directory, "objects.json")?;
-        // Only birth eligibility is needed before exclusion. Decoding the entire
-        // inventory here duplicated the authoritative read and held the physical
-        // birth gate across all historical objects for every ordinary publisher.
-        let absent = match fs::symlink_metadata(&path) {
+        let mut absent = match fs::symlink_metadata(&path) {
             Ok(_) => false,
             Err(e) if create && e.kind() == std::io::ErrorKind::NotFound => true,
             Err(e) => {
@@ -170,6 +164,26 @@ impl Store {
                     "producer registry unavailable; preserve objects: {e}"
                 ));
             }
+        };
+        // An established registry already binds its one named exclusion lease.
+        // Reentering directory birth would serialize ordinary publications with
+        // unrelated live birth descendants, although no lease is being created.
+        let birth = if absent {
+            observer("birth-gate-entered");
+            let birth = BirthGate::acquire(directory, began, bound, &mut observer)?;
+            observer("birth-gate-acquired");
+            absent = match fs::symlink_metadata(&path) {
+                Ok(_) => false,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+                Err(e) => {
+                    return Err(format!(
+                        "producer registry unavailable; preserve objects: {e}"
+                    ));
+                }
+            };
+            Some(birth)
+        } else {
+            None
         };
         let lease_path = no_symlink_parents(directory, "registry.lease")?;
         observer("registry-lease-entered");

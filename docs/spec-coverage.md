@@ -877,9 +877,12 @@ remain unresolved. Owner-local source/behavior verification, composed input/nati
 acceptance, independent review, deployment, landing and full SPEC acceptance are
 distinct claims; actual evidence must establish each. Total costs remain unknown.
 
-Producer admission now uses one excluded registry snapshot, releases its physical
-birth gate before decoding, and preserves missing/replaced expected lease
+Producer admission now uses one excluded registry snapshot, enters physical birth
+only for an absent registry, and preserves missing/replaced expected lease
 identities. Retention diagnostics distinguish actual root protection reasons.
+Immediate creation reuses its same admitted ledger and lease through the existing
+durable reservation/materialization writes, avoiding a duplicate full load without
+changing standalone plan, completion, recovery or acquisition bounds.
 Rust capability fixtures use separate test processes with unchanged assertions,
 budgets and explicit internal concurrency; a controlled fork/exec boundary covers
 temporary inherited protection and actual last-close retirement. Prior original
