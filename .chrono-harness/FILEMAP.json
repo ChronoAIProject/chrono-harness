@@ -6412,6 +6412,30 @@
       "surface": "documentation",
       "cost": "unmeasured",
       "edges": []
+    },
+    {
+      "path": ".chrono-harness/inputs/isolated-observation.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

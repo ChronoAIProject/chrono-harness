@@ -2326,6 +2326,19 @@
             "--output",
             ".chrono-harness/state/native/linux/acquisition.json"
           ]
+        },
+        "observe_isolated": {
+          "operation": "inputs.observe-isolated",
+          "tool": "chrono-inputs",
+          "argv": [
+            "observe",
+            "--host-root",
+            ".",
+            "--manifest",
+            ".chrono-harness/inputs/isolated-observation.json",
+            "--output",
+            ".chrono-harness/state/isolated-rust/acquisition.json"
+          ]
         }
       },
       "test_project": "inputs-tests",
