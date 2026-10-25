@@ -1822,3 +1822,59 @@ fn scheduling_requires_complete_unambiguous_explicit_claims() {
         );
     }
 }
+
+#[test]
+fn configuration_edges_select_exact_policy_without_changing_shared_graph() {
+    use chrono_judge_registration::select_filemap;
+    let shared = json!({"from":"project:p","kind":"test-execution","to":"test:t"});
+    let private = json!({"from":"input:private","kind":"runtime-input","to":"project:p"});
+    let base = json!({"schema_version":2,"status":"proposed","cost_models":{},
+        "files":[file(".chrono-harness/a.json"),file(".chrono-harness/b.json")],
+        "project_edges":[shared],"test_costs":[],"execution_plans":{}});
+    assert_eq!(select_filemap(&base, None).unwrap(), base);
+    let mut scoped = base.clone();
+    scoped["configuration_edges"] = json!({"schema":"chrono-filemap-configuration-edges/v1",
+        "configurations":[{"config":".chrono-harness/a.json","edges":[private]}]});
+    let source = scoped.clone();
+    let selected = select_filemap(&scoped, Some(".chrono-harness/a.json")).unwrap();
+    assert_eq!(selected["project_edges"], json!([shared, private]));
+    assert!(selected.get("configuration_edges").is_none());
+    assert_eq!(scoped, source, "projection must not mutate retained source");
+    assert_eq!(
+        select_filemap(&scoped, Some(".chrono-harness/b.json")).unwrap(),
+        base
+    );
+    assert!(
+        select_filemap(&scoped, None)
+            .unwrap_err()
+            .contains("configuration")
+    );
+    for table in [
+        Value::Null,
+        json!({"schema":"unknown","configurations":[]}),
+        json!({"schema":"chrono-filemap-configuration-edges/v1","configurations":[]}),
+        json!({"schema":"chrono-filemap-configuration-edges/v1","configurations":[{"config":"../a.json","edges":[private]}]}),
+        json!({"schema":"chrono-filemap-configuration-edges/v1","configurations":[{"config":".chrono-harness/missing.json","edges":[private]}]}),
+        json!({"schema":"chrono-filemap-configuration-edges/v1","configurations":[{"config":".chrono-harness/a.json","edges":[private]},{"config":".chrono-harness/a.json","edges":[private]}]}),
+        json!({"schema":"chrono-filemap-configuration-edges/v1","configurations":[{"config":".chrono-harness/a.json","edges":[]}]}),
+        json!({"schema":"chrono-filemap-configuration-edges/v1","configurations":[{"config":".chrono-harness/a.json","edges":[private],"fallback":true}]}),
+        json!({"schema":"chrono-filemap-configuration-edges/v1","configurations":[{"config":".chrono-harness/a.json","edges":[{"from":"input:private","kind":"guess","to":"project:p"}]}]}),
+    ] {
+        let mut bad = scoped.clone();
+        bad["configuration_edges"] = table.clone();
+        assert!(
+            select_filemap(&bad, Some(".chrono-harness/a.json")).is_err(),
+            "{table}"
+        );
+    }
+    let mut duplicate = scoped.clone();
+    duplicate["configuration_edges"]["configurations"][0]["edges"] = json!([shared]);
+    assert!(
+        select_filemap(&duplicate, Some(".chrono-harness/a.json"))
+            .unwrap_err()
+            .contains("duplicate")
+    );
+    let mut legacy = scoped;
+    legacy["schema_version"] = json!(1);
+    assert!(select_filemap(&legacy, Some(".chrono-harness/a.json")).is_err());
+}

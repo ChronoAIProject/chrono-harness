@@ -232,6 +232,10 @@ class Bootstrap(unittest.TestCase):
             path.chmod(0o755)
         (self.tools / "cargo-ready").touch()
         self.environment = dict(os.environ)
+        # This fixture supplies its own compiler and wrappers. A real parent
+        # selection must not contradict those independently declared mock tools.
+        for name in ("RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"):
+            self.environment.pop(name, None)
         self.environment["PATH"] = str(self.tools) + os.pathsep + os.environ["PATH"]
         self.environment["GIT_TRACE2_EVENT"] = str(self.tools / "git-trace.jsonl")
         self.state_path = self.root / ".chrono-harness/state/bootstrap.json"

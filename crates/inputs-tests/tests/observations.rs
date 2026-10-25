@@ -1055,8 +1055,22 @@ fn main_host_observation_reuses_all_declared_cargo_acquisition_operations() {
             .iter()
             .find(|r| r["id"] == scope["manifest"])
             .unwrap();
-        assert_eq!(declaration["manifest"]["root"], scope["root"]);
-        assert_eq!(declaration["manifest"]["path"], input["location"]);
+        if id == "sdk" {
+            assert_eq!(declaration["manifest"]["root"], scope["root"]);
+            assert_eq!(declaration["manifest"]["path"], input["location"]);
+        } else {
+            // The historical Developer-only guard is preserved, unadopted data.
+            // Current acquisition owns enclosing Contents so sibling framework
+            // aliases stay inside the independently retained v3 inventory.
+            let enclosing = Path::new(scope["root"].as_str().unwrap()).parent().unwrap();
+            assert_eq!(declaration["manifest"]["root"], json!(enclosing));
+            assert_eq!(declaration["location"], json!({"path":enclosing}));
+            assert_eq!(
+                declaration["manifest"]["path"],
+                ".chrono-harness/state/native/macos/guard-inputs/xcode-contents.json"
+            );
+            assert_ne!(declaration["manifest"]["path"], input["location"]);
+        }
         assert_eq!(declaration["max_entries"], 200000);
     }
 }

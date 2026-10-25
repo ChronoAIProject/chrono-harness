@@ -1,5 +1,26 @@
 # FILEMAP impact contract
 
+FILEMAP v2 may opt into `configuration_edges` with schema
+`chrono-filemap-configuration-edges/v1` and a nonempty `configurations` array.
+Each row names one registered direct policy file as `config` and a nonempty
+`edges` array using the existing explicit edge shape. Registration's shared
+`select_filemap` projection appends only the row matching the endpoint's effective
+direct policy path to unconditional `project_edges`. A nonmatching policy keeps
+the shared graph. Missing configuration context, unknown table versions,
+unregistered policy paths, repeated configurations and duplicate active edges
+fail; legacy v1 rejects the extension. No directory, platform name or executable
+observation infers an edge. Retained registry snapshots keep the source bytes;
+graph/record consumers use the projection independently at both endpoints, so
+adding, removing or changing active edges keeps the existing union impact rules.
+
+**Product and host policy change together:** the isolated macOS 27 input edges
+move from the common table into this explicit scope. Their required bindings and
+expected bytes remain intact; pinned native policies retain their shared graph.
+Schema/projection Rust behavior and endpoint impact tests, source bootstrap,
+canonical DELTA and native detector/consumer validation are required. Additional
+build, validation and maintenance costs remain unmeasured. Git v2 and worktree v3
+identity selection are unchanged.
+
 `chrono-judge-filemap --protocol chrono-judge/v1` is a candidate executable. It reuses runner facts, wire identity and transport, consumes registration's single bound interpreted view, including historical conversion, and publishes `outputs.impact`. It never calls registration's judge in place of a process. Registration still owns schema, readiness, checkout and direct-reference admissibility. Its immutable `node_data()` is the sole full-format node inventory; loading data alone does not certify semantic validity or input completeness.
 
 The dependency direction is `judge-ci → judge-filemap → judge-mixed → judge-registration → runner`, with direct runner dependencies for facts/transport. The independent filemap test project has its own manifest, lock and target. There is no workspace or generic registry project.

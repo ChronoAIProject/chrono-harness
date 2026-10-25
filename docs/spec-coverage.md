@@ -867,3 +867,11 @@ The source migration does not activate full governance or certify historical
 retained endpoints, native acquisition, guarded consumption, review or landing.
 Actual candidate checks and installed-consumer postconditions need their own
 fixed-source originals; full SPEC and deterministic parity remain incomplete.
+
+The I3 observed-failure repair adds an explicit configuration-scoped FILEMAP
+edge projection and opt-in scoped-CI graph evidence without repeated derived
+witness tables. The original native unknown-input edge and local 8 MiB transport
+failures remain retained. Current acquisition declares enclosing Xcode Contents
+directly; historical native Developer guard data stays unadopted. Fixture-owned
+compiler selection is isolated from the real parent's RUSTC. Source presence and
+behavior tests do not by themselves establish fresh native/guard acceptance.

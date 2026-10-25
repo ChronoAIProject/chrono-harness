@@ -698,8 +698,7 @@
     {
       "id": "developer",
       "location": {
-        "stdout": "developer.root",
-        "suffix": ".."
+        "path": "/Applications/Xcode_26.6.app/Contents"
       },
       "max_entries": 200000,
       "manifest": {

@@ -335,7 +335,8 @@ retained endpoint pairs, native acceptance and parity remain incomplete.
 ### Selected local runner input policy
 
 The macOS 27 direct host policy connects every literal runner v6 input ID to
-`project:runner`. Package file and crate-archive expectations come from preserved
+`project:runner` through the explicit configuration-scoped FILEMAP table;
+native pinned policies retain the common graph. Package file and crate-archive expectations come from preserved
 PR163 source and must match the independently fetched packages; selected private
 Rustup 1.29.1 comes from its official versioned archive and published checksum.
 The previous 1.29.2 observation remains a failed selection, not an expectation.
@@ -364,6 +365,9 @@ retained bytes must be measured separately; total cost and savings are unknown.
 The registered macOS native acquisition uses the same enclosing-root treatment
 for its already declared Xcode 26.6 distribution, retains `xcodebuild -version`,
 and publishes the distinct `guard-inputs/xcode-contents.json` original. It keeps
+the declared Contents root as a direct absolute location: the observation
+contract rejects `..` suffixes, and the original rejected attempt is retained.
+It keeps
 all 34 fetch/metadata pairs, 14 installation targets, directory entry bounds and
 failure-before-installation behavior. The native full guard must explicitly bind
 that new original/root before adoption; this acquisition does not activate it.
