@@ -72,7 +72,8 @@
   "toolchain": {
     "sysroot": {
       "root": ".chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
-      "manifest": "toolchain.rust.inventory"
+      "manifest": "toolchain.rust.inventory",
+      "manifest_root": "/Users/macstudio2/chrono-pr-inputs-20261023/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin"
     },
     "backend": [
       "toolchain.rust-driver"
