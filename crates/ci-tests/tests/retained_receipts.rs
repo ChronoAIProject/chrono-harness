@@ -652,7 +652,7 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
 }
 
 #[test]
-fn established_registry_releases_birth_gate_before_reading_its_snapshot() {
+fn established_registry_does_not_reenter_birth_while_its_lease_exists() {
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);
     let first = cargo_result(true);
@@ -667,8 +667,17 @@ fn established_registry_releases_birth_gate_before_reading_its_snapshot() {
         None,
     );
     let second = cargo_result(false);
+    // An established registry is already bound to its named lease. A still-live
+    // birth capability (including one inherited by a different fork) must not
+    // make an ordinary publication enter directory birth again.
+    let held_birth = fs::File::open(&directory).unwrap();
+    held_birth.lock().unwrap();
     let mut observations = Vec::new();
     let mut observer = |phase: &str| {
+        assert_ne!(
+            phase, "birth-gate-entered",
+            "established registry reentered birth"
+        );
         if phase == "registry-read-entered" {
             let birth = fs::File::open(&directory).unwrap();
             let birth_available = birth.try_lock().is_ok();
@@ -693,8 +702,8 @@ fn established_registry_releases_birth_gate_before_reading_its_snapshot() {
     );
     assert_eq!(
         observations,
-        [(true, true)],
-        "one excluded snapshot read must not hold the physical birth gate"
+        [(false, true)],
+        "one excluded snapshot must proceed while the independent birth holder remains live"
     );
 }
 
