@@ -57,9 +57,14 @@ fn isolated_capability_driver_rejects_a_successful_zero_test_process() {
     ) {
         return;
     }
+    let failure =
+        std::panic::catch_unwind(|| isolated_capability_test("__no_declared_retention_test__"))
+            .unwrap_err();
+    let message = failure.downcast_ref::<String>().unwrap();
+    assert!(message.contains("exit status: 0"), "{message}");
     assert!(
-        std::panic::catch_unwind(|| { isolated_capability_test("__no_declared_retention_test__") })
-            .is_err()
+        message.contains("test result: ok. 0 passed; 0 failed;"),
+        "{message}"
     );
 }
 #[test]
