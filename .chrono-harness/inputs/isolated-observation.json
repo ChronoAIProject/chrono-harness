@@ -691,17 +691,6 @@
         "stdout": "python.extensions"
       },
       "max_entries": 200000
-    },
-    {
-      "id": "developer",
-      "location": {
-        "stdout": "developer.root"
-      },
-      "max_entries": 200000,
-      "manifest": {
-        "path": ".chrono-harness/state/isolated-rust/acquired/developer.json",
-        "root": "/Applications/Xcode.app/Contents/Developer"
-      }
     }
   ],
   "platforms": [

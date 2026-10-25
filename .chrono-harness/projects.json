@@ -2339,6 +2339,19 @@
             "--output",
             ".chrono-harness/state/isolated-rust/acquisition.json"
           ]
+        },
+        "observe_developer": {
+          "operation": "inputs.observe-developer",
+          "tool": "chrono-inputs",
+          "argv": [
+            "observe",
+            "--host-root",
+            ".",
+            "--manifest",
+            ".chrono-harness/inputs/isolated-developer.json",
+            "--output",
+            ".chrono-harness/state/isolated-rust/developer-acquisition.json"
+          ]
         }
       },
       "test_project": "inputs-tests",
