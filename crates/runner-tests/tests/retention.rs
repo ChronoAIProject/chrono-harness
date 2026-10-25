@@ -199,7 +199,12 @@ fn released_original_larger_than_verification_round_is_not_permanently_blocked()
     );
     drop(reader);
     let round = inventory(h.path()).maintain().unwrap();
-    assert_eq!(round["remaining_outputs"], 0);
+    if round["remaining_outputs"] != 0 {
+        let original = ledger(h.path());
+        let path = h.keep();
+        panic!("released original was not retired: {round}; inventory: {original}; retained fixture: {}", path.display());
+    }
+    assert_eq!(round["remaining_outputs"], 0, "{round}");
     assert_eq!(round["removed_logical_bytes"], 4096);
     assert_eq!(round["verified_bytes"], 0);
     assert_eq!(

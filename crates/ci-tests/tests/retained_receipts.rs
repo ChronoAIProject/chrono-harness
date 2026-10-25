@@ -652,6 +652,53 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
 }
 
 #[test]
+fn established_registry_releases_birth_gate_before_reading_its_snapshot() {
+    let owner = Owner::new();
+    let directory = owner.root.join(FAMILY);
+    let first = cargo_result(true);
+    retain_command_result_observed(
+        &owner.root,
+        first.0.path(),
+        &first.2,
+        &json!({"publisher":0}),
+        &first.1,
+        Some(101),
+        Some(&directory),
+        None,
+    );
+    let second = cargo_result(false);
+    let mut observations = Vec::new();
+    let mut observer = |phase: &str| {
+        if phase == "registry-read-entered" {
+            let birth = fs::File::open(&directory).unwrap();
+            let birth_available = birth.try_lock().is_ok();
+            let registry = fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(directory.join("registry.lease"))
+                .unwrap();
+            let registry_excluded = registry.try_lock().is_err();
+            observations.push((birth_available, registry_excluded));
+        }
+    };
+    retain_command_result_observed(
+        &owner.root,
+        second.0.path(),
+        &second.2,
+        &json!({"publisher":1}),
+        &second.1,
+        Some(0),
+        Some(&directory),
+        Some(&mut observer),
+    );
+    assert_eq!(
+        observations,
+        [(true, true)],
+        "one excluded snapshot read must not hold the physical birth gate"
+    );
+}
+
+#[test]
 fn producer_registry_birth_serializes_create_before_lock_and_retains_both_commands() {
     use std::{os::unix::fs::MetadataExt, sync::mpsc, time::Duration};
     let owner = Owner::new();
