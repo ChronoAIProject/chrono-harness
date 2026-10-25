@@ -18,6 +18,49 @@ fn tests(i: &Impact) -> Vec<&str> {
     i.required_tests.iter().map(|t| t.node.as_str()).collect()
 }
 #[test]
+fn configuration_edges_preserve_two_endpoint_add_remove_impact_and_inactive_scope() {
+    let mut original = values();
+    original.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    original.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t": {
+        "operations":["execute.t"],"timeout_seconds":900,"output_limit_bytes":1048576
+    }});
+    original.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(".chrono-harness/other.json", json!([])));
+    let mut active = original.clone();
+    active.get_mut(FM).unwrap()["configuration_edges"] = json!({
+    "schema":"chrono-filemap-configuration-edges/v1","configurations":[
+        {"config":CONFIG,"edges":[edge("environment:PATH","runtime-input","project:p")]},
+        {"config":".chrono-harness/other.json","edges":[edge("input:foreign","runtime-input","project:foreign")]}
+    ]});
+    for (before, after, origin) in [
+        (&original, &active, Origin::Candidate),
+        (&active, &original, Origin::Base),
+    ] {
+        let (impact, findings) = run(before, after, &[]);
+        assert!(findings.is_empty(), "{findings:?}");
+        assert_eq!(tests(&impact), ["test:t"]);
+        assert!(
+            impact
+                .edges
+                .iter()
+                .any(|e| e.edge.from == "environment:PATH" && e.origin == origin)
+        );
+        assert!(!impact.nodes.contains_key("input:foreign"));
+        assert!(!impact.edges.iter().any(|e| e.edge.from == "input:foreign"));
+    }
+    let mut inactive = active.clone();
+    inactive.get_mut(FM).unwrap()["configuration_edges"]["configurations"][1]["edges"][0]["from"] =
+        json!("input:other-foreign");
+    let (impact, findings) = run(&active, &inactive, &[]);
+    assert!(findings.is_empty(), "{findings:?}");
+    assert!(
+        tests(&impact).is_empty(),
+        "inactive policy graph must not select business tests"
+    );
+}
+#[test]
 fn operation_override_add_change_and_remove_keep_explicit_plan_impact() {
     let mut original = values();
     original.get_mut(FM).unwrap()["schema_version"] = json!(2);

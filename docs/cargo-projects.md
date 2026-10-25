@@ -321,3 +321,30 @@ The full host remains proposed until the host registers and activates this
 policy. Dedicated tests cover a real Rust sysroot, linker, SDK inventory,
 build-script input, selection conflicts and directory/input drift through the
 ordinary Cargo operation.
+
+
+## Compatible v6 native target and v3 directory source
+
+`chrono-cargo-inputs/v6` explicitly requires `target_mode: "native" | "explicit"`.
+Native mode retains Cargo's original target-directory layout without injecting
+`--target`, verifies the bound rustc `-vV` host against the declared target and
+rejects competing Cargo build-target environment/configuration. V2–v5 retain their
+previous semantics. Registered named test suites, filters and libtest tails remain
+literal consuming argv. A declared `CARGO_NET_OFFLINE=true` may supply offline
+selection; online or conflicting selection still rejects.
+
+Directory inventory v3 adds exact child-name rows, including root `.` and empty
+or alias-only directories. V1/v2 retain their original meanings. Optional
+`manifest_root` explicitly relocates an unchanged original inventory to a different
+selected live root; wrong origin, changed bytes, alias escape, cycles and child
+drift still reject. The observer-produced original is consumed by the existing
+guard, including its post-operation checks. Bounded phase observations retain
+where a failure occurred without replacing any check.
+
+The host registers one proposed isolated `guard.check.runner` consumer; its
+current host input and participant bindings are incomplete. The generic behavior
+cases are retained in the dedicated Rust owner tests. Historical host execution
+experiments and omitted sibling guard policies remain preserved source with
+unimplemented adoption status; [custody](input-source-custody.md) records their
+natural owners. This source increment establishes neither full-host nor native
+acceptance.

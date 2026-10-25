@@ -511,7 +511,7 @@ pub fn filemap(v: &Value) -> Result {
                 "test_costs",
                 "execution_plans",
             ],
-            &["execution_scheduling"],
+            &["execution_scheduling", "configuration_edges"],
         )?;
         choice(&v["status"], &["active", "proposed"])?;
         crate::execution::plans(v)?;
@@ -580,6 +580,32 @@ pub fn filemap(v: &Value) -> Result {
     }
     for e in array(&v["project_edges"])? {
         edge(e, true)?;
+    }
+    if let Some(table) = v.get("configuration_edges") {
+        object(table, &["schema", "configurations"], &[])?;
+        choice(&table["schema"], &["chrono-filemap-configuration-edges/v1"])?;
+        let configurations = array(&table["configurations"])?;
+        if configurations.is_empty() {
+            return Err("configuration edges require nonempty configurations".into());
+        }
+        unique(&table["configurations"], Some("config"))?;
+        for row in configurations {
+            object(row, &["config", "edges"], &[])?;
+            path(&row["config"])?;
+            if !array(&v["files"])?
+                .iter()
+                .any(|file| file["path"] == row["config"])
+            {
+                return Err("configuration edge policy is not a registered file".into());
+            }
+            let edges = array(&row["edges"])?;
+            if edges.is_empty() {
+                return Err("configuration edges require nonempty edges".into());
+            }
+            for e in edges {
+                edge(e, true)?;
+            }
+        }
     }
     unique(&v["test_costs"], Some("test"))?;
     for c in array(&v["test_costs"])? {
