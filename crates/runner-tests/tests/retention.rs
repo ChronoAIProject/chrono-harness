@@ -327,6 +327,16 @@ fn unrelated_fork_retains_a_reader_until_exec_closes_its_capability() {
     result.2.unwrap();
     assert!(result.3.unwrap().unwrap().status.success());
     assert_eq!(protected["remaining_outputs"], 1, "{protected}");
+    assert!(
+        protected["protected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| {
+                row["id"] == id && row["reason"] == "live producer/consumer descendants"
+            }),
+        "the inherited capability must be the recorded protection reason: {protected}"
+    );
     assert_eq!(fs::read(h.path().join(path)).unwrap(), [9; 4096]);
     let retired = inventory(h.path()).maintain().unwrap();
     assert_eq!(retired["remaining_outputs"], 0, "{retired}");
