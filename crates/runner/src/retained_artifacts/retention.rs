@@ -1129,6 +1129,7 @@ impl Inventory {
             None,
         )?;
         let mut rooted = BTreeSet::new();
+        let mut protection_reasons = BTreeMap::new();
         let mut pending: Vec<_> = l.roots.values().flatten().cloned().collect();
         for o in &l.outputs {
             if matches!(o.phase.as_str(), "reserving" | "creating") {
@@ -1139,6 +1140,7 @@ impl Inventory {
                 "check-original" | "full-original" | "lifecycle-original"
             ) && report_exclusion.is_none()
             {
+                protection_reasons.insert(o.id.clone(), "live report activity".to_string());
                 pending.push(o.id.clone());
                 continue;
             }
@@ -1146,6 +1148,7 @@ impl Inventory {
             // already removed successful fixture into permanent metadata.
             let absent = matches!(fs::symlink_metadata(self.root.join(&o.path)),Err(ref e) if e.kind()==std::io::ErrorKind::NotFound);
             if o.expires > observed && !absent {
+                protection_reasons.insert(o.id.clone(), "retention window".to_string());
                 pending.push(o.id.clone());
                 // Already retained by policy: probing its live-use exclusion
                 // adds no protection and serializes unrelated admissions.
@@ -1159,7 +1162,17 @@ impl Inventory {
                 None,
             ) {
                 Ok(Some(_)) => (),
-                _ => pending.push(o.id.clone()),
+                Ok(None) => {
+                    protection_reasons.insert(
+                        o.id.clone(),
+                        "live producer/consumer descendants".to_string(),
+                    );
+                    pending.push(o.id.clone());
+                }
+                Err(error) => {
+                    protection_reasons.insert(o.id.clone(), error);
+                    pending.push(o.id.clone());
+                }
             }
         }
         while let Some(id) = pending.pop() {
@@ -1201,7 +1214,7 @@ impl Inventory {
             l.cursor = (i + 1) % count.max(1);
             if rooted.contains(&id) {
                 protected.push(
-                    json!({"id":id,"reason":"current consumer/reference or retention window"}),
+                    json!({"id":id,"reason":protection_reasons.get(&id).map(String::as_str).unwrap_or("current consumer/reference closure")}),
                 );
                 continue;
             }

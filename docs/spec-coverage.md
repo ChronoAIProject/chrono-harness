@@ -876,3 +876,13 @@ not historical adoption: old outcomes/expiries, unknown/interrupted consumers,
 remain unresolved. Owner-local source/behavior verification, composed input/native
 acceptance, independent review, deployment, landing and full SPEC acceptance are
 distinct claims; actual evidence must establish each. Total costs remain unknown.
+
+Producer admission now uses one excluded registry snapshot, releases its physical
+birth gate before decoding, and preserves missing/replaced expected lease
+identities. Retention diagnostics distinguish actual root protection reasons.
+Rust capability fixtures use separate test processes with unchanged assertions,
+budgets and explicit internal concurrency; a controlled fork/exec boundary covers
+temporary inherited protection and actual last-close retirement. Prior original
+failures and the missing nested inventory remain historical limits. Candidate
+canonical checks, independent review, native composition and landing each require
+their actual evidence; this correction does not adopt or migrate historical policy.

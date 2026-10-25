@@ -2,6 +2,9 @@ use chrono_harness::retained_artifacts::{self, retention::Inventory};
 use serde_json::json;
 use std::{fs, io::Write, path::Path};
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("exit-success") {
+        return;
+    }
     if std::env::args().nth(1).as_deref() == Some("emit-original-failure") {
         use std::io::Read;
         let mut input = Vec::new();

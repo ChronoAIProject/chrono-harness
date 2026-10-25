@@ -24,8 +24,34 @@ fn ledger(root: &Path) -> Value {
     )
     .unwrap()
 }
+// fork duplicates every thread's open descriptions until exec, even CLOEXEC
+// capabilities that the child never intentionally consumes. Tests asserting an
+// immediate last-close boundary need a process without unrelated fixture forks.
+fn isolated_capability_test(name: &str) -> bool {
+    const MARKER: &str = "CHRONO_RETENTION_CAPABILITY_TEST";
+    if std::env::var(MARKER).as_deref() == Ok(name) {
+        return true;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--nocapture"])
+        .env(MARKER, name)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "isolated capability test failed: {}; stdout: {}; stderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    false
+}
 #[test]
 fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
+    if !isolated_capability_test("creation_intent_survives_no_finish_and_admission_creates_nothing")
+    {
+        return;
+    }
     let h = host(256, 16);
     let path = ".chrono-harness/state/fixtures/not-created";
     let publication = inventory(h.path())
@@ -80,6 +106,11 @@ fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
 
 #[test]
 fn controlled_fixture_writes_refuse_before_copy_and_keep_original_outcomes() {
+    if !isolated_capability_test(
+        "controlled_fixture_writes_refuse_before_copy_and_keep_original_outcomes",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -129,6 +160,11 @@ fn controlled_fixture_writes_refuse_before_copy_and_keep_original_outcomes() {
 
 #[test]
 fn released_byte_overflow_is_accounted_and_reclaimed_under_unchanged_policy() {
+    if !isolated_capability_test(
+        "released_byte_overflow_is_accounted_and_reclaimed_under_unchanged_policy",
+    ) {
+        return;
+    }
     let h = host(8, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -176,6 +212,11 @@ fn released_byte_overflow_is_accounted_and_reclaimed_under_unchanged_policy() {
 }
 #[test]
 fn released_original_larger_than_verification_round_is_not_permanently_blocked() {
+    if !isolated_capability_test(
+        "released_original_larger_than_verification_round_is_not_permanently_blocked",
+    ) {
+        return;
+    }
     let h = host(8, 4);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -202,7 +243,10 @@ fn released_original_larger_than_verification_round_is_not_permanently_blocked()
     if round["remaining_outputs"] != 0 {
         let original = ledger(h.path());
         let path = h.keep();
-        panic!("released original was not retired: {round}; inventory: {original}; retained fixture: {}", path.display());
+        panic!(
+            "released original was not retired: {round}; inventory: {original}; retained fixture: {}",
+            path.display()
+        );
     }
     assert_eq!(round["remaining_outputs"], 0, "{round}");
     assert_eq!(round["removed_logical_bytes"], 4096);
@@ -218,7 +262,71 @@ fn released_original_larger_than_verification_round_is_not_permanently_blocked()
 }
 
 #[test]
+fn unrelated_fork_retains_a_reader_until_exec_closes_its_capability() {
+    if !isolated_capability_test("unrelated_fork_retains_a_reader_until_exec_closes_its_capability")
+    {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::{fd::AsRawFd, unix::net::UnixStream, unix::process::CommandExt},
+    };
+    let h = host(8, 4);
+    let path = ".chrono-harness/state/fixtures/fork-original";
+    fs::write(h.path().join(path), [9; 4096]).unwrap();
+    let p = inventory(h.path())
+        .begin("fixture", path, json!(null))
+        .unwrap();
+    let id = p.id().to_string();
+    p.complete(json!({"exit":101})).unwrap();
+    let reader = inventory(h.path()).consume(&id).unwrap();
+    let (mut parent, child) = UnixStream::pair().unwrap();
+    let parent_fd = parent.as_raw_fd();
+    let child_fd = child.as_raw_fd();
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"));
+    command.arg("exit-success");
+    unsafe {
+        command.pre_exec(move || {
+            libc::close(parent_fd);
+            let mut byte = 1u8;
+            if libc::write(child_fd, (&byte as *const u8).cast(), 1) != 1
+                || libc::read(child_fd, (&mut byte as *mut u8).cast(), 1) != 1
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let result = std::thread::scope(|scope| {
+        let launched = scope.spawn(|| command.output());
+        let signaled = parent.read_exact(&mut [0]);
+        drop(reader);
+        let protected = inventory(h.path()).maintain();
+        let resumed = parent.write_all(&[1]);
+        let joined = launched.join();
+        (signaled, protected, resumed, joined)
+    });
+    result.0.unwrap();
+    let protected = result.1.unwrap();
+    result.2.unwrap();
+    assert!(result.3.unwrap().unwrap().status.success());
+    assert_eq!(protected["remaining_outputs"], 1, "{protected}");
+    assert_eq!(fs::read(h.path().join(path)).unwrap(), [9; 4096]);
+    let retired = inventory(h.path()).maintain().unwrap();
+    assert_eq!(retired["remaining_outputs"], 0, "{retired}");
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["exit"],
+        101
+    );
+}
+
+#[test]
 fn killed_creation_intent_recovers_on_ordinary_entry_without_a_callback() {
+    if !isolated_capability_test(
+        "killed_creation_intent_recovers_on_ordinary_entry_without_a_callback",
+    ) {
+        return;
+    }
     use std::io::BufRead;
     let h = host(8, 4);
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"))
@@ -252,6 +360,11 @@ fn killed_creation_intent_recovers_on_ordinary_entry_without_a_callback() {
 
 #[test]
 fn released_manifest_overflow_makes_bounded_progress_without_policy_growth() {
+    if !isolated_capability_test(
+        "released_manifest_overflow_makes_bounded_progress_without_policy_growth",
+    ) {
+        return;
+    }
     let h = host(4, 4);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -313,6 +426,11 @@ fn released_manifest_overflow_makes_bounded_progress_without_policy_growth() {
 
 #[test]
 fn creation_destination_replacement_is_preserved_and_controlled_nodes_are_refused() {
+    if !isolated_capability_test(
+        "creation_destination_replacement_is_preserved_and_controlled_nodes_are_refused",
+    ) {
+        return;
+    }
     let h = host(8, 4);
     let path = ".chrono-harness/state/fixtures/planned";
     let p = inventory(h.path())
@@ -363,6 +481,11 @@ fn creation_destination_replacement_is_preserved_and_controlled_nodes_are_refuse
 
 #[test]
 fn preparation_write_refusal_leaves_owner_intent_and_ordinary_recovery() {
+    if !isolated_capability_test(
+        "preparation_write_refusal_leaves_owner_intent_and_ordinary_recovery",
+    ) {
+        return;
+    }
     let h = report_host();
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -402,6 +525,11 @@ fn preparation_write_refusal_leaves_owner_intent_and_ordinary_recovery() {
 
 #[test]
 fn ordinary_entry_reclaims_completed_nested_outputs_with_real_savings() {
+    if !isolated_capability_test(
+        "ordinary_entry_reclaims_completed_nested_outputs_with_real_savings",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let p = tree(h.path(), "sdk");
     let publication = inventory(h.path())
@@ -440,6 +568,11 @@ fn ordinary_entry_reclaims_completed_nested_outputs_with_real_savings() {
 }
 #[test]
 fn no_finish_preserves_live_producer_then_recovers_unknown_partial_publication() {
+    if !isolated_capability_test(
+        "no_finish_preserves_live_producer_then_recovers_unknown_partial_publication",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let p = tree(h.path(), "interrupted");
     let publication = inventory(h.path())
@@ -472,6 +605,11 @@ fn no_finish_preserves_live_producer_then_recovers_unknown_partial_publication()
 }
 #[test]
 fn current_references_protect_closure_and_released_historical_cycles_are_not_roots() {
+    if !isolated_capability_test(
+        "current_references_protect_closure_and_released_historical_cycles_are_not_roots",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let a = tree(h.path(), "a");
     let b = tree(h.path(), "b");
@@ -503,6 +641,11 @@ fn current_references_protect_closure_and_released_historical_cycles_are_not_roo
 }
 #[test]
 fn live_consumer_protects_references_even_after_retention_window_expires() {
+    if !isolated_capability_test(
+        "live_consumer_protects_references_even_after_retention_window_expires",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let a = tree(h.path(), "a");
     let b = tree(h.path(), "b");
@@ -525,6 +668,9 @@ fn live_consumer_protects_references_even_after_retention_window_expires() {
 }
 #[test]
 fn identity_drift_and_changed_policy_preserve_original_evidence() {
+    if !isolated_capability_test("identity_drift_and_changed_policy_preserve_original_evidence") {
+        return;
+    }
     let h = host(256, 16);
     let p = tree(h.path(), "original");
     let publication = inventory(h.path())
@@ -552,6 +698,11 @@ fn identity_drift_and_changed_policy_preserve_original_evidence() {
 }
 #[test]
 fn partial_disposal_is_bounded_resumable_and_cannot_be_referenced_again() {
+    if !isolated_capability_test(
+        "partial_disposal_is_bounded_resumable_and_cannot_be_referenced_again",
+    ) {
+        return;
+    }
     let h = host(3, 2);
     let p = tree(h.path(), "many");
     let publication = inventory(h.path())
@@ -592,6 +743,11 @@ fn partial_disposal_is_bounded_resumable_and_cannot_be_referenced_again() {
 }
 #[test]
 fn immutable_file_content_drift_is_refused_without_changing_original_outcome() {
+    if !isolated_capability_test(
+        "immutable_file_content_drift_is_refused_without_changing_original_outcome",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let p = ".chrono-harness/state/fixtures/original.json";
     fs::write(h.path().join(p), b"original failure").unwrap();
@@ -608,6 +764,9 @@ fn immutable_file_content_drift_is_refused_without_changing_original_outcome() {
 }
 #[test]
 fn legacy_without_policy_and_unenrolled_outputs_remain_untouched() {
+    if !isolated_capability_test("legacy_without_policy_and_unenrolled_outputs_remain_untouched") {
+        return;
+    }
     let h = tempfile::tempdir().unwrap();
     assert!(Inventory::adopted(h.path()).unwrap().is_none());
     let h = host(256, 16);
@@ -617,6 +776,9 @@ fn legacy_without_policy_and_unenrolled_outputs_remain_untouched() {
 }
 #[test]
 fn verified_content_reuse_preserves_independent_operation_results() {
+    if !isolated_capability_test("verified_content_reuse_preserves_independent_operation_results") {
+        return;
+    }
     let h = host(256, 16);
     let input = h.path().join("input");
     fs::write(&input, b"shared original failure bytes").unwrap();
@@ -638,6 +800,11 @@ fn verified_content_reuse_preserves_independent_operation_results() {
 
 #[test]
 fn killed_producer_is_joined_and_ordinary_entry_recovers_without_any_drop_callback() {
+    if !isolated_capability_test(
+        "killed_producer_is_joined_and_ordinary_entry_recovers_without_any_drop_callback",
+    ) {
+        return;
+    }
     use std::io::{BufRead, BufReader};
     let h = host(256, 16);
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"))
@@ -676,6 +843,11 @@ fn killed_producer_is_joined_and_ordinary_entry_recovers_without_any_drop_callba
 #[cfg(unix)]
 #[test]
 fn bounded_disposal_unlinks_internal_symlink_without_touching_external_original() {
+    if !isolated_capability_test(
+        "bounded_disposal_unlinks_internal_symlink_without_touching_external_original",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let external = tempfile::tempdir().unwrap();
     fs::write(external.path().join("evidence"), b"external original").unwrap();
@@ -697,6 +869,11 @@ fn bounded_disposal_unlinks_internal_symlink_without_touching_external_original(
 
 #[test]
 fn reserved_publication_and_retired_capability_intents_recover_without_scanning() {
+    if !isolated_capability_test(
+        "reserved_publication_and_retired_capability_intents_recover_without_scanning",
+    ) {
+        return;
+    }
     let h = host(3, 16);
     let p = tree(h.path(), "reserved");
     let publication = inventory(h.path())
@@ -740,6 +917,11 @@ fn reserved_publication_and_retired_capability_intents_recover_without_scanning(
 
 #[test]
 fn protected_capacity_refuses_enrollment_and_bounded_replacement_recovers() {
+    if !isolated_capability_test(
+        "protected_capacity_refuses_enrollment_and_bounded_replacement_recovers",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -791,6 +973,11 @@ fn report_host() -> tempfile::TempDir {
 }
 #[test]
 fn actual_original_publisher_and_reader_reclaim_rotated_reports_but_preserve_shared_inputs() {
+    if !isolated_capability_test(
+        "actual_original_publisher_and_reader_reclaim_rotated_reports_but_preserve_shared_inputs",
+    ) {
+        return;
+    }
     use chrono_harness::prepared::{read_original, retain_original};
     use retained_artifacts::retention::{reference_report, settle_report};
     let h = report_host();
@@ -847,6 +1034,11 @@ fn actual_original_publisher_and_reader_reclaim_rotated_reports_but_preserve_sha
 }
 #[test]
 fn interrupted_fixed_pointer_publication_keeps_both_originals_until_owner_settles() {
+    if !isolated_capability_test(
+        "interrupted_fixed_pointer_publication_keeps_both_originals_until_owner_settles",
+    ) {
+        return;
+    }
     use chrono_harness::prepared::retain_original;
     use retained_artifacts::retention::{reference_report, settle_report};
     let h = report_host();
@@ -898,6 +1090,11 @@ fn interrupted_fixed_pointer_publication_keeps_both_originals_until_owner_settle
 }
 #[test]
 fn report_activity_and_pending_publication_preserve_interrupted_originals() {
+    if !isolated_capability_test(
+        "report_activity_and_pending_publication_preserve_interrupted_originals",
+    ) {
+        return;
+    }
     use chrono_harness::prepared::retain_original;
     let h = report_host();
     let activity = retained_artifacts::retention::report_activity(h.path()).unwrap();
@@ -926,6 +1123,11 @@ fn report_activity_and_pending_publication_preserve_interrupted_originals() {
 }
 #[test]
 fn pending_native_delivery_is_independent_of_latest_report_and_explicitly_released() {
+    if !isolated_capability_test(
+        "pending_native_delivery_is_independent_of_latest_report_and_explicitly_released",
+    ) {
+        return;
+    }
     use chrono_harness::prepared::retain_original;
     use retained_artifacts::retention::{reference_report, settle_report};
     let h = report_host();
@@ -959,6 +1161,11 @@ fn pending_native_delivery_is_independent_of_latest_report_and_explicitly_releas
 }
 #[test]
 fn addressed_legacy_original_is_verified_without_silent_enrollment_or_rewriting() {
+    if !isolated_capability_test(
+        "addressed_legacy_original_is_verified_without_silent_enrollment_or_rewriting",
+    ) {
+        return;
+    }
     use chrono_harness::prepared::retain_original;
     let h = report_host();
     let dir = ".chrono-harness/state/preparation/";
@@ -980,6 +1187,11 @@ fn addressed_legacy_original_is_verified_without_silent_enrollment_or_rewriting(
 
 #[test]
 fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_missing_scopes() {
+    if !isolated_capability_test(
+        "explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_missing_scopes",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let path = tree(h.path(), "migration");
     let publication = inventory(h.path())
@@ -1040,6 +1252,11 @@ fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_mi
 
 #[test]
 fn addressed_reuse_refuses_equal_bytes_at_changed_identity_or_partial_disposal() {
+    if !isolated_capability_test(
+        "addressed_reuse_refuses_equal_bytes_at_changed_identity_or_partial_disposal",
+    ) {
+        return;
+    }
     use chrono_harness::prepared::retain_original;
     for replacement in [false, true] {
         let h = report_host();
@@ -1103,6 +1320,11 @@ fn addressed_reuse_refuses_equal_bytes_at_changed_identity_or_partial_disposal()
 
 #[test]
 fn sealed_tree_rejects_replaced_descendants_and_preserves_the_replacement() {
+    if !isolated_capability_test(
+        "sealed_tree_rejects_replaced_descendants_and_preserves_the_replacement",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let p = tree(h.path(), "sealed");
     let publication = inventory(h.path())
@@ -1122,6 +1344,11 @@ fn sealed_tree_rejects_replaced_descendants_and_preserves_the_replacement() {
 
 #[test]
 fn sealed_tree_never_enrolls_a_late_unknown_descendant_during_disposal() {
+    if !isolated_capability_test(
+        "sealed_tree_never_enrolls_a_late_unknown_descendant_during_disposal",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let p = tree(h.path(), "unknown");
     inventory(h.path())
@@ -1138,6 +1365,11 @@ fn sealed_tree_never_enrolls_a_late_unknown_descendant_during_disposal() {
 
 #[test]
 fn total_capacity_reserves_live_writers_then_charges_sealed_tree_bytes() {
+    if !isolated_capability_test(
+        "total_capacity_reserves_live_writers_then_charges_sealed_tree_bytes",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -1171,6 +1403,9 @@ fn total_capacity_reserves_live_writers_then_charges_sealed_tree_bytes() {
 
 #[test]
 fn staged_source_added_after_publication_prevents_disposal() {
+    if !isolated_capability_test("staged_source_added_after_publication_prevents_disposal") {
+        return;
+    }
     let h = host(256, 16);
     let p = tree(h.path(), "source");
     let publication = inventory(h.path())
@@ -1195,6 +1430,11 @@ fn staged_source_added_after_publication_prevents_disposal() {
 
 #[test]
 fn historical_cli_requires_registered_producer_receipt_exclusion_and_release_evidence() {
+    if !isolated_capability_test(
+        "historical_cli_requires_registered_producer_receipt_exclusion_and_release_evidence",
+    ) {
+        return;
+    }
     use chrono_harness::{artifact_disposal::identity, ownership::Lease, sha256};
     let h = host(256, 16);
     let p = tree(h.path(), "historical");
@@ -1275,6 +1515,11 @@ fn historical_cli_requires_registered_producer_receipt_exclusion_and_release_evi
 
 #[test]
 fn native_delivery_acknowledgement_releases_only_its_exact_original_and_keeps_failed_outcome() {
+    if !isolated_capability_test(
+        "native_delivery_acknowledgement_releases_only_its_exact_original_and_keeps_failed_outcome",
+    ) {
+        return;
+    }
     use retained_artifacts::retention::{publish_original, reference_report, settle_report};
     let h = report_host();
     let path = ".chrono-harness/state/preparation/native-delivery.json";
@@ -1319,6 +1564,9 @@ fn native_delivery_acknowledgement_releases_only_its_exact_original_and_keeps_fa
 
 #[test]
 fn unselected_producer_keeps_legacy_publication_semantics() {
+    if !isolated_capability_test("unselected_producer_keeps_legacy_publication_semantics") {
+        return;
+    }
     let h = host(256, 16);
     let path = tree(h.path(), "unselected");
     assert!(
@@ -1336,6 +1584,11 @@ fn unselected_producer_keeps_legacy_publication_semantics() {
 
 #[test]
 fn oversized_tree_completion_keeps_the_actual_failed_producer_outcome() {
+    if !isolated_capability_test(
+        "oversized_tree_completion_keeps_the_actual_failed_producer_outcome",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -1366,6 +1619,11 @@ fn oversized_tree_completion_keeps_the_actual_failed_producer_outcome() {
 
 #[test]
 fn native_upload_cli_consumes_current_reference_and_rejects_pointer_digest_drift() {
+    if !isolated_capability_test(
+        "native_upload_cli_consumes_current_reference_and_rejects_pointer_digest_drift",
+    ) {
+        return;
+    }
     use retained_artifacts::retention::{publish_original, reference_report, settle_report};
     let h = report_host();
     let original = ".chrono-harness/state/preparation/native-cli.json";
@@ -1457,6 +1715,10 @@ fn native_upload_cli_consumes_current_reference_and_rejects_pointer_digest_drift
 
 #[test]
 fn staged_blob_checks_capacity_before_copy_and_preserves_the_input() {
+    if !isolated_capability_test("staged_blob_checks_capacity_before_copy_and_preserves_the_input")
+    {
+        return;
+    }
     let h = report_host();
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -1497,6 +1759,11 @@ fn staged_blob_checks_capacity_before_copy_and_preserves_the_input() {
 
 #[test]
 fn interrupted_lifecycle_original_stays_rooted_for_its_actual_recovery_reader() {
+    if !isolated_capability_test(
+        "interrupted_lifecycle_original_stays_rooted_for_its_actual_recovery_reader",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -1519,6 +1786,11 @@ fn interrupted_lifecycle_original_stays_rooted_for_its_actual_recovery_reader() 
 
 #[test]
 fn explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound() {
+    if !isolated_capability_test(
+        "explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -1585,6 +1857,11 @@ fn explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound()
 }
 #[test]
 fn ordinary_maintenance_defers_busy_exclusion_without_spending_another_round() {
+    if !isolated_capability_test(
+        "ordinary_maintenance_defers_busy_exclusion_without_spending_another_round",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let i = inventory(h.path());
     let gate = chrono_harness::ownership::Lease::acquire(
@@ -1609,6 +1886,11 @@ fn ordinary_maintenance_defers_busy_exclusion_without_spending_another_round() {
 
 #[test]
 fn ordinary_concurrent_publications_admit_against_retained_inventory() {
+    if !isolated_capability_test(
+        "ordinary_concurrent_publications_admit_against_retained_inventory",
+    ) {
+        return;
+    }
     let h = host(256, 128);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -1706,6 +1988,11 @@ fn consumer_release(root: &Path, declaration: &Value, state: &str) -> Value {
 }
 #[test]
 fn declared_consumer_cli_protects_existing_original_and_requires_real_release() {
+    if !isolated_capability_test(
+        "declared_consumer_cli_protects_existing_original_and_requires_real_release",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let path = tree(h.path(), "required-failure");
     fs::write(h.path().join(&path).join("stderr"), [3; 2048]).unwrap();
@@ -1754,6 +2041,11 @@ fn declared_consumer_cli_protects_existing_original_and_requires_real_release() 
 
 #[test]
 fn declared_consumer_rejects_partial_binding_missing_and_replaced_originals() {
+    if !isolated_capability_test(
+        "declared_consumer_rejects_partial_binding_missing_and_replaced_originals",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let a = tree(h.path(), "first");
     let b = tree(h.path(), "second");
@@ -1826,6 +2118,11 @@ fn declared_consumer_rejects_partial_binding_missing_and_replaced_originals() {
 
 #[test]
 fn declared_consumer_survives_killed_real_reader_and_ordinary_reentry() {
+    if !isolated_capability_test(
+        "declared_consumer_survives_killed_real_reader_and_ordinary_reentry",
+    ) {
+        return;
+    }
     use std::io::{BufRead, BufReader};
     let h = host(256, 16);
     let path = tree(h.path(), "interrupted-repair");
@@ -1892,6 +2189,11 @@ fn declared_consumer_survives_killed_real_reader_and_ordinary_reentry() {
 
 #[test]
 fn consumer_adoption_keeps_old_inventory_expiry_and_capacity_while_future_entries_reclaim() {
+    if !isolated_capability_test(
+        "consumer_adoption_keeps_old_inventory_expiry_and_capacity_while_future_entries_reclaim",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
@@ -1971,6 +2273,11 @@ fn consumer_adoption_keeps_old_inventory_expiry_and_capacity_while_future_entrie
 
 #[test]
 fn producer_consumer_retains_interrupted_capture_and_releases_only_accounted_success() {
+    if !isolated_capability_test(
+        "producer_consumer_retains_interrupted_capture_and_releases_only_accounted_success",
+    ) {
+        return;
+    }
     use std::io::{BufRead, BufReader};
     let h = host(256, 16);
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"))
@@ -2027,6 +2334,11 @@ fn producer_consumer_retains_interrupted_capture_and_releases_only_accounted_suc
 
 #[test]
 fn typed_inventory_decoder_keeps_duplicate_unknown_and_opaque_json_refusals() {
+    if !isolated_capability_test(
+        "typed_inventory_decoder_keeps_duplicate_unknown_and_opaque_json_refusals",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let path = tree(h.path(), "strict-original");
     inventory(h.path())
@@ -2072,6 +2384,11 @@ fn typed_inventory_decoder_keeps_duplicate_unknown_and_opaque_json_refusals() {
 
 #[test]
 fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it() {
+    if !isolated_capability_test(
+        "failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it",
+    ) {
+        return;
+    }
     use retained_artifacts::retention::{publish_final_original, reference_report, settle_report};
     let h = report_host();
     let failed = ".chrono-harness/state/preparation/failed-final.json";
@@ -2168,6 +2485,11 @@ fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it(
 
 #[test]
 fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retirement() {
+    if !isolated_capability_test(
+        "fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retirement",
+    ) {
+        return;
+    }
     use retained_artifacts::retention::{external_removal_guards, publish_original};
     let h = report_host();
     let path = ".chrono-harness/state/preparation/nested-original";
@@ -2213,6 +2535,11 @@ fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retir
 
 #[test]
 fn adopted_process_streams_and_launch_keep_original_bytes_and_joined_failure() {
+    if !isolated_capability_test(
+        "adopted_process_streams_and_launch_keep_original_bytes_and_joined_failure",
+    ) {
+        return;
+    }
     let h = report_host();
     let dir = h.path().join(".chrono-harness/state/preparation");
     fs::create_dir_all(&dir).unwrap();
@@ -2272,6 +2599,11 @@ fn adopted_process_streams_and_launch_keep_original_bytes_and_joined_failure() {
 
 #[test]
 fn final_report_dependencies_include_exact_nested_acquisition_members() {
+    if !isolated_capability_test(
+        "final_report_dependencies_include_exact_nested_acquisition_members",
+    ) {
+        return;
+    }
     let h = report_host();
     let path = tree(h.path(), "acquired");
     fs::write(

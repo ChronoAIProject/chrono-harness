@@ -699,6 +699,53 @@ fn established_registry_releases_birth_gate_before_reading_its_snapshot() {
 }
 
 #[test]
+fn established_registry_never_recreates_or_rebinds_its_expected_lease() {
+    for replaced in [false, true] {
+        let owner = Owner::new();
+        let directory = owner.root.join(FAMILY);
+        fs::create_dir_all(directory.join("first")).unwrap();
+        chrono_worktree::RetainedArtifact::begin(
+            &directory,
+            "ci-command-result",
+            &directory.join("first"),
+            &[],
+            "boundary-check",
+            "original lease identity must remain authoritative",
+        )
+        .unwrap();
+        let original = fs::read(directory.join("objects.json")).unwrap();
+        let lease = directory.join("registry.lease");
+        let saved = directory.join("original-registry.lease");
+        fs::rename(&lease, &saved).unwrap();
+        if replaced {
+            fs::copy(&saved, &lease).unwrap();
+        }
+        fs::create_dir(directory.join("next")).unwrap();
+        let error = chrono_worktree::RetainedArtifact::begin(
+            &directory,
+            "ci-command-result",
+            &directory.join("next"),
+            &[],
+            "boundary-check",
+            "missing and substituted ownership preserve the original",
+        )
+        .err()
+        .unwrap();
+        assert!(
+            error.contains(if replaced {
+                "identity differs"
+            } else {
+                "unavailable"
+            }),
+            "{error}"
+        );
+        assert_eq!(fs::read(directory.join("objects.json")).unwrap(), original);
+        assert_eq!(lease.exists(), replaced, "missing lease must stay missing");
+        assert!(saved.exists());
+    }
+}
+
+#[test]
 fn producer_registry_birth_serializes_create_before_lock_and_retains_both_commands() {
     use std::{os::unix::fs::MetadataExt, sync::mpsc, time::Duration};
     let owner = Owner::new();

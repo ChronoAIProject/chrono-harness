@@ -28,6 +28,26 @@ The real-bootstrap fixture's cache-attempt reentry consumes every original strea
 
 Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then holds final-original admission exclusion across its exact effect. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
 
+Producer registry admission performs one authoritative snapshot decode while
+holding its existing registry lease. The physical directory gate covers lease
+birth/acquisition and releases before that decode; existing registry identities
+still bind the held lease before publication. Missing established leases remain
+missing, and replaced or unknown leases cannot acquire a new binding. The
+30-second acquisition bound is unchanged.
+
+Retention rounds report the actual retention, report-activity, live-capability or
+identity-error reason for a protected root. A parent closing a capability is not
+proof of its final kernel close: an unrelated concurrent fork temporarily inherits
+even CLOEXEC descriptors until exec. The Rust retention suite runs each fixture in
+its own test process while retaining parallel parent tests and each fixture's
+explicit internal concurrency and assertions. A controlled native pre-exec
+handshake checks preservation during that inherited hold and retirement after the
+joined exec. An unexpected large-original refusal preserves its complete round,
+inventory and fixture for diagnosis. These boundaries do not expire a live lease
+or increase time, byte, node or output budgets. The unavailable inventory from the
+earlier nested failure is not reconstructed; local causal coverage does not
+establish its unobserved exact interleaving or native acceptance.
+
 ## Bounded recovery and migration
 
 The supported owner entry is:

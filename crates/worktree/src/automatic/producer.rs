@@ -151,13 +151,15 @@ impl Store {
         let began = std::time::Instant::now();
         let bound = std::time::Duration::from_secs(30);
         observer("birth-gate-entered");
-        let _birth = BirthGate::acquire(directory, began, bound, &mut observer)?;
+        let birth = BirthGate::acquire(directory, began, bound, &mut observer)?;
         observer("birth-gate-acquired");
         let path = no_symlink_parents(directory, "objects.json")?;
-        observer("registry-read-entered");
-        let prior: Option<Registry> = match fs::read(&path) {
-            Ok(bytes) => Some(decode(&bytes)?),
-            Err(e) if create && e.kind() == std::io::ErrorKind::NotFound => None,
+        // Only birth eligibility is needed before exclusion. Decoding the entire
+        // inventory here duplicated the authoritative read and held the physical
+        // birth gate across all historical objects for every ordinary publisher.
+        let absent = match fs::symlink_metadata(&path) {
+            Ok(_) => false,
+            Err(e) if create && e.kind() == std::io::ErrorKind::NotFound => true,
             Err(e) => {
                 return Err(format!(
                     "producer registry unavailable; preserve objects: {e}"
@@ -165,25 +167,26 @@ impl Store {
             }
         };
         let lease_path = no_symlink_parents(directory, "registry.lease")?;
-        observer("registry-read-returned");
         observer("registry-lease-entered");
         let lease = Lease::acquire_observed(
             &lease_path,
-            prior.as_ref().map(|r| r.lease_id.as_str()),
-            prior.is_none(),
+            None,
+            absent,
             true,
             Some(bound.saturating_sub(began.elapsed())),
             || observer("lease-created-before-lock"),
         )?
         .ok_or("producer registry busy")?;
         observer("registry-lease-acquired");
-        // Re-read after exclusion: reference acquisition/release and drain use this gate.
+        drop(birth);
+        observer("registry-read-entered");
+        // This one excluded read supplies the admitted identity. Existing state
+        // must bind the held lease below before any publication; an absent lease
+        // beside an existing registry is never created, nor an unknown one adopted.
         let registry: Registry = match fs::read(&path) {
             Ok(bytes) => decode(&bytes)?,
             Err(e)
-                if prior.is_none()
-                    && lease.newly_created()
-                    && e.kind() == std::io::ErrorKind::NotFound =>
+                if absent && lease.newly_created() && e.kind() == std::io::ErrorKind::NotFound =>
             {
                 let registry = Registry {
                     schema: "chrono-retained-producer/v1".into(),
@@ -201,6 +204,7 @@ impl Store {
                 ));
             }
         };
+        observer("registry-read-returned");
         if registry.schema != "chrono-retained-producer/v1"
             || registry.producer != producer
             || registry.directory_id != directory_id(directory)?
