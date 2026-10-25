@@ -194,10 +194,6 @@ jobs:
     if: ${{ needs.detect.outputs.unit_cache == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
-    permissions:
-      contents: read
-      actions: read
-      pull-requests: read
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -276,31 +272,9 @@ jobs:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
         run: |
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.cache","check.cache-tests"]' --github-output "$GITHUB_OUTPUT"
-      - name: Read selected native cache activation
-        id: chrono_cache_activation
-        if: ${{ success() && github.event_name == 'pull_request' && contains(github.event.pull_request.body, '<!-- chrono-cache-acceptance-source/v1 -->') }}
-        timeout-minutes: 1
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CHRONO_CACHE_PR_NUMBER: ${{ github.event.pull_request.number }}
-          CHRONO_CACHE_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-        run: |
-          'gh' api "repos/$GITHUB_REPOSITORY/pulls/$CHRONO_CACHE_PR_NUMBER" > '.chrono-harness/state/cache/check.unit_cache/activation-pr.json'
-          '.chrono-harness/bin/chrono-ci' cache-activation --host-root . --response '.chrono-harness/state/cache/check.unit_cache/activation-pr.json' --fixture 'native-unusable' --consumer 'check.unit_cache' --github-output "$GITHUB_OUTPUT"
-      - name: Apply selected native cache acceptance fixture
-        id: chrono_cache_acceptance
-        if: ${{ success() && steps.chrono_cache_activation.outputs.activation != '' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_ACCEPTANCE: ${{ steps.chrono_cache_activation.outputs.activation }}
-          CHRONO_CACHE_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          CHRONO_CACHE_ACCEPTANCE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' acceptance-fixture --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --fixture 'native-unusable' --steps-env CHRONO_CACHE_ACCEPTANCE_STEPS --work 'chrono_cache_work'
       - name: Save registered cache check.cache
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') && (github.event_name != 'pull_request' || !contains(github.event.pull_request.body, '<!-- chrono-cache-acceptance-source/v1 -->') || steps.chrono_cache_activation.outcome == 'success') && (steps.chrono_cache_activation.outputs.activation == '' || steps.chrono_cache_acceptance.outcome == 'success') }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -308,7 +282,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.cache-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') && (github.event_name != 'pull_request' || !contains(github.event.pull_request.body, '<!-- chrono-cache-acceptance-source/v1 -->') || steps.chrono_cache_activation.outcome == 'success') && (steps.chrono_cache_activation.outputs.activation == '' || steps.chrono_cache_acceptance.outcome == 'success') }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:

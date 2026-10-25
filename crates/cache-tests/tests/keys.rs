@@ -291,10 +291,6 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
     // Toolchain/key observation is tested separately. This fixture reads the
     // actual host's consumers and producer references without running platform probes.
     config["require_primary_checkout"] = json!(false);
-    config
-        .as_object_mut()
-        .unwrap()
-        .remove("acceptance_fixtures");
     config["recover_failed_restores"] = json!(false);
     config["recover_unconfirmed_restores"] = json!(false);
     for cache in config["caches"].as_object_mut().unwrap().values_mut() {
@@ -1252,10 +1248,6 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     let root = Host::new();
     fs::create_dir_all(root.path().join(".chrono-harness/ci")).unwrap();
     config["require_primary_checkout"] = json!(false);
-    config
-        .as_object_mut()
-        .unwrap()
-        .remove("acceptance_fixtures");
     config["recover_failed_restores"] = json!(false);
     config["recover_unconfirmed_restores"] = json!(false);
     for cache in config["caches"].as_object_mut().unwrap().values_mut() {

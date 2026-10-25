@@ -17,7 +17,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 2.2 routes regression helper migration | implemented bounded: the eight `judge-routes-tests` route regressions use a Rust test-owned subprocess helper | `tests/support/tool.rs` is an explicit Cargo binary and FILEMAP compile input of `judge-routes-tests`; the existing `test:judge-routes-tests` plan runs the helper through its unchanged Cargo test action; literal/empty/newline argv, cwd/environment, receipt tampering, wrong version/replaced executable, PATH binding, version-observation reuse, cycle/preflight rejection, canonical invocation and collection identity remain covered; committed candidate `af0e2432d849fddbcd233491d428d7322fd32925` canonical DELTA acceptance is observed with judge status passed in `.chrono-harness/state/preparation/check-a6eeb18c816192599c44d33a6532c4215da67c8d35b700dc5c0671d07ce77472.json` against base `c159392f0a9c16049be11933013ab946ddc22293`; migration remains bounded to this test owner, while cross-language completion, full activation, input closure and local/native parity remain unresolved | migration remains limited to this test owner; other cross-language logic/helper and external-interface fixture registration, complete input closure, full activation and local/native parity remain unresolved |
 | 3 five registries | partial | registration `schema.rs`, G `strict_five_schemas_*`, `real_host_pseudo_script_*` | complete Cargo/SDK closure; bounded pairing/routes/migration/snapshots and v5 toolchain inventory implemented |
 | 4 fixed snapshots/context/CI | partial | runner `facts.rs`, registration `lib.rs`; G `context_and_config_identity_mismatch`, `ignored_untracked_staged_and_wrong_checkout_fail` | config v3 binds full/initial Git facts through all full consumers, explicit scoped-v2 acquisition and provider-v3 event reads/fetches (docs/git-facts.md); full native CI/parity and Git/delegated/Cargo/SDK input closure remain |
-| 4.2 CI caches and incremental builds | partial: explicit keys, producer/content binding and bounded native cold/save, compatible-source rebuild, healthy exact hit and incompatible-environment partition/rebuild for both opted-in compilation caches | Independent Rust `chrono-cache plan` consumes explicit consumer/input/artifact registrations, separates source and compatibility keys; explicit JSON pointers bind selected configuration values with whole-file provenance outside keys, and host adoption regressions distinguish unit metadata from build parameters; v2 resolves consumer operation references before probes, retaining producer keys across consumer-only changes; references existing host output registrations and rejects selected output overlap or evidence/source caching; dedicated Rust invalidation, selection, absence, path, real CLI environment and planner mismatch cases; the two `check.unit_cache` compilation caches now bind selected actual producer actions/Cargo registration and opt into producer-manifest content verification before reported hits are consumed; real Cargo rebuild and retained-content recovery regressions remain local evidence; see [cache key contract](ci-cache.md); bootstrap/check/release explicitly configure Rust incremental and release collection checks its reported value; opt-in provider projects pinned restore/save actions for explicitly registered main check/release consumers; native action observations retain unconfirmed save outcomes; optional declared GitHub queries preserve raw bounded process evidence, distinguish exact key/ref availability from action provenance, and leave failed/ambiguous observations unconfirmed; no pending saves means no query; declared startup caches may save after later work failure; each cache has at most one declared saving job, with conflicting writers rejected before projection; [bounded native acceptance](ci-cache.md#bounded-native-acceptance) records both opted entries' cold/save, verified compatible-source rebuild, healthy exact hit and incompatible-environment partition/rebuild with original canonical work/collection | native unusable-content recovery, persistent repair and repaired exact hit remain unexecuted; the current opted PR-body activation transport has source/local validation only after historical Variables GET/list HTTP 403; concurrent producers/reruns, complete backend lifecycle protection and dependency/current judge/bootstrap/per-project input closure remain open; broaden native acceptance beyond the registered consumer |
+| 4.2 CI caches and incremental builds | partial: explicit keys, producer/content binding and bounded native cold/save, compatible-source rebuild, healthy exact hit and incompatible-environment partition/rebuild for both opted-in compilation caches | Independent Rust `chrono-cache plan` consumes explicit consumer/input/artifact registrations, separates source and compatibility keys; explicit JSON pointers bind selected configuration values with whole-file provenance outside keys, and host adoption regressions distinguish unit metadata from build parameters; v2 resolves consumer operation references before probes, retaining producer keys across consumer-only changes; references existing host output registrations and rejects selected output overlap or evidence/source caching; dedicated Rust invalidation, selection, absence, path, real CLI environment and planner mismatch cases; the two `check.unit_cache` compilation caches now bind selected actual producer actions/Cargo registration and opt into producer-manifest content verification before reported hits are consumed; real Cargo rebuild and retained-content recovery regressions remain local evidence; see [cache key contract](ci-cache.md); bootstrap/check/release explicitly configure Rust incremental and release collection checks its reported value; opt-in provider projects pinned restore/save actions for explicitly registered main check/release consumers; native action observations retain unconfirmed save outcomes; optional declared GitHub queries preserve raw bounded process evidence, distinguish exact key/ref availability from action provenance, and leave failed/ambiguous observations unconfirmed; no pending saves means no query; declared startup caches may save after later work failure; each cache has at most one declared saving job, with conflicting writers rejected before projection; [bounded native acceptance](ci-cache.md#bounded-native-acceptance) records both opted entries' cold/save, verified compatible-source rebuild, healthy exact hit and incompatible-environment partition/rebuild with original canonical work/collection | historical C1 partially observed unusable-content recovery/rebuild and replacement caches for both entries; repaired original-domain healthy exact hit remains unmet after rustup identity drift and latest collection HTTP 502; optional Variables/PR-body controls and dedicated fixture are now retired; concurrent producers/reruns, complete backend lifecycle protection and dependency/current judge/bootstrap/per-project input closure remain open; broaden native acceptance beyond the registered consumer |
 | 5 DELTA graph | partial | filemap typed union/records/closure and CI adapter; F all tests, P `actual_runner_registration_filemap_*`; SPEC §5.1 pins two-state locality and Theorem 6's conditional node-set consequence (merged trureturing PR #10868), reusing frozen ConsequenceClosure declarations, with prior exact-application compilation and the old execution-edge counterexample | complete host input closure and native activation; Rust refinement is unproved and reached-node equality does not preserve typed test selection |
 | 5.2 autonomous dependency-DAG structural optimization | partial: FILEMAP emits deterministic structural diagnostics and self-validates them | `judge-filemap` `structure` output and F regressions expose typed SCCs, original cycle witnesses, condensed-DAG depth, cross-owner edges, operation precedence cycles and explicit resource/output conflicts; the producer checks its own report and returns `E_SELF_DIAGNOSTIC` for an internal inconsistency; no edges are inferred | comparable before/after mappings and vectors; autonomous real refactoring, pairing/operation/CI migration, same-command checks and verified delivery; language-independent host/example acceptance |
 | 6 evolution/removal | partial | W actual replacement, joint retirement, alias repair and candidate migration certification; registration workflow v3 selects explicit endpoint versions, inputs consumer certifies a host config v1→v2 decoder with original snapshots | further host converters and full host activation |
@@ -84,7 +84,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 42 cold and exact-hit CI cache | implemented bounded: planner/report executable identity plus live `cache` consumer cold miss/save and exact-hit restore; the original canonical bootstrap and check run in both states and the transport report retains the native observations | broaden to other registered consumers and complete backend/lifecycle acceptance |
 | 43 changed-source incremental cache | pending: SPEC §4.2 contract only | reuse compatible per-project fingerprints/dependencies/incremental data with the same build entry; bind candidate judge outputs |
 | 44 incompatible compilation inputs | pending: SPEC §4.2 contract only | partition incompatible toolchain/target/profile/features/input domains and rebuild before use |
-| 45 missing/corrupt/unavailable cache | partial: explicit restore recovery, opted producer-manifest verification and bounded pre-save native acceptance support | real filesystem/CLI regressions discard unusable registered outputs and retain original outcomes, manifests and removal evidence; the existing `unit_cache` path can explicitly select a registered manifest-removal fixture after seal and before real native save; local Rust tests cover binding rejection, selected scopes and subsequent ordinary recovery; actual native unusable archived-content acceptance remains pending; see [finite caller sequence](ci-cache.md#bounded-native-unusable-content-fixture) |
+| 45 missing/corrupt/unavailable cache | partial: explicit restore recovery and opted producer-manifest verification; optional remote fixture retired | real filesystem/CLI regressions retain successful/invalid/missing-content and failed-producer boundaries, discard unusable registered outputs and preserve original failures; ordinary `unit_cache` build/seal/save remains; C1 partial historical recovery/rebuild/replacement observations do not establish repaired original-domain healthy exact hit; see [retirement and remaining native obligations](ci-cache.md#retired-remote-acceptance-controls) |
 | 46 concurrent jobs/reruns and later test failure | pending: SPEC §4.2 contract only | isolated live outputs, joined cache producers and truthful build/test/evidence states |
 | 47 same-language production/test pair | partial: v2 declarations and affected reciprocal-pair checks; registered Rust helpers for CI and lifecycle fixtures | complete host migration and real registered execution; declarations alone do not establish source language |
 | 48 declared or observed mismatched/embedded cross-language test logic | partial: projects rejects declared language mismatch; Rust regressions cover both projects and scripts | remaining foreign-language test logic migration and observed-entry correspondence; outer-language wrappers do not establish compliance; no claim to detect arbitrary hidden logic |
@@ -858,17 +858,15 @@ obligations for that one internal chain; historical consumers keep their scope.
 Strict judge-v1 remains unchanged. Optional versioned runner report extensions
 preserve historical data decoding, without granting an absent child a result.
 
-**Product and host policy change:** runner transport/report diagnostics change;
-cache adds selected producer binding, opted inventories and one bounded native
-acceptance fixture; registration owns internal causal admission. The host opts
-only its two existing unit-cache compilation entries and one runner startup
-chain, adds the focused runner operation and exact FILEMAP edges, and regenerates
-CI from its owner. Old unsealed caches cannot seed the new domain. The fixture
-now uses an exact run/attempt variable name and the actual checkout source role,
-keeping PR event merge SHA separate; original Rust failures expose the prior
-shared-variable projection and merge/head mismatch. No native outcome is filled
-from those local fixtures. The current native handoff, source pair and temporary
-producer-input variation are documented by the [cache owner](ci-cache.md#native-source-pair-and-producer-input-variation).
+**Historical product and host policy change:** runner transport/report diagnostics,
+selected cache producer binding/content inventories and internal causal admission
+were combined with a bounded native acceptance fixture. The two existing
+unit-cache compilation entries and one runner startup chain remain adopted.
+The optional manifest-removal fixture and both remote activation transports are
+now retired under the explicit user correction below. Earlier exact run/attempt,
+checkout-source and merge/head regression evidence remains attached to its
+retained commits; it is not a current activation recipe. Ordinary content
+validation/recovery and real build/seal/save consumers remain current.
 
 Candidate bootstrap and committed-clean DELTA check originals are supplied in
 the implementation handoff, including any actual failures and repaired results.
@@ -883,13 +881,35 @@ passed 27 result rows. Production and scenario runner streams each retain 166
 passing tests and one existing ignored test, including named prelaunch cases;
 startup imports/install bindings match clean source and actual producer attempts.
 Ordinary revert `c72c141` restores production `72b1d08` exactly, preserving the
-scenario history. Native unusable contents, recovery, persistent repair and
-repaired exact hit remain unexecuted: repository Variables GET/list returned
-HTTP 403 before activation ownership/value could be established. No variable or
-cache was mutated in that historical investigation; the access gap does not waive the obligation. The current host now registers the optional `pull-request-body/v1` read transport at the existing CI owner. It forwards the same strict activation to the existing fixture, with only `unit_cache` granted PR read access. No activation block is present in source; live transport, native recovery/persistent repair/repaired exact and independent review remain unverified. Linux process
-regressions, independent review and actual landing remain required.
+scenario history. Initial Variables GET/list HTTP 403 prevented activation in
+that historical investigation. Later C1 partially observed bad-content
+save/restore/rejection/rebuild and replacement caches for both entries; repaired
+original-domain healthy exact hit was not achieved because rustup identity
+changed, and latest collection returned HTTP 502. Neither retirement nor these
+partial observations establish complete native acceptance. Independent review,
+Linux verification and actual landing remain required.
 Public/all-consumer adoption, complete input closure, formal refinement,
 full-host activation, full SPEC acceptance and parity remain pending. New
 third-party dependencies: none. Local build/test windows are reported separately
 from compilation, native runtime, transfer/storage and total lifecycle cost;
 those complete totals and incremental bytes remain unknown.
+
+## User-directed remote activation retirement and principles
+
+**Product and host policy change:** optional cache activation via repository
+Variables or live PR body, the manifest-removal CLI/configuration/fixture and
+exclusive provider/test/FILEMAP declarations are retired. No replacement transport
+or extra permission is introduced. Ordinary cache plan/restore/content validation,
+recovery, candidate build/tests, producer seal/save and original outcome reports
+remain the real consumers. Product and adopted host bilingual instruction leaves
+now require independent authorized progress after local failure, existing
+permissions only and proportional consumers/IO/processes/DELTA verification.
+Generated guides remain projections, without claiming enforcement or parity.
+
+Historical sources and evidence retain their exact scope: original Variables
+HTTP 403; later C1 bad-content save/restore/rejection/rebuild and replacement
+caches for both; no repaired original-domain healthy exact hit because selected
+rustup identity changed, with latest collection HTTP 502. Retirement does not
+establish native acceptance, landing, full input closure, parity or full SPEC
+completion. Native runtime/storage/lifecycle savings are unknown; applicable
+candidate checks and command timing belong to retained handoff reports.

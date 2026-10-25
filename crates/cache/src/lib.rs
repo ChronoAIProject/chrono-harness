@@ -1,5 +1,4 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
-mod acceptance;
 mod backend;
 mod content;
 mod probe;
@@ -52,9 +51,6 @@ pub struct Config {
     pub recover_failed_restores: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub recover_unconfirmed_restores: bool,
-    /// Explicit, inactive-by-default native acceptance scopes. Never part of build identity.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub acceptance_fixtures: BTreeMap<String, acceptance::Fixture>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -188,7 +184,6 @@ fn path(root: &Path, value: &str) -> Result<PathBuf, String> {
 }
 
 pub fn validate(c: &Config) -> Result<(), String> {
-    acceptance::validate(c)?;
     if ![SCHEMA, CONSUMER_SCHEMA].contains(&c.schema.as_str()) || c.caches.is_empty() {
         return Err("E_CACHE_CONFIG: expected nonempty chrono-cache/v1 or v2 registration".into());
     }
@@ -804,9 +799,6 @@ fn prepare_with_inputs(
 }
 
 pub fn dispatch(args: &[String]) -> Result<String, String> {
-    if args.first().map(String::as_str) == Some("acceptance-fixture") {
-        return acceptance::dispatch(&args[1..]);
-    }
     if args.first().map(String::as_str) == Some("seal") {
         return content::dispatch(&args[1..]);
     }

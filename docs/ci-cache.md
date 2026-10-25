@@ -37,7 +37,7 @@ on macos-26, Rust/Cargo 1.95.0, under PR #207's `refs/pull/207/merge` scope:
 | Compatible source change | [39690377913/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/1), production `72b1d08`: equal compatibility prefixes, distinct source suffixes, seed-key restores and matched producer inventories, retained incremental data and current registered rebuild/tests passed |
 | Healthy exact hit | [39690377913/2](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/2): both primary keys matched, inventories verified and original canonical work/collection passed; detector/startup retain their original attempt 1 identities |
 | Incompatible producer environment | [39695762671/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671/attempts/1), scenario `c515cd05`: both domains changed, neither restore matched a key, and original optimized Cargo builds/tests, seals and collection passed |
-| Unusable contents, recovery, persistent repair and repaired exact hit | Not executed: repository Variables GET/list returned HTTP 403, so activation ownership/value could not be established; no variable or cache was mutated |
+| Unusable contents, recovery, persistent repair and repaired exact hit | Initial observation: Variables GET/list HTTP 403 prevented activation. Later C1 partially observed unusable payload recovery/rebuild and replacement caches; repaired original-domain healthy exact hit remains unmet (see retirement below). |
 
 In the incompatible scenario the only changed selected observation was
 `check.environment`; all other selected runtime/probe/absence observations and
@@ -65,8 +65,8 @@ complete lifecycle costs. Transfer/storage and total incremental costs remain
 unknown. An ordinary revert `c72c141` restores the exact production `72b1d08`
 tree and removes both temporary optimization settings while preserving the
 scenario commit. Unusable-content acceptance remains required; the access gap
-does not waive it. The subsequent explicitly authorized continuation adopts the
-PR-body transport documented below; its native behavior remains unverified. Other consumers,
+does not waive it. The optional remote activation continuation has since been retired as documented below;
+its partial historical observations do not establish a repaired exact hit. Other consumers,
 concurrency, linked ownership and complete compiler/SDK/input closure remain open.
 
 The planner prepares identities; the GitHub provider projects pinned native
@@ -460,226 +460,39 @@ and a source-bound artifact is not proof of complete build input provenance.
 
 发行验证的 `chrono-cache` 资产在 Cargo test destination 被消费；bootstrap 安装的运输 executable 保持归 bootstrap。发行配方不再将资产 staging 到同一个 bin 路径。Python release integration 回归覆盖真实 CLI 的 plan／recover／staging／report 与 inode、摘要保留；这个本地证据不证明原生缓存后端或外围 workflow 成功。详见[发布所有者](release-ci.md)。
 
-## Bounded native unusable-content fixture
+## Retired remote acceptance controls
 
-**Product and host policy change:** the cache CLI now supports only
-`acceptance-fixture` with `remove-producer-manifest/v1`; the provider can opt one
-existing saving consumer into a named scope. Previously no registered operation
-could create an unusable archived payload. The host opts in only
-`persistent_cache.jobs.unit_cache.acceptance_fixture = native-unusable`, matching
-`cache.json.acceptance_fixtures.native-unusable` and its `check.cache` /
-`check.cache-tests` scopes. The operation removes only producer manifests after
-the original successful work and seal, before the existing native saves. It adds
-no job, build recipe or archive transport. The host classifies the selected step
-as `cache-verification`. Costs: ordinary consumers run no fixture process;
-selected execution revalidates plan inputs, reads manifest preimages and writes
-evidence for selected artifacts. Incremental byte cost is unmeasured. End-to-end native runtime, transfer and storage cost remain
-unknown. Rust behavior and provider tests plus DELTA-selected canonical validation
-are required; local tests do not establish native archive acceptance.
+**Product and host policy change:** the optional native manifest-removal fixture,
+its CLI/configuration and provider registration, repository Variables activation,
+and live PR-body reader have been removed. The provider no longer adds
+`pull-requests: read` for activation or reads PR metadata. No replacement
+activation transport, variable management, remote cache deletion or additional
+permission is required. Retired configuration fields fail normal strict decoding;
+they are not silently accepted as successful activation.
 
-**Product and host policy change (native continuation):** providers may register
-`acceptance_source: {"method":"pull-request-body/v1","program":"gh",
-"reader":".chrono-harness/bin/chrono-ci"}` beside
-`acceptance_fixture`. This host selects it only for `unit_cache`. The generated
-job has explicit `contents: read`, `actions: read`, and `pull-requests: read`;
-other jobs retain their original permissions and steps. This is a new transport
-for the same existing fixture, not a change to its CLI activation schema or
-native acceptance obligations. Providers omitting the source preserve the
-per-run/attempt repository Variables transport exactly.
+The existing `check.unit_cache` consumers still plan and restore their two
+registered compilation archives, validate `producer-manifest/v1` contents, discard
+unusable host outputs through ordinary recovery, execute the original candidate
+build/tests, seal successful producer outputs and save through the existing
+native cache actions. Required producer/seal outcomes still gate saving. Ordinary
+backend observation retains its existing necessary scope and original failures.
+Other registered build/release cache consumers retain their existing behavior.
 
-The current host reads the **live** PR body with one bounded, read-only `gh api`
-step after successful work/seal, only when the **original event** PR body contains
-`<!-- chrono-cache-acceptance-source/v1 -->`. This explicit opt-in is only a
-transport read request; it never authorizes manifest removal. Ordinary PRs
-without that event marker and push events run no reader/API/fixture and keep their
-original save conditions. The event snapshot is retained across a rerun; adding
-the marker only after the event cannot enroll that old run. This permits selecting an already observed run's
-next attempt without Variables permissions or a source-SHA self reference.
-The caller owns PR metadata and must retain/restore its original body; no fixture
-code writes PR metadata. Only one dedicated block is recognized:
+Historical native evidence remains attached to its exact source/run/attempt.
+Variables GET/list HTTP 403 was a real historical failure. Later bounded C1
+observations recorded unusable payload save/restore/rejection, rebuild and
+replacement caches for both entries, but a healthy exact hit in the original
+compatibility domain was not achieved: the selected rustup identity changed;
+the latest collection returned HTTP 502. Those observations are partial, and
+this deletion neither reruns nor completes them. Original records, streams,
+commits and retained evidence remain under their existing custodian. The former
+fixture and its finite caller sequence remain reproducible from retained source
+`f52442addfa3079f644cc7be59809a4ca6e756d5`; they are not current instructions.
 
-```text
-<!-- chrono-cache-acceptance/v1
-<the JSON activation below>
--->
-```
-
-No block or a block for another exact run/attempt produces an empty activation
-and skips the fixture. Duplicate/malformed blocks or a selected activation with
-mismatched native source/ref, PR identity, fixture, consumer or plan keys fail
-before mutation and prevent native saves. Live PR head drift also fails a
-selected activation. Successful selection forwards the original strict JSON bytes through GitHub's
-multiline output protocol to
-`acceptance-fixture`; it still validates every preimage and all original
-work/seal/save prerequisites. The raw API response stays in the existing plan
-and upload directory, with original step stdout/stderr and exit preserved by CI.
-API/reader failure blocks saves rather than treating an unavailable input as empty.
-Push events do not read PR metadata or run this fixture. Nothing is activated in
-production source: the caller must explicitly supply the bounded block.
-
-Registered inputs are the exact `repos/<GITHUB_REPOSITORY>/pulls/<event PR number>`
-response, current event source/ref/run/attempt, existing plan and fixture; the
-producer is the selected API step plus `chrono-ci cache-activation`, consumed only
-by the opted fixture and its save guards. The reader accepts at most 1 MiB and
-retains the original response. The host classifies the new step as
-`cache-verification`; one API request, a reader process and a one-minute step
-bound are added per successful PR job whose event explicitly requests this transport. No marker means no fixture process.
-CPU, transfer, retained bytes and native latency are unknown until measured.
-Response/evidence retention follows the existing CI artifact/plan policy; this
-transport grants no new cache ownership or deletion authority.
-
-The activation value remains strict JSON, for example:
-
-```json
-{
-  "schema": "chrono-cache-acceptance/v1",
-  "fixture": "native-unusable",
-  "consumer": "check.unit_cache",
-  "keys": {
-    "check.cache": "<exact native plan key for check.cache>",
-    "check.cache-tests": "<exact native plan key for check.cache-tests>"
-  },
-  "git_ref": "refs/pull/<PR number>/merge",
-  "run_id": "<R observed in attempt 1>",
-  "run_attempt": "2",
-  "source_commit": "<checked-out PR head SHA observed in attempt 1>"
-}
-```
-
-`keys` is a nonempty subset of the declared two caches; use both for the bounded
-acceptance obligation. The operation validates exact current source/domain keys,
-consumer, fixture and native run/ref/attempt identity. `source_commit` binds
-`CHRONO_CACHE_SOURCE_COMMIT`, supplied by the same event source selection as
-checkout (`github.event.pull_request.head.sha || github.event.after || github.sha`
-on this host). PR `GITHUB_SHA` is the event merge SHA and is retained separately,
-without requiring it to equal the checked-out head. The actual successful
-canonical request/report and startup import must also bind that head, and the
-caller verifies this original evidence. The fixture records both SHA roles,
-`GITHUB_RUN_ID` and executable identity. It rejects missing native identity, unknown
-fields/scopes, changed preimages, unsuccessful original work/seal outcomes,
-exact-key restore hits and repeated/unfinished intents. It preflights all selected
-artifacts before removing any manifest. A selected fixture failure fails its step
-and prevents all native saves in this job. Other jobs do not subscribe to this transport. An empty selected activation
-skips the fixture step entirely.
-
-The fixture registration and activation do not enter cache compatibility or
-source identity. Product/source edits still affect keys through the existing
-registered source closure. The opted `producer-manifest/v1` compatibility domain,
-producer action argv, restore prefix, seal and original canonical check stay in
-force. Do not place temporary scenario sources or activation values in merged
-production policy, and do not calculate native compatibility with a different
-local toolchain/SDK environment.
-
-For an authorized caller, one finite sequence using the existing native workflow
-is:
-
-1. Before the candidate's native push/PR event, retain the original PR body and
-   add only the transport opt-in marker above, without an activation block. On
-   the committed candidate, run the ordinary selected `unit_cache` job (R/1). Keep its native plan and both original
-   restore/save outcomes. Use the exact two keys from that native plan; keep
-   source, producer inputs and workflow ref fixed through the next attempts.
-2. Before attempt 2, ensure both requested keys can be saved: if attempt 1 saved
-   exact entries, retain their evidence, then revalidate each caller-owned entry's
-   ID, exact key/ref, ownership and lack of active consumers before deleting only
-   those entries under the caller's cache authority. No bulk deletion. If this
-   prerequisite cannot be established, stop this scenario without claiming it.
-   Alternatively an already observed native plan with no exact entry supplies
-   the same prerequisite. Backend listing alone does not prove archive health.
-3. Select R's actual next attempt from the original run/jobs API, not an assumed
-   counter. For next attempt 2, preserve the original PR body, add the one dedicated block
-   containing that exact activation JSON, then use
-   `gh run rerun <R> --job <observed unit_cache job database ID>`. Revalidate
-   run/ref/head, selected job identity and both exact keys immediately before
-   mutation. The block contains those native identities and attempt `2` above.
-   Use the existing job rerun route; a full workflow rerun is not required.
-   If GitHub reports another next attempt, use that actual value in both places.
-   No standalone workflow_dispatch exists in this host. The selected current producers
-   remain `build.cache` / `test.cache-tests` via
-   `.chrono-harness/bin/chrono-harness check --unit cache`. Require successful
-   original work, seal, fixture and actual native saves. Retain the entire
-   `.chrono-harness/state/` artifact, step logs and original GitHub job/run/attempt
-   responses. `acceptance-intent.json` and `acceptance.json` sit beside the plan;
-   they reference original activation, steps, seal, manifest preimages, requested
-   keys, native identities and removal outcomes. Retain the originals referenced
-   by those records, not just the pointers. A successful fixture or save action
-   alone does not prove that the backend stored the deliberately unusable bytes.
-4. Restore the original PR body, removing only the scenario activation block.
-   Verify cleanup and absence of an activation for the next attempt, then rerun
-   only the observed current `unit_cache` job of R for ordinary attempt 3.
-   Keep the same checked-out head, keys/ref
-   and use the ordinary native restore -> verify/recover -> original canonical
-   work -> seal -> report path. For **each** cache, require an original successful
-   native restore with the requested matched key, verification `unusable`,
-   recovery `discarded` with actual artifact removal, and successful current
-   rebuild/check. The transport report must preserve `unusable-content`, the
-   original exact key status and `W_CACHE_CONTENT_UNUSABLE`. Keep bad-content
-   verification originals, native steps, recovery/removal results, rebuilt seal,
-   original business streams/responses and collection result. These observations
-   establish unusable archived content only when the later native restore and
-   its retained verification actually demonstrate it. They do not establish
-   extraction failure or backend outage. Unavailable/missing originals remain
-   unresolved.
-5. The exact-hit save guard skips repair after recovery. After preserving the
-   acceptance evidence and all consumers finish, the caller may revalidate and
-   delete only the two owned deliberately bad entries, then use ordinary attempt
-   4 to rebuild/seal/save. A separate ordinary attempt 5 must verify healthy exact
-   hits if persistent repair is claimed. Keep each attempt's selected activation absent. The caller owns
-   this remote lifecycle and evidence retention/cleanup, following existing
-   finite artifact retention; the fixture does not mutate backend entries.
-
-This support leaves actual native execution, concurrency, other consumers,
-public adoption and complete SPEC/input closure pending. It is not a general
-fault-injection service and never manufactures native action observations.
-
-
-## Native source pair and producer-input variation
-
-The actual implementation seed is `98615238ba130b5a7306cd162204791f4ba305e9`;
-its successor is the committed combined candidate carrying the bounded fixture,
-runner diagnostics and internal consumption contract. These states have unchanged
-selected compatibility declarations and selected file/JSON build values for
-`check.cache` and `check.cache-tests`; both registered source closures change.
-A fixed-byte source audit belongs to the candidate handoff. This is conditional
-source eligibility, not a native domain observation: native compiler/Cargo,
-platform, linker/SDK, home configuration and all other selected observations must
-also match. The seed already uses `producer-manifest/v1`; older unsealed caches
-cannot seed this experiment.
-
-Use the existing PR-to-dev path for a clean native seed checkout, retain its two
-successful producers, complete seals, exact saved keys, backend observations and
-original artifact/run/attempt records, then advance that same PR to the combined
-successor. The PR merge ref is the cache scope; keeping the same PR permits the
-existing same-domain prefix to select seed archives. Before claiming compatible
-reuse, compare both actual native plans: compatibility prefixes equal, source
-suffixes different for BOTH caches, matched restore keys equal the retained seed
-keys, original producer manifests verify, and the unchanged canonical cache unit
-actually builds/tests the successor. Do not widen a prefix or execute any cached
-old judge to adjudicate the successor. If native inputs drift or an exact
-successor entry wins, retain observations and report the unmet prerequisite.
-
-The predeclared output distinction is existing implementation behavior: the seed
-has no `acceptance-fixture` dispatch or native-acceptance Rust cases; the successor
-binary dispatches it (without activation, it rejects the missing option rather
-than treating it as an unknown action) and the current test output includes
-`native_acceptance_binds_checkout_head_separately_from_event_merge_sha` and the
-other fixture cases. Check actual newly built cache executable identity and
-successful current tests after restoration; no old binary is executed in the
-successor. Tests and diagnostics show current output, not measured compiler
-incremental speedup. Native logs must separately show retained incremental data,
-actual registered Cargo acceptance/rebuild and candidate output identities.
-
-For the incompatible-input scenario, the caller prepares a temporary owner
-patch adding `CARGO_PROFILE_DEV_OPT_LEVEL=1` and
-`CARGO_PROFILE_TEST_OPT_LEVEL=1` as string values at
-`.chrono-harness/ci/check.json#/policy/environment`. This is the existing actual
-Cargo execution environment and both caches' selected compatibility input;
-no provider environment field or alternate build recipe is needed. Preserve all
-existing values, especially `CARGO_INCREMENTAL=1`, and Rust `1.95.0` in the bootstrap
-owners. Bootstrap and check the committed scenario through the registered entry;
-policy-only edits do not require an independent YAML edit. Do not change `build.cache`, `test.cache-tests`,
-`check --unit cache` or restore prefixes. Both cache domains must differ because
-they select `/policy/environment`, and the actual original Cargo processes must
-receive the changed profile settings. The caller owns scenario commits after
-observing the earlier native results; no temporary scenario policy belongs in the
-final production tree. Revert only the scenario's exact owner changes when returning to ordinary inputs. Native execution, storage and total
-cost are unknown until measured.
+Costs: ordinary execution needs no activation process/API request. Deleting the
+optional layer removes its reader, fixture, response/intent evidence IO and
+exclusive tests; native time, transfer, storage and total lifecycle savings are
+unmeasured. Existing same-language content/recovery, invalid-input and provider
+regressions and the registered DELTA-selected canonical check remain required.
+Native acceptance, concurrency, other-consumer adoption, full input closure,
+parity and actual delivery remain separate uncompleted obligations.

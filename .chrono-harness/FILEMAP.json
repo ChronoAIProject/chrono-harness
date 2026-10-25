@@ -8,13 +8,6 @@
       "peak_rss_bytes": null,
       "io_bytes": null,
       "basis": "unknown; not measured"
-    },
-    "native-activation-reader": {
-      "cpu_ms": null,
-      "wall_ms": null,
-      "peak_rss_bytes": null,
-      "io_bytes": null,
-      "basis": "unknown; pull-request-body/v1 adds one read-only PR API request and Rust reader per successful PR job explicitly enrolled by its original event marker; ordinary jobs run no reader/API/fixture; reader input <=1 MiB, native step bound 60 seconds; fixture and cache costs retain existing owners"
     }
   },
   "files": [
@@ -1187,7 +1180,7 @@
       "path": ".chrono-harness/ci/units.json",
       "owner": "repository",
       "surface": "membership",
-      "cost": "native-activation-reader",
+      "cost": "unmeasured",
       "edges": [
         {
           "kind": "test-execution",
@@ -1275,7 +1268,7 @@
       "path": ".github/workflows/chrono-ci.yml",
       "owner": "repository",
       "surface": "product",
-      "cost": "native-activation-reader",
+      "cost": "unmeasured",
       "edges": [
         {
           "kind": "test-execution",
@@ -5449,7 +5442,7 @@
       "path": "crates/ci/src/cache.rs",
       "owner": "ci",
       "surface": "product",
-      "cost": "native-activation-reader",
+      "cost": "unmeasured",
       "edges": [
         {
           "kind": "compile",
@@ -5465,7 +5458,7 @@
       "path": "crates/ci-tests/tests/cache.rs",
       "owner": "ci-tests",
       "surface": "test",
-      "cost": "native-activation-reader",
+      "cost": "unmeasured",
       "edges": [
         {
           "kind": "compile",
@@ -6066,22 +6059,6 @@
       ]
     },
     {
-      "path": "crates/cache/src/acceptance.rs",
-      "owner": "cache",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "compile",
-          "to": "project:cache"
-        },
-        {
-          "kind": "judge-trigger",
-          "to": "judge:filemap"
-        }
-      ]
-    },
-    {
       "path": "crates/judge-registration/src/consumption.rs",
       "owner": "judge-registration",
       "surface": "product",
@@ -6102,22 +6079,6 @@
         {
           "kind": "compile",
           "to": "project:judge-registration-tests"
-        }
-      ]
-    },
-    {
-      "path": "crates/ci-tests/fixtures/cache-activation-pr.json",
-      "owner": "ci-tests",
-      "surface": "test",
-      "cost": "native-activation-reader",
-      "edges": [
-        {
-          "kind": "runtime-input",
-          "to": "project:ci-tests"
-        },
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
         }
       ]
     }
