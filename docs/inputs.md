@@ -360,3 +360,10 @@ consumer evidence must identify their actual source separately. Missing historic
 endpoint originals, complete input closure/parity, other guarded projects, batch
 review and actual delivery remain open. Acquisition/build/check windows and
 retained bytes must be measured separately; total cost and savings are unknown.
+
+The registered macOS native acquisition uses the same enclosing-root treatment
+for its already declared Xcode 26.6 distribution, retains `xcodebuild -version`,
+and publishes the distinct `guard-inputs/xcode-contents.json` original. It keeps
+all 34 fetch/metadata pairs, 14 installation targets, directory entry bounds and
+failure-before-installation behavior. The native full guard must explicitly bind
+that new original/root before adoption; this acquisition does not activate it.

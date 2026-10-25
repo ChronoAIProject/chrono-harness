@@ -337,6 +337,15 @@
       ],
       "timeout_seconds": 120,
       "output_limit_bytes": 1048576
+    },
+    {
+      "id": "xcode.distribution",
+      "program": "/usr/bin/xcodebuild",
+      "argv": [
+        "-version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
     }
   ],
   "registered_operations": {
@@ -689,12 +698,13 @@
     {
       "id": "developer",
       "location": {
-        "stdout": "developer.root"
+        "stdout": "developer.root",
+        "suffix": ".."
       },
       "max_entries": 200000,
       "manifest": {
-        "path": ".chrono-harness/state/native/macos/guard-inputs/developer.json",
-        "root": "/Applications/Xcode_26.6.app/Contents/Developer"
+        "path": ".chrono-harness/state/native/macos/guard-inputs/xcode-contents.json",
+        "root": "/Applications/Xcode_26.6.app/Contents"
       }
     }
   ],
