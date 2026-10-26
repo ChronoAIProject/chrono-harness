@@ -137,6 +137,13 @@ impl BirthGate {
     }
 }
 
+// Temporary C2 causal instrumentation; removed after the bounded experiment.
+fn trace_store(directory: &Path, phase: &str) {
+    eprintln!("C2_STORE pid={} thread={:?} name={:?} ns={} directory={} phase={phase}", std::process::id(), std::thread::current().id(), std::thread::current().name(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(), directory.display());
+}
+impl Drop for Store {
+    fn drop(&mut self) { trace_store(&self.directory, "drop"); }
+}
 impl Store {
     fn open(directory: &Path, producer: &str, create: bool) -> Result<Self, String> {
         Self::open_observed(directory, producer, create, |_| {})
@@ -148,6 +155,7 @@ impl Store {
         create: bool,
         mut observer: impl FnMut(&str),
     ) -> Result<Self, String> {
+        trace_store(directory, "open");
         observer("store-open-entered");
         absolute(directory, false)?;
         if producer.is_empty() {
@@ -196,6 +204,7 @@ impl Store {
             || observer("lease-created-before-lock"),
         )?
         .ok_or("producer registry busy")?;
+        trace_store(directory, "lease-acquired");
         observer("registry-lease-acquired");
         drop(birth);
         observer("registry-read-entered");
@@ -241,6 +250,7 @@ impl Store {
                 return Err("invalid exact producer object registration".into());
             }
         }
+        trace_store(directory, "read-returned");
         observer("store-open-returned");
         Ok(Self {
             directory: directory.into(),
@@ -329,12 +339,14 @@ impl Store {
     }
 
     fn save(&self) -> Result<(), String> {
+        trace_store(&self.directory, "save-entered");
         self.lease.stable()?;
         write_json(
             &no_symlink_parents(&self.directory, "objects.json")?,
             &self.registry,
             false,
         )?;
+        trace_store(&self.directory, "save-returned");
         Ok(())
     }
 

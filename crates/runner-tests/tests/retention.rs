@@ -627,7 +627,12 @@ fn no_finish_preserves_live_producer_then_recovers_unknown_partial_publication()
     // Simulate the kernel capability closing without any finish/completion callback.
     drop(publication);
     let r = inventory(h.path()).maintain().unwrap();
-    assert_eq!(r["remaining_outputs"], 0);
+    if r["remaining_outputs"] != 0 {
+        let original = ledger(h.path());
+        let path = h.keep();
+        panic!("released partial publication was not retired: {r}; inventory: {original}; retained fixture: {}", path.display());
+    }
+    assert_eq!(r["remaining_outputs"], 0, "{r}");
     assert_eq!(
         ledger(h.path())["summaries"][0]["original_outcome"]["completion"],
         "not-established"
