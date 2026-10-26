@@ -374,8 +374,9 @@ pub fn validate_invocation_observation(
     }
     Ok(())
 }
-/// Reject duplicate object members before typed decoding, including opaque policy data.
-pub(crate) fn strict_json_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Value, D::Error> {
+/// Deserialize an opaque JSON value while rejecting duplicate members recursively.
+/// Typed consumers can apply this at dynamic fields without a second whole-document tree.
+pub fn strict_json_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Value, D::Error> {
     struct Strict;
     impl<'de> serde::de::Visitor<'de> for Strict {
         type Value = Value;

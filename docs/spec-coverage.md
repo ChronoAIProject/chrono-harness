@@ -879,7 +879,10 @@ distinct claims; actual evidence must establish each. Total costs remain unknown
 
 Producer admission now uses one excluded registry snapshot, enters physical birth
 only for an absent registry, and preserves missing/replaced expected lease
-identities. Retention diagnostics distinguish actual root protection reasons.
+identities. Registry decoding constructs typed objects directly and retains strict
+duplicate/unknown-field rejection at dynamic maps. Compact registry replacement
+uses the same durable publication; historical pretty JSON remains readable.
+Retention diagnostics distinguish actual root protection reasons.
 Immediate creation reuses its same admitted ledger and lease through the existing
 durable reservation/materialization writes, avoiding a duplicate full load without
 changing standalone plan, completion, recovery or acquisition bounds.

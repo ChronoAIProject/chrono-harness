@@ -41,8 +41,11 @@ struct Object {
     intent: Receipt,
     sealed: bool,
     publication: Option<Receipt>,
+    #[serde(deserialize_with = "strict_map")]
     generated: BTreeMap<String, String>,
+    #[serde(deserialize_with = "strict_map")]
     evidence: BTreeMap<String, Value>,
+    #[serde(deserialize_with = "strict_map")]
     consumers: BTreeMap<String, Reference>,
     retention_reason: String,
     disposed: bool,
@@ -50,6 +53,7 @@ struct Object {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cache_lease: Option<CacheLease>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(deserialize_with = "strict_map")]
     bodies: BTreeMap<String, body::Body>,
 }
 
@@ -61,6 +65,16 @@ struct Registry {
     directory_id: String,
     lease_id: String,
     objects: Vec<Object>,
+}
+
+// Keep typed registry decoding strict at each dynamic map without constructing
+// a second generic tree for the complete object inventory.
+fn strict_map<'de, D, T>(d: D) -> Result<BTreeMap<String, T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    serde_json::from_value(chrono_harness::strict_json_value(d)?).map_err(serde::de::Error::custom)
 }
 
 struct Store {
@@ -137,28 +151,6 @@ impl BirthGate {
     }
 }
 
-// Temporary C2 causal instrumentation; removed after the bounded experiment.
-fn trace_store(directory: &Path, phase: &str) {
-    use std::io::Write;
-    writeln!(
-        std::io::stderr(),
-        "C2_STORE pid={} thread={:?} name={:?} ns={} directory={} phase={phase}",
-        std::process::id(),
-        std::thread::current().id(),
-        std::thread::current().name(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        directory.display()
-    )
-    .unwrap();
-}
-impl Drop for Store {
-    fn drop(&mut self) {
-        trace_store(&self.directory, "drop");
-    }
-}
 impl Store {
     fn open(directory: &Path, producer: &str, create: bool) -> Result<Self, String> {
         Self::open_observed(directory, producer, create, |_| {})
@@ -170,7 +162,6 @@ impl Store {
         create: bool,
         mut observer: impl FnMut(&str),
     ) -> Result<Self, String> {
-        trace_store(directory, "open");
         observer("store-open-entered");
         absolute(directory, false)?;
         if producer.is_empty() {
@@ -219,7 +210,6 @@ impl Store {
             || observer("lease-created-before-lock"),
         )?
         .ok_or("producer registry busy")?;
-        trace_store(directory, "lease-acquired");
         observer("registry-lease-acquired");
         drop(birth);
         observer("registry-read-entered");
@@ -227,7 +217,7 @@ impl Store {
         // must bind the held lease below before any publication; an absent lease
         // beside an existing registry is never created, nor an unknown one adopted.
         let registry: Registry = match fs::read(&path) {
-            Ok(bytes) => decode(&bytes)?,
+            Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| e.to_string())?,
             Err(e)
                 if absent && lease.newly_created() && e.kind() == std::io::ErrorKind::NotFound =>
             {
@@ -265,7 +255,6 @@ impl Store {
                 return Err("invalid exact producer object registration".into());
             }
         }
-        trace_store(directory, "read-returned");
         observer("store-open-returned");
         Ok(Self {
             directory: directory.into(),
@@ -354,14 +343,15 @@ impl Store {
     }
 
     fn save(&self) -> Result<(), String> {
-        trace_store(&self.directory, "save-entered");
         self.lease.stable()?;
-        write_json(
+        // Registry consumers use JSON values, not formatting. Preserve the same
+        // durable replacement while avoiding a pretty-printed full inventory.
+        let bytes = serde_json::to_vec(&self.registry).map_err(|e| e.to_string())?;
+        write_bytes(
             &no_symlink_parents(&self.directory, "objects.json")?,
-            &self.registry,
+            &bytes,
             false,
         )?;
-        trace_store(&self.directory, "save-returned");
         Ok(())
     }
 

@@ -652,6 +652,119 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
 }
 
 #[test]
+fn typed_registry_preserves_strict_maps_and_nested_fields_before_allocation() {
+    let owner = Owner::new();
+    let directory = owner.root.join(".chrono-harness/state/registry-decoding");
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&directory, "strict-fixture", &[], "first-")
+            .unwrap();
+    let source = owner.root.join("copied-source");
+    fs::write(&source, b"required original input").unwrap();
+    let original = chrono_worktree::TemporaryHost::register_copy(
+        &directory,
+        "strict-fixture",
+        &source,
+        &allocation.path().join("copy"),
+        None,
+        "real strict-decoder fixture copy",
+    )
+    .unwrap();
+    let path = directory.join("objects.json");
+    let valid = fs::read(&path).unwrap();
+    let registry: Value = serde_json::from_slice(&valid).unwrap();
+    let lease = directory.join("registry.lease");
+    let lease_identity = chrono_harness::ownership::identity(&lease).unwrap();
+    let compact = serde_json::to_string(&registry).unwrap();
+    let reference = r#"{"released":false,"reason":"current consumer","receipt":null}"#;
+    let body = serde_json::to_string(&registry["objects"][0]["bodies"]["copy"]).unwrap();
+    let mut invalid = Vec::new();
+    for (field, before, after) in [
+        (
+            "generated",
+            "{}".to_owned(),
+            r#"{"target/":"id","target/":"id"}"#.into(),
+        ),
+        (
+            "evidence",
+            "{}".to_owned(),
+            r#"{"original":{"length":1,"length":2}}"#.into(),
+        ),
+        (
+            "consumers",
+            "{}".to_owned(),
+            format!(r#"{{"reader":{reference},"reader":{reference}}}"#),
+        ),
+        (
+            "bodies",
+            format!(r#"{{"copy":{body}}}"#),
+            format!(r#"{{"copy":{body},"copy":{body}}}"#),
+        ),
+    ] {
+        let from = format!("\"{field}\":{before}");
+        let malformed = compact.replacen(&from, &format!("\"{field}\":{after}"), 1);
+        assert_ne!(malformed, compact, "fixture must change {field}");
+        invalid.push((format!("duplicate {field}"), malformed));
+    }
+    invalid.push((
+        "duplicate root".into(),
+        compact.replacen("{", r#"{"schema":"chrono-retained-producer/v1","#, 1),
+    ));
+    for pointer in [
+        "",
+        "/objects/0",
+        "/objects/0/bodies/copy",
+        "/objects/0/cache_lease",
+    ] {
+        let mut malformed = registry.clone();
+        malformed.pointer_mut(pointer).unwrap()["unknown_field"] = json!(true);
+        invalid.push((
+            format!("unknown field at {pointer}"),
+            serde_json::to_string(&malformed).unwrap(),
+        ));
+    }
+    invalid.push(("trailing document".into(), format!("{compact}{{}}")));
+    for (case, malformed) in invalid {
+        fs::write(&path, malformed.as_bytes()).unwrap();
+        let error = chrono_worktree::TemporaryHost::allocate(
+            &directory,
+            "strict-fixture",
+            &[],
+            "must-not-be-created-",
+        )
+        .err()
+        .expect("malformed registry must refuse before allocation");
+        assert!(
+            error.contains("duplicate")
+                || error.contains("unknown field")
+                || error.contains("trailing"),
+            "{case}: {error}"
+        );
+        assert_eq!(fs::read(&path).unwrap(), malformed.as_bytes(), "{case}");
+        assert_eq!(
+            chrono_harness::ownership::identity(&lease).unwrap(),
+            lease_identity,
+            "{case}"
+        );
+        assert_eq!(
+            fs::read(&original).unwrap(),
+            b"required original input",
+            "{case}"
+        );
+    }
+    // The same consumer accepts pretty historical bytes and publishes a new
+    // allocation without losing the original copied-input registration.
+    fs::write(&path, serde_json::to_vec_pretty(&registry).unwrap()).unwrap();
+    let second =
+        chrono_worktree::TemporaryHost::allocate(&directory, "strict-fixture", &[], "second-")
+            .unwrap();
+    let current: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(current["objects"].as_array().unwrap().len(), 2);
+    assert_eq!(current["objects"][0], registry["objects"][0]);
+    assert!(allocation.path().is_dir() && second.path().is_dir());
+    assert_eq!(fs::read(original).unwrap(), b"required original input");
+}
+
+#[test]
 fn established_registry_does_not_reenter_birth_while_its_lease_exists() {
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);

@@ -124,19 +124,6 @@ impl Lease {
                 match wait {
                     None => return Ok(None),
                     Some(bound) if began.elapsed() >= bound => {
-                        use std::io::Write;
-                        let result = std::process::Command::new("/usr/sbin/lsof")
-                            .args([
-                                "-nP",
-                                "-a",
-                                "-p",
-                                &std::process::id().to_string(),
-                                "-F",
-                                "pftlin",
-                                path.to_str().unwrap(),
-                            ])
-                            .output();
-                        writeln!(std::io::stderr(), "C2_BUSY pid={} thread={:?} ns={} lease={} elapsed_millis={} actual_lsof={result:?}", std::process::id(), std::thread::current().id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(), path.display(), began.elapsed().as_millis()).unwrap();
                         return Err(format!(
                             "automatic cleanup admission remains busy at {}; kernel ownership was not expired",
                             path.display()

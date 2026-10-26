@@ -30,19 +30,6 @@ fn duplicate(fd: RawFd) -> Result<OwnedFd, String> {
     }
     Ok(unsafe { OwnedFd::from_raw_fd(copy) })
 }
-// Temporary C2 descriptor-lifetime evidence; no production protocol.
-fn trace_fds(phase: &str, fds: &[RawFd], program: &str) {
-    use std::io::Write;
-    let identities: Vec<_> = fds
-        .iter()
-        .map(|fd| {
-            let mut m: libc::stat = unsafe { std::mem::zeroed() };
-            let rc = unsafe { libc::fstat(*fd, &mut m) };
-            (*fd, rc, m.st_dev, m.st_ino)
-        })
-        .collect();
-    writeln!(std::io::stderr(), "C2_FDS pid={} thread={:?} ns={} phase={phase} program={program:?} identities={identities:?}", std::process::id(), std::thread::current().id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()).unwrap();
-}
 /// A thread-local, owned set of opaque capabilities forwarded by every engine call.
 /// Dropping closes copies; it never unlocks a shared inherited open description.
 pub struct Scope {
@@ -65,16 +52,7 @@ impl Scope {
 }
 impl Drop for Scope {
     fn drop(&mut self) {
-        SCOPES.with(|s| {
-            let fds = s
-                .borrow()
-                .iter()
-                .filter(|(id, _)| *id == self.id)
-                .flat_map(|(_, fds)| fds.iter().map(AsRawFd::as_raw_fd))
-                .collect::<Vec<_>>();
-            trace_fds("scope-drop", &fds, "");
-            s.borrow_mut().retain(|(id, _)| *id != self.id);
-        });
+        SCOPES.with(|s| s.borrow_mut().retain(|(id, _)| *id != self.id));
     }
 }
 fn inherited() -> Result<Vec<RawFd>, String> {
@@ -123,11 +101,6 @@ impl Transfer {
             }
             Ok(())
         })?;
-        trace_fds(
-            "transfer-prepared",
-            &copies.iter().map(AsRawFd::as_raw_fd).collect::<Vec<_>>(),
-            &command.get_program().to_string_lossy(),
-        );
         let copies = std::sync::Arc::new(copies);
         let mut value = None;
         if !copies.is_empty() {

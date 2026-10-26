@@ -35,7 +35,13 @@ named lease without reentering directory birth, even while an independent birth
 capability remains live. Existing registry identities
 still bind the held lease before publication. Missing established leases remain
 missing, and replaced or unknown leases cannot acquire a new binding. The
-30-second acquisition bound is unchanged.
+30-second acquisition bound is unchanged. The typed registry decoder rejects
+duplicate and unknown struct fields directly, and reuses the strict JSON visitor
+for every dynamic map, including opaque evidence and copied-body metadata. It
+avoids constructing a second generic tree for the complete inventory. Registry
+replacement uses compact JSON through the same synced temporary file and atomic
+publication; historical pretty JSON remains readable. No lease identity, release
+rule, intent write, capacity or time bound changes.
 
 Immediate output creation retains its admitted ledger through reservation and
 materialization, using the same physical admission lease and all original durable
