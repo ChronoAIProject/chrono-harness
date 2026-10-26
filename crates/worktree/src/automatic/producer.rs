@@ -139,7 +139,9 @@ impl BirthGate {
 
 // Temporary C2 causal instrumentation; removed after the bounded experiment.
 fn trace_store(directory: &Path, phase: &str) {
-    eprintln!(
+    use std::io::Write;
+    writeln!(
+        std::io::stderr(),
         "C2_STORE pid={} thread={:?} name={:?} ns={} directory={} phase={phase}",
         std::process::id(),
         std::thread::current().id(),
@@ -149,7 +151,8 @@ fn trace_store(directory: &Path, phase: &str) {
             .unwrap()
             .as_nanos(),
         directory.display()
-    );
+    )
+    .unwrap();
 }
 impl Drop for Store {
     fn drop(&mut self) {
