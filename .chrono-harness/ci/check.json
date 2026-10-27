@@ -415,6 +415,23 @@
     },
     "facts_config": ".chrono-harness/config.json",
     "report_publication": "retained-reference/v2",
-    "selection_evidence": "explicit-graph/v1"
+    "selection_evidence": "explicit-graph/v1",
+    "causal_consumption": {
+      "schema": "chrono-internal-causal-consumption/v1",
+      "shared_startup": [
+        {
+          "id": "runner-startup",
+          "units": ".chrono-harness/ci/units.json",
+          "startup": ".chrono-harness/ci/bootstrap-shared.json",
+          "consumer": "unit_runner",
+          "producer": "host.bootstrap-shared-produce",
+          "caller": "host.bootstrap-shared-install-unit_runner",
+          "evidence": {
+            "test": "test:host-bootstrap-tests",
+            "operation": "host.bootstrap-real-consumer"
+          }
+        }
+      ]
+    }
   }
 }

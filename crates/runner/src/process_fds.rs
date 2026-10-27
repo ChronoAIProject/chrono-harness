@@ -1,5 +1,6 @@
 //! Explicit capability transfer through the existing process engine.
 //! Owned copies stay CLOEXEC; inherited flags remain unchanged for native children.
+use crate::ProcessFailure;
 use std::{
     cell::RefCell,
     io,
@@ -11,7 +12,7 @@ pub const ENV: &str = "CHRONO_PROCESS_FDS";
 thread_local! { static SCOPES: RefCell<Vec<(u64, Vec<OwnedFd>)>> = const { RefCell::new(Vec::new()) }; }
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
-fn duplicate(fd: RawFd) -> Result<OwnedFd, String> {
+fn duplicate(fd: RawFd) -> Result<OwnedFd, ProcessFailure> {
     if fd < 3 {
         return Err("ownership descriptor must not alias stdio".into());
     }
@@ -23,9 +24,11 @@ fn duplicate(fd: RawFd) -> Result<OwnedFd, String> {
         )
     };
     if copy < 0 {
-        return Err(format!(
-            "ownership descriptor: {}",
-            io::Error::last_os_error()
+        let error = io::Error::last_os_error();
+        return Err(ProcessFailure::native(
+            "E_PROCESS_OWNERSHIP_DUPLICATE",
+            format!("ownership descriptor: {error}"),
+            error,
         ));
     }
     Ok(unsafe { OwnedFd::from_raw_fd(copy) })
@@ -41,7 +44,8 @@ impl Scope {
         let copies = fds
             .iter()
             .map(|fd| duplicate(fd.as_raw_fd()))
-            .collect::<Result<_, _>>()?;
+            .collect::<Result<_, _>>()
+            .map_err(|error: ProcessFailure| error.message)?;
         let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         SCOPES.with(|s| s.borrow_mut().push((id, copies)));
         Ok(Self {
@@ -55,7 +59,7 @@ impl Drop for Scope {
         SCOPES.with(|s| s.borrow_mut().retain(|(id, _)| *id != self.id));
     }
 }
-fn inherited() -> Result<Vec<RawFd>, String> {
+fn inherited() -> Result<Vec<RawFd>, ProcessFailure> {
     let Some(value) = std::env::var_os(ENV) else {
         return Ok(vec![]);
     };
@@ -73,9 +77,11 @@ fn inherited() -> Result<Vec<RawFd>, String> {
             }
             let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
             if flags < 0 {
-                return Err(format!(
-                    "inherited ownership descriptor: {}",
-                    io::Error::last_os_error()
+                let error = io::Error::last_os_error();
+                return Err(ProcessFailure::native(
+                    "E_PROCESS_OWNERSHIP_INHERITED",
+                    format!("inherited ownership descriptor: {error}"),
+                    error,
                 ));
             }
             Ok(fd)
@@ -87,13 +93,13 @@ pub(crate) struct Transfer {
     pub(crate) value: Option<String>,
 }
 impl Transfer {
-    pub(crate) fn prepare(command: &mut Command) -> Result<Self, String> {
+    pub(crate) fn prepare(command: &mut Command) -> Result<Self, ProcessFailure> {
         let inherited = inherited()?;
         let mut copies = inherited
             .iter()
             .map(|fd| duplicate(*fd))
             .collect::<Result<Vec<_>, _>>()?;
-        SCOPES.with(|s| -> Result<(), String> {
+        SCOPES.with(|s| -> Result<(), ProcessFailure> {
             for (_, fds) in s.borrow().iter() {
                 for fd in fds {
                     copies.push(duplicate(fd.as_raw_fd())?);

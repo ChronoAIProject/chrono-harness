@@ -601,7 +601,8 @@ pub fn execute(
             Err(e) => {
                 status = Status::Error;
                 let exit = e.process.as_ref().map(|p| p.exit_code);
-                records.push(value!({"id":b.id,"binding":b,"state":if e.process.is_some(){"executed"}else{"error"},"request_id":req.request().request_id,"transport_failure":e.message,"exit_code":exit,"process":e.process}));
+                let diagnostic = e.diagnostic();
+                records.push(value!({"id":b.id,"binding":b,"state":if e.process.is_some(){"executed"}else{"error"},"request_id":req.request().request_id,"transport_failure":e.message,"transport_diagnostic":diagnostic,"exit_code":exit,"process":e.process}));
             }
         }
     }
@@ -663,6 +664,33 @@ pub fn validate_execution(
         let state = record["state"]
             .as_str()
             .ok_or_else(|| format!("E_SELF_DIAGNOSTIC: record {id} has no string state"))?;
+        if let Some(diagnostic) = record.get("transport_diagnostic") {
+            let diagnostic: wire::TransportDiagnostic = serde_json::from_value(diagnostic.clone())
+                .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} transport diagnostic: {e}"))?;
+            let error = &diagnostic.error.error;
+            if error.message != record["transport_failure"].as_str().unwrap_or_default()
+                || error.context.get("request_id") != record.get("request_id")
+                || error.context.get("judge_id") != Some(&value!(id))
+                || error.context.get("operation") != Some(&value!("judge.invoke"))
+                || error.context.get("operation_started") != Some(&value!(state == "executed"))
+                || !matches!(state, "executed" | "error")
+            {
+                return Err(format!(
+                    "E_SELF_DIAGNOSTIC: record {id} transport diagnostic context differs from invocation"
+                ));
+            }
+            if let Some(process_error) = record["process"].get("failure_record") {
+                let expected: chrono_diagnostics::error::ErrorRecord =
+                    serde_json::from_value(process_error.clone()).map_err(|e| {
+                        format!("E_SELF_DIAGNOSTIC: record {id} process failure record: {e}")
+                    })?;
+                if error.source.as_deref() != Some(&expected.error) {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} transport cause differs from process evidence"
+                    ));
+                }
+            }
+        }
         match state {
             "executed" => {
                 let process = record.get("process").ok_or_else(|| {
@@ -1567,71 +1595,126 @@ pub fn check_prepared(
         }
         None => no_symlink_parents(root, &format!("{report_directory}report.json"))?,
     };
+    let mut publication_failures = Vec::new();
+    let mut published = Vec::new();
+    let mut publish = |path: &Path| match fs::write(path, &text) {
+        Ok(()) => {
+            published
+                .push(value!({"path":path,"sha256":sha256(text.as_bytes()),"length":text.len()}));
+            true
+        }
+        Err(error) => {
+            publication_failures.push(
+                chrono_diagnostics::error::Failure::wrap(
+                    "E_FULL_REPORT_PUBLISH",
+                    "full report publication failed",
+                    chrono_diagnostics::error::NativeIoError::new(error),
+                )
+                .at("path", path.to_string_lossy().into_owned())
+                .at("phase", "write"),
+            );
+            false
+        }
+    };
     if let Some(publication) = &retained_publication {
         publication.check_length(text.len() as u64)?;
     }
-    fs::write(retained_report, &text).map_err(|e| e.to_string())?;
-    if let Some(publication) = retained_publication {
-        let outcome = value!({"status":report["status"],"request_id":req.request_id,"exit_code":status.exit_code()});
-        if status.exit_code() == 0 {
-            let consumer = format!("report-recheck:{}", publication.id());
-            publication.complete_releasing_consumer(outcome, &consumer)?;
-        } else {
-            publication.complete(outcome)?;
+    let mut _slot = None;
+    let retained_written = publish(&retained_report);
+    if retained_written {
+        if let Some(publication) = retained_publication {
+            let outcome = value!({"status":report["status"],"request_id":req.request_id,"exit_code":status.exit_code()});
+            if status.exit_code() == 0 {
+                let consumer = format!("report-recheck:{}", publication.id());
+                publication.complete_releasing_consumer(outcome, &consumer)?;
+            } else {
+                publication.complete(outcome)?;
+            }
         }
-    }
-    let mut originals = Vec::new();
-    if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
-        originals.push(path.into());
-    }
-    for map in [&report["artifacts"], &report["artifact_closure"]] {
-        if let Some(map) = map.as_object() {
-            for descriptor in map.values() {
-                if let Some(storage) = descriptor["storage"].as_str() {
-                    originals.push(storage.to_owned());
+        let mut originals = Vec::new();
+        if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
+            originals.push(path.into());
+        }
+        for map in [&report["artifacts"], &report["artifact_closure"]] {
+            if let Some(map) = map.as_object() {
+                for descriptor in map.values() {
+                    if let Some(storage) = descriptor["storage"].as_str() {
+                        originals.push(storage.to_owned());
+                    }
                 }
             }
         }
-    }
-    for name in ["base", "candidate"] {
-        if let Some(files) = req.observations["retained"][name]["files"].as_object() {
-            for file in files.values() {
-                if let Some(blob) = file["blob"].as_str() {
-                    originals.push(blob.to_owned());
+        for name in ["base", "candidate"] {
+            if let Some(files) = req.observations["retained"][name]["files"].as_object() {
+                for file in files.values() {
+                    if let Some(blob) = file["blob"].as_str() {
+                        originals.push(blob.to_owned());
+                    }
                 }
             }
         }
-    }
-    if let Some(context) = req
-        .context
-        .path
-        .strip_prefix(root)
-        .ok()
-        .and_then(|p| p.to_str())
-    {
-        originals.push(context.into());
-    }
-    let delivery_id = report["request"]["request_id"]
-        .as_str()
-        .ok_or("full original request identity")?;
-    let pending_native = req.observations["preparation"]["request"]["source"]
-        .as_str()
-        .filter(|s| *s == "ci")
-        .map(|_| delivery_id);
-    let _slot = crate::retained_artifacts::retention::reference_report(
-        root,
-        &publication_path,
-        &report_path,
-        &originals,
-        pending_native,
-    )?;
-    fs::write(path, &text).map_err(|e| e.to_string())?;
-    crate::retained_artifacts::retention::settle_report(root, &publication_path, &report_path)?;
-    if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
-        inventory.reference_paths(
-            &format!("full-recovery:{}", sha256(config_path.as_bytes())),
-            &[],
+        if let Some(context) = req
+            .context
+            .path
+            .strip_prefix(root)
+            .ok()
+            .and_then(|p| p.to_str())
+        {
+            originals.push(context.into());
+        }
+        let delivery_id = report["request"]["request_id"]
+            .as_str()
+            .ok_or("full original request identity")?;
+        let pending_native = req.observations["preparation"]["request"]["source"]
+            .as_str()
+            .filter(|s| *s == "ci")
+            .map(|_| delivery_id);
+        _slot = crate::retained_artifacts::retention::reference_report(
+            root,
+            &publication_path,
+            &report_path,
+            &originals,
+            pending_native,
         )?;
+    }
+    let current_written = publish(&path);
+    drop(publish);
+    if retained_written && current_written {
+        crate::retained_artifacts::retention::settle_report(root, &publication_path, &report_path)?;
+        if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
+            inventory.reference_paths(
+                &format!("full-recovery:{}", sha256(config_path.as_bytes())),
+                &[],
+            )?;
+        }
+    }
+    if !publication_failures.is_empty() {
+        let original = report["judges"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find_map(|row| row.get("transport_diagnostic"))
+            .map(|value| serde_json::from_value::<wire::TransportDiagnostic>(value.clone()))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let mut failure = match original {
+            Some(original) => chrono_diagnostics::error::Failure::wrap(
+                "E_FULL_REPORT_EVIDENCE",
+                "full report publication failed after judge failure",
+                chrono_diagnostics::error::ReceivedError::from(original.error),
+            ),
+            None => publication_failures.remove(0),
+        };
+        for error in publication_failures {
+            failure = failure.with_related("report_publication", error);
+        }
+        return Err(format!(
+            "E_REPORT_EVIDENCE: {}",
+            value!({
+                "schema":"chrono-full-report-publication-failure/v1",
+                "error":failure.record(),"report":report,"published":published,
+            })
+        ));
     }
     Ok((status.exit_code() as u8, text))
 }

@@ -486,3 +486,95 @@ fn one_registered_cache_has_at_most_one_saving_job() {
         assert_eq!(checks(&read_only["jobs"][id]), checks(original));
     }
 }
+
+#[test]
+fn content_sealing_follows_original_work_and_gates_native_saving() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("unit_example");
+    let rendered = chrono_ci::units::render(
+        &serde_json::from_value(value).unwrap(),
+        ".chrono-harness/ci/units.json",
+    )
+    .unwrap();
+    let yaml: Value =
+        serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
+    let position = |id: &str| steps.iter().position(|s| s["id"] == id).unwrap();
+    assert!(position("chrono_cache_work") < position("chrono_cache_seal"));
+    assert!(position("chrono_cache_seal") < position("cache_0_save"));
+    let seal = &steps[position("chrono_cache_seal")];
+    assert!(seal["run"].as_str().unwrap().contains(" seal --host-root"));
+    assert!(
+        seal["if"]
+            .as_str()
+            .unwrap()
+            .contains("cache_content_verification")
+    );
+    let save = &steps[position("cache_0_save")];
+    assert!(
+        save["if"]
+            .as_str()
+            .unwrap()
+            .contains("steps.chrono_cache_seal.outputs.cache_0_sealed == 'true'")
+    );
+    assert!(
+        save["if"]
+            .as_str()
+            .unwrap()
+            .contains("steps.chrono_cache_work.outcome == 'success'")
+    );
+}
+
+#[test]
+fn retired_remote_activation_options_are_rejected_before_projection() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("unit_example");
+    for (field, option) in [
+        ("acceptance_fixture", json!("native-unusable")),
+        (
+            "acceptance_source",
+            json!({"method":"pull-request-body/v1","program":"gh","reader":".chrono-harness/bin/chrono-ci"}),
+        ),
+    ] {
+        let mut retired = value.clone();
+        retired["persistent_cache"]["jobs"]["unit_example"][field] = option;
+        let decoded = serde_json::from_value::<chrono_ci::units::Config>(retired);
+        assert!(
+            decoded.is_err(),
+            "retired remote activation option {field} was accepted"
+        );
+    }
+    let rendered = chrono_ci::units::render(
+        &serde_json::from_value(value).unwrap(),
+        ".chrono-harness/ci/units.json",
+    )
+    .unwrap();
+    let workflow = &rendered[".github/workflows/chrono-ci.yml"];
+    for removed in [
+        "vars[",
+        "pull-requests:",
+        "cache-activation",
+        "acceptance-fixture",
+        "CHRONO_CACHE_ACCEPTANCE",
+        "github.event.pull_request.body",
+    ] {
+        assert!(
+            !workflow.contains(removed),
+            "retired control surfaced: {removed}"
+        );
+    }
+    let yaml: Value = serde_yaml_ng::from_str(workflow).unwrap();
+    let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
+    for id in [
+        "chrono_cache_plan",
+        "cache_0_restore",
+        "chrono_cache_work",
+        "chrono_cache_seal",
+        "cache_0_save",
+    ] {
+        assert!(
+            steps.iter().any(|step| step["id"] == id),
+            "ordinary cache consumer {id} missing"
+        );
+    }
+}

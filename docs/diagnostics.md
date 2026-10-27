@@ -120,9 +120,82 @@ uses the declared two-end DELTA closure, which may be broad; no local selection
 or verification-cost reduction is claimed. Marginal build, CI and storage cost
 remain unmeasured.
 
+## Judge invocation diagnostics
+
+Full judge invocations now retain a typed process setup cause through the wire
+owner. Executable reads, cwd acquisition, descriptor transfer, process ownership
+setup and spawn keep their original native IO values in the live Rust source
+chain, including the available errno. A digest mismatch is a direct domain
+rejection. The compatibility `transport_failure` string remains present.
+
+Each new full failure row additionally carries `transport_diagnostic`, an
+explicit `chrono-runner-transport-failure/v1` record containing a
+`chrono-error/v1` error. It binds the sealed request ID, judge ID,
+`operation: judge.invoke` and whether an actual child was started. Unstarted
+rows keep `process: null` and `exit_code: null`; no streams, PID or child exit
+are invented. Spawn failures separately retain private pre-exec diagnostic
+availability and raw stage/reason/errno, plus shared observer counters and
+available receive errno with `attributed_to_child: false`. Shared observations
+are never promoted to a child-specific cause.
+
+Started processes preserve their original bytes, digests, PID and terminal
+result. New process `failure_record` fields keep stream read/publication and
+launch-publication IO causes; secondary evidence and ownership cleanup failures
+remain related errors. The live process also retains its typed cause until the
+transport boundary. Historical process records without this optional field and
+full rows without the extension remain readable. Strict decoders reject unknown
+diagnostic/error schemas and fields; the full audit checks invocation context
+and the relationship to the retained process cause. Judge-v1 requests and
+responses remain strict and do not acquire a new error field.
+
+Late full-report publication attempts both existing destinations. Failure returns
+`E_REPORT_EVIDENCE` with the explicit
+`chrono-full-report-publication-failure/v1` record, the unchanged attempted
+report and only the writes that actually succeeded. An original judge transport
+failure remains the source; failed report writes are related native IO errors.
+The boundary does not claim durable retention when both destinations fail.
+
+Rust behavior regressions exercise real missing executables, permission-denied
+spawn, digest rejection, native source downcasts, serialized version/context
+mutations, actual full reports with both stored copies, healthy execution,
+blocked dependents, binary protocol-failure streams and real file-size-limited
+secondary stream publication errors. Existing ownership exhaustion regressions
+continue checking original pre-exec errors and fork allocation boundaries.
+
+**Product and host registration change:** the existing runner-tests project adds
+`test.runner.diagnostics`, a protected feedback operation over its Rust
+diagnostics cases. It uses the existing cargo tool, project inputs and isolated
+target. It supplements the current full runner test operation; canonical local
+and CI checks still select the declared two-end DELTA closure. No FILEMAP edge
+changes are needed because all changed units and consumers are already explicit.
+Full build/check, remote CI and storage costs remain unmeasured; focused local
+elapsed observations belong to the implementation handoff.
+
 This increment does not complete SPEC §7.1 or §7.2. Other runner domain paths and
 other programs retain their existing diagnostics. General native-error adapters,
 typed errors throughout the existing products, a common emergency publication
 entry, registered formatting/sink choices, persisted record references,
 subprocess context transfer and non-Rust adapters remain required. Failed
 diagnostic publication must not be reported as successful evidence retention.
+
+
+The existing macos-26 path was observed at production `72b1d08` in run
+`39690377913/1` and scenario `c515cd05` in run `39695762671/1`. Both canonical
+runner originals record 166 passing tests and one existing ignored test across
+six binaries, including the three `prelaunch_diagnostics_*` regressions and
+`execution_self_diagnostic_rejects_mutated_prelaunch_error_records`. Current
+startup imports, installed tool identities, original unit process streams and
+passing collection are retained. This is bounded Darwin test/consumer evidence;
+it does not establish general persisted diagnostic publication or Linux behavior.
+
+For native candidate acceptance, the existing macos-26 `unit_runner` path must
+execute the canonical runner unit after current shared-startup install/verify.
+Retain actual full invocation regression outputs, original process/stream/error
+records, current binary/source binding and the original unit/collection artifact
+production identities. Linux process/descriptor/pre-exec coverage still requires
+the registered Linux native verification path; local Darwin results do not
+establish Linux errno or ownership behavior. A successful native business check
+without these retained originals is insufficient for the corresponding evidence
+claim. The [shared-startup handoff](filemap-impact.md#bounded-internal-causal-consumption)
+owns the existing source/artifact/run/attempt predicates; no new workflow or
+alternate diagnostic test recipe is introduced.

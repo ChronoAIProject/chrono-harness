@@ -92,3 +92,24 @@ Historical enrollment separately requires a policy-selected exact producer sourc
 ## Outstanding acceptance
 
 The historical 512 records / 493 extant / 19 absent observation, OS39/OS54 originals, historical current-release and `ci-persistent-cache` two-endpoint migration mismatch remain unresolved. Their originals and current consumers stay protected under their actual owners; future policy selection does not settle them. L1 source and all retained commits remain intact. Fixed compatible input/native/PR207 handoffs, complete shared acceptance, exact-source native runs, independent review, coordinator deployment, actual landing/postconditions and full SPEC §10.1 acceptance remain caller/L3/L4 obligations. Local Rust regressions or generated upload YAML do not establish remote artifact availability or real native release.
+
+## Fixed-source composition boundary
+
+The lifecycle source is composed with input handoff
+`cf7ee4d85bb002491c84173a5e5320b13e29fff0` and principles source
+`24949168c0eaad671f98e0d033e16040378f284f`. Configuration-scoped FILEMAP
+edges and `explicit-graph/v1` selection evidence retain their input-owner
+contracts. Retained stream/launch publication now composes with typed process
+failure records; full-report publication retains both original judge failures
+and publication errors. The report-slot lease remains held through actual
+pointer publication and settlement. Failed publication keeps repair/current
+roots instead of acknowledging release.
+
+This composition preserves the removal of Variables/PR-body activation and
+extra permission overrides. It does not repair the retained producer admission
+or retirement algorithms: the preceding lifecycle candidate failed CI/projects
+registry admission and two runner retirement cases, and its complete global
+response exceeded the unchanged 8 MiB bound. Those failures remain failed;
+composed-source prerequisite checks need their own originals before any shared
+acceptance. No native, deployment, landing or complete SPEC acceptance follows
+from composition. The two correction reserves are exhausted.
