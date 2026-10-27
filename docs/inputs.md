@@ -262,3 +262,112 @@ snapshots remain original; unbound digests cannot acquire absence semantics.
 The runtime does not generate a host's config conversion algorithm. This implementation does
 not activate the repository's proposed full configuration or establish complete
 compiler/backend/linker/SDK/build-script inputs.
+
+
+## Registered acquisition and the bounded source successor
+
+`chrono-inputs observe --host-root H --manifest P --output P` produces facts for
+explicit acquisition declarations. It reuses the current retained process owner;
+capture, pair, capture-governance and compose keep their existing contracts.
+Observation neither registers discovered files nor changes expected identities.
+A manifest selects platforms, an explicit environment, bounded operations,
+literal or preceding-stdout paths, files and bounded directory scopes. Registered
+operations resolve a unique project/script action and reuse its original argv.
+Preceding executable/compiler selections, per-operation bounds and stop-on-failure
+remain explicit. Reports retain the source manifest/projects originals, executable
+identity, launch record and raw stdout/stderr; nonzero, timeout, overflow and
+alias failures remain failures. Originals publish without clobbering prior output.
+
+Directory observation can produce `chrono-input-directory/v3` originals with
+exact directory children, including the root `.` and empty/alias-only directories.
+The Cargo guard consumes the original topology and rechecks it after the real
+consumer. Canonical-target file observation retains traversed alias identities;
+it does not relax ordinary retained-input path validation. Configuration and
+credential-presence observations retain identity/absence, never credential content.
+The Python helper belongs to host-bootstrap and selects stdlib, platstdlib,
+extensions, runtime image and declared configuration locations rather than claiming
+the entire Python base prefix.
+
+The registered source chain is `host.acquire-native-{macos,linux}` → the selected
+bootstrap-acquire profile → source builds of fourteen installed participants →
+`inputs.acquire-PLATFORM` → `inputs.provision-native` → all 34 registered fetch
+operations → `inputs.observe-PLATFORM`, including all 34 fetch/metadata pairs.
+The original macOS/Linux compiler, SDK/full Developer, runtime/configuration and
+failed alias domains remain represented. Installation follows successful profile
+operations; a failed acquisition does not imply those binaries were installed.
+The pre-build surviving coordinator is a separate participant, still requiring
+its actual source/policy/toolchain/installed identity and protected linked use.
+Bootstrap forwards the surviving owner's original report path on stderr; the
+owner's retained report remains authoritative for its managed process and lease.
+
+The isolated source path is `inputs.provision-isolated` → the existing worktree
+`use inputs.produce-admit-isolated` → `host.bootstrap-isolated`, the 34 fetches,
+and immediate `guard.check.runner`. The guard names the current direct
+`.chrono-harness/git/macos-27.json` policy; it does not reinterpret the root Git
+identity selector. This is a proposed consumer with unresolved actual Cargo,
+compiler, package/resolver, SDK, configuration and retained-input bindings. Its
+policy preserves the required domains and expected package vectors, without
+adopting historical machine bytes. Source presence is not positive guard adoption.
+Before executing this isolated source chain, the adoption owner must bind and
+verify that the observer's selected Cargo/Rustup homes and rustc are exactly those
+of the private bootstrap profile and the guard; inherited homes alone do not prove
+that agreement. The current root worktree v3 policy is retained by acquisition
+participation. A Linux linked/coordinator policy and full Linux host config are
+not adopted by these source declarations and remain a native adoption obligation.
+
+The new native workflow selects the bounded input integration branch and forwards
+the two registered profiles. Its raw event, argv, streams, exit, run/attempt and
+workflow revision accompany the acquired originals and fourteen declared install
+destinations. The workflow job key does not establish the remote numeric job ID;
+that identity and the actual artifact/producer attempt must be resolved from the
+original native run. No native run, installed consumption or landing follows from
+committing this workflow.
+
+The root `chrono-git-configs/v2` exact executable identity semantics, worktree v3,
+known identity tuples and unknown-byte rejection are unchanged. No source-selector
+schema, input-set extension, historical full policy, beta.21 installation or new
+installer is adopted. Historical native config/runner files under `native/macos/`
+are fixed decoder/test data only; no registered action selects that pair. See
+[input source custody](input-source-custody.md) for the preserved omissions and
+unequal-original correction. Full activation, complete input closure, fixed
+retained endpoint pairs, native acceptance and parity remain incomplete.
+
+### Selected local runner input policy
+
+The macOS 27 direct host policy connects every literal runner v6 input ID to
+`project:runner` through the explicit configuration-scoped FILEMAP table;
+native pinned policies retain the common graph. Package file and crate-archive expectations come from preserved
+PR163 source and must match the independently fetched packages; selected private
+Rustup 1.29.1 comes from its official versioned archive and published checksum.
+The previous 1.29.2 observation remains a failed selection, not an expectation.
+Observer, private bootstrap and ordinary guard select the same private homes,
+compiler, empty wrappers, sysroot, linker and SDK environment.
+
+The current Xcode acquisition identifies Xcode 26.5 / 17F42. Its Developer-only
+inventory rejected `usr/bin/altool` because that literal alias reaches the sibling
+SharedFrameworks directory. The selected inventory therefore covers the enclosing
+`Xcode.app/Contents` root with unchanged directory-v3 checks; `DEVELOPER_DIR`
+continues to name Developer and `CHRONO_XCODE_CONTENTS` selects the encompassing
+inventory. SDK, Developer, configuration and runtime scopes remain explicit.
+The original rejected acquisition and successful replacement are retained
+separately. The generated Rust, SDK and Xcode inventories are required original
+inputs under the registered state owner, with digests in the selected policy;
+source declarations alone cannot provision or certify those bytes.
+
+This is a host-policy and registration migration. It changes no Git-v2 or
+worktree-v3 admitted identity and activates no full governance. Guard execution,
+clean candidate bootstrap/canonical DELTA, native acquisition and installed
+consumer evidence must identify their actual source separately. Missing historical
+endpoint originals, complete input closure/parity, other guarded projects, batch
+review and actual delivery remain open. Acquisition/build/check windows and
+retained bytes must be measured separately; total cost and savings are unknown.
+
+The registered macOS native acquisition uses the same enclosing-root treatment
+for its already declared Xcode 26.6 distribution, retains `xcodebuild -version`,
+and publishes the distinct `guard-inputs/xcode-contents.json` original. It keeps
+the declared Contents root as a direct absolute location: the observation
+contract rejects `..` suffixes, and the original rejected attempt is retained.
+It keeps
+all 34 fetch/metadata pairs, 14 installation targets, directory entry bounds and
+failure-before-installation behavior. The native full guard must explicitly bind
+that new original/root before adoption; this acquisition does not activate it.

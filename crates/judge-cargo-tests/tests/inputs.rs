@@ -10,7 +10,10 @@ use std::process::Command;
 fn pinned_git_package_executes_and_changed_revision_blocks_the_consumer() {
     let mut f = Fixture::new();
     let root = f.root();
-    let upstream = tempfile::tempdir().unwrap();
+    let upstream = tempfile::Builder::new()
+        .prefix("pinned Git 空白 λ ")
+        .tempdir()
+        .unwrap();
     write(
         upstream.path(),
         "Cargo.toml",
@@ -19,10 +22,23 @@ fn pinned_git_package_executes_and_changed_revision_blocks_the_consumer() {
     write(upstream.path(), "src/lib.rs", "pub fn value()->u32 { 0 }\n");
     git(upstream.path(), &["init", "-q"]);
     let revision = commit(upstream.path());
-    let url = format!(
-        "file://{}",
-        fs::canonicalize(upstream.path()).unwrap().display()
-    );
+    // Cargo canonicalizes a file URL in the lockfile. Encode the actual UTF-8
+    // allocation path so the declared source has that same identity, including
+    // the adopted parent's spaces and Unicode.
+    let path = fs::canonicalize(upstream.path()).unwrap();
+    let encoded: String = path
+        .to_str()
+        .unwrap()
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"/-_.~".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect();
+    let url = format!("file://{encoded}");
     let manifest = f.root().join("p/Cargo.toml");
     let mut text = fs::read_to_string(&manifest).unwrap();
     text.push_str(&format!(
@@ -159,6 +175,172 @@ fn guarded_registry_and_transitive_inputs_execute_real_cargo_test() {
         fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
         b"ran"
     );
+}
+
+#[test]
+fn registered_named_suites_filters_and_libtest_tails_preserve_real_listings_and_assertions() {
+    let mut f = Fixture::new();
+    write(
+        &f.root(),
+        "t/tests/groups.rs",
+        "#[test] fn core_pass() { assert_eq!(p::value(),43); }\n#[test] fn detail_pass() { assert_eq!(p::value(),43); }\n#[test] fn selected_failure() { panic!(\"real selected assertion\"); }\n",
+    );
+    let mut row = file(
+        "t/tests/groups.rs",
+        json!([{"kind":"compile","to":"project:t"}]),
+    );
+    row["owner"] = "t".into();
+    f.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(row);
+    let original = f.contract["operations"]["test.t"]["argv"]
+        .as_array()
+        .unwrap()
+        .clone();
+    for (tail, expected, listing) in [
+        (
+            vec!["--test", "groups", "--", "--list"],
+            0,
+            "core_pass: test",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "detail",
+                "--",
+                "--list",
+                "--exact",
+                "detail_pass",
+            ],
+            0,
+            "detail_pass: test",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "--",
+                "--skip",
+                "selected_failure",
+                "--test-threads=1",
+            ],
+            0,
+            "2 passed",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "selected_failure",
+                "--",
+                "--exact",
+                "--nocapture",
+            ],
+            101,
+            "selected_failure",
+        ),
+    ] {
+        let mut argv = original.clone();
+        argv.extend(tail.iter().map(|s| json!(s)));
+        f.contract["operations"]["test.t"]["argv"] = json!(argv);
+        f.save();
+        let (code, report, stderr) = f.call();
+        assert_eq!(code, expected, "{report} {stderr}");
+        let process = &report["operation"];
+        assert_eq!(process["exit_code"], expected, "{report}");
+        assert!(
+            process["stdout"].as_str().unwrap().contains(listing),
+            "{report}"
+        );
+        let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+        assert_eq!(process["stdout_sha256"], sha256(&bytes));
+    }
+}
+
+#[test]
+fn native_v6_keeps_the_original_output_layout_and_checks_real_host_and_offline_selection() {
+    for case in [
+        "native",
+        "wrong-host",
+        "target-env",
+        "online",
+        "old-schema",
+        "format",
+    ] {
+        let mut f = Fixture::new();
+        toolchain_binding(&mut f);
+        f.contract["schema"] = json!("chrono-cargo-inputs/v6");
+        f.contract["target_mode"] = json!("native");
+        f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_NET_OFFLINE"] =
+            json!("true");
+        let argv = f.contract["operations"]["test.t"]["argv"]
+            .as_array_mut()
+            .unwrap();
+        let index = argv.iter().position(|v| v == "--target").unwrap();
+        argv.drain(index..index + 2);
+        argv.retain(|v| v != "--offline");
+        match case {
+            "wrong-host" => {
+                f.contract["target"] = json!("wrong-native-host");
+                let argv = f.contract["metadata"]["argv"].as_array_mut().unwrap();
+                let index = argv.iter().position(|v| v == "--filter-platform").unwrap();
+                argv[index + 1] = json!("wrong-native-host");
+            }
+            "target-env" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_BUILD_TARGET"] =
+                    f.contract["target"].clone()
+            }
+            "online" => f.values.get_mut(CONFIG).unwrap()["environment"]["values"]
+                .as_object_mut()
+                .unwrap()
+                .remove("CARGO_NET_OFFLINE")
+                .map(|_| ())
+                .unwrap(),
+            "old-schema" => f.contract["schema"] = json!("chrono-cargo-inputs/v5"),
+            "format" => f.contract["operations"]["test.t"]["argv"][0] = json!("fmt"),
+            _ => {}
+        }
+        f.save();
+        let (code, report, stderr) = f.call();
+        if case == "native" {
+            assert_eq!(code, 0, "{report} {stderr}");
+            assert!(
+                report["native_target"]["stdout"]
+                    .as_str()
+                    .unwrap()
+                    .contains("host: ")
+            );
+            assert!(
+                report["operation"]["stdout"]
+                    .as_str()
+                    .unwrap()
+                    .contains("1 passed")
+            );
+            assert!(f.root().join("t/target/debug/deps").is_dir());
+            assert!(
+                !f.root()
+                    .join("t/target")
+                    .join(f.contract["target"].as_str().unwrap())
+                    .exists()
+            );
+        } else {
+            assert_ne!(code, 0, "{case}: {report} {stderr}");
+            assert!(report["operation"].is_null());
+            assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+            if case == "wrong-host" {
+                assert!(report["native_target"].is_object(), "{report}");
+                assert!(
+                    report["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("native host differs"),
+                    "{report}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
@@ -894,6 +1076,170 @@ fn save_sdk_links(f: &mut Fixture, manifest: &serde_json::Value) {
         .unwrap();
     input["sha256"] = json!(sha256(&bytes));
     f.save();
+}
+
+#[cfg(unix)]
+#[test]
+fn v3_directory_aliases_cover_empty_and_alias_only_directories_and_detect_drift() {
+    use std::os::unix::fs::symlink;
+    for case in ["accepted", "v2", "missing", "extra-child", "mutation"] {
+        let mut f = Fixture::new();
+        let mut manifest = sdk_links(&mut f);
+        let sdk = f.root().join(".chrono-harness/state/sdk");
+        fs::create_dir(sdk.join("empty")).unwrap();
+        fs::create_dir(sdk.join("container")).unwrap();
+        symlink("../empty", sdk.join("container/leaf")).unwrap();
+        symlink("container", sdk.join("container-alias")).unwrap();
+        manifest["schema"] = json!("chrono-input-directory/v3");
+        manifest["directories"] =
+            json!([{"path":"empty","entries":[]},{"path":"container","entries":["leaf"]}]);
+        manifest["symlinks"].as_array_mut().unwrap().extend([
+            json!({"path":"container/leaf","target":"../empty","kind":"directory"}),
+            json!({"path":"container-alias","target":"container","kind":"directory"}),
+        ]);
+        match case {
+            "v2" => manifest["schema"] = json!("chrono-input-directory/v2"),
+            "missing" => {
+                manifest.as_object_mut().unwrap().remove("directories");
+            }
+            "extra-child" => fs::write(sdk.join("empty/unlisted"), b"changed").unwrap(),
+            "mutation" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
+                    json!(sdk.join("empty/unlisted"));
+                write(
+                    &f.root(),
+                    "t/src/lib.rs",
+                    "#[test] fn change_directory() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"changed\").unwrap(); }\n",
+                );
+            }
+            _ => {}
+        }
+        save_sdk_links(&mut f, &manifest);
+        let (exit, report, stderr) = f.call();
+        if case == "accepted" {
+            assert_eq!(exit, 0, "{report} {stderr}");
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            if case == "mutation" {
+                assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+                assert!(
+                    report["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("directory children differ"),
+                    "{report}"
+                );
+            } else {
+                assert!(report["operation"].is_null());
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn observer_v3_original_is_consumed_by_the_guard_and_detects_real_topology_drift() {
+    use std::os::unix::fs::symlink;
+    for case in [
+        "accepted",
+        "file-drift",
+        "root-addition",
+        "nested-addition",
+        "missing",
+        "alias-drift",
+        "escape",
+        "mutation",
+    ] {
+        let mut f = Fixture::new();
+        sdk_links(&mut f);
+        let root = f.root();
+        let sdk = root.join(".chrono-harness/state/sdk");
+        fs::create_dir_all(sdk.join("nested/empty")).unwrap();
+        symlink("nested/empty", sdk.join("empty-alias")).unwrap();
+        let manifest_path = ".chrono-harness/state/observed-sdk.json";
+        let declaration = json!({"schema":"chrono-input-observation/v1",
+            "environment":{"inherit":[],"values":{}},"operations":[],"files":[],
+            "directories":[{"id":"sdk","location":{"path":".chrono-harness/state/sdk"},
+                "max_entries":32,"manifest":{"path":manifest_path,"root":".chrono-harness/state/sdk"}}]});
+        write(
+            &root,
+            ".chrono-harness/observe-sdk.json",
+            &declaration.to_string(),
+        );
+        let observed = chrono_inputs::observe(
+            &root,
+            ".chrono-harness/observe-sdk.json",
+            ".chrono-harness/state/sdk-observation.json",
+        )
+        .unwrap();
+        let original =
+            serde_json::from_value(observed["directories"]["sdk"]["manifest"].clone()).unwrap();
+        let bytes = chrono_harness::prepared::read_original(&root, &original, None).unwrap();
+        // Point the real guard at exactly the published original; no manifest
+        // regeneration, reconstruction or fixture replacement supplies topology.
+        let input = f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|r| r["id"] == "toolchain.sdk.manifest")
+            .unwrap();
+        input["location"] = json!(manifest_path);
+        input["sha256"] = json!(sha256(&bytes));
+        match case {
+            "file-drift" => fs::write(sdk.join("include/header"), b"changed").unwrap(),
+            "root-addition" => fs::write(sdk.join("new-child"), b"unlisted").unwrap(),
+            "nested-addition" => {
+                fs::write(sdk.join("nested/empty/new-child"), b"unlisted").unwrap()
+            }
+            "missing" => fs::remove_dir(sdk.join("nested/empty")).unwrap(),
+            "alias-drift" | "escape" => {
+                fs::remove_file(sdk.join("alias")).unwrap();
+                symlink(
+                    if case == "escape" {
+                        "../build-script.input"
+                    } else {
+                        "include/header"
+                    },
+                    sdk.join("alias"),
+                )
+                .unwrap();
+            }
+            "mutation" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
+                    json!(sdk.join("new-child"));
+                write(
+                    &root,
+                    "t/src/lib.rs",
+                    "#[test] fn add_root_child() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"changed\").unwrap(); }\n",
+                );
+            }
+            _ => {}
+        }
+        f.save();
+        let (exit, report, stderr) = f.call();
+        if case == "accepted" {
+            assert_eq!(exit, 0, "{report} {stderr}");
+            assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+        } else if case == "mutation" {
+            assert_ne!(exit, 0, "{report} {stderr}");
+            assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("directory children differ"),
+                "{report}"
+            );
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            assert!(report["operation"].is_null(), "{case}: {report}");
+            assert!(
+                report["error"].as_str().unwrap().contains("directory"),
+                "{case}: {report}"
+            );
+        }
+        assert_eq!(fs::read(root.join(manifest_path)).unwrap(), bytes);
+    }
 }
 
 #[cfg(unix)]

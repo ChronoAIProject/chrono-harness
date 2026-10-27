@@ -66,6 +66,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-inputs"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-registration",
+ "chrono-judge-routes",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "chrono-judge-cargo"
 version = "0.1.0"
 dependencies = [
@@ -83,6 +96,7 @@ name = "chrono-judge-cargo-tests"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
+ "chrono-inputs",
  "chrono-judge-cargo",
  "chrono-judge-registration",
  "chrono-worktree",
