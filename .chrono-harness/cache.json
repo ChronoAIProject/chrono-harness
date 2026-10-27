@@ -910,6 +910,21 @@
       "kind": "file",
       "path": ".chrono-harness/ci/bootstrap-toolchains.json",
       "presence": "present"
+    },
+    "cache.producer": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/34/actions/build"
+    },
+    "cache-tests.producer": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/35/actions/execute"
+    },
+    "cache.cargo-registration": {
+      "kind": "json-value",
+      "path": ".chrono-harness/git/pinned-macos.json",
+      "pointer": "/tools/0"
     }
   },
   "artifacts": {
@@ -2936,12 +2951,15 @@
         "bootstrap.config",
         "check.environment",
         "check.cargo-tool",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "cache.producer",
+        "cache.cargo-registration"
       ],
       "source_inputs": [
         "cache.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "verify_contents": true
     },
     "check.cache-tests": {
       "owner": "cache-tests",
@@ -2985,12 +3003,15 @@
         "bootstrap.config",
         "check.environment",
         "check.cargo-tool",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "cache-tests.producer",
+        "cache.cargo-registration"
       ],
       "source_inputs": [
         "cache-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "verify_contents": true
     },
     "release.linux.release.runner": {
       "owner": "runner",

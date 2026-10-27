@@ -1205,6 +1205,10 @@
         {
           "kind": "runtime-input",
           "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -5511,6 +5515,10 @@
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -5735,6 +5743,10 @@
         {
           "kind": "runtime-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -6027,6 +6039,46 @@
         {
           "kind": "test-execution",
           "to": "test:judge-projects-migration"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache/src/content.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/src/consumption.rs",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration-tests/tests/consumption.rs",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
         }
       ]
     }

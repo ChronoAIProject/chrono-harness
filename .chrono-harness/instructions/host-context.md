@@ -10,6 +10,8 @@
 
 [FILEMAP](../FILEMAP.json) 是唯一执行计划源，逐文件登记所有者、输入、消费者、边与成本；不从路径、语言或调用推断选测。routes 规划、绑定工具，projects 核配对、隔离和真实回执；scoped CI 复用该链。只按 DELTA 与两端显式依赖选检查，漏登须修登记，不全测兜底。
 
+本宿主采用“不阻塞、不使用额外权限、关注性能”：局部失败保留真实结果，只阻断显式依赖闭包，独立授权工作继续；只用现有权限，无必要特殊权限功能退役，不增加替代激活运输；普通必要流程保留已有权限范围。消费者、IO、进程及验证按当前需求和 DELTA 影响收窄，成本未知保持未知，必需验收不旁路。产品默认与宿主 catalog 已同步采用，具体规则及验证成本边界归[指令所有者](../../docs/instructions.md)。
+
 ## 当前固定入口
 
 ### 安装候选工具
@@ -62,14 +64,14 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 | --- | --- |
 | 改登记、执行计划或测试 | [影响闭包](../../docs/filemap-impact.md)、[执行／分组／语言](../../docs/execution.md)、[单元库存](../../docs/ci-units.md)：本宿主 cap=2，不越依赖、共享 claim 或登记时限；跨调用隔离归调用方。分组、真实未过滤库存与原断言／线程／发布操作的保留合同在单元文档；语言声明不证明其余跨语言逻辑已迁移。 |
 | 改输入、Cargo 或 full 采用 | [输入与 parity](../../docs/inputs.md)、[Cargo guarded](../../docs/cargo-projects.md)、[Git facts](../../docs/git-facts.md)、[full CI](../../docs/full-ci.md)：快照不补依赖／改预期摘要／启用治理；candidate decoder 消费历史数据，不执行旧判官。full unscoped 需原 origin receipt／历史证据，缺失失败。解码测试由 `.chrono-harness/migrations/test-hosts.json` 显式选平台，未知平台不回退、不以实测版本生成预期；Linux fixture 不表示主宿主 full 采用。 |
-| 改 CI 缓存 | [缓存所有者](../../docs/ci-cache.md)：原生消费者、唯一保存者、恢复／重入、bootstrap 报告槽位、原始 outcome 与后端查询合同。缓存不替代构建／检查；有效命中内容校验、外部所有权、linked transport 租约未完成，只支持 primary checkout。缓存测试只在失败时保留原 fixture／探测配置／报告。 |
+| 改 CI 缓存 | [缓存所有者](../../docs/ci-cache.md)：普通 plan/restore、producer-manifest 内容验证、失败恢复、原构建／测试、seal/save 和原始 outcome 报告保持；专属 Variables／PR 正文激活、manifest-removal fixture 及新增权限依赖已按用户要求退役，不增加替代入口。历史 C1 对两项缓存观察到坏内容保存／恢复／拒绝、重建与替换缓存，但原兼容域健康精确命中未达成（rustup 身份变化，最新 collection HTTP 502），保留部分结论及原件。外部所有权、linked transport 租约、其它消费者及完整验收仍未完成；只支持 primary checkout。缓存测试只在失败时保留原 fixture／探测配置／报告。 |
 | 改发布或消费关系 | [发布所有者](../../docs/release-ci.md)：v5 显式 needs／rust_toolchain／verification_consumers、原未过滤操作与 producer/run/attempt、失败证据；declared 不证明必要性，本地／原生／公开采用分别验收。 |
 | 读成本或排查失败 | [汇总观察](../../docs/ci-units.md#github-projection-and-transport)、[诊断边界](../../docs/diagnostics.md)：读原件；当前 attempt API 视图可含沿用结果，新 job ID 不证明重跑。canonical-check 含构建／测试／汇总，读数不是完整历史、重跑成本、计费或全流程总量，告警不证明冗余／节省。 |
 
 ## 当前未完成边界
 
-五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；未采用 Cargo guarded policy。Cargo／编译器／SDK、配置及其它适用输入／执行物绑定仍有缺口。宿主 Git facts 采用 `chrono-git-configs/v2` 精确摘要选择，worktree 采用 v3 主身份与登记的补充身份；两者保留原 `/usr/bin/git` 字节／版本并另登记实测 macOS 27.0.1 身份，未知摘要仍在执行前拒绝。政策与产品同改：旧宿主含义保留，新增宿主可选对应直接政策；额外读取和完整验证成本未测。原生仍使用 macos-26，其当前字节与本候选原生验收待观察；已有 scoped 原生匹配结果不等于本次验收或完整启用，开发工具目录仍未显式绑定。
+五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；未采用 Cargo guarded policy。Cargo／编译器／SDK、配置及其它适用输入／执行物绑定仍有缺口。宿主 Git facts 采用 `chrono-git-configs/v2` 精确摘要选择，worktree 采用 v3 主身份与登记的补充身份；两者保留原 `/usr/bin/git` 字节／版本并另登记实测 macOS 27.0.1 身份，未知摘要仍在执行前拒绝。政策与产品同改：旧宿主含义保留，新增宿主可选对应直接政策；额外读取和完整验证成本未测。原生仍使用 macos-26，当前生产 `72b1d08` 与临时环境 `c515cd05` 的 scoped 检查已有有界观察；它们不证明完整启用，开发工具目录仍未显式绑定。
 
 普通 full check 在登记要求和所选义务通过后只表示 DELTA 满足现役合同；`declared-complete` 是负责的工程声明，registration 仍报告 `completeness_proven:false`。已知缺输入、必需依赖未解决、缺绑定／快照及漂移必须失败，不另要求普遍隐藏输入证明或 VM。同命令已采用，同判仍需完整相同有效输入与确定性求值；独立 parity 要求 `completeness_proven:true` 和完整观察，当前未建立，也不另加普通 full 门。
 
-缓存已有一个登记消费者的原生 cold miss/save 与 exact-hit 路径验收；changed-source、损坏／不可用、并发、其它消费者及完整成本／生命周期合同仍未完成。完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收仍未完成；阶段成功不是交付。成本仍有 unmeasured 项，来源／许可资料是可选资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
+两项 producer-manifest/v1 缓存原生 cold/save、健康精确命中、兼容源码校验后实际重建与不兼容环境分域／重建已有有界观察，分别来自 `39688684172/1`、`39690377913/1,2` 与 `39695762671/1`。原 Variables GET/list HTTP 403 与后续 C1 部分证据保留，坏内容恢复／替换不等于修复后的原域健康精确命中；可选远端激活层已退役，不作为任何当前推进依赖。并发、其它消费者及完整成本／生命周期合同仍未完成。临时优化环境已由普通 revert `c72c141` 移除，恢复树等同生产 `72b1d08`，保留实验历史。现役 scoped 路径仅采用 runner-startup 的版本化内部消费关系检查；full judge 的类型化 prelaunch／报告诊断已有有界实现。当前 detector→startup 导入／安装→runner 检查→原件汇总链已有 Darwin 原生观察，runner 原始输出含 166 passed／1 ignored 及具名 prelaunch 回归；Linux、外部／全消费者采用仍未完成，具体边界归所有者文档及覆盖表。完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收仍未完成；阶段成功不是交付。成本仍有 unmeasured 项，来源／许可资料是可选资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。

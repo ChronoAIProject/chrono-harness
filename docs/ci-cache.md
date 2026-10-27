@@ -22,11 +22,52 @@ transport report recorded `current_executable_verification: matched`,
 and `verdict: not-a-judgment`. The canonical bootstrap and check still ran after
 the hits, and no save was attempted for the exact-hit attempt.
 
-This proves the registered consumer's bounded cold miss/save and exact-hit
+This historical observation proves the registered consumer's bounded cold miss/save and exact-hit
 restore path, including current cache executable identity and recovery evidence.
 It does not prove changed-source reuse, incompatible-input partitioning, corrupt
 or unavailable archive handling, concurrent producers/reruns, complete backend
 lifecycle protection, or cache completeness for other consumers.
+
+The current `producer-manifest/v1` domain has additional bounded native evidence
+on macos-26, Rust/Cargo 1.95.0, under PR #207's `refs/pull/207/merge` scope:
+
+| Scenario, both `check.cache` and `check.cache-tests` | Fixed native observation |
+| --- | --- |
+| Cold production domain | [39688684172/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172/attempts/1), seed `98615238`: original Cargo work, seal/save and collection passed |
+| Compatible source change | [39690377913/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/1), production `72b1d08`: equal compatibility prefixes, distinct source suffixes, seed-key restores and matched producer inventories, retained incremental data and current registered rebuild/tests passed |
+| Healthy exact hit | [39690377913/2](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/2): both primary keys matched, inventories verified and original canonical work/collection passed; detector/startup retain their original attempt 1 identities |
+| Incompatible producer environment | [39695762671/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671/attempts/1), scenario `c515cd05`: both domains changed, neither restore matched a key, and original optimized Cargo builds/tests, seals and collection passed |
+| Unusable contents, recovery, persistent repair and repaired exact hit | Initial observation: Variables GET/list HTTP 403 prevented activation. Later C1 partially observed unusable payload recovery/rebuild and replacement caches; repaired original-domain healthy exact hit remains unmet (see retirement below). |
+
+In the incompatible scenario the only changed selected observation was
+`check.environment`; all other selected runtime/probe/absence observations and
+producer argv matched production. Compatibility digests changed from
+`d24c19748a988bdb5732af429ed07932e5e4ac25774ef4d4613b5be87ce34c6f` to
+`b9653959eb2bc10a7a166822f4e59c4374d31105acf865a8b980c372c4af7987`
+for `check.cache`, and from
+`070f000f3499ba497fc6d1c4eac347720586017d61c114954293f69c21964228` to
+`17b22e6e2b9ea72b6eb2afdc98a63075b62fe778baba507511337f259b317cbc`
+for `check.cache-tests`. Each restore exposed only its new domain prefix;
+production fallback was impossible through that declared key set. Both actual
+Cargo producers received `CARGO_INCREMENTAL=1` and the two optimization values,
+and reported optimized dev/test output. The transport retained
+`miss-or-unavailable`, successful original work and matched current planner
+identity; backend entries `9310328424` / `9310330849` were observed, with creator
+unestablished. This is partition/rebuild evidence, not an exact-restore test of
+those scenario archives.
+
+Original scenario artifacts are cache `12391316467`, detector `12391201225`,
+startup `12391076536`, runner `12390726564` and collection `12391598633`, all from
+attempt 1. Collection verified 26 unit originals and passed all 27 result rows.
+The cache and collection jobs measured 113 and 106 seconds respectively from
+native start/completion timestamps; these windows are not billing, speedup or
+complete lifecycle costs. Transfer/storage and total incremental costs remain
+unknown. An ordinary revert `c72c141` restores the exact production `72b1d08`
+tree and removes both temporary optimization settings while preserving the
+scenario commit. Unusable-content acceptance remains required; the access gap
+does not waive it. The optional remote activation continuation has since been retired as documented below;
+its partial historical observations do not establish a repaired exact hit. Other consumers,
+concurrency, linked ownership and complete compiler/SDK/input closure remain open.
 
 The planner prepares identities; the GitHub provider projects pinned native
 restore/save actions around the original bootstrap and check/release command.
@@ -190,9 +231,9 @@ and refused; a previous failure is not automatically retried.
 
 The host adopts this method in its existing jobs and classifies its step time as
 `cache-recovery`. No job, build recipe or business-test retry is added. The failure-only policy covers
-reported native restore failures and partial extraction, not corruption hidden
-behind a successful restore, backend archive replacement, or general compiler
-failure recovery. Archive integrity, linked-worktree leases and full native
+reported native restore failures and partial extraction. The optional producer
+content verification below also covers reported valid hits for selected caches.
+Backend archive replacement, linked-worktree leases and full native
 failure-scenario acceptance remain obligations.
 
 The host additionally adopts `recover_unconfirmed_restores: true`. This optional
@@ -211,9 +252,64 @@ Original outcomes, reasons and per-artifact results remain available to the
 transport reporter. Completed reentry preserves subsequent builds. An ordinary
 cold miss with all selected artifacts already absent adds no recovery warning;
 removed leftovers and explicit failures remain visible. The original build and
-selected tests still run, and their failures remain failures. This extension does
+selected tests still run, and their failures remain failures. This extension alone does
 not verify the contents of a restore that reports a valid matched key, preserve
 external ownership, or establish a native corruption experiment.
+
+## Opted-in producer content verification
+
+This host opts only `check.cache` and `check.cache-tests`, consumed by the existing
+`check.unit_cache` job, into `verify_contents: true`. This v2 option requires the
+existing primary-checkout failed/unconfirmed recovery policies; external artifacts
+remain unsupported. Other consumers retain their previous contract. The method
+`producer-manifest/v1` enters the compatibility identity, so earlier unsealed
+archives cannot enter this domain through a broad prefix.
+
+Those two compatibility domains additionally select their actual producer action
+from `projects.json` (`build.cache` or `test.cache-tests`, including tool and argv)
+and the Cargo tool record in the adopted direct Git policy. Existing inputs bind
+check environment, Cargo/compiler observations, manifests, locks, bootstrap and
+platform declarations. Unrelated project metadata remains outside these selected
+values. These declarations do not prove complete compiler/SDK input closure.
+
+The provider's existing save phase invokes `chrono-cache seal` after the original
+work has ended and before saving. It revalidates the plan/registration and current
+planner identity, requires the original producer step's successful **outcome**,
+and inventories the explicitly selected artifact directories. Each artifact gets
+`.chrono-cache-content-v1.json`, binding cache ID, producer operation, actual source
+key, artifact declaration and its contents. The inventory records regular-file
+SHA-256/length/execute bits, directories (including empty ones), and literal
+symlink targets without following them; special files and non-UTF-8 names fail.
+Only this method's own marker is excluded. The marker contains output identities,
+not test results, judge responses or a cached passing status. Original native
+steps, manifests and sealing observations remain in host execution evidence.
+Saving an opted-in entry requires its successful seal output in addition to the
+existing producer/save conditions. No build recipe, job or test retry is added.
+
+Before any original build consumes a claimed exact/compatible hit, `recover`
+compares its producer manifest and a fresh content inventory. Compatible restores
+bind the manifest to the **matched** source key, while the candidate retains its
+new source identity. Changed/missing contents, a missing/malformed manifest or an
+incompatible producer binding are recorded as unusable. Original manifest bytes,
+observed content identities/errors and native restore observations are retained
+before the existing recovery contract discards only selected registered outputs.
+The original build and check still run; replaying completed recovery preserves
+subsequently rebuilt outputs. Reporting retains the original key classification
+and exposes `unusable-content` separately from an accepted hit, copying referenced
+verification evidence into the existing upload directory.
+
+Hashing cost is additional: sealing and restore verification record wall-clock
+seconds per selected cache, with the measured window in each observation; the
+native step is classified `cache-verification`. Total transfer/storage/runner
+cost remains unknown; bounded native acceptance is recorded above. Local Rust regressions include an
+actual Cargo invocation read from the unchanged registered producer action on a
+small fixture: compatible source changes produce the candidate binary and retain
+incremental data, while changed producer settings partition the compatibility
+domain. This fixture is compiler evidence, not a native archive acceptance run.
+Content manifests are consistency evidence from trusted but fallible producers,
+not archive authentication or proof of complete build inputs. The native results
+above cover cold/save, exact, compatible changed-source and incompatible-input
+scenarios for these two entries. Unusable-content recovery remains unverified.
 
 ## Actual provider consumers
 
@@ -363,3 +459,40 @@ binaries stay outside evidence uploads. Transfer costs are measured separately,
 and a source-bound artifact is not proof of complete build input provenance.
 
 发行验证的 `chrono-cache` 资产在 Cargo test destination 被消费；bootstrap 安装的运输 executable 保持归 bootstrap。发行配方不再将资产 staging 到同一个 bin 路径。Python release integration 回归覆盖真实 CLI 的 plan／recover／staging／report 与 inode、摘要保留；这个本地证据不证明原生缓存后端或外围 workflow 成功。详见[发布所有者](release-ci.md)。
+
+## Retired remote acceptance controls
+
+**Product and host policy change:** the optional native manifest-removal fixture,
+its CLI/configuration and provider registration, repository Variables activation,
+and live PR-body reader have been removed. The provider no longer adds
+`pull-requests: read` for activation or reads PR metadata. No replacement
+activation transport, variable management, remote cache deletion or additional
+permission is required. Retired configuration fields fail normal strict decoding;
+they are not silently accepted as successful activation.
+
+The existing `check.unit_cache` consumers still plan and restore their two
+registered compilation archives, validate `producer-manifest/v1` contents, discard
+unusable host outputs through ordinary recovery, execute the original candidate
+build/tests, seal successful producer outputs and save through the existing
+native cache actions. Required producer/seal outcomes still gate saving. Ordinary
+backend observation retains its existing necessary scope and original failures.
+Other registered build/release cache consumers retain their existing behavior.
+
+Historical native evidence remains attached to its exact source/run/attempt.
+Variables GET/list HTTP 403 was a real historical failure. Later bounded C1
+observations recorded unusable payload save/restore/rejection, rebuild and
+replacement caches for both entries, but a healthy exact hit in the original
+compatibility domain was not achieved: the selected rustup identity changed;
+the latest collection returned HTTP 502. Those observations are partial, and
+this deletion neither reruns nor completes them. Original records, streams,
+commits and retained evidence remain under their existing custodian. The former
+fixture and its finite caller sequence remain reproducible from retained source
+`f52442addfa3079f644cc7be59809a4ca6e756d5`; they are not current instructions.
+
+Costs: ordinary execution needs no activation process/API request. Deleting the
+optional layer removes its reader, fixture, response/intent evidence IO and
+exclusive tests; native time, transfer, storage and total lifecycle savings are
+unmeasured. Existing same-language content/recovery, invalid-input and provider
+regressions and the registered DELTA-selected canonical check remain required.
+Native acceptance, concurrency, other-consumer adoption, full input closure,
+parity and actual delivery remain separate uncompleted obligations.

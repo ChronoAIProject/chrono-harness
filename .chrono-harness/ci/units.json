@@ -582,7 +582,8 @@
         "Restore registered cache detect.judge-ci": "cache-restore",
         "Save registered cache detect.judge-ci": "cache-save",
         "Restore registered cache detect.worktree": "cache-restore",
-        "Save registered cache detect.worktree": "cache-save"
+        "Save registered cache detect.worktree": "cache-save",
+        "Seal producer cache contents": "cache-verification"
       },
       "summary_environment": "GITHUB_STEP_SUMMARY",
       "comparisons": {

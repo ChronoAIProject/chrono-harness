@@ -25,6 +25,7 @@ pub mod scoped_report;
 mod short_console;
 pub mod units;
 pub mod wire;
+use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]
 pub use publication::NativeOutput;
 pub use publication::{publish_native_output, publish_output, publish_output_to};
@@ -125,6 +126,12 @@ pub struct ProcessResult {
     pub stdout_sha256: String,
     pub stderr_sha256: String,
     pub failure: Option<String>,
+    /// Structured failure evidence is additive to the historical string.  It
+    /// is deliberately outside the judge-v1 request/response wire contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_record: Option<ErrorRecord>,
+    #[serde(skip)]
+    pub(crate) failure_cause: Option<Arc<ProcessFailure>>,
     pub exit_code: i32,
     pub stdout: String,
     pub stderr: String,
@@ -142,6 +149,91 @@ pub struct ProcessResult {
     pub output_limit_bytes: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch_original: Option<Value>,
+}
+
+/// A process setup failure retains its structured owner record while the
+/// public compatibility helpers continue returning the historical message.
+#[derive(Debug)]
+pub(crate) struct ProcessFailure {
+    pub(crate) message: String,
+    pub(crate) error: Failure,
+}
+
+impl ProcessFailure {
+    fn domain(code: impl Into<String>, message: impl Into<String>) -> Self {
+        let message = message.into();
+        let error = Failure::new(code, message.clone());
+        Self { message, error }
+    }
+
+    fn native(code: impl Into<String>, message: impl Into<String>, source: std::io::Error) -> Self {
+        let message = message.into();
+        let error = Failure::wrap(code, message.clone(), NativeIoError::new(source));
+        Self { message, error }
+    }
+}
+
+impl From<String> for ProcessFailure {
+    fn from(message: String) -> Self {
+        Self::domain("E_PROCESS", message)
+    }
+}
+
+impl From<&str> for ProcessFailure {
+    fn from(message: &str) -> Self {
+        Self::from(message.to_string())
+    }
+}
+impl From<std::io::Error> for ProcessFailure {
+    fn from(source: std::io::Error) -> Self {
+        Self::native("E_PROCESS_OWNERSHIP", source.to_string(), source)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct SharedProcessFailure(pub(crate) Arc<ProcessFailure>);
+impl std::fmt::Display for SharedProcessFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl std::error::Error for SharedProcessFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.0.as_ref())
+    }
+}
+impl chrono_diagnostics::error::RecordedError for SharedProcessFailure {
+    fn error_node(&self) -> chrono_diagnostics::error::ErrorNode {
+        self.0.error.record().error
+    }
+}
+impl ProcessFailure {
+    fn shared(source: Arc<Self>) -> Self {
+        Self {
+            message: source.message.clone(),
+            error: Failure::wrap(
+                "E_PROCESS_OWNERSHIP",
+                source.message.clone(),
+                SharedProcessFailure(source),
+            ),
+        }
+    }
+}
+
+impl std::fmt::Display for ProcessFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+impl std::error::Error for ProcessFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+impl chrono_diagnostics::error::RecordedError for ProcessFailure {
+    fn error_node(&self) -> chrono_diagnostics::error::ErrorNode {
+        self.error.record().error
+    }
 }
 
 pub fn sha256(bytes: &[u8]) -> String {
@@ -192,17 +284,29 @@ pub fn relative_path(value: &str) -> Result<(), String> {
     Ok(())
 }
 pub fn no_symlink_parents(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    no_symlink_parents_detailed(root, relative).map_err(|error| error.message)
+}
+pub(crate) fn no_symlink_parents_detailed(
+    root: &Path,
+    relative: &str,
+) -> Result<PathBuf, ProcessFailure> {
     relative_path(relative)?;
     let mut p = root.to_path_buf();
     for c in Path::new(relative).components() {
         p.push(c);
         match fs::symlink_metadata(&p) {
             Ok(m) if m.file_type().is_symlink() => {
-                return Err(format!("symlink path is not allowed: {}", p.display()));
+                return Err(format!("symlink path is not allowed: {}", p.display()).into());
             }
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.to_string()),
+            Err(e) => {
+                return Err(ProcessFailure::native(
+                    "E_PROCESS_PATH_READ",
+                    e.to_string(),
+                    e,
+                ));
+            }
         }
     }
     Ok(p)
@@ -522,14 +626,17 @@ pub fn resolve_program(
     Err(format!("executable not found: {program}"))
 }
 pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<ProcessResult, String> {
-    finish_process(run_process_inner(
-        root,
-        s,
-        input,
-        None,
-        Duration::from_secs(s.timeout_seconds),
-        None,
-    )?)
+    finish_process(
+        run_process_inner(
+            root,
+            s,
+            input,
+            None,
+            Duration::from_secs(s.timeout_seconds),
+            None,
+        )
+        .map_err(|failure| failure.message)?,
+    )
 }
 /// v1 uses the same bounded engine with a cleared environment and prelaunch binding.
 pub fn run_process_bound(
@@ -538,20 +645,27 @@ pub fn run_process_bound(
     input: &[u8],
     digest: &str,
 ) -> Result<ProcessResult, String> {
-    finish_process(run_process_inner(
-        root,
-        s,
-        input,
-        Some(digest),
-        Duration::from_secs(s.timeout_seconds),
-        None,
-    )?)
+    finish_process(
+        run_process_inner(
+            root,
+            s,
+            input,
+            Some(digest),
+            Duration::from_secs(s.timeout_seconds),
+            None,
+        )
+        .map_err(|failure| failure.message)?,
+    )
 }
 fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
     if let Some(error) = &p.failure {
         return Err(error.clone());
     }
     Ok(p)
+}
+
+fn finish_detailed(p: Result<ProcessResult, ProcessFailure>) -> Result<ProcessResult, String> {
+    p.map_err(|failure| failure.message)
 }
 /// Same engine, retaining partial output and true exit even when a process bound fires.
 pub fn run_process_observed(
@@ -560,14 +674,14 @@ pub fn run_process_observed(
     input: &[u8],
     digest: &str,
 ) -> Result<ProcessResult, String> {
-    run_process_inner(
+    finish_detailed(run_process_inner(
         root,
         s,
         input,
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
         None,
-    )
+    ))
 }
 /// Preserve a caller's finer acquisition deadline through the same engine.
 pub fn run_process_observed_for(
@@ -577,7 +691,31 @@ pub fn run_process_observed_for(
     digest: &str,
     timeout: Duration,
 ) -> Result<ProcessResult, String> {
-    run_process_inner(root, s, input, Some(digest), timeout, None)
+    finish_detailed(run_process_inner(
+        root,
+        s,
+        input,
+        Some(digest),
+        timeout,
+        None,
+    ))
+}
+
+/// Runner-owned wire callers use this variant to retain prelaunch causes.
+pub(crate) fn run_process_observed_detailed(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+) -> Result<ProcessResult, ProcessFailure> {
+    run_process_inner(
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+        None,
+    )
 }
 /// Explicit originals for a consumer that can be terminated by an enclosing owner.
 /// Stream files contain only bytes actually read, within the unchanged output bound.
@@ -607,8 +745,20 @@ struct LaunchEvidence {
 }
 
 pub(crate) fn validate_launch_evidence(path: &Path, process: &ProcessResult) -> Result<(), String> {
-    let bytes = fs::read(path).map_err(|e| format!("launch evidence read: {e}"))?;
-    validate_launch_evidence_bytes(&bytes, process)
+    validate_launch_evidence_detailed(path, process).map_err(|failure| failure.message)
+}
+fn validate_launch_evidence_detailed(
+    path: &Path,
+    process: &ProcessResult,
+) -> Result<(), ProcessFailure> {
+    let bytes = fs::read(path).map_err(|e| {
+        ProcessFailure::native(
+            "E_PROCESS_LAUNCH_EVIDENCE",
+            format!("launch evidence read: {e}"),
+            e,
+        )
+    })?;
+    validate_launch_evidence_bytes(&bytes, process).map_err(ProcessFailure::from)
 }
 
 pub(crate) fn validate_launch_evidence_bytes(
@@ -699,17 +849,17 @@ pub fn run_process_observed_retained(
     digest: &str,
     evidence: &ProcessEvidence<'_>,
 ) -> Result<ProcessResult, String> {
-    run_process_inner(
+    finish_detailed(run_process_inner(
         root,
         s,
         input,
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
         Some(evidence),
-    )
+    ))
 }
 
-fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, String> {
+fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, ProcessFailure> {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -718,8 +868,13 @@ fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, Strin
     let parent = absolute
         .parent()
         .ok_or_else(|| format!("{label} evidence parent missing"))?;
-    let parent =
-        fs::canonicalize(parent).map_err(|error| format!("{label} evidence parent: {error}"))?;
+    let parent = fs::canonicalize(parent).map_err(|error| {
+        ProcessFailure::native(
+            "E_PROCESS_EVIDENCE_PATH",
+            format!("{label} evidence parent: {error}"),
+            error,
+        )
+    })?;
     let absolute = parent.join(
         absolute
             .file_name()
@@ -730,23 +885,29 @@ fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, Strin
         .map_err(|_| format!("{label} evidence escapes host root"))?
         .to_str()
         .ok_or_else(|| format!("{label} evidence path is not UTF-8"))?;
-    let checked = no_symlink_parents(root, relative)?;
+    let checked = no_symlink_parents_detailed(root, relative)?;
     let mut parent = checked
         .parent()
         .ok_or_else(|| format!("{label} evidence parent missing"))?;
     loop {
         match fs::symlink_metadata(parent) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(format!("{label} evidence parent is a symlink"));
+                return Err(format!("{label} evidence parent is a symlink").into());
             }
             Ok(metadata) if !metadata.is_dir() => {
-                return Err(format!("{label} evidence parent is not a directory"));
+                return Err(format!("{label} evidence parent is not a directory").into());
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(format!("{label} evidence parent missing"));
+                return Err(format!("{label} evidence parent missing").into());
             }
-            Err(error) => return Err(format!("{label} evidence parent: {error}")),
+            Err(error) => {
+                return Err(ProcessFailure::native(
+                    "E_PROCESS_EVIDENCE_PATH",
+                    format!("{label} evidence parent: {error}"),
+                    error,
+                ));
+            }
         }
         if parent == root {
             break;
@@ -757,10 +918,10 @@ fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, Strin
     }
     if let Ok(metadata) = fs::symlink_metadata(&checked) {
         if metadata.file_type().is_symlink() {
-            return Err(format!("{label} evidence path is a symlink"));
+            return Err(format!("{label} evidence path is a symlink").into());
         }
         if !metadata.is_file() {
-            return Err(format!("{label} evidence path is not a regular file"));
+            return Err(format!("{label} evidence path is not a regular file").into());
         }
     }
     Ok(checked)
@@ -769,7 +930,7 @@ fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, Strin
 fn validate_process_evidence_paths(
     root: &Path,
     evidence: &ProcessEvidence<'_>,
-) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+) -> Result<(PathBuf, PathBuf, PathBuf), ProcessFailure> {
     Ok((
         evidence_path(root, evidence.stdout, "stdout")?,
         evidence_path(root, evidence.stderr, "stderr")?,
@@ -783,21 +944,25 @@ fn launch_descriptor(root: &Path, path: &Path) -> Option<Value> {
     Some(serde_json::json!({"path": relative, "sha256": digest}))
 }
 
-fn cleanup_evidence_path(path: &Path) -> Result<(), String> {
+fn cleanup_evidence_path(path: &Path) -> Result<(), ProcessFailure> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => Err(format!(
-            "evidence cleanup refused symlink {}",
-            path.display()
-        )),
-        Ok(metadata) if metadata.is_file() => {
-            fs::remove_file(path).map_err(|error| format!("{}: {error}", path.display()))
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Err(format!("evidence cleanup refused symlink {}", path.display()).into())
         }
-        Ok(_) => Err(format!(
-            "evidence cleanup refused non-file {}",
-            path.display()
-        )),
+        Ok(metadata) if metadata.is_file() => fs::remove_file(path).map_err(|error| {
+            ProcessFailure::native(
+                "E_PROCESS_EVIDENCE_CLEANUP",
+                format!("{}: {error}", path.display()),
+                error,
+            )
+        }),
+        Ok(_) => Err(format!("evidence cleanup refused non-file {}", path.display()).into()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(format!("{}: {error}", path.display())),
+        Err(error) => Err(ProcessFailure::native(
+            "E_PROCESS_EVIDENCE_CLEANUP",
+            format!("{}: {error}", path.display()),
+            error,
+        )),
     }
 }
 // The existing process engine owns termination on errors and unwinding too.
@@ -844,7 +1009,7 @@ pub fn run_process_observed_data(
     digest: &str,
     stdout_limit: usize,
 ) -> Result<ProcessResult, String> {
-    run_process_inner_with_stdout(
+    finish_detailed(run_process_inner_with_stdout(
         root,
         s,
         input,
@@ -852,7 +1017,7 @@ pub fn run_process_observed_data(
         Duration::from_secs(s.timeout_seconds),
         stdout_limit,
         None,
-    )
+    ))
 }
 fn run_process_inner(
     root: &Path,
@@ -861,7 +1026,7 @@ fn run_process_inner(
     expected: Option<&str>,
     timeout: Duration,
     evidence: Option<&ProcessEvidence<'_>>,
-) -> Result<ProcessResult, String> {
+) -> Result<ProcessResult, ProcessFailure> {
     run_process_inner_with_stdout(
         root,
         s,
@@ -871,6 +1036,23 @@ fn run_process_inner(
         s.output_limit_bytes,
         evidence,
     )
+    .map_err(|mut failure| {
+        failure.error = failure
+            .error
+            .at(
+                "argv",
+                serde_json::json!(
+                    std::iter::once(&s.program)
+                        .chain(&s.args)
+                        .collect::<Vec<_>>()
+                ),
+            )
+            .at("cwd", root.to_string_lossy().into_owned())
+            .at("stdin_sha256", sha256(input))
+            .at("expected_executable_sha256", serde_json::json!(expected))
+            .at("operation_started", false);
+        failure
+    })
 }
 fn run_process_inner_with_stdout(
     root: &Path,
@@ -880,7 +1062,7 @@ fn run_process_inner_with_stdout(
     timeout: Duration,
     stdout_limit: usize,
     evidence: Option<&ProcessEvidence<'_>>,
-) -> Result<ProcessResult, String> {
+) -> Result<ProcessResult, ProcessFailure> {
     validate_command(s)?;
     if stdout_limit == 0 || stdout_limit > 64 * 1024 * 1024 {
         return Err("invalid immutable input transport bound".into());
@@ -888,8 +1070,13 @@ fn run_process_inner_with_stdout(
     if expected.is_some() && !Path::new(&s.program).is_absolute() {
         return Err("bound executable must be absolute; no ambient PATH resolution".into());
     }
-    let executable = resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?;
-    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let executable = if expected.is_some() {
+        PathBuf::from(&s.program)
+    } else {
+        resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?
+    };
+    let root = fs::canonicalize(root)
+        .map_err(|e| ProcessFailure::native("E_PROCESS_CWD", format!("process cwd: {e}"), e))?;
     let evidence_paths = evidence
         .map(|paths| validate_process_evidence_paths(&root, paths))
         .transpose()?;
@@ -909,9 +1096,15 @@ fn run_process_inner_with_stdout(
         env
     };
     let stdin_sha256 = sha256(input);
-    let hash = sha256(&fs::read(&executable).map_err(|e| e.to_string())?);
+    let hash = sha256(
+        &fs::read(&executable)
+            .map_err(|e| ProcessFailure::native("E_PROCESS_EXECUTABLE_READ", e.to_string(), e))?,
+    );
     if expected.is_some_and(|v| v != hash) {
-        return Err("prelaunch executable digest mismatch".into());
+        return Err(ProcessFailure::domain(
+            "E_PROCESS_EXECUTABLE_DIGEST",
+            "prelaunch executable digest mismatch",
+        ));
     }
     let mut command = Command::new(&executable);
     if expected.is_some() {
@@ -948,26 +1141,32 @@ fn run_process_inner_with_stdout(
     // and can be removed without touching a pre-existing address.
     let (stdout_original, stderr_original) = match evidence.as_ref() {
         Some(paths) => {
-            let stdout =
-                fs::File::create_new(paths.stdout).map_err(|e| format!("stdout original: {e}"))?;
+            let stdout = fs::File::create_new(paths.stdout).map_err(|e| {
+                ProcessFailure::native("E_PROCESS_EVIDENCE", format!("stdout original: {e}"), e)
+            })?;
             let stderr = match fs::File::create_new(paths.stderr) {
                 Ok(file) => file,
                 Err(error) => {
                     drop(stdout);
                     let cleanup = cleanup_evidence_path(paths.stdout).err();
-                    return Err(match cleanup {
+                    let message = match &cleanup {
                         Some(cleanup) => {
                             format!("stderr original: {error}; evidence cleanup: {cleanup}")
                         }
                         None => format!("stderr original: {error}"),
-                    });
+                    };
+                    let mut failure = ProcessFailure::native("E_PROCESS_EVIDENCE", message, error);
+                    if let Some(cleanup) = cleanup {
+                        failure.error = failure.error.with_related("evidence_cleanup", cleanup);
+                    }
+                    return Err(failure);
                 }
             };
             (Some(stdout), Some(stderr))
         }
         None => (None, None),
     };
-    std::thread::scope(|scope| {
+    Ok(std::thread::scope(|scope| {
         let child = match command.spawn() {
             Ok(child) => child,
             Err(e) => {
@@ -981,11 +1180,43 @@ fn run_process_inner_with_stdout(
                 });
                 let cleanup = cleanup.filter(|errors| !errors.is_empty());
                 #[cfg(unix)]
-                let e = ownership.spawn_error(e);
+                let detail = ownership.spawn_error(&e);
+                #[cfg(not(unix))]
+                let detail = e.to_string();
                 let cleanup_note = cleanup
-                    .map(|errors| format!("; evidence cleanup: {}", errors.join("; ")))
+                    .as_ref()
+                    .map(|errors| {
+                        format!(
+                            "; evidence cleanup: {}",
+                            errors
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join("; ")
+                        )
+                    })
                     .unwrap_or_default();
-                return Err(format!("{}: {e}{cleanup_note}", executable.display()));
+                let mut failure = ProcessFailure::native(
+                    "E_PROCESS_SPAWN",
+                    format!("{}: {detail}{cleanup_note}", executable.display()),
+                    e,
+                );
+                failure.error = failure
+                    .error
+                    .at("executable", executable.to_string_lossy().into_owned());
+                #[cfg(unix)]
+                {
+                    failure.error = failure.error.at("ownership", ownership.spawn_observation());
+                }
+                if !cleanup_note.is_empty() {
+                    failure.error = failure
+                        .error
+                        .at("evidence_cleanup", cleanup_note.trim_start_matches("; "));
+                }
+                for cleanup in cleanup.into_iter().flatten() {
+                    failure.error = failure.error.with_related("evidence_cleanup", cleanup);
+                }
+                return Err(failure);
             }
         };
         let mut child = OwnedProcess {
@@ -1005,25 +1236,25 @@ fn run_process_inner_with_stdout(
                 "ownership_fds": ownership_fds, "stdin_sha256": stdin_sha256,
                 "timeout_seconds": s.timeout_seconds, "output_limit_bytes": s.output_limit_bytes,
             });
-            let published = (|| -> Result<(), String> {
+            let published = (|| -> Result<(), Failure> {
                 let mut original = tempfile::NamedTempFile::new_in(
                     paths
                         .launch
                         .parent()
-                        .ok_or("launch original parent missing")?,
+                        .ok_or_else(|| Failure::new("E_PROCESS_EVIDENCE", "launch original parent missing"))?,
                 )
-                .map_err(|e| format!("launch original: {e}"))?;
-                serde_json::to_writer(&mut original, &record)
-                    .map_err(|e| format!("launch original: {e}"))?;
-                original.flush().map_err(|e| format!("launch original: {e}"))?;
+                .map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e)).at("phase", "create"))?;
+                original.write_all(record.to_string().as_bytes())
+                    .map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e)).at("phase", "write"))?;
+                original.flush().map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e)).at("phase", "flush"))?;
                 original
                     .persist_noclobber(paths.launch)
-                    .map_err(|e| format!("launch original: {e}"))?;
+                    .map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e.error)).at("phase", "persist"))?;
                 Ok(())
             })();
             published
                 .err()
-                .map(|error| format!("{error}; launch evidence: {record}"))
+                .map(|error| Failure::wrap("E_PROCESS_EVIDENCE", format!("{error}; launch evidence: {record}"), error).at("launch", record))
         });
         let stdin = child.stdin.take().ok_or("missing process stdin")?;
         let writer = if input.is_empty() {
@@ -1052,7 +1283,7 @@ fn run_process_inner_with_stdout(
         };
         struct StreamResult {
             bytes: Vec<u8>,
-            failures: Vec<String>,
+            failures: Vec<Failure>,
         }
         fn reader<'scope, R: Read + Send + 'scope, W: Fn() + Send + 'scope>(
             scope: &'scope std::thread::Scope<'scope, '_>,
@@ -1075,7 +1306,15 @@ fn run_process_inner_with_stdout(
                     let n = match r.read(&mut buf) {
                         Ok(n) => n,
                         Err(e) => {
-                            result.failures.push(format!("{stream} read: {e}"));
+                            result.failures.push(
+                                Failure::wrap(
+                                    "E_PROCESS_STREAM_READ",
+                                    format!("{stream} read: {e}"),
+                                    NativeIoError::new(e),
+                                )
+                                .at("stream", stream)
+                                .at("phase", "read"),
+                            );
                             break;
                         }
                     };
@@ -1093,7 +1332,15 @@ fn run_process_inner_with_stdout(
                         // File is unbuffered: enclosing termination cannot discard
                         // bytes already retained by a completed write.
                         if let Err(e) = file.write_all(&buf[..keep]) {
-                            result.failures.push(format!("{stream} original: {e}"));
+                            result.failures.push(
+                                Failure::wrap(
+                                    "E_PROCESS_EVIDENCE",
+                                    format!("{stream} original: {e}"),
+                                    NativeIoError::new(e),
+                                )
+                                .at("stream", stream)
+                                .at("phase", "write"),
+                            );
                             original = None;
                         }
                     }
@@ -1132,6 +1379,7 @@ fn run_process_inner_with_stdout(
         let terminal_deadline = process_ownership::terminal_deadline(timeout);
         let start = Instant::now();
         let mut failure = None;
+        let mut failure_detail = None;
         let mut status = loop {
             #[cfg(unix)]
             if child.ownership.cancelled() {
@@ -1162,6 +1410,11 @@ fn run_process_inner_with_stdout(
                 Ok(None) => {}
                 Err(e) => {
                     failure = Some(format!("process wait: {e}"));
+                    failure_detail = Some(Failure::wrap(
+                        "E_PROCESS_WAIT",
+                        format!("process wait: {e}"),
+                        NativeIoError::new(e),
+                    ));
                     break None;
                 }
             }
@@ -1181,6 +1434,19 @@ fn run_process_inner_with_stdout(
         }
         #[cfg(unix)]
         if !child.ownership.drain() {
+            if failure_detail.is_none() {
+                failure_detail = failure
+                    .as_ref()
+                    .map(|message| Failure::new("E_PROCESS", message.clone()));
+            }
+            let cleanup = Failure::new(
+                "E_PROCESS_OWNERSHIP_CLEANUP",
+                "nested owner did not acknowledge joined completion",
+            );
+            failure_detail = Some(match failure_detail.take() {
+                Some(original) => original.with_related("ownership_cleanup", cleanup),
+                None => cleanup,
+            });
             let original = failure
                 .take()
                 .unwrap_or_else(|| "process ownership cleanup failed".into());
@@ -1200,6 +1466,18 @@ fn run_process_inner_with_stdout(
                 Err(e) => {
                     let original = failure.take().unwrap_or_default();
                     failure = Some(format!("{original}; process join: {e}"));
+                    let join = Failure::wrap(
+                        "E_PROCESS_JOIN",
+                        format!("process join: {e}"),
+                        NativeIoError::new(e),
+                    );
+                    failure_detail = Some(match failure_detail.take() {
+                        Some(original) => original.with_related("process_join", join),
+                        None if original.is_empty() => join,
+                        None => {
+                            Failure::new("E_PROCESS", original).with_related("process_join", join)
+                        }
+                    });
                 }
             }
         }
@@ -1220,6 +1498,11 @@ fn run_process_inner_with_stdout(
             });
         }
         let launch_publication_failed = publication_failure.is_some();
+        if failure_detail.is_none() {
+            failure_detail = failure
+                .as_ref()
+                .map(|message| Failure::new("E_PROCESS", message.clone()));
+        }
         for error in publication_failure
             .into_iter()
             .chain(a.failures)
@@ -1227,11 +1510,24 @@ fn run_process_inner_with_stdout(
         {
             failure = Some(match failure {
                 Some(original) => format!("{original}; {error}"),
+                None => error.to_string(),
+            });
+            failure_detail = Some(match failure_detail.take() {
+                Some(original) => original.with_related("process_evidence", error),
                 None => error,
             });
         }
         let a = a.bytes;
         let b = b.bytes;
+        let failure_cause = failure_detail.map(|error| {
+            Arc::new(ProcessFailure {
+                message: error.to_string(),
+                error: error
+                    .at("launcher_pid", launcher_pid)
+                    .at("child_pid", pid)
+                    .at("operation_started", true),
+            })
+        });
         let mut process = ProcessResult {
             argv: std::iter::once(executable.to_string_lossy().into_owned())
                 .chain(s.args.clone())
@@ -1247,7 +1543,7 @@ fn run_process_inner_with_stdout(
             stderr: String::from_utf8_lossy(&b).into_owned(),
             stdout_bytes: a,
             stderr_bytes: b,
-            failure,
+            failure: failure.clone(),
             exit_code: status.and_then(|s| s.code()).unwrap_or(-1),
             executable,
             sha256: hash,
@@ -1255,22 +1551,40 @@ fn run_process_inner_with_stdout(
             child_pid: Some(pid),
             timeout_seconds: Some(s.timeout_seconds),
             output_limit_bytes: Some(s.output_limit_bytes),
+            failure_record: failure_cause.as_ref().map(|source| source.error.record()),
+            failure_cause,
             launch_original: None,
         };
         if let Some(paths) = evidence.as_ref() {
             let validate_launch = !launch_publication_failed;
-            if let Err(error) = validate_launch_evidence(paths.launch, &process)
+            if let Err(error) = validate_launch_evidence_detailed(paths.launch, &process)
                 && validate_launch
             {
                 process.failure = Some(match process.failure.take() {
                     Some(original) => format!("{original}; {error}"),
-                    None => error,
+                    None => error.to_string(),
                 });
+                let detail = match process.failure_cause.take() {
+                    Some(original) => Failure::wrap(
+                        "E_PROCESS",
+                        original.message.clone(),
+                        SharedProcessFailure(original),
+                    )
+                    .with_related("launch_evidence", error),
+                    None => {
+                        Failure::wrap("E_PROCESS_LAUNCH_EVIDENCE", error.message.clone(), error)
+                    }
+                };
+                process.failure_record = Some(detail.record());
+                process.failure_cause = Some(Arc::new(ProcessFailure {
+                    message: detail.to_string(),
+                    error: detail,
+                }));
             }
             process.launch_original = launch_descriptor(&process.cwd, paths.launch);
         }
         Ok(process)
-    })
+    })?)
 }
 pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String> {
     validate_response_protocol(r, id, exit, PROTOCOL)
@@ -1788,6 +2102,7 @@ fn execute_check(
             Duration::from_secs(c.judge.timeout_seconds),
             evidence.as_ref(),
         )
+        .map_err(|failure| failure.message)
     };
     let runner_executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let runner_identity = serde_json::json!({"path":runner_executable,"sha256":sha256(&fs::read(&runner_executable).map_err(|e|e.to_string())?),"version":env!("CARGO_PKG_VERSION")});

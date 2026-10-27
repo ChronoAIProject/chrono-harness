@@ -221,7 +221,7 @@ pub(crate) fn project(
         } else {
             work_id
         };
-        suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {step}_save\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.{producer_step}.outcome == 'success' && steps.{step}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
+        suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {step}_save\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.{producer_step}.outcome == 'success' && steps.{step}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key && (steps.chrono_cache_plan.outputs.{key}_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.{key}_sealed == 'true') }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
     }
     prefix.push_str(&format!("      - name: Recover failed cache restores\n        if: ${{{{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_RESTORE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} recover --host-root . --config {} --plan {} --steps-env CHRONO_CACHE_RESTORE_STEPS\n", shell(&c.program), shell(&c.config), shell(&plan_path)));
     let bootstrap_arg = if consumer.save_after_bootstrap.is_empty() {
@@ -239,6 +239,22 @@ pub(crate) fn project(
             )
         })
         .unwrap_or_default();
+    let bootstrap_seal_arg = if consumer.save_after_bootstrap.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " --bootstrap {bootstrap_id} --save-after-bootstrap {}",
+            shell(&serde_json::to_string(&consumer.save_after_bootstrap).unwrap())
+        )
+    };
+    let seal = format!(
+        "      - name: Seal producer cache contents\n        id: chrono_cache_seal\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_PRODUCER_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} seal --host-root . --config {} --plan {} --steps-env CHRONO_CACHE_PRODUCER_STEPS --work {}{bootstrap_seal_arg}{saves_arg} --github-output \"$GITHUB_OUTPUT\"\n",
+        shell(&c.program),
+        shell(&c.config),
+        shell(&plan_path),
+        shell(work_id)
+    );
+    suffix.insert_str(0, &seal);
     suffix.push_str(&format!("      - name: Record original cache transport observations\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_STEPS: ${{{{ toJSON(steps) }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {} report --host-root . --plan {} --report-directory {} --steps-env CHRONO_CACHE_STEPS --work {}{bootstrap_arg}{saves_arg}\n", shell(&c.program), shell(&plan_path), shell(&evidence_directory), shell(work_id)));
     let marker = format!("      - name: {before}\n");
     let work_marker = format!("      - name: {work}\n");

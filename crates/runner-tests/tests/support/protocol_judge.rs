@@ -48,6 +48,17 @@ fn main() {
     if let Some(marker) = case["marker"].as_str() {
         std::fs::write(marker, "yes").unwrap();
     }
+    if let Some(path) = case["block_report"].as_str()
+        && !std::path::Path::new(path).is_dir()
+    {
+        // A real publication failure after the runner's destination preflight.
+        std::fs::create_dir(path).unwrap();
+    }
+    if case["block_retained_report"] == true {
+        let path = request["observations"]["report_path"].as_str().unwrap();
+        std::fs::remove_file(path).unwrap();
+        std::fs::create_dir(path).unwrap();
+    }
     let mut response = json!({
         "protocol": request["protocol"], "request_id": request["request_id"],
         "judge_id": request["judge_id"], "status": "pass", "findings": [],
