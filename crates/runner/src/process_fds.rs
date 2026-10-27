@@ -166,6 +166,6 @@ pub fn forward_command(command: &mut Command, fds: &[BorrowedFd<'_>]) -> Result<
         );
     }
     let _scope = Scope::new(fds)?;
-    Transfer::prepare(command)?;
+    Transfer::prepare(command).map_err(|failure| failure.to_string())?;
     Ok(())
 }
