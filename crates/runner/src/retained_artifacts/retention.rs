@@ -1730,16 +1730,13 @@ impl Publication {
         self.lease.stable()?;
         let gate = self.inventory.gate()?;
         let mut l = self.inventory.load()?;
-        let role = consumer
-            .map(|consumer| self.inventory.consumer_role(consumer))
-            .transpose()?;
-        self.materialize_excluded(&mut l, &gate, role.as_deref())
+        self.materialize_excluded(&mut l, &gate, consumer)
     }
     fn materialize_excluded(
         &self,
         l: &mut Ledger,
         gate: &Lease,
-        reference: Option<&str>,
+        consumer: Option<&str>,
     ) -> Result<(), String> {
         self.lease.stable()?;
         let o = l
@@ -1779,12 +1776,13 @@ impl Publication {
         o.creation = None;
         o.phase = "publishing".into();
         let attached = o.identity.clone();
-        if let Some(role) = reference {
-            if l.roots.contains_key(role) {
+        if let Some(consumer) = consumer {
+            let role = self.inventory.consumer_role(consumer)?;
+            if l.roots.contains_key(&role) {
                 return Err("creation consumer role already exists".into());
             }
             self.inventory
-                .reference_locked(l, role, &[self.id.clone()])?;
+                .reference_locked(l, &role, &[self.id.clone()])?;
         }
         self.inventory.save(l, gate)?;
         *self.identity.borrow_mut() = attached;
@@ -2039,7 +2037,7 @@ pub fn create_adopted_with_limit(
     outcome: Value,
     byte_limit: Option<u64>,
 ) -> Result<Option<Publication>, String> {
-    create_with_reference(root, producer, path, tree, outcome, byte_limit, None)
+    create_with_consumer(root, producer, path, tree, outcome, byte_limit, None)
 }
 /// Bind an actual consumer in the existing durable publication, before any
 /// content write. The producer supplies the role prefix; the owner mints its
@@ -2056,47 +2054,24 @@ pub fn create_adopted_for_consumer(
     if consumer_prefix.trim().is_empty() || consumer_prefix.len() > 210 {
         return Err("invalid bounded creation consumer prefix".into());
     }
-    create_with_reference(
+    create_with_consumer(
         root,
         producer,
         path,
         tree,
         outcome,
         byte_limit,
-        Some(&format!("consumer:{consumer_prefix}")),
+        Some(consumer_prefix),
     )
 }
-/// Attach a producer-owned reference atomically with its original, using the
-/// producer's existing root identity rather than an external consumer identity.
-pub(crate) fn create_adopted_for_reference(
-    root: &Path,
-    producer: &str,
-    path: &Path,
-    tree: bool,
-    outcome: Value,
-    reference_prefix: &str,
-) -> Result<Option<Publication>, String> {
-    if reference_prefix.trim().is_empty() || reference_prefix.len() > 210 {
-        return Err("invalid bounded creation reference prefix".into());
-    }
-    create_with_reference(
-        root,
-        producer,
-        path,
-        tree,
-        outcome,
-        None,
-        Some(reference_prefix),
-    )
-}
-fn create_with_reference(
+fn create_with_consumer(
     root: &Path,
     producer: &str,
     path: &Path,
     tree: bool,
     outcome: Value,
     byte_limit: Option<u64>,
-    reference_prefix: Option<&str>,
+    consumer_prefix: Option<&str>,
 ) -> Result<Option<Publication>, String> {
     let canonical_root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     let physical_path = fs::canonicalize(path.parent().ok_or("output parent")?)
@@ -2124,8 +2099,8 @@ fn create_with_reference(
                 Some(tree),
                 byte_limit,
             )?;
-            let reference = reference_prefix.map(|prefix| format!("{prefix}:{}", publication.id()));
-            publication.materialize_excluded(&mut ledger, &gate, reference.as_deref())?;
+            let consumer = consumer_prefix.map(|prefix| format!("{prefix}:{}", publication.id()));
+            publication.materialize_excluded(&mut ledger, &gate, consumer.as_deref())?;
             return Ok(Some(publication));
         }
     }

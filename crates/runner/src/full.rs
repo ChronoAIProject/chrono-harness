@@ -1294,17 +1294,15 @@ pub fn check_prepared(
         .to_owned()
         + "/";
     let retained_report = crate::prepare_publication(root, &report_path)?;
-    let retained_publication = crate::retained_artifacts::retention::create_adopted_for_reference(
+    let retained_publication = crate::retained_artifacts::retention::create_adopted_for_consumer(
         root,
         "full-original",
         &retained_report,
         false,
         value!({"publication":"started","outcome":"not-established"}),
+        None,
         "report-recheck",
     )?;
-    let report_recheck = retained_publication
-        .as_ref()
-        .map(|publication| format!("report-recheck:{}", publication.id()));
     let timeout = cfg["protocol"]["timeout_seconds"]
         .as_u64()
         .ok_or("full timeout")?;
@@ -1624,10 +1622,6 @@ pub fn check_prepared(
     let mut _slot = None;
     let retained_written = publish(&retained_report);
     if retained_written {
-        if let Some(publication) = retained_publication {
-            let outcome = value!({"status":report["status"],"request_id":req.request_id,"exit_code":status.exit_code()});
-            publication.complete(outcome)?;
-        }
         let mut originals = Vec::new();
         if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
             originals.push(path.into());
@@ -1683,10 +1677,16 @@ pub fn check_prepared(
                 &format!("full-recovery:{}", sha256(config_path.as_bytes())),
                 &[],
             )?;
-            if status.exit_code() == 0 {
-                if let Some(consumer) = &report_recheck {
-                    inventory.reference(consumer, &[])?;
-                }
+        }
+    }
+    if retained_written {
+        if let Some(publication) = retained_publication {
+            let outcome = value!({"status":report["status"],"request_id":req.request_id,"exit_code":status.exit_code()});
+            if current_written && status.exit_code() == 0 {
+                let consumer = format!("report-recheck:{}", publication.id());
+                publication.complete_releasing_consumer(outcome, &consumer)?;
+            } else {
+                publication.complete(outcome)?;
             }
         }
     }

@@ -1025,7 +1025,7 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
                     inventory["roots"]
                         .as_object()
                         .unwrap()
-                        .contains_key(&format!("report-recheck:{id}"))
+                        .contains_key(&format!("consumer:report-recheck:{id}"))
                 );
                 assert!(
                     inventory["roots"]
@@ -1048,6 +1048,72 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
                 assert_eq!(process["stdout_bytes"], value!([255, 0, 10]));
                 assert_eq!(process["stderr_bytes"], value!([254, 0, 10]));
                 assert_eq!(process["exit_code"], 17);
+            }
+            if adopted {
+                let inventory_path =
+                    root.join(".chrono-harness/state/output-retention-v1/inventory.json");
+                let inventory: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&inventory_path).unwrap()).unwrap();
+                let path = report["report_path"].as_str().unwrap();
+                let output = inventory["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|output| output["path"] == path)
+                    .unwrap();
+                let consumer = format!("report-recheck:{}", output["id"].as_str().unwrap());
+                let original = chrono_harness::prepared::Original {
+                    path: path.into(),
+                    sha256: output["sha256"].as_str().unwrap().into(),
+                };
+                let raw = chrono_harness::prepared::read_original(root, &original, None).unwrap();
+                assert_eq!(
+                    serde_json::from_slice::<serde_json::Value>(&raw).unwrap(),
+                    *report
+                );
+                let declaration = serde_json::to_vec(&value!({
+                    "schema":"chrono-retention-consumer/v1","consumer":consumer,
+                    "purpose":"Recheck the exact full original after failed current-slot publication",
+                    "originals":[{"id":output["id"],"path":path,"identity":output["identity"]}]
+                })).unwrap();
+                fs::write(root.join("recheck-consumer.json"), &declaration).unwrap();
+                let receipt = serde_json::to_vec(&value!({
+                    "release":{"consumer":consumer,"declaration_sha256":sha256(&declaration),
+                    "state":"released"},"observed_original_sha256":sha256(&raw)
+                }))
+                .unwrap();
+                fs::write(root.join("recheck-result.json"), &receipt).unwrap();
+                fs::write(root.join("recheck-request.json"), serde_json::to_vec(&value!({
+                    "operation":"release-consumer",
+                    "declaration":{"path":"recheck-consumer.json","sha256":sha256(&declaration)},
+                    "receipt":{"path":"recheck-result.json","sha256":sha256(&receipt)},"pointer":"/release"
+                })).unwrap()).unwrap();
+                let result = chrono_harness::dispatch(&[
+                    "retention",
+                    "--host-root",
+                    root.to_str().unwrap(),
+                    "--request",
+                    "recheck-request.json",
+                ]);
+                assert_eq!(result.exit_code, 0, "{}", result.stderr);
+                let inventory: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&inventory_path).unwrap()).unwrap();
+                assert!(
+                    !inventory["roots"]
+                        .as_object()
+                        .unwrap()
+                        .contains_key(&format!("consumer:{consumer}"))
+                );
+                let consumed = inventory["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|record| record["id"] == output["id"])
+                    .unwrap();
+                for field in ["identity", "sha256", "outcome"] {
+                    assert_eq!(consumed[field], output[field]);
+                }
+                assert_eq!(fs::read(root.join(path)).unwrap(), raw);
             }
             continue;
         }
@@ -1080,7 +1146,7 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
                 inventory["roots"]
                     .as_object()
                     .unwrap()
-                    .contains_key(&format!("report-recheck:{id}")),
+                    .contains_key(&format!("consumer:report-recheck:{id}")),
                 exit != 0
             );
         }
