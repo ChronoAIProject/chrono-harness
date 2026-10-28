@@ -705,6 +705,128 @@ fn live_consumer_protects_references_even_after_retention_window_expires() {
     drop(lease);
     assert_eq!(i.maintain().unwrap()["remaining_outputs"], 0);
 }
+
+#[test]
+fn retained_capacity_round_retires_unrelated_outputs_without_probing_all_leases() {
+    if !isolated_capability_test(
+        "retained_capacity_round_retires_unrelated_outputs_without_probing_all_leases",
+    ) {
+        return;
+    }
+    let h = host(256, 128);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_entries"] = json!(512);
+    policy["max_millis_per_round"] = json!(25);
+    policy["max_bytes_per_round"] = json!(67108864);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let mut ids = Vec::new();
+    for n in 0..512 {
+        let path = format!(".chrono-harness/state/fixtures/retained-{n}");
+        fs::write(h.path().join(&path), b"original").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        ids.push(publication.id().to_owned());
+        publication.complete(json!({"exit": n % 2})).unwrap();
+    }
+    let i = inventory(h.path());
+    i.reference("required-failed-recheck", &[ids[1].clone()])
+        .unwrap();
+    let reader = i.consume(&ids[0]).unwrap();
+    assert_eq!(ledger(h.path())["outputs"].as_array().unwrap().len(), 512);
+    let began = std::time::Instant::now();
+    let round = i.maintain().unwrap();
+    let elapsed = began.elapsed();
+    assert!(
+        round["remaining_outputs"].as_u64().unwrap() < 512,
+        "{round}"
+    );
+    assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+    assert!(
+        round["verified_bytes"].as_u64().unwrap() <= 67108864,
+        "{round}"
+    );
+    assert_eq!(round["inventory_capacity"], 512);
+    for n in 0..2 {
+        assert_eq!(
+            fs::read(
+                h.path()
+                    .join(format!(".chrono-harness/state/fixtures/retained-{n}"))
+            )
+            .unwrap(),
+            b"original"
+        );
+    }
+    let path = ".chrono-harness/state/fixtures/next";
+    fs::write(h.path().join(path), b"next").unwrap();
+    inventory(h.path())
+        .begin("fixture", path, json!(null))
+        .unwrap()
+        .complete(json!({"exit": 0}))
+        .unwrap();
+    println!(
+        "MEASURE retained-capacity outputs=512 policy_millis=25 elapsed_micros={} remaining={} nodes={} removed_bytes={}",
+        elapsed.as_micros(),
+        round["remaining_outputs"],
+        round["nodes"],
+        round["removed_logical_bytes"]
+    );
+    drop(reader);
+}
+
+#[test]
+fn retirement_candidate_preserves_transitive_live_and_unknown_consumers_in_a_cycle() {
+    if !isolated_capability_test(
+        "retirement_candidate_preserves_transitive_live_and_unknown_consumers_in_a_cycle",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut ids = Vec::new();
+    for name in ["input", "middle", "consumer", "unrelated"] {
+        let path = tree(h.path(), name);
+        let p = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        ids.push(p.id().to_owned());
+        p.complete(json!({"exit": 9})).unwrap();
+    }
+    let i = inventory(h.path());
+    i.dependencies(&ids[2], &[ids[1].clone()]).unwrap();
+    i.dependencies(&ids[1], &[ids[0].clone()]).unwrap();
+    i.dependencies(&ids[0], &[ids[2].clone()]).unwrap();
+    let reader = i.consume(&ids[2]).unwrap();
+    assert_eq!(i.maintain().unwrap()["remaining_outputs"], 3);
+    for name in ["input", "middle", "consumer"] {
+        assert!(
+            h.path()
+                .join(format!(".chrono-harness/state/fixtures/{name}"))
+                .exists()
+        );
+    }
+    drop(reader);
+    let original_lease = h.path().join(format!(
+        ".chrono-harness/state/output-retention-v1/{}",
+        ids[2]
+    ));
+    let changed_lease = original_lease.with_extension("preserved");
+    fs::rename(&original_lease, &changed_lease).unwrap();
+    assert_eq!(i.maintain().unwrap()["remaining_outputs"], 3);
+    fs::rename(&changed_lease, &original_lease).unwrap();
+    assert_eq!(i.maintain().unwrap()["remaining_outputs"], 0);
+    assert!(
+        ledger(h.path())["summaries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|s| s["original_outcome"]["exit"] == 9)
+    );
+}
 #[test]
 fn identity_drift_and_changed_policy_preserve_original_evidence() {
     if !isolated_capability_test("identity_drift_and_changed_policy_preserve_original_evidence") {

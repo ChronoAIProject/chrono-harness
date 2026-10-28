@@ -63,6 +63,20 @@ or increase time, byte, node or output budgets. The unavailable inventory from t
 earlier nested failure is not reconstructed; local causal coverage does not
 establish its unobserved exact interleaving or native acceptance.
 
+Retirement checks physical liveness for the selected output and its declared
+transitive consumers, holding their identity-bound exclusive capabilities through
+the effect. Explicit roots, retention windows and report activity still protect
+their full dependency closure. Cycles use the same reverse reachability check;
+a live, missing or replaced consumer capability preserves its inputs. Unrelated
+output leases are no longer all opened before the retirement cursor can advance.
+That preliminary sweep exhausted the adopted 25 ms round at 512 entries even
+when released, unreferenced originals were eligible. The clock, admission and
+physical disposal bounds remain unchanged. The capacity regression creates all
+512 originals through the actual producer, retains a live reader and a required
+failed-original consumer, and requires reclamation to admit the next output;
+separate cycle cases check transitive live and unknown consumers. These checks
+do not establish a universal latency guarantee or release historical consumers.
+
 ## Bounded recovery and migration
 
 The supported owner entry is:

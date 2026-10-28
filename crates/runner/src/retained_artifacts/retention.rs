@@ -1013,6 +1013,42 @@ impl Inventory {
         let gate = self.gate()?;
         self.maintain_locked(observed, &gate)
     }
+    /// Under admission exclusion, only reverse-reachable outputs can still
+    /// consume this original. Keep their exclusive capabilities through the
+    /// physical effect; an unknown or live consumer preserves the candidate.
+    fn exclude_consumers(
+        &self,
+        l: &Ledger,
+        id: &str,
+        consumers: &BTreeMap<String, Vec<String>>,
+        began: Instant,
+    ) -> Result<Vec<Lease>, String> {
+        let mut seen = BTreeSet::from([id.to_owned()]);
+        let mut pending = consumers.get(id).cloned().unwrap_or_default();
+        let mut leases = Vec::new();
+        while let Some(consumer) = pending.pop() {
+            if !seen.insert(consumer.clone()) {
+                continue;
+            }
+            let Some(output) = l.outputs.iter().find(|o| o.id == consumer) else {
+                continue; // This consumer was already retired in the current round.
+            };
+            if began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128 {
+                return Err("bounded consumer exclusion; original preserved".into());
+            }
+            let lease = Lease::acquire(
+                &self.directory.join(&output.lease),
+                Some(&output.lease_id),
+                false,
+                true,
+                None,
+            )?
+            .ok_or("live producer/consumer descendants")?;
+            leases.push(lease);
+            pending.extend(consumers.get(&consumer).into_iter().flatten().cloned());
+        }
+        Ok(leases)
+    }
     fn maintain_locked(&self, observed: u64, gate: &Lease) -> Result<Value, String> {
         let began = Instant::now();
         let mut l = self.load()?;
@@ -1165,31 +1201,10 @@ impl Inventory {
             }
             // A finite window retains bytes that still exist; it cannot turn an
             // already removed successful fixture into permanent metadata.
-            let absent = matches!(fs::symlink_metadata(self.root.join(&o.path)),Err(ref e) if e.kind()==std::io::ErrorKind::NotFound);
-            if o.expires > observed && !absent {
-                protection_reasons.insert(o.id.clone(), "retention window".to_string());
-                pending.push(o.id.clone());
-                // Already retained by policy: probing its live-use exclusion
-                // adds no protection and serializes unrelated admissions.
-                continue;
-            }
-            match Lease::acquire(
-                &self.directory.join(&o.lease),
-                Some(&o.lease_id),
-                false,
-                true,
-                None,
-            ) {
-                Ok(Some(_)) => (),
-                Ok(None) => {
-                    protection_reasons.insert(
-                        o.id.clone(),
-                        "live producer/consumer descendants".to_string(),
-                    );
-                    pending.push(o.id.clone());
-                }
-                Err(error) => {
-                    protection_reasons.insert(o.id.clone(), error);
+            if o.expires > observed {
+                let absent = matches!(fs::symlink_metadata(self.root.join(&o.path)),Err(ref e) if e.kind()==std::io::ErrorKind::NotFound);
+                if !absent {
+                    protection_reasons.insert(o.id.clone(), "retention window".to_string());
                     pending.push(o.id.clone());
                 }
             }
@@ -1217,6 +1232,15 @@ impl Inventory {
         // preserves the durable cursor among peers; cycles remain reclaimable.
         let referenced: BTreeSet<_> = l.outputs.iter().flat_map(|o| o.references.iter()).collect();
         order.sort_by_key(|id| referenced.contains(id));
+        let mut consumers: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for output in &l.outputs {
+            for original in &output.references {
+                consumers
+                    .entry(original.clone())
+                    .or_default()
+                    .push(output.id.clone());
+            }
+        }
         for id in order {
             if !self.metadata_room()
                 || nodes >= self.policy.max_nodes_per_round
@@ -1247,6 +1271,13 @@ impl Inventory {
                 }
                 Err(e) => {
                     protected.push(json!({"id":id,"reason":e}));
+                    continue;
+                }
+            };
+            let consumer_leases = match self.exclude_consumers(&l, &id, &consumers, began) {
+                Ok(leases) => leases,
+                Err(error) => {
+                    protected.push(json!({"id":id,"reason":error}));
                     continue;
                 }
             };
@@ -1382,6 +1413,9 @@ impl Inventory {
                             || {
                                 self.stable(&gate)?;
                                 lease.stable()?;
+                                for consumer in &consumer_leases {
+                                    consumer.stable()?;
+                                }
                                 crate::artifact_disposal::source_safe(&self.root, &o.path)?;
                                 if identity(&root)? != o.identity {
                                     return Err("output changed before overflow disposal".into());
@@ -1468,6 +1502,9 @@ impl Inventory {
                         || {
                             self.stable(&gate)?;
                             lease.stable()?;
+                            for consumer in &consumer_leases {
+                                consumer.stable()?;
+                            }
                             crate::artifact_disposal::source_safe(&self.root, &o.path)?;
                             Manifest::validate(&entry, &self.root)?;
                             if identity(&root)? != o.identity {
