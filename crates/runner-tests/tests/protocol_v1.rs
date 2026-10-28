@@ -878,6 +878,9 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
         "publication-healthy",
         "healthy-adopted",
         "publication-adopted",
+        "publication-healthy-adopted",
+        "missing-adopted",
+        "digest-adopted",
     ] {
         let adopted = case.ends_with("-adopted");
         let case = case.strip_suffix("-adopted").unwrap_or(case);
@@ -1059,6 +1062,28 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
             fs::read_to_string(root.join(".chrono-harness/state/report.json")).unwrap(),
             text
         );
+        if adopted {
+            let inventory: serde_json::Value = serde_json::from_slice(
+                &fs::read(root.join(".chrono-harness/state/output-retention-v1/inventory.json"))
+                    .unwrap(),
+            )
+            .unwrap();
+            let output = inventory["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|output| output["path"] == report["report_path"])
+                .unwrap();
+            assert_eq!(output["outcome"]["status"], report["status"]);
+            let id = output["id"].as_str().unwrap();
+            assert_eq!(
+                inventory["roots"]
+                    .as_object()
+                    .unwrap()
+                    .contains_key(&format!("report-recheck:{id}")),
+                exit != 0
+            );
+        }
         let judge = &report["judges"][0];
         if case == "healthy" {
             assert!(judge.get("transport_diagnostic").is_none());

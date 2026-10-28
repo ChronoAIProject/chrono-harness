@@ -4,13 +4,22 @@ The retained-artifact owner governs final originals, fixed report slots and thei
 
 **Source and host policy change together:** this candidate selects `.chrono-harness/retention.json` for future report publications, including `keep_seconds:0` and 25 ms maintenance rounds. Count/byte capacities remain PR172's 512 outputs, 128 summaries, 256 steps, 64 MiB verification/metadata per round, 1 GiB per output, 8 GiB total admission and 16384 descendant identities per output. Existing outcomes and expiries require explicit migration and remain unchanged. This source selection is not historical adoption, deployment or release permission. Implementation, native, migration and total storage costs are unknown; per-command observations belong to the actual verification reports.
 
+The full-report publication repair also relocates the current macOS 27 policy's
+private tools, registered inputs, HOME, Cargo/Rustup caches and temporary writes
+into its validation checkout. Expected input digests, tool versions and the
+toolchain domain remain unchanged. The report repair and effective environment
+changes both participate in the two-endpoint DELTA checks; earlier cache effects
+outside that checkout remain unverified. Copying the four missing static inputs
+and validating the relocated inputs add local IO; total validation and storage
+costs remain unknown.
+
 ## Publishers and consumers
 
 | Natural owner | Publication and current use | Release |
 | --- | --- | --- |
 | preparation and retained blobs | durable creation intent, original digest/length, explicit preparation dependencies and `publication-recheck:OUTPUT_ID` consumer | actual fixed-slot publication transfers the exact closure to its final report; interruption retains the consumer |
 | scoped/native process capture | prospective stdout/stderr enrollment before native writes, inherited capabilities, separately published launch record and actual joined outcome | final report closure handoff; failed/missing publication retains its repair consumer |
-| scoped/full check | immutable report original, explicit snapshot/blob/preparation/stream dependencies, fixed current report slot | pointer replacement releases prior current closure; failed final reports retain `report-recheck:OUTPUT_ID` independently |
+| scoped/full check | immutable report original, explicit snapshot/blob/preparation/stream dependencies, fixed current report slot | pointer replacement releases prior current closure; full reports retain the producer's `report-recheck:OUTPUT_ID` until both original and current-slot publication succeed with a passing check |
 | full baseline export | reserved output before export, cumulative controlled byte admission and explicit recovery role | published final report owns the snapshot closure; failed/interrupted work keeps original recovery state |
 | lifecycle reports | exact intent/result originals and actual recovery readers | terminal result transfers failed diagnostics to an exact recheck consumer; interrupted work and failed rebind resume retain recovery roles |
 | native gather | exact acquisition intent and original gather report; existing PR207 shared report aliases and all attempt paths are preserved | current gather report owns acquisitions; failed gather retains a distinct exact recheck consumer |
