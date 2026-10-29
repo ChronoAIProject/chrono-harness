@@ -422,8 +422,10 @@ now verifies the imported core profile, builds the candidate guard, delegates
 `host.bootstrap-diagnostics-inputs`, then installs the guard before that check.
 The registered producer builds its observer and retains its own report and streams
 under the unit's existing state artifact directory. This delegation does not prove
-a native execution. Its output must first be qualified against the exact
-candidate/source, original producer
+a native execution. The local diagnostics input, environment and compiler edges
+stay in the existing macOS 27 configuration scope; the native graph retains the
+common guard and observer dependencies without borrowing those local inputs.
+Its output must first be qualified against the exact candidate/source, original producer
 run/attempt, official Rust expectations and declared Xcode/configuration scope.
 A later fixed candidate can explicitly adopt those qualified original hashes in
 the native direct policy and v6 Cargo contract. Missing originals, failed
