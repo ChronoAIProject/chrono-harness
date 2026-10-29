@@ -34,6 +34,11 @@ path = "tests/parity.rs"
 name = "git_inputs"
 path = "tests/git_inputs.rs"
 
+# Compile the real runner with its registered development optimization.
+# Finite retention rounds exercise snapshot work; debug assertions remain enabled.
+[profile.dev]
+opt-level = 1
+
 [profile.dev.package.sha2]
 opt-level = 3
 
