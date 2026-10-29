@@ -340,8 +340,21 @@ This host's detector produces the registered core startup tools for the unit and
 collection jobs. Its cache preparation builds `chrono-cache`; its bootstrap calls
 the existing core profile once and publishes all five installed tools. Consumer
 jobs validate and install the selected profiles, then verify them at the original
-cache/core preparation points. Their canonical checks and business build plans
-remain unchanged. Local and release bootstraps keep their registered source builds.
+cache/core preparation points. The diagnostics unit uses the registered
+`host.bootstrap-diagnostics-guard` preparation: it first verifies the imported
+core profile, then runs the existing `build.judge-cargo` operation and installs
+that candidate's `chrono-judge-cargo`. Its separate
+`diagnostics-guard-bootstrap.json` report retains the clean source identity,
+original operation streams and installed digest; the imported core report and
+`startup-install.json` remain the source-bound import evidence. A failed core
+verification or guard build stops preparation before the canonical check.
+This source build serves diagnostics only; the detector and other consumers
+still transfer the same cache/core profiles. Native build/IO/time costs for the
+additional diagnostics preparation remain unmeasured. Canonical checks and
+business build plans keep their registered entries. Local and release bootstraps
+keep their registered source builds. This preparation supplies the executable;
+native guarded policy/input binding and actual native execution remain separate
+acceptance obligations.
 
 Optional `job_gating.startup` uses schema `chrono-shared-startup/v1`. It declares a
 literal host `directory`, artifact name, pinned `download_action`, and `consumers`

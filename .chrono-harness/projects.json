@@ -4283,6 +4283,16 @@
             ".",
             ".chrono-harness/ci/bootstrap-diagnostics-inputs.json"
           ]
+        },
+        "diagnostics-guard": {
+          "operation": "host.bootstrap-diagnostics-guard",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-diagnostics-guard.json"
+          ]
         }
       }
     },
