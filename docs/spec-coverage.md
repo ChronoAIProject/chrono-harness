@@ -1000,3 +1000,19 @@ Prior lifecycle CI/projects registry admission and runner retirement failures,
 the 8 MiB incomplete global response and historical migration obligations remain
 unresolved until actual composed-source checks establish their precise outcomes.
 No extra corrective assignment, limit increase or weaker assertion is admitted.
+
+
+## Composed input and lifecycle consumer correction
+
+**Product and host registration change together:** the current composed candidate
+retains interrupted-input original recovery, fresh-prefix/two-thread directory
+validation, runner report-consumer completion and retained-original lifecycle
+contracts. Optional isolated observations use the existing registered owner and
+current-host output paths. All expected input identities and existing product,
+admission, maintenance and cumulative output bounds remain unchanged. Worktree
+stdout now uses compact JSON while preserving every decoded value and original
+capture identity. Applicable explicit two-end DELTA checks and actual bootstrap
+consumption remain required; prior production acceptance retains its fixed source
+and scope. Independent review, native acceptance, landing, coordinator deployment,
+full input closure/parity and remaining SPEC obligations are separate. Additional
+verification/storage cost remains measured only by retained command receipts.

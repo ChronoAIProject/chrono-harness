@@ -1426,6 +1426,7 @@ fn replace_declared_regular_file() {
     std::fs::rename(sdk.join("SDKROOT.marker"), sdk.join("same-content")).unwrap();
     std::os::unix::fs::symlink("same-content", sdk.join("SDKROOT.marker")).unwrap();
 }
+
 "#,
     );
     fs::write(lib, source).unwrap();
@@ -1438,5 +1439,197 @@ fn replace_declared_regular_file() {
             .unwrap()
             .contains("directory inventory contains symlink"),
         "{report}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn shared_directory_ancestors_recheck_every_file_and_parent_after_the_consumer() {
+    for case in ["unchanged", "bytes", "other-file-bytes", "parent-alias"] {
+        let mut f = Fixture::new();
+        toolchain_binding(&mut f);
+        let sdk = f.root().join(".chrono-harness/state/sdk");
+        fs::create_dir_all(sdk.join("shared/nested")).unwrap();
+        let mut files = vec![json!({"path":"SDKROOT.marker","sha256":sha256(b"declared sdk\n")})];
+        for name in ["a", "b", "c"] {
+            let path = format!("shared/nested/{name}");
+            fs::write(sdk.join(&path), b"original").unwrap();
+            files.push(json!({"path":path,"sha256":sha256(b"original")}));
+        }
+        save_sdk_links(
+            &mut f,
+            &json!({
+                "schema":"chrono-input-directory/v2", "root":".chrono-harness/state/sdk",
+                "files":files, "symlinks":[]
+            }),
+        );
+        let mutation = match case {
+            "unchanged" => "",
+            "bytes" => "std::fs::write(sdk.join(\"shared/nested/c\"), b\"modified\").unwrap();",
+            "other-file-bytes" => {
+                "std::fs::write(sdk.join(\"shared/nested/b\"), b\"modified\").unwrap();"
+            }
+            "parent-alias" => {
+                "std::fs::rename(sdk.join(\"shared\"), sdk.join(\"same-content\")).unwrap(); std::os::unix::fs::symlink(\"same-content\", sdk.join(\"shared\")).unwrap();"
+            }
+            _ => unreachable!(),
+        };
+        let lib = f.root().join("t/src/lib.rs");
+        let mut source = fs::read_to_string(&lib).unwrap();
+        source.push_str(&format!(
+            "\n#[test] fn inventory_boundary() {{ let sdk=std::path::PathBuf::from(std::env::var(\"CHRONO_SDK_ROOT\").unwrap()); {mutation} }}\n"
+        ));
+        fs::write(lib, source).unwrap();
+        let (exit, report, stderr) = f.call();
+        assert_eq!(
+            report["operation"]["exit_code"], 0,
+            "{case}: {report} {stderr}"
+        );
+        if case == "unchanged" {
+            assert_eq!(exit, 0, "{report} {stderr}");
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            assert!(
+                report["error"].as_str().unwrap().contains(
+                    if matches!(case, "bytes" | "other-file-bytes") {
+                        "directory input changed"
+                    } else {
+                        "directory inventory contains symlink"
+                    }
+                ),
+                "{case}: {report}"
+            );
+        }
+    }
+}
+
+// Explicit host experiment, separate from the portable fixture suite. The
+// registered production consumer and all its input/guard bounds remain intact.
+#[test]
+#[ignore = "requires the host's selected isolated toolchain and SDK inventories"]
+fn isolated_production_within_joinable_observation_window() {
+    observe_q1_consumer(false);
+}
+
+#[test]
+#[ignore = "requires the host's selected isolated toolchain and SDK inventories"]
+fn isolated_guard_within_joinable_observation_window() {
+    observe_q1_consumer(true);
+}
+
+fn observe_q1_consumer(guard_only: bool) {
+    let root = source();
+    let evidence_root = root.join(".chrono-harness/state/input-q1-repair");
+    fs::create_dir_all(&evidence_root).unwrap();
+    let destination = tempfile::Builder::new()
+        .prefix(if guard_only {
+            "representative-guard-"
+        } else {
+            "representative-retained-"
+        })
+        .tempdir_in(evidence_root)
+        .unwrap()
+        .keep();
+    fs::create_dir_all(destination.join("tmp")).unwrap();
+    let mut environment: std::collections::BTreeMap<String, String> = std::env::vars().collect();
+    environment.insert(
+        "TMPDIR".into(),
+        destination.join("tmp").to_str().unwrap().into(),
+    );
+    let command = chrono_harness::CommandSpec {
+        program: root
+            .join(".chrono-harness/bin/chrono-worktree")
+            .to_str()
+            .unwrap()
+            .into(),
+        args: Vec::new(),
+        env: environment,
+        // The host terminal can join one 300-second observation. A timeout here
+        // is a distinct inconclusive observation against the unchanged 600s guard.
+        timeout_seconds: 300,
+        output_limit_bytes: 67108864,
+    };
+    // Consume the current action verbatim. The outer registered experiment
+    // holds use already; another wrapper would duplicate lifecycle report bytes.
+    let projects: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
+            .unwrap();
+    let operation = if guard_only {
+        "guard.check.runner"
+    } else {
+        "inputs.provision-isolated"
+    };
+    let action = projects["projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|p| p["actions"].as_object().unwrap().values())
+        .find(|a| a["operation"] == operation)
+        .unwrap();
+    let args: Vec<String> = serde_json::from_value(action["argv"].clone()).unwrap();
+    let command = if guard_only {
+        let config = &args[args.iter().position(|a| a == "--config").unwrap() + 1];
+        let config: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join(config)).unwrap()).unwrap();
+        let tool = config["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == action["tool"])
+            .unwrap();
+        chrono_harness::CommandSpec {
+            program: root
+                .join(tool["program"].as_str().unwrap())
+                .to_str()
+                .unwrap()
+                .into(),
+            args,
+            output_limit_bytes: 4194304,
+            ..command
+        }
+    } else {
+        assert_eq!(action["tool"], "chrono-worktree");
+        chrono_harness::CommandSpec { args, ..command }
+    };
+    let digest = chrono_harness::file_identity(std::path::Path::new(&command.program))
+        .unwrap()
+        .0;
+    let started = std::time::Instant::now();
+    let process = chrono_harness::run_process_observed(&root, &command, &[], &digest).unwrap();
+    let elapsed = started.elapsed().as_secs_f64();
+    fs::write(destination.join("stdout.bytes"), &process.stdout_bytes).unwrap();
+    fs::write(destination.join("stderr.bytes"), &process.stderr_bytes).unwrap();
+    fs::write(
+        destination.join("process.json"),
+        serde_json::to_vec(&process).unwrap(),
+    )
+    .unwrap();
+    fs::write(destination.join("measurement.json"), serde_json::to_vec(&json!({
+        "elapsed_seconds":elapsed, "observation_timeout_seconds":300,
+        "production_guard_timeout_seconds":600,
+        "stdout_bytes":process.stdout_bytes.len(), "stderr_bytes":process.stderr_bytes.len(),
+        "purpose":"Q1 actual registered consumer measurement; retain until acceptance and caller handoff",
+    })).unwrap()).unwrap();
+    assert!(
+        process.failure.is_none(),
+        "bounded observation incomplete; originals: {}",
+        destination.display()
+    );
+    assert_eq!(
+        process.exit_code,
+        0,
+        "consumer failed; originals: {}",
+        destination.display()
+    );
+    let report: serde_json::Value = serde_json::from_slice(&process.stdout_bytes).unwrap();
+    assert_eq!(
+        report["status"],
+        if guard_only { "passed" } else { "used" },
+        "{}",
+        destination.display()
+    );
+    println!(
+        "Q1 consumer originals: {}; elapsed {elapsed:.3}s",
+        destination.display()
     );
 }

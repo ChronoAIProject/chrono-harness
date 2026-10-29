@@ -14,6 +14,10 @@ fn main() {
         "overflow" => {
             let _ = std::io::stdout().write_all(&[b'x'; 4096]);
         }
+        #[cfg(unix)]
+        "socket" => {
+            let _listener = std::os::unix::net::UnixListener::bind(&args[1]).unwrap();
+        }
         _ => panic!("unknown observation fixture"),
     }
 }

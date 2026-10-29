@@ -278,6 +278,14 @@ remain explicit. Reports retain the source manifest/projects originals, executab
 identity, launch record and raw stdout/stderr; nonzero, timeout, overflow and
 alias failures remain failures. Originals publish without clobbering prior output.
 
+If an interrupted observer left process originals without publishing its report,
+a retry reserves a fresh attempt directory below the existing process directory.
+The new report references only that attempt; abandoned originals remain intact
+for failure diagnosis and acceptance handoff. An existing published report still
+rejects reuse of the output path. The acquisition owner retains failed attempts
+until their debugging and acceptance obligations end, then hands them to the
+host's ordinary evidence retention and cleanup lifecycle.
+
 Directory observation can produce `chrono-input-directory/v3` originals with
 exact directory children, including the root `.` and empty/alias-only directories.
 The Cargo guard consumes the original topology and rechecks it after the real

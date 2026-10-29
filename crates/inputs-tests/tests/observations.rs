@@ -100,6 +100,48 @@ fn observations_retain_actual_processes_absence_and_only_declared_roots() {
 }
 
 #[test]
+fn interrupted_observation_preserves_orphaned_streams_and_uses_a_fresh_attempt() {
+    for fail in [false, true] {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        fs::create_dir(root.join("declared")).unwrap();
+        let output = ".chrono-harness/state/recovered.json";
+        let abandoned = root.join(format!("{output}.processes/0.stdout"));
+        fs::create_dir_all(abandoned.parent().unwrap()).unwrap();
+        fs::write(&abandoned, b"original interrupted stream").unwrap();
+        let mut m = manifest(root);
+        if fail {
+            m["operations"][0]["argv"] = json!(["fail"]);
+        }
+        let result = invoke(root, &m, output);
+        if fail {
+            assert!(result.unwrap_err().contains("E_OBSERVATION"));
+        } else {
+            assert!(result.is_ok(), "{result:?}");
+        }
+        assert_eq!(
+            fs::read(&abandoned).unwrap(),
+            b"original interrupted stream"
+        );
+        let original = fs::read(root.join(output)).unwrap();
+        let report: Value = serde_json::from_slice(&original).unwrap();
+        assert_eq!(report["status"], if fail { "failed" } else { "observed" });
+        let process = chrono_harness::scoped_report::restore_process(
+            &report["operations"]["location"],
+            |o| chrono_harness::prepared::read_original(root, o, None),
+        )
+        .unwrap();
+        assert_eq!(process.exit_code, if fail { 17 } else { 0 });
+        assert!(invoke(root, &m, output).unwrap_err().contains("EXISTS"));
+        assert_eq!(fs::read(root.join(output)).unwrap(), original);
+        assert_eq!(
+            fs::read(&abandoned).unwrap(),
+            b"original interrupted stream"
+        );
+    }
+}
+
+#[test]
 fn native_observation_executes_selected_tool_and_rejects_missing_failed_or_wrong_platform_selection()
  {
     let d = tempfile::tempdir().unwrap();
@@ -704,9 +746,17 @@ fn rejected_manifest_aliases_retain_literal_resolution_and_kind_in_failed_origin
         fs::write(root.join("declared/data"), b"inside").unwrap();
         fs::write(root.join("other/data"), b"outside").unwrap();
         symlink("declared", root.join("selected")).unwrap();
-        let socket = (case == "unsupported-kind").then(|| {
-            std::os::unix::net::UnixListener::bind(root.join("declared/bin/z-socket")).unwrap()
-        });
+        if case == "unsupported-kind" {
+            // Unix socket names have a short platform bound. A child cwd keeps
+            // this real socket fixture valid under long host temporary roots.
+            let fixture = env!("CARGO_BIN_EXE_chrono-inputs-test-observe");
+            let status = std::process::Command::new(fixture)
+                .current_dir(&root)
+                .args(["socket", "declared/bin/z-socket"])
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
         let (literal, destination, kind) = match case {
             "absolute-inside" => (
                 root.join("declared/nested/../data"),
@@ -821,7 +871,6 @@ fn rejected_manifest_aliases_retain_literal_resolution_and_kind_in_failed_origin
         assert!(invoke(&root, &m, output).unwrap_err().contains("EXISTS"));
         assert_eq!(fs::read(root.join(output)).unwrap(), original);
         assert!(!root.join(artifact).exists());
-        drop(socket);
     }
 }
 

@@ -2985,6 +2985,40 @@
             "--manifest-path",
             "crates/judge-cargo-tests/Cargo.toml"
           ]
+        },
+        "observe_isolated": {
+          "operation": "test.judge-cargo-isolated-observation",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml",
+            "--test",
+            "inputs",
+            "--",
+            "--ignored",
+            "--exact",
+            "isolated_production_within_joinable_observation_window",
+            "--nocapture"
+          ]
+        },
+        "observe_guard": {
+          "operation": "test.judge-cargo-guard-observation",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml",
+            "--test",
+            "inputs",
+            "--",
+            "--ignored",
+            "--exact",
+            "isolated_guard_within_joinable_observation_window",
+            "--nocapture"
+          ]
         }
       },
       "tests_for": "judge-cargo",

@@ -533,14 +533,34 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
         return Err("reserved observation environment".into());
     }
     environment.extend(m.environment.values);
-    let directory = super::state(root, &format!("{output}.processes"))?;
-    if directory.exists() {
-        return Err("E_OBSERVATION_EXISTS: preserve original process directory".into());
+    let mut retained_prefix = format!("{output}.processes");
+    let mut directory = super::state(root, &retained_prefix)?;
+    fs::create_dir_all(directory.parent().ok_or("process directory parent")?)
+        .map_err(|e| e.to_string())?;
+    match fs::create_dir(&directory) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            // An interrupted producer can leave streams without publishing its
+            // immutable report. Preserve those bytes and atomically reserve a
+            // fresh attempt; published reports were rejected before this point.
+            directory = tempfile::Builder::new()
+                .prefix("attempt-")
+                .tempdir_in(&directory)
+                .map_err(|e| e.to_string())?
+                .keep();
+            retained_prefix = format!(
+                "{retained_prefix}/{}",
+                directory
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or("process directory UTF8")?
+            );
+        }
+        Err(e) => return Err(e.to_string()),
     }
-    fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     let mut sources = Vec::new();
     for (i, (path, bytes)) in original_sources.into_iter().enumerate() {
-        let retained = format!("{output}.processes/source-{i}.json");
+        let retained = format!("{retained_prefix}/source-{i}.json");
         fs::write(super::state(root, &retained)?, &bytes).map_err(|e| e.to_string())?;
         sources
             .push(json!({"path":path,"retained":retained,"sha256":chrono_harness::sha256(&bytes)}));
@@ -683,15 +703,15 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
             let retained = (|| {
                 let stdout = chrono_harness::prepared::original(
                     root,
-                    &format!("{output}.processes/{i}.stdout"),
+                    &format!("{retained_prefix}/{i}.stdout"),
                 )?;
                 let stderr = chrono_harness::prepared::original(
                     root,
-                    &format!("{output}.processes/{i}.stderr"),
+                    &format!("{retained_prefix}/{i}.stderr"),
                 )?;
                 let launch = chrono_harness::prepared::original(
                     root,
-                    &format!("{output}.processes/{i}.launch.json"),
+                    &format!("{retained_prefix}/{i}.launch.json"),
                 )?;
                 if process["stdout_sha256"] != stdout.sha256
                     || process["stderr_sha256"] != stderr.sha256

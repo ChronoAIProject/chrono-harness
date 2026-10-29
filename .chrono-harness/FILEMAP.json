@@ -180,6 +180,10 @@
         {
           "kind": "runtime-input",
           "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },
@@ -6355,6 +6359,10 @@
         {
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },
@@ -6507,6 +6515,10 @@
         {
           "kind": "runtime-input",
           "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },

@@ -354,6 +354,9 @@ impl Host {
         }
         let report = json(&out.stdout).unwrap_or(Value::Null);
         if !report.is_null() {
+            // CLI JSON carries complete process evidence within consumer stream
+            // bounds; pretty-printing byte arrays multiplies its transport cost.
+            assert_eq!(out.stdout.iter().filter(|&&byte| byte == b'\n').count(), 1);
             assert_eq!(
                 report,
                 json(
