@@ -45,6 +45,140 @@ fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
     original
 }
 
+fn joined_command_body(outcome: &str) {
+    use std::io::{Read, Write};
+
+    let h = host();
+    let projects_path = h.root.join(PROJECTS);
+    let mut projects = json(&fs::read(&projects_path).unwrap()).unwrap();
+    projects["scripts"][0]["actions"]["execute"]["argv"] = value!(["custody-holder"]);
+    fs::write(projects_path, serde_json::to_vec(&projects).unwrap()).unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = listener.local_addr().unwrap();
+    let consumer_root = h.root.join(".chrono-harness/state/consumer-root");
+    let config_path = h.root.join(CONFIG);
+    let mut config = json(&fs::read(&config_path).unwrap()).unwrap();
+    config["environment"]["values"]["TMPDIR"] = value!(consumer_root);
+    config["environment"]["values"]["CHRONO_TEMPORARY_CARGO_ROOT"] = value!(consumer_root);
+    config["environment"]["values"]["CHRONO_TEMPORARY_SYNC"] =
+        value!(listener.local_addr().unwrap().to_string());
+    fs::write(config_path, serde_json::to_vec(&config).unwrap()).unwrap();
+    commit(&h.root);
+    fs::create_dir_all(consumer_root.join("cache 空白")).unwrap();
+    fs::write(consumer_root.join("cache 空白/output"), "rebuildable").unwrap();
+    let source = fs::read(h.root.join("recipe.rs")).unwrap();
+    let mut command = h.auto_command("use", &["--operation", "use.consumer"]);
+    let (output, store, root, original, diagnostic, partial) = std::thread::scope(|scope| {
+        let wrapper = scope.spawn(|| {
+            let output = command.output().unwrap();
+            std::net::TcpStream::connect(endpoint)
+                .unwrap()
+                .write_all(b"ended")
+                .unwrap();
+            output
+        });
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut readiness = [0; 5];
+        stream.read_exact(&mut readiness).unwrap();
+        if readiness != *b"ready" {
+            panic!(
+                "managed child ended before readiness: {:?}",
+                wrapper.join().unwrap()
+            );
+        }
+        // This allocation did not exist during admission's drain.
+        let (store, allocation) = allocation(&h);
+        let root = allocation.path().to_owned();
+        let original = copy(&store, &root, "joined-body.bin");
+        let partial = [255, 0, 10];
+        fs::write(root.join("partial.stderr"), partial).unwrap();
+        let diagnostic =
+            chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+        if outcome == "diagnostic" {
+            diagnostic
+                .acquire("assertion", "actual post-command copied-body consumer")
+                .unwrap();
+        }
+        drop(allocation);
+        if outcome == "failure" {
+            fs::write(
+                consumer_root.join("cache 空白/output"),
+                "original failed input",
+            )
+            .unwrap();
+        }
+        stream.write_all(b"r").unwrap();
+        (
+            wrapper.join().unwrap(),
+            store,
+            root,
+            original,
+            diagnostic,
+            partial,
+        )
+    });
+    let (code, report, error) = h.received(output);
+    assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
+    assert_eq!(fs::read(root.join("real-source")).unwrap(), [0, 255, 7, 8]);
+    assert_eq!(fs::read(root.join("partial.stderr")).unwrap(), partial);
+    assert_eq!(fs::read(h.root.join("recipe.rs")).unwrap(), source);
+    assert!(h.ledger()["entries"][0]["terminal"].is_null());
+    assert!(report["producer_drains"].is_array(), "{report}");
+    assert!(
+        report["managed_use_receipt"]["path"].is_string(),
+        "{report}"
+    );
+    if outcome == "failure" {
+        assert_ne!(code, 0, "{report} {error}");
+        assert_eq!(report["managed_process"]["exit_code"], 101);
+        assert_eq!(report["managed_process"]["stdout_bytes"], value!([]));
+        let stderr: Vec<u8> =
+            serde_json::from_value(report["managed_process"]["stderr_bytes"].clone()).unwrap();
+        assert!(String::from_utf8_lossy(&stderr).contains("assertion `left == right` failed"));
+        assert_eq!(report["managed_command_failed"], true);
+        assert!(report["post_use_cleanup"].is_null(), "{report}");
+        assert!(root.join("joined-body.bin").exists());
+    } else {
+        assert_eq!(code, 0, "{report} {error}");
+        assert_eq!(report["managed_process"]["exit_code"], 0);
+        assert_eq!(
+            root.join("joined-body.bin").exists(),
+            outcome == "diagnostic"
+        );
+        assert!(
+            report["post_use_cleanup"]["producer_drains"].is_array(),
+            "{report}"
+        );
+        if outcome == "diagnostic" {
+            assert_eq!(
+                fs::read(root.join("joined-body.bin")).unwrap(),
+                [0, 255, 7, 8]
+            );
+            diagnostic
+                .release("assertion", "actual read completed")
+                .unwrap();
+            assert_eq!(h.auto("maintain", &[]).0, 0);
+            assert!(!root.join("joined-body.bin").exists());
+        }
+    }
+    assert!(store.join("objects.json").is_file());
+}
+
+#[test]
+fn successful_join_reclaims_copied_bodies_created_during_managed_use() {
+    joined_command_body("success");
+}
+
+#[test]
+fn successful_join_preserves_unreleased_copied_body_consumer() {
+    joined_command_body("diagnostic");
+}
+
+#[test]
+fn failed_join_preserves_copied_bodies_and_original_process_failure() {
+    joined_command_body("failure");
+}
+
 #[test]
 fn body_recovers_without_finish_after_overlapping_holders_and_diagnostic_release() {
     let h = host();

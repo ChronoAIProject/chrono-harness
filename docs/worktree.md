@@ -1319,6 +1319,18 @@ are rechecked before each effect. Copied members and their retained originals
 have distinct lifetimes. Final-original retention/publication and the compatible
 shared-effect composition are separate work; this API does not release originals.
 
+After a joined managed `use`, `check` or `bootstrap` command succeeds, the owner
+runs the same guarded drain before returning. This recovers eligible fixture
+bodies created during that command before a following artifact upload. The
+separate `post_use_cleanup` report retains this pass without replacing admission's
+drain or the original managed process and use receipt. The invoking source and
+target keep their existing exclusion and live leases; producer recovery still
+requires exact membership, original bytes and released holders and consumers.
+Failed commands retain their original failure and skip this post-success pass,
+preserving partial diagnostics. Cleanup does not release original evidence or
+declare lifecycle completion. Native artifact size and collection-time savings
+require observation of the resulting candidate.
+
 `migrate --path WORKTREE --adopt-fixtures STATE_PATH` consumes a finite
 `chrono-fixture-body-custody/v1` declaration through the existing migration owner.
 It binds current HEAD, allocation/intent/physical identity, exact member bytes,
