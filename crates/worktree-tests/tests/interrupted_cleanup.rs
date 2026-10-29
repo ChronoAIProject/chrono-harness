@@ -189,12 +189,37 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
     for exit in [0, 7] {
         let h = Host::new("payload");
         participating_check(&h);
+        let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+        config["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .extend([
+                value!("CHRONO_TEST_AUTHENTICATION"),
+                value!("CHRONO_TEST_AUTHENTICATION_ABSENT"),
+            ]);
+        config["environment"]["credential_environment"] = value!([
+            "CHRONO_TEST_AUTHENTICATION",
+            "CHRONO_TEST_AUTHENTICATION_ABSENT"
+        ]);
+        fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
         h.kernel_cleanup();
         let target = h.parent.join("console");
         assert_eq!(h.invoke("feature", "console", &target).0, 0);
         install_inner(&target, "original stdout\n", "original diagnostic\n", exit);
+        let response = target.join(".chrono-harness/state/inner-check-response.json");
+        let mut expected = json(&fs::read(&response).unwrap()).unwrap();
+        expected["authentication"] = value!({
+            "CHRONO_TEST_AUTHENTICATION":"inert managed authentication λ",
+            "CHRONO_TEST_AUTHENTICATION_ABSENT":null,
+        });
+        fs::write(response, serde_json::to_vec(&expected).unwrap()).unwrap();
         let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
+            .env(
+                "CHRONO_TEST_AUTHENTICATION",
+                "inert managed authentication λ",
+            )
+            .env_remove("CHRONO_TEST_AUTHENTICATION_ABSENT")
             .arg("check")
             .output()
             .unwrap();
@@ -205,11 +230,67 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         let (_, owner, _) = h.received(
             Command::new(target.join(".chrono-harness/bin/chrono-worktree"))
                 .current_dir(&target)
+                .env(
+                    "CHRONO_TEST_AUTHENTICATION",
+                    "inert managed authentication λ",
+                )
+                .env_remove("CHRONO_TEST_AUTHENTICATION_ABSENT")
                 .args(["check", "--config", POLICY])
                 .output()
                 .unwrap(),
         );
         assert_eq!(owner["managed_process"]["exit_code"], exit);
+        assert!(!owner.to_string().contains("inert managed authentication λ"));
+        let process = &owner["managed_process"];
+        assert_eq!(process["environment_representation"], "sha256");
+        assert_eq!(
+            process["environment"]["CHRONO_TEST_AUTHENTICATION"],
+            sha256("inert managed authentication λ".as_bytes())
+        );
+        assert!(
+            process["environment"]
+                .get("CHRONO_TEST_AUTHENTICATION_ABSENT")
+                .is_none()
+        );
+        let environment = std::collections::BTreeMap::from([
+            ("PATH".to_owned(), std::env::var("PATH").unwrap()),
+            (
+                "CHRONO_TEST_AUTHENTICATION".to_owned(),
+                "inert managed authentication λ".to_owned(),
+            ),
+            (
+                "CHRONO_WORKTREE_CHECK".to_owned(),
+                target.to_str().unwrap().to_owned(),
+            ),
+        ]);
+        assert_eq!(
+            process["environment_digest"],
+            chrono_harness::wire::digest(&environment).unwrap()
+        );
+        let receipt = &owner["managed_use_receipt"];
+        let raw = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+        assert_eq!(receipt["sha256"], sha256(&raw));
+        assert!(!String::from_utf8_lossy(&raw).contains("inert managed authentication λ"));
+        assert_eq!(json(&raw).unwrap()["process"], *process);
+        let report = fs::read(h.root.join(owner["report_path"].as_str().unwrap())).unwrap();
+        assert!(!String::from_utf8_lossy(&report).contains("inert managed authentication λ"));
+        assert_eq!(process["failure"], Value::Null);
+        assert!(process["child_pid"].as_u64().is_some());
+        assert!(process["launcher_pid"].as_u64().is_some());
+        assert_eq!(
+            process["timeout_seconds"],
+            config["protocol"]["timeout_seconds"]
+        );
+        assert_eq!(
+            process["output_limit_bytes"],
+            config["protocol"]["stdout_limit_bytes"]
+        );
+        assert_eq!(
+            process["sha256"],
+            sha256(&fs::read(target.join(".chrono-harness/bin/inner-check")).unwrap())
+        );
+        assert_eq!(process["stdout_sha256"], sha256(b"original stdout\n"));
+        assert_eq!(process["stderr_sha256"], sha256(b"original diagnostic\n"));
         assert_eq!(
             owner["managed_process"]["stdout_bytes"],
             value!(b"original stdout\n".to_vec())
