@@ -2502,6 +2502,19 @@
             "--output",
             ".chrono-harness/state/isolated-rust/developer-acquisition.json"
           ]
+        },
+        "observe_diagnostics": {
+          "operation": "inputs.observe-diagnostics",
+          "tool": "chrono-inputs",
+          "argv": [
+            "observe",
+            "--host-root",
+            ".",
+            "--manifest",
+            ".chrono-harness/inputs/diagnostics-observation.json",
+            "--output",
+            ".chrono-harness/state/diagnostics-native/observation.json"
+          ]
         }
       },
       "test_project": "inputs-tests",
@@ -4259,6 +4272,16 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-acquire-linux.json"
+          ]
+        },
+        "diagnostics-inputs": {
+          "operation": "host.bootstrap-diagnostics-inputs",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-diagnostics-inputs.json"
           ]
         }
       }

@@ -1,0 +1,37 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.95.0",
+  "tools": {
+    "chrono-inputs": "crates/inputs/target/debug/chrono-inputs",
+    "cargo": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
+    "rustc": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc"
+  },
+  "operations": [
+    "build.inputs",
+    "inputs.observe-diagnostics"
+  ],
+  "install": [],
+  "participation": {
+    "coordinator_root": "git-main-worktree",
+    "program": ".chrono-harness/bin/chrono-worktree",
+    "git": "/usr/bin/git",
+    "config": ".chrono-harness/worktree.json"
+  },
+  "entrypoint": {
+    "tool": "python3",
+    "script": ".chrono-harness/ci/bootstrap.py"
+  },
+  "rust_incremental": true,
+  "require_tool_bindings": true,
+  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
+  "report_path": ".chrono-harness/state/diagnostics-native/bootstrap.json",
+  "environment": {
+    "HOME": "/Users/runner",
+    "CARGO_HOME": "/Users/runner/.cargo",
+    "RUSTUP_HOME": "/Users/runner/.rustup",
+    "RUSTC": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": ""
+  }
+}

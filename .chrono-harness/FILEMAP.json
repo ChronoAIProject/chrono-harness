@@ -6788,6 +6788,46 @@
           "to": "project:judge-registration-tests"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/inputs/diagnostics-observation.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-diagnostics-inputs.json",
+      "owner": "host-bootstrap",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

@@ -379,3 +379,50 @@ It keeps
 all 34 fetch/metadata pairs, 14 installation targets, directory entry bounds and
 failure-before-installation behavior. The native full guard must explicitly bind
 that new original/root before adoption; this acquisition does not activate it.
+
+### Native diagnostics originals before guard adoption
+
+The registered `host.bootstrap-diagnostics-inputs` action is the native
+diagnostics producer entry:
+
+```sh
+/usr/bin/python3 -B .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-diagnostics-inputs.json
+```
+
+It builds the candidate `chrono-inputs` with the existing Rust 1.95.0 bootstrap
+registry, then delegates `inputs.observe-diagnostics`. That operation uses the
+registered diagnostics fetch and locked/offline metadata argv. Its private,
+host-relative Cargo home contains this consumer's acquisition rather than all
+34 projects. Fetch may acquire missing locked packages; metadata remains offline.
+No guard is executed and no expected input identity is rewritten.
+
+The observation explicitly selects the original native `/Users/runner` Rust
+1.95.0 toolchain and the already declared Xcode 26.6 distribution. It retains
+source commit/tree/status, Cargo/compiler identities and native target output,
+SDK/developer/tool selections, root/home and native checkout ancestor Cargo
+configuration facts, and four directory-v3 originals: Rust sysroot, SDK,
+enclosing Xcode Contents and the diagnostics-only Cargo registry. Backend and
+build-script tool bytes remain addressable in those originals. A missing root,
+wrong selected root, unsupported alias, operation failure or inventory limit
+preserves failure through the existing observer; an observed version is not a
+new expected version.
+
+All outputs belong to `.chrono-harness/state/diagnostics-native/`: the bootstrap
+report and streams, `observation.json` and its source/launch/stream originals,
+`guard-inputs/{rust,sdk,xcode-contents,packages}.json`, and the private Cargo home.
+The existing ordinary diagnostics unit uploads `.chrono-harness/state/`, so its
+existing artifact transport can retain this closure. Each observation child
+keeps 120 seconds/1 MiB and each directory keeps 200,000 entries; the native job
+keeps 45 minutes. Inventory IO, artifact size and total native time are unmeasured.
+
+The ordinary native integration point is the diagnostics bootstrap selected by
+`units.diagnostics.bootstrap` in `ci/units.json`, after startup/core verification
+and before `check --unit diagnostics`. That separately owned bootstrap must
+delegate `host.bootstrap-diagnostics-inputs` to invoke this producer. Registering
+this profile does not install that link or prove a native execution. Its output
+must first be qualified against the exact candidate/source, original producer
+run/attempt, official Rust expectations and declared Xcode/configuration scope.
+A later fixed candidate can explicitly adopt those qualified original hashes in
+the native direct policy and v6 Cargo contract. Missing originals, failed
+qualification and drift remain failures; producer success is not guarded-build,
+unit/aggregate, full-input, parity or landing acceptance.
