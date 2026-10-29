@@ -86,6 +86,22 @@ failed-original consumer, and requires reclamation to admit the next output;
 separate cycle cases check transitive live and unknown consumers. These checks
 do not establish a universal latency guarantee or release historical consumers.
 
+The independent runner test project now uses the runner production project's
+existing development optimization (`opt-level = 1`), retaining debug assertions,
+the original 512-output / 25 ms fixture and all 28 concurrent publishers / 5 s
+admission assertions. Cargo takes profiles from the invoking manifest; previously
+this test manifest rebuilt the same inventory implementation without that
+optimization. Temporary Rust stage measurements located the main CPU work in
+snapshot decode, validation and serialization, and were removed after the
+experiment. With the unchanged fixture inputs, the observed first-candidate
+prelude was 9.055 ms before and 1.730 ms after; concurrent snapshot serialization
+medians were 16.052 ms and 0.636 ms. These are single local operation observations,
+not a universal latency or common-cause proof for the two original failures.
+The complete measured test-operation windows were 85.190 s and 92.758 s (build
+windows 8.00 s and 12.59 s); filesystem and unrelated fixture costs varied, so no
+end-to-end saving is established. The canonical candidate check remains the
+acceptance authority. No inventory format, release rule or product bound changes.
+
 ## Bounded recovery and migration
 
 The supported owner entry is:

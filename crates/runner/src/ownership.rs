@@ -1,7 +1,6 @@
 //! Stable, identity-bound kernel capabilities for an opted-in enrollment.
 use std::{
     fs::{self, File, OpenOptions},
-    io::Write,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -11,7 +10,6 @@ pub struct Lease {
     path: PathBuf,
     id: String,
     created: bool,
-    measured_acquired: Option<Instant>,
     #[cfg(unix)]
     _scope: crate::process_fds::Scope,
 }
@@ -32,7 +30,6 @@ pub fn identity(path: &Path) -> Result<String, String> {
     }
 }
 impl Lease {
-    #[track_caller]
     pub fn acquire(
         path: &Path,
         expected: Option<&str>,
@@ -43,7 +40,6 @@ impl Lease {
         Self::acquire_observed(path, expected, create, exclusive, wait, || {})
     }
 
-    #[track_caller]
     pub fn acquire_observed(
         path: &Path,
         expected: Option<&str>,
@@ -103,24 +99,6 @@ impl Lease {
             if expected.is_some_and(|v| v != id) || identity(path)? != id {
                 return Err("ownership lease identity changed; preserve work".into());
             }
-            let measured = path.ends_with("output-retention-v1/admission.lease")
-                && std::thread::current().name().is_none()
-                && std::env::var("CHRONO_RETENTION_CAPABILITY_TEST").as_deref()
-                    == Ok("ordinary_concurrent_publications_admit_against_retained_inventory");
-            let event = |kind: &str, us: u128| {
-                if measured {
-                    let _ = writeln!(
-                        std::io::stderr().lock(),
-                        "RETTRACE stage={kind} tid={:?} ns={} us={us} caller={}",
-                        std::thread::current().id(),
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_nanos(),
-                        std::panic::Location::caller()
-                    );
-                }
-            };
             let began = Instant::now();
             loop {
                 if unsafe {
@@ -146,7 +124,6 @@ impl Lease {
                 match wait {
                     None => return Ok(None),
                     Some(bound) if began.elapsed() >= bound => {
-                        event("gate-timeout", began.elapsed().as_micros());
                         return Err(format!(
                             "automatic cleanup admission remains busy at {}; kernel ownership was not expired",
                             path.display()
@@ -158,14 +135,12 @@ impl Lease {
             if identity(path)? != id {
                 return Err("ownership lease replaced during acquisition".into());
             }
-            event("gate-acquired", began.elapsed().as_micros());
             let scope = crate::process_fds::Scope::new(&[file.as_fd()])?;
             Ok(Some(Self {
                 file,
                 path: path.into(),
                 id,
                 created,
-                measured_acquired: measured.then(Instant::now),
                 _scope: scope,
             }))
         }
@@ -190,20 +165,3 @@ impl Lease {
 }
 // Closing the final descriptor releases ownership. Never LOCK_UN: descendants
 // share the same open description and must retain protection after this owner dies.
-
-impl Drop for Lease {
-    fn drop(&mut self) {
-        if let Some(began) = self.measured_acquired {
-            let _ = writeln!(
-                std::io::stderr().lock(),
-                "RETTRACE stage=gate-closing tid={:?} ns={} us={}",
-                std::thread::current().id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos(),
-                began.elapsed().as_micros()
-            );
-        }
-    }
-}
