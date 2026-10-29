@@ -37,6 +37,14 @@ fn isolated_capability_test(name: &str) -> bool {
         .env(MARKER, name)
         .output()
         .unwrap();
+    if name.starts_with("retained_capacity_round")
+        || name.starts_with("ordinary_concurrent_publications")
+    {
+        eprintln!(
+            "MEASURED_FIXTURE {name} stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
     let stdout = String::from_utf8_lossy(&output.stdout);
     let one_passed = stdout
         .lines()

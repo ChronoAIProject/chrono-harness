@@ -155,6 +155,22 @@ fn now() -> Result<u64, String> {
 }
 use crate::artifact_disposal::identity;
 
+fn measured(stage: &str, began: Instant, entries: usize) {
+    let case = std::env::var("CHRONO_RETENTION_CAPABILITY_TEST").unwrap_or_default();
+    if entries >= 420
+        && (std::thread::current().name().is_none() || case.starts_with("retained_capacity_round"))
+    {
+        eprintln!(
+            "RETTRACE stage={stage} case={case} tid={:?} ns={} us={} entries={entries}",
+            std::thread::current().id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+            began.elapsed().as_micros()
+        );
+    }
+}
 fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
     if raw.len() as u64 > MAX_STATE {
         return Err("retention metadata bound; preserve outputs".into());
@@ -285,6 +301,7 @@ impl Inventory {
         self.load_bound(&sha256(&self.policy_bytes))
     }
     fn load_bound(&self, policy_digest: &str) -> Result<Ledger, String> {
+        let measured_began = Instant::now();
         let path = self.directory.join("inventory.json");
         let mut raw = Vec::new();
         if let Ok(metadata) = fs::symlink_metadata(&path) {
@@ -312,7 +329,13 @@ impl Inventory {
         self.charge_metadata(raw.len() as u64)?;
         // Typed fields reject duplicate/unknown members directly. Opaque JSON
         // retains the same strict visitor, without materializing a second whole ledger.
+        let read_us = measured_began.elapsed().as_micros();
         let l: Ledger = serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
+        measured(
+            &format!("load-decode-read-{read_us}"),
+            measured_began,
+            l.outputs.len(),
+        );
         if l.policy_sha256 != policy_digest
             || l.outputs.len() > self.policy.max_entries
             || l.summaries.len() > self.policy.max_summaries
@@ -387,13 +410,18 @@ impl Inventory {
                 return Err("missing current consumer output reference".into());
             }
         }
+        measured("load-validated", measured_began, l.outputs.len());
         Ok(l)
     }
     fn save(&self, l: &Ledger, gate: &Lease) -> Result<(), String> {
+        let measured_began = Instant::now();
         self.stable(gate)?;
         let raw = serde_json::to_vec(l).map_err(|e| e.to_string())?;
+        measured("save-serialized", measured_began, l.outputs.len());
         self.charge_metadata(raw.len() as u64)?;
-        write(&self.directory.join("inventory.json"), &raw)
+        let result = write(&self.directory.join("inventory.json"), &raw);
+        measured("save-synced", measured_began, l.outputs.len());
+        result
     }
     /// Explicit owner migration. The caller supplies the exact prior policy bytes;
     /// every existing output must still be declared, and all old producers/readers must be excluded.
@@ -1052,6 +1080,7 @@ impl Inventory {
     fn maintain_locked(&self, observed: u64, gate: &Lease) -> Result<Value, String> {
         let began = Instant::now();
         let mut l = self.load()?;
+        measured("maintain-loaded", began, l.outputs.len());
         let mut metadata_steps = 0usize;
         let mut accounting_errors = Vec::new();
         // Recover only explicit reservations; never discover unknown files by scanning.
@@ -1120,6 +1149,7 @@ impl Inventory {
             l.retired_leases.remove(0);
             self.save(&l, &gate)?;
         }
+        measured("maintain-recovered", began, l.outputs.len());
         // Accounting is independent of retirement eligibility: a current root
         // may retain a sealed output, but must not defer byte accounting forever.
         // Legacy entries reserve the policy ceiling until this bounded pass seals them.
@@ -1176,6 +1206,7 @@ impl Inventory {
             }
             l.cursor = (index + 1) % l.outputs.len().max(1);
         }
+        measured("maintain-accounted", began, l.outputs.len());
         let report_exclusion = Lease::acquire(
             &self.directory.join("reports.lease"),
             None,
@@ -1241,6 +1272,7 @@ impl Inventory {
                     .push(output.id.clone());
             }
         }
+        measured("maintain-first-candidate", began, l.outputs.len());
         for id in order {
             if !self.metadata_room()
                 || nodes >= self.policy.max_nodes_per_round
