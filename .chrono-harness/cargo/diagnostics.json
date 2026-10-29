@@ -30,6 +30,7 @@
       "argv": [
         "build",
         "--locked",
+        "--offline",
         "--manifest-path",
         "crates/diagnostics/Cargo.toml"
       ]
@@ -47,11 +48,11 @@
       "input": null
     },
     {
-      "path": "/Users/macstudio2/chrono-diagnostics-guard-20261030/.chrono-harness/state/diagnostics-current/tooling/cargo/config",
+      "path": ".chrono-harness/state/diagnostics-native/cargo/config",
       "input": null
     },
     {
-      "path": "/Users/macstudio2/chrono-diagnostics-guard-20261030/.chrono-harness/state/diagnostics-current/tooling/cargo/config.toml",
+      "path": ".chrono-harness/state/diagnostics-native/cargo/config.toml",
       "input": null
     }
   ],
@@ -63,9 +64,8 @@
   },
   "toolchain": {
     "sysroot": {
-      "root": "/Users/macstudio2/chrono-input-q1-validation-20261028/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
-      "manifest": "toolchain.rust.inventory",
-      "manifest_root": "/Users/macstudio2/chrono-pr-inputs-20261023/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin"
+      "root": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "manifest": "toolchain.rust.inventory"
     },
     "backend": [
       "toolchain.rust-driver"
@@ -77,12 +77,12 @@
     },
     "sdks": [
       {
-        "root": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+        "root": "/Applications/Xcode_26.6.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
         "manifest": "toolchain.sdk.inventory",
         "environment": "SDKROOT"
       },
       {
-        "root": "/Applications/Xcode.app/Contents",
+        "root": "/Applications/Xcode_26.6.app/Contents",
         "manifest": "toolchain.developer.inventory",
         "environment": "CHRONO_XCODE_CONTENTS"
       }

@@ -427,7 +427,33 @@ stay in the existing macOS 27 configuration scope; the native graph retains the
 common guard and observer dependencies without borrowing those local inputs.
 Its output must first be qualified against the exact candidate/source, original producer
 run/attempt, official Rust expectations and declared Xcode/configuration scope.
-A later fixed candidate can explicitly adopt those qualified original hashes in
-the native direct policy and v6 Cargo contract. Missing originals, failed
+The native direct policy and diagnostics v6 contract now explicitly adopt the
+qualified originals from clean source `6ca53a96f0f0aceca69149a162ac24696bb10bda`,
+run `40961603966`, attempt `1`, diagnostics job `123757592461`, artifact
+`12936817318` (ZIP SHA-256
+`bba25e442cfd89804dfd68cf608883c99143a605ea3640a19adb6ba604103f66`).
+The selected native policy binds the original Cargo/rustc, Xcode 26.6 tools,
+private diagnostics Cargo home, explicit configuration absences and native
+sysroot/SDK/developer roots. Its configuration-scoped FILEMAP edges retain
+1,127 package source-file identities checked against the qualified registry
+inventory; the local macOS 27 policy and its input edges remain local.
+
+The three runtime directory originals are `rust.json` SHA-256
+`792aad114bf2ffec0fea2ebae5fd921cc03446cd4a1a524c933197b3c4e6757b`,
+`sdk.json` SHA-256
+`95337d9300b02f0e75bde2d6aec955d5a8f3a9fc1e8a951726c15c433f74221b`,
+and `xcode-contents.json` SHA-256
+`866c18f9c3469a4cf734e452748b2eff0c4f3bcbeccccbab515c6a29d3309d4d`.
+The package-file adoption authority is `packages.json` SHA-256
+`ba0f4178c06dede474b4d6c4adb39fe0dafaf01af15d3bcde2a5a1532cfcd2da`.
+These are exact original expectations, not values learned from a failing guard.
+The existing producer recreates current observations; the guard rejects changed
+manifest or live input bytes. The ordinary build explicitly uses `--offline`.
+No generic guard behavior changes. Registration validation may select broad
+existing consumers; its local/native validation and storage costs are unknown.
+Local macOS 27 checks cannot validate the selected native Xcode/SDK binding,
+and the shared diagnostics policy now describes the native consumer. The actual
+native guarded build, diagnostics tests and canonical collection remain owed.
+Missing originals, failed
 qualification and drift remain failures; producer success is not guarded-build,
 unit/aggregate, full-input, parity or landing acceptance.
