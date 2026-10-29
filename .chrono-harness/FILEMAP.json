@@ -6788,6 +6788,34 @@
           "to": "project:judge-registration-tests"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-diagnostics-guard.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:diagnostics"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -9570,6 +9598,11 @@
       "from": "tool:cargo-guard",
       "kind": "runtime-input",
       "to": "project:runner"
+    },
+    {
+      "from": "project:judge-cargo",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
     }
   ],
   "test_costs": [
@@ -10492,6 +10525,14 @@
       "host.bootstrap-provision-tests": {
         "resources": [],
         "outputs": []
+      },
+      "host.bootstrap-diagnostics-guard": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-cargo/target/",
+          ".chrono-harness/bin/chrono-judge-cargo",
+          ".chrono-harness/state/"
+        ]
       }
     }
   },
