@@ -138,8 +138,23 @@ dependencies = [
  "chrono-harness",
  "chrono-judge-registration",
  "chrono-judge-workflow",
+ "chrono-worktree",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "chrono-worktree"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-registration",
+ "chrono-judge-workflow",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "time",
 ]
 
 [[package]]

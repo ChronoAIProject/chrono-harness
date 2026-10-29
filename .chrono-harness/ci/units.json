@@ -29,7 +29,8 @@
     "context_path": ".chrono-harness/state/collection/context.json",
     "artifact_directory": ".chrono-harness/state/",
     "facts_config": ".chrono-harness/config.json",
-    "include_hidden_files": true
+    "include_hidden_files": true,
+    "retention_delivery": true
   },
   "units": {
     "runner": {
@@ -391,11 +392,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-diagnostics-guard.json"
       ],
       "context_path": ".chrono-harness/state/units/diagnostics/context.json",
       "artifact_directory": ".chrono-harness/state/"

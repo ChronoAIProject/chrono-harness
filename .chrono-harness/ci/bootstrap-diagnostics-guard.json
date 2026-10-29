@@ -1,0 +1,33 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.95.0",
+  "tools": {
+    "python3": "/usr/bin/python3"
+  },
+  "operations": [
+    "host.bootstrap-shared-verify-core",
+    "build.judge-cargo",
+    "host.bootstrap-diagnostics-inputs"
+  ],
+  "install": [
+    {
+      "source": "crates/judge-cargo/target/debug/chrono-judge-cargo",
+      "destination": ".chrono-harness/bin/chrono-judge-cargo"
+    }
+  ],
+  "participation": {
+    "coordinator_root": "git-main-worktree",
+    "program": ".chrono-harness/bin/chrono-worktree",
+    "git": "/usr/bin/git",
+    "config": ".chrono-harness/worktree.json"
+  },
+  "entrypoint": {
+    "tool": "python3",
+    "script": ".chrono-harness/ci/bootstrap.py"
+  },
+  "rust_incremental": true,
+  "require_tool_bindings": true,
+  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
+  "report_path": ".chrono-harness/state/diagnostics-guard-bootstrap.json"
+}

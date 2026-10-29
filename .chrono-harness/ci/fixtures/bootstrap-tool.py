@@ -19,7 +19,10 @@ if name == "rustup":
         sys.exit(0 if (root / "cargo-ready").exists() else 1)
     if args == ["run", "1.95.0", "rustfmt", "--version"]:
         sys.exit(0 if (root / "fmt-ready").exists() else 1)
-    if args == ["toolchain", "install", "1.95.0", "--profile", "minimal", "--component", "rustfmt"]:
+    if args == ["toolchain", "install", "1.95.0", "--profile", "default", "--no-self-update"]:
+        (root / "cargo-ready").touch()
+        (root / "fmt-ready").touch()
+    elif args == ["toolchain", "install", "1.95.0", "--profile", "minimal", "--component", "rustfmt"]:
         (root / "cargo-ready").touch()
         (root / "fmt-ready").touch()
     elif args == ["component", "add", "--toolchain", "1.95.0", "rustfmt"]:

@@ -297,6 +297,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_cache/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.cache","check.cache-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -304,6 +305,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'cache' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_ci:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -451,6 +460,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_ci/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_ci/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.ci-tests","check.ci"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -458,6 +468,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'ci' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_diagnostics:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -521,7 +539,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-diagnostics-guard.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -569,6 +587,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_diagnostics/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_diagnostics/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.diagnostics","check.diagnostics-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -576,6 +595,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'diagnostics' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_distribution:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -687,6 +714,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_distribution/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_distribution/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.distribution","check.distribution-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -694,6 +722,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'distribution' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_host-bootstrap:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -741,6 +777,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'host-bootstrap' --github-output "$GITHUB_OUTPUT"
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -748,6 +785,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'host-bootstrap' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_inputs:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -931,6 +976,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_inputs/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_inputs/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.inputs-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -938,6 +984,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'inputs' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_instructions:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1049,6 +1103,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_instructions/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_instructions/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.instructions","check.instructions-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -1056,6 +1111,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'instructions' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-cargo:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1248,6 +1311,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cargo/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cargo/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cargo","check.judge-cargo-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -1255,6 +1319,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-cargo' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-ci:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1375,6 +1447,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-ci/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-ci/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-ci-tests","check.judge-ci"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -1382,6 +1455,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-ci' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-cost:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1520,6 +1601,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cost/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cost","check.judge-cost-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -1527,6 +1609,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-cost' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-filemap:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1674,6 +1764,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-filemap/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-filemap","check.judge-filemap-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -1681,6 +1772,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-filemap' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-mixed:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1828,6 +1927,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-mixed/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-mixed","check.judge-mixed-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -1835,6 +1935,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-mixed' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-projects:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2000,6 +2108,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects","check.judge-projects-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -2007,6 +2116,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-projects' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-projects-migration:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2164,6 +2281,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects-migration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects-migration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects-tests.migration"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -2171,6 +2289,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-projects-migration' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-registration:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2291,6 +2417,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-registration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-registration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-registration","check.judge-registration-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -2298,6 +2425,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-registration' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-routes:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2409,6 +2544,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-routes/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-routes/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-routes","check.judge-routes-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -2416,6 +2552,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-routes' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-workflow:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2617,6 +2761,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow","check.judge-workflow-tests"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -2624,6 +2769,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-workflow-short:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2817,6 +2970,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-short/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-short"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -2824,6 +2978,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow-short' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_judge-workflow-units:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3017,6 +3179,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-units/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-units"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3024,6 +3187,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow-units' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_release-build:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3071,6 +3242,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'release-build' --github-output "$GITHUB_OUTPUT"
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3078,6 +3250,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'release-build' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_release-build-integration:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3164,6 +3344,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_release-build-integration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_release-build-integration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '[]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3171,6 +3352,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'release-build-integration' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_runner:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3282,6 +3471,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_runner/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_runner/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.runner-tests","check.runner"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3289,6 +3479,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'runner' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_scoped-v1:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3336,6 +3534,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'scoped-v1' --github-output "$GITHUB_OUTPUT"
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3343,6 +3542,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'scoped-v1' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_workflow-inventory:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3390,6 +3597,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'workflow-inventory' --github-output "$GITHUB_OUTPUT"
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3397,6 +3605,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'workflow-inventory' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_worktree:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3526,6 +3742,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_worktree/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_worktree/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.worktree-tests","check.worktree"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3533,6 +3750,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'worktree' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   unit_worktree-adoption:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3654,6 +3879,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_worktree-adoption/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_worktree-adoption/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.worktree-tests.worktree-adoption"]'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3661,6 +3887,14 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'worktree-adoption' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
   aggregate:
     name: "chrono / collection"
     needs: ["detect","unit_cache","unit_ci","unit_diagnostics","unit_distribution","unit_host-bootstrap","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-projects-migration","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_release-build-integration","unit_runner","unit_scoped-v1","unit_workflow-inventory","unit_worktree","unit_worktree-adoption"]
@@ -3703,6 +3937,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' 'check' '--collect'
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -3710,3 +3945,11 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Acknowledge delivered original evidence
+        if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_DELIVERED_ARTIFACT: ${{ steps.chrono_evidence_upload.outputs.artifact-id }}
+          CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'collect' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
