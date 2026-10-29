@@ -1722,9 +1722,22 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
         assert_eq!(
             output.status.code(),
             Some(if failures.is_empty() { 0 } else { 2 }),
-            "{report}"
+            "allocation maintenance failed: {}",
+            allocation.display()
         );
-        report
+        report["producer_objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| {
+                row["producer"] == "worktree-test-host"
+                    && row["path"]
+                        .as_str()
+                        .unwrap()
+                        .ends_with(allocation.file_name().unwrap().to_str().unwrap())
+            })
+            .expect("actual fixture allocation maintenance record")
+            .clone()
     };
     h.kernel_cleanup();
     super::automatic::native_consumer_actions(&h, "cargo-run", "cargo-prepare");
@@ -1780,21 +1793,7 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let preserved_while_native_live = target.join("output λ/cache").exists();
     let protected = maintain_allocation();
     assert!(cargo_output.is_dir(), "{protected}");
-    assert!(
-        protected["producer_objects"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|row| {
-                row["producer"] == "worktree-test-host"
-                    && row["status"] == "protected"
-                    && row["path"]
-                        .as_str()
-                        .unwrap()
-                        .ends_with(allocation.file_name().unwrap().to_str().unwrap())
-            }),
-        "{protected}"
-    );
+    assert_eq!(protected["status"], "protected", "{protected}");
     fs::write(target.join(".chrono-harness/state/native-release"), "join").unwrap();
     await_file(&target.join(".chrono-harness/state/native-done"));
     assert!(
