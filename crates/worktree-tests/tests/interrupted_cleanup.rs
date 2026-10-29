@@ -1707,7 +1707,25 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
 
 #[test]
 fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
-    let h = Host::new("payload");
+    let h = Host::retained("payload");
+    let allocation = h._dir.path().to_owned();
+    let coordinator = source();
+    let maintain_allocation = || {
+        let mut command = Command::new(coordinator.join(".chrono-harness/bin/chrono-worktree"));
+        command.current_dir(&coordinator).arg("maintain");
+        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+        let output =
+            chrono_worktree::TemporaryHost::capture_bound_output(&allocation, &mut command)
+                .unwrap();
+        let report = json(&output.stdout).unwrap();
+        let failures = report["cleanup_failures"].as_array().unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(if failures.is_empty() { 0 } else { 2 }),
+            "{report}"
+        );
+        report
+    };
     h.kernel_cleanup();
     super::automatic::native_consumer_actions(&h, "cargo-run", "cargo-prepare");
     // Compile and list the native tests under the registered fixture action, with the same
@@ -1736,6 +1754,8 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
         "native test executable was not prepared: {prepared}"
     );
     assert!(!target.join(".chrono-harness/state/native-holder").exists());
+    let cargo_output = target.join(".chrono-harness/state/cargo-case/target");
+    assert!(cargo_output.is_dir(), "the actual Cargo output must exist");
     output(&target);
     let mut owner = wrapper(&h, &target);
     owner.await_file(&target.join(".chrono-harness/state/native-holder"));
@@ -1758,6 +1778,23 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     );
     assert_eq!(h.auto("maintain", &[]).0, 0);
     let preserved_while_native_live = target.join("output λ/cache").exists();
+    let protected = maintain_allocation();
+    assert!(cargo_output.is_dir(), "{protected}");
+    assert!(
+        protected["producer_objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| {
+                row["producer"] == "worktree-test-host"
+                    && row["status"] == "protected"
+                    && row["path"]
+                        .as_str()
+                        .unwrap()
+                        .ends_with(allocation.file_name().unwrap().to_str().unwrap())
+            }),
+        "{protected}"
+    );
     fs::write(target.join(".chrono-harness/state/native-release"), "join").unwrap();
     await_file(&target.join(".chrono-harness/state/native-done"));
     assert!(
@@ -1765,6 +1802,19 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
         "actual native Cargo child completed after cleanup but lost enrollment lease"
     );
     reclaim(&h, &target);
+    let original_head = git(&target, &["rev-parse", "HEAD"]);
+    let original_payload = fs::read(target.join("payload")).unwrap();
+    let manifest = target.join(".chrono-harness/state/cargo-case/Cargo.toml");
+    let library = target.join(".chrono-harness/state/cargo-case/src/lib.rs");
+    let original_manifest = fs::read(&manifest).unwrap();
+    let original_library = fs::read(&library).unwrap();
+    drop(h);
+    let reclaimed = maintain_allocation();
+    assert!(!cargo_output.exists(), "{reclaimed}");
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), original_payload);
+    assert_eq!(fs::read(manifest).unwrap(), original_manifest);
+    assert_eq!(fs::read(library).unwrap(), original_library);
 }
 
 #[test]
