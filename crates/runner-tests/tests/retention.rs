@@ -3,7 +3,7 @@ use chrono_harness::retained_artifacts::{
     retention::{Inventory, POLICY_PATH},
 };
 use serde_json::{Value, json};
-use std::{fs, path::Path};
+use std::{fs, io::Write, path::Path};
 fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
     fs::create_dir_all(d.path().join(".chrono-harness/state/fixtures")).unwrap();
@@ -40,7 +40,8 @@ fn isolated_capability_test(name: &str) -> bool {
     if name.starts_with("retained_capacity_round")
         || name.starts_with("ordinary_concurrent_publications")
     {
-        eprintln!(
+        let _ = writeln!(
+            std::io::stderr().lock(),
             "MEASURED_FIXTURE {name} stderr: {}",
             String::from_utf8_lossy(&output.stderr)
         );

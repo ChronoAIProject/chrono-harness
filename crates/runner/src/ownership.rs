@@ -1,6 +1,7 @@
 //! Stable, identity-bound kernel capabilities for an opted-in enrollment.
 use std::{
     fs::{self, File, OpenOptions},
+    io::Write,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -108,7 +109,8 @@ impl Lease {
                     == Ok("ordinary_concurrent_publications_admit_against_retained_inventory");
             let event = |kind: &str, us: u128| {
                 if measured {
-                    eprintln!(
+                    let _ = writeln!(
+                        std::io::stderr().lock(),
                         "RETTRACE stage={kind} tid={:?} ns={} us={us} caller={}",
                         std::thread::current().id(),
                         std::time::SystemTime::now()
@@ -192,7 +194,8 @@ impl Lease {
 impl Drop for Lease {
     fn drop(&mut self) {
         if let Some(began) = self.measured_acquired {
-            eprintln!(
+            let _ = writeln!(
+                std::io::stderr().lock(),
                 "RETTRACE stage=gate-closing tid={:?} ns={} us={}",
                 std::thread::current().id(),
                 std::time::SystemTime::now()

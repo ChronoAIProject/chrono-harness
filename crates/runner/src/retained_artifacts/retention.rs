@@ -160,7 +160,8 @@ fn measured(stage: &str, began: Instant, entries: usize) {
     if entries >= 420
         && (std::thread::current().name().is_none() || case.starts_with("retained_capacity_round"))
     {
-        eprintln!(
+        let _ = writeln!(
+            std::io::stderr().lock(),
             "RETTRACE stage={stage} case={case} tid={:?} ns={} us={} entries={entries}",
             std::thread::current().id(),
             SystemTime::now()
