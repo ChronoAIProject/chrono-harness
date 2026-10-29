@@ -2484,6 +2484,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             process.exit_code, process.failure
                         ));
                     }
+                    let mut post_use_cleanup = value!({});
+                    let cleanup = manager.drain_for_admission(
+                        r,
+                        &[invoking.clone(), target.clone()],
+                        &mut post_use_cleanup,
+                    );
+                    report["post_use_cleanup"] = post_use_cleanup;
+                    cleanup?;
                     Ok(())
                 }
                 _ => unreachable!(),
