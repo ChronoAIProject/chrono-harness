@@ -23,6 +23,10 @@ fn main() {
         }
         "sleep" => std::thread::sleep(std::time::Duration::from_secs(4)),
         "flood" => std::io::stdout().write_all(&vec![b'x'; 4096]).unwrap(),
+        #[cfg(unix)]
+        "socket" => {
+            let _listener = std::os::unix::net::UnixListener::bind(&args[1]).unwrap();
+        }
         _ => std::process::exit(99),
     }
 }
