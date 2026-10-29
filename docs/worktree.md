@@ -192,11 +192,11 @@ CLI exits 0 or 2 respectively. `governance` remains `not-evaluated` and `parity`
 remains `unestablished`. The partial `context` is an input for later work, not a
 complete check context or integration certificate.
 
-The CLI serializes stdout as compact JSON with one trailing newline. Stored
-originals retain their existing representation; consumers compare decoded JSON
-values and verify each original's own byte identity. Complete process captures,
-their byte arrays, hashes, exit codes and bounds remain present. This avoids
-indentation expansion of captured Git bytes in bounded lifecycle consumers.
+New reports and their matching CLI stdout use compact JSON with one trailing
+newline. Historical originals retain their representation and byte identity.
+Complete process captures, their byte arrays, hashes, exit codes and bounds
+remain present. This avoids indentation expansion of captured Git bytes in
+bounded lifecycle consumers while preserving exact stored/stdout equality.
 
 The dedicated tests use real bare remotes, advanced remote commits, arbitrary
 host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and

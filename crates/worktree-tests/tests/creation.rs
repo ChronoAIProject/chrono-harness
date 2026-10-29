@@ -358,6 +358,14 @@ impl Host {
             // bounds; pretty-printing byte arrays multiplies its transport cost.
             assert_eq!(out.stdout.iter().filter(|&&byte| byte == b'\n').count(), 1);
             assert_eq!(
+                out.stdout,
+                fs::read(
+                    Path::new(report["source_root"].as_str().unwrap())
+                        .join(report["report_path"].as_str().unwrap())
+                )
+                .unwrap()
+            );
+            assert_eq!(
                 report,
                 json(
                     &fs::read(

@@ -772,7 +772,7 @@ pub(crate) fn with_report(
             }
         }
     }
-    let mut data = serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?;
+    let mut data = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
     data.push(b'\n');
     if let Some(publication) = &report_publication {
         publication.check_length(data.len() as u64)?;

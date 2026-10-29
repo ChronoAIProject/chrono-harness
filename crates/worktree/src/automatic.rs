@@ -2660,7 +2660,8 @@ pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> 
     let target = no_symlink_parents(&root, path)?;
     fs::create_dir_all(target.parent().ok_or("lifecycle report parent")?)
         .map_err(|e| e.to_string())?;
-    let raw = serde_json::to_vec_pretty(report).map_err(|e| e.to_string())?;
+    let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
+    raw.push(b'\n');
     if !chrono_harness::retained_artifacts::retention::publish_owned_original(
         &root,
         "lifecycle-original",
@@ -2668,7 +2669,7 @@ pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> 
         &raw,
         crate::recovery::publication_outcome(report, &raw),
     )? {
-        write_json(&target, report, true)?;
+        write_bytes(&target, &raw, true)?;
     }
     crate::recovery::settle_report(&root, report)?;
     Ok(())
