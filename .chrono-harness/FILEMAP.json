@@ -10525,14 +10525,6 @@
       "host.bootstrap-provision-tests": {
         "resources": [],
         "outputs": []
-      },
-      "host.bootstrap-diagnostics-guard": {
-        "resources": [],
-        "outputs": [
-          "crates/judge-cargo/target/",
-          ".chrono-harness/bin/chrono-judge-cargo",
-          ".chrono-harness/state/"
-        ]
       }
     }
   },
