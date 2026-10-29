@@ -45,6 +45,8 @@ pub struct Report {
     status: &'static str,
     error: Option<String>,
     operation_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    registry_binding: Option<facts::ConfigIdentity>,
     tool: Option<observation::Tool>,
     compiler: Option<observation::Tool>,
     native_target: Option<ProcessResult>,
@@ -69,6 +71,7 @@ pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
         status: "passed",
         error: None,
         operation_id: operation.into(),
+        registry_binding: None,
         tool: None,
         compiler: None,
         native_target: None,
@@ -94,35 +97,33 @@ fn evaluate(
     report: &mut Report,
 ) -> Result<(), String> {
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-    let config_value =
-        json(&fs::read(no_symlink_parents(&root, config)?).map_err(|e| e.to_string())?)?;
-    let values: BTreeMap<_, _> = facts::registry_paths(&config_value, config)?
-        .into_iter()
-        .map(|path| {
-            Ok((
-                path.clone(),
-                json(&fs::read(no_symlink_parents(&root, &path)?).map_err(|e| e.to_string())?)?,
-            ))
-        })
-        .collect::<Result<_, String>>()?;
-    let registrations = Registrations::load(&values, config)?;
-    let snapshot: serde_json::Map<String, Value> = registrations.config()["environment"]["inherit"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|key| {
-            let key = key.as_str().unwrap();
-            let value = match std::env::var(key) {
-                Ok(v) => Value::String(v),
-                Err(std::env::VarError::NotPresent) => Value::Null,
-                Err(e) => return Err(format!("E_CARGO_INPUT: environment {key}: {e}")),
-            };
-            Ok((key.to_string(), value))
-        })
-        .collect::<Result<_, String>>()?;
+    let snapshot = facts::registry_snapshot_with(config, |path| {
+        fs::read(no_symlink_parents(&root, path)?).map_err(|e| e.to_string())
+    })?;
+    let registrations = Registrations::load(&snapshot.values, config)?;
+    report.registry_binding = Some(facts::ConfigIdentity {
+        entry_path: registrations.entry_path().into(),
+        effective_path: registrations.effective_config_path().into(),
+        selection: registrations.selection().cloned(),
+    });
+    let inherited: serde_json::Map<String, Value> =
+        registrations.config()["environment"]["inherit"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|key| {
+                let key = key.as_str().unwrap();
+                let value = match std::env::var(key) {
+                    Ok(v) => Value::String(v),
+                    Err(std::env::VarError::NotPresent) => Value::Null,
+                    Err(e) => return Err(format!("E_CARGO_INPUT: environment {key}: {e}")),
+                };
+                Ok((key.to_string(), value))
+            })
+            .collect::<Result<_, String>>()?;
     let environment = chrono_judge_registration::inputs::environment(
         registrations.config(),
-        &Value::Object(snapshot),
+        &Value::Object(inherited),
     )?;
     let check = measure("prepare-inputs", || {
         crate::inputs::prepare(
@@ -132,6 +133,7 @@ fn evaluate(
             policy,
             operation,
             &environment,
+            &snapshot.bytes,
         )
     })?;
     report.configuration = Some(check.configuration.evidence.clone());

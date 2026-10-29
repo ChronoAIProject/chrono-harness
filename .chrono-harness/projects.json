@@ -3341,12 +3341,17 @@
       "actions": {
         "build": {
           "operation": "build.diagnostics",
-          "tool": "cargo",
+          "tool": "cargo-guard",
           "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/diagnostics/Cargo.toml"
+            "run",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/config.json",
+            "--policy",
+            ".chrono-harness/cargo/diagnostics.json",
+            "--operation",
+            "build.diagnostics"
           ]
         },
         "check": {

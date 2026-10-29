@@ -417,10 +417,13 @@ keeps 45 minutes. Inventory IO, artifact size and total native time are unmeasur
 
 The ordinary native integration point is the diagnostics bootstrap selected by
 `units.diagnostics.bootstrap` in `ci/units.json`, after startup/core verification
-and before `check --unit diagnostics`. That separately owned bootstrap must
-delegate `host.bootstrap-diagnostics-inputs` to invoke this producer. Registering
-this profile does not install that link or prove a native execution. Its output
-must first be qualified against the exact candidate/source, original producer
+and before `check --unit diagnostics`. The selected diagnostics guard bootstrap
+now verifies the imported core profile, builds the candidate guard, delegates
+`host.bootstrap-diagnostics-inputs`, then installs the guard before that check.
+The registered producer builds its observer and retains its own report and streams
+under the unit's existing state artifact directory. This delegation does not prove
+a native execution. Its output must first be qualified against the exact
+candidate/source, original producer
 run/attempt, official Rust expectations and declared Xcode/configuration scope.
 A later fixed candidate can explicitly adopt those qualified original hashes in
 the native direct policy and v6 Cargo contract. Missing originals, failed

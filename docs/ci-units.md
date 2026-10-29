@@ -342,8 +342,14 @@ the existing core profile once and publishes all five installed tools. Consumer
 jobs validate and install the selected profiles, then verify them at the original
 cache/core preparation points. The diagnostics unit uses the registered
 `host.bootstrap-diagnostics-guard` preparation: it first verifies the imported
-core profile, then runs the existing `build.judge-cargo` operation and installs
-that candidate's `chrono-judge-cargo`. Its separate
+core profile, runs the existing `build.judge-cargo` operation, then delegates
+`host.bootstrap-diagnostics-inputs` and installs that candidate's
+`chrono-judge-cargo`. The delegated producer builds its candidate observer and
+retains the bounded native source/tool/configuration observations and four
+directory originals under `.chrono-harness/state/diagnostics-native/`, within the
+existing unit artifact directory. A later guarded-build refusal preserves these
+originals through the existing always-run upload. This preparation neither adopts
+observed hashes nor makes the guarded check pass. Its separate
 `diagnostics-guard-bootstrap.json` report retains the clean source identity,
 original operation streams and installed digest; the imported core report and
 `startup-install.json` remain the source-bound import evidence. A failed core

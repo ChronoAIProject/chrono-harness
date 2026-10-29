@@ -7,7 +7,8 @@
   },
   "operations": [
     "host.bootstrap-shared-verify-core",
-    "build.judge-cargo"
+    "build.judge-cargo",
+    "host.bootstrap-diagnostics-inputs"
   ],
   "install": [
     {

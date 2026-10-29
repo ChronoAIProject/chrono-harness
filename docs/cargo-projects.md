@@ -89,6 +89,15 @@ declarations, and only then runs the declared Cargo consumer. It checks input
 identities again after metadata and after the consumer. The ordinary full and
 scoped execution paths require no Cargo-specific callback or schema field.
 
+The guarded `run` entry accepts direct host configurations and the existing
+`chrono-git-configs/v1` and `v2` selectors through the shared registry acquisition
+owner. The registered action still names the caller's entry path exactly.
+`registry_binding` reports that entry, its effective direct policy and any
+selection. Both files' original bytes, together with the acquired registries,
+are checked before child execution and after metadata and the consumer. A
+selector does not qualify another host's toolchain or inputs; unknown identities
+and selection/binding mismatches fail before Cargo runs.
+
 The registered development build of the guard uses optimization level 1, as do
 the other inventory judges. Large selected sysroot/SDK inventories still receive
 every original file, directory, alias and boundary check; this changes compiled

@@ -1,6 +1,6 @@
 //! Explicit retained Cargo package contracts and metadata comparison.
 use crate::{Policy, Project};
-use chrono_harness::{facts, file_identity, json, no_symlink_parents, wire};
+use chrono_harness::{file_identity, json, no_symlink_parents, sha256, wire};
 use chrono_judge_filemap::{
     edges,
     graph::{self, EdgeKind, Seed},
@@ -321,6 +321,7 @@ pub(crate) fn prepare(
     policy: &str,
     operation: &str,
     environment: &BTreeMap<String, String>,
+    registry_bytes: &BTreeMap<String, Vec<u8>>,
 ) -> Result<Check> {
     use std::cell::RefCell;
     if !policy.starts_with(".chrono-harness/") {
@@ -524,8 +525,8 @@ pub(crate) fn prepare(
             .insert(path, (canonical.clone(), digest));
         Ok(canonical)
     };
-    for path in facts::registry_paths(r.config(), config)? {
-        retain(root.join(path), None)?;
+    for (path, bytes) in registry_bytes {
+        retain(root.join(path), Some(&sha256(bytes)))?;
     }
     retain(policy_path, None)?;
     for f in files

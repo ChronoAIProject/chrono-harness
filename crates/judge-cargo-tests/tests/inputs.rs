@@ -6,6 +6,178 @@ use serde_json::json;
 use std::fs;
 use std::process::Command;
 
+const SELECTED_CONFIG: &str = ".chrono-harness/selected.json";
+
+fn select_configuration(f: &mut Fixture, version: u8) {
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let git = "/usr/bin/git";
+    let digest = sha256(&fs::read(git).unwrap());
+    let output = Command::new(git).arg("--version").output().unwrap();
+    assert!(output.status.success());
+    let mut direct = f.values.remove(CONFIG).unwrap();
+    direct["schema_version"] = json!(3);
+    direct["facts_git"] = json!({"tool":"git","input":"git-binary"});
+    direct["input_closure"] = json!({"status":"incomplete","unresolved":["fixture scope"]});
+    direct["tools"].as_array_mut().unwrap().push(json!({
+        "id":"git","program":git,"resolution":"PATH-once","version_argv":["--version"],
+        "expected_version":String::from_utf8(output.stdout).unwrap().trim()
+    }));
+    let inputs = direct["environment"]["inputs"].as_array_mut().unwrap();
+    for row in &mut *inputs {
+        row["presence"] = json!("present");
+    }
+    inputs.push(json!({"id":"git-binary","location":git,"presence":"present","sha256":digest}));
+    f.values.insert(SELECTED_CONFIG.into(), direct);
+    f.values.insert(
+        CONFIG.into(),
+        json!({
+            "schema":format!("chrono-git-configs/v{version}"),
+            "platforms":{platform:if version == 1 {json!(SELECTED_CONFIG)} else {
+                json!({"program":git,"configurations":[{"sha256":digest,"path":SELECTED_CONFIG}]})
+            }}
+        }),
+    );
+    f.save();
+}
+
+#[test]
+fn guard_configuration_selection_runs_direct_and_both_existing_selectors() {
+    for version in [1, 2, 0] {
+        let mut f = Fixture::new();
+        if version != 0 {
+            select_configuration(&mut f, version);
+        }
+        let (code, report, stderr) = f.call();
+        assert_eq!(code, 0, "v{version}: {report} {stderr}");
+        assert_eq!(report["metadata"]["exit_code"], 0);
+        assert_eq!(report["operation"]["exit_code"], 0);
+        assert_eq!(report["registry_binding"]["entry_path"], CONFIG);
+        assert_eq!(
+            report["registry_binding"]["effective_path"],
+            if version == 0 {
+                CONFIG
+            } else {
+                SELECTED_CONFIG
+            }
+        );
+        assert_eq!(
+            report["registry_binding"]["selection"].is_null(),
+            version == 0
+        );
+        assert_eq!(
+            fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+            b"ran"
+        );
+    }
+}
+
+#[test]
+fn guard_configuration_selection_rejects_invalid_identity_and_entry_before_cargo() {
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    for (case, expected) in [
+        ("unknown-digest", "no registered executable identity"),
+        ("binding", "identity differs from selected policy binding"),
+        ("platform", "no registered platform"),
+        ("nested", "never another selector"),
+        ("missing", "No such file"),
+        ("entry", "registered Cargo guard entry"),
+    ] {
+        let mut f = Fixture::new();
+        select_configuration(&mut f, 2);
+        match case {
+            "unknown-digest" => {
+                f.values.get_mut(CONFIG).unwrap()["platforms"][&platform]["configurations"][0]["sha256"] =
+                    json!("0".repeat(64))
+            }
+            "binding" => {
+                f.values.get_mut(SELECTED_CONFIG).unwrap()["environment"]["inputs"]
+                    .as_array_mut()
+                    .unwrap()
+                    .last_mut()
+                    .unwrap()["sha256"] = json!("0".repeat(64))
+            }
+            "platform" => {
+                f.values.get_mut(CONFIG).unwrap()["platforms"] =
+                    json!({"unknown-platform":f.values[CONFIG]["platforms"][&platform]})
+            }
+            "nested" => {
+                f.values
+                    .insert(SELECTED_CONFIG.into(), f.values[CONFIG].clone());
+            }
+            "missing" => {
+                f.values.get_mut(CONFIG).unwrap()["platforms"][&platform]["configurations"][0]["path"] =
+                    json!(".chrono-harness/missing.json")
+            }
+            "entry" => {
+                f.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"]
+                    [4] = json!(SELECTED_CONFIG)
+            }
+            _ => unreachable!(),
+        }
+        f.save();
+        let (code, report, stderr) = f.call_unchecked();
+        assert_ne!(code, 0, "{case}: {report} {stderr}");
+        assert!(
+            report["error"].as_str().unwrap().contains(expected),
+            "{case}: {report}"
+        );
+        assert!(report["metadata"].is_null() && report["operation"].is_null());
+        assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+    }
+}
+
+#[test]
+fn guard_configuration_selection_retains_entry_and_target_across_every_child_boundary() {
+    for path in [CONFIG, SELECTED_CONFIG] {
+        for phase in ["--version", "metadata", "test"] {
+            let mut f = Fixture::new();
+            let proxy = f.root().join(".chrono-harness/state/cargo-proxy");
+            let output = Command::new(
+                f.values[CONFIG]["environment"]["values"]["RUSTC"]
+                    .as_str()
+                    .unwrap(),
+            )
+            .args(["--edition=2024", "--crate-name", "configuration_drift"])
+            .arg(source().join("crates/judge-cargo-tests/tests/fixtures/configuration-drift.rs"))
+            .arg("-o")
+            .arg(&proxy)
+            .output()
+            .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let cargo = f.values[CONFIG]["tools"][0]["program"].clone();
+            f.values.get_mut(CONFIG).unwrap()["tools"][0]["program"] = json!(proxy);
+            let mutation_target = f.root().join(path);
+            let env = &mut f.values.get_mut(CONFIG).unwrap()["environment"]["values"];
+            env["CHRONO_REAL_CARGO"] = cargo;
+            env["CHRONO_MUTATION_PHASE"] = json!(phase);
+            env["CHRONO_MUTATION_TARGET"] = json!(mutation_target);
+            select_configuration(&mut f, 2);
+            let (code, report, stderr) = f.call();
+            assert_ne!(code, 0, "{path} {phase}: {report} {stderr}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("input changed during guarded operation"),
+                "{path} {phase}: {report}"
+            );
+            assert_eq!(report["metadata"].is_null(), phase == "--version");
+            assert_eq!(report["operation"].is_null(), phase != "test");
+            if phase == "test" {
+                assert_eq!(report["operation"]["exit_code"], 0);
+                assert_eq!(
+                    fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+                    b"ran"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn pinned_git_package_executes_and_changed_revision_blocks_the_consumer() {
     let mut f = Fixture::new();
