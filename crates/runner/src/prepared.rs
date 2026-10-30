@@ -324,17 +324,22 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
             .as_u64()
             .ok_or("participation output bound")? as usize,
     };
-    let process = run_process_observed(root, &spec, &[], &file_identity(&program)?.0)?;
+    let process = process_identities(run_process_observed(
+        root,
+        &spec,
+        &[],
+        &file_identity(&program)?.0,
+    )?);
     let original_failure = |message: String| -> String {
         let retained = (|| {
+            let mut receipt = serde_json::to_value(&process).map_err(|e| e.to_string())?;
+            receipt["environment_representation"] = json!("sha256");
             retain_original(
                 root,
                 ".chrono-harness/state/preparation/",
                 "participation",
-                &serde_json::to_vec(&crate::full::compact_process(
-                    &serde_json::to_value(&process).map_err(|e| e.to_string())?,
-                )?)
-                .map_err(|e| e.to_string())?,
+                &serde_json::to_vec(&crate::full::compact_process(&receipt)?)
+                    .map_err(|e| e.to_string())?,
             )
         })();
         match retained {
@@ -426,7 +431,10 @@ fn environment_hashes(env: &BTreeMap<String, String>) -> BTreeMap<String, String
         .map(|(k, v)| (k.clone(), sha256(v.as_bytes())))
         .collect()
 }
-fn process_identities(mut process: ProcessResult) -> ProcessResult {
+/// Project a freshly observed process for an owner's receipt, without changing
+/// its original effective-environment digest or any process/stream evidence.
+/// The receipt owner must label this environment representation as `sha256`.
+pub fn process_identities(mut process: ProcessResult) -> ProcessResult {
     process.environment = environment_hashes(&process.environment);
     process
 }

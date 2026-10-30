@@ -1159,6 +1159,11 @@ fn run_retained_cli_child(root: &Path, source: &str) -> Value {
         ])
         .current_dir(root)
         .env(chrono_harness::prepared::SOURCE, source)
+        .env(
+            "CHRONO_TEST_AUTHENTICATION",
+            "inert authentication fixture λ",
+        )
+        .env_remove("CHRONO_TEST_AUTHENTICATION_ABSENT")
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");
@@ -1220,7 +1225,8 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
             {"id": "producer", "program": producer, "resolution": "PATH-once", "version_argv": ["version"], "expected_version": "prepared-producer 0.1.0"}
         ],
         "environment": {
-            "inherit": ["PATH", "CHRONO_CHECK_SOURCE"],
+            "inherit": ["PATH", "CHRONO_CHECK_SOURCE", "CHRONO_TEST_AUTHENTICATION", "CHRONO_TEST_AUTHENTICATION_ABSENT"],
+            "credential_environment": ["CHRONO_TEST_AUTHENTICATION", "CHRONO_TEST_AUTHENTICATION_ABSENT"],
             "values": {},
             "inputs": [{"id": "git-bytes", "location": shell, "presence": "present", "sha256": shell_hash}]
         },
@@ -1263,6 +1269,44 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
 
     let output = run_retained_cli_child(dir.path(), "local");
     assert_eq!(output["exit_code"], 0, "{}", output["stderr"]);
+    let environment = std::collections::BTreeMap::from([
+        ("PATH".to_owned(), std::env::var("PATH").unwrap()),
+        ("CHRONO_CHECK_SOURCE".to_owned(), "local".to_owned()),
+        (
+            "CHRONO_TEST_AUTHENTICATION".to_owned(),
+            "inert authentication fixture λ".to_owned(),
+        ),
+    ]);
+    let mut acquisitions = 0;
+    for entry in fs::read_dir(dir.path().join(".chrono-harness/state/preparation")).unwrap() {
+        let path = entry.unwrap().path();
+        if !path.is_file() {
+            continue;
+        }
+        let raw = fs::read(path).unwrap();
+        let Ok(receipt) = serde_json::from_slice::<Value>(&raw) else {
+            continue;
+        };
+        if receipt["environment_representation"] == "sha256" {
+            acquisitions += 1;
+            for process in [&receipt["process"], &receipt["tool"]["version"]] {
+                assert_eq!(
+                    process["environment"]["CHRONO_TEST_AUTHENTICATION"],
+                    chrono_harness::sha256(b"inert authentication fixture \xce\xbb")
+                );
+                assert!(
+                    process["environment"]
+                        .get("CHRONO_TEST_AUTHENTICATION_ABSENT")
+                        .is_none()
+                );
+                assert_eq!(
+                    process["environment_digest"],
+                    chrono_harness::wire::digest(&environment).unwrap()
+                );
+            }
+        }
+    }
+    assert_eq!(acquisitions, 1);
     let reference: Value = serde_json::from_slice(
         &fs::read(dir.path().join(".chrono-harness/state/check.json")).unwrap(),
     )
@@ -1324,9 +1368,26 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
                 .is_some_and(|name| name.starts_with("participation-"))
         })
         .expect("participation failure receipt");
-    let receipt: Value = serde_json::from_slice(&fs::read(receipt).unwrap()).unwrap();
+    let raw = fs::read(receipt).unwrap();
+    assert!(!String::from_utf8_lossy(&raw).contains("inert authentication fixture λ"));
+    let receipt: Value = serde_json::from_slice(&raw).unwrap();
     let receipt = chrono_harness::full::expand_process(&receipt).unwrap();
     assert_eq!(receipt["stdout"], "{}");
+    assert_eq!(receipt["stdout_sha256"], chrono_harness::sha256(b"{}"));
+    assert_eq!(receipt["environment_representation"], "sha256");
+    assert_eq!(
+        receipt["environment"]["CHRONO_TEST_AUTHENTICATION"],
+        chrono_harness::sha256("inert authentication fixture λ".as_bytes())
+    );
+    assert!(
+        receipt["environment"]
+            .get("CHRONO_TEST_AUTHENTICATION_ABSENT")
+            .is_none()
+    );
+    assert_eq!(
+        receipt["environment_digest"],
+        chrono_harness::wire::digest(&environment).unwrap()
+    );
 }
 
 #[test]

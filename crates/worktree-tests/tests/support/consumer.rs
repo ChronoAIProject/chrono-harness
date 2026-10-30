@@ -56,6 +56,11 @@ fn main() -> ExitCode {
                 &fs::read(Path::new(STATE).join("inner-check-response.json")).unwrap(),
             )
             .unwrap();
+            if let Some(expected) = response["authentication"].as_object() {
+                for (key, value) in expected {
+                    assert_eq!(std::env::var(key).ok(), value.as_str().map(str::to_owned));
+                }
+            }
             io::stdout()
                 .write_all(response["stdout"].as_str().unwrap().as_bytes())
                 .unwrap();
