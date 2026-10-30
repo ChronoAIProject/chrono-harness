@@ -296,3 +296,111 @@ fn forwarded_capabilities_preserve_identity_across_reserved_descriptor_slots() {
         );
     }
 }
+
+#[test]
+fn declared_native_command_owns_capability_after_scope_release() {
+    use std::io::{Read, Seek};
+    let mut file = tempfile::tempfile().unwrap();
+    let scope = Scope::new(&[file.as_fd()]).unwrap();
+    let probe = capability_probe(inherited_count() + 1);
+    let mut command = std::process::Command::new(&probe.program);
+    command
+        .args(&probe.args)
+        .env_clear()
+        .envs(&probe.env)
+        .env("CHRONO_FD_WRITE", "native-owned-copy");
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    assert!(chrono_harness::process_fds::forward_command(&mut command, &[]).is_err());
+    drop(scope);
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_ne!(
+        unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC,
+        0
+    );
+    file.rewind().unwrap();
+    let mut bytes = String::new();
+    file.read_to_string(&mut bytes).unwrap();
+    assert_eq!(bytes, "native-owned-copy");
+}
+
+#[test]
+fn held_native_capability_helper() {
+    if std::env::var_os("CHRONO_FD_HELD").is_none() {
+        return;
+    }
+    capability_child_helper();
+    use std::io::{Read, Write};
+    println!("READY");
+    std::io::stdout().flush().unwrap();
+    std::io::stdin().read_exact(&mut [0]).unwrap();
+}
+
+#[test]
+fn overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff() {
+    use std::io::{BufRead, Write};
+    for signal in [libc::SIGTERM, libc::SIGKILL] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("capability");
+        let file = fs::File::create(&path).unwrap();
+        assert_eq!(unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_SH) }, 0);
+        let scope = Scope::new(&[file.as_fd()]).unwrap();
+        let mut commands = Vec::new();
+        for _ in 0..2 {
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .args(["--exact", "held_native_capability_helper", "--nocapture"])
+                .env_clear()
+                .env("CHRONO_FD_HELD", "1")
+                .env("CHRONO_FD_EXPECT", (inherited_count() + 1).to_string())
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped());
+            chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+            commands.push(command);
+        }
+        drop(scope);
+        drop(file);
+        let mut first = commands.remove(0);
+        let mut first = std::thread::spawn(move || first.spawn().unwrap())
+            .join()
+            .unwrap();
+        let mut second_command = commands.remove(0);
+        let mut second = second_command.spawn().unwrap();
+        drop(second_command);
+        let mut readers = Vec::new();
+        for child in [&mut first, &mut second] {
+            let mut reader = std::io::BufReader::new(child.stdout.take().unwrap());
+            let mut line = String::new();
+            loop {
+                assert_ne!(reader.read_line(&mut line).unwrap(), 0);
+                if line.contains("READY") {
+                    break;
+                }
+                line.clear();
+            }
+            readers.push(reader);
+        }
+        let exclusion = fs::File::open(&path).unwrap();
+        assert_ne!(
+            unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
+        assert_eq!(unsafe { libc::kill(first.id() as i32, signal) }, 0);
+        assert!(!first.wait().unwrap().success());
+        assert_ne!(
+            unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
+        second.stdin.take().unwrap().write_all(b"r").unwrap();
+        assert!(second.wait().unwrap().success());
+        assert_eq!(
+            unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
+    }
+}

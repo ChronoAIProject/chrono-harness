@@ -469,6 +469,8 @@ fn collect_reports(
     old: &Registrations,
     effective: &Value,
 ) -> Result<(Results, CollectedCompletion), String> {
+    let _report_activity =
+        chrono_harness::retained_artifacts::retention::report_activity(&req.candidate.root)?;
     let chrono_harness::units::Scope::Collect { manifest } =
         req.scope.as_ref().ok_or("collection scope missing")?
     else {
@@ -1352,6 +1354,8 @@ pub fn verify_completion(
     artifacts: Option<&Value>,
     declaration_root: &Path,
 ) -> Result<(), String> {
+    let _report_activity =
+        chrono_harness::retained_artifacts::retention::report_activity(&req.candidate.root)?;
     let completion = results
         .completion
         .as_ref()
@@ -1459,6 +1463,10 @@ pub fn verify_completion(
         let bytes = if let Some(artifacts) = artifacts {
             chrono_harness::retained_artifacts::bytes(declaration_root, artifacts, address, None)?
         } else {
+            let _retention = chrono_harness::retained_artifacts::retention::read_guard(
+                &req.candidate.root,
+                address,
+            )?;
             let p = chrono_harness::no_symlink_parents(&req.candidate.root, address)?;
             if fs::metadata(&p).map_err(|e| e.to_string())?.len() > limit {
                 return Err("original report bound".into());
