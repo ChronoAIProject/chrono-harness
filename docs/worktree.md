@@ -1451,3 +1451,9 @@ input list separately admits the observed adopted candidate `638c638a…`, bound
 its source66 adoption receipt. The construction issuer remains exact source51;
 this selected-input addition does not reclassify the issuer or seed ownership.
 Current-candidate canonical/native/review/landing obligations remain distinct.
+
+That exact selected-byte admission is finite input qualification, not support for
+arbitrary subsequently adopted owner binaries or future source iterations. Same
+source publication/reentry is covered by the original receipt path; other newly
+installed bytes still need original producer qualification. No generalized
+post-adoption compatibility claim follows from this registration-only transition.
