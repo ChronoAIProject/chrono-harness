@@ -50,3 +50,9 @@ name = "chrono-worktree-test-version-probe"
 path = "tests/support/version_probe.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-worktree-owner-publication-probe"
+path = "tests/support/owner_publication_probe.rs"
+test = false
+bench = false

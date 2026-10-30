@@ -39,5 +39,6 @@
   },
   "rust_incremental": true,
   "require_tool_bindings": true,
-  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json"
+  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
+  "owner_upgrade": ".chrono-harness/ci/bootstrap-owner-supply.json"
 }

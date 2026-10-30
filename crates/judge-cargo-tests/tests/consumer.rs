@@ -12,6 +12,7 @@ fn attach(h: &mut Host, rows: Value) {
     let root = h.root();
     let binary = source().join("crates/judge-cargo/target/debug/chrono-judge-cargo");
     let path = ".chrono-harness/bin/chrono-judge-cargo";
+    host::copied_fixture_input(&root, &binary, &root.join(path));
     fs::copy(&binary, root.join(path)).unwrap();
     h.values.get_mut(JUDGES).unwrap()["judges"].as_array_mut().unwrap().push(json!({"id":"cargo","executable":path,"version":"0.1.0","sha256":sha256(&fs::read(&binary).unwrap()),"argv":["--protocol","chrono-judge/v1","--policy",POLICY],"selector":"every-delta","after":["registration","filemap"],"modes":["evaluate"]}));
     h.values.get_mut(JUDGES).unwrap()["judges"]

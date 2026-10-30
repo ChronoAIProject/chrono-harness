@@ -1,0 +1,28 @@
+{
+  "schema": "chrono-bootstrap-owner-supply/v1",
+  "source": {
+    "commit": "51d85d833e4fdf9f7a607af901bfa52d3e64939a",
+    "tree": "c1f18330edef19d5ba3a7591a2225954084d9d85"
+  },
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64"
+  },
+  "startup_config": ".chrono-harness/ci/bootstrap-shared.json",
+  "bundle": "/Users/macstudio2/chrono-caller-evidence/01a15fb8-7317-7881-b3fd-fbe372fc354b/pr211-produced-owner-supply-20261030/originals/startup",
+  "binding": "e316e9c966e30bd9b73d9338f10c15048617933c3c9810e94652d1df219a6bba",
+  "issuer": {
+    "destination": ".chrono-harness/bin/chrono-worktree",
+    "sha256": "6fd82ea7586cf23a934a063cd4d44c97312d84bae0514e62a193127aa85064b7",
+    "size": 14205792
+  },
+  "selected_sha256": [
+    "985e45d92d1e6efe307e0f1b46086e0b9fece032f95aedff6080c1848e1949c9"
+  ],
+  "stage_config": ".chrono-harness/ci/bootstrap-owner-stage.json",
+  "retention": {
+    "owner": "caller current engineering/PR acceptance",
+    "review_at": "2026-11-05T00:00:00Z",
+    "condition": "retain input/staged/previous owner and original reports until all acceptance/debug consumers end; no completion or age-only deletion"
+  }
+}

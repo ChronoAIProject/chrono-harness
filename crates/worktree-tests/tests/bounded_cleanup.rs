@@ -4,8 +4,10 @@ fn main_host() -> Host {
     main_host_mode("rebuild-evidence")
 }
 
-fn main_host_mode(mode: &str) -> Host {
-    let h = Host::new("payload");
+pub(super) fn main_host_mode(mode: &str) -> Host {
+    configure_main(Host::new("payload"), mode)
+}
+pub(super) fn configure_main(h: Host, mode: &str) -> Host {
     h.kernel_cleanup();
     super::automatic::native_consumer(&h, mode);
     let path = h.root.join(".chrono-harness/cleanup.json");
@@ -45,7 +47,7 @@ const CARGO_FILES: &[(&str, &[u8])] = &[
 ];
 
 fn cargo_host() -> Host {
-    let h = main_host_mode("bounded-cargo");
+    let h = configure_main(Host::retained("payload"), "bounded-cargo");
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     let mut policy = json(&fs::read(h.root.join(".chrono-harness/cleanup.json")).unwrap()).unwrap();
     let mut map = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();

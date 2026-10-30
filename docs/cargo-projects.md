@@ -89,6 +89,61 @@ declarations, and only then runs the declared Cargo consumer. It checks input
 identities again after metadata and after the consumer. The ordinary full and
 scoped execution paths require no Cargo-specific callback or schema field.
 
+The guarded `run` entry accepts direct host configurations and the existing
+`chrono-git-configs/v1` and `v2` selectors through the shared registry acquisition
+owner. The registered action still names the caller's entry path exactly.
+`registry_binding` reports that entry, its effective direct policy and any
+selection. Both files' original bytes, together with the acquired registries,
+are checked before child execution and after metadata and the consumer. A
+selector does not qualify another host's toolchain or inputs; unknown identities
+and selection/binding mismatches fail before Cargo runs.
+
+The registered development build of the guard uses optimization level 1, as do
+the other inventory judges. Large selected sysroot/SDK inventories still receive
+every original file, directory, alias and boundary check; this changes compiled
+execution cost only. The isolated producer retains its 600-second guard deadline.
+Its actual enclosing consumer must establish bound-compatible performance on
+the selected host; a build profile or small regression alone is insufficient.
+
+Directory validation shares a physical directory-prefix check only within one
+pass, and revalidates those parents at the end of that pass. Every declared regular file is still hashed, every declared child
+inventory is still read, and every alias is still checked. A new pass starts
+with an empty prefix set, so checks after each child still detect persistent
+parent replacement, file mutation and alias drift. This is no filesystem
+snapshot guarantee: changes restored between observations remain outside the
+existing contract. The optimization removes repeated metadata reads for shared
+parents; it does not cache file identities across validation boundaries.
+
+Each directory pass hashes its declared files in two bounded threads, with a
+separate prefix set in each thread. Both threads finish before validation can
+return or any guarded child can run; an error in either thread fails the pass.
+Their merged physical parents receive the same final recheck. The selected host
+declares 14,466,038,905 logical file bytes per complete pass, including overlapping
+inventories. This concurrency bounds the hashing work without omitting bytes,
+changing expected digests or retaining identities between boundaries. Its actual
+enclosing performance still requires host measurement.
+
+This host registers `test.judge-cargo-isolated-observation` as an explicit
+experiment in the existing Rust test owner. It invokes the unchanged registered
+`inputs.provision-isolated` action verbatim under the experiment's existing use
+protection, through the existing retained process
+engine, with a stricter 300-second observation window so the current terminal
+can join it. A timeout of that observation is inconclusive for the production
+600-second deadline. The portable suite leaves this host inventory experiment
+ignored; its separate registered action selects it explicitly. Original streams,
+the process result and elapsed time are retained under
+unique `.chrono-harness/state/input-q1-repair/representative-retained-*/` directories for Q1 acceptance and
+caller handoff, after which the caller owns their retention/cleanup. This adds
+no worker, polling or transport implementation. Total validation/storage costs
+remain unmeasured until execution.
+
+The related `test.judge-cargo-guard-observation` diagnostic consumes the existing
+`guard.check.runner` action verbatim under the experiment's use protection. It
+uses the same selected input domain and a 300-second observation window, and
+retains partial phase stderr through `run_process_observed` under
+unique `.chrono-harness/state/input-q1-repair/representative-guard-*/` directories. This is guard
+diagnosis only; it cannot replace the enclosing provisioning consumer's verdict.
+
 The configuration policy has schema `chrono-cargo-inputs/v3` and these required fields.
 The fixed v2 inventory contract remains supported with its original absolute
 `CARGO_HOME` requirement and no ancestor-policy choice.
@@ -321,3 +376,30 @@ The full host remains proposed until the host registers and activates this
 policy. Dedicated tests cover a real Rust sysroot, linker, SDK inventory,
 build-script input, selection conflicts and directory/input drift through the
 ordinary Cargo operation.
+
+
+## Compatible v6 native target and v3 directory source
+
+`chrono-cargo-inputs/v6` explicitly requires `target_mode: "native" | "explicit"`.
+Native mode retains Cargo's original target-directory layout without injecting
+`--target`, verifies the bound rustc `-vV` host against the declared target and
+rejects competing Cargo build-target environment/configuration. V2–v5 retain their
+previous semantics. Registered named test suites, filters and libtest tails remain
+literal consuming argv. A declared `CARGO_NET_OFFLINE=true` may supply offline
+selection; online or conflicting selection still rejects.
+
+Directory inventory v3 adds exact child-name rows, including root `.` and empty
+or alias-only directories. V1/v2 retain their original meanings. Optional
+`manifest_root` explicitly relocates an unchanged original inventory to a different
+selected live root; wrong origin, changed bytes, alias escape, cycles and child
+drift still reject. The observer-produced original is consumed by the existing
+guard, including its post-operation checks. Bounded phase observations retain
+where a failure occurred without replacing any check.
+
+The host registers one proposed isolated `guard.check.runner` consumer; its
+current host input and participant bindings are incomplete. The generic behavior
+cases are retained in the dedicated Rust owner tests. Historical host execution
+experiments and omitted sibling guard policies remain preserved source with
+unimplemented adoption status; [custody](input-source-custody.md) records their
+natural owners. This source increment establishes neither full-host nor native
+acceptance.

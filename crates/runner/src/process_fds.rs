@@ -89,7 +89,7 @@ fn inherited() -> Result<Vec<RawFd>, ProcessFailure> {
         .collect()
 }
 pub(crate) struct Transfer {
-    _copies: Vec<OwnedFd>,
+    _copies: std::sync::Arc<Vec<OwnedFd>>,
     pub(crate) value: Option<String>,
 }
 impl Transfer {
@@ -107,6 +107,7 @@ impl Transfer {
             }
             Ok(())
         })?;
+        let copies = std::sync::Arc::new(copies);
         let mut value = None;
         if !copies.is_empty() {
             let fds: Vec<_> = copies.iter().map(AsRawFd::as_raw_fd).collect();
@@ -118,8 +119,12 @@ impl Transfer {
             command.env(ENV, &carrier);
             value = Some(carrier);
             use std::os::unix::process::CommandExt;
+            let held = copies.clone();
             unsafe {
                 command.pre_exec(move || {
+                    // Command owns these copies too: explicit native adapters may
+                    // drop their temporary Scope before spawning this command.
+                    let _ = &held;
                     // Only this managed child retires the superseded carriers.
                     // The parent and its native children keep their original flags.
                     for fd in &inherited {
@@ -149,4 +154,18 @@ impl Transfer {
             value,
         })
     }
+}
+
+/// Forward the same opaque capabilities through a declared native Command route.
+/// The command owns CLOEXEC copies until spawn/drop; only its child inherits them.
+pub fn forward_command(command: &mut Command, fds: &[BorrowedFd<'_>]) -> Result<(), String> {
+    if command.get_envs().any(|(key, _)| key == ENV) {
+        return Err(
+            "native command already has an ownership binding; configure it before binding once"
+                .into(),
+        );
+    }
+    let _scope = Scope::new(fds)?;
+    Transfer::prepare(command).map_err(|failure| failure.to_string())?;
+    Ok(())
 }

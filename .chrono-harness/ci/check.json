@@ -12,8 +12,12 @@
     "projects": ".chrono-harness/projects.json",
     "tools": {
       "cargo": "cargo",
+      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
-      "python3": "/usr/bin/python3"
+      "chrono-inputs": ".chrono-harness/bin/chrono-inputs",
+      "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
+      "python3": "/usr/bin/python3",
+      "rustup": "rustup"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -411,6 +415,7 @@
     },
     "facts_config": ".chrono-harness/config.json",
     "report_publication": "retained-reference/v2",
+    "selection_evidence": "explicit-graph/v1",
     "causal_consumption": {
       "schema": "chrono-internal-causal-consumption/v1",
       "shared_startup": [
