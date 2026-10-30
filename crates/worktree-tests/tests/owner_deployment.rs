@@ -178,16 +178,17 @@ fn owner_deployment_refuses_unqualified_consumer_handoff_and_live_inherited_chil
     BufReader::new(child.stdout.take().unwrap())
         .read_line(&mut ready)
         .unwrap();
-    assert_eq!(ready, "ready\n");
     drop(lease);
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    child.stdin.take().unwrap().write_all(b"x").unwrap();
+    let joined = child.wait().unwrap();
+    assert_eq!(ready, "ready\n");
+    assert!(joined.success());
     assert_ne!(code, 0, "{report} {error}");
     assert!(
         report.to_string().contains("live inherited consumers"),
         "{report}"
     );
-    child.stdin.take().unwrap().write_all(b"x").unwrap();
-    assert!(child.wait().unwrap().success());
     assert_eq!(
         fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap(),
         before

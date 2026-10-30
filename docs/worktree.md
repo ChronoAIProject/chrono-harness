@@ -1407,3 +1407,12 @@ retention on 2026-11-05T00:00:00Z after all acceptance/debug consumers end; pres
 unique work and original failures until then. No age-only deletion or lifecycle
 completion is authorized. Additional build, verification and storage costs remain
 unmeasured until the actual operations report them; product bounds are unchanged.
+
+The selected profiles resolve writable HOME/CARGO_HOME/TMPDIR through the existing
+bootstrap host-path owner, under this physical host's state directory. Resolution
+has no pre-grant effects; directory creation happens after ordinary participation
+or the existing missing-main seed path. The locked Cargo input-fetch operations
+populate that private Cargo home with an explicit online selection. This is a
+changed local input domain, not local/CI parity. The original received offline
+selection and missing-package failure remain evidence; product time/output bounds
+are unchanged.
