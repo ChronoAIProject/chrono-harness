@@ -1440,3 +1440,14 @@ This replaces the historical diagnostics-root HOME/CARGO_HOME/TMPDIR and offline
 selection. The existing environment and macOS registration FILEMAP edges select
 the affected tests at both endpoints; native profiles and source51 toolchain
 roles are unchanged. This input selection does not establish local/native parity.
+
+At committed source `66fe0f999fdee8cef2f434b0ce8ed80a0b674d50`, the
+public core bootstrap completed original-protected publication/adoption and kept
+prior owner `985e45d9…` at its original inode. Candidate canonical then refused in
+`ci.inventory` because the declared Cargo guard was absent. The core registration
+now also builds/installs the declared Cargo guard and input producer; it uses the
+same public bootstrap entry and private homes. The existing exact-byte upgrade
+input list separately admits the observed adopted candidate `638c638a…`, bound by
+its source66 adoption receipt. The construction issuer remains exact source51;
+this selected-input addition does not reclassify the issuer or seed ownership.
+Current-candidate canonical/native/review/landing obligations remain distinct.
