@@ -2,7 +2,9 @@
   "schema": "chrono-bootstrap/v1",
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
-  "tools": {},
+  "tools": {
+    "python3": "/usr/bin/python3"
+  },
   "operations": [
     "inputs.fetch.worktree",
     "inputs.fetch.worktree-tests",
