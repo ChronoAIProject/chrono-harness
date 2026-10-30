@@ -9,12 +9,11 @@ fn excluded(root: &Path) {
     let dir = root.join(".chrono-harness/state/automatic-cleanup");
     let ledger: serde_json::Value =
         serde_json::from_slice(&fs::read(dir.join("ledger.json")).unwrap()).unwrap();
-    let e = ledger["entries"]
+    for e in ledger["entries"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|e| e["path"] == root.to_str().unwrap())
-        .unwrap();
+        .filter(|e| e["status"] != "disposed") {
     for path in [
         dir.join("admission.lease"),
         root.join(e["ownership"]["path"].as_str().unwrap()),
@@ -27,6 +26,7 @@ fn excluded(root: &Path) {
             path.display()
         );
     }
+    }
 }
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -34,7 +34,16 @@ fn main() -> ExitCode {
         println!("owner probe");
         return ExitCode::SUCCESS;
     }
-    if args == ["--hold"] {
+    if args.first().map(String::as_str) == Some("--hold-descendants") {
+        let depth: u32 = args[1].parse().unwrap();
+        if depth > 0 {
+            let mut child = Command::new(std::env::current_exe().unwrap());
+            child.args(["--hold-descendants", &(depth - 1).to_string()]);
+            chrono_harness::process_fds::forward_command(&mut child, &[]).unwrap();
+            return ExitCode::from(u8::try_from(child.status().unwrap().code().unwrap_or(1)).unwrap());
+        }
+    }
+    if args == ["--hold"] || args.first().map(String::as_str) == Some("--hold-descendants") {
         println!("ready");
         io::stdout().flush().unwrap();
         let mut byte = [0];
