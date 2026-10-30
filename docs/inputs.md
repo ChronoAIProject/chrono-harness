@@ -439,8 +439,9 @@ The guarded `build.diagnostics` action selects
 the existing macOS 27 selection. The native direct policy keeps the private
 Cargo home, required offline environment, compiler/sysroot/linker/SDK and all
 package/configuration expectations. The ordinary `.chrono-harness/config.json`
-selects the ordinary native policy from dev, so other scoped builds and tests
-use their existing Cargo acquisition domain and current locked manifests.
+retains dev's ordinary native environment, with the guard/observer tool names
+required by the current registered actions. Other scoped builds and tests use
+their existing Cargo acquisition domain and current locked manifests.
 Neither shared startup nor the diagnostics producer supplies ordinary registry
 contents. No warm registry, named-crate patch or all-project provisioning is
 required by this separation.

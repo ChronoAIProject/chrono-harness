@@ -1022,8 +1022,8 @@ verification/storage cost remains measured only by retained command receipts.
 
 The first PR211 native originals exposed 21 ordinary Cargo check failures in a
 private diagnostics-only offline home, plus a guard bootstrap failure before
-its diagnostics producer ran. The native ordinary config is restored to its dev
-selection. The existing guarded diagnostics action now selects its own native
+its diagnostics producer ran. The native ordinary config retains dev's environment
+and the guard/observer tool declarations needed by the current actions. The existing guarded diagnostics action now selects its own native
 config, preserving the v6 offline/package/toolchain/native-target/configuration
 contract; guard and observer bootstrap prerequisites explicitly select ordinary
 Cargo acquisition for their own locked manifests before private diagnostics
