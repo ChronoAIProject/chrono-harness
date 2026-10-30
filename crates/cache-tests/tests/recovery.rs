@@ -539,10 +539,18 @@ fn partial_cleanup_failure_retains_each_result_and_refuses_a_second_deletion() {
         serde_json::to_vec(&prepared).unwrap(),
     )
     .unwrap();
-    let socket_root = tempfile::tempdir().unwrap();
-    let socket_path = socket_root.path().join("socket");
-    let _socket = std::os::unix::net::UnixListener::bind(&socket_path).unwrap();
-    fs::rename(socket_path, root.path().join("out/socket")).unwrap();
+    // A relative socket name keeps the fixture within SUN_LEN even when the
+    // registered temporary root is long. Only the child's cwd changes.
+    let socket = Command::new(env!("CARGO_BIN_EXE_chrono-cache-test-probe"))
+        .current_dir(root.path())
+        .args(["socket", "out/socket"])
+        .output()
+        .unwrap();
+    assert!(
+        socket.status.success(),
+        "{}",
+        String::from_utf8_lossy(&socket.stderr)
+    );
     let steps = json!({"cache_0_restore":{"outcome":"failure"}});
     let failed = recover(root.path(), &steps);
     assert!(!failed.status.success());

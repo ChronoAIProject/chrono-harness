@@ -1,5 +1,12 @@
 #[test]
 fn native_holder() {
+    if let Some(root) = std::env::var_os("CHRONO_TEMPORARY_CARGO_ROOT") {
+        let status = std::process::Command::new(std::env::var_os("CHRONO_TEMPORARY_HELPER").unwrap())
+            .arg("custody-holder").status().unwrap();
+        assert!(status.success());
+        std::fs::write(std::path::Path::new(&root).join("cargo-native-joined"), "actual native child joined").unwrap();
+        return;
+    }
     std::env::set_current_dir(std::env::var("CHRONO_NATIVE_FIXTURE_ROOT").unwrap()).unwrap();
     std::fs::write(
         ".chrono-harness/state/native-pid",

@@ -1,7 +1,9 @@
 """Execute one explicit build fixture operation inside the temporary host."""
 from pathlib import Path
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -11,6 +13,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from process_fds import inherited_fds
 
 mode = sys.argv[1]
+if mode == "copy-executable":
+    destination = Path(sys.argv[3])
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(sys.argv[2], destination)
+    sys.exit(0)
+if mode == "acquisition":
+    # A Python interface fixture, not a native observation or admission receipt.
+    output = Path(sys.argv[2])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.dumps({"installed_before": Path(sys.argv[3]).exists(),
+                      "environment": {key: os.environ.get(key) for key in
+                                      ("RUSTUP_HOME", "CARGO_HOME", "RUSTC")}}).encode()
+    with output.open("xb") as stream:
+        stream.write(raw)
+    print(json.dumps({"fixture_original": {"path": output.as_posix(),
+                                          "sha256": hashlib.sha256(raw).hexdigest()}}))
+    sys.exit(0)
 if mode == "runner-consumer":
     outcome = sys.argv[2]
     Path("runner-consumed").write_bytes(outcome.encode())
