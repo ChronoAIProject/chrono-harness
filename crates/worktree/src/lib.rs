@@ -176,6 +176,7 @@ pub fn run(args: &[String]) -> CliOutput {
                         | "maintained"
                         | "imported"
                         | "migrated"
+                        | "owner-deployed"
                         | "used"
                 )
             ) {
