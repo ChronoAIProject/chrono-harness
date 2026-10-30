@@ -186,7 +186,10 @@ fn install_inner(root: &Path, stdout: &str, stderr: &str, exit: i32) {
 }
 #[test]
 fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
-    for exit in [0, 7] {
+    for (source, exit) in [None, Some("local"), Some("ci")]
+        .into_iter()
+        .flat_map(|source| [(source, 0), (source, 7)])
+    {
         let h = Host::new("payload");
         participating_check(&h);
         let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
@@ -220,6 +223,8 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
                 "inert managed authentication λ",
             )
             .env_remove("CHRONO_TEST_AUTHENTICATION_ABSENT")
+            .env_remove("CHRONO_CHECK_SOURCE")
+            .envs(source.map(|value| ("CHRONO_CHECK_SOURCE", value)))
             .arg("check")
             .output()
             .unwrap();
@@ -235,6 +240,8 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
                     "inert managed authentication λ",
                 )
                 .env_remove("CHRONO_TEST_AUTHENTICATION_ABSENT")
+                .env_remove("CHRONO_CHECK_SOURCE")
+                .envs(source.map(|value| ("CHRONO_CHECK_SOURCE", value)))
                 .args(["check", "--config", POLICY])
                 .output()
                 .unwrap(),
@@ -252,7 +259,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
                 .get("CHRONO_TEST_AUTHENTICATION_ABSENT")
                 .is_none()
         );
-        let environment = std::collections::BTreeMap::from([
+        let mut environment = std::collections::BTreeMap::from([
             ("PATH".to_owned(), std::env::var("PATH").unwrap()),
             (
                 "CHRONO_TEST_AUTHENTICATION".to_owned(),
@@ -263,6 +270,15 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
                 target.to_str().unwrap().to_owned(),
             ),
         ]);
+        if let Some(source) = source {
+            environment.insert("CHRONO_CHECK_SOURCE".to_owned(), source.to_owned());
+            assert_eq!(
+                process["environment"]["CHRONO_CHECK_SOURCE"],
+                sha256(source.as_bytes())
+            );
+        } else {
+            assert!(process["environment"].get("CHRONO_CHECK_SOURCE").is_none());
+        }
         assert_eq!(
             process["environment_digest"],
             chrono_harness::wire::digest(&environment).unwrap()
