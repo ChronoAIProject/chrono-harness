@@ -12,7 +12,7 @@
     "fmt.worktree-tests",
     "build.worktree",
     "test.worktree.owner-deployment",
-    "host.bootstrap-tests"
+    "host.bootstrap-owner-tests"
   ],
   "install": [],
   "participation": {

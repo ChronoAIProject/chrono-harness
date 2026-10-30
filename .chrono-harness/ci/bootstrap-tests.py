@@ -210,7 +210,8 @@ class Bootstrap(unittest.TestCase):
         self.root = Path(directory.name).resolve()
         self.ci = self.root / ".chrono-harness/ci"
         self.ci.mkdir(parents=True)
-        shutil.copyfile(SOURCE / "bootstrap.py", self.ci / "bootstrap.py")
+        for name in ("bootstrap.py", "bootstrap_owner.py", "bootstrap_shared.py"):
+            shutil.copyfile(SOURCE / name, self.ci / name)
         shutil.copyfile(SOURCE.parent / "process_fds.py", self.ci.parent / "process_fds.py")
         (self.ci / "fixtures").mkdir()
         shutil.copyfile(SOURCE / "fixtures/bootstrap-operation.py", self.root / OPERATION)
@@ -802,6 +803,12 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--lifecycle-program"]:
+        if len(sys.argv) != 3:
+            raise ValueError("--lifecycle-program requires one candidate executable")
+        import bootstrap_shared_tests
+        bootstrap_shared_tests.LIFECYCLE_PROGRAM = Path(sys.argv[2]).resolve(strict=True)
+        sys.argv = [sys.argv[0]]
     if sys.argv[1:] == ["--real-consumer"]:
         from bootstrap_shared_tests import RealSharedStartup
         unittest.main(argv=[sys.argv[0]], defaultTest="RealSharedStartup")

@@ -21,6 +21,7 @@ spec = importlib.util.spec_from_file_location("bootstrap_fixture", SOURCE / "boo
 fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 CONFIG = ".chrono-harness/ci/bootstrap-shared.json"
+LIFECYCLE_PROGRAM = SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree"
 
 
 def fixture_host_config(root):
@@ -974,7 +975,7 @@ class ManagedAttemptCustody(unittest.TestCase):
             acquire("commit", [git, "-C", str(root), *args], root)
         import bootstrap
         attempt = RealAttempt(directory / "evidence", bootstrap.observe_source(root), time.monotonic() + 40, 1048576)
-        attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", environment)
+        attempt.manage(root, LIFECYCLE_PROGRAM, environment)
         print("custody fixture originals: " + str(attempt.evidence), flush=True)
         return root, attempt
 

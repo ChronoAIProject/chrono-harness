@@ -4382,8 +4382,8 @@
           "argv": [
             "-B",
             ".chrono-harness/ci/bootstrap-tests.py",
-            "OwnerPublication",
-            "ProducerSource"
+            "--lifecycle-program",
+            "crates/worktree/target/debug/chrono-worktree"
           ]
         }
       }
