@@ -1433,3 +1433,10 @@ populate that private Cargo home with an explicit online selection. This is a
 changed local input domain, not local/CI parity. The original received offline
 selection and missing-package failure remain evidence; product time/output bounds
 are unchanged.
+
+The current macOS host environment registration selects those same primary private
+writable homes for canonical consumers, with ordinary online Cargo acquisition.
+This replaces the historical diagnostics-root HOME/CARGO_HOME/TMPDIR and offline
+selection. The existing environment and macOS registration FILEMAP edges select
+the affected tests at both endpoints; native profiles and source51 toolchain
+roles are unchanged. This input selection does not establish local/native parity.
