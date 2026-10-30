@@ -89,6 +89,17 @@ class OwnerPublication(unittest.TestCase):
 
 
 class ProducerSource(unittest.TestCase):
+    def test_writable_homes_resolve_inside_this_host_without_pregrant_creation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selection = {"host_environment": {"TMPDIR": ".chrono-harness/state/owner-tmp"}}
+            env = bootstrap.provision_environment(root, selection)
+            self.assertEqual(env["TMPDIR"], str(root / ".chrono-harness/state/owner-tmp"))
+            self.assertFalse((root / ".chrono-harness").exists())
+            for path in ("/tmp", "../outside", ".chrono-harness/bin/temporary"):
+                with self.assertRaises(ValueError):
+                    bootstrap.provision_environment(root, {"host_environment": {"TMPDIR": path}})
+
     def test_producer_validation_uses_immutable_source_and_retains_all_byte_checks(self):
         from bootstrap_shared_tests import SharedStartup
         fixture = SharedStartup()

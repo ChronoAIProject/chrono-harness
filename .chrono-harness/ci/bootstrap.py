@@ -295,6 +295,14 @@ def provision_environment(root, config):
                 for k, v in values.items())):
             raise ValueError("invalid bootstrap environment selection")
         env.update(values)
+    if "host_environment" in config:
+        values = config["host_environment"]
+        if (not isinstance(values, dict) or not values or any(not isinstance(v, str) for v in values.values())
+                or set(values) - {"HOME", "CARGO_HOME", "TMPDIR"}
+                or set(values) & set(config.get("environment", {}))):
+            raise ValueError("invalid bootstrap host environment selection")
+        env.update({key: str(host_path(root, value, ".chrono-harness/state/"))
+                    for key, value in values.items()})
     declaration = config.get("toolchain_provision")
     if "toolchain_provision" in config:
         if (not isinstance(declaration, dict)
@@ -459,6 +467,10 @@ def main():
         raise ValueError("unsupported bootstrap schema")
     projects = json.loads((root / config["projects"]).read_text())
     operations = registered_operations(projects)
+    # Path resolution above has no side effects. Create these declared writable
+    # homes only after ordinary participation issued protection (or main seed).
+    for path in config.get("host_environment", {}).values():
+        host_path(root, path, ".chrono-harness/state/").mkdir(parents=True, exist_ok=True)
     try:
         env, versions, bindings = toolchain_environment(config, root)
     except subprocess.CalledProcessError as error:
@@ -487,6 +499,9 @@ def main():
     if "toolchain_provision" in config:
         result["toolchain_provision"] = config["toolchain_provision"]
         result["environment"].update({key: env[key] for key in ("RUSTUP_HOME", "CARGO_HOME")})
+    if "host_environment" in config:
+        result["host_environment"] = config["host_environment"]
+        result["environment"].update({key: env[key] for key in config["host_environment"]})
     try:
         for index, operation in enumerate(config["operations"]):
             action = operations[operation]

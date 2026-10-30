@@ -54,7 +54,7 @@ fn fixture(scope: &str) -> (Host, PathBuf, String, String) {
     .unwrap();
     let profile = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0",
         "tools":{"cargo":tools.join("cargo"),"rustc":tools.join("rustc")},"operations":[],"install":[],
-        "environment":{"PATH":std::env::join_paths(std::iter::once(tools).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap()))).unwrap()},
+        "environment":{"PATH":std::env::join_paths(std::iter::once(tools).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap()))).unwrap().to_str().unwrap()},
         "entrypoint":{"tool":"owner-probe","script":".chrono-harness/ci/bootstrap.py"},
         "participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":fixture_git(),"config":POLICY},
         "owner_stage":{"source":".chrono-harness/bin/built-owner","selected":".chrono-harness/bin/chrono-worktree","consumer_scope":scope}});
@@ -97,7 +97,7 @@ fn fixture(scope: &str) -> (Host, PathBuf, String, String) {
     (h, executable, path, sha)
 }
 fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, String) {
-    let mut c = h.auto_command(
+    let c = h.auto_command(
         "deploy-owner",
         &[
             "--bootstrap-config",

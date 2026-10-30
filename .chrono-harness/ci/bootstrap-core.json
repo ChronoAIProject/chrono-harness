@@ -40,5 +40,10 @@
   "rust_incremental": true,
   "require_tool_bindings": true,
   "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
-  "owner_upgrade": ".chrono-harness/ci/bootstrap-owner-supply.json"
+  "owner_upgrade": ".chrono-harness/ci/bootstrap-owner-supply.json",
+  "host_environment": {
+    "TMPDIR": ".chrono-harness/state/bootstrap-owner-tooling/tmp",
+    "CARGO_HOME": ".chrono-harness/state/bootstrap-owner-tooling/cargo",
+    "HOME": ".chrono-harness/state/bootstrap-owner-tooling/home"
+  }
 }
