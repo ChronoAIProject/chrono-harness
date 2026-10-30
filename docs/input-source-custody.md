@@ -1,4 +1,4 @@
-# Input source custody and unimplemented adoption
+# Input source custody and current adoption
 
 The fixed source commits are PR163 `65d577f0c570451b674d271642d385b316c7085b`,
 retained unique source `87a77182c5da33627deb3b837e7515748eb6fd58` (tree
@@ -13,16 +13,25 @@ They are not a permanent runtime dependency or automatic deletion authorization.
 | Preserved source and purpose | Natural owner | Current disposition |
 | --- | --- | --- |
 | Observer/acquisition/provisioning/runtime source and original same-language cases | inputs and host-bootstrap | Compatible source adopted; current bindings, installed protected consumption and native acceptance pending |
-| Cargo v6, directory v3, generic guard cases and directory relocation | judge-cargo | Compatible source adopted; Rust execution and native acceptance pending |
-| All PR163 sibling guard declarations and guarded actions, including runner build | host Cargo policy | Preserved at fixed source/archives; omitted current adoption remains unimplemented |
+| Cargo v6, directory v3, generic guard cases and directory relocation | judge-cargo | Compatible source adopted; fixed-51 native cases retain their finite scope; broader current-candidate acceptance pending |
+| All PR163 sibling guard declarations and guarded actions, including runner build | host Cargo policy | Original 33-policy/95-action map preserved; current methods use 94 direct Cargo recipes and one diagnostics guarded build; restoring historical parallel guard aliases is not a mandatory scoped target |
 | Original package/resolver vectors, 33 sibling package-file bindings and seven governance executable bindings | host input policy and each named consumer | Preserved; no claim that PR205's narrower declarations are semantically equivalent |
 | Four original local inventories: rust/python/sdk/developer | input policy | Preserved original source/fixtures; historical personal paths and expected hashes are not current-host authority |
-| Bootstrap distribution selection, receipt/payload validation, shared publication/import/verification and dedicated Python cases | host-bootstrap and distribution | Preserved/unimplemented current host integration; reuse existing chrono-distribution when a current consumer adopts it |
+| Bootstrap distribution selection, receipt/payload validation, shared publication/import/verification and dedicated Python cases | host-bootstrap and distribution | Finite native core/detector source supply and original payload qualified; default 14-tool installation, portable/distribution adoption and whole-branch retirement remain unqualified |
 | Main-host Cargo acquisition/guard experiments and enclosing-timeout original-publication cases | inputs and judge-cargo tests | Original source retained; no claim those historical executions certify this candidate |
-| Historical endpoint snapshots e21/3083 and their external retained blobs | input transport and caller retention | Not accessed/recovered by I1; availability and completeness unverified; missing originals must remain missing until recovered |
+| Historical endpoint snapshots e21/3083 and their external retained blobs | input transport and caller retention | Completed recovery found no qualified originals within allowed custody sources; availability elsewhere remains unknown; present recapture cannot replace them |
 
-The omitted guard policies are the following exact PR163 paths, all prefixed
-`.chrono-harness/cargo/`:
+Cargo guarding is optional under SPEC §3. Current methods, original assertions,
+literal argv and input-accounting obligations remain retained. Exact
+`51d85d833e4fdf9f7a607af901bfa52d3e64939a` native run `41021444210/1`
+qualifies 37 of the 95 corresponding current operations: 36 direct operations
+and one guarded build. The other 58 remain registered without an admitted
+execution in that cohort; neither obsolescence nor a requirement to run all 58
+follows. These fixed-source receipts do not certify a later candidate.
+
+The original sibling policy inventory is the following exact PR163 paths, all
+prefixed `.chrono-harness/cargo/`; the current diagnostics policy is a separately
+selected adoption, not evidence that every historical policy is required:
 
 - `cache.json`
 - `cache-tests.json`
@@ -77,12 +86,31 @@ product (identical original install.py / assets/distribution/bootstrap.py blob
 `1508d9f71c7f72a4945ff126bcd271abe1bfbeb1`). No duplicate installer or forced
 beta.21 adoption follows from preserving this source.
 
-I2 owns actual selected source, policy, canonical producer argv, toolchain and
-pre-build coordinator/newly source-built installed participant bindings, including
-private-home agreement before isolated use. Native owners retain the exact failed
-Developer alias escape and all other required failed/missing domains, original
-job/process streams, numeric job/run/attempt/workflow identity, and both platform
-acceptance. I3 composes fixed completed inputs and acceptance, then caller owns
-independent review, actual dev landing SHA/tree and installed-consumer postconditions.
-Native recovery and lifecycle L1/L2 remain separate active obligations; I1 neither
-inspects them nor performs deployment, finish, maintain or cleanup.
+## Remaining consumer prerequisites
+
+Each row constrains its explicit consumer/domain, not unrelated authorized work.
+The original map and producer reports retain the detailed methods and identities.
+
+| Scope | Natural owner and missing acceptance |
+| --- | --- |
+| P1 ordinary full inputs | Input owner: source-bound selected-root metadata, features, packages, configuration/home and compiler/SDK/runtime originals; ordinary scoped Cargo receipts do not supply this full correspondence |
+| P2 isolated runner | Input/bootstrap owner: reconcile the selected private home, toolchain and runner policy, then retain the existing provisioning → `guard.check.runner` consumer's originals |
+| P3 local diagnostics | Diagnostics/input owner: matching local policy, inputs, home and toolchain plus actual `build.diagnostics`; native 27-node metadata/offline-build coverage is that native domain only |
+| P4 seven full-governance bindings | Full-host/bootstrap owner: matching default-profile installed bytes and producer/consumer originals, both-end inputs and declared full scope; proposed null bindings remain unqualified |
+| P5 default/distribution | Bootstrap/distribution owner: default 14-tool installed consumption and any chosen portable/release replacement; artifact `12961832338` already qualifies all 18 original members and five executable payloads, including core tools 1–4, for exact native 51 core/detector supply only |
+| P6 historical custody | Original capture/archive owner: authentic e21/3083 snapshots and referenced blobs; prior allowed-source recovery did not supply them |
+
+Current protected-owner correction `d04bf3004d17f438bfcbadde3bd4d85023eb08c3`
+retains successful focused 3 Rust/68 Python cases and actual 51-protected candidate
+construction. Official bootstrap still exits 2 on the unqualified unmanaged
+consumer handoff, preserving installed owner `985e45d9…`; it is not host adoption.
+After that prerequisite is satisfied, candidate installation and actual both-end
+canonical DELTA checks, local/linked/native adoption, independent review, actual
+landing SHA/tree and installed-consumer postconditions remain required. PR163
+remains continuing; this disposition neither closes it nor completes SPEC.
+
+Native owners retain the original Developer alias escape and other failed/missing
+domains, job/process streams and run/attempt/workflow identities. Lifecycle L1/L2
+and unknown native outcomes remain separate obligations. Caller owns source/ref
+custody and lifecycle handoff; no deployment, finish, maintain or cleanup follows
+from this documentation.

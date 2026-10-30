@@ -205,7 +205,8 @@ rejected. To migrate v2 to v3, explicitly select the ancestor policy. `inventory
 preserves its rows; `absent` requires removing strict-ancestor rows and ensuring
 the asserted files are absent. Relative home and input locations are explicit
 host choices, not automatic rewrites. Existing v2 policies keep their meaning.
-The product host has not yet activated the guarded operation.
+Full-host guarded adoption remains proposed; the finite scoped diagnostics
+selection is described below.
 
 Each package row contains `id`, `name`, `version`, `source`, `project`,
 `manifest_input`, `inputs`, `checksum`, `features` and `dependencies`. Local
@@ -397,9 +398,18 @@ guard, including its post-operation checks. Bounded phase observations retain
 where a failure occurred without replacing any check.
 
 The host registers one proposed isolated `guard.check.runner` consumer; its
-current host input and participant bindings are incomplete. The generic behavior
-cases are retained in the dedicated Rust owner tests. Historical host execution
-experiments and omitted sibling guard policies remain preserved source with
-unimplemented adoption status; [custody](input-source-custody.md) records their
-natural owners. This source increment establishes neither full-host nor native
-acceptance.
+current selected-home, input and participant bindings remain incomplete. Its
+generic behavior cases stay in the dedicated Rust owner tests. Cargo guarding is
+optional: the 95 current methods corresponding to PR163 retain 94 direct Cargo
+recipes and one ordinary `build.diagnostics` action through
+`.chrono-harness/cargo/diagnostics-config.json` and `diagnostics.json`.
+Restoring the historical parallel guard aliases is not required for ordinary
+scoped operation; underlying methods, assertions and input obligations remain.
+
+Exact 51 native run `41021444210/1` qualifies 37 corresponding operations,
+including diagnostics' 27-node locked/offline metadata and guarded offline build.
+The other 58 methods remain registered without execution evidence in that cohort.
+This native diagnostics domain does not qualify ordinary sibling package inputs,
+the local diagnostics selection or the isolated runner home. Full-host bindings,
+input closure and candidate acceptance remain separate. [Custody](input-source-custody.md)
+records the retained source and each remaining consumer prerequisite.

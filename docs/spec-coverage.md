@@ -901,8 +901,20 @@ participants and 34 fetch/metadata pairs remain explicit. Generic Rust behavior
 cases and Python provisioning/runtime/forwarding cases are retained; source
 registration is not their executed verdict. Current host binding/adoption,
 protected installed participant consumption, candidate canonical/native acceptance,
-landing, full input closure and parity remain pending. PR163-only source remains
-preserved/unimplemented as described in [custody](input-source-custody.md).
+landing, full input closure and parity remain pending. PR163's preserved source,
+optional current method disposition and scoped residuals are recorded in
+[custody](input-source-custody.md#remaining-consumer-prerequisites).
+
+Exact `51d85d833e4fdf9f7a607af901bfa52d3e64939a` native `41021444210/1`
+qualifies 37 of the 95 corresponding current operations; 58 remain registered
+without execution evidence in that cohort. Current methods retain 94 direct
+Cargo recipes and one diagnostics guarded build. Diagnostics' 27-node native
+metadata/offline-build result covers that domain only. Ordinary full inputs,
+isolated-home agreement, local diagnostics, seven full bindings, default and
+portable/distribution adoption, and historical originals remain P1–P6 obligations.
+Qualified startup artifact `12961832338` supplies all 18 original members and five
+executables for finite native core/detector supply; it does not establish default
+14-tool installation or complete SPEC §12.1. PR163 is not wholly superseded or closed.
 
 I3 connects the selected macOS 27 runner guard's 2398 literal input IDs, preserves
 2387 package-file expectations and selects a privately acquired exact Rustup
@@ -1052,3 +1064,9 @@ replacement. Stage/source fixture evidence does not restore the official host
 consumer, prove current M-to-C acceptance, or discharge native/linked/review/landing
 obligations. See the worktree owner for the exact retention and product/policy
 cochange boundary.
+
+At fixed correction `d04bf3004d17f438bfcbadde3bd4d85023eb08c3`, focused
+3 Rust/68 Python cases and actual 51-protected construction passed. Official
+bootstrap still exited 2 for the unqualified unmanaged consumer handoff and kept
+installed owner `985e45d9…` unchanged. These results remain fixed-source evidence;
+this documentation adds no candidate canonical, adoption, review or landing pass.
