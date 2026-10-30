@@ -1058,12 +1058,15 @@ Linux/public adoption and complete SPEC acceptance remain unfinished.
 
 The protected ordinary-owner bootstrap correction adds explicit immutable produced
 first-issuer validation, retained candidate construction and original-owner EX
-publication/adoption within the registered-enrollment domain. The current host's
-unmanaged consumer handoff remains unqualified and must refuse selected-owner
-replacement. Stage/source fixture evidence does not restore the official host
-consumer, prove current M-to-C acceptance, or discharge native/linked/review/landing
-obligations. See the worktree owner for the exact retention and product/policy
-cochange boundary.
+publication/adoption. The enrollment-exclusion repair replaces the unsupported
+host scope assertion with actual original admission plus EX for all unresolved
+ordinary enrollments of the selected physical coordinator, including linked
+attachments. Its receipt records the protected identities. Concrete unknown,
+legacy or unavailable affected ownership still refuses; another physical
+coordinator is outside the set. Stage/source fixture evidence alone does not prove
+official bootstrap restoration, current both-end canonical acceptance, native
+adoption, independent review or landing. See the worktree owner for the exact
+retention and product/policy cochange boundary.
 
 At fixed correction `d04bf3004d17f438bfcbadde3bd4d85023eb08c3`, focused
 3 Rust/68 Python cases and actual 51-protected construction passed. Official

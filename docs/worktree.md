@@ -1392,14 +1392,31 @@ immutable publication result alone never establishes adoption or task completion
 supply selection, internal stage/actions and FILEMAP input edges change. Previous
 ordinary bootstrap delegated immediately to the incompatible installed decoder;
 the new construction path can use qualified source51 bytes before building C.
-The actual host stage still declares its unmanaged consumer handoff **unqualified**
-and refuses publication. Existing EX proves exclusion of registered holders only;
-historical child joins and unknown relationships do not establish current
-unmanaged consumer absence. No substitute handoff producer is supplied here. The
-registered-only fixture domain exercises publication, inherited-holder refusal,
-original identity drift and reentry; it does not qualify this host handoff. Actual
-source51 construction, current M-to-C canonical acceptance, local/linked/native
-adoption, independent review and landing remain separate obligations.
+The stage no longer declares a consumer scope. The deployment owner produces its
+actual exclusion set from the original coordinator ledger and Git owner inventory.
+Admission prevents new ordinary enrollment/use; deployment acquires original EX
+for every unresolved enrollment of that physical coordinator, including linked
+attachments, before any selected-byte effect. It retains those capabilities through
+Python publication and adoption, rechecking admission, ledger bytes, inventory,
+attachment, committed endpoints and lease identities. The adoption receipt records
+the actual protected attachment and enrollment identities; it makes no universal
+unmanaged-process claim. Live descendants, unknown or unavailable affected
+attachments, missing kernel ownership and unjoined use inputs refuse specifically,
+preserving selected bytes and originals. Disposed historical generations do not
+become live consumers; another physical coordinator is outside this exclusion set.
+An actually bound out-of-protocol producer still requires its identified original
+custodian's join/exclusion. Historical unknown tasks do not establish such binding.
+
+**Additional product and host policy change:** Rust's static scope refusal and
+main-only exclusion become actual coordinator enrollment exclusion; the host stage
+removes the unsupported scope declaration. Existing FILEMAP compile edges to
+`project:worktree` / `project:worktree-tests` and stage runtime/test edges to
+`script:host-bootstrap` / `test:host-bootstrap-tests` carry the change. No Python
+byte-publisher or supply-issuer change is needed. Runtime validation scales with
+the explicitly affected enrollments; total IO/build/CI costs remain unmeasured.
+Source51 provenance and prior scoped passes stay fixed. Actual current-candidate
+construction, official bootstrap, both-end canonical DELTA, local/linked/native
+adoption, independent review and landing remain distinct acceptance obligations.
 
 Supply carriers, staged candidates, preserved previous-owner inodes and original
 reports/streams belong to caller current engineering/PR acceptance. Review their

@@ -24,8 +24,7 @@
   "report_path": ".chrono-harness/state/bootstrap-owner-stage.json",
   "owner_stage": {
     "source": "crates/worktree/target/debug/chrono-worktree",
-    "selected": ".chrono-harness/bin/chrono-worktree",
-    "consumer_scope": "unqualified"
+    "selected": ".chrono-harness/bin/chrono-worktree"
   },
   "host_environment": {
     "TMPDIR": ".chrono-harness/state/bootstrap-owner-tooling/tmp",

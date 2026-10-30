@@ -1,4 +1,4 @@
-//! Selected lifecycle bytes change only under the original admission + EX lease.
+//! Selected coordinator bytes change only under original affected enrollment EX leases.
 use super::*;
 
 fn executable_binding(path: &Path) -> Result<Value, String> {
@@ -30,27 +30,85 @@ impl Manager {
         if !e.cache_only || e.status != "active" || e.terminal.is_some() {
             return Err("owner deployment preserves unknown or terminal enrollment".into());
         }
-        let lease = self
-            .lease(&e, true)?
-            .ok_or("owner deployment has live inherited consumers; preserve selected bytes")?;
-        self.birth_ready(&e)?;
-        let head = r.oid(root, "HEAD")?;
-        self.check_entry(r, &e, &head, None)?;
-        if !e.uses.is_empty() {
-            return Err("owner deployment has unjoined use inputs; preserve selected bytes".into());
+        // Admission excludes new ordinary entrants. Each already admitted target
+        // has its own enrollment SH, including linked checkout descendants.
+        let inventory = r.inventory(root)?;
+        let entries: Vec<_> = self
+            .ledger
+            .entries
+            .iter()
+            .filter(|entry| entry.status != "disposed")
+            .cloned()
+            .collect();
+        for row in &inventory {
+            let path = Path::new(&row["worktree"]);
+            if !entries.iter().any(|entry| entry.path == path) {
+                return Err(format!(
+                    "owner deployment affected checkout {} has no current enrollment; original custodian exclusion required; preserve selected bytes",
+                    path.display()
+                ));
+            }
+            if row.contains_key("locked") || row.contains_key("prunable") {
+                return Err(format!(
+                    "owner deployment affected checkout {} has unknown Git ownership; preserve selected bytes",
+                    path.display()
+                ));
+            }
         }
+        let mut exclusions = Vec::new();
+        for entry in &entries {
+            if inventory
+                .iter()
+                .filter(|row| Path::new(&row["worktree"]) == entry.path)
+                .count()
+                != 1
+            {
+                return Err(format!(
+                    "owner deployment affected enrollment {} is unavailable in original Git inventory; preserve selected bytes",
+                    entry.path.display()
+                ));
+            }
+            let lease = self.lease(entry, true)?.ok_or_else(|| format!(
+                "owner deployment affected enrollment {} has live inherited consumers; preserve selected bytes", entry.path.display()))?;
+            if !entry.uses.is_empty() {
+                return Err(format!(
+                    "owner deployment affected enrollment {} has unjoined use inputs; preserve selected bytes",
+                    entry.path.display()
+                ));
+            }
+            exclusions.push((entry, r.oid(&entry.path, "HEAD")?, lease));
+        }
+        let ledger_path = self.directory.join("ledger.json");
+        let ledger_bytes = fs::read(&ledger_path).map_err(|e| e.to_string())?;
+        if value!(decode::<Ledger>(&ledger_bytes)?) != value!(&self.ledger) {
+            return Err(
+                "owner deployment original enrollment changed; preserve selected bytes".into(),
+            );
+        }
+        let stable = |r: &mut Runner| -> Result<(), String> {
+            self.stable(r)?;
+            if fs::read(&ledger_path).map_err(|e| e.to_string())? != ledger_bytes
+                || r.inventory(root)? != inventory
+            {
+                return Err(
+                    "owner deployment affected enrollment inventory changed; preserve originals"
+                        .into(),
+                );
+            }
+            for (entry, head, lease) in &exclusions {
+                lease.stable()?;
+                self.birth_ready(entry)?;
+                self.check_entry(r, entry, head, None)?;
+            }
+            Ok(())
+        };
+        stable(r)?;
+        let head = r.oid(root, "HEAD")?;
         let mut command = bootstrap_command(r, root, &self.registrations, profile)?;
         let profile_bytes =
             fs::read(no_symlink_parents(root, profile)?).map_err(|e| e.to_string())?;
         let policy = json(&profile_bytes)?;
         let declaration = &policy["owner_stage"];
-        // A stage receipt is not a proof about unmanaged consumers. The current
-        // adopted host has not qualified this input; it must remain a refusal.
-        // Registered-only fixtures exercise the positive kernel domain. A host
-        // can select it only after its actual caller-owned consumer handoff.
-        if declaration["consumer_scope"] != "registered-enrollment-only" {
-            return Err("owner deployment unmanaged consumer handoff is unqualified; preserve selected bytes".into());
-        }
         if !stage_path.starts_with(".chrono-harness/state/bootstrap-") {
             return Err("owner deployment requires an original retained bootstrap report".into());
         }
@@ -96,7 +154,12 @@ impl Manager {
         )?;
         let owner_identity = value!({"attachment":e.attachment,
             "admission":self._gate.lease.as_ref().unwrap().id(),
-            "enrollment":e.ownership.as_ref().ok_or("kernel ownership")?.id});
+            "enrollment":e.ownership.as_ref().ok_or("kernel ownership")?.id,
+            "coordinator_root":self.policy.coordinator_root,"common":self.ledger.common,
+            "enrollments":exclusions.iter().map(|(entry, head, lease)| value!({
+                "path":entry.path,"attachment":entry.attachment,"head":head,
+                "enrollment":{"path":entry.ownership.as_ref().unwrap().path,"id":lease.id()}
+            })).collect::<Vec<_>>()});
         report["owner_deployment_identity"] = owner_identity.clone();
         command.args.extend([
             "--owner-publication".into(),
@@ -106,15 +169,13 @@ impl Manager {
         command
             .env
             .insert("CHRONO_WORKTREE_OWNER_DEPLOYMENT".into(), stage_sha.into());
-        lease.stable()?;
-        self.check_entry(r, &e, &head, None)?;
+        stable(r)?;
         let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
         let process = chrono_harness::prepared::process_identities(
             chrono_harness::run_process_observed(root, &command, &[], &digest)?,
         );
         report["managed_process"] = value!(process);
-        lease.stable()?;
-        self.check_entry(r, &e, &head, None)?;
+        stable(r)?;
         if process.failure.is_some() || process.exit_code != 0 {
             report["managed_command_failed"] = value!(true);
             return Err(format!(
@@ -142,7 +203,7 @@ impl Manager {
             "source_commit":head,"stage_result":stage_path,"stage_sha256":stage_sha,
             "installed":publication["installed"],"original_owner":record["previous"],
             "original_protection":owner_identity,"publication":publication,
-            "consumer_scope":"registered-enrollment-only","terminal_handoff":"not-claimed",
+            "terminal_handoff":"not-claimed",
             "task_completion":"not-claimed"});
         let receipt = self.immutable_reconciled(
             &format!(
@@ -151,16 +212,14 @@ impl Manager {
             ),
             &adoption,
         )?;
-        lease.stable()?;
-        self.check_entry(r, &e, &head, None)?;
+        stable(r)?;
         if executable_binding(&selected)? != adoption["installed"] {
             return Err("installed owner changed before adoption".into());
         }
         adoption["receipt"] = value!(receipt);
         let index = no_symlink_parents(root, ".chrono-harness/state/bootstrap-owner-current.json")?;
         write_json(&index, &adoption, false)?;
-        lease.stable()?;
-        self.check_entry(r, &e, &head, None)?;
+        stable(r)?;
         report["owner_deployment"] = adoption;
         Ok(())
     }
