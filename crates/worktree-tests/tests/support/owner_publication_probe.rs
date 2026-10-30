@@ -13,19 +13,20 @@ fn excluded(root: &Path) {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|e| e["status"] != "disposed") {
-    for path in [
-        dir.join("admission.lease"),
-        root.join(e["ownership"]["path"].as_str().unwrap()),
-    ] {
-        assert!(
-            chrono_harness::ownership::Lease::acquire(&path, None, false, true, None)
-                .unwrap()
-                .is_none(),
-            "original EX must remain held at {}",
-            path.display()
-        );
-    }
+        .filter(|e| e["status"] != "disposed")
+    {
+        for path in [
+            dir.join("admission.lease"),
+            root.join(e["ownership"]["path"].as_str().unwrap()),
+        ] {
+            assert!(
+                chrono_harness::ownership::Lease::acquire(&path, None, false, true, None)
+                    .unwrap()
+                    .is_none(),
+                "original EX must remain held at {}",
+                path.display()
+            );
+        }
     }
 }
 fn main() -> ExitCode {
@@ -40,7 +41,9 @@ fn main() -> ExitCode {
             let mut child = Command::new(std::env::current_exe().unwrap());
             child.args(["--hold-descendants", &(depth - 1).to_string()]);
             chrono_harness::process_fds::forward_command(&mut child, &[]).unwrap();
-            return ExitCode::from(u8::try_from(child.status().unwrap().code().unwrap_or(1)).unwrap());
+            return ExitCode::from(
+                u8::try_from(child.status().unwrap().code().unwrap_or(1)).unwrap(),
+            );
         }
     }
     if args == ["--hold"] || args.first().map(String::as_str) == Some("--hold-descendants") {

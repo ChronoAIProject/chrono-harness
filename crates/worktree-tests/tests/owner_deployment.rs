@@ -142,14 +142,26 @@ fn owner_deployment_retains_original_ex_through_publication_and_adoption() {
 fn inherited_holder(h: &Host, entry: &Value) -> std::process::Child {
     let lease = chrono_harness::ownership::Lease::acquire(
         &h.root.join(entry["ownership"]["path"].as_str().unwrap()),
-        Some(entry["ownership"]["id"].as_str().unwrap()), false, false, None,
-    ).unwrap().unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-owner-publication-probe"));
-    command.args(["--hold-descendants", "3"]).stdin(Stdio::piped()).stdout(Stdio::piped());
+        Some(entry["ownership"]["id"].as_str().unwrap()),
+        false,
+        false,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let mut command = Command::new(env!(
+        "CARGO_BIN_EXE_chrono-worktree-owner-publication-probe"
+    ));
+    command
+        .args(["--hold-descendants", "3"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped());
     chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
     let mut child = command.spawn().unwrap();
     let mut ready = String::new();
-    BufReader::new(child.stdout.take().unwrap()).read_line(&mut ready).unwrap();
+    BufReader::new(child.stdout.take().unwrap())
+        .read_line(&mut ready)
+        .unwrap();
     drop(lease);
     assert_eq!(ready, "ready\n");
     child
@@ -170,21 +182,38 @@ fn owner_deployment_excludes_main_and_linked_inherited_descendants_until_join() 
         let (h, exe, path, sha) = fixture();
         let target = linked(&h);
         let entries = h.ledger()["entries"].as_array().unwrap().clone();
-        let entry = entries.iter().find(|e| e["path"] == value!(if linked_holder {&target} else {&h.root})).unwrap();
+        let entry = entries
+            .iter()
+            .find(|e| e["path"] == value!(if linked_holder { &target } else { &h.root }))
+            .unwrap();
         let before = fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap();
         let child = inherited_holder(&h, entry);
         let (code, report, error) = deploy(&h, &exe, &path, &sha);
         join_holder(child);
         assert_ne!(code, 0, "{report} {error}");
-        assert!(report.to_string().contains("live inherited consumers"), "{report}");
-        assert_eq!(fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap(), before);
-        assert!(!h.root.join(".chrono-harness/state/bootstrap-owner-current.json").exists());
+        assert!(
+            report.to_string().contains("live inherited consumers"),
+            "{report}"
+        );
+        assert_eq!(
+            fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap(),
+            before
+        );
+        assert!(
+            !h.root
+                .join(".chrono-harness/state/bootstrap-owner-current.json")
+                .exists()
+        );
         let (code, report, error) = deploy(&h, &exe, &path, &sha);
         assert_eq!(code, 0, "{report} {error}");
-        let excluded = report["owner_deployment"]["original_protection"]["enrollments"].as_array().unwrap();
+        let excluded = report["owner_deployment"]["original_protection"]["enrollments"]
+            .as_array()
+            .unwrap();
         assert_eq!(excluded.len(), 2);
         for e in &entries {
-            assert!(excluded.iter().any(|x| x["path"] == e["path"] && x["attachment"] == e["attachment"] && x["enrollment"]["id"] == e["ownership"]["id"]));
+            assert!(excluded.iter().any(|x| x["path"] == e["path"]
+                && x["attachment"] == e["attachment"]
+                && x["enrollment"]["id"] == e["ownership"]["id"]));
         }
         assert_eq!(h.ledger()["entries"], value!(entries));
         assert!(h.root.join(LEDGER).exists());
@@ -198,7 +227,13 @@ fn owner_deployment_does_not_exclude_an_unrelated_physical_coordinator() {
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     join_holder(child);
     assert_eq!(code, 0, "{report} {error}");
-    assert_eq!(report["owner_deployment"]["original_protection"]["enrollments"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        report["owner_deployment"]["original_protection"]["enrollments"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
 }
 #[test]
 fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
@@ -206,16 +241,27 @@ fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
         let (h, exe, path, sha) = fixture();
         let target = linked(&h);
         let mut ledger = h.ledger();
-        let e = ledger["entries"].as_array_mut().unwrap().iter_mut().find(|e| e["path"] == value!(target)).unwrap();
+        let e = ledger["entries"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|e| e["path"] == value!(target))
+            .unwrap();
         let expected = match fault {
-            "unknown" => { ledger["entries"].as_array_mut().unwrap().pop(); "no current enrollment" },
-            "ownership" => { e.as_object_mut().unwrap().remove("ownership"); "no kernel ownership" },
+            "unknown" => {
+                ledger["entries"].as_array_mut().unwrap().pop();
+                "no current enrollment"
+            }
+            "ownership" => {
+                e.as_object_mut().unwrap().remove("ownership");
+                "no kernel ownership"
+            }
             "lease" => {
                 let lease = h.root.join(e["ownership"]["path"].as_str().unwrap());
                 fs::rename(&lease, lease.with_extension("original")).unwrap();
                 fs::write(lease, "changed physical identity").unwrap();
                 "ownership lease identity changed"
-            },
+            }
             _ => {
                 let gitfile = target.join(".git");
                 let bytes = fs::read(&gitfile).unwrap();
@@ -224,14 +270,21 @@ fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
                 "attachment changed"
             }
         };
-        fs::write(h.root.join(LEDGER), serde_json::to_vec_pretty(&ledger).unwrap()).unwrap();
+        fs::write(
+            h.root.join(LEDGER),
+            serde_json::to_vec_pretty(&ledger).unwrap(),
+        )
+        .unwrap();
         let old_ledger = fs::read(h.root.join(LEDGER)).unwrap();
         let before = fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap();
         let (code, report, error) = deploy(&h, &exe, &path, &sha);
         assert_ne!(code, 0, "{fault}: {report} {error}");
         assert!(report.to_string().contains(expected), "{fault}: {report}");
         assert_eq!(fs::read(h.root.join(LEDGER)).unwrap(), old_ledger);
-        assert_eq!(fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap(), before);
+        assert_eq!(
+            fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap(),
+            before
+        );
         assert!(exe.exists());
     }
 }
