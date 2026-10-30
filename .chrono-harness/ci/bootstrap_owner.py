@@ -148,6 +148,7 @@ def publish_bytes(root, record):
         raise ValueError("retained owner stage changed before publication")
     previous = staged.parent / "previous-owner"
     intent = staged.parent / "publication-intent.json"
+    next_owner = staged.parent / "publication-next-owner"
     result_path = staged.parent / "publication-result.json"
     if previous.exists() or previous.is_symlink():
         if file_binding(previous) != record["previous"]:
@@ -158,14 +159,33 @@ def publish_bytes(root, record):
         os.link(target, previous, follow_symlinks=False)
     if file_binding(previous) != record["previous"]:
         raise ValueError("original owner preservation identity differs")
-    write_new(intent, {"schema": "chrono-bootstrap-owner-publication-intent/v1", "stage": record})
+    if intent.exists():
+        if intent.is_symlink():
+            raise ValueError("owner publication intent is a symlink")
+        planned = json.loads(intent.read_bytes())
+        if (set(planned) != {"schema", "stage", "replacement"}
+                or planned["schema"] != "chrono-bootstrap-owner-publication-intent/v1"
+                or planned["stage"] != record):
+            raise ValueError("owner publication intent binding differs")
+    else:
+        if next_owner.exists() or next_owner.is_symlink():
+            raise ValueError("unqualified prepared owner without publication intent")
+        with next_owner.open("xb") as output:
+            output.write(staged.read_bytes())
+            os.fchmod(output.fileno(), 0o755)
+        planned = {"schema": "chrono-bootstrap-owner-publication-intent/v1",
+                   "stage": record, "replacement": file_binding(next_owner)}
+        write_new(intent, planned)
     current = file_binding(target)
     if current == record["previous"]:
-        shared.replace(target, staged.read_bytes(), 0o755)
-    elif current["sha256"] != record["staged"]["sha256"] or current["size"] != record["staged"]["size"]:
+        if file_binding(next_owner) != planned["replacement"]:
+            raise ValueError("prepared publication owner changed")
+        os.replace(next_owner, target)
+    elif current != planned["replacement"]:
         raise ValueError("selected owner drifted after publication intent")
     installed = file_binding(target)
-    if installed["sha256"] != record["staged"]["sha256"] or file_binding(previous) != record["previous"]:
+    if (installed != planned["replacement"] or installed["sha256"] != record["staged"]["sha256"]
+            or file_binding(previous) != record["previous"]):
         raise ValueError("installed owner verification failed")
     result = {"schema": "chrono-bootstrap-owner-publication/v1", "stage": record,
               "installed": installed, "adoption": "not-claimed", "task_completion": "not-claimed"}

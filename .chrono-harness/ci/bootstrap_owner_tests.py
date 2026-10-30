@@ -63,6 +63,14 @@ class OwnerPublication(unittest.TestCase):
                 else:
                     changed.write_bytes(original)
 
+    def test_reentry_refuses_same_bytes_from_a_different_published_inode(self):
+        owner.publish_bytes(self.root, self.record)
+        foreign = self.selected.parent / "foreign-same-bytes"
+        foreign.write_bytes(self.selected.read_bytes())
+        os.replace(foreign, self.selected)
+        with self.assertRaisesRegex(ValueError, "drifted after publication intent"):
+            owner.publish_bytes(self.root, self.record)
+
     def test_symlink_and_marker_without_capabilities_refuse(self):
         self.staged.unlink()
         self.staged.symlink_to(self.selected)

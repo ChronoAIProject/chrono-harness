@@ -83,7 +83,7 @@ impl Manager {
             "admission":self._gate.lease.as_ref().unwrap().id(),
             "enrollment":e.ownership.as_ref().ok_or("kernel ownership")?.id});
         report["owner_deployment_identity"] = owner_identity.clone();
-        command.argv.extend(["--owner-publication".into(), stage_path.into(), stage_sha.into()]);
+        command.args.extend(["--owner-publication".into(), stage_path.into(), stage_sha.into()]);
         command.env.insert("CHRONO_WORKTREE_OWNER_DEPLOYMENT".into(), stage_sha.into());
         lease.stable()?;
         self.check_entry(r, &e, &head, None)?;
