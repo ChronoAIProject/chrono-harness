@@ -13,6 +13,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from process_fds import inherited_fds
 
 mode = sys.argv[1]
+if mode == "cargo-domain":
+    # A bounded Cargo interface fixture. It never touches a real Cargo home or
+    # certifies package availability; receipts are scoped by selected home and
+    # exact manifest/lock bytes so the Python owner can test launch domains.
+    action, manifest = sys.argv[2:]
+    home = os.environ["CARGO_HOME"]
+    offline = os.environ.get("CARGO_NET_OFFLINE") == "true"
+    locked = hashlib.sha256(Path(manifest).read_bytes() + b"\0" +
+                            Path(manifest).with_name("Cargo.lock").read_bytes()).hexdigest()
+    domain = Path(os.environ["FIXTURE_DOMAIN_ROOT"]) / hashlib.sha256(home.encode()).hexdigest()
+    receipt = domain / locked
+    if (offline and not receipt.exists()) or (action == "fetch" and offline):
+        sys.stdout.buffer.write(b"fixture cargo original stdout\x00\xff\n")
+        sys.stderr.buffer.write(b"fixture cargo: unprepared locked manifest\xfe\n")
+        sys.exit(101)
+    if not offline:
+        domain.mkdir(parents=True, exist_ok=True)
+        receipt.touch()
+    print(json.dumps({"cargo_home": home, "offline": offline, "manifest": manifest,
+                      "locked_input": locked, "action": action}))
+    sys.exit(0)
 if mode == "copy-executable":
     destination = Path(sys.argv[3])
     destination.parent.mkdir(parents=True, exist_ok=True)
