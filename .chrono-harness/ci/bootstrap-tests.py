@@ -50,6 +50,9 @@ class Bootstrap(unittest.TestCase):
             path.chmod(0o755)
         (self.tools / "cargo-ready").touch()
         self.environment = dict(os.environ)
+        # Synthetic bindings own compiler selection; conflict cases set overrides explicitly.
+        for key in ("RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"):
+            self.environment.pop(key, None)
         self.environment["PATH"] = str(self.tools) + os.pathsep + os.environ["PATH"]
         self.environment["GIT_TRACE2_EVENT"] = str(self.tools / "git-trace.jsonl")
         self.state_path = self.root / ".chrono-harness/state/bootstrap.json"
