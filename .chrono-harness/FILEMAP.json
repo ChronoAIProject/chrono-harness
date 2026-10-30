@@ -263,15 +263,7 @@
         },
         {
           "kind": "runtime-input",
-          "to": "project:release-build"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:diagnostics"
-        },
-        {
-          "kind": "test-execution",
-          "to": "test:diagnostics-tests"
+          "to": "script:release-build"
         },
         {
           "kind": "test-execution",
@@ -5711,6 +5703,10 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
         }
       ]
     },
@@ -7050,6 +7046,70 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/git/pinned-macos-diagnostics.json",
+      "owner": "diagnostics",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:diagnostics"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:diagnostics-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/cargo/diagnostics-config.json",
+      "owner": "diagnostics",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:diagnostics"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:diagnostics-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     }
@@ -30063,7 +30123,7 @@
         ]
       },
       {
-        "config": ".chrono-harness/git/pinned-macos.json",
+        "config": ".chrono-harness/git/pinned-macos-diagnostics.json",
         "edges": [
           {
             "from": "input:package.cfg-if.1.0.5.06572a96a58dc510",

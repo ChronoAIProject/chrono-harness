@@ -3347,7 +3347,7 @@
             "--host-root",
             ".",
             "--config",
-            ".chrono-harness/config.json",
+            ".chrono-harness/cargo/diagnostics-config.json",
             "--policy",
             ".chrono-harness/cargo/diagnostics.json",
             "--operation",

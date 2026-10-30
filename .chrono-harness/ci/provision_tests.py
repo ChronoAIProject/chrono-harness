@@ -221,6 +221,15 @@ class NativeCargoDomains(unittest.TestCase):
                 observed = json.loads((self.root / result["stdout"]["path"]).read_bytes())
                 self.assertEqual(observed["cargo_home"], "/Users/runner/.cargo")
                 self.assertFalse(observed["offline"])
+        # The terminal managed originals identify this same ordinary cache
+        # prerequisite inside RealFixtureStartup; retain its registered profile.
+        cache = json.loads((SOURCE / "bootstrap-cache.json").read_text())
+        self.assertEqual(cache["operations"], ["build.cache"])
+        child_environment = self.selected_environment(cache.get("environment", {}), environment,
+                                                      bootstrap_profile=True)
+        self.assertEqual(self.cargo(cache["operations"][0], child_environment)["exit_code"], 0)
+        self.assertEqual(child_environment["CARGO_HOME"], "/Users/runner/.cargo")
+        self.assertNotEqual(child_environment.get("CARGO_NET_OFFLINE"), "true")
 
     def test_diagnostics_prerequisites_escape_an_inherited_private_offline_domain(self):
         inherited = dict(self.base_environment,

@@ -1016,3 +1016,30 @@ consumption remain required; prior production acceptance retains its fixed sourc
 and scope. Independent review, native acceptance, landing, coordinator deployment,
 full input closure/parity and remaining SPEC obligations are separate. Additional
 verification/storage cost remains measured only by retained command receipts.
+
+
+### Native diagnostics Cargo domain repair source
+
+The first PR211 native originals exposed 21 ordinary Cargo check failures in a
+private diagnostics-only offline home, plus a guard bootstrap failure before
+its diagnostics producer ran. The native ordinary config is restored to its dev
+selection. The existing guarded diagnostics action now selects its own native
+config, preserving the v6 offline/package/toolchain/native-target/configuration
+contract; guard and observer bootstrap prerequisites explicitly select ordinary
+Cargo acquisition for their own locked manifests before private diagnostics
+fetch/metadata and guarded consumption. Shared startup still transfers tools
+and original reports, without transferring a Cargo registry.
+
+**Host policy and consumer change:** the private environment's scope narrows to
+its actual diagnostic consumers. Existing Python owner tests now define cold
+prerequisite, selected-home agreement and cold/wrong-home/wrong-lock failure
+expectations through the bootstrap process owner and original-stream fixture.
+Their added source and manifest/lock inputs have explicit FILEMAP edges. These
+expectations are not an executed result: compatible candidate owner deployment,
+registered local checks, native guard/build/test/ordinary-consumer acceptance,
+independent review and landing remain required. The subsequently qualified managed-use originals identify the same ordinary
+fixture cache-bootstrap offline-domain failure; no lifecycle functional change
+is included, and actual repaired real-fixture acceptance remains required. The extra
+guard selector read and bounded fixture operations have unmeasured total cost;
+no budgets or acquisition cohort are enlarged, and full input closure/parity,
+Linux/public adoption and complete SPEC acceptance remain unfinished.

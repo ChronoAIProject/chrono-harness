@@ -32,6 +32,7 @@
     "RUSTUP_HOME": "/Users/runner/.rustup",
     "RUSTC": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
     "RUSTC_WRAPPER": "",
-    "RUSTC_WORKSPACE_WRAPPER": ""
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CARGO_NET_OFFLINE": "false"
   }
 }

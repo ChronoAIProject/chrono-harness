@@ -390,8 +390,9 @@ diagnostics producer entry:
 ```
 
 It builds the candidate `chrono-inputs` with the existing Rust 1.95.0 bootstrap
-registry, then delegates `inputs.observe-diagnostics`. That operation uses the
-registered diagnostics fetch and locked/offline metadata argv. Its private,
+registry in the ordinary native `/Users/runner/.cargo` domain, with acquisition
+allowed for that locked observer manifest, then delegates
+`inputs.observe-diagnostics`. That operation uses the registered diagnostics fetch and locked/offline metadata argv. Its private,
 host-relative Cargo home contains this consumer's acquisition rather than all
 34 projects. Fetch may acquire missing locked packages; metadata remains offline.
 No guard is executed and no expected input identity is rewritten.
@@ -418,8 +419,13 @@ keeps 45 minutes. Inventory IO, artifact size and total native time are unmeasur
 The ordinary native integration point is the diagnostics bootstrap selected by
 `units.diagnostics.bootstrap` in `ci/units.json`, after startup/core verification
 and before `check --unit diagnostics`. The selected diagnostics guard bootstrap
-now verifies the imported core profile, builds the candidate guard, delegates
+verifies the imported core profile, builds the candidate guard in the ordinary
+native Cargo home with acquisition allowed for its locked manifest, delegates
 `host.bootstrap-diagnostics-inputs`, then installs the guard before that check.
+Both bootstrap profiles explicitly select that ordinary home and
+`CARGO_NET_OFFLINE=false`, so an inherited diagnostics-only offline selection
+cannot prevent the guard or observer from being built. They use the existing
+Cargo bootstrap actions; they do not populate the private diagnostics registry.
 The registered producer builds its observer and retains its own report and streams
 under the unit's existing state artifact directory. This delegation does not prove
 a native execution. The local diagnostics input, environment and compiler edges
@@ -427,6 +433,29 @@ stay in the existing macOS 27 configuration scope; the native graph retains the
 common guard and observer dependencies without borrowing those local inputs.
 Its output must first be qualified against the exact candidate/source, original producer
 run/attempt, official Rust expectations and declared Xcode/configuration scope.
+The guarded `build.diagnostics` action selects
+`.chrono-harness/cargo/diagnostics-config.json`. Its native Git identity selects
+`.chrono-harness/git/pinned-macos-diagnostics.json`; its local identity retains
+the existing macOS 27 selection. The native direct policy keeps the private
+Cargo home, required offline environment, compiler/sysroot/linker/SDK and all
+package/configuration expectations. The ordinary `.chrono-harness/config.json`
+selects the ordinary native policy from dev, so other scoped builds and tests
+use their existing Cargo acquisition domain and current locked manifests.
+Neither shared startup nor the diagnostics producer supplies ordinary registry
+contents. No warm registry, named-crate patch or all-project provisioning is
+required by this separation.
+
+**Host policy and consumer change:** the private environment now applies only to
+the existing guard and observer consumers, while the two bootstrap prerequisites
+select the ordinary native domain. Python owner expectations exercise the
+selected launch homes, cold prerequisite acquisition and offline cold/wrong-home/
+wrong-lock rejection with original streams. Source registration and these
+expectations do not establish an executed local/native result; compatible owner
+deployment, candidate checks and native guard/build/test acceptance remain
+required. The selector adds one small registry read for guarded builds; total
+bootstrap/package/inventory/CI/storage cost remains unmeasured. Bounds and the
+single existing acquisition path are unchanged.
+
 The native direct policy and diagnostics v6 contract now explicitly adopt the
 qualified originals from clean source `6ca53a96f0f0aceca69149a162ac24696bb10bda`,
 run `40961603966`, attempt `1`, diagnostics job `123757592461`, artifact

@@ -29,5 +29,14 @@
   "rust_incremental": true,
   "require_tool_bindings": true,
   "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
-  "report_path": ".chrono-harness/state/diagnostics-guard-bootstrap.json"
+  "report_path": ".chrono-harness/state/diagnostics-guard-bootstrap.json",
+  "environment": {
+    "HOME": "/Users/runner",
+    "CARGO_HOME": "/Users/runner/.cargo",
+    "RUSTUP_HOME": "/Users/runner/.rustup",
+    "RUSTC": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "CARGO_NET_OFFLINE": "false"
+  }
 }

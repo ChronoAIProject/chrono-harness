@@ -344,8 +344,12 @@ cache/core preparation points. The diagnostics unit uses the registered
 `host.bootstrap-diagnostics-guard` preparation: it first verifies the imported
 core profile, runs the existing `build.judge-cargo` operation, then delegates
 `host.bootstrap-diagnostics-inputs` and installs that candidate's
-`chrono-judge-cargo`. The delegated producer builds its candidate observer and
-retains the bounded native source/tool/configuration observations and four
+`chrono-judge-cargo`. Guard and observer source builds explicitly select the
+ordinary native Cargo home with acquisition allowed for their own locked
+manifests. The ordinary native check config retains dev's ordinary environment;
+only the existing guarded diagnostics action selects the separate diagnostics
+config and its private offline home. The delegated producer builds its candidate
+observer and retains the bounded native source/tool/configuration observations and four
 directory originals under `.chrono-harness/state/diagnostics-native/`, within the
 existing unit artifact directory. A later guarded-build refusal preserves these
 originals through the existing always-run upload. This preparation neither adopts
