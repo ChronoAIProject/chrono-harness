@@ -1067,6 +1067,53 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         verified.failure.is_none(),
         "workflow verify failed: {verified:?}"
     );
+    // These consumers have joined and the repaired workflow has been consumed.
+    // This distinct Git host owns its nested fixtures; the outer allocation's
+    // drain cannot reach them. Keep the owner's original result before judging
+    // its exact member disposal/protection outcomes. Earlier failures retain the
+    // fixture through the existing diagnostic guard without this handoff.
+    let argv = vec![
+        "maintain".to_owned(),
+        "--host-root".to_owned(),
+        root.to_str().unwrap().to_owned(),
+    ];
+    let owner = chrono_worktree::run(&argv);
+    let directory = source().join(".chrono-harness/state/migration-tests");
+    fs::create_dir_all(&directory).unwrap();
+    let (file, original) = tempfile::Builder::new()
+        .prefix("inner-owner-handoff-")
+        .suffix(".json")
+        .tempfile_in(directory)
+        .unwrap()
+        .keep()
+        .unwrap();
+    serde_json::to_writer(
+        file,
+        &json!({"argv":argv,"exit_code":owner.exit_code,
+            "stdout_bytes":owner.stdout.as_bytes(),"stderr_bytes":owner.stderr.as_bytes()}),
+    )
+    .unwrap();
+    assert_eq!(
+        owner.exit_code,
+        0,
+        "inner owner handoff failed; original result at {}",
+        original.display()
+    );
+    let handoff: Value = serde_json::from_str(&owner.stdout).unwrap();
+    assert_eq!(handoff["status"], "maintained");
+    assert_eq!(handoff["invoking_root"], json!(root));
+    assert_eq!(handoff["lifecycle_coordinator_root"], json!(root));
+    assert!(
+        handoff["producer_objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|member| member["producer"] == "ci-test-host"
+                && member["path"].is_string()
+                && member["status"].is_string()),
+        "inner fixture member outcomes missing; original result at {}",
+        original.display()
+    );
 }
 
 #[test]
