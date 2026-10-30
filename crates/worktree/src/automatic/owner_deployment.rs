@@ -23,12 +23,15 @@ impl Manager {
         if root != self.policy.coordinator_root || self._gate.lease.is_none() {
             return Err("owner deployment requires the original kernel Git-main owner".into());
         }
-        let i = self.current_entry(root).ok_or("owner deployment requires enrollment")?;
+        let i = self
+            .current_entry(root)
+            .ok_or("owner deployment requires enrollment")?;
         let e = self.ledger.entries[i].clone();
         if !e.cache_only || e.status != "active" || e.terminal.is_some() {
             return Err("owner deployment preserves unknown or terminal enrollment".into());
         }
-        let lease = self.lease(&e, true)?
+        let lease = self
+            .lease(&e, true)?
             .ok_or("owner deployment has live inherited consumers; preserve selected bytes")?;
         self.birth_ready(&e)?;
         let head = r.oid(root, "HEAD")?;
@@ -37,7 +40,8 @@ impl Manager {
             return Err("owner deployment has unjoined use inputs; preserve selected bytes".into());
         }
         let mut command = bootstrap_command(r, root, &self.registrations, profile)?;
-        let profile_bytes = fs::read(no_symlink_parents(root, profile)?).map_err(|e| e.to_string())?;
+        let profile_bytes =
+            fs::read(no_symlink_parents(root, profile)?).map_err(|e| e.to_string())?;
         let policy = json(&profile_bytes)?;
         let declaration = &policy["owner_stage"];
         // A stage receipt is not a proof about unmanaged consumers. The current
@@ -55,9 +59,12 @@ impl Manager {
             return Err("owner deployment stage report changed".into());
         }
         let stage = json(&raw)?;
-        if stage["schema"] != "chrono-bootstrap-result/v1" || stage["status"] != "passed"
-            || stage["config"] != profile || stage["source"]["state"] != "clean"
-            || stage["source"]["commit"] != head || stage["host_root"] != value!(root)
+        if stage["schema"] != "chrono-bootstrap-result/v1"
+            || stage["status"] != "passed"
+            || stage["config"] != profile
+            || stage["source"]["state"] != "clean"
+            || stage["source"]["commit"] != head
+            || stage["host_root"] != value!(root)
         {
             return Err("owner deployment stage source/configuration differs".into());
         }
@@ -65,7 +72,9 @@ impl Manager {
         if record["selected"] != declaration["selected"] {
             return Err("owner deployment destination differs from declaration".into());
         }
-        let staged_path = record["staged"]["path"].as_str().ok_or("staged executable path")?;
+        let staged_path = record["staged"]["path"]
+            .as_str()
+            .ok_or("staged executable path")?;
         if !staged_path.starts_with(".chrono-harness/bin/owner-stages/") {
             return Err("owner deployment stage must survive cache disposal".into());
         }
@@ -74,37 +83,60 @@ impl Manager {
         bound["path"] = value!(staged_path);
         if bound != record["staged"]
             || fs::canonicalize(std::env::current_exe().map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())? != staged
+                .map_err(|e| e.to_string())?
+                != staged
         {
             return Err("owner deployment must execute its exact retained candidate bytes".into());
         }
-        let selected = no_symlink_parents(root, declaration["selected"].as_str().ok_or("selected owner path")?)?;
+        let selected = no_symlink_parents(
+            root,
+            declaration["selected"]
+                .as_str()
+                .ok_or("selected owner path")?,
+        )?;
         let owner_identity = value!({"attachment":e.attachment,
             "admission":self._gate.lease.as_ref().unwrap().id(),
             "enrollment":e.ownership.as_ref().ok_or("kernel ownership")?.id});
         report["owner_deployment_identity"] = owner_identity.clone();
-        command.args.extend(["--owner-publication".into(), stage_path.into(), stage_sha.into()]);
-        command.env.insert("CHRONO_WORKTREE_OWNER_DEPLOYMENT".into(), stage_sha.into());
+        command.args.extend([
+            "--owner-publication".into(),
+            stage_path.into(),
+            stage_sha.into(),
+        ]);
+        command
+            .env
+            .insert("CHRONO_WORKTREE_OWNER_DEPLOYMENT".into(), stage_sha.into());
         lease.stable()?;
         self.check_entry(r, &e, &head, None)?;
         let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
         let process = chrono_harness::prepared::process_identities(
-            chrono_harness::run_process_observed(root, &command, &[], &digest)?);
+            chrono_harness::run_process_observed(root, &command, &[], &digest)?,
+        );
         report["managed_process"] = value!(process);
         lease.stable()?;
         self.check_entry(r, &e, &head, None)?;
         if process.failure.is_some() || process.exit_code != 0 {
             report["managed_command_failed"] = value!(true);
-            return Err(format!("owner publication failed with original exit {}: {:?}", process.exit_code, process.failure));
+            return Err(format!(
+                "owner publication failed with original exit {}: {:?}",
+                process.exit_code, process.failure
+            ));
         }
         let publication = json(&process.stdout_bytes)?;
         if publication["schema"] != "chrono-bootstrap-owner-publication/v1"
             || publication["stage"] != *record
             || publication["installed"] != executable_binding(&selected)?
             || publication["installed"]["sha256"] != record["staged"]["sha256"]
-            || executable_binding(&staged.parent().ok_or("stage directory")?.join("previous-owner"))? != record["previous"]
+            || executable_binding(
+                &staged
+                    .parent()
+                    .ok_or("stage directory")?
+                    .join("previous-owner"),
+            )? != record["previous"]
         {
-            return Err("owner publication original/result identity mismatch; adoption not claimed".into());
+            return Err(
+                "owner publication original/result identity mismatch; adoption not claimed".into(),
+            );
         }
         let mut adoption = value!({"schema":"chrono-worktree-owner-adoption/v1",
             "source_commit":head,"stage_result":stage_path,"stage_sha256":stage_sha,
@@ -113,7 +145,12 @@ impl Manager {
             "consumer_scope":"registered-enrollment-only","terminal_handoff":"not-claimed",
             "task_completion":"not-claimed"});
         let receipt = self.immutable_reconciled(
-            &format!("owner-adoption-{}.json", chrono_harness::wire::digest(&adoption)?), &adoption)?;
+            &format!(
+                "owner-adoption-{}.json",
+                chrono_harness::wire::digest(&adoption)?
+            ),
+            &adoption,
+        )?;
         lease.stable()?;
         self.check_entry(r, &e, &head, None)?;
         if executable_binding(&selected)? != adoption["installed"] {

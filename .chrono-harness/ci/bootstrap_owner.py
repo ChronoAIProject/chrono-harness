@@ -243,6 +243,14 @@ def upgrade(root, config_path, config):
                 and current.get("installed") == file_binding(selected)):
             stage_report(root, current["stage_result"], current["stage_sha256"])
             return
+    original = bootstrap.report_destination(root, config)
+    if original.exists():
+        previous = json.loads(original.read_bytes())
+        if previous.get("source") == bootstrap.source_identity(observed, observed):
+            shared.original_report(root, {"config": config_path.as_posix()}, config, observed)
+            # A real current-source seed/ordinary producer already installed the
+            # exact declared set. Its original execution, not a marker, binds it.
+            return
     if file_binding(selected)["sha256"] not in declaration["selected_sha256"]:
         raise ValueError("selected ordinary owner has no qualified upgrade input")
     data, _, _ = qualified_supply(root, declaration)

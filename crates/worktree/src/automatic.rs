@@ -2247,7 +2247,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         }
         n += 2;
     }
-    if (values.contains_key("--bootstrap-config") && !matches!(operation.as_str(), "bootstrap" | "deploy-owner"))
+    if (values.contains_key("--bootstrap-config")
+        && !matches!(operation.as_str(), "bootstrap" | "deploy-owner"))
         || (operation == "bootstrap" && !values.contains_key("--bootstrap-config"))
         || (values.contains_key("--path") && operation == "bootstrap")
         || (values.contains_key("--unit") && operation != "check")
@@ -2262,9 +2263,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (values.contains_key("--adopt-fixtures") && operation != "migrate")
         || (values.contains_key("--stage-result") && operation != "deploy-owner")
         || (values.contains_key("--stage-sha256") && operation != "deploy-owner")
-        || (operation == "deploy-owner" && (!values.contains_key("--bootstrap-config")
-            || !values.contains_key("--stage-result") || !values.contains_key("--stage-sha256")
-            || values.contains_key("--path")))
+        || (operation == "deploy-owner"
+            && (!values.contains_key("--bootstrap-config")
+                || !values.contains_key("--stage-result")
+                || !values.contains_key("--stage-sha256")
+                || values.contains_key("--path")))
     {
         return Err("invalid lifecycle command arguments".into());
     }
@@ -2312,8 +2315,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             report["lifecycle_coordinator_root"] = value!(manager.policy.coordinator_root);
             report["source_commit"] = value!(manager.anchor_head);
             match operation.as_str() {
-                "deploy-owner" => manager.deploy_owner(r, &invoking,
-                    values["--bootstrap-config"], values["--stage-result"], values["--stage-sha256"], report),
+                "deploy-owner" => manager.deploy_owner(
+                    r,
+                    &invoking,
+                    values["--bootstrap-config"],
+                    values["--stage-result"],
+                    values["--stage-sha256"],
+                    report,
+                ),
                 "maintain" => manager.drain(r, &[invoking.clone()], report),
                 "import" => manager.enroll(
                     r,

@@ -127,7 +127,16 @@ pub fn run(args: &[String]) -> CliOutput {
     }
     let result = if matches!(
         args.first().map(String::as_str),
-        Some("finish" | "maintain" | "import" | "migrate" | "use" | "check" | "bootstrap" | "deploy-owner")
+        Some(
+            "finish"
+                | "maintain"
+                | "import"
+                | "migrate"
+                | "use"
+                | "check"
+                | "bootstrap"
+                | "deploy-owner"
+        )
     ) {
         automatic::dispatch(args)
     } else if matches!(

@@ -4323,6 +4323,16 @@
             ".",
             ".chrono-harness/ci/bootstrap-owner-stage.json"
           ]
+        },
+        "owner-verify": {
+          "operation": "host.bootstrap-owner-verify",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-owner-verification.json"
+          ]
         }
       }
     },

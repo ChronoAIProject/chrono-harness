@@ -87,6 +87,8 @@ def participate(root, config_path, config):
     if marker is not None:
         if Path(marker) != root:
             raise ValueError("bootstrap participation root mismatch")
+        if ("owner_upgrade" in config or "owner_stage" in config) and not PASS_FDS:
+            raise ValueError("bootstrap participation requires original ownership descriptors")
         return False
     if set(adoption) != {"coordinator_root", "program", "git", "config"} or adoption["coordinator_root"] != "git-main-worktree":
         raise ValueError("unsupported bootstrap participation declaration")
