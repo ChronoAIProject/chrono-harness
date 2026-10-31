@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import runpy
 import subprocess
 import shutil
 import sys
@@ -90,18 +91,46 @@ class IsolatedProvision(unittest.TestCase):
     def test_entry_preserves_the_isolated_installers_nonzero_exit(self):
         ci = self.root / ".chrono-harness/ci"
         ci.mkdir(parents=True)
-        config = dict(self.config, schema="chrono-bootstrap/v1", projects=".chrono-harness/projects.json")
+        config = dict(self.config, schema="chrono-bootstrap/v1", projects=".chrono-harness/projects.json",
+                      tools={"python3": sys.executable}, operations=["fixture.after-install"],
+                      install=[{"source": ".chrono-harness/ci/bootstrap.py",
+                                "destination": ".chrono-harness/bin/fixture"}])
         (ci / "isolated.json").write_text(json.dumps(config))
-        (ci.parent / "projects.json").write_text('{"projects":[],"scripts":[]}')
+        (ci.parent / "projects.json").write_text(json.dumps({"projects": [], "scripts": [{
+            "actions": {"execute": {"operation": "fixture.after-install", "tool": "python3",
+                                    "argv": ["--version"]}}}]}))
+        shutil.copyfile(SOURCE / "bootstrap.py", ci / "bootstrap.py")
         failure = subprocess.CalledProcessError(17, ["rustup", "toolchain", "install"])
         with mock.patch.object(bootstrap.sys, "argv", ["bootstrap.py", str(self.root), ".chrono-harness/ci/isolated.json"]), \
-                mock.patch.object(bootstrap, "participate"), \
-                mock.patch.object(bootstrap, "observe_source"), \
-                mock.patch.object(bootstrap, "toolchain_environment", side_effect=failure), \
+                mock.patch.object(bootstrap.subprocess, "run", side_effect=failure) as installer, \
+                mock.patch.object(bootstrap.subprocess, "check_output", side_effect=
+                                  subprocess.CalledProcessError(128, ["git"], stderr=b"fixture host")), \
+                mock.patch.object(bootstrap.subprocess, "Popen", side_effect=
+                                  AssertionError("operation ran after installer failure")) as operation, \
+                mock.patch.object(bootstrap.shutil, "copy2", side_effect=
+                                  AssertionError("installation ran after installer failure")) as copy, \
                 mock.patch.object(bootstrap.sys, "stderr", io.StringIO()):
             with self.assertRaises(SystemExit) as raised:
-                bootstrap.main()
+                runpy.run_path(str(SOURCE / "bootstrap.py"), run_name="__main__")
         self.assertEqual(raised.exception.code, 17)
+        installer.assert_called_once()
+        self.assertEqual(installer.call_args[0][0], ["rustup", "toolchain", "install", "1.95.0",
+                                                   "--profile", "default", "--no-self-update"])
+        for key, field in [("RUSTUP_HOME", "rustup_home"), ("CARGO_HOME", "cargo_home")]:
+            self.assertEqual(installer.call_args[1]["env"][key],
+                             str(self.root / config["toolchain_provision"][field]))
+        operation.assert_not_called()
+        copy.assert_not_called()
+        reports = list((self.root / ".chrono-harness/state").glob("bootstrap-*/report.json"))
+        self.assertEqual(len(reports), 1)
+        report = json.loads(reports[0].read_text())
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["error"], str(failure))
+        self.assertEqual(report["operations"], [])
+        self.assertEqual(report["installed"], [])
+        self.assertEqual(report["versions"], {})
+        self.assertEqual(report["environment"], {})
+        self.assertFalse((self.root / ".chrono-harness/state/bootstrap.json").exists())
 
     def test_invalid_or_overlapping_homes_fail_before_any_child(self):
         for update in [
