@@ -643,6 +643,15 @@ class Bootstrap(unittest.TestCase):
         self.assertIn(b"bound rustc identity mismatch", result.stderr)
         self.assertFalse((self.root / "built-tool").exists())
 
+    def test_version_mismatch_with_matching_bytes_rejects_before_registered_operation(self):
+        config = self.binding_config()
+        config["tool_bindings"]["rustc"]["version"] = "rustc 1.94.0 (fixture)"
+        self.write_json(self.ci / "bootstrap.json", config)
+        rejected = self.invoke()
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn(b"bound rustc identity mismatch", rejected.stderr)
+        self.assertFalse((self.root / "built-tool").exists())
+
     def test_required_binding_declaration_cannot_be_omitted(self):
         config = dict(self.config, require_tool_bindings=True)
         self.write_json(self.ci / "bootstrap.json", config)
