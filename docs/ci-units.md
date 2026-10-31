@@ -338,10 +338,36 @@ never discovers host SDKs, imports, directories or language boundaries.
 
 This host's detector produces the registered core startup tools for the unit and
 collection jobs. Its cache preparation builds `chrono-cache`; its bootstrap calls
-the existing core profile once and publishes all five installed tools. Consumer
+the existing core profile once and publishes its declared installed tools. The
+current core profile declares six tools, adding the Cargo guard and input producer
+needed by canonical inventory. The qualified source51 native startup retains its
+original five executable payloads; it is not evidence for this changed profile. Consumer
 jobs validate and install the selected profiles, then verify them at the original
-cache/core preparation points. Their canonical checks and business build plans
-remain unchanged. Local and release bootstraps keep their registered source builds.
+cache/core preparation points. The diagnostics unit uses the registered
+`host.bootstrap-diagnostics-guard` preparation: it first verifies the imported
+core profile, runs the existing `build.judge-cargo` operation, then delegates
+`host.bootstrap-diagnostics-inputs` and installs that candidate's
+`chrono-judge-cargo`. Guard and observer source builds explicitly select the
+ordinary native Cargo home with acquisition allowed for their own locked
+manifests. The ordinary native check config retains dev's ordinary environment;
+only the existing guarded diagnostics action selects the separate diagnostics
+config and its private offline home. The delegated producer builds its candidate
+observer and retains the bounded native source/tool/configuration observations and four
+directory originals under `.chrono-harness/state/diagnostics-native/`, within the
+existing unit artifact directory. A later guarded-build refusal preserves these
+originals through the existing always-run upload. This preparation neither adopts
+observed hashes nor makes the guarded check pass. Its separate
+`diagnostics-guard-bootstrap.json` report retains the clean source identity,
+original operation streams and installed digest; the imported core report and
+`startup-install.json` remain the source-bound import evidence. A failed core
+verification or guard build stops preparation before the canonical check.
+This source build serves diagnostics only; the detector and other consumers
+still transfer the same cache/core profiles. Native build/IO/time costs for the
+additional diagnostics preparation remain unmeasured. Canonical checks and
+business build plans keep their registered entries. Local and release bootstraps
+keep their registered source builds. This preparation supplies the executable;
+native guarded policy/input binding and actual native execution remain separate
+acceptance obligations.
 
 Optional `job_gating.startup` uses schema `chrono-shared-startup/v1`. It declares a
 literal host `directory`, artifact name, pinned `download_action`, and `consumers`
@@ -797,7 +823,8 @@ as were actual cancellation with selective retry, business failure with another
 unit passing, and restoration with zero selected business operations. Initial
 inventory remains a separate contract. The product host registers sixteen units,
 one per complete test plan, and a collector in `.chrono-harness/ci/units.json`.
-Its core bootstrap explicitly builds runner, judge-ci, ci and worktree; each selected plan
+Its current core bootstrap explicitly builds runner, judge-ci, ci, worktree,
+judge-cargo and inputs; each selected plan
 keeps its complete existing build/check/test operations. Shared operations are
 listed in the check profile and repeat only in isolated checkouts. The default
 full bootstrap remains available when its existing configuration is selected.

@@ -53,8 +53,8 @@ def native_platform():
     return {"system": platform.system(), "machine": platform.machine()}
 
 
-def registration(root, path):
-    raw = read(root, path, ".chrono-harness/ci/")
+def registration(root, path, read_input=read):
+    raw = read_input(root, path, ".chrono-harness/ci/")
     config = json.loads(raw)
     if (set(config) != {"schema", "directory", "profiles", "consumers"}
             or config["schema"] != "chrono-host-startup/v1"
@@ -72,13 +72,13 @@ def registration(root, path):
         if (not re.fullmatch(r"[A-Za-z0-9_-]+", name) or set(item) != {"config", "build"}
                 or type(item["build"]) is not bool):
             raise ValueError("invalid startup profile")
-        data = read(root, item["config"], ".chrono-harness/ci/")
+        data = read_input(root, item["config"], ".chrono-harness/ci/")
         profile = json.loads(data)
         if profile["schema"] != "chrono-bootstrap/v1" or not profile["install"]:
             raise ValueError("startup profile must install declared tools")
         if type(profile.get("require_tool_bindings", False)) is not bool:
             raise ValueError("invalid bootstrap binding requirement")
-        bootstrap.binding_declarations(root, profile)
+        bootstrap.binding_declarations(root, profile, read_input)
         report = bootstrap.report_destination(root, profile)
         if report in reports:
             raise ValueError("startup profiles must have separate reports")
@@ -115,15 +115,21 @@ def original_report(root, item, profile, observed):
     return data
 
 
-def validate_execution(root, profile, report):
+def validate_execution(root, profile, report, read_input=read):
     """Bind original producer facts to this source's declarations, never to probes."""
     if report.get("status") != "passed" or not Path(report.get("host_root", "")).is_absolute():
         raise ValueError("startup requires a successful original execution")
-    expected_registrations = {path: digest(read(root, path)) for path in
+    expected_registrations = {path: digest(read_input(root, path)) for path in
                               bootstrap.registration_paths(report["config"], profile)}
     if report.get("registrations") != expected_registrations:
         raise ValueError("startup execution registrations differ")
-    bindings = bootstrap.binding_declarations(root, profile)
+    if "host_environment" in profile:
+        if (report.get("host_environment") != profile["host_environment"]
+                or any(report.get("environment", {}).get(key) != str(
+                    bootstrap.host_path(Path(report["host_root"]), path, ".chrono-harness/state/"))
+                    for key, path in profile["host_environment"].items())):
+            raise ValueError("startup producer host environment differs")
+    bindings = bootstrap.binding_declarations(root, profile, read_input)
     selected = {}
     if bindings is not None:
         rows = report.get("executables", [])
@@ -151,7 +157,7 @@ def validate_execution(root, profile, report):
             expected_environment["CARGO_INCREMENTAL"] = "1" if profile["rust_incremental"] else "0"
         if any(report.get("environment", {}).get(key) != value for key, value in expected_environment.items()):
             raise ValueError("startup producer compiler environment differs")
-    operations = bootstrap.registered_operations(json.loads(read(root, profile["projects"])))
+    operations = bootstrap.registered_operations(json.loads(read_input(root, profile["projects"])))
     actual = report.get("operations", [])
     if [row["operation"] for row in actual] != profile["operations"]:
         raise ValueError("startup producer operations differ")
@@ -159,6 +165,8 @@ def validate_execution(root, profile, report):
         action = operations[row["operation"]]
         executable = (selected[action["tool"]] if action["tool"] in selected
                       else profile["tools"][action["tool"]])
+        if not Path(executable).is_absolute() and "/" in executable:
+            executable = str(Path(report["host_root"]) / executable)
         if (row["tool"] != action["tool"] or row["argv"] != [executable, *action["argv"]]
                 or row["cwd"] != report["host_root"] or type(row["exit_code"]) is not int
                 or row["exit_code"] != 0 or type(row["pid"]) is not int or row["pid"] <= 0):
@@ -248,11 +256,12 @@ def produce(root, path, config, profiles, config_sha):
         output.write("binding=" + digest(raw) + "\n")
 
 
-def validate_artifact(root, path, config, profiles, config_sha, binding):
-    observed = source(root)
+def validate_artifact(root, path, config, profiles, config_sha, binding, *,
+                      observed=None, transfer=None, read_input=read):
+    observed = source(root) if observed is None else observed
     if not isinstance(binding, str) or not re.fullmatch(r"[0-9a-f]{64}", binding):
         raise ValueError("missing or invalid startup producer binding")
-    transfer = safe(root, config["directory"][:-1])
+    transfer = safe(root, config["directory"][:-1]) if transfer is None else transfer
     raw = read(transfer, "manifest.json")
     if digest(raw) != binding:
         raise ValueError("startup manifest differs from producer binding")
@@ -281,7 +290,7 @@ def validate_artifact(root, path, config, profiles, config_sha, binding):
                 or report["installed"] != [{"path": f["destination"], "sha256": f["sha256"]} for f in entry["files"]]):
             raise ValueError("startup original report is not bound to this source and payload")
         originals[name] = original
-        validate_execution(root, profile, report)
+        validate_execution(root, profile, report, read_input)
         validate_streams(transfer, report)
         for item in entry["files"]:
             data = read(transfer, item["path"], "tools/")

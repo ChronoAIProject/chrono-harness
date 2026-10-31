@@ -121,14 +121,15 @@ pub fn delta(path: &str) -> Delta {
     }
 }
 pub fn git(root: &Path, args: &[&str]) -> String {
-    let o = Command::new("git")
+    let mut command = Command::new("git");
+    command
         .arg("-C")
         .arg(root)
         .args(args)
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .output()
-        .unwrap();
+        .env("GIT_CONFIG_GLOBAL", "/dev/null");
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    let o = command.output().unwrap();
     assert!(
         o.status.success(),
         "{args:?}: {}",

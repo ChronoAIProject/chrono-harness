@@ -180,3 +180,62 @@ fn parity_cli_publishes_established_evidence_without_rerunning_judges() {
     let printed: Value = serde_json::from_str(&output.stdout).unwrap();
     assert_eq!(printed["parity"]["status"], "established");
 }
+
+#[test]
+fn adopted_parity_reads_originals_and_publishes_a_new_original_without_rewriting_them() {
+    use chrono_harness::retained_artifacts::retention::{self, Inventory};
+    use std::{fs, path::Path};
+    let host = tempfile::tempdir().unwrap();
+    // An equivalent spelling must remain compatible with canonical original
+    // addresses on every platform, including a host below a symlinked temp root.
+    let host_root = host.path().join(".");
+    let root = host_root.as_path();
+    fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
+    fs::write(root.join(retention::POLICY_PATH),serde_json::to_vec(&json!({"schema":"chrono-output-retention/v1","producers":{"full-original":[".chrono-harness/state/"]},"keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000})).unwrap()).unwrap();
+    let original = ".chrono-harness/state/current-original.json";
+    let slot = ".chrono-harness/state/current.json";
+    let compared = ".chrono-harness/state/compared.json";
+    let mut current = report(true);
+    current["report_path"] = json!(original);
+    let raw = serde_json::to_vec(&current).unwrap();
+    retention::publish_final_original(
+        root,
+        "full-original",
+        original,
+        &raw,
+        json!({"status":"pass"}),
+        true,
+    )
+    .unwrap();
+    fs::write(root.join(slot), &raw).unwrap();
+    fs::write(root.join(compared), &raw).unwrap();
+    let _slot = retention::reference_report(root, slot, original, &[], None).unwrap();
+    retention::settle_report(root, slot, original).unwrap();
+    drop(_slot);
+    let (compared_report, established) =
+        parity::update_files(root, Path::new(slot), Path::new(compared)).unwrap();
+    assert!(established);
+    assert_ne!(compared_report["report_path"], original);
+    assert_eq!(fs::read(root.join(original)).unwrap(), raw);
+    assert_eq!(fs::read(root.join(compared)).unwrap(), raw);
+    let new = compared_report["report_path"].as_str().unwrap();
+    assert!(
+        Inventory::adopted(root)
+            .unwrap()
+            .unwrap()
+            .enrolled(new)
+            .unwrap()
+    );
+    assert_eq!(
+        chrono_harness::json(&fs::read(root.join(slot)).unwrap()).unwrap(),
+        compared_report
+    );
+    assert_eq!(
+        Inventory::adopted(root)
+            .unwrap()
+            .unwrap()
+            .maintain()
+            .unwrap()["remaining_outputs"],
+        2
+    );
+}
