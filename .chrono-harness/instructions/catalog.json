@@ -1882,14 +1882,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "等待任务不轮询。 每个任务只用一个宿主完成通知或真正阻塞等待通道；完成后一次收取并核对原始结果、退出状态和任务身份。禁止定时反复查询状态、进程或产物，也不以 sleep 后查询、反复空写会话或名为 wait/watch 的状态查询循环代替等待。等待超时或暂时无通知不证明任务终结，不因此重启。缺少通知和阻塞等待能力时保留句柄、继续独立工作并如实说明能力缺口；不另造轮询器或伪造完成。"
+            "text": "等待任务并核对原结果。 每项任务优先使用一个实际可用的宿主完成通知或原生真正阻塞等待通道；完成后一次收取并核对原 stdout／stderr、退出／signal 和任务身份。生产者等待其自有子孙及后台工作结束后才发布终态，调用方仍须加入另行启动的任务。禁止短周期反复查询状态、进程或产物，也不以反复空写会话、sleep 后查询或改名 wait/watch 的短周期循环代替等待。允许授权内对原任务作长周期核实；不另开同时运行的完成通道或新增确认门。真正阻塞的原生工具可以内部查询，但名称、默认间隔或包装器退出 0 均不证明符合等待要求或任务成功。等待超时、暂缺通知、通道丢失或结果不可取得时保留原句柄、已有结果和保护，状态保持未知，不重复启动；继续独立授权工作并说明能力缺口，不另造轮询器或伪造完成。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Wait for tasks without polling. Use one host completion notification or genuinely blocking wait per task; after completion, collect and verify the original result, exit status and task identity once. Do not repeatedly query status, processes or artifacts on a timer, sleep then query, repeatedly send empty session input, or substitute a status-query loop named wait/watch. A wait timeout or delayed notification does not establish termination or justify restarting. When neither notification nor blocking wait is available, retain the handle, continue independent work and report the capability gap; do not add a poller or fabricate completion."
+            "text": "Wait for tasks and verify the original result. Prefer one actually available host completion notification or genuinely blocking native wait per task; after completion, collect and verify the original stdout/stderr, exit/signal and task identity once. Producers wait for their owned descendants and background work before publishing terminal results; callers still join separately launched tasks. Prohibit short-cycle repeated status, process or artifact queries; do not substitute repeated empty session input, sleep-then-query or short-cycle loops renamed wait/watch for waiting. Long-period reconciliation of the original task is allowed within existing authorization; do not add a simultaneous completion channel or a new confirmation gate. A genuinely blocking native tool may query internally, but its name, default interval or wrapper exit 0 proves neither compliance with waiting requirements nor task success. On timeout, delayed notification, lost channel or unavailable results, retain the original handle, acquired results and protection, keep the state unknown and do not duplicate the task; continue independent authorized work and report capability gaps without adding a poller or fabricating completion."
           }
         }
       ]
