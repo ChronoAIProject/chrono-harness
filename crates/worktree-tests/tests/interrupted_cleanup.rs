@@ -2084,9 +2084,9 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
         .next()
         .unwrap();
     let original = json(&fs::read(h.root.join(reference)).unwrap()).unwrap();
-    // The existing inner bootstrap wraps the build's exit 7 as its own exit 1;
-    // preserve that wrapper result and its original build exception/streams.
-    assert_eq!(original["managed_process"]["exit_code"], 1);
+    // The inner bootstrap preserves the build's exit 7 as its own exit code;
+    // retain that result and its original build exception/streams.
+    assert_eq!(original["managed_process"]["exit_code"], 7);
     let build_error = original["managed_process"]["stderr"].as_str().unwrap();
     assert!(build_error.starts_with("original build stderr\n"));
     assert!(build_error.contains("non-zero exit status 7"));
