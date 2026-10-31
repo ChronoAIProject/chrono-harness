@@ -73,6 +73,10 @@ pub fn update_files(root: &Path, report: &Path, compared: &Path) -> Result<(Valu
     if report.is_absolute() || compared.is_absolute() || report == compared {
         return Err("E_PARITY_INPUT: report paths must be distinct relative paths".into());
     }
+    // The immutable publisher returns canonical addresses. Use the same host
+    // spelling for both input resolution and its returned relative address.
+    let root = fs::canonicalize(root).map_err(|e| format!("E_PARITY_INPUT: {e}"))?;
+    let root = root.as_path();
     let report_path =
         crate::no_symlink_parents(root, report.to_str().ok_or("non UTF-8 report path")?)?;
     let compared_path = crate::no_symlink_parents(
@@ -82,6 +86,15 @@ pub fn update_files(root: &Path, report: &Path, compared: &Path) -> Result<(Valu
     if report_path == compared_path {
         return Err("E_PARITY_INPUT: reports must be distinct".into());
     }
+    let _activity = crate::retained_artifacts::retention::report_activity(root)?;
+    let _current_use = crate::retained_artifacts::retention::read_guard(
+        root,
+        report.to_str().ok_or("report path UTF-8")?,
+    )?;
+    let _compared_use = crate::retained_artifacts::retention::read_guard(
+        root,
+        compared.to_str().ok_or("compared path UTF-8")?,
+    )?;
     let mut current =
         crate::json(&fs::read(&report_path).map_err(|e| format!("E_PARITY_INPUT: {e}"))?)?;
     let compared_value =
@@ -107,6 +120,55 @@ pub fn update_files(root: &Path, report: &Path, compared: &Path) -> Result<(Valu
             false
         }
     };
+    if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
+        let retained = current["report_path"].as_str().map(str::to_owned);
+        if let Some(retained) = retained
+            && inventory.enrolled(&retained)?
+        {
+            let original = crate::no_symlink_parents(root, &retained)?;
+            let destination = crate::retained_artifacts::retention::unique_path(
+                original.parent().ok_or("parity original parent")?,
+                "parity-",
+                ".json",
+            )?;
+            let destination = destination
+                .strip_prefix(root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("parity destination UTF-8")?
+                .to_owned();
+            current["report_path"] = json!(destination);
+            let text = serde_json::to_vec(&current).map_err(|e| e.to_string())?;
+            if !crate::retained_artifacts::retention::publish_final_original(
+                root,
+                "full-original",
+                &destination,
+                &text,
+                json!({"kind":"parity-comparison","established":established,"original_status":current["status"],"original_report":retained}),
+                established,
+            )? {
+                return Err("parity original producer/scope is not adopted".into());
+            }
+            let slot = report.to_str().ok_or("parity slot UTF-8")?;
+            let _publisher = crate::retained_artifacts::retention::reference_report(
+                root,
+                slot,
+                &destination,
+                &[
+                    retained,
+                    compared.to_str().ok_or("compared path UTF-8")?.into(),
+                ],
+                None,
+            )?;
+            // A caller naming an immutable original receives the new address;
+            // a distinct fixed pointer is updated after original publication.
+            if !inventory.enrolled(slot)? {
+                fs::write(&report_path, &text).map_err(|e| e.to_string())?;
+            }
+            crate::retained_artifacts::retention::settle_report(root, slot, &destination)?;
+            return Ok((current, established));
+        }
+    }
     let text = serde_json::to_string_pretty(&current).map_err(|e| e.to_string())? + "\n";
     let mut targets = vec![report_path];
     if let Some(retained) = current.get("report_path").and_then(Value::as_str) {

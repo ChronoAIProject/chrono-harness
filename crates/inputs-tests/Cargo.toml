@@ -6,6 +6,7 @@ publish = false
 autotests = false
 
 [dev-dependencies]
+chrono-worktree = { path = "../worktree" }
 chrono-inputs = { path = "../inputs" }
 chrono-harness = { path = "../runner" }
 chrono-judge-registration = { path = "../judge-registration" }
@@ -31,6 +32,16 @@ path = "tests/snapshots.rs"
 [[test]]
 name = "consumer"
 path = "tests/consumer.rs"
+
+[[bin]]
+name = "chrono-inputs-test-observe"
+path = "tests/support/observe.rs"
+test = false
+bench = false
+
+[[test]]
+name = "observations"
+path = "tests/observations.rs"
 
 [profile.dev.package.sha2]
 opt-level = 3

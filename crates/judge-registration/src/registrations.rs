@@ -34,7 +34,7 @@ impl Registrations {
             .ok_or("missing registry bytes")?
             .clone())
         };
-        let s = Self {
+        let mut s = Self {
             entry: v[config_path].clone(),
             entry_path: identity.entry_path,
             effective_path: identity.effective_path,
@@ -59,6 +59,7 @@ impl Registrations {
         ] {
             check(v).map_err(|e| format!("{name}: {e}"))?;
         }
+        s.filemap = crate::select_filemap(&s.filemap, Some(&s.effective_path))?;
         crate::execution::scheduling(s.filemap(), s.projects(), &s.config()["artifacts"])?;
         Ok(s)
     }

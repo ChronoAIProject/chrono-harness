@@ -266,11 +266,10 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
     let mut h = Host::new(true);
     let root = h.root();
     let profile = ".chrono-harness/scoped.json";
-    fs::copy(
-        source().join("crates/judge-ci/target/debug/chrono-judge-ci"),
-        root.join(".chrono-harness/bin/chrono-judge-ci"),
-    )
-    .unwrap();
+    let original = source().join("crates/judge-ci/target/debug/chrono-judge-ci");
+    let destination = root.join(".chrono-harness/bin/chrono-judge-ci");
+    host::copied_fixture_input(&root, &original, &destination);
+    fs::copy(original, destination).unwrap();
     h.values.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] = json!([
         ".chrono-harness/bin/chrono-harness",
         "check",
@@ -294,7 +293,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         use std::os::unix::fs::PermissionsExt;
         let facts = ".chrono-harness/scoped-facts.json";
         let git = chrono_harness::resolve_program(&root, "git", None).unwrap();
-        let version = Command::new(&git).arg("--version").output().unwrap();
+        let version = h.capture_native(Command::new(&git).arg("--version"));
         assert!(version.status.success());
         let chosen = root.join(".chrono-harness/bin/chosen git");
         let quoted = format!("'{}'", git.to_str().unwrap().replace('\'', "'\\''"));
@@ -394,7 +393,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         if bound {
             command.env_clear().env("PATH", &shadow);
         }
-        let output = command.current_dir("/").args(args).output().unwrap();
+        let output = h.capture_native(command.current_dir("/").args(args));
         h.retain_command_result(
             &format!("scoped-check-bound-{bound}-selected-{selected:?}-reordered-{reordered}"),
             &output,
@@ -840,19 +839,13 @@ fn full_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes
             rejected.push((mode, serde_json::to_vec(&wrong).unwrap()));
         }
         for (mode, bytes) in rejected {
-            use std::{io::Write, process::Stdio};
             let isolated = tempfile::tempdir().unwrap();
-            let mut child = Command::new(env!("CARGO_BIN_EXE_chrono-test-project-execution"))
-                .arg(mode)
-                .current_dir(isolated.path())
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .unwrap();
-            // An unsupported mode may exit without reading stdin.
-            let _ = child.stdin.take().unwrap().write_all(&bytes);
-            let output = child.wait_with_output().unwrap();
+            let output = h.capture_native_input(
+                Command::new(env!("CARGO_BIN_EXE_chrono-test-project-execution"))
+                    .arg(mode)
+                    .current_dir(isolated.path()),
+                &bytes,
+            );
             assert!(!output.status.success());
             assert!(output.stdout.is_empty());
             assert!(!isolated.path().join(".chrono-harness/state").exists());
@@ -1051,7 +1044,7 @@ fn output_registration_delta_alone_wakes_its_owner_and_checks_isolation() {
 fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
     let mut h = Host::new(false);
     let cargo = chrono_harness::resolve_program(&h.root(), "cargo", None).unwrap();
-    let version = Command::new(&cargo).arg("--version").output().unwrap();
+    let version = h.capture_native(Command::new(&cargo).arg("--version"));
     assert!(version.status.success());
     let cargo_bytes = fs::read(&cargo).unwrap();
     let cargo_digest = sha256(&cargo_bytes);
@@ -1127,11 +1120,11 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         fs::create_dir_all(h.root().join(path).parent().unwrap()).unwrap();
         fs::write(h.root().join(path), body).unwrap();
     }
-    let lock = Command::new(&cargo)
-        .current_dir(h.root())
-        .args(["generate-lockfile", "--manifest-path", "t/Cargo.toml"])
-        .output()
-        .unwrap();
+    let lock = h.capture_native(Command::new(&cargo).current_dir(h.root()).args([
+        "generate-lockfile",
+        "--manifest-path",
+        "t/Cargo.toml",
+    ]));
     assert!(lock.status.success(), "{lock:?}");
     let scoped_path = ".chrono-harness/ci/group-check.json";
     let scoped_registration = ".chrono-harness/ci/group-registration.json";
@@ -1191,21 +1184,21 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         for name in ["alpha", "beta"] {
             fs::remove_file(h.root().join(".chrono-harness/state").join(name)).unwrap_or(());
         }
-        let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
-            .current_dir(h.root())
-            .args([
-                "check",
-                "--config",
-                scoped_path,
-                "--base",
-                &h.base,
-                "--candidate",
-                &h.candidate,
-                "--unit",
-                unit,
-            ])
-            .output()
-            .unwrap();
+        let out = h.capture_native(
+            Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+                .current_dir(h.root())
+                .args([
+                    "check",
+                    "--config",
+                    scoped_path,
+                    "--base",
+                    &h.base,
+                    "--candidate",
+                    &h.candidate,
+                    "--unit",
+                    unit,
+                ]),
+        );
         h.retain_command_result(&format!("group-unit-{unit}"), &out);
         let report: Value = serde_json::from_slice(&out.stdout).unwrap();
         assert!(out.status.success(), "{}", failure_summary(&report));
@@ -1218,21 +1211,21 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         r#"{"schema":"chrono-ci-collection/v1","reports":[]}"#,
     )
     .unwrap();
-    let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
-        .current_dir(h.root())
-        .args([
-            "check",
-            "--config",
-            scoped_path,
-            "--base",
-            &h.base,
-            "--candidate",
-            &h.candidate,
-            "--collect",
-            ".chrono-harness/state/missing.json",
-        ])
-        .output()
-        .unwrap();
+    let out = h.capture_native(
+        Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+            .current_dir(h.root())
+            .args([
+                "check",
+                "--config",
+                scoped_path,
+                "--base",
+                &h.base,
+                "--candidate",
+                &h.candidate,
+                "--collect",
+                ".chrono-harness/state/missing.json",
+            ]),
+    );
     h.retain_command_result("group-missing-collection", &out);
     let report: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(!out.status.success(), "{}", failure_summary(&report));
@@ -1317,3 +1310,26 @@ fn full_route_retains_registered_policy_and_rejects_incomplete_claims_before_eff
         );
     }
 }
+
+#[test]
+fn offline_source_and_declared_external_input_survive_the_old_checkout_path() {
+    let h = Host::new(true);
+    let old_root = h.root();
+    let source_bytes = fs::read(old_root.join("p/product.py")).unwrap();
+    let head = git(&old_root, &["rev-parse", "HEAD"]);
+    let external = h.external.path().to_owned();
+    let retained = h.make_checkout_unavailable();
+    assert!(!old_root.exists());
+    assert_eq!(
+        fs::read(retained.join("p/product.py")).unwrap(),
+        source_bytes
+    );
+    assert_eq!(git(&retained, &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read(&external).unwrap(), b"bounded input\n");
+    drop(h);
+    assert!(!old_root.exists());
+    assert_eq!(fs::read(external).unwrap(), b"bounded input\n");
+    assert_eq!(git(&retained, &["rev-parse", "HEAD"]), head);
+}
+#[path = "support/fixture_custody.rs"]
+mod fixture_custody;

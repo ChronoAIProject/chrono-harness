@@ -156,3 +156,5 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 beta.11 新增显式 `inspect-rebind`／`rebind` 元数据重建，以及所有现役检查／worktree 消费者共用的原始 checkout 身份核对。真实公开混合宿主已验证：Git 配置隐藏的执行位变化仍被拒绝，损坏索引重建保留未提交工作、显式选择的索引和旧元数据。重建不推断丢失的历史索引，不证明原操作成功；源码新增 `resume-rebind`，按保留 intent 与原计划续跑中断／失败重建，保留原结果与备份；beta.15 开始包含此入口。见[元数据重建](docs/worktree.md#explicit-metadata-rebind)与[原始快照身份](docs/git-facts.md#literal-checkout-identity)。
 
 候选源码增加显式 automatic_cleanup/v2 的内核租约与未 finish 缓存恢复，并为短 check/bootstrap 登记自动参与。本地真实 Cargo test／原生子进程回归验证包装器终止后的租约保留；已提交组合、协调者二进制部署、兼容生产者切换和支持平台验收仍归调用方，尚未宣称完整采用。
+
+Final-original candidate ownership and historical migration boundaries are documented in [artifact retention](docs/artifact-retention.md).
