@@ -1081,3 +1081,23 @@ At fixed correction `d04bf3004d17f438bfcbadde3bd4d85023eb08c3`, focused
 bootstrap still exited 2 for the unqualified unmanaged consumer handoff and kept
 installed owner `985e45d9…` unchanged. These results remain fixed-source evidence;
 this documentation adds no candidate canonical, adoption, review or landing pass.
+
+
+### Native diagnostics retained build inventory source
+
+**Visible host policy change:** native diagnostics selects a fixed directory-v3
+inventory of 158 qualified common Rust payload files and all 22 original
+directory rows/root/aliases. The old 159-file raw identity additionally bound
+`lib/rustlib/components` content. That content, membership syntax, type and raw
+content drift are outside the new build certificate; its child name/presence
+remains required. The complete raw observer output remains unchanged and distinct.
+The [native adoption contract](inputs.md#native-diagnostics-originals-before-guard-adoption)
+records the exact retained digest, source scope and exclusions. Generic
+observer/guard/startup, ordinary prerequisite, private offline, macOS 27/default
+profiles, configuration/package/SDK and retained post-child drift contracts remain.
+No registry-membership/type, order-only equivalence, full-input closure or parity
+claim follows. This source/data correction still requires its own candidate
+canonical/native guard/build/tests/aggregate originals, final independent triplet,
+landing/posterior and clean dev sync; historical J/N results keep their exact scope.
+Verification, CI, IO and storage total costs remain unmeasured; raw observation
+cost and existing resource bounds are unchanged.

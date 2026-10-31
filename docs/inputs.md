@@ -468,17 +468,45 @@ sysroot/SDK/developer roots. Its configuration-scoped FILEMAP edges retain
 1,127 package source-file identities checked against the qualified registry
 inventory; the local macOS 27 policy and its input edges remain local.
 
-The three runtime directory originals are `rust.json` SHA-256
-`792aad114bf2ffec0fea2ebae5fd921cc03446cd4a1a524c933197b3c4e6757b`,
-`sdk.json` SHA-256
-`95337d9300b02f0e75bde2d6aec955d5a8f3a9fc1e8a951726c15c433f74221b`,
-and `xcode-contents.json` SHA-256
-`866c18f9c3469a4cf734e452748b2eff0c4f3bcbeccccbab515c6a29d3309d4d`.
-The package-file adoption authority is `packages.json` SHA-256
+**Native build-input policy change:** `toolchain.rust.inventory` now selects the
+committed `.chrono-harness/inputs/diagnostics-rust-build.json`, SHA-256
+`d22ae2e29961289dd9835ac4bdd51d9a942e16209702dc76fe9ce46d63157901`. This fixed
+`chrono-input-directory/v3` retained subset contains exactly the 158 qualified
+common file rows of the admitted J/N raw Rust inventories, all 22 directory rows,
+the original root and all declared aliases. It omits only the file-content row
+`lib/rustlib/components`. Cargo, rustc, backend and standard-library payloads,
+and all four component installation manifests keep their exact identities.
+The current consumer directly selects the pinned Cargo/rustc/sysroot and performs
+locked offline metadata/build; it performs no component-management operation.
+Startup separately checks original source/report/install/executable bindings.
+Those build/provenance obligations therefore retain their payload identities
+without certifying the installer component registry's content.
+
+The previous policy bound all 159 raw file rows. The new build certificate does
+not bind `lib/rustlib/components` content, text membership, file type or raw
+content drift. Its name/presence remains required by the unchanged `lib/rustlib`
+directory children. This is an explicit payload/topology boundary, without an
+order-only equivalence rule or a registry-membership/type certificate. It does
+not establish full input closure or parity. All retained live payloads, physical
+parents, topology, roots, aliases and persistent retained-input changes after
+children remain guarded by the unchanged v3 consumer. Config, wrappers,
+environment, packages, SDK/developer/linker, original startup bindings and bounds
+keep their existing contracts; local macOS 27/default six-component and ordinary
+online prerequisite domains retain their own selections.
+
+The observer still writes the complete, unmodified raw `guard-inputs/rust.json`
+as a distinct diagnostic original, without selecting it as this build's inventory.
+The admitted J raw SHA-256 is
+`792aad114bf2ffec0fea2ebae5fd921cc03446cd4a1a524c933197b3c4e6757b`;
+N is `2452c5a1b1a08232f42c144765c69d1dee9bca7ac24ea9214374bb499662c29b`.
+The remaining runtime `sdk.json` and `xcode-contents.json` expectations stay
+`95337d9300b02f0e75bde2d6aec955d5a8f3a9fc1e8a951726c15c433f74221b`
+and `866c18f9c3469a4cf734e452748b2eff0c4f3bcbeccccbab515c6a29d3309d4d`.
+The package-file adoption authority remains `packages.json` SHA-256
 `ba0f4178c06dede474b4d6c4adb39fe0dafaf01af15d3bcde2a5a1532cfcd2da`.
-These are exact original expectations, not values learned from a failing guard.
-The existing producer recreates current observations; the guard rejects changed
-manifest or live input bytes. The ordinary build explicitly uses `--offline`.
+These fixed expectations are qualified retained data, not identities learned from
+a current installation. The observer's acquisition and raw output remain unchanged.
+The ordinary build explicitly uses `--offline`.
 No generic guard behavior changes. Registration validation may select broad
 existing consumers; its local/native validation and storage costs are unknown.
 Local macOS 27 checks cannot validate the selected native Xcode/SDK binding,

@@ -7305,9 +7305,9 @@
       },
       {
         "id": "toolchain.rust.inventory",
-        "location": ".chrono-harness/state/diagnostics-native/guard-inputs/rust.json",
+        "location": ".chrono-harness/inputs/diagnostics-rust-build.json",
         "presence": "present",
-        "sha256": "792aad114bf2ffec0fea2ebae5fd921cc03446cd4a1a524c933197b3c4e6757b"
+        "sha256": "d22ae2e29961289dd9835ac4bdd51d9a942e16209702dc76fe9ce46d63157901"
       },
       {
         "id": "toolchain.sdk.inventory",
