@@ -1436,7 +1436,8 @@ fn run_process_inner_with_stdout(
                         child.ownership.monitor_observation(),
                     )
                     .at("monitor_elapsed_millis", start.elapsed().as_millis() as u64)
-                    .at("monitor_timeout_millis", timeout.as_millis() as u64),
+                    .at("monitor_timeout_millis", timeout.as_millis() as u64)
+                    .at("terminal_deadline_ns", terminal_deadline),
             );
         }
         // Record the child's original terminal signal before cleanup can kill
