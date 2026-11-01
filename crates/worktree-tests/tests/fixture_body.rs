@@ -345,7 +345,7 @@ fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_sibli
     let (store, first) = allocation(&h);
     let root = first.path().to_owned();
     let original = copy(&store, &root, "partial-body");
-    fs::write(root.join("partial-body"), b"partial failed copy").unwrap();
+    fs::write(root.join("partial-body"), [0, 255, 7, 9]).unwrap();
     let good = copy(&store, &root, "good-body");
     assert_eq!(good, original);
     git(&root, &["init", "-q", "-b", "dev"]);
@@ -368,12 +368,30 @@ fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_sibli
     assert!(report.to_string().contains("partial; preserve"));
     assert!(report.to_string().contains("committed or staged source"));
     assert!(!root.join("good-body").exists());
-    assert_eq!(
-        fs::read(root.join("partial-body")).unwrap(),
-        b"partial failed copy"
-    );
+    assert_eq!(fs::read(root.join("partial-body")).unwrap(), [0, 255, 7, 9]);
     assert_eq!(git(&root, &["rev-parse", "HEAD"]), head);
     assert!(root.join("tracked-body").exists());
+    let child = report["producer_drains"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["producer"] == "test-allocation")
+        .unwrap();
+    let bytes = fs::read(h.root.join(child["receipt"]["path"].as_str().unwrap())).unwrap();
+    assert_eq!(sha256(&bytes), child["receipt"]["sha256"]);
+    let original_report = json(&bytes).unwrap();
+    // One live source/index observation per content-matching member suffices at
+    // the shared unlink boundary. Partial copies never reach source admission.
+    let source_checks = original_report["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|process| process["root"] == value!(root) && process["argv"][1] == "ls-files")
+        .count();
+    assert_eq!(
+        source_checks, 2,
+        "repeated source/index reads: {source_checks}"
+    );
     let (_, second) = allocation(&h);
     let other = second.path().to_owned();
     copy(&store, &other, "body");

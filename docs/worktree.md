@@ -1323,6 +1323,19 @@ are rechecked before each effect. Copied members and their retained originals
 have distinct lifetimes. Final-original retention/publication and the compatible
 shared-effect composition are separate work; this API does not release originals.
 
+Copied-body admission runs once in the shared effect owner's immediate
+pre-unlink callback. It verifies current member content and identity, retained
+original identity, live Git source/index, coordinator policy/HEAD, allocation,
+consumer leases and final-original exclusion there; the effect owner rechecks
+physical identity before unlinking. Intent publication precedes that admission,
+so a refused member retains its intent and failed result. The native migration
+timeout reached this owner after its nested CI command joined and left 254
+completed body-disposal results. Removing duplicate pre-intent reads preserves
+the existing 900-second operation limit. The local source/index regression first
+observed three reads for two checked members and now observes two; seven
+body-custody tests pass, including content drift of unchanged length. This does
+not establish native end-to-end timing or complete SPEC acceptance.
+
 After a joined managed `use`, `check` or `bootstrap` command succeeds, the owner
 runs the same guarded drain before returning. This recovers eligible fixture
 bodies created during that command before a following artifact upload. The

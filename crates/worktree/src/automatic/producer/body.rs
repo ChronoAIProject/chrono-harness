@@ -634,10 +634,12 @@ pub(super) fn drain(
                     return Ok(value!({"path":member,"status":"already-absent"}));
                 }
                 Err(e) => return Err(e.to_string()),
+                Ok(m) if !m.is_file() || m.file_type().is_symlink() => {
+                    return Err(
+                        "copied body is not a regular file; preserve original member".into(),
+                    );
+                }
                 Ok(_) => (),
-            }
-            if input(&path)? != (body.sha256.clone(), body.length) {
-                return Err("copied body differs or is partial; preserve original member".into());
             }
             if let Some(expected) = intent["provenance"]["member_identity"].as_str() {
                 if crate::ownership::identity(&path)? != expected {
@@ -646,26 +648,12 @@ pub(super) fn drain(
                     );
                 }
             }
-            protect_source(r, &allocation, member, body.git_root.as_deref())?;
             let footprint = artifact_disposal::artifact_footprint(&path)?;
             let before_id = crate::ownership::identity(&path)?;
             let effect = value!({"schema":"chrono-fixture-body-disposal-intent/v1", "allocation":object.path,
                 "identity":object.identity,"member":member,"member_identity":before_id,"body_intent":body.intent,
                 "footprint_before":footprint, "physical_release_bytes":Value::Null});
             let intent = Store::receipt_in(directory, "fixture-body-disposal-intent", &effect)?;
-            manager.stable(r)?;
-            lease.stable()?;
-            Store::stable_in(directory, &policy.id, registry_id, object)?;
-            if crate::ownership::identity(&path)? != before_id
-                || input(&path)? != (body.sha256.clone(), body.length)
-                || fingerprint(&original)? != original_id
-            {
-                return Err("copied body or original changed before removal".into());
-            }
-            protect_source(r, &allocation, member, body.git_root.as_deref())?;
-            for dependency in &dependencies {
-                dependency.stable()?;
-            }
             let mut result = value!({"path":member,"intent":intent,"footprint_before":footprint,"status":"failed","original":body.original,"physical_release_bytes":Value::Null});
             let report_root = body
                 .git_root
@@ -695,9 +683,27 @@ pub(super) fn drain(
                 // effect owner's type tag; keep the old intent unchanged.
                 &format!("{before_id}:file"),
                 || {
+                    // The shared effect owner calls this immediately before
+                    // unlink and rechecks physical identity afterwards. Keep
+                    // all live admission here instead of repeating content and
+                    // Git reads on both sides of intent publication.
+                    if crate::ownership::identity(&path)? != before_id
+                        || input(&path)? != (body.sha256.clone(), body.length)
+                    {
+                        return Err(
+                            "copied body differs or is partial; preserve original member".into(),
+                        );
+                    }
+                    if fingerprint(&original)? != original_id {
+                        return Err("copied input original changed before removal".into());
+                    }
+                    protect_source(r, &allocation, member, body.git_root.as_deref())?;
                     manager.stable(r)?;
                     lease.stable()?;
                     Store::stable_in(directory, &policy.id, registry_id, object)?;
+                    for dependency in &dependencies {
+                        dependency.stable()?;
+                    }
                     if let Some(retention) = &_retention {
                         retention.stable()?;
                     }
