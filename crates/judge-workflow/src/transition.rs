@@ -209,13 +209,18 @@ pub fn evaluate(
             return Err("E_MIGRATION_EVIDENCE: missing/ambiguous schema migration".into());
         }
         let m = rows[0];
-        let test = format!("test:{}", m["test"].as_str().unwrap());
-        if results.tests.get(&test).map(String::as_str) != Some("passed")
-            || view["conversion"].is_null()
-        {
-            return Err("E_MIGRATION_EVIDENCE: retained conversion and executed compatibility test required".into());
-        }
         let c = &view["conversion"];
+        if m.get("script").is_none() {
+            if !c.is_null() {
+                return Err("E_MIGRATION_EVIDENCE: actual data conversion requires its declared script/test pair".into());
+            }
+            migrations.push(m.clone());
+            continue;
+        }
+        let test = format!("test:{}", m["test"].as_str().unwrap());
+        if results.tests.get(&test).map(String::as_str) != Some("passed") || c.is_null() {
+            return Err("E_MIGRATION_EVIDENCE: declared data conversion requires its retained execution and passing test".into());
+        }
         if m["script"] != c["input"]["profile"]["script"]
             || m["test"] != c["input"]["profile"]["test"]
         {

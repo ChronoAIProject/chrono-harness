@@ -80,14 +80,23 @@ this declaration does not certify semantic equivalence or test success. Existing
 execution and workflow validation still own those verdicts. Public beta.15
 includes this extension; earlier readers reject the new field.
 
-Schema changes are compared using original versions before decoding. FILEMAP
-selects explicit compatibility tests and integration requirements. Workflow checks
-retained candidate conversion and actual compatibility-test success against the
-declared version transition and mappings. The shipped host conversion remains the
+Schema changes are compared using original versions before decoding. Every changed
+version pair requires one explicit transition with mappings and a reason. Evolving
+the current contract needs no historical compatibility or synthetic converter.
+Only actual retained-data conversion declares the optional `script` and `test`
+together. FILEMAP selects that declared test; workflow verifies the retained
+conversion and passing test against the transition and mappings. Missing either
+member, missing actual execution and unrelated passing tests fail. An actual
+conversion cannot use a transition that omits its pair.
+
+**Product and host contract change together:** current-only transitions no longer
+require conversion tools. Existing actual data conversions retain their evidence
+requirements. Registration, FILEMAP and the seven-judge consumer are validated;
+broader build/CI/storage costs remain unknown. The shipped host conversion remains the
 finite `chrono-ci-check/v1` plus FILEMAP v1 decoder. Workflow v3 additionally allows
 explicit `from_versions`/`to_versions` profile selection across all five registries,
 including config v1→v2; it runs the registered candidate script and requires its
-dedicated compatibility test. Ambiguous matches fail, unmatched profiles never
+dedicated data-conversion test. Ambiguous matches fail, unmatched profiles never
 certify a transition, and each changed version pair still requires a migration
 declaration. Historical config must retain its original interpretation and snapshot
 binding. See [execution](execution.md) for the v2 decoder input; no migration or

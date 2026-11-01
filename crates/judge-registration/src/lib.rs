@@ -1093,7 +1093,10 @@ fn references(
     }
     for m in new.workflow["migrations"].as_array().unwrap() {
         for k in ["script", "test"] {
-            let id = format!("script:{}", m[k].as_str().unwrap());
+            let Some(script) = m.get(k).and_then(Value::as_str) else {
+                continue;
+            };
+            let id = format!("script:{script}");
             if !nodes.contains(&id)
                 && (initial
                     || !old.workflow["migrations"].as_array().unwrap().contains(m)

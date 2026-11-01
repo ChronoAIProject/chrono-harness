@@ -547,7 +547,9 @@ each contain the five positive integer versions `config`, `filemap`, `projects`,
 The remaining profile fields are `id`, `script`, `test`, `mappings`, `legacy_records`,
 and `ambiguities`. Legacy marker profiles remain supported without reinterpretation.
 More than one matching profile fails. No matching version profile runs no decoder;
-any changed schema still requires actual conversion and compatibility evidence.
+each changed schema requires its current transition declaration. Actual data
+conversion alone requires a converter and its executed test; a current-only
+transition has neither field and creates no compatibility obligation.
 
 The selected candidate script receives `chrono-historical-decode/v2` with
 `config_path`, `original`, `original_bytes`, `candidate`, and `profile`.
