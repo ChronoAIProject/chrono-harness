@@ -911,8 +911,12 @@ and verified zero afterward; these are logical bytes, not allocated-block saving
 Legacy explicit maintenance keeps its report shape.
 
 The optional v2 `main_cache_only: true` enrolls the physical Git main checkout
-through the same owner on ordinary `use`, canonical `check`, and adopted
-`bootstrap`. Its enrollment, use intents, shared kernel lease, original process
+through the same owner on explicit `import`, ordinary `use`, canonical `check`, and adopted
+`bootstrap`. Explicit main import establishes current cache custody without
+executing a managed command or claiming prior production. A subsequent `finish`
+acquires the existing exclusive enrollment lease and retains its actual main-cache
+release, including when no outputs have been produced. Hosts without this option
+retain linked-worktree-only import. Its enrollment, use intents, shared kernel lease, original process
 result, release, and cache attempts use the existing lifecycle state. Main finish
 releases caches and stays active; it never authorizes checkout, branch, index,
 source, bin, evidence, or commit deletion. Evidence-disposal and landing-pin flags

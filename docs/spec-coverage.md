@@ -805,6 +805,20 @@ cases exercise the existing binary and preserve source/evidence while reclaiming
 owned generated outputs. They do not establish real Cargo consumption or generic
 power-loss recovery; actual committed-clean consumer custody remains to be run.
 
+The real-consumer fixture also retains a separate setup-recovery result for a
+failed attempt whose successful source-acquisition commands all joined before
+owner management began. The current candidate owner explicitly imports its
+unchanged clean physical main and acquires the original exclusive release;
+registered outputs must remain absent. The failed attempt and its streams keep
+their original bytes and failed outcome. Admission checks both owner report
+originals and the exact failed-result binding. Running, timed-out, unknown-command,
+changed-source, unknown-output and incomplete recovery attempts remain protected.
+Installed source and owner-byte preflight now precedes slot reservation.
+**Product and host admission change together:** opted-in main import gains this
+cache-only meaning, and this host's real bootstrap consumer selects that recovery.
+This does not establish a managed production result or generic interrupted-setup
+recovery; applicable local/native candidate acceptance remains required.
+
 **Mixed registration/runtime change:** the source expectation input, FILEMAP
 consumer edges, canonical required inputs and cache compatibility declarations
 change alongside Python behavior. Direct Python regressions provide source-leg
