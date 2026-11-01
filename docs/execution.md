@@ -150,8 +150,12 @@ process probe, extra task or changed deadline.
 The runner regression `completion_wait_blocks_without_periodic_status_probes`
 isolates one engine in a native child process, with a real child that closes both
 streams and delays 1500 ms before exit 7. It counts macOS `PROC_PIDTASKINFO`
-process context switches or Linux `RUSAGE_SELF` voluntary context switches across
-that invocation, including its observer/readers, and requires fewer than 128.
+process context switches or Linux `RUSAGE_SELF` voluntary context switches from
+the child's post-launch, closed-stream socket handshake until the actual engine
+join, including its observer/readers, and requires fewer than 128. The child
+begins its unchanged delay only after the counter window opens. Executable
+hashing/loading and ownership setup precede the window; their context switches
+do not measure completion probes. The handshake blocks on a native socket.
 The counters have different platform meanings and are not compared across OSes;
 this finite quiet-wait regression does not prove all task ownership or host
 notification behavior. Existing timeout, output-bound, suspended-monitor,
