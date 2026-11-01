@@ -855,6 +855,91 @@ complete-SPEC claim. Added empty-selection Cargo cost and native total cost rema
 unmeasured until those actual consumer cases run.
 
 
+L1 fixture-custody candidate extends the existing retained producer owner with
+prospective allocation/output and copied-member membership, exact native
+stdin/EOF/stream captures, actual descendant capabilities, nested diagnostic
+references and offline relocation at the worktree, CI, shared projects/workflow
+and historical migration publishers. Git inventory adds diagnostic observations
+without enrollment or deletion. Product and finite host fixture policy change
+together; Git v2 identity selection and worktree v3 remain unchanged. See the
+worktree owner for release/migration contracts. Source adaptation does not prove
+canonical/native acceptance, deployment, physical savings or SPEC 10.1 completion.
+Final-original bounded retention and shared-effect composition, exact compatible
+input/native handoffs, historical release/ci-persistent-cache migration and actual
+landing remain separate obligations. All lifecycle costs remain unknown.
+
+
+L2 final-original candidate adapts fixed PR172 source to the current report,
+preparation/blob, scoped native capture, full-check, lifecycle and gather owners.
+Current slots/readers, original-stream dependencies, failure/interruption recheck
+roots and exact upload/recheck release use the shared evolved Lease and physical
+effect owner. Fixture effects check explicit overlapping final-original membership;
+fixture custody remains distinct. Existing PR207 report references, launch/stream
+interfaces and shared native aliases remain. See artifact-retention.md.
+
+**Source and host policy change together:** the candidate selects future zero-second
+retention and bounded 25 ms rounds with unchanged count/byte capacities. This is
+not historical adoption: old outcomes/expiries, unknown/interrupted consumers,
+512/493/19 and OS39/OS54 originals and the ci-persistent-cache migration mismatch
+remain unresolved. Owner-local source/behavior verification, composed input/native
+acceptance, independent review, deployment, landing and full SPEC acceptance are
+distinct claims; actual evidence must establish each. Total costs remain unknown.
+
+Producer admission now uses one excluded registry snapshot, enters physical birth
+only for an absent registry, and preserves missing/replaced expected lease
+identities. Registry decoding constructs typed objects directly and retains strict
+duplicate/unknown-field rejection at dynamic maps. Compact registry replacement
+uses the same durable publication; historical pretty JSON remains readable.
+Retention diagnostics distinguish actual root protection reasons.
+Immediate creation reuses its same admitted ledger and lease through the existing
+durable reservation/materialization writes, avoiding a duplicate full load without
+changing standalone plan, completion, recovery or acquisition bounds.
+Rust capability fixtures use separate test processes with unchanged assertions,
+budgets and explicit internal concurrency; a controlled fork/exec boundary covers
+temporary inherited protection and actual last-close retirement. Prior original
+failures and the missing nested inventory remain historical limits. Candidate
+canonical checks, independent review, native composition and landing each require
+their actual evidence; this correction does not adopt or migrate historical policy.
+### Bounded input source reconciliation (I1)
+
+Observer acquisition, explicit native/provisioning source and Cargo v6/directory
+v3 behavior are reconciled with the current transport and process owners. The
+registered host-bootstrap and isolated guarded-runner consumer chain, 14 install
+participants and 34 fetch/metadata pairs remain explicit. Generic Rust behavior
+cases and Python provisioning/runtime/forwarding cases are retained; source
+registration is not their executed verdict. Current host binding/adoption,
+protected installed participant consumption, candidate canonical/native acceptance,
+landing, full input closure and parity remain pending. PR163's preserved source,
+optional current method disposition and scoped residuals are recorded in
+[custody](input-source-custody.md#remaining-consumer-prerequisites).
+
+Exact `51d85d833e4fdf9f7a607af901bfa52d3e64939a` native `41021444210/1`
+qualifies 37 of the 95 corresponding current operations; 58 remain registered
+without execution evidence in that cohort. Current methods retain 94 direct
+Cargo recipes and one diagnostics guarded build. Diagnostics' 27-node native
+metadata/offline-build result covers that domain only. Ordinary full inputs,
+isolated-home agreement, local diagnostics, seven full bindings, default and
+portable/distribution adoption, and historical originals remain P1–P6 obligations.
+Qualified startup artifact `12961832338` supplies all 18 original members and five
+executables for finite native core/detector supply; it does not establish default
+14-tool installation or complete SPEC §12.1. PR163 is not wholly superseded or closed.
+
+I3 connects the selected macOS 27 runner guard's 2398 literal input IDs, preserves
+2387 package-file expectations and selects a privately acquired exact Rustup
+1.29.1. Current SDK and encompassing Xcode Contents inventories retain the genuine
+Developer alias topology; the original Developer-only rejection remains failed.
+The source migration does not activate full governance or certify historical
+retained endpoints, native acquisition, guarded consumption, review or landing.
+Actual candidate checks and installed-consumer postconditions need their own
+fixed-source originals; full SPEC and deterministic parity remain incomplete.
+
+The I3 observed-failure repair adds an explicit configuration-scoped FILEMAP
+edge projection and opt-in scoped-CI graph evidence without repeated derived
+witness tables. The original native unknown-input edge and local 8 MiB transport
+failures remain retained. Current acquisition declares enclosing Xcode Contents
+directly; historical native Developer guard data stays unadopted. Fixture-owned
+compiler selection is isolated from the real parent's RUSTC. Source presence and
+behavior tests do not by themselves establish fresh native/guard acceptance.
 ## Bounded combined runner/cache/consumer increment
 
 The combined candidate preserves the complete runner-diagnostics, cache-content
@@ -921,3 +1006,98 @@ rustup identity changed, with latest collection HTTP 502. Retirement does not
 establish native acceptance, landing, full input closure, parity or full SPEC
 completion. Native runtime/storage/lifecycle savings are unknown; applicable
 candidate checks and command timing belong to retained handoff reports.
+
+
+## Lifecycle composition acceptance boundary
+
+Fixed lifecycle, completed input `cf7ee4d8` and reviewed principles `24949168`
+source histories are composed, preserving separate fixture custody and
+final-original release, configuration-scoped graph selection and the retirement
+of remote cache activation. Typed process/full-report diagnostics retain the
+original failure while adopted publication keeps its exact repair roots and
+slot exclusion. This is source composition, not delivery or shared acceptance.
+Prior lifecycle CI/projects registry admission and runner retirement failures,
+the 8 MiB incomplete global response and historical migration obligations remain
+unresolved until actual composed-source checks establish their precise outcomes.
+No extra corrective assignment, limit increase or weaker assertion is admitted.
+
+
+## Composed input and lifecycle consumer correction
+
+**Product and host registration change together:** the current composed candidate
+retains interrupted-input original recovery, fresh-prefix/two-thread directory
+validation, runner report-consumer completion and retained-original lifecycle
+contracts. Optional isolated observations use the existing registered owner and
+current-host output paths. All expected input identities and existing product,
+admission, maintenance and cumulative output bounds remain unchanged. Worktree
+stdout now uses compact JSON while preserving every decoded value and original
+capture identity. Applicable explicit two-end DELTA checks and actual bootstrap
+consumption remain required; prior production acceptance retains its fixed source
+and scope. Independent review, native acceptance, landing, coordinator deployment,
+full input closure/parity and remaining SPEC obligations are separate. Additional
+verification/storage cost remains measured only by retained command receipts.
+
+
+### Native diagnostics Cargo domain repair source
+
+The first PR211 native originals exposed 21 ordinary Cargo check failures in a
+private diagnostics-only offline home, plus a guard bootstrap failure before
+its diagnostics producer ran. The native ordinary config retains dev's environment
+and the guard/observer tool declarations needed by the current actions. The existing guarded diagnostics action now selects its own native
+config, preserving the v6 offline/package/toolchain/native-target/configuration
+contract; guard and observer bootstrap prerequisites explicitly select ordinary
+Cargo acquisition for their own locked manifests before private diagnostics
+fetch/metadata and guarded consumption. Shared startup still transfers tools
+and original reports, without transferring a Cargo registry.
+
+**Host policy and consumer change:** the private environment's scope narrows to
+its actual diagnostic consumers. Existing Python owner tests now define cold
+prerequisite, selected-home agreement and cold/wrong-home/wrong-lock failure
+expectations through the bootstrap process owner and original-stream fixture.
+Their added source and manifest/lock inputs have explicit FILEMAP edges. These
+expectations are not an executed result: compatible candidate owner deployment,
+registered local checks, native guard/build/test/ordinary-consumer acceptance,
+independent review and landing remain required. The subsequently qualified managed-use originals identify the same ordinary
+fixture cache-bootstrap offline-domain failure; no lifecycle functional change
+is included, and actual repaired real-fixture acceptance remains required. The extra
+guard selector read and bounded fixture operations have unmeasured total cost;
+no budgets or acquisition cohort are enlarged, and full input closure/parity,
+Linux/public adoption and complete SPEC acceptance remain unfinished.
+
+The protected ordinary-owner bootstrap correction adds explicit immutable produced
+first-issuer validation, retained candidate construction and original-owner EX
+publication/adoption. The enrollment-exclusion repair replaces the unsupported
+host scope assertion with actual original admission plus EX for all unresolved
+ordinary enrollments of the selected physical coordinator, including linked
+attachments. Its receipt records the protected identities. Concrete unknown,
+legacy or unavailable affected ownership still refuses; another physical
+coordinator is outside the set. Stage/source fixture evidence alone does not prove
+official bootstrap restoration, current both-end canonical acceptance, native
+adoption, independent review or landing. See the worktree owner for the exact
+retention and product/policy cochange boundary.
+
+At fixed correction `d04bf3004d17f438bfcbadde3bd4d85023eb08c3`, focused
+3 Rust/68 Python cases and actual 51-protected construction passed. Official
+bootstrap still exited 2 for the unqualified unmanaged consumer handoff and kept
+installed owner `985e45d9…` unchanged. These results remain fixed-source evidence;
+this documentation adds no candidate canonical, adoption, review or landing pass.
+
+
+### Native diagnostics retained build inventory source
+
+**Visible host policy change:** native diagnostics selects a fixed directory-v3
+inventory of 158 qualified common Rust payload files and all 22 original
+directory rows/root/aliases. The old 159-file raw identity additionally bound
+`lib/rustlib/components` content. That content, membership syntax, type and raw
+content drift are outside the new build certificate; its child name/presence
+remains required. The complete raw observer output remains unchanged and distinct.
+The [native adoption contract](inputs.md#native-diagnostics-originals-before-guard-adoption)
+records the exact retained digest, source scope and exclusions. Generic
+observer/guard/startup, ordinary prerequisite, private offline, macOS 27/default
+profiles, configuration/package/SDK and retained post-child drift contracts remain.
+No registry-membership/type, order-only equivalence, full-input closure or parity
+claim follows. This source/data correction still requires its own candidate
+canonical/native guard/build/tests/aggregate originals, final independent triplet,
+landing/posterior and clean dev sync; historical J/N results keep their exact scope.
+Verification, CI, IO and storage total costs remain unmeasured; raw observation
+cost and existing resource bounds are unchanged.

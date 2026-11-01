@@ -111,6 +111,15 @@ pub fn retain_original(
     directory(dir)?;
     units::id(prefix)?;
     let path = format!("{dir}{prefix}-{}.json", sha256(bytes));
+    if crate::retained_artifacts::retention::publish_pending_original(
+        root,
+        "check-original",
+        &path,
+        bytes,
+        serde_json::json!({"kind":"addressed-original","sha256":sha256(bytes),"length":bytes.len()}),
+    )? {
+        return original(root, &path);
+    }
     let target = no_symlink_parents(root, &path)?;
     fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
     match fs::OpenOptions::new()
@@ -153,6 +162,7 @@ pub fn read_original(
     transport: Option<&ArtifactTransport>,
 ) -> Result<Vec<u8>, String> {
     let path = original_path(o, transport)?;
+    let _use = crate::retained_artifacts::retention::read_guard(root, &path)?;
     let target = no_symlink_parents(root, &path)?;
     let meta = fs::symlink_metadata(&target)
         .map_err(|e| format!("missing original evidence {path}: {e}"))?;
@@ -200,12 +210,19 @@ fn validate_originals_with_artifacts(
     transport: Option<&ArtifactTransport>,
     artifacts: Option<&Value>,
 ) -> Result<(), String> {
+    validate_originals_with_reader(p, &mut |o| read_binding_original(root, o, transport, artifacts))
+}
+
+fn validate_originals_with_reader(
+    p: &PreparedCheck,
+    read: &mut impl FnMut(&Original) -> Result<Vec<u8>, String>,
+) -> Result<(), String> {
     let mut paths = BTreeSet::new();
     for o in &p.originals {
         if !paths.insert(&o.path) {
             return Err("duplicate original evidence path".into());
         }
-        read_binding_original(root, o, transport, artifacts)?;
+        read(o)?;
     }
     let report = Original {
         path: p.evidence["report_path"]
@@ -226,7 +243,7 @@ fn validate_originals_with_artifacts(
             sha256: c.sha256.clone(),
         };
         if !p.originals.contains(&o)
-            || read_binding_original(root, &o, transport, artifacts)? != c.raw
+            || read(&o)? != c.raw
             || sha256(&c.raw) != c.sha256
             || wire::digest(&crate::json(&c.raw)?)? != c.semantic_digest
         {
@@ -234,7 +251,7 @@ fn validate_originals_with_artifacts(
         }
     }
     // The retained producer explicitly addresses its other originals; omissions cannot be hidden in a report.
-    let evidence = crate::json(&read_binding_original(root, &report, transport, artifacts)?)?;
+    let evidence = crate::json(&read(&report)?)?;
     if evidence.get("current_observation") != p.evidence.get("current_observation") {
         return Err("current observation differs from original producer report".into());
     }
@@ -261,6 +278,28 @@ pub fn validate_retained_binding(
     transport: Option<&ArtifactTransport>,
     artifacts: Option<&Value>,
 ) -> Result<(), String> {
+    validate_portable_binding_with_reader(root, binding, transport, |o| {
+        read_binding_original(root, o, transport, artifacts)
+    })
+}
+
+/// The preparation owner makes exactly the same typed reads during native
+/// acquisition and offline verification. The reader only supplies original
+/// bytes; it never discovers a closure or grants semantic acceptance.
+pub fn validate_portable_binding_with_reader(
+    root: &Path,
+    binding: &Value,
+    transport: Option<&ArtifactTransport>,
+    mut read: impl FnMut(&Original) -> Result<Vec<u8>, String>,
+) -> Result<(), String> {
+    let mut read = |o: &Original| -> Result<Vec<u8>, String> {
+        original_path(o, transport)?;
+        let raw = read(o)?;
+        if raw.len() > 64 * 1024 * 1024 || sha256(&raw) != o.sha256 {
+            return Err(format!("original evidence digest/limit mismatch: {}", o.path));
+        }
+        Ok(raw)
+    };
     let req: InputRequest =
         serde_json::from_value(binding["request"].clone()).map_err(|e| e.to_string())?;
     let p: PreparedCheck =
@@ -310,7 +349,7 @@ pub fn validate_retained_binding(
             return Err("original evidence outside selected native upload root".into());
         }
     }
-    validate_originals_with_artifacts(root, &p, transport, artifacts)?;
+    validate_originals_with_reader(&p, &mut read)?;
     let refs: Vec<Original> =
         serde_json::from_value(binding["receipts"].clone()).map_err(|e| e.to_string())?;
     if refs.len()
@@ -330,7 +369,7 @@ pub fn validate_retained_binding(
         {
             return Err("acquisition outside selected native upload root".into());
         }
-        let r = crate::json(&read_binding_original(root, o, transport, artifacts)?)?;
+        let r = crate::json(&read(o)?)?;
         let request: InputRequest =
             serde_json::from_value(r["request"].clone()).map_err(|e| e.to_string())?;
         let process: ProcessResult =
@@ -359,7 +398,7 @@ pub fn validate_retained_binding(
         {
             return Err("original acquisition transport mismatch".into());
         }
-        validate_originals_with_artifacts(root, &result, transport, artifacts)?;
+        validate_originals_with_reader(&result, &mut read)?;
         if index + 1 == refs.len()
             && (r["request"] != binding["request"]
                 || crate::json(&process.stdout_bytes)? != binding["result"])

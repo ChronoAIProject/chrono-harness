@@ -85,6 +85,7 @@ dependencies = [
  "chrono-harness",
  "chrono-inputs",
  "chrono-judge-registration",
+ "chrono-worktree",
  "serde_json",
  "tempfile",
 ]
@@ -110,6 +111,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-judge-projects"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-registration",
+ "chrono-judge-routes",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "chrono-judge-registration"
 version = "0.1.0"
 dependencies = [
@@ -128,6 +141,33 @@ dependencies = [
  "chrono-judge-registration",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "chrono-judge-workflow"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-projects",
+ "chrono-judge-registration",
+ "chrono-judge-routes",
+ "serde_json",
+ "time",
+]
+
+[[package]]
+name = "chrono-worktree"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-registration",
+ "chrono-judge-workflow",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "time",
 ]
 
 [[package]]

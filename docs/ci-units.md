@@ -338,10 +338,55 @@ never discovers host SDKs, imports, directories or language boundaries.
 
 This host's detector produces the registered core startup tools for the unit and
 collection jobs. Its cache preparation builds `chrono-cache`; its bootstrap calls
-the existing core profile once and publishes all five installed tools. Consumer
+the existing core profile once and publishes its declared installed tools. The
+current core profile declares six tools, adding the Cargo guard and input producer
+needed by canonical inventory. The qualified source51 native startup retains its
+original five executable payloads; it is not evidence for this changed profile. Consumer
 jobs validate and install the selected profiles, then verify them at the original
-cache/core preparation points. Their canonical checks and business build plans
-remain unchanged. Local and release bootstraps keep their registered source builds.
+cache/core preparation points. The diagnostics unit uses the registered
+`host.bootstrap-diagnostics-guard` preparation: it first verifies the imported
+core profile as an explicit bootstrap `prerequisites` operation, runs the existing `build.judge-cargo` operation, then delegates
+`host.bootstrap-diagnostics-inputs` and installs that candidate's
+`chrono-judge-cargo`. Guard and observer source builds explicitly select the
+ordinary native Cargo home with acquisition allowed for their own locked
+manifests. The ordinary native check config retains dev's ordinary environment;
+only the existing guarded diagnostics action selects the separate diagnostics
+config and its private offline home. The delegated producer builds its candidate
+observer and retains the bounded native source/tool/configuration observations and four
+directory originals under `.chrono-harness/state/diagnostics-native/`, within the
+existing unit artifact directory. A later guarded-build refusal preserves these
+originals through the existing always-run upload. This preparation neither adopts
+observed hashes nor makes the guarded check pass. Its separate
+`diagnostics-guard-bootstrap.json` report retains the clean source identity,
+original operation streams and installed digest; the imported core report and
+`startup-install.json` remain the source-bound import evidence. A failed core
+verification or guard build stops preparation before the canonical check.
+Prerequisites run with the caller environment, before the enclosing profile
+creates its selected homes or probes/provisions its build toolchain. Shared
+verification therefore independently resolves the current core selection, as
+installation did; the later guard selection cannot replace it. Exact local
+path/hash/version equality, inherited compiler/wrapper conflicts and declared
+producer-to-consumer relocation keep their existing meanings. Prerequisites use
+explicit configured tools and appear before ordinary operations in the same
+original report; a prerequisite failure retains its real streams and exit and
+prevents later build/input/install effects.
+
+Product and host-policy change warning: bootstrap gains this optional explicit
+phase and shared report validation binds its full ordered sequence; this host
+moves only diagnostics core verification into that phase. Previously all guard
+operations inherited the already selected guard toolchain. Python composition
+regressions cover the installation transition, unchanged core selection across
+distinct build domains, and genuine local drift before dependent effects. The
+same registered canonical/native checks remain required; fixture observations
+do not establish native acceptance. Runtime/build/CI/storage cost is unmeasured,
+and existing operation/time/output bounds remain in force.
+This source build serves diagnostics only; the detector and other consumers
+still transfer the same cache/core profiles. Native build/IO/time costs for the
+additional diagnostics preparation remain unmeasured. Canonical checks and
+business build plans keep their registered entries. Local and release bootstraps
+keep their registered source builds. This preparation supplies the executable;
+native guarded policy/input binding and actual native execution remain separate
+acceptance obligations.
 
 Optional `job_gating.startup` uses schema `chrono-shared-startup/v1`. It declares a
 literal host `directory`, artifact name, pinned `download_action`, and `consumers`
@@ -745,6 +790,51 @@ directory supplies report inputs; fixed artifact identity, digests, workflow
 source, run/attempt and final judge checks still apply. Exhausted recovery
 produces no accepted manifest and cannot make a failed unit pass.
 
+The current scoped native host adopts `gather.typed_acquisition` for its
+`retained-reference/v2` reports. This is the single acquisition method for that
+adopted consumer. It qualifies the runtime script against the bytes compiled
+into the candidate `chrono-ci`, then uses the existing scoped collector's
+`unit_originals` and preparation owner's reader interface to request originals.
+Those semantic owners remain shared with offline collection: report references,
+`PreparedCheck.originals`, actual receipt results, and judge stdout/stderr/launch
+originals determine reads. Arbitrary JSON traversal, filename/path inventories
+and directory discovery never determine the input set. Unsupported domains fail;
+other provider/profile registrations keep their existing method.
+
+The registered Python helper receives one `chrono-artifact-member-request/v1`
+stdin object from gather and acquires only that named member through stdlib
+`zipfile` and verified HTTP byte ranges. The selected artifact ID, run, source,
+name and expiry bind its archive endpoint. ZIP central/local member mapping,
+regular-file status, length, CRC and every semantic digest remain checked.
+Ranges must be exact `206` responses with identity encoding; ignoring ranges
+fails without a whole-archive fallback. Original bytes appear at the same
+`ArtifactTransport` logical address. Complete producer uploads, source/fixture
+availability, retention expiry, protections, uploads and acknowledgement remain
+unchanged. This local input subset is never complete archive or custody
+verification, and successful acquisition is still unjudged.
+
+One artifact deadline starts before metadata/runtime qualification and covers
+all its metadata, byte acquisition, process joins, typed decoding, workflow and
+final run checks, retries and delays. The current host retains 60 seconds and
+8 MiB per process-observation stream, cumulatively across artifact processes;
+reader/report bounds are unchanged. HTTP-only retries consume one shared
+artifact retry allowance; a timeout is never retryable. Member attempts retain
+partial bytes separately from their final input addresses. Raw process outputs,
+exit/failure and helper byte/request counts remain original acquisition evidence.
+A failed attempt's unreported payload bytes and total API request count remain
+unknown. No failed acquisition publishes a new accepted report/manifest/ack.
+
+WARNING: product acquisition and host adoption change together. The former
+method downloads a whole selected unit artifact; this host now materializes the
+complete typed canonical input set while retaining full remote originals. The
+paired Python behavior plan belongs to the existing `ci` unit. Rust preparation
+and canonical collection behavior tests remain in their existing dedicated test
+projects. Measured wall time, payload, requests, processes, CPU/RSS, IO, storage
+and total cost are UNKNOWN until qualified candidate execution. A source-only
+candidate does not establish performance, native success, generated workflow
+parity or delivery. Candidate generation/verification and actual baseline-to-
+candidate checks remain required before independent review and native delivery.
+
 The bootstrap list is a literal argv. Register only the tools each unit needs;
 the generator never infers packages, language setup or build dependencies. Each
 unit's report and context must be inside its uploaded artifact directory.
@@ -797,7 +887,8 @@ as were actual cancellation with selective retry, business failure with another
 unit passing, and restoration with zero selected business operations. Initial
 inventory remains a separate contract. The product host registers sixteen units,
 one per complete test plan, and a collector in `.chrono-harness/ci/units.json`.
-Its core bootstrap explicitly builds runner, judge-ci, ci and worktree; each selected plan
+Its current core bootstrap explicitly builds runner, judge-ci, ci, worktree,
+judge-cargo and inputs; each selected plan
 keeps its complete existing build/check/test operations. Shared operations are
 listed in the check profile and repeat only in isolated checkouts. The default
 full bootstrap remains available when its existing configuration is selected.

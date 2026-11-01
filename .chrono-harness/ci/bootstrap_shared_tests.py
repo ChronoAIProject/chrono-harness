@@ -21,18 +21,62 @@ spec = importlib.util.spec_from_file_location("bootstrap_fixture", SOURCE / "boo
 fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 CONFIG = ".chrono-harness/ci/bootstrap-shared.json"
+LIFECYCLE_PROGRAM = SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree"
 
 
 def fixture_host_config(root):
-    """Read the registered policy as fixture data, without selecting a live host.
+    """Use an already admitted policy when preparing a current fixture host.
 
-    Independent fixtures rebind their own tools before committing. The real
-    consumer retains the original selector and delegates admission to Rust.
+    Keep its exact expected Git identity: observing different bytes never edits
+    a binding or falls back to another platform's historical policy.
     """
     value = json.loads((root / ".chrono-harness/config.json").read_bytes())
     if value.get("schema") == "chrono-git-configs/v2":
-        value = json.loads((root / ".chrono-harness/git/pinned-macos.json").read_bytes())
+        operating_system = {"Darwin": "macos", "Linux": "linux"}.get(platform.system())
+        architecture = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64"}.get(platform.machine())
+        host = value["platforms"].get(str(operating_system) + "-" + str(architecture))
+        if host is None:
+            raise ValueError("fixture has no registered native Git platform")
+        observed = hashlib.sha256(Path(host["program"]).read_bytes()).hexdigest()
+        matches = [row for row in host["configurations"] if row["sha256"] == observed]
+        if len(matches) != 1:
+            raise ValueError("fixture has no unique registered Git executable identity")
+        value = json.loads((root / matches[0]["path"]).read_bytes())
     return value
+
+
+class FixtureHostPolicy(unittest.TestCase):
+    def test_exact_registered_identity_selects_current_policy_and_preserves_expected_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".chrono-harness").mkdir()
+            program = root / "fixture-git"
+            program.write_bytes(b"current admitted Git")
+            policy = {"expected": hashlib.sha256(program.read_bytes()).hexdigest()}
+            (root / "current.json").write_text(json.dumps(policy))
+            (root / "historical.json").write_text(json.dumps({"expected": "old admitted Git"}))
+            selector = {"schema": "chrono-git-configs/v2", "platforms": {"macos-aarch64": {
+                "program": str(program), "configurations": [
+                    {"sha256": "0" * 64, "path": "historical.json"},
+                    {"sha256": policy["expected"], "path": "current.json"}]}}}
+            path = root / ".chrono-harness/config.json"
+            path.write_text(json.dumps(selector))
+            original = path.read_bytes()
+            with fixture.mock.patch.object(platform, "system", return_value="Darwin"), fixture.mock.patch.object(platform, "machine", return_value="arm64"):
+                self.assertEqual(fixture_host_config(root), policy)
+                program.write_bytes(b"unadmitted replacement")
+                with self.assertRaisesRegex(ValueError, "no unique registered Git"):
+                    fixture_host_config(root)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_unknown_platform_has_no_historical_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".chrono-harness").mkdir()
+            (root / ".chrono-harness/config.json").write_text(json.dumps({
+                "schema": "chrono-git-configs/v2", "platforms": {}}))
+            with self.assertRaisesRegex(ValueError, "no registered native Git platform"):
+                fixture_host_config(root)
 
 
 def acquire_parent_source(source, root, git, run):
@@ -347,6 +391,136 @@ class SharedStartup(unittest.TestCase):
         self.assertEqual([row["sha256"] for row in report["executables"]],
                          [bindings[name]["sha256"] for name in ["cargo", "rustc"]])
 
+    def prepare_diagnostics_composition(self):
+        """Use production install/main/verify; fixtures replace external builds only.
+
+        Core's current selection is inherited independently. The enclosing guard
+        and nested observer must use their declared ordinary online domain, even
+        when the caller has private offline inputs. Installation evidence must
+        remain comparison data, including after an equal-byte path switch.
+        """
+        bindings = self.bind_tools(relocate=True)
+        ordinary = self.root / "mock-tools-ordinary"
+        shutil.copytree(self.host.tools, ordinary)
+        environment = dict(PATH=str(ordinary) + os.pathsep + os.environ["PATH"],
+                           HOME=str(ordinary / "home"), CARGO_HOME=str(ordinary / "cargo-home"),
+                           RUSTUP_HOME=str(ordinary / "rustup-home"),
+                           RUSTC=str(ordinary / "rustc"), RUSTC_WRAPPER="",
+                           RUSTC_WORKSPACE_WRAPPER="", CARGO_NET_OFFLINE="false")
+        guard = json.loads((SOURCE / "bootstrap-diagnostics-guard.json").read_bytes())
+        observer = json.loads((SOURCE / "bootstrap-diagnostics-inputs.json").read_bytes())
+        for name, profile, output in [("bootstrap-diagnostics-guard.json", guard, "guard-domain"),
+                                      ("bootstrap-diagnostics-inputs.json", observer, "observer-domain")]:
+            profile.update(projects=self.host.config["projects"], tools=dict(
+                               python3=sys.executable, **{name: bindings[name]["path"]
+                                                         for name in ("cargo", "rustc")}),
+                           tool_bindings=bindings, environment=environment,
+                           native_platform={"system": platform.system(), "machine": platform.machine()},
+                           install=[{"source": output, "destination": ".chrono-harness/bin/" + output}],
+                           report_path=".chrono-harness/state/" + output + ".json")
+            for key in ("participation", "tool_bindings_registry"):
+                profile.pop(key, None)
+            self.host.write_json(self.host.ci / name, profile)
+        keys = ["HOME", "CARGO_HOME", "RUSTUP_HOME", "RUSTC", "CARGO_NET_OFFLINE"]
+        actions = self.host.declarations("write", "built-tool", "binary")
+        actions["projects"][0]["actions"].update({
+            "verify": {"operation": "host.bootstrap-shared-verify-core", "tool": "python3",
+                       "argv": [".chrono-harness/ci/bootstrap_shared.py", ".", CONFIG, "verify", "core"]},
+            "guard": {"operation": "build.judge-cargo", "tool": "python3",
+                      "argv": [fixture.OPERATION, "environment", "guard-domain", *keys]},
+            "observer-bootstrap": {"operation": "host.bootstrap-diagnostics-inputs", "tool": "python3",
+                                   "argv": [".chrono-harness/ci/bootstrap.py", ".",
+                                            ".chrono-harness/ci/bootstrap-diagnostics-inputs.json"]},
+            "observer-build": {"operation": "build.inputs", "tool": "python3",
+                               "argv": [fixture.OPERATION, "environment", "observer-domain", *keys]},
+            "observe": {"operation": "inputs.observe-diagnostics", "tool": "python3",
+                        "argv": [fixture.OPERATION, "write", "observer-prepared", "prepared"]}})
+        self.host.write_json(self.host.registry, actions)
+        (self.root / ".gitignore").write_text((self.root / ".gitignore").read_text() +
+                                              "/guard-domain\n/observer-domain\n/observer-prepared\n/mock-tools-*/\n")
+        self.host.git("add", ".")
+        self.host.git("commit", "-qm", "registered diagnostics composition fixture")
+        self.environment.update(CARGO_HOME=str(self.host.tools / "private-cargo"),
+                                CARGO_NET_OFFLINE="true")
+        self.produce()
+        self.host.succeeded(self.invoke("install", "unit_fixture"))
+        self.composition_originals = {path: (self.root / path).read_bytes() for path in [
+            ".chrono-harness/state/startup-install.json",
+            ".chrono-harness/state/startup-originals/core.json",
+            ".chrono-harness/state/bootstrap.json"]}
+        self.ordinary_environment = {key: environment[key] for key in keys}
+
+    def invoke_diagnostics_composition(self):
+        return self.host.invoke(".chrono-harness/ci/bootstrap-diagnostics-guard.json")
+
+    def assert_composition_originals(self):
+        for path, original in self.composition_originals.items():
+            self.assertEqual((self.root / path).read_bytes(), original, path)
+
+    def test_diagnostics_composition_verifies_core_before_selecting_build_domain(self):
+        self.prepare_diagnostics_composition()
+        self.host.succeeded(self.invoke_diagnostics_composition())
+        self.assert_composition_originals()
+        for name in ("guard-domain", "observer-domain"):
+            self.assertEqual(json.loads((self.root / ".chrono-harness/bin" / name).read_bytes()),
+                             self.ordinary_environment)
+        self.assertEqual((self.root / "observer-prepared").read_bytes(), b"prepared")
+        report = json.loads((self.root / ".chrono-harness/state/guard-domain.json").read_bytes())
+        self.assertEqual([row["operation"] for row in report["operations"]],
+                         ["host.bootstrap-shared-verify-core", "build.judge-cargo",
+                          "host.bootstrap-diagnostics-inputs"])
+        self.assertTrue(all(row["exit_code"] == 0 for row in report["operations"]))
+        import bootstrap_shared
+        profile = json.loads((self.host.ci / "bootstrap-diagnostics-guard.json").read_bytes())
+        bootstrap_shared.validate_execution(self.root, profile, report)
+        missing = json.loads(json.dumps(report))
+        missing["operations"].pop(0)
+        with self.assertRaisesRegex(ValueError, "startup producer operations differ"):
+            bootstrap_shared.validate_execution(self.root, profile, missing)
+
+    def test_diagnostics_composition_rejects_core_drift_before_dependent_effects(self):
+        self.prepare_diagnostics_composition()
+        original_environment = dict(self.environment)
+        alternate = self.root / "mock-tools-alternate"
+        shutil.copytree(self.host.tools, alternate)
+        cases = [("path", b"installed local executable provenance differs"),
+                 ("bytes", b"bound cargo identity mismatch"),
+                 ("version", b"bound cargo identity mismatch"),
+                 ("compiler", b"inherited compiler selection differs"),
+                 ("wrapper", b"inherited compiler wrapper differs"),
+                 ("workspace-wrapper", b"inherited compiler wrapper differs")]
+        cargo = self.host.tools / "cargo"
+        original_cargo = cargo.read_bytes()
+        for defect, message in cases:
+            with self.subTest(defect=defect):
+                self.environment.clear()
+                self.environment.update(original_environment)
+                if defect == "path":
+                    self.environment["PATH"] = str(alternate) + os.pathsep + os.environ["PATH"]
+                elif defect in ("bytes", "version"):
+                    cargo.write_bytes(original_cargo + b"\n# changed identity\n" if defect == "bytes"
+                                      else original_cargo.replace(b"1.95.0 (fixture)", b"1.94.0 (fixture)"))
+                else:
+                    key = {"compiler": "RUSTC", "wrapper": "RUSTC_WRAPPER",
+                           "workspace-wrapper": "RUSTC_WORKSPACE_WRAPPER"}[defect]
+                    self.environment[key] = str(alternate / "rustc")
+                result = self.invoke_diagnostics_composition()
+                cargo.write_bytes(original_cargo)
+                self.assertNotEqual(result.returncode, 0, result)
+                self.assertIn(message, result.stderr)
+                self.assert_composition_originals()
+                reports = sorted((self.root / ".chrono-harness/state").glob("bootstrap-*/report.json"),
+                                 key=lambda path: path.stat().st_mtime_ns)
+                failed = json.loads(reports[-1].read_bytes())
+                self.assertEqual(failed["status"], "failed")
+                self.assertEqual(failed["versions"], {}, "enclosing SDK selection ran before verification")
+                self.assertEqual([row["operation"] for row in failed["operations"]],
+                                 ["host.bootstrap-shared-verify-core"])
+                self.assertEqual(failed["operations"][0]["exit_code"], 1)
+                for path in ("guard-domain", "observer-domain", "observer-prepared",
+                             ".chrono-harness/bin/guard-domain"):
+                    self.assertFalse((self.root / path).exists(), path)
+
     def bind_tools(self, relocate=False):
         bindings = {}
         for tool in ["cargo", "rustc"]:
@@ -533,13 +707,16 @@ class RealAttempt:
         if evidence.is_symlink():
             raise ValueError("attempt ownership is unknown")
         result = json.loads((evidence / "result.json").read_bytes())
-        if result["status"] != "passed":
-            raise ValueError("producer success is unresolved")
+        if result["status"] not in ("passed", "failed"):
+            raise ValueError("producer completion is unresolved")
         custody, root = result["custody"], Path(result["fixture"])
         reports = {}
         for command in result["commands"]:
-            if command["status"] != "passed" or command["exit_code"] != 0:
-                raise ValueError("producer command did not succeed")
+            code = command["exit_code"]
+            if not isinstance(code, int) or command["status"] != ("passed" if code == 0 else "failed"):
+                raise ValueError("producer command has not joined with its original outcome")
+            if code != 0 and (result["status"] != "failed" or command["name"] != "managed-use"):
+                raise ValueError("producer setup/release did not succeed")
             raw = cls.original(command["stdout"])
             cls.original(command["stderr"])
             reports[command["name"]] = raw
@@ -549,8 +726,16 @@ class RealAttempt:
                 name.startswith("owner-release-") and raw == released for name, raw in reports.items()):
             raise ValueError("owner reports are not retained command originals")
         report = json.loads(managed)
-        if report["status"] != "used" or report["managed_process"]["exit_code"] != 0 or report["managed_process"]["failure"] is not None:
-            raise ValueError("managed producer did not succeed")
+        command = next(row for row in result["commands"] if row["name"] == "managed-use")
+        process = report["managed_process"]
+        if result["status"] == "passed":
+            if command["exit_code"] != 0 or report["status"] != "used" or process["exit_code"] != 0 or process["failure"] is not None:
+                raise ValueError("managed producer success differs from its original")
+        elif command["exit_code"] == 0 or report["status"] != "failed" or not isinstance(process["exit_code"], int):
+            raise ValueError("managed producer failure lacks a joined original")
+        # This releases only the cache-attempt admission slot. Actual exclusive
+        # disposal must already be proved; failed originals and their consumers
+        # remain in place with unchanged outcomes and evidence identities.
         cls.verify_disposal(root, custody["declared_outputs"], json.loads(released))
 
     def publish(self):
@@ -920,7 +1105,7 @@ class ManagedAttemptCustody(unittest.TestCase):
             acquire("commit", [git, "-C", str(root), *args], root)
         import bootstrap
         attempt = RealAttempt(directory / "evidence", bootstrap.observe_source(root), time.monotonic() + 40, 1048576)
-        attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", environment)
+        attempt.manage(root, LIFECYCLE_PROGRAM, environment)
         print("custody fixture originals: " + str(attempt.evidence), flush=True)
         return root, attempt
 
@@ -968,13 +1153,15 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertEqual(attempt.result["custody"]["descendants_quiescent"], True)
                 attempt.finish("passed" if mode == "success" else "failed")
                 originals = {path: path.read_bytes() for path in attempt.evidence.rglob("*") if path.is_file()}
-                for defect in ("running", "failed", "interrupted", "unknown", "missing-release", "altered-release", "missing-stream", "labels-only"):
+                for defect in ("running", "false-outcome", "interrupted", "unknown", "missing-release", "altered-release", "missing-stream", "labels-only"):
                     with self.subTest(defect=defect), tempfile.TemporaryDirectory() as directory:
                         owner = Path(directory)
                         pending = owner / "pending-attempt"
                         pending.mkdir()
                         retained = json.loads((attempt.evidence / "result.json").read_bytes())
-                        if defect in ("running", "failed", "interrupted", "unknown"):
+                        if defect == "false-outcome":
+                            retained["status"] = "failed" if mode == "success" else "passed"
+                        elif defect in ("running", "interrupted", "unknown"):
                             retained["status"] = defect
                         elif defect == "missing-release":
                             del retained["custody"]["release_report"]
@@ -994,23 +1181,19 @@ class ManagedAttemptCustody(unittest.TestCase):
                             RealAttempt(owner, {}, time.monotonic() + 5, 1048576)
                         self.assertEqual((pending / "result.json").read_bytes(), raw)
                         self.assertEqual(list(owner.iterdir()), [pending])
-                if mode == "success":
-                    with ThreadPoolExecutor(max_workers=2) as workers:
-                        entrants = [workers.submit(RealAttempt, attempt.evidence.parent, {},
-                                                   time.monotonic() + 5, 1048576) for _ in range(2)]
-                    admitted = [entry.result() for entry in entrants if entry.exception() is None]
-                    rejected = [entry.exception() for entry in entrants if entry.exception() is not None]
-                    self.assertEqual(len(admitted), 1)
-                    self.assertEqual(len(rejected), 1)
-                    self.assertIsInstance(rejected[0], ValueError)
-                    self.assertIn("unresolved real-consumer attempt", str(rejected[0]))
-                    next_attempt = admitted[0]
-                    self.assertNotEqual(next_attempt.evidence, attempt.evidence)
-                    with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
-                        RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
-                else:
-                    with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
-                        RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
+                with ThreadPoolExecutor(max_workers=2) as workers:
+                    entrants = [workers.submit(RealAttempt, attempt.evidence.parent, {},
+                                               time.monotonic() + 5, 1048576) for _ in range(2)]
+                admitted = [entry.result() for entry in entrants if entry.exception() is None]
+                rejected = [entry.exception() for entry in entrants if entry.exception() is not None]
+                self.assertEqual(len(admitted), 1)
+                self.assertEqual(len(rejected), 1)
+                self.assertIsInstance(rejected[0], ValueError)
+                self.assertIn("unresolved real-consumer attempt", str(rejected[0]))
+                next_attempt = admitted[0]
+                self.assertNotEqual(next_attempt.evidence, attempt.evidence)
+                with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+                    RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
                 for path, raw in originals.items():
                     self.assertEqual(path.read_bytes(), raw)
 

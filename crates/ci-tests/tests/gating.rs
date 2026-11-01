@@ -1341,7 +1341,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
     git(&root, &["push", "-q", "origin", "dev"]);
     let mut h = GatedHost {
         host: ShortHost {
-            _dir: dir,
+            _dir: crate::tools::FixtureDirectory::Ephemeral(dir),
             root,
             remote,
             base: base.clone(),
@@ -1936,4 +1936,53 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         ".chrono-harness/state/current-host-delta-selection.json",
         &json!({"source_baseline":original,"fixture_base":base,"fixture_candidate":candidate,"selection_scope":"actual-worktree-and-explicit-fixture-delta","detection":result["detection"],"global_selected":result["requirements"]["global_selected"],"native_actions_verified":false}),
     );
+}
+
+
+#[test]
+fn typed_acquisition_preserves_metadata_runtime_and_budget_failures_without_manifest() {
+    for mode in ["missing", "misbound", "runtime", "typed-metadata-timeout", "typed-metadata-output"] {
+        let mut h = GatedHost::new();
+        let helper = ".chrono-harness/ci/artifact_members.py";
+        fs::write(h.host.root.join(helper), include_bytes!("../../../.chrono-harness/ci/artifact_members.py")).unwrap();
+        if mode == "runtime" { fs::write(h.host.root.join(helper), b"changed runtime").unwrap(); }
+        h.host.modify(".chrono-harness/FILEMAP.json", |fm| {
+            let mut row = fm["files"].as_array().unwrap().iter().find(|r| r["path"] == PROVIDER).unwrap().clone();
+            row["path"] = json!(helper);
+            row["edges"] = json!([]);
+            fm["files"].as_array_mut().unwrap().push(row);
+        });
+        h.host.modify(".chrono-harness/ci/check.json", |c| {
+            c["policy"]["report_publication"] = json!("retained-reference/v2");
+        });
+        h.host.modify(PROVIDER, |c| {
+            c["gather"]["typed_acquisition"] = json!({"program":"/usr/bin/python3","script":helper});
+            if mode == "typed-metadata-timeout" { c["gather"]["timeout_seconds"] = json!(1); }
+            if mode == "typed-metadata-output" { c["gather"]["output_limit_bytes"] = json!(1024); }
+        });
+        h.change(&["a.txt", "b.txt"]);
+        let d = h.detection();
+        h.units(&d);
+        h.mock(&d, mode);
+        let data_path = ".chrono-harness/state/parent-data.json";
+        let mut data: Value = serde_json::from_slice(&fs::read(h.host.root.join(data_path)).unwrap()).unwrap();
+        data["artifact_pages"] = if mode == "missing" { json!([{"artifacts":[]}]) } else {
+            json!([{"artifacts":[{"id":99,"name":"chrono-unit-alpha-101-2","expired":false,
+                "workflow_run":{"id":101,"head_sha":"incorrect-source"},"size_in_bytes":100,
+                "archive_download_url":"https://api.github.com/repos/owner/host/actions/artifacts/99/zip"}]}])
+        };
+        json_file(&h.host.root, data_path, &data);
+        let n = needs(&h, &d);
+        let output = h.command(&["check", "--collect"], &d, &n).output().unwrap();
+        assert!(!output.status.success(), "accepted typed acquisition failure {mode}");
+        let gather: Value = serde_json::from_slice(&fs::read(h.host.root.join(
+            ".chrono-harness/state/collection/gather.json")).unwrap()).unwrap();
+        assert!(gather["result"].is_null(), "{gather}");
+        assert!(gather["error"].is_string(), "{gather}");
+        assert!(!h.host.root.join(".chrono-harness/state/collection/manifest.json").exists());
+        if mode.starts_with("typed-metadata-") {
+            assert!(gather["processes"].as_array().unwrap().iter().any(|p|
+                !p["failure"].is_null() && p["acquisition"].is_object()), "{gather}");
+        }
+    }
 }

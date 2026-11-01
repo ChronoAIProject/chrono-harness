@@ -110,8 +110,22 @@ fn download_retry_present<'de, D: serde::Deserializer<'de>>(
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct TypedAcquisition {
+    pub program: String,
+    pub script: String,
+}
+fn typed_acquisition_present<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<TypedAcquisition>, D::Error> {
+    TypedAcquisition::deserialize(d).map(Some)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Gather {
     pub program: String,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "typed_acquisition_present")]
+    pub typed_acquisition: Option<TypedAcquisition>,
     pub inherit_environment: Vec<String>,
     pub credential_environment: Vec<String>,
     pub environment: BTreeMap<String, String>,
@@ -338,6 +352,18 @@ pub fn validate(c: &Config) -> Result<(), String> {
         timeout_seconds: c.gather.timeout_seconds,
         output_limit_bytes: c.gather.output_limit_bytes,
     })?;
+    if let Some(acquisition) = &c.gather.typed_acquisition {
+        relative_path(&acquisition.script)?;
+        chrono_harness::validate_command(&chrono_harness::CommandSpec {
+            program: acquisition.program.clone(), args: vec![], env: BTreeMap::new(),
+            timeout_seconds: c.gather.timeout_seconds, output_limit_bytes: c.gather.output_limit_bytes,
+        })?;
+        if c.schema != SCHEMA || c.collection.schema != "chrono-github-ci/v4" || c.job_gating.is_none()
+            || c.gather.timeout_seconds > 60
+            || !c.gather.credential_environment.iter().any(|s| s == "GH_TOKEN") {
+            return Err("typed acquisition requires scoped native retained inputs, GH_TOKEN and current deadline".into());
+        }
+    }
     let inherited: BTreeSet<_> = c.gather.inherit_environment.iter().collect();
     let credentials: BTreeSet<_> = c.gather.credential_environment.iter().collect();
     if inherited.len() != c.gather.inherit_environment.len()

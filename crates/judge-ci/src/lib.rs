@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 mod collect;
+pub use collect::{UnitOriginals, unit_originals};
 mod units;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -31,6 +32,8 @@ impl Default for CollectionLimits {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_evidence: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report_publication: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -156,6 +159,12 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
         return Err("v1 cannot declare facts_config, including null".into());
     }
     let p: Policy = serde_json::from_value(c.policy.clone()).map_err(|e| e.to_string())?;
+    if c.policy
+        .get("selection_evidence")
+        .is_some_and(|v| v != "explicit-graph/v1")
+    {
+        return Err("unsupported selection_evidence representation".into());
+    }
     if c.schema == "chrono-ci-check/v2" {
         let path = p
             .facts_config
@@ -203,6 +212,17 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
 }
 fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
     let fm = json(&at(reader, root, oid, &p.filemap)?)?;
+    let registration = p
+        .registration_config
+        .as_ref()
+        .map(|config| reader.registry_snapshot(root, oid, config))
+        .transpose()?;
+    let fm = chrono_judge_registration::select_filemap(
+        &fm,
+        registration
+            .as_ref()
+            .map(|snapshot| snapshot.effective_path.as_str()),
+    )?;
     let pr = json(&at(reader, root, oid, &p.projects)?)?;
     if ![object!(1), object!(2)].contains(&fm["schema_version"])
         || ![object!(1), object!(2)].contains(&pr["schema_version"])
@@ -254,8 +274,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
     let mut owner_nodes = BTreeMap::new();
     let mut ops = BTreeMap::new();
     let mut nodes = BTreeSet::new();
-    if let Some(config) = &p.registration_config {
-        let snapshot = reader.registry_snapshot(root, oid, config)?;
+    if let Some(snapshot) = &registration {
         let config = snapshot
             .values
             .get(&snapshot.effective_path)
@@ -701,7 +720,21 @@ fn ci_impact(
         .collect();
     selected.extend(extras.keys().cloned());
     let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
-    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    // The explicit graph and seed causes already determine every predecessor
+    // and contributing-seed set. Opted-in hosts publish that sufficient source
+    // once rather than repeating those derived strings for each (seed, node).
+    let replay = new.policy.selection_evidence.as_deref() == Some("explicit-graph/v1");
+    let closure_evidence = if replay {
+        object!({"schema":"chrono-ci-reachability/v1",
+            "reached":closure.reached.keys().collect::<Vec<_>>(),
+            "selected_tests":closure.selected_tests()})
+    } else {
+        object!(&closure)
+    };
+    let mut explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure_evidence, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    if replay {
+        explanation["representation"] = object!("explicit-graph/v1");
+    }
     let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
     if old.is_none() {
         affected.extend(new.owner_nodes.values().cloned());

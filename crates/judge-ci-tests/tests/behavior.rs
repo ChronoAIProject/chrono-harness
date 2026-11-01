@@ -6,6 +6,67 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 const CONFIG: &str = ".chrono-harness/ci/check.json";
+
+#[test]
+fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_output_bound() {
+    let h = Host::new();
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["selection_evidence"] = json!("explicit-graph/v1")
+    });
+    let base = h.commit();
+    let names: Vec<_> = (0..2697)
+        .map(|i| format!("registered-input-{}-{i:04}", "x".repeat(64)))
+        .collect();
+    for name in &names {
+        h.write(name, "declared input\n");
+    }
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        for name in &names {
+            v["files"].as_array_mut().unwrap().push(json!({"path":name,"owner":"host","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:lib"}]}));
+        }
+    });
+    let candidate = h.commit();
+    let r = h.check(&base, &candidate);
+    pass(&r);
+    assert_eq!(h.calls(), 1);
+    let e = &r.evidence["selection_explanation"];
+    assert_eq!(e["representation"], "explicit-graph/v1");
+    assert_eq!(e["closure"]["selected_tests"], json!(["test:suite"]));
+    for name in &names {
+        assert!(
+            e["seeds"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(format!("file:{name}")))
+        );
+        assert!(
+            e["seed_causes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|s| s["node"] == format!("file:{name}"))
+        );
+    }
+    assert!(
+        e["closure"]["reached"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("test:suite"))
+    );
+    assert!(e["closure"].get("predecessors").is_none());
+    assert!(serde_json::to_vec(&r).unwrap().len() < 8 * 1024 * 1024);
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["selection_evidence"] = json!("unknown")
+    });
+    let invalid = h.commit();
+    let rejected = h.check(&candidate, &invalid);
+    assert_eq!(rejected.status, Status::Failed);
+    assert_eq!(
+        h.calls(),
+        1,
+        "unknown representation must fail before business effects"
+    );
+}
 #[path = "checkout.rs"]
 mod checkout;
 #[path = "git_facts.rs"]

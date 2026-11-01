@@ -1,5 +1,6 @@
 //! GitHub transports fixed unit artifacts; the scoped judge decides their acceptance.
 use super::*;
+mod typed;
 use chrono_harness::{CommandSpec, ProcessResult, file_identity, run_process_observed_for, sha256};
 use std::{
     collections::BTreeMap,
@@ -95,6 +96,8 @@ struct Transport<'a> {
     observations: Vec<Value>,
     resources: Option<Value>,
     shared_report_aliases: Vec<Value>,
+    acquisition_path: Option<String>,
+    downloads: Option<chrono_harness::retained_artifacts::retention::Publication>,
 }
 
 impl<'a> Transport<'a> {
@@ -119,6 +122,8 @@ impl<'a> Transport<'a> {
             digest: file_identity(&exe)?.0,
             observations: vec![],
             shared_report_aliases: vec![],
+            acquisition_path: None,
+            downloads: None,
             resources: c
                 .resource_observation
                 .as_ref()
@@ -146,14 +151,23 @@ impl<'a> Transport<'a> {
         remaining: Duration,
         output_limit: usize,
     ) -> Result<ProcessResult, String> {
+        let executable = self.executable.clone();
+        let digest = self.digest.clone();
+        self.process_program(&executable, &digest, args, &[], remaining, output_limit)
+    }
+
+    fn process_program(
+        &mut self, executable: &str, digest: &str, args: &[String], stdin: &[u8],
+        remaining: Duration, output_limit: usize,
+    ) -> Result<ProcessResult, String> {
         let spec = CommandSpec {
-            program: self.executable.clone(),
+            program: executable.into(),
             args: args.to_vec(),
             env: self.environment.clone(),
             timeout_seconds: self.config.timeout_seconds,
             output_limit_bytes: output_limit,
         };
-        let p = run_process_observed_for(self.root, &spec, &[], &self.digest, remaining)?;
+        let p = run_process_observed_for(self.root, &spec, stdin, digest, remaining)?;
         // Credentials are explicitly omitted, while the original nonsecret process bytes and environment digest remain.
         let env: BTreeMap<_, _> = p
             .environment
@@ -181,7 +195,10 @@ impl<'a> Transport<'a> {
         if absolute.exists() {
             return Err("artifact download destination exists; retain original acquisition".into());
         }
-        fs::create_dir_all(&absolute).map_err(|e| e.to_string())?;
+        chrono_harness::retained_artifacts::retention::directory_adopted(
+            self.downloads.as_ref(),
+            &absolute,
+        )?;
         let policy = self.config.download_retry.clone();
         let attempts = policy.as_ref().map_or(1, |p| p.max_attempts);
         let mut stdout_remaining = self.config.output_limit_bytes;
@@ -189,7 +206,10 @@ impl<'a> Transport<'a> {
         for attempt in 1..=attempts {
             let destination = if policy.is_some() {
                 let path = format!("{directory}/attempt-{attempt}");
-                fs::create_dir(no_symlink_parents(self.root, &path)?).map_err(|e| e.to_string())?;
+                chrono_harness::retained_artifacts::retention::directory_adopted(
+                    self.downloads.as_ref(),
+                    &no_symlink_parents(self.root, &path)?,
+                )?;
                 path
             } else {
                 directory.into()
@@ -527,6 +547,14 @@ fn inner(
     if context["canonical_argv"] != json!(canonical) {
         return Err("collection command context mismatch".into());
     }
+    let typed_profile = if c.gather.typed_acquisition.is_some() {
+        let profile = chrono_harness::load_config(&no_symlink_parents(root, &c.collection.check_config)?)?;
+        if !chrono_harness::units::reference_publication(&profile)?
+            || !chrono_harness::units::stream_publication(&profile) {
+            return Err("typed acquisition supports the adopted retained-reference/v2 collector only".into());
+        }
+        Some(profile)
+    } else { None };
     let completed = if c.job_gating.is_some() {
         parent_units(root, c, repository, &context, transport)?
     } else {
@@ -593,11 +621,28 @@ fn inner(
     let mut reports = vec![];
     let mut identities = vec![];
     let download_prefix = if c.collection.schema == "chrono-github-ci/v4" {
-        let retained = chrono_harness::prepared::retain_directory(
-            root,
-            &c.gather.download_directory,
-            "gather-",
-        )?;
+        let parent = no_symlink_parents(root, &c.gather.download_directory)?;
+        fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
+        let retained =
+            chrono_harness::retained_artifacts::retention::unique_path(&parent, "gather-", "")?;
+        transport.downloads =
+            chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(
+                root,
+                "check-original",
+                &retained,
+                true,
+                json!({"kind":"native-acquisition","outcome":"not-established"}),
+                None,
+                "publication-recheck",
+            )?;
+        transport.acquisition_path = Some(
+            retained
+                .strip_prefix(root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("acquisition path UTF8")?
+                .into(),
+        );
         format!(
             "{}/",
             retained
@@ -625,7 +670,12 @@ fn inner(
         } else {
             format!("chrono-unit-{unit}-{id}-{attempt}")
         };
-        let destination = transport.download(id, repository, &artifact, &destination)?;
+        let mut typed = if typed_profile.is_some() {
+            Some(typed::Artifact::new(transport, id, repository, &artifact, &destination, candidate)?)
+        } else { None };
+        let destination = if let Some(acquisition) = &typed {
+            acquisition.directory.clone()
+        } else { transport.download(id, repository, &artifact, &destination)? };
         let downloaded = |input: &str| -> Result<String, String> {
             let relative = input
                 .strip_prefix(&w.artifact_directory)
@@ -633,6 +683,26 @@ fn inner(
             relative_path(relative)?;
             Ok(format!("{destination}/{relative}"))
         };
+        if let (Some(acquisition), Some(profile)) = (typed.as_mut(), typed_profile.as_ref()) {
+            let context_member = w.context_path.strip_prefix(&w.artifact_directory)
+                .ok_or("typed context outside uploaded root")?;
+            acquisition.member(transport, context_member,
+                Some(run["production"]["context_sha256"].as_str().ok_or("original context identity missing")?),
+                64 * 1024 * 1024)?;
+            let report_member = registered[&unit].report_path.strip_prefix(&w.artifact_directory)
+                .ok_or("typed report outside uploaded root")?;
+            let limits: chrono_judge_ci::CollectionLimits = profile.policy.get("collection_limits")
+                .cloned().map(serde_json::from_value).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
+            let bytes = acquisition.member(transport, report_member,
+                Some(run["production"]["report_sha256"].as_str().ok_or("original report identity missing")?),
+                limits.report_bytes)?;
+            let mapping = chrono_harness::prepared::ArtifactTransport {
+                source_directory: w.artifact_directory.clone(), directory: format!("{destination}/"),
+            };
+            chrono_judge_ci::unit_originals(root, profile, &unit, &bytes, Some(&mapping),
+                |original, limit| acquisition.original(transport, original, &mapping, limit))?;
+            acquisition.finish()?;
+        }
         if c.job_gating.is_some() {
             if run["production"]["context_sha256"]
                 != file_identity(&no_symlink_parents(root, &downloaded(&w.context_path)?)?)?.0
@@ -716,7 +786,7 @@ fn inner(
             .as_str()
             .filter(|v| full_oid(v))
             .ok_or("workflow source revision missing")?;
-        let source = transport.run(&[
+        let source_args = [
             "api".into(),
             format!(
                 "repos/{repository}/contents/{}?ref={revision}",
@@ -724,7 +794,10 @@ fn inner(
             ),
             "--header".into(),
             "Accept: application/vnd.github.raw".into(),
-        ])?;
+        ];
+        let source = if let Some(acquisition) = typed.as_mut() {
+            acquisition.run(transport, &source_args)?
+        } else { transport.run(&source_args)? };
         if source != fs::read(root.join(workflow_path)).map_err(|e| e.to_string())? {
             return Err(format!("unit {unit} executed a different workflow source"));
         }
@@ -751,7 +824,10 @@ fn inner(
             input.as_object_mut().unwrap().remove("artifacts");
         }
         reports.push(input);
-        let fresh = transport.api(&format!("repos/{repository}/actions/runs/{id}"), false)?;
+        let endpoint = format!("repos/{repository}/actions/runs/{id}");
+        let fresh = if let Some(acquisition) = typed.as_mut() {
+            decode(&acquisition.run(transport, &["api".into(), endpoint])?)?
+        } else { transport.api(&endpoint, false)? };
         if c.job_gating.is_some() {
             let d =
                 serde_json::from_value(context["detection"].clone()).map_err(|e| e.to_string())?;
@@ -774,6 +850,7 @@ fn inner(
                 return Err("unit run changed while collecting original evidence".into());
             }
         }
+        if let Some(acquisition) = &typed { acquisition.finish()?; }
         identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"job_id":run["unit_job_id"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
     }
     if identities.iter().any(|i| i["conclusion"] != "success") {
@@ -813,6 +890,7 @@ pub(super) fn gather(
     c: &units::Config,
     repository: &str,
 ) -> Result<String, String> {
+    let _report_activity = chrono_harness::retained_artifacts::retention::report_activity(root)?;
     units::validate(c)?;
     let parts: Vec<_> = repository.split('/').collect();
     if parts.len() != 2
@@ -831,7 +909,11 @@ pub(super) fn gather(
     }
     let mut transport = Transport::new(root, &c.gather)?;
     let result = inner(root, path, c, repository, &mut transport);
-    let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations,"shared_report_aliases":transport.shared_report_aliases});
+    let acquisition_path = transport.acquisition_path.take();
+    let storage_result = transport.downloads.take().map(|publication| publication.complete(
+        json!({"kind":"native-acquisition","result":result.as_ref().ok(),"error":result.as_ref().err(),"completion":"not-established"})
+    )).transpose();
+    let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"storage_error":storage_result.as_ref().err(),"processes":transport.observations,"shared_report_aliases":transport.shared_report_aliases});
     if let Some(resources) = transport.resources {
         report["resources"] = resources;
         if let Some(summary) = c.gather.resource_observation.as_ref().and_then(|config| {
@@ -851,12 +933,43 @@ pub(super) fn gather(
             .path
         );
     }
+    let gather_original = report["retained_report"].as_str().map(str::to_owned);
+    if result.is_err() || storage_result.is_err() {
+        if let (Some(inventory), Some(original)) = (
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?,
+            &gather_original,
+        ) {
+            inventory.protect_path_consumer(
+                &format!("gather-recheck:{}", sha256(original.as_bytes())),
+                original,
+            )?;
+        }
+    }
+    let _slot = if let Some(original) = &gather_original {
+        chrono_harness::retained_artifacts::retention::reference_report(
+            root,
+            &c.gather.report_path,
+            original,
+            &acquisition_path.into_iter().collect::<Vec<_>>(),
+            None,
+        )?
+    } else {
+        None
+    };
     write_file(
         root,
         &c.gather.report_path,
         &serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?,
     )?;
+    if let Some(original) = gather_original {
+        chrono_harness::retained_artifacts::retention::settle_report(
+            root,
+            &c.gather.report_path,
+            &original,
+        )?;
+    }
     result?;
+    storage_result?;
     Ok(serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n")
 }
 

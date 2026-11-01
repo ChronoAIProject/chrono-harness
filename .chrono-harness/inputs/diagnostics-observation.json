@@ -1,0 +1,377 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "platforms": [
+    "macos-aarch64"
+  ],
+  "environment": {
+    "inherit": [
+      "TMPDIR"
+    ],
+    "values": {
+      "HOME": "/Users/runner",
+      "CARGO_HOME": ".chrono-harness/state/diagnostics-native/cargo",
+      "RUSTUP_HOME": "/Users/runner/.rustup",
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "RUSTC": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": "",
+      "RUSTFLAGS": "--sysroot=/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "CARGO_TERM_COLOR": "never",
+      "PATH": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+      "SDKROOT": "/Applications/Xcode_26.6.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+      "DEVELOPER_DIR": "/Applications/Xcode_26.6.app/Contents/Developer",
+      "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER": "/Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+      "CHRONO_XCODE_CONTENTS": "/Applications/Xcode_26.6.app/Contents",
+      "CARGO_NET_OFFLINE": "false"
+    }
+  },
+  "operations": [
+    {
+      "id": "source.commit",
+      "program": "/usr/bin/git",
+      "argv": [
+        "rev-parse",
+        "HEAD"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "source.tree",
+      "program": "/usr/bin/git",
+      "argv": [
+        "rev-parse",
+        "HEAD^{tree}"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "source.status",
+      "program": "/usr/bin/git",
+      "argv": [
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=normal"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.cargo",
+      "program": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.rustc",
+      "program": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+      "argv": [
+        "-vV"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "rust.sysroot",
+      "program": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+      "argv": [
+        "--print",
+        "sysroot"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "sdk.root",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--sdk",
+        "macosx",
+        "--show-sdk-path"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "developer.root",
+      "program": "/usr/bin/xcode-select",
+      "argv": [
+        "-p"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "xcode.distribution",
+      "program": "/usr/bin/xcodebuild",
+      "argv": [
+        "-version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.clang",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "clang"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.ar",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "ar"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.ld",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "ld"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.libtool",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "libtool"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.dsymutil",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "dsymutil"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.linker",
+      "program": {
+        "stdout": "selection.clang"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    }
+  ],
+  "registered_operations": {
+    "projects": ".chrono-harness/projects.json",
+    "operations": [
+      "inputs.fetch.diagnostics",
+      "inputs.metadata.diagnostics"
+    ],
+    "tools": {
+      "cargo": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo"
+    },
+    "timeout_seconds": 120,
+    "output_limit_bytes": 1048576
+  },
+  "files": [
+    {
+      "id": "tool.cargo",
+      "location": {
+        "path": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo"
+      }
+    },
+    {
+      "id": "tool.rustc",
+      "location": {
+        "path": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc"
+      }
+    },
+    {
+      "id": "bootstrap-native-toolchains",
+      "location": {
+        "path": ".chrono-harness/ci/bootstrap-toolchains.json"
+      }
+    },
+    {
+      "id": "tool.clang",
+      "location": {
+        "stdout": "selection.clang"
+      },
+      "resolution": "canonical-target"
+    },
+    {
+      "id": "tool.ar",
+      "location": {
+        "stdout": "selection.ar"
+      },
+      "resolution": "canonical-target"
+    },
+    {
+      "id": "tool.ld",
+      "location": {
+        "stdout": "selection.ld"
+      },
+      "resolution": "canonical-target"
+    },
+    {
+      "id": "tool.libtool",
+      "location": {
+        "stdout": "selection.libtool"
+      },
+      "resolution": "canonical-target"
+    },
+    {
+      "id": "tool.dsymutil",
+      "location": {
+        "stdout": "selection.dsymutil"
+      },
+      "resolution": "canonical-target"
+    },
+    {
+      "id": "configuration.checkout.config",
+      "location": {
+        "path": ".cargo/config"
+      }
+    },
+    {
+      "id": "configuration.checkout.config.toml",
+      "location": {
+        "path": ".cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.cargo-home.config",
+      "location": {
+        "path": ".chrono-harness/state/diagnostics-native/cargo/config"
+      }
+    },
+    {
+      "id": "configuration.cargo-home.config.toml",
+      "location": {
+        "path": ".chrono-harness/state/diagnostics-native/cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.ancestor-0.config",
+      "location": {
+        "path": "/Users/runner/work/chrono-harness/.cargo/config"
+      }
+    },
+    {
+      "id": "configuration.ancestor-0.config.toml",
+      "location": {
+        "path": "/Users/runner/work/chrono-harness/.cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.ancestor-1.config",
+      "location": {
+        "path": "/Users/runner/work/.cargo/config"
+      }
+    },
+    {
+      "id": "configuration.ancestor-1.config.toml",
+      "location": {
+        "path": "/Users/runner/work/.cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.ancestor-2.config",
+      "location": {
+        "path": "/Users/runner/.cargo/config"
+      }
+    },
+    {
+      "id": "configuration.ancestor-2.config.toml",
+      "location": {
+        "path": "/Users/runner/.cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.ancestor-3.config",
+      "location": {
+        "path": "/Users/.cargo/config"
+      }
+    },
+    {
+      "id": "configuration.ancestor-3.config.toml",
+      "location": {
+        "path": "/Users/.cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.ancestor-4.config",
+      "location": {
+        "path": "/.cargo/config"
+      }
+    },
+    {
+      "id": "configuration.ancestor-4.config.toml",
+      "location": {
+        "path": "/.cargo/config.toml"
+      }
+    }
+  ],
+  "directories": [
+    {
+      "id": "rust",
+      "location": {
+        "stdout": "rust.sysroot"
+      },
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/diagnostics-native/guard-inputs/rust.json",
+        "root": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin"
+      }
+    },
+    {
+      "id": "sdk",
+      "location": {
+        "stdout": "sdk.root"
+      },
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/diagnostics-native/guard-inputs/sdk.json",
+        "root": "/Applications/Xcode_26.6.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+      }
+    },
+    {
+      "id": "developer",
+      "location": {
+        "path": "/Applications/Xcode_26.6.app/Contents"
+      },
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/diagnostics-native/guard-inputs/xcode-contents.json",
+        "root": "/Applications/Xcode_26.6.app/Contents"
+      }
+    },
+    {
+      "id": "cargo-registry",
+      "location": {
+        "path": ".chrono-harness/state/diagnostics-native/cargo/registry"
+      },
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/diagnostics-native/guard-inputs/packages.json",
+        "root": ".chrono-harness/state/diagnostics-native/cargo/registry"
+      }
+    }
+  ],
+  "stop_on_failure": true
+}

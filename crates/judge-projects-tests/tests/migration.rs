@@ -2,6 +2,8 @@
 mod history;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
+#[path = "support/temporary.rs"]
+mod temporary;
 use chrono_harness::{facts, observation, wire};
 use chrono_judge_registration::{execution, interpret};
 use chrono_judge_routes::{execute_actions, prepare_scoped};
@@ -605,7 +607,12 @@ fn adopt_fixture_bindings(_root: &std::path::Path, config: &mut Value) {
         .unwrap();
     *input = fixture.git_input.clone();
 }
-fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+fn migration_host() -> (
+    temporary::FixtureDirectory,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     migration_host_with_alias_collision(false)
 }
 fn copy_nested_receipts(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
@@ -631,6 +638,7 @@ fn execution_failure(
     reason: &str,
     result: &chrono_judge_projects::Results,
 ) -> String {
+    let protection = temporary::retain_diagnostic(root, reason);
     let directory = source().join(".chrono-harness/state/migration-tests");
     let retained = (|| -> Result<String, Box<dyn std::error::Error>> {
         fs::create_dir_all(&directory)?;
@@ -662,6 +670,9 @@ fn execution_failure(
     })()
     .unwrap_or_else(|error| format!("original execution retention failed: {error}"));
     let mut summary = format!("{reason}; {retained}");
+    if let Err(error) = protection {
+        summary.push_str(&format!("; diagnostic reference failed: {error}"));
+    }
     for row in result.executed.iter().chain(&result.blocked) {
         if row.status == "passed" {
             continue;
@@ -687,12 +698,14 @@ fn execution_failure(
 }
 fn migration_host_with_alias_collision(
     collision: bool,
-) -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+) -> (
+    temporary::FixtureDirectory,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     let source = fs::canonicalize(source()).unwrap();
-    let dir = tempfile::Builder::new()
-        .prefix("migration actual host ")
-        .tempdir()
-        .unwrap();
+    let dir = temporary::migration_directory("migration actual host ");
     let root = fs::canonicalize(dir.path()).unwrap();
     historical_input().export(&root).unwrap();
     if collision {
@@ -761,11 +774,10 @@ fn migration_host_with_alias_collision(
         ("runner", "chrono-harness"),
         ("judge-ci", "chrono-judge-ci"),
     ] {
-        fs::copy(
-            source.join(format!("crates/{project}/target/debug/{name}")),
-            root.join(format!(".chrono-harness/bin/{name}")),
-        )
-        .unwrap();
+        let original = source.join(format!("crates/{project}/target/debug/{name}"));
+        let destination = root.join(format!(".chrono-harness/bin/{name}"));
+        temporary::copied_fixture_input(&root, &original, &destination);
+        fs::copy(original, destination).unwrap();
     }
     // The copied candidate is a test host on the executing native platform.
     // Preserve the historical snapshot; install only the explicitly selected
@@ -1019,16 +1031,16 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         "{}",
         execution_failure(&root, "ci.verify did not diagnose drift", &result)
     );
-    let output = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
-        .args([
+    let output = temporary::capture_native(
+        &root,
+        Command::new(root.join(".chrono-harness/bin/chrono-ci")).args([
             "generate",
             "--host-root",
             root.to_str().unwrap(),
             "--config",
             ".chrono-harness/ci/units.json",
-        ])
-        .output()
-        .unwrap();
+        ]),
+    );
     assert!(
         output.status.success(),
         "workflow repair failed: {output:?}"
@@ -1055,6 +1067,53 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         verified.failure.is_none(),
         "workflow verify failed: {verified:?}"
     );
+    // These consumers have joined and the repaired workflow has been consumed.
+    // This distinct Git host owns its nested fixtures; the outer allocation's
+    // drain cannot reach them. Keep the owner's original result before judging
+    // its exact member disposal/protection outcomes. Earlier failures retain the
+    // fixture through the existing diagnostic guard without this handoff.
+    let argv = vec![
+        "maintain".to_owned(),
+        "--host-root".to_owned(),
+        root.to_str().unwrap().to_owned(),
+    ];
+    let owner = chrono_worktree::run(&argv);
+    let directory = source().join(".chrono-harness/state/migration-tests");
+    fs::create_dir_all(&directory).unwrap();
+    let (file, original) = tempfile::Builder::new()
+        .prefix("inner-owner-handoff-")
+        .suffix(".json")
+        .tempfile_in(directory)
+        .unwrap()
+        .keep()
+        .unwrap();
+    serde_json::to_writer(
+        file,
+        &json!({"argv":argv,"exit_code":owner.exit_code,
+            "stdout_bytes":owner.stdout.as_bytes(),"stderr_bytes":owner.stderr.as_bytes()}),
+    )
+    .unwrap();
+    assert_eq!(
+        owner.exit_code,
+        0,
+        "inner owner handoff failed; original result at {}",
+        original.display()
+    );
+    let handoff: Value = serde_json::from_str(&owner.stdout).unwrap();
+    assert_eq!(handoff["status"], "maintained");
+    assert_eq!(handoff["invoking_root"], json!(root));
+    assert_eq!(handoff["lifecycle_coordinator_root"], json!(root));
+    assert!(
+        handoff["producer_objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|member| member["producer"] == "ci-test-host"
+                && member["path"].is_string()
+                && member["status"].is_string()),
+        "inner fixture member outcomes missing; original result at {}",
+        original.display()
+    );
 }
 
 #[test]
@@ -1068,10 +1127,10 @@ fn migration_binding_failure_retains_expected_and_observed_version() {
         .iter_mut()
         .find(|t| t["id"] == "python3")
         .unwrap();
-    let observed = Command::new(tool["program"].as_str().unwrap())
-        .arg("--version")
-        .output()
-        .unwrap();
+    let observed = temporary::capture_native(
+        &root,
+        Command::new(tool["program"].as_str().unwrap()).arg("--version"),
+    );
     tool["expected_version"] = json!("Python deliberately-wrong");
     let env: BTreeMap<String, String> = std::env::vars().collect();
     let error = interpret(&root, &base, &candidate, CONFIG, raw, new, &env)

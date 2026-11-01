@@ -12,8 +12,12 @@
     "projects": ".chrono-harness/projects.json",
     "tools": {
       "cargo": "cargo",
+      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
-      "python3": "/usr/bin/python3"
+      "chrono-inputs": ".chrono-harness/bin/chrono-inputs",
+      "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
+      "python3": "/usr/bin/python3",
+      "rustup": "rustup"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -71,7 +75,8 @@
       ".chrono-harness/ci/bootstrap_shared.py",
       ".chrono-harness/ci/bootstrap-shared.json",
       ".chrono-harness/ci/bootstrap-cache.json",
-      ".chrono-harness/ci/bootstrap-toolchains.json"
+      ".chrono-harness/ci/bootstrap-toolchains.json",
+      ".chrono-harness/ci/artifact_members.py"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,
@@ -103,7 +108,8 @@
       },
       "ci": {
         "tests": [
-          "test:ci-tests"
+          "test:ci-tests",
+          "test:artifact-members-tests"
         ],
         "report_path": ".chrono-harness/state/units/ci/check.json"
       },
@@ -411,6 +417,7 @@
     },
     "facts_config": ".chrono-harness/config.json",
     "report_publication": "retained-reference/v2",
+    "selection_evidence": "explicit-graph/v1",
     "causal_consumption": {
       "schema": "chrono-internal-causal-consumption/v1",
       "shared_startup": [

@@ -28,6 +28,35 @@ pub fn validate_projects(projects: &Value) -> std::result::Result<(), String> {
     schema::projects(projects)
 }
 
+/// Project explicitly scoped edges for one effective direct policy. Retained
+/// registry bytes remain source data; all graph consumers use this projection.
+/// Unqualified legacy FILEMAP documents keep their existing interpretation.
+pub fn select_filemap(filemap: &Value, config: Option<&str>) -> std::result::Result<Value, String> {
+    let Some(table) = filemap.get("configuration_edges") else {
+        return Ok(filemap.clone());
+    };
+    schema::filemap(filemap)?;
+    let config =
+        config.ok_or("configuration edges require an effective registration configuration")?;
+    let mut selected = filemap.clone();
+    selected
+        .as_object_mut()
+        .unwrap()
+        .remove("configuration_edges");
+    let edges = selected["project_edges"].as_array_mut().unwrap();
+    for row in table["configurations"].as_array().unwrap() {
+        if row["config"] == config {
+            for edge in row["edges"].as_array().unwrap() {
+                if edges.contains(edge) {
+                    return Err("duplicate active configuration edge".into());
+                }
+                edges.push(edge.clone());
+            }
+        }
+    }
+    Ok(selected)
+}
+
 type Result<T> = std::result::Result<T, String>;
 fn read(path: &Path) -> Result<Value> {
     json(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
