@@ -22,7 +22,6 @@ fn native_holder() {
     let mut synchronization = std::net::TcpStream::connect(
         std::fs::read_to_string(".chrono-harness/state/native-sync").unwrap(),
     ).unwrap();
-    synchronization.set_read_timeout(Some(std::time::Duration::from_secs(30))).unwrap();
     synchronization.write_all(b"ready").unwrap();
     let mut release = [0; 4];
     synchronization.read_exact(&mut release).unwrap();

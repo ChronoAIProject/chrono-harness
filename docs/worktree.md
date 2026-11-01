@@ -1461,3 +1461,16 @@ arbitrary subsequently adopted owner binaries or future source iterations. Same
 source publication/reentry is covered by the original receipt path; other newly
 installed bytes still need original producer qualification. No generalized
 post-adoption compatibility claim follows from this registration-only transition.
+
+The finite list also admits installed owner `2f3886db…`, qualified by the original
+clean-source core bootstrap of `c09e50bef6a41fbdb4347aca8b441a08763af7aa`.
+Its retained producer report and installed-byte digest were checked before this
+selection. This extends host input policy to that exact owner; the source51
+construction issuer and exclusive deployment method keep their existing roles.
+
+The native Cargo wrapper-survival regression joins its actual native child over
+a blocking socket after the existing wrapper interruption and maintenance checks.
+The child still publishes its original release/completion files, and the test
+checks both the socket response and completion file. A closed or timed-out native
+channel fails with its original IO error; file polling cannot stand in for that
+completion. Its existing ten-second completion bound is unchanged.
