@@ -260,7 +260,11 @@ Inherited parent-host expectations are not native fixture expectations. Regressi
 cases require ordinary success, nonzero exit, timeout and live consumption to
 retain producer streams and status. Missing owner reports and failed live readiness
 must preserve the earlier failure, retain unresolved custody and refuse reentry;
-only verified release/disposal allows successful-attempt reentry.
+Only verified release/disposal allows reentry after a completed success or
+failure. Every command must retain its joined outcome and original streams;
+only the managed consumer may fail, with its failed owner report preserved.
+Setup/release failure, interruption, unknown completion or missing originals
+still refuse reentry. Admission never changes the earlier failed result.
 
 The bootstrap test owner retains the existing 900-second/1-MiB limits and FILEMAP
 cap 2. The producer reserves 15 seconds of the same deadline for owner release and

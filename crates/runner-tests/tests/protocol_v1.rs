@@ -2608,12 +2608,28 @@ fn completion_wait_blocks_without_periodic_status_probes() {
     // while the real child keeps both output streams closed for 1.5 seconds.
     // A finite allowance accommodates launch/EOF/exit/join events; 2-ms and
     // 10-ms periodic waits exceed it even when the child is entirely quiet.
+    use std::os::unix::process::CommandExt;
     let root = tempfile::tempdir().unwrap();
-    let original = std::process::Command::new(std::env::current_exe().unwrap())
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
         .args(["--exact", "completion_wait_resource_helper", "--nocapture"])
-        .env("CHRONO_WAIT_RESOURCE_FIXTURE", root.path())
-        .output()
-        .unwrap();
+        .env("CHRONO_WAIT_RESOURCE_FIXTURE", root.path());
+    unsafe {
+        command.pre_exec(|| {
+            // Start this counter window with its own native exit observer.
+            // Preserve every inherited worktree capability descriptor.
+            for fd in [198, 199, 200] {
+                if libc::close(fd) < 0 {
+                    let error = std::io::Error::last_os_error();
+                    if error.raw_os_error() != Some(libc::EBADF) {
+                        return Err(error);
+                    }
+                }
+            }
+            Ok(())
+        });
+    }
+    let original = command.output().unwrap();
     assert!(original.status.success(), "{original:?}");
     let report: serde_json::Value =
         serde_json::from_slice(&fs::read(root.path().join("wait-resource.json")).unwrap()).unwrap();
