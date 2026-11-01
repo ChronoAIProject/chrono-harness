@@ -2020,7 +2020,15 @@ fn outer_timeout_contains_nested_owned_operation() {
             .expect("the timed-out launch remains identified before cleanup");
         assert_eq!(outer["slot"], observation["slot"]);
         assert_eq!(outer["generation"], observation["generation"]);
-        assert_eq!(outer["parent_slot"], serde_json::Value::Null);
+        // A canonical runner check itself has an inherited launch ancestry.
+        // Standalone tests start a new tree; both must retain their real links.
+        if !outer["parent_slot"].is_null() {
+            assert!(
+                launches
+                    .iter()
+                    .any(|launch| launch["slot"] == outer["parent_slot"])
+            );
+        }
         let nested = launches
             .iter()
             .find(|launch| launch["child_pid"] == pid)
@@ -2033,6 +2041,17 @@ fn outer_timeout_contains_nested_owned_operation() {
             .find(|launch| launch["slot"] == nested["parent_slot"])
             .expect("nested launch keeps its explicit parent identity");
         assert_eq!(parent["state"], 2);
+        let mut ancestor = nested;
+        for _ in 0..launches.len() {
+            if ancestor["slot"] == outer["slot"] {
+                break;
+            }
+            ancestor = launches
+                .iter()
+                .find(|launch| launch["slot"] == ancestor["parent_slot"])
+                .expect("the nested child must retain its path to the timed-out owner");
+        }
+        assert_eq!(ancestor["slot"], outer["slot"]);
         let state = unsafe { libc::kill(pid, 0) };
         let error = std::io::Error::last_os_error();
         if state == 0 {
