@@ -606,9 +606,9 @@ Current scoped execution evidence declares
 receipt, whose process uses the existing lossless `chrono-retained-process`
 encoding; the duplicate row-level process and text/byte aliases are absent.
 Collection expands and checks the original stream digests before comparing the
-unchanged receipt digest, method, plan and outcome. Historical evidence without
-the new marker retains its original two-process-view agreement check. Unknown
-schemas, duplicate current process views, missing encodings, corrupted streams
+unchanged receipt digest, method, plan and outcome. Only the current evidence
+schema is accepted; active producers and consumers migrate together. Missing or
+unknown schemas, duplicate process views, missing encodings, corrupted streams
 and changed receipt digests fail. No execution or output bound increases.
 Product and host input policy change together in this candidate: the report
 producer/collector and their Rust/Python consumers migrate, while local diagnostics

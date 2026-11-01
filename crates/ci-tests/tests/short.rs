@@ -1044,7 +1044,7 @@ fn short_preserves_actual_business_and_producer_failures() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|e| e["process"]["exit_code"] == 7)
+            .any(|e| e["receipt"]["process"]["exit_code"] == 7)
     );
     git(
         &h.root,

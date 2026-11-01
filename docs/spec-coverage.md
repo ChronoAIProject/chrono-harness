@@ -936,7 +936,9 @@ isolated-home agreement, local diagnostics, seven full bindings, default and
 portable/distribution adoption, and historical originals remain P1–P6 obligations.
 Qualified startup artifact `12961832338` supplies all 18 original members and five
 executables for finite native core/detector supply; it does not establish default
-14-tool installation or complete SPEC §12.1. PR163 is not wholly superseded or closed.
+14-tool installation or complete SPEC §12.1. PR163 is closed for historical
+custody; its current obligations continue in PR214. Historical compatibility is
+not a current support obligation.
 
 I3 connects the selected macOS 27 runner guard's 2398 literal input IDs, preserves
 2387 package-file expectations and selects a privately acquired exact Rustup

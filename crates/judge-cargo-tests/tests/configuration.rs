@@ -308,11 +308,8 @@ fn portable_policy_runs_and_rejects_through_both_profiles_without_selecting_docs
                 assert!(rows.is_empty(), "{report}");
             } else {
                 assert_eq!(rows.len(), 1, "{report}");
-                let process = if consumer == Consumer::Full {
-                    &rows[0]["receipt"]["process"]
-                } else {
-                    &rows[0]["process"]
-                };
+                let process =
+                    chrono_harness::full::expand_process(&rows[0]["receipt"]["process"]).unwrap();
                 let bytes: Vec<u8> =
                     serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
                 let actual: serde_json::Value = serde_json::from_slice(&bytes).unwrap();

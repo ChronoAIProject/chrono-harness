@@ -1496,8 +1496,6 @@ class RealSharedStartup(unittest.TestCase):
 def runner_execution_process(evidence, row):
     """Read the versioned Rust report interface, preserving original byte checks."""
     schema = evidence.get("execution_evidence_schema")
-    if schema is None:
-        return row["process"]
     if schema != "chrono-ci-executions/v2" or "process" in row:
         raise AssertionError("unsupported or duplicate runner execution evidence")
     process = dict(row["receipt"]["process"])
@@ -1579,9 +1577,15 @@ class RunnerConsumption(unittest.TestCase):
         return consume_runner_operation(self.response, "same-fixture-source", self.registered)
 
     def selected(self):
+        process = {"exit_code": 0, "failure": None}
+        for stream, raw in (("stdout", b"test result: ok. 1 passed; 0 failed"), ("stderr", b"")):
+            process[stream + "_zlib_hex"] = zlib.compress(raw).hex()
+            process[stream + "_length"] = len(raw)
+            process[stream + "_sha256"] = hashlib.sha256(raw).hexdigest()
+        process["encoding"] = "chrono-retained-process/v2"
         self.response["evidence"].update(base="earlier-fixture-source", changed_paths=["runner-source"],
-            selected=["test:runner-tests"], executed=[{"operation": "test.runner-tests", "process": {
-                "exit_code": 0, "failure": None, "stdout": "test result: ok. 1 passed; 0 failed"}}])
+            execution_evidence_schema="chrono-ci-executions/v2", selected=["test:runner-tests"],
+            executed=[{"operation": "test.runner-tests", "receipt": {"process": process}}])
 
     def test_same_commit_no_work_stays_unchanged_and_runs_registered_consumer(self):
         before = json.dumps(self.response, sort_keys=True)
@@ -1611,15 +1615,7 @@ class RunnerConsumption(unittest.TestCase):
         self.selected()
         evidence = self.response["evidence"]
         row = evidence["executed"][0]
-        process = row.pop("process")
-        for stream in ("stdout", "stderr"):
-            raw = process.pop(stream, "").encode("utf-8")
-            process[stream + "_zlib_hex"] = zlib.compress(raw).hex()
-            process[stream + "_length"] = len(raw)
-            process[stream + "_sha256"] = hashlib.sha256(raw).hexdigest()
-        process["encoding"] = "chrono-retained-process/v2"
-        row["receipt"] = {"process": process}
-        evidence["execution_evidence_schema"] = "chrono-ci-executions/v2"
+        process = row["receipt"]["process"]
         before = json.dumps(self.response, sort_keys=True)
         self.assertEqual(self.consume()["evidence"], "runner-check")
         self.assertEqual(json.dumps(self.response, sort_keys=True), before)
@@ -1630,17 +1626,24 @@ class RunnerConsumption(unittest.TestCase):
 
     def test_missing_duplicate_failed_or_unselected_execution_never_substitutes(self):
         for defect in ("missing", "duplicate", "exit", "failure", "no-tests", "unselected", "blocked",
-                       "check-failed", "source-drift"):
+                       "check-failed", "source-drift", "missing-schema", "duplicate-process"):
             with self.subTest(defect=defect):
                 self.selected()
                 self.response["status"] = "passed"
                 self.response["evidence"].update(candidate="same-fixture-source", blocked=[])
                 evidence = self.response["evidence"]
+                process = evidence["executed"][0]["receipt"]["process"]
                 if defect == "missing": evidence["executed"] = []
                 elif defect == "duplicate": evidence["executed"] *= 2
-                elif defect == "exit": evidence["executed"][0]["process"]["exit_code"] = 7
-                elif defect == "failure": evidence["executed"][0]["process"]["failure"] = "timeout"
-                elif defect == "no-tests": evidence["executed"][0]["process"]["stdout"] = "startup only"
+                elif defect == "exit": process["exit_code"] = 7
+                elif defect == "failure": process["failure"] = "timeout"
+                elif defect == "no-tests":
+                    raw = b"startup only"
+                    process["stdout_zlib_hex"] = zlib.compress(raw).hex()
+                    process["stdout_length"] = len(raw)
+                    process["stdout_sha256"] = hashlib.sha256(raw).hexdigest()
+                elif defect == "missing-schema": del evidence["execution_evidence_schema"]
+                elif defect == "duplicate-process": evidence["executed"][0]["process"] = process
                 elif defect == "unselected": evidence["selected"] = []
                 elif defect == "blocked": evidence["blocked"] = ["test.runner-tests"]
                 elif defect == "check-failed": self.response["status"] = "failed"

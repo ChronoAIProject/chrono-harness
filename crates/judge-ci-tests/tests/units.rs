@@ -399,7 +399,7 @@ fn execution_originals_use_one_lossless_receipt_and_collect_without_reexecution(
 }
 
 #[test]
-fn collection_preserves_legacy_receipts_and_rejects_conflicting_or_corrupt_current_evidence() {
+fn collection_rejects_missing_schema_and_conflicting_or_corrupt_current_evidence() {
     let h = report_host();
     let b = h.head();
     h.write("src.txt", "two");
@@ -417,23 +417,8 @@ fn collection_preserves_legacy_receipts_and_rejects_conflicting_or_corrupt_curre
         reference["sha256"] = json!(sha256(&fs::read(h.root().join(path)).unwrap()));
         reference
     };
-    let mut legacy = original.clone();
-    let e = &mut legacy["response"]["evidence"];
-    e.as_object_mut()
-        .unwrap()
-        .remove("execution_evidence_schema");
-    for row in e["executed"].as_array_mut().unwrap() {
-        let process = chrono_harness::full::expand_process(&row["receipt"]["process"]).unwrap();
-        row["receipt"]["process"] = process.clone();
-        row["process"] = process;
-    }
-    let reference = publish(&mut legacy);
-    pass(&collect(&h, &b, &c, json!([reference])));
-    legacy["response"]["evidence"]["executed"][0]["process"]["exit_code"] = json!(19);
-    let reference = publish(&mut legacy);
-    fail(&collect(&h, &b, &c, json!([reference])), "disagrees");
-
     for mode in [
+        "missing-schema",
         "schema",
         "duplicate",
         "missing-encoding",
@@ -444,6 +429,17 @@ fn collection_preserves_legacy_receipts_and_rejects_conflicting_or_corrupt_curre
         let mut report = original.clone();
         let e = &mut report["response"]["evidence"];
         match mode {
+            "missing-schema" => {
+                e.as_object_mut()
+                    .unwrap()
+                    .remove("execution_evidence_schema");
+                for row in e["executed"].as_array_mut().unwrap() {
+                    let process =
+                        chrono_harness::full::expand_process(&row["receipt"]["process"]).unwrap();
+                    row["receipt"]["process"] = process.clone();
+                    row["process"] = process;
+                }
+            }
             "schema" => e["execution_evidence_schema"] = json!("chrono-ci-executions/v999"),
             "duplicate" => {
                 e["executed"][0]["process"] = e["executed"][0]["receipt"]["process"].clone()
