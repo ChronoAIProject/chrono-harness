@@ -2673,7 +2673,7 @@ fn completion_wait_blocks_without_periodic_status_probes() {
     println!(
         "quiet completion wait: {switches} native process context switches over a 1500-ms child delay"
     );
-    assert!((0..128).contains(&switches), "{report}");
+    assert!((0..64).contains(&switches), "{report}");
 }
 
 #[cfg(target_os = "macos")]
