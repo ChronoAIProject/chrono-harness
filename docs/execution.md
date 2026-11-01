@@ -140,6 +140,13 @@ in-progress reservations as well as explicit descendants.
 The stop handle shares the existing descriptor without increasing the descriptor
 budget. No task daemon, status-polling channel or execution-time extension is added.
 
+Monitor failures retain the launch identity, terminal/cancellation markers,
+observer timestamp, parent markers and finite slot counts before cleanup changes
+them, together with elapsed and allowed monitor milliseconds. These are explicitly
+independent atomic reads, not a coherent tree snapshot or a causal verdict. They
+distinguish missing exit observations from other completion failures without a
+process probe, extra task or changed deadline.
+
 The runner regression `completion_wait_blocks_without_periodic_status_probes`
 isolates one engine in a native child process, with a real child that closes both
 streams and delays 1500 ms before exit 7. It counts macOS `PROC_PIDTASKINFO`

@@ -650,6 +650,39 @@ impl Launch {
             .load(Ordering::Acquire);
         deadline.is_some_and(|deadline| observed != 0 && observed < deadline)
     }
+    pub(crate) fn monitor_observation(&self) -> serde_json::Value {
+        let slots = self.tree.slots();
+        let slot = &slots[self.index];
+        let mut states = [0usize; 5];
+        for slot in slots {
+            states[usize::from(slot.state.load(Ordering::Acquire)).min(4)] += 1;
+        }
+        let parent = slot.parent.load(Ordering::Acquire);
+        let parent = slots.get(parent).map(|slot| {
+            serde_json::json!({
+                "state":slot.state.load(Ordering::Acquire),
+                "generation":slot.generation.load(Ordering::Acquire),
+                "cancelled":slot.cancelled.load(Ordering::Acquire),
+                "terminal":slot.terminal.load(Ordering::Acquire),
+            })
+        });
+        serde_json::json!({
+            "consistency":"independent atomic reads before cleanup",
+            "slot":self.index,
+            "generation":slot.generation.load(Ordering::Acquire),
+            "state":slot.state.load(Ordering::Acquire),
+            "child_pid":slot.pid.load(Ordering::Acquire),
+            "terminal":slot.terminal.load(Ordering::Acquire),
+            "terminal_observed_ns":slot.terminal_observed_ns.load(Ordering::Acquire),
+            "observed_at_ns":monotonic_ns(),
+            "launcher_terminal":slot.launcher_terminal.load(Ordering::Acquire),
+            "cancelled":slot.cancelled.load(Ordering::Acquire),
+            "inherited_cancellation":self.cancelled(),
+            "parent":parent,
+            "slot_counts":{"vacant":states[0],"initializing":states[1],
+                "active":states[2],"released":states[3],"unknown":states[4]},
+        })
+    }
     pub(crate) fn wake(&self) -> Wake {
         Wake(self.acknowledgement_sender.clone())
     }

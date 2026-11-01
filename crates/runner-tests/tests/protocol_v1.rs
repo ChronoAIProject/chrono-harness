@@ -2533,6 +2533,13 @@ fn closed_output_streams_preserve_child_exit_and_timeout() {
                 Some("process timed out"),
                 "{result:?}; markers={markers:?}"
             );
+            let record = result.failure_record.as_ref().unwrap();
+            let observed = &record.error.context["ownership_at_monitor_end"];
+            assert_eq!(observed["child_pid"], value!(result.child_pid));
+            assert_eq!(observed["state"], 2);
+            assert_eq!(observed["terminal"], false);
+            assert_eq!(observed["cancelled"], false);
+            assert!(observed["generation"].as_u64().unwrap() > 0);
             assert!(!root.path().join("completed").exists());
         }
     }
