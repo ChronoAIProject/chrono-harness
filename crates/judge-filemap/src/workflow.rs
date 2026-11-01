@@ -36,7 +36,10 @@ pub fn select(
                 .iter()
                 .enumerate()
             {
-                if m["from_version"] == *old_version && m["to_version"] == *new_version {
+                if m["from_version"] == *old_version
+                    && m["to_version"] == *new_version
+                    && m.get("test").is_some()
+                {
                     requirements.push(requirement(
                         endpoint,
                         r.config()["registries"]["workflow"].as_str().unwrap(),

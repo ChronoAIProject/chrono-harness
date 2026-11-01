@@ -8,6 +8,26 @@ use std::{
 use tempfile::TempDir;
 #[path = "consumption.rs"]
 mod consumption;
+#[path = "../../judge-filemap-tests/tests/support/mod.rs"]
+mod support;
+
+#[test]
+fn schema_evolution_registers_conversion_tools_only_for_actual_data_conversion() {
+    use chrono_judge_registration::Registrations;
+    let mut values = support::values();
+    let transition = json!({"from_version":1,"to_version":2,"mappings":[],
+        "reason":"current workflow adoption without retained-data conversion"});
+    values.get_mut(support::WORKFLOW).unwrap()["migrations"] = json!([transition]);
+    Registrations::load(&values, support::CONFIG).unwrap();
+    for key in ["script", "test"] {
+        let mut incomplete = values.clone();
+        incomplete.get_mut(support::WORKFLOW).unwrap()["migrations"][0][key] = json!("converter");
+        assert!(Registrations::load(&incomplete, support::CONFIG).is_err());
+    }
+    values.get_mut(support::WORKFLOW).unwrap()["migrations"][0]["script"] = json!("converter");
+    values.get_mut(support::WORKFLOW).unwrap()["migrations"][0]["test"] = json!("converter-tests");
+    Registrations::load(&values, support::CONFIG).unwrap();
+}
 
 #[test]
 fn operation_bounds_are_explicit_complete_and_local_to_listed_operations() {

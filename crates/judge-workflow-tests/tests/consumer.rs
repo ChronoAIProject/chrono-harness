@@ -862,6 +862,48 @@ fn migration_host() -> Host {
 }
 
 #[test]
+fn schema_evolution_without_data_conversion_requires_only_the_current_transition() {
+    let mut h = host();
+    let transition = json!({"from_version":1,"to_version":2,"mappings":[],
+        "reason":"adopt current workflow registration without converting retained data"});
+    h.values.get_mut(WORKFLOW).unwrap()["schema_version"] = json!(2);
+    h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([]);
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"] = json!([transition]);
+    h.save();
+    let (e, r) = run(&h, "integration", None, |_| {});
+    passed(e, &r);
+    assert_eq!(
+        workflow(&r)["transitions"]["migrations"],
+        json!([transition])
+    );
+    assert!(r["tests"]["tests"].get("test:decoder-tests").is_none());
+    assert_eq!(r["tests"]["executed"].as_array().unwrap().len(), 2);
+
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"] = json!([]);
+    h.save();
+    let (e, r) = run(&h, "integration", None, |_| {});
+    assert_ne!(e, 0);
+    assert!(r["findings"].to_string().contains("E_MIGRATION_EVIDENCE"));
+
+    let mut incomplete = transition.clone();
+    incomplete["script"] = json!("p");
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"] = json!([incomplete]);
+    h.save();
+    let (e, _) = run(&h, "integration", None, |_| {});
+    assert_ne!(e, 0, "an incomplete data-conversion pair must fail");
+
+    incomplete["test"] = json!("t");
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"] = json!([incomplete]);
+    h.save();
+    let (e, r) = run(&h, "integration", None, |_| {});
+    assert_ne!(
+        e, 0,
+        "declared data conversion still requires its original execution"
+    );
+    assert!(r["findings"].to_string().contains("E_MIGRATION_EVIDENCE"));
+}
+
+#[test]
 fn candidate_decoder_and_real_compatibility_test_certify_the_declared_schema_transition() {
     let mut h = migration_host();
     let (e, r) = run(&h, "integration", None, |_| {});

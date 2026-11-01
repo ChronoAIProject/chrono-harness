@@ -754,23 +754,22 @@ pub fn workflow(v: &Value) -> Result {
     for m in array(&v["migrations"])? {
         object(
             m,
-            &[
-                "from_version",
-                "to_version",
-                "script",
-                "test",
-                "mappings",
-                "reason",
-            ],
-            &[],
+            &["from_version", "to_version", "mappings", "reason"],
+            &["script", "test"],
         )?;
         for k in ["from_version", "to_version"] {
             if m[k].as_u64().is_none() {
                 return Err("migration version must be integer".into());
             }
         }
-        for k in ["script", "test", "reason"] {
-            string(&m[k])?;
+        string(&m["reason"])?;
+        if m.get("script").is_some() != m.get("test").is_some() {
+            return Err("data conversion script and test must be declared together".into());
+        }
+        for k in ["script", "test"] {
+            if let Some(value) = m.get(k) {
+                string(value)?;
+            }
         }
         for pair in array(&m["mappings"])? {
             object(pair, &["from", "to"], &[])?;
