@@ -262,3 +262,256 @@ snapshots remain original; unbound digests cannot acquire absence semantics.
 The runtime does not generate a host's config conversion algorithm. This implementation does
 not activate the repository's proposed full configuration or establish complete
 compiler/backend/linker/SDK/build-script inputs.
+
+
+## Registered acquisition and the bounded source successor
+
+`chrono-inputs observe --host-root H --manifest P --output P` produces facts for
+explicit acquisition declarations. It reuses the current retained process owner;
+capture, pair, capture-governance and compose keep their existing contracts.
+Observation neither registers discovered files nor changes expected identities.
+A manifest selects platforms, an explicit environment, bounded operations,
+literal or preceding-stdout paths, files and bounded directory scopes. Registered
+operations resolve a unique project/script action and reuse its original argv.
+Preceding executable/compiler selections, per-operation bounds and stop-on-failure
+remain explicit. Reports retain the source manifest/projects originals, executable
+identity, launch record and raw stdout/stderr; nonzero, timeout, overflow and
+alias failures remain failures. Originals publish without clobbering prior output.
+
+If an interrupted observer left process originals without publishing its report,
+a retry reserves a fresh attempt directory below the existing process directory.
+The new report references only that attempt; abandoned originals remain intact
+for failure diagnosis and acceptance handoff. An existing published report still
+rejects reuse of the output path. The acquisition owner retains failed attempts
+until their debugging and acceptance obligations end, then hands them to the
+host's ordinary evidence retention and cleanup lifecycle.
+
+Directory observation can produce `chrono-input-directory/v3` originals with
+exact directory children, including the root `.` and empty/alias-only directories.
+The Cargo guard consumes the original topology and rechecks it after the real
+consumer. Canonical-target file observation retains traversed alias identities;
+it does not relax ordinary retained-input path validation. Configuration and
+credential-presence observations retain identity/absence, never credential content.
+The Python helper belongs to host-bootstrap and selects stdlib, platstdlib,
+extensions, runtime image and declared configuration locations rather than claiming
+the entire Python base prefix.
+
+The registered source chain is `host.acquire-native-{macos,linux}` → the selected
+bootstrap-acquire profile → source builds of fourteen installed participants →
+`inputs.acquire-PLATFORM` → `inputs.provision-native` → all 34 registered fetch
+operations → `inputs.observe-PLATFORM`, including all 34 fetch/metadata pairs.
+The original macOS/Linux compiler, SDK/full Developer, runtime/configuration and
+failed alias domains remain represented. Installation follows successful profile
+operations; a failed acquisition does not imply those binaries were installed.
+The pre-build surviving coordinator is a separate participant, still requiring
+its actual source/policy/toolchain/installed identity and protected linked use.
+Bootstrap forwards the surviving owner's original report path on stderr; the
+owner's retained report remains authoritative for its managed process and lease.
+
+The isolated source path is `inputs.provision-isolated` → the existing worktree
+`use inputs.produce-admit-isolated` → `host.bootstrap-isolated`, the 34 fetches,
+and immediate `guard.check.runner`. The guard names the current direct
+`.chrono-harness/git/macos-27.json` policy; it does not reinterpret the root Git
+identity selector. This is a proposed consumer with unresolved actual Cargo,
+compiler, package/resolver, SDK, configuration and retained-input bindings. Its
+policy preserves the required domains and expected package vectors, without
+adopting historical machine bytes. Source presence is not positive guard adoption.
+Before executing this isolated source chain, the adoption owner must bind and
+verify that the observer's selected Cargo/Rustup homes and rustc are exactly those
+of the private bootstrap profile and the guard; inherited homes alone do not prove
+that agreement. The current root worktree v3 policy is retained by acquisition
+participation. A Linux linked/coordinator policy and full Linux host config are
+not adopted by these source declarations and remain a native adoption obligation.
+
+The new native workflow selects the bounded input integration branch and forwards
+the two registered profiles. Its raw event, argv, streams, exit, run/attempt and
+workflow revision accompany the acquired originals and fourteen declared install
+destinations. The workflow job key does not establish the remote numeric job ID;
+that identity and the actual artifact/producer attempt must be resolved from the
+original native run. No native run, installed consumption or landing follows from
+committing this workflow.
+
+The root `chrono-git-configs/v2` exact executable identity semantics, worktree v3,
+known identity tuples and unknown-byte rejection are unchanged. No source-selector
+schema, input-set extension, historical full policy, beta.21 installation or new
+installer is adopted. Historical native config/runner files under `native/macos/`
+are fixed decoder/test data only; no registered action selects that pair. See
+[input source custody](input-source-custody.md) for the preserved omissions and
+unequal-original correction. Full activation, complete input closure, fixed
+retained endpoint pairs, native acceptance and parity remain incomplete.
+
+### Selected local runner input policy
+
+The macOS 27 direct host policy connects every literal runner v6 input ID to
+`project:runner` through the explicit configuration-scoped FILEMAP table;
+native pinned policies retain the common graph. Package file and crate-archive expectations come from preserved
+PR163 source and must match the independently fetched packages; selected private
+Rustup 1.29.1 comes from its official versioned archive and published checksum.
+The previous 1.29.2 observation remains a failed selection, not an expectation.
+Observer, private bootstrap and ordinary guard select the same private homes,
+compiler, empty wrappers, sysroot, linker and SDK environment.
+
+The current Xcode acquisition identifies Xcode 26.5 / 17F42. Its Developer-only
+inventory rejected `usr/bin/altool` because that literal alias reaches the sibling
+SharedFrameworks directory. The selected inventory therefore covers the enclosing
+`Xcode.app/Contents` root with unchanged directory-v3 checks; `DEVELOPER_DIR`
+continues to name Developer and `CHRONO_XCODE_CONTENTS` selects the encompassing
+inventory. SDK, Developer, configuration and runtime scopes remain explicit.
+The original rejected acquisition and successful replacement are retained
+separately. The generated Rust, SDK and Xcode inventories are required original
+inputs under the registered state owner, with digests in the selected policy;
+source declarations alone cannot provision or certify those bytes.
+
+This is a host-policy and registration migration. It changes no Git-v2 or
+worktree-v3 admitted identity and activates no full governance. Guard execution,
+clean candidate bootstrap/canonical DELTA, native acquisition and installed
+consumer evidence must identify their actual source separately. Missing historical
+endpoint originals, complete input closure/parity, other guarded projects, batch
+review and actual delivery remain open. Acquisition/build/check windows and
+retained bytes must be measured separately; total cost and savings are unknown.
+
+The registered macOS native acquisition uses the same enclosing-root treatment
+for its already declared Xcode 26.6 distribution, retains `xcodebuild -version`,
+and publishes the distinct `guard-inputs/xcode-contents.json` original. It keeps
+the declared Contents root as a direct absolute location: the observation
+contract rejects `..` suffixes, and the original rejected attempt is retained.
+It keeps
+all 34 fetch/metadata pairs, 14 installation targets, directory entry bounds and
+failure-before-installation behavior. The native full guard must explicitly bind
+that new original/root before adoption; this acquisition does not activate it.
+
+### Native diagnostics originals before guard adoption
+
+The registered `host.bootstrap-diagnostics-inputs` action is the native
+diagnostics producer entry:
+
+```sh
+/usr/bin/python3 -B .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-diagnostics-inputs.json
+```
+
+It builds the candidate `chrono-inputs` with the existing Rust 1.95.0 bootstrap
+registry in the ordinary native `/Users/runner/.cargo` domain, with acquisition
+allowed for that locked observer manifest, then delegates
+`inputs.observe-diagnostics`. That operation uses the registered diagnostics fetch and locked/offline metadata argv. Its private,
+host-relative Cargo home contains this consumer's acquisition rather than all
+34 projects. Fetch may acquire missing locked packages; metadata remains offline.
+No guard is executed and no expected input identity is rewritten.
+
+The observation explicitly selects the original native `/Users/runner` Rust
+1.95.0 toolchain and the already declared Xcode 26.6 distribution. It retains
+source commit/tree/status, Cargo/compiler identities and native target output,
+SDK/developer/tool selections, root/home and native checkout ancestor Cargo
+configuration facts, and four directory-v3 originals: Rust sysroot, SDK,
+enclosing Xcode Contents and the diagnostics-only Cargo registry. Backend and
+build-script tool bytes remain addressable in those originals. A missing root,
+wrong selected root, unsupported alias, operation failure or inventory limit
+preserves failure through the existing observer; an observed version is not a
+new expected version.
+
+All outputs belong to `.chrono-harness/state/diagnostics-native/`: the bootstrap
+report and streams, `observation.json` and its source/launch/stream originals,
+`guard-inputs/{rust,sdk,xcode-contents,packages}.json`, and the private Cargo home.
+The existing ordinary diagnostics unit uploads `.chrono-harness/state/`, so its
+existing artifact transport can retain this closure. Each observation child
+keeps 120 seconds/1 MiB and each directory keeps 200,000 entries; the native job
+keeps 45 minutes. Inventory IO, artifact size and total native time are unmeasured.
+
+The ordinary native integration point is the diagnostics bootstrap selected by
+`units.diagnostics.bootstrap` in `ci/units.json`, after startup/core verification
+and before `check --unit diagnostics`. The selected diagnostics guard bootstrap
+verifies the imported core profile, builds the candidate guard in the ordinary
+native Cargo home with acquisition allowed for its locked manifest, delegates
+`host.bootstrap-diagnostics-inputs`, then installs the guard before that check.
+Both bootstrap profiles explicitly select that ordinary home and
+`CARGO_NET_OFFLINE=false`, so an inherited diagnostics-only offline selection
+cannot prevent the guard or observer from being built. They use the existing
+Cargo bootstrap actions; they do not populate the private diagnostics registry.
+The registered producer builds its observer and retains its own report and streams
+under the unit's existing state artifact directory. This delegation does not prove
+a native execution. The local diagnostics input, environment and compiler edges
+stay in the existing macOS 27 configuration scope; the native graph retains the
+common guard and observer dependencies without borrowing those local inputs.
+Its output must first be qualified against the exact candidate/source, original producer
+run/attempt, official Rust expectations and declared Xcode/configuration scope.
+The guarded `build.diagnostics` action selects
+`.chrono-harness/cargo/diagnostics-config.json`. Its native Git identity selects
+`.chrono-harness/git/pinned-macos-diagnostics.json`; its local identity retains
+the existing macOS 27 selection. The native direct policy keeps the private
+Cargo home, required offline environment, compiler/sysroot/linker/SDK and all
+package/configuration expectations. The ordinary `.chrono-harness/config.json`
+retains dev's ordinary native environment, with the guard/observer tool names
+required by the current registered actions. Other scoped builds and tests use
+their existing Cargo acquisition domain and current locked manifests.
+Neither shared startup nor the diagnostics producer supplies ordinary registry
+contents. No warm registry, named-crate patch or all-project provisioning is
+required by this separation.
+
+**Host policy and consumer change:** the private environment now applies only to
+the existing guard and observer consumers, while the two bootstrap prerequisites
+select the ordinary native domain. Python owner expectations exercise the
+selected launch homes, cold prerequisite acquisition and offline cold/wrong-home/
+wrong-lock rejection with original streams. Source registration and these
+expectations do not establish an executed local/native result; compatible owner
+deployment, candidate checks and native guard/build/test acceptance remain
+required. The selector adds one small registry read for guarded builds; total
+bootstrap/package/inventory/CI/storage cost remains unmeasured. Bounds and the
+single existing acquisition path are unchanged.
+
+The native direct policy and diagnostics v6 contract now explicitly adopt the
+qualified originals from clean source `6ca53a96f0f0aceca69149a162ac24696bb10bda`,
+run `40961603966`, attempt `1`, diagnostics job `123757592461`, artifact
+`12936817318` (ZIP SHA-256
+`bba25e442cfd89804dfd68cf608883c99143a605ea3640a19adb6ba604103f66`).
+The selected native policy binds the original Cargo/rustc, Xcode 26.6 tools,
+private diagnostics Cargo home, explicit configuration absences and native
+sysroot/SDK/developer roots. Its configuration-scoped FILEMAP edges retain
+1,127 package source-file identities checked against the qualified registry
+inventory; the local macOS 27 policy and its input edges remain local.
+
+**Native build-input policy change:** `toolchain.rust.inventory` now selects the
+committed `.chrono-harness/inputs/diagnostics-rust-build.json`, SHA-256
+`d22ae2e29961289dd9835ac4bdd51d9a942e16209702dc76fe9ce46d63157901`. This fixed
+`chrono-input-directory/v3` retained subset contains exactly the 158 qualified
+common file rows of the admitted J/N raw Rust inventories, all 22 directory rows,
+the original root and all declared aliases. It omits only the file-content row
+`lib/rustlib/components`. Cargo, rustc, backend and standard-library payloads,
+and all four component installation manifests keep their exact identities.
+The current consumer directly selects the pinned Cargo/rustc/sysroot and performs
+locked offline metadata/build; it performs no component-management operation.
+Startup separately checks original source/report/install/executable bindings.
+Those build/provenance obligations therefore retain their payload identities
+without certifying the installer component registry's content.
+
+The previous policy bound all 159 raw file rows. The new build certificate does
+not bind `lib/rustlib/components` content, text membership, file type or raw
+content drift. Its name/presence remains required by the unchanged `lib/rustlib`
+directory children. This is an explicit payload/topology boundary, without an
+order-only equivalence rule or a registry-membership/type certificate. It does
+not establish full input closure or parity. All retained live payloads, physical
+parents, topology, roots, aliases and persistent retained-input changes after
+children remain guarded by the unchanged v3 consumer. Config, wrappers,
+environment, packages, SDK/developer/linker, original startup bindings and bounds
+keep their existing contracts; local macOS 27/default six-component and ordinary
+online prerequisite domains retain their own selections.
+
+The observer still writes the complete, unmodified raw `guard-inputs/rust.json`
+as a distinct diagnostic original, without selecting it as this build's inventory.
+The admitted J raw SHA-256 is
+`792aad114bf2ffec0fea2ebae5fd921cc03446cd4a1a524c933197b3c4e6757b`;
+N is `2452c5a1b1a08232f42c144765c69d1dee9bca7ac24ea9214374bb499662c29b`.
+The remaining runtime `sdk.json` and `xcode-contents.json` expectations stay
+`95337d9300b02f0e75bde2d6aec955d5a8f3a9fc1e8a951726c15c433f74221b`
+and `866c18f9c3469a4cf734e452748b2eff0c4f3bcbeccccbab515c6a29d3309d4d`.
+The package-file adoption authority remains `packages.json` SHA-256
+`ba0f4178c06dede474b4d6c4adb39fe0dafaf01af15d3bcde2a5a1532cfcd2da`.
+These fixed expectations are qualified retained data, not identities learned from
+a current installation. The observer's acquisition and raw output remain unchanged.
+The ordinary build explicitly uses `--offline`.
+No generic guard behavior changes. Registration validation may select broad
+existing consumers; its local/native validation and storage costs are unknown.
+Local macOS 27 checks cannot validate the selected native Xcode/SDK binding,
+and the shared diagnostics policy now describes the native consumer. The actual
+native guarded build, diagnostics tests and canonical collection remain owed.
+Missing originals, failed
+qualification and drift remain failures; producer success is not guarded-build,
+unit/aggregate, full-input, parity or landing acceptance.

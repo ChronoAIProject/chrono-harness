@@ -1,0 +1,123 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "platforms": [
+    "macos-aarch64"
+  ],
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "TMPDIR",
+      "CARGO_HOME",
+      "RUSTUP_HOME",
+      "RUSTC"
+    ],
+    "values": {
+      "CARGO_TERM_COLOR": "never",
+      "CARGO_NET_OFFLINE": "false",
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": "",
+      "HOME": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/home",
+      "CARGO_HOME": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/cargo",
+      "RUSTUP_HOME": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/rustup",
+      "PATH": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin:/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/manager:/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/cargo/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+      "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+      "DEVELOPER_DIR": "/Applications/Xcode.app/Contents/Developer",
+      "RUSTC": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+      "RUSTFLAGS": "--sysroot=/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+      "CHRONO_XCODE_CONTENTS": "/Applications/Xcode.app/Contents"
+    }
+  },
+  "operations": [
+    {
+      "id": "selection.cargo",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "cargo"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.rustc",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "rustc"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    }
+  ],
+  "registered_operations": {
+    "projects": ".chrono-harness/projects.json",
+    "operations": [
+      "host.bootstrap-isolated",
+      "inputs.fetch.runner",
+      "inputs.fetch.runner-tests",
+      "inputs.fetch.instructions",
+      "inputs.fetch.instructions-tests",
+      "inputs.fetch.judge-ci",
+      "inputs.fetch.judge-ci-tests",
+      "inputs.fetch.ci",
+      "inputs.fetch.ci-tests",
+      "inputs.fetch.judge-registration",
+      "inputs.fetch.judge-registration-tests",
+      "inputs.fetch.judge-filemap",
+      "inputs.fetch.judge-filemap-tests",
+      "inputs.fetch.judge-routes",
+      "inputs.fetch.judge-routes-tests",
+      "inputs.fetch.judge-projects",
+      "inputs.fetch.judge-projects-tests",
+      "inputs.fetch.judge-cost",
+      "inputs.fetch.judge-cost-tests",
+      "inputs.fetch.judge-mixed",
+      "inputs.fetch.judge-mixed-tests",
+      "inputs.fetch.judge-workflow",
+      "inputs.fetch.judge-workflow-tests",
+      "inputs.fetch.inputs",
+      "inputs.fetch.inputs-tests",
+      "inputs.fetch.distribution",
+      "inputs.fetch.distribution-tests",
+      "inputs.fetch.judge-cargo",
+      "inputs.fetch.judge-cargo-tests",
+      "inputs.fetch.worktree",
+      "inputs.fetch.worktree-tests",
+      "inputs.fetch.diagnostics",
+      "inputs.fetch.diagnostics-tests",
+      "inputs.fetch.cache",
+      "inputs.fetch.cache-tests",
+      "guard.check.runner"
+    ],
+    "tools": {
+      "python3": "/usr/bin/python3",
+      "cargo": {
+        "stdout": "selection.cargo"
+      },
+      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo"
+    },
+    "timeout_seconds": 120,
+    "output_limit_bytes": 1048576,
+    "operation_bounds": {
+      "guard.check.runner": {
+        "timeout_seconds": 600,
+        "output_limit_bytes": 4194304
+      }
+    },
+    "environment": {
+      "RUSTC": {
+        "stdout": "selection.rustc"
+      }
+    }
+  },
+  "files": [],
+  "directories": [],
+  "stop_on_failure": true
+}

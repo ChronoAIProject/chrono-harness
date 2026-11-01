@@ -1,4 +1,5 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
+pub mod artifact_disposal;
 mod canonical_request;
 mod checkout;
 pub mod facts;
@@ -15,6 +16,7 @@ pub mod full;
 pub mod initial;
 pub mod input_file;
 pub mod observation;
+pub mod ownership;
 pub mod parity;
 pub mod prepared;
 #[cfg(unix)]
@@ -476,8 +478,9 @@ pub fn validate_invocation_observation(
     }
     Ok(())
 }
-/// Reject duplicate object members before typed decoding, including opaque policy data.
-pub fn json(bytes: &[u8]) -> Result<Value, String> {
+/// Deserialize an opaque JSON value while rejecting duplicate members recursively.
+/// Typed consumers can apply this at dynamic fields without a second whole-document tree.
+pub fn strict_json_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Value, D::Error> {
     struct Strict;
     impl<'de> serde::de::Visitor<'de> for Strict {
         type Value = Value;
@@ -536,10 +539,13 @@ pub fn json(bytes: &[u8]) -> Result<Value, String> {
             d.deserialize_any(Strict).map(StrictValue)
         }
     }
+    d.deserialize_any(Strict)
+}
+pub fn json(bytes: &[u8]) -> Result<Value, String> {
     let mut d = serde_json::Deserializer::from_slice(bytes);
-    let v = StrictValue::deserialize(&mut d).map_err(|e| e.to_string())?;
+    let v = strict_json_value(&mut d).map_err(|e| e.to_string())?;
     d.end().map_err(|e| e.to_string())?;
-    Ok(v.0)
+    Ok(v)
 }
 pub fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, String> {
     serde_json::from_value(json(bytes)?).map_err(|e| e.to_string())
@@ -1122,6 +1128,39 @@ fn run_process_inner_with_stdout(
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
+    let mut stream_publications = Vec::new();
+    let mut enrolled_streams = [None, None];
+    if let Some(paths) = &evidence {
+        for (index, (path, bound)) in [
+            (paths.stdout, stdout_limit),
+            (paths.stderr, s.output_limit_bytes),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let relative = path
+                .strip_prefix(&root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("stream path UTF-8")?;
+            if retained_artifacts::retention::Inventory::adopted(&root)?
+                .is_some_and(|i| i.accepts("check-original", relative))
+            {
+                let publication = retained_artifacts::retention::create_adopted_for_consumer(
+                    &root, "check-original", path, false,
+                    serde_json::json!({"kind":"process-stream","stream":index,"stdin_sha256":stdin_sha256,"outcome":"not-established"}),
+                    Some(bound as u64), "publication-recheck"
+                )?.ok_or("stream publication adoption changed")?;
+                enrolled_streams[index] = Some(
+                    fs::OpenOptions::new()
+                        .write(true)
+                        .open(path)
+                        .map_err(|e| e.to_string())?,
+                );
+                stream_publications.push(publication);
+            }
+        }
+    }
     #[cfg(unix)]
     let _transfer = process_fds::Transfer::prepare(&mut command)?;
     #[cfg(unix)]
@@ -1141,14 +1180,25 @@ fn run_process_inner_with_stdout(
     // and can be removed without touching a pre-existing address.
     let (stdout_original, stderr_original) = match evidence.as_ref() {
         Some(paths) => {
-            let stdout = fs::File::create_new(paths.stdout).map_err(|e| {
-                ProcessFailure::native("E_PROCESS_EVIDENCE", format!("stdout original: {e}"), e)
-            })?;
-            let stderr = match fs::File::create_new(paths.stderr) {
+            let stdout = match enrolled_streams[0].take() {
+                Some(file) => file,
+                None => fs::File::create_new(paths.stdout).map_err(|e| {
+                    ProcessFailure::native("E_PROCESS_EVIDENCE", format!("stdout original: {e}"), e)
+                })?,
+            };
+            let stderr = match enrolled_streams[1]
+                .take()
+                .map(Ok)
+                .unwrap_or_else(|| fs::File::create_new(paths.stderr))
+            {
                 Ok(file) => file,
                 Err(error) => {
                     drop(stdout);
-                    let cleanup = cleanup_evidence_path(paths.stdout).err();
+                    let cleanup = if stream_publications.is_empty() {
+                        cleanup_evidence_path(paths.stdout).err()
+                    } else {
+                        None
+                    };
                     let message = match &cleanup {
                         Some(cleanup) => {
                             format!("stderr original: {error}; evidence cleanup: {cleanup}")
@@ -1166,18 +1216,21 @@ fn run_process_inner_with_stdout(
         }
         None => (None, None),
     };
-    Ok(std::thread::scope(|scope| {
+    let mut result = std::thread::scope(|scope| {
         let child = match command.spawn() {
             Ok(child) => child,
             Err(e) => {
                 drop(stdout_original);
                 drop(stderr_original);
-                let cleanup = evidence.as_ref().map(|paths| {
-                    [paths.stdout, paths.stderr]
-                        .into_iter()
-                        .filter_map(|path| cleanup_evidence_path(path).err())
-                        .collect::<Vec<_>>()
-                });
+                let cleanup = evidence
+                    .as_ref()
+                    .filter(|_| stream_publications.is_empty())
+                    .map(|paths| {
+                        [paths.stdout, paths.stderr]
+                            .into_iter()
+                            .filter_map(|path| cleanup_evidence_path(path).err())
+                            .collect::<Vec<_>>()
+                    });
                 let cleanup = cleanup.filter(|errors| !errors.is_empty());
                 #[cfg(unix)]
                 let detail = ownership.spawn_error(&e);
@@ -1237,6 +1290,10 @@ fn run_process_inner_with_stdout(
                 "timeout_seconds": s.timeout_seconds, "output_limit_bytes": s.output_limit_bytes,
             });
             let published = (|| -> Result<(), Failure> {
+                let relative = paths.launch.strip_prefix(&root).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?.to_str().ok_or_else(||Failure::new("E_PROCESS_EVIDENCE","launch path UTF-8"))?;
+                let raw = serde_json::to_vec(&record).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?;
+                if retained_artifacts::retention::publish_pending_original(&root, "check-original", relative, &raw,
+                    serde_json::json!({"kind":"process-launch","child_pid":pid,"outcome":"not-established"})).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e))? { return Ok(()); }
                 let mut original = tempfile::NamedTempFile::new_in(
                     paths
                         .launch
@@ -1601,7 +1658,29 @@ fn run_process_inner_with_stdout(
             process.launch_original = launch_descriptor(&process.cwd, paths.launch);
         }
         Ok(process)
-    })?)
+    });
+    if let Ok(process) = &mut result {
+        for publication in stream_publications {
+            if let Err(error) = publication.complete(serde_json::json!({"kind":"process-stream","exit_code":process.exit_code,"failure":process.failure,"stdin_sha256":process.stdin_sha256})) {
+                process.failure = Some(match process.failure.take() {
+                    Some(original) => format!("{original}; stream retention publication: {error}"),
+                    None => format!("stream retention publication: {error}"),
+                });
+                let retention_error = Failure::new("E_PROCESS_STREAM_RETENTION", error);
+                let detail = match process.failure_cause.take() {
+                    Some(original) => Failure::wrap(
+                        "E_PROCESS", original.message.clone(), SharedProcessFailure(original),
+                    ).with_related("stream_retention", retention_error),
+                    None => retention_error,
+                };
+                process.failure_record = Some(detail.record());
+                process.failure_cause = Some(Arc::new(ProcessFailure {
+                    message: process.failure.as_ref().unwrap().clone(), error: detail,
+                }));
+            }
+        }
+    }
+    Ok(result?)
 }
 pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String> {
     validate_response_protocol(r, id, exit, PROTOCOL)
@@ -1746,6 +1825,7 @@ pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
     ["check",rest @ ..]=>match check(rest, entry){Ok(output)=>output,Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
     ["parity",rest @ ..]=>parity_command(rest),
+    ["retention",rest @ ..]=>retained_artifacts::retention_command::command(rest),
     _=>CliOutput{exit_code:2,stdout:String::new(),stderr:"E_USAGE: use --help\n".into()}
 }
 }
@@ -1775,6 +1855,8 @@ fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> 
             },
             _ => unreachable!(),
         };
+        retained_artifacts::retention::maintain_adopted(&root)?;
+        let _report_activity = retained_artifacts::retention::report_activity(&root)?;
         let (req, p, binding) = prepared::prepare(&root, selection)?;
         let retention = prepared::retention_directory(&req);
         let result = execute_check(
@@ -1899,6 +1981,7 @@ fn execute_check(
     entry: Value,
     preparation: Option<Value>,
 ) -> Result<(u8, String), String> {
+    retained_artifacts::retention::maintain_adopted(&root)?;
     let (_, _, profile, _) = facts_configs::load(&root, &config_path)?;
     let full_units = if scope.is_some() && profile["schema"] != units::PROFILE {
         units::full_execution_units(&profile)?
@@ -2171,6 +2254,25 @@ fn execute_check(
     } else {
         None
     };
+    let collected_originals: Vec<String> =
+        if matches!(report["request"]["scope"]["kind"].as_str(), Some("collect")) {
+            report["response"]["evidence"]["retained_originals"]
+                .as_array()
+                .map(|paths| {
+                    paths
+                        .iter()
+                        .map(|p| {
+                            p.as_str()
+                                .ok_or_else(|| "collection original path".to_owned())
+                                .map(str::to_owned)
+                        })
+                        .collect::<Result<Vec<_>, String>>()
+                })
+                .transpose()?
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
     let console = if retained_streams {
         let projection = serde_json::json!({
             "retained_report": report["retained_report"],
@@ -2193,17 +2295,57 @@ fn execute_check(
     fs::create_dir_all(report_path.parent().ok_or("report parent missing")?)
         .map_err(|e| e.to_string())?;
     if let Some(path) = retained_report {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(no_symlink_parents(&root, &path)?)
-            .map_err(|e| e.to_string())?;
-        file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        if !retained_artifacts::retention::publish_final_original(
+            &root,
+            "check-original",
+            &path,
+            text.as_bytes(),
+            serde_json::json!({"request_id":request_id,"exit_code":code,"transport_failure":report["transport_failure"]}),
+            code == 0,
+        )? {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(no_symlink_parents(&root, &path)?)
+                .map_err(|e| e.to_string())?;
+            file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        }
+        let preparation = &report["request"]["observations"]["preparation"];
+        let mut originals = collected_originals;
+        for values in [
+            &preparation["result"]["originals"],
+            &preparation["receipts"],
+        ] {
+            if let Some(values) = values.as_array() {
+                for value in values {
+                    originals.push(
+                        value["path"]
+                            .as_str()
+                            .ok_or("declared original path")?
+                            .to_owned(),
+                    );
+                }
+            }
+        }
+        for stream in ["stdout_original", "stderr_original", "launch_original"] {
+            if let Some(path) = report["judge"][stream]["path"].as_str() {
+                originals.push(path.to_owned());
+            }
+        }
+        let pending_native =
+            (preparation["request"]["source"] == "ci").then_some(request_id.as_str());
+        let _publication = retained_artifacts::retention::reference_report(
+            &root,
+            &output_path,
+            &path,
+            &originals,
+            pending_native,
+        )?;
         if units::reference_publication(&c)? {
             let reference = units::ReportReference {
                 schema: units::REPORT_REFERENCE.into(),
                 original: prepared::Original {
-                    path,
+                    path: path.clone(),
                     sha256: sha256(text.as_bytes()),
                 },
             };
@@ -2212,8 +2354,12 @@ fn execute_check(
                 serde_json::to_vec(&reference).map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;
+            retained_artifacts::retention::settle_report(&root, &output_path, &path)?;
             return Ok((code, console.unwrap_or(text)));
         }
+        fs::write(report_path, &text).map_err(|e| e.to_string())?;
+        retained_artifacts::retention::settle_report(&root, &output_path, &path)?;
+        return Ok((code, text));
     }
     fs::write(report_path, &text).map_err(|e| e.to_string())?;
     Ok((code, text))
