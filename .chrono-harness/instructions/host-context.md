@@ -4,6 +4,11 @@
 
 ## 所有者与范围
 
+本宿主以当前规范为合同，无需兼容历史版本、格式、接口和执行路径。
+演进时同步迁移现役消费者与登记，移除仅为历史兼容保留的实现和测试。
+下文的旧版本材料只保留其事实用途，不形成支持义务；固定基线 DELTA、必要原件与
+活跃消费的保护继续按当前合同处理。
+
 本仓维护 Rust harness 产品和独立宿主采用数据。[SPEC](../../SPEC.md) 是尚未全部实现的产品合同，当前结果与缺口归[覆盖表](../../docs/spec-coverage.md)。生产／专属测试项目各有独立 manifest、lock、target，无根 workspace；独立 Python 脚本及测试也显式配对。
 
 产品默认归 `assets/instructions/catalog.json`、`assets/instructions/default-manifest.json`；本宿主选择归本目录的 [catalog](catalog.json)、[manifest](manifest.json) 和本上下文。产品资产是编译／测试输入，宿主数据与现有投影是运行输入；升级二进制或重复 init 不覆盖宿主选择，采用新默认须比较所选产品版本的 catalog／default-manifest，保留定制后编辑宿主源并 generate；具体步骤归[指令所有者](../../docs/instructions.md#新默认的宿主采用边界)，不是自动更新。CLAUDE.md 是生成的中文根，AGENTS.md 是字面相对链接 `CLAUDE.md`，不手改投影。
