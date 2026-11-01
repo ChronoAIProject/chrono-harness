@@ -2,7 +2,7 @@
 //! never argv/environment policy. Each launcher reaps its own children on cancellation.
 use crate::ProcessFailure;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fs::File,
     os::fd::{AsRawFd, FromRawFd},
     ptr::NonNull,
@@ -317,33 +317,21 @@ impl Tree {
         Arc::get_mut(&mut tree).unwrap().observer = Some(observer);
         Ok(tree)
     }
-    fn cancelled(&self, index: usize) -> bool {
-        cancelled(self.slots(), index)
+    fn cancelled(&self, mut index: usize) -> bool {
+        for _ in 0..CAPACITY {
+            if index == CAPACITY {
+                return false;
+            }
+            let slot = &self.slots()[index];
+            if slot.cancelled.load(Ordering::Acquire) {
+                return true;
+            }
+            index = slot.parent.load(Ordering::Acquire);
+        }
+        true
     }
     fn descendant(&self, index: usize, ancestor: usize) -> bool {
         descendant(self.slots(), index, ancestor)
-    }
-}
-fn cancelled(slots: &[Slot; CAPACITY], mut index: usize) -> bool {
-    for _ in 0..CAPACITY {
-        if index == CAPACITY {
-            return false;
-        }
-        let slot = &slots[index];
-        if slot.cancelled.load(Ordering::Acquire) {
-            return true;
-        }
-        index = slot.parent.load(Ordering::Acquire);
-    }
-    true
-}
-fn wake_ancestors(slots: &[Slot; CAPACITY], mut index: usize, pending: &mut BTreeSet<usize>) {
-    for _ in 0..CAPACITY {
-        if index == CAPACITY {
-            break;
-        }
-        pending.insert(index);
-        index = slots[index].parent.load(Ordering::Acquire);
     }
 }
 fn descendant(slots: &[Slot; CAPACITY], mut index: usize, ancestor: usize) -> bool {
@@ -800,11 +788,9 @@ impl ExitObserver {
             .name("chrono-owned-exits".into())
             .spawn(move || {
                 let shared = unsafe { &*(memory as *const Shared) };
-                // Each registered launch retains its own reply endpoint and
-                // whether cancellation has already been relayed on it.
-                let mut wake: BTreeMap<usize, (File, bool)> = BTreeMap::new();
+                let mut wake = BTreeMap::new();
                 while !stopping.load(Ordering::Acquire) {
-                    let mut pending = BTreeSet::new();
+                    let mut changed = false;
                     // Receive only explicit launch handoffs. The reply descriptor is
                     // specific to this child, so sibling registrations cannot steal it.
                     loop {
@@ -834,6 +820,7 @@ impl ExitObserver {
                             // A lifecycle transition or observer shutdown, on
                             // the same channel as launch handoffs. This hint
                             // carries no task identity or terminal verdict.
+                            changed = true;
                             continue;
                         }
                         if n as usize != std::mem::size_of_val(&data) || header.is_null() {
@@ -874,9 +861,9 @@ impl ExitObserver {
                             );
                         }
                         if ack == 0 {
-                            wake_ancestors(&shared.slots, index, &mut pending);
+                            changed = true;
                             wake.entry(generation * CAPACITY * 2 + index * 2)
-                                .or_insert((reply, false));
+                                .or_insert(reply);
                         }
                     }
                     identities.retain(|cookie| {
@@ -893,7 +880,7 @@ impl ExitObserver {
                         let index = (cookie / 2) % CAPACITY;
                         let generation = cookie / (CAPACITY * 2);
                         if shared.slots[index].generation.load(Ordering::Acquire) == generation {
-                            wake_ancestors(&shared.slots, index, &mut pending);
+                            changed = true;
                             if cookie % 2 == 0 {
                                 if let Some(observed) = monotonic_ns() {
                                     shared.slots[index]
@@ -917,7 +904,6 @@ impl ExitObserver {
                         let mut released = false;
                         for (index, slot) in shared.slots.iter().enumerate() {
                             if slot.state.load(Ordering::Acquire) == 3 {
-                                wake_ancestors(&shared.slots, index, &mut pending);
                                 slot.state.store(0, Ordering::Release);
                                 released = true;
                                 continue;
@@ -931,7 +917,6 @@ impl ExitObserver {
                                         && descendant(&shared.slots, child, index)
                                 })
                             {
-                                wake_ancestors(&shared.slots, index, &mut pending);
                                 slot.state.store(0, Ordering::Release);
                                 released = true;
                             }
@@ -939,17 +924,14 @@ impl ExitObserver {
                         if !released {
                             break;
                         }
+                        changed = true;
                     }
-                    // Wake only the changed launch and its actual ancestors.
-                    // Descendants receive an inherited cancellation once; quiet
-                    // independent launches need no sibling status notifications.
-                    for (cookie, (reply, cancellation_sent)) in &mut wake {
-                        let index = (*cookie / 2) % CAPACITY;
-                        let cancellation = !*cancellation_sent && cancelled(&shared.slots, index);
-                        if cancellation {
-                            *cancellation_sent = true;
-                        }
-                        if pending.contains(&index) || cancellation {
+                    if changed {
+                        // Retain endpoints through terminal observation until
+                        // slot release. An enclosing join also needs child and
+                        // launcher retirement notifications. Each receiver still
+                        // checks its own identity, cancellation and real exit.
+                        for reply in wake.values() {
                             notify(reply.as_raw_fd());
                         }
                     }

@@ -133,9 +133,10 @@ notify that same socket; completed descendant retirement is closed within the
 event batch before blocking again. Notifications never substitute for the actual
 child join or establish a successful result. The private mapping v5 requires
 these lifecycle hints, so coupled nested executables must use the same version.
-Exit and registration hints reach only the affected launch and its ancestors;
-inherited cancellation reaches each affected descendant once. Independent
-sibling launches do not wake a quiet monitor.
+Lifecycle and identity events notify the retained launch endpoints. A shared
+observer can therefore wake siblings when actual tree events occur; it does not
+schedule periodic status probes. This also covers the drain predicate's shared
+in-progress reservations as well as explicit descendants.
 The stop handle shares the existing descriptor without increasing the descriptor
 budget. No task daemon, status-polling channel or execution-time extension is added.
 
