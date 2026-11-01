@@ -1485,6 +1485,17 @@ before any construction command. The source51 issuer still owns protected
 construction; a staged current owner still acquires the actual exclusive leases
 before replacement. Qualification grants neither compatibility nor completion.
 
+When exclusive owner publication succeeded but the following core installation
+failed, the selected owner's producer is its retained stage, rather than the
+older full-install report. Current Python qualifies that fixed producer as data:
+the original clean source/registrations, toolchain execution and streams, staged
+and previous inode identities, publication intent/result, and original Rust
+adoption receipt must agree with the installed owner. Missing or changed originals
+still refuse. This read does not rewrite the old full-install report or adoption
+index, execute a historical bootstrap, acquire replacement authority or claim
+that core installation completed. Subsequent construction and deployment retain
+the existing owner and kernel exclusion path.
+
 **Product and host policy change together:** the Python owner reuses shared
 producer validation with an immutable source reader, and this host selects its
 existing bootstrap report as the additional input. It replaces repeated manual

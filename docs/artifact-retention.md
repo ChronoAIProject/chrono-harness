@@ -104,6 +104,29 @@ acceptance authority. No inventory format, release rule or product bound changes
 
 ## Bounded recovery and migration
 
+Lifecycle entry and output admission perform their existing bounded retention
+rounds before acquiring that invocation's report-family activity. Holding its own
+activity during either prelude protected every old adopted report, so a full inventory
+could refuse both ordinary admission and the advised `chrono-worktree maintain`
+recovery command. Other active publishers/collectors still protect the family;
+exact roots, dependency closures, producer/read capabilities, original identity,
+source/index checks and all finite policy bounds remain authoritative. The new
+invocation holds its activity from after rooted output reservation through
+execution and settlement; its publication capability and durable recovery root
+protect that reservation before content writes. Failed/interrupted originals,
+pending delivery and required consumers are never released by this prelude. A deferred
+or insufficient round can still leave admission refused; no retry loop or
+capacity reserve is added.
+
+The Rust lifecycle regressions exercise real maintenance and bootstrap
+participation at 512 entries with the existing 25 ms / 256-node round. They
+require eligible unrelated originals to retire after an independent collector
+closes, preserve active producers/readers and their dependencies, exact failure,
+interruption, current-report and delivery roots, and unchanged source/index
+bytes. Fully rooted exhaustion still refuses admission. Bootstrap participation
+uses the existing registered Rust interface fixture; it does not establish a
+real bootstrap build, host recovery, canonical adoption or native acceptance.
+
 The supported owner entry is:
 
 ```sh

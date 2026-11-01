@@ -95,13 +95,14 @@ fn owner(root: &Path, rule: &Historical) -> Result<Lease, String> {
 }
 fn bounded_json(root: &Path, path: &str, limit: u64) -> Result<(Value, Vec<u8>), String> {
     let path = no_symlink_parents(root, path)?;
-    let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    let metadata = fs::symlink_metadata(&path)
+        .map_err(|e| format!("delivery input {}: {e}", path.display()))?;
     if !metadata.is_file() || metadata.len() > limit {
         return Err("delivery input must be a bounded regular file".into());
     }
     let mut raw = Vec::new();
-    fs::File::open(path)
-        .map_err(|e| e.to_string())?
+    fs::File::open(&path)
+        .map_err(|e| format!("delivery input {}: {e}", path.display()))?
         .take(limit + 1)
         .read_to_end(&mut raw)
         .map_err(|e| e.to_string())?;
@@ -271,11 +272,14 @@ pub fn command(args: &[&str]) -> CliOutput {
                     .or(config["policy"]["units"][scope]["report_path"].as_str())
             }
             .ok_or("delivered report slot not registered")?;
-            let (report, _) = bounded_json(&root, path, 64 * 1024 * 1024)?;
+            let (report, _) = bounded_json(&root, path, 64 * 1024 * 1024).map_err(|e| {
+                format!("delivered check report unavailable at {path}: {e}; upload does not establish report production; delivery not acknowledged, original outcomes and roots preserved")
+            })?;
             let (original, original_raw) = if report["schema"] == crate::units::REPORT_REFERENCE {
                 let reference: crate::units::ReportReference = serde_json::from_value(report)
                     .map_err(|e| format!("delivery report reference: {e}"))?;
-                let raw = crate::prepared::read_original(&root, &reference.original, None)?;
+                let raw = crate::prepared::read_original(&root, &reference.original, None)
+                    .map_err(|e| format!("delivery original {} verification failed: {e}; delivery not acknowledged, original outcomes and roots preserved", reference.original.path))?;
                 (reference.original.path, raw)
             } else {
                 let original = report["retained_report"]

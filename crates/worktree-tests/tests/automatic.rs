@@ -83,6 +83,251 @@ fn output(target: &Path) {
     fs::write(target.join("output λ/data"), vec![42u8; 8192]).unwrap();
 }
 
+// Exercise the actual lifecycle CLI with the adopted finite owner, not an
+// alternate maintenance implementation. Failed cases retain their original host.
+fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        h.kernel_cleanup();
+        native_consumer(&h, "ordinary");
+        let bootstrap = ".chrono-harness/ci/capacity.json";
+        fs::create_dir_all(h.root.join(".chrono-harness/ci")).unwrap();
+        fs::write(h.root.join(bootstrap), serde_json::to_vec(&value!({
+            "schema":"chrono-bootstrap/v1", "participation":{"coordinator_root":"git-main-worktree"},
+            "entrypoint":{"tool":"consumer","script":"noop"}
+        })).unwrap()).unwrap();
+        // The registered Rust interface fixture returns immediately for noop;
+        // the real bootstrap participation dispatch still resolves and joins it.
+        fs::write(h.root.join("noop"), include_bytes!("support/consumer.rs")).unwrap();
+        fs::write(
+            h.root.join(POLICY_PATH),
+            serde_json::to_vec(&value!({
+                "schema":"chrono-output-retention/v1",
+                "producers":{"check-original":[".chrono-harness/state/"],
+                    "lifecycle-original":[".chrono-harness/state/worktrees/"]},
+                "keep_seconds":0,"max_entries":512,"max_summaries":128,
+                "max_nodes_per_round":256,"max_bytes_per_round":67108864,
+                "max_millis_per_round":25,"max_output_bytes":1073741824,
+                "max_total_bytes":8589934592u64,"max_manifest_nodes":16384,
+                "max_metadata_bytes_per_round":67108864
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+        for path in [POLICY_PATH, bootstrap, "noop"] {
+            fm["files"]
+                .as_array_mut()
+                .unwrap()
+                .push(file(path, value!([])));
+        }
+        fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let source_bytes = fs::read(h.root.join("payload")).unwrap();
+        let index = fs::read(h.root.join(".git/index")).unwrap();
+        let inventory = || Inventory::adopted(&h.root).unwrap().unwrap();
+        let state = || {
+            json(
+                &fs::read(
+                    h.root
+                        .join(".chrono-harness/state/output-retention-v1/inventory.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+        };
+        fs::create_dir_all(h.root.join(".chrono-harness/state/worktrees")).unwrap();
+        let mut ids = Vec::new();
+        let mut live = None;
+        for n in 0..512 {
+            let path = format!(".chrono-harness/state/worktrees/history-{n}.json");
+            fs::write(h.root.join(&path), format!("original {n}\n")).unwrap();
+            let publication = inventory()
+                .begin(
+                    "lifecycle-original",
+                    &path,
+                    value!({"status":"not-established"}),
+                )
+                .unwrap();
+            ids.push(publication.id().to_owned());
+            if n == 0 {
+                live = Some(publication); // Actual unfinished producer capability.
+            } else {
+                publication
+                    .complete(if n == 1 {
+                        value!({"status":"failed","error":"original failure"})
+                    } else if n == 2 {
+                        value!({"status":"not-established","publication":"interrupted"})
+                    } else {
+                        value!({"status":"cleaned"})
+                    })
+                    .unwrap();
+            }
+        }
+        inventory()
+            .reference("consumer:lifecycle-recheck:failure", &[ids[1].clone()])
+            .unwrap();
+        inventory()
+            .reference(
+                "consumer:publication-recheck:interrupted",
+                &[ids[2].clone()],
+            )
+            .unwrap();
+        inventory()
+            .reference("native-delivery:pending", &[ids[3].clone()])
+            .unwrap();
+        inventory()
+            .reference("current-report:exact", &[ids[4].clone()])
+            .unwrap();
+        inventory()
+            .dependencies(&ids[4], &[ids[5].clone()])
+            .unwrap();
+        inventory()
+            .dependencies(&ids[6], &[ids[7].clone()])
+            .unwrap();
+        let reader = inventory().consume(&ids[6]).unwrap();
+        if all_rooted {
+            inventory()
+                .reference("consumer:required-originals", &ids)
+                .unwrap();
+        }
+        let before = state();
+        assert_eq!(before["outputs"].as_array().unwrap().len(), 512);
+        let invoke = |phase: &str| {
+            let extra = if operation == "bootstrap" {
+                vec!["--bootstrap-config", bootstrap]
+            } else {
+                vec![]
+            };
+            let mut command = h.auto_command(operation, &extra);
+            let out = h._dir.capture_bound(&mut command);
+            let dir = h.root.join(".chrono-harness/state");
+            fs::write(dir.join(format!("capacity-{phase}.stdout")), &out.stdout).unwrap();
+            fs::write(dir.join(format!("capacity-{phase}.stderr")), &out.stderr).unwrap();
+            fs::write(
+                dir.join(format!("capacity-{phase}.status")),
+                out.status.to_string(),
+            )
+            .unwrap();
+            h.received(out)
+        };
+        // An independent active collector still roots the whole family. The
+        // new entrant must not remove evidence to make room for its own report.
+        let activity = inventory().report_activity().unwrap();
+        let (code, _, error) = invoke("active");
+        assert_eq!(code, 2, "{error}");
+        assert!(
+            error.contains("protected output inventory capacity"),
+            "{error}"
+        );
+        assert_eq!(state()["outputs"], before["outputs"]);
+        drop(activity);
+        let (code, report, error) = invoke("excluded");
+        if all_rooted {
+            assert_eq!(code, 2, "{report} {error}");
+            assert!(
+                error.contains("protected output inventory capacity"),
+                "{error}"
+            );
+            assert_eq!(state()["outputs"], before["outputs"]);
+        } else {
+            assert_eq!(code, 0, "{report} {error}");
+            assert_eq!(
+                report["status"],
+                if operation == "maintain" {
+                    "maintained"
+                } else {
+                    "used"
+                }
+            );
+            if operation == "bootstrap" {
+                assert_eq!(report["managed_process"]["exit_code"], 0);
+                assert_eq!(
+                    report["managed_process"]["argv"],
+                    value!([
+                        env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
+                        "noop",
+                        h.root,
+                        bootstrap
+                    ])
+                );
+            }
+            let after = state();
+            assert!(
+                after["summaries"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
+            );
+            assert!(after["outputs"].as_array().unwrap().len() <= 512);
+            assert!(
+                after["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|o| o["path"] == report["report_path"])
+            );
+            assert_eq!(after["roots"], before["roots"]);
+        }
+        let after = state();
+        for n in 0..if all_rooted { 512 } else { 8 } {
+            assert_eq!(
+                fs::read(
+                    h.root
+                        .join(format!(".chrono-harness/state/worktrees/history-{n}.json"))
+                )
+                .unwrap(),
+                format!("original {n}\n").as_bytes()
+            );
+            let original = before["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["id"] == ids[n])
+                .unwrap();
+            assert_eq!(
+                after["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|o| o["id"] == ids[n])
+                    .unwrap(),
+                original
+            );
+        }
+        assert_eq!(fs::read(h.root.join("payload")).unwrap(), source_bytes);
+        assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
+        drop(reader);
+        drop(live);
+    }));
+    if let Err(failure) = result {
+        eprintln!(
+            "original capacity fixture retained at {}",
+            h.parent.display()
+        );
+        std::mem::forget(h);
+        std::panic::resume_unwind(failure);
+    }
+}
+
+#[test]
+fn ordinary_report_capacity_maintenance_reclaims_only_eligible_originals() {
+    ordinary_report_capacity("maintain", false);
+}
+
+#[test]
+fn ordinary_report_capacity_bootstrap_admits_after_bounded_recovery() {
+    ordinary_report_capacity("bootstrap", false);
+}
+
+#[test]
+fn ordinary_report_capacity_required_originals_still_refuse_admission() {
+    ordinary_report_capacity("maintain", true);
+}
+
 pub(super) fn inventory_row<'a>(report: &'a Value, target: &Path) -> &'a Value {
     report["worktree_inventory"]
         .as_array()

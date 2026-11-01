@@ -80,6 +80,11 @@ def qualified_supply(root, declaration):
 def qualified_selected_original(root, reference, selected):
     """Qualify installed input from its actual producer, before construction."""
     selected_before = file_binding(selected)
+    current_path = shared.safe(root, CURRENT)
+    if current_path.exists():
+        current = json.loads(current_path.read_bytes())
+        if current.get("installed") == selected_before:
+            return qualified_publication(root, current, selected)
     path = shared.safe(root, reference, ".chrono-harness/state/")
     original = path.read_bytes()
     report = json.loads(original)
@@ -104,6 +109,39 @@ def qualified_selected_original(root, reference, selected):
         raise ValueError("selected owner or its original changed during qualification")
     return {"schema": "chrono-bootstrap-selected-original/v1", "path": reference,
             "sha256": shared.digest(original), "source": source, "selected": selected_before}
+
+
+def qualified_publication(root, current, selected):
+    """Read fixed producer data; never execute an older bootstrap or judge."""
+    receipt = current["receipt"]
+    raw = shared.read(root, receipt["path"], ".chrono-harness/state/automatic-cleanup-v2/")
+    if (shared.digest(raw) != receipt["sha256"]
+            or json.loads(raw) != {k: v for k, v in current.items() if k != "receipt"}
+            or current.get("schema") != "chrono-worktree-owner-adoption/v1"):
+        raise ValueError("selected owner adoption original differs")
+    report, _ = stage_report(root, current["stage_result"], current["stage_sha256"],
+                             producer_commit=current["source_commit"])
+    record = report["owner_stage"]
+    staged = shared.safe(root, record["staged"]["path"], STAGES)
+    publication = current["publication"]
+    installed = file_binding(selected)
+    expected = {"schema": "chrono-bootstrap-owner-publication/v1", "stage": record,
+                "installed": installed, "adoption": "not-claimed", "task_completion": "not-claimed"}
+    intent = {"schema": "chrono-bootstrap-owner-publication-intent/v1",
+              "stage": record, "replacement": installed}
+    if (record["selected"] != selected.relative_to(root).as_posix()
+            or current["installed"] != installed or publication != expected
+            or installed["sha256"] != record["staged"]["sha256"]
+            or current["original_owner"] != record["previous"]
+            or file_binding(staged.parent / "previous-owner") != record["previous"]
+            or json.loads(shared.read(root, (staged.parent / "publication-intent.json").relative_to(root).as_posix())) != intent
+            or json.loads(shared.read(root, (staged.parent / "publication-result.json").relative_to(root).as_posix())) != expected):
+        raise ValueError("selected owner publication originals differ")
+    if file_binding(selected) != installed:
+        raise ValueError("selected owner changed during publication qualification")
+    return {"schema": "chrono-bootstrap-selected-original/v1", "path": current["stage_result"],
+            "sha256": current["stage_sha256"],
+            "source": {k: report["source"][k] for k in ("commit", "tree")}, "selected": installed}
 
 
 def check_shared_install(root, source, target):
@@ -133,19 +171,27 @@ def stage(root, config, result, previous):
                              "staged": dict(file_binding(target), path=target.relative_to(root).as_posix())}
 
 
-def stage_report(root, reference, expected_sha=None):
+def stage_report(root, reference, expected_sha=None, producer_commit=None):
     path = shared.safe(root, reference, ".chrono-harness/state/bootstrap-")
     raw = path.read_bytes()
     if expected_sha is not None and shared.digest(raw) != expected_sha:
         raise ValueError("owner stage original report differs")
     report = json.loads(raw)
-    observed = bootstrap.observe_source(root)
-    profile = json.loads(shared.read(root, report["config"], ".chrono-harness/ci/"))
+    read_input = shared.read
+    if producer_commit is None:
+        observed = bootstrap.observe_source(root)
+    else:
+        source = {k: report["source"][k] for k in ("commit", "tree")}
+        if source["commit"] != producer_commit or report.get("host_root") != str(root):
+            raise ValueError("selected owner stage producer differs")
+        read_input = committed_reader(root, source)
+        observed = dict(source, dirty=False, error=None)
+    profile = json.loads(read_input(root, report["config"], ".chrono-harness/ci/"))
     if (report.get("source") != bootstrap.source_identity(observed, observed)
             or observed["dirty"] is not False or observed["error"] is not None
             or not profile.get("owner_stage") or report["installed"]):
         raise ValueError("owner stage requires the original current clean source")
-    shared.validate_execution(root, profile, report)
+    shared.validate_execution(root, profile, report, read_input)
     shared.validate_streams(root, report)
     record = report["owner_stage"]
     staged = shared.safe(root, record["staged"]["path"], STAGES)
@@ -270,7 +316,7 @@ def upgrade(root, config_path, config):
         if (current.get("schema") == "chrono-worktree-owner-adoption/v1"
                 and current.get("source_commit") == observed["commit"]
                 and current.get("installed") == file_binding(selected)):
-            stage_report(root, current["stage_result"], current["stage_sha256"])
+            qualified_publication(root, current, selected)
             return
     original = bootstrap.report_destination(root, config)
     if original.exists():

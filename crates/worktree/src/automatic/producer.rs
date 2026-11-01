@@ -907,13 +907,28 @@ impl TemporaryHost {
             true,
         )?;
         command.stdin(stdin).stdout(out).stderr(err);
+        let span = tracing::info_span!("fixture.native", capture = %capture.display(),
+            program = %command.get_program().to_string_lossy(),
+            argv = %value!(command.get_args().map(|v| v.to_string_lossy()).collect::<Vec<_>>()),
+            launcher_pid = std::process::id(), child_pid = tracing::field::Empty);
+        let _entered = span.enter();
+        tracing::info!(
+            event_id = "fixture.native_spawn",
+            "original intent and streams created"
+        );
         let mut child = command.spawn().map_err(|e| e.to_string())?;
+        span.record("child_pid", child.id());
         let started = write_json(
             &capture.join("started.json"),
             &value!({"child_pid":child.id()}),
             true,
         );
+        tracing::info!(
+            event_id = "fixture.native_wait",
+            "joining actual native child"
+        );
         let status = child.wait().map_err(|e| e.to_string())?;
+        tracing::info!(event_id = "fixture.native_joined", status = %status, "native child joined");
         started?;
         write_json(
             &capture.join("result.json"),
@@ -922,11 +937,16 @@ impl TemporaryHost {
             "task_completion":"not-claimed"}),
             true,
         )?;
-        Ok(std::process::Output {
+        let result = std::process::Output {
             status,
             stdout: fs::read(stdout).map_err(|e| e.to_string())?,
             stderr: fs::read(stderr).map_err(|e| e.to_string())?,
-        })
+        };
+        tracing::info!(
+            event_id = "fixture.native_return",
+            "original result and streams available"
+        );
+        Ok(result)
     }
 }
 

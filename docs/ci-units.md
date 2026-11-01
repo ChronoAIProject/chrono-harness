@@ -1028,3 +1028,12 @@ final aggregate, and associate request/candidate/profile, plan/operation and
 PID/ownership identities from those records. Native validation of this adoption
 still requires the committed candidate and declared DELTA units; a focused Rust
 fixture does not establish a repaired native timeout or merge/landing.
+
+Input-production failure can leave an acquisition original without producing the
+final check report slot. A successful upload exports the available evidence; it
+does not create that report or establish a passing check. Delivery refusal now
+names the exact unavailable report or unverifiable original and retains exit 2,
+original outcomes and delivery roots. It does not release another consumer or
+acknowledge unproduced evidence. `test.runner.retention-delivery` is the registered
+Rust feedback operation for missing slots/originals, pointer digest drift and
+failed-outcome acknowledgement; canonical selection retains the full DELTA plan.

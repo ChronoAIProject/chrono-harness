@@ -605,7 +605,8 @@ pub(crate) fn with_report(
     if fs::canonicalize(root).map_err(|e| e.to_string())? != root {
         return Err("host root must be canonical".into());
     }
-    let _report_activity = chrono_harness::retained_artifacts::retention::report_activity(root)?;
+    // Reclaim before this invocation starts protecting its report family.
+    // Admission below also resumes bounded work before reserving the result.
     chrono_harness::retained_artifacts::retention::maintain_adopted(root)?;
     let dir = no_symlink_parents(&root, config.report_directory.trim_end_matches('/'))?;
     let mut inherited = serde_json::Map::new();
@@ -702,6 +703,11 @@ pub(crate) fn with_report(
         false,
         value!({"operation":operation,"outcome":"not-established"}),
     )?;
+    // The publication capability and durable recovery root already protect this
+    // output. Start family protection only after admission's maintenance, so it
+    // can resume a partial retirement without this invocation rooting all history.
+    // Other active collectors and exact roots still exclude both earlier rounds.
+    let _report_activity = chrono_harness::retained_artifacts::retention::report_activity(root)?;
     let mut output = fs::OpenOptions::new()
         .write(true)
         .open(&output_path)

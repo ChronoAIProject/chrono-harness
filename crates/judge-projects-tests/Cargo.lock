@@ -103,6 +103,7 @@ dependencies = [
 name = "chrono-judge-projects-tests"
 version = "0.1.0"
 dependencies = [
+ "chrono-diagnostics",
  "chrono-harness",
  "chrono-judge-filemap",
  "chrono-judge-projects",
@@ -112,6 +113,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -160,6 +162,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "time",
+ "tracing",
 ]
 
 [[package]]

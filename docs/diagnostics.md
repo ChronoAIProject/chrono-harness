@@ -282,3 +282,33 @@ launchers remained incomplete. The historical root cause remains unresolved.
 The missing final unit report and resulting post-upload acknowledgement refusal
 remain real failures. This change neither fixes that timeout speculatively nor
 permits releasing originals when final publication is absent.
+
+Scoped Logger registration also covers unrelated uninstrumented first use of
+shared callsites. The locked tracing-core 0.1.36 single-dispatch fast path can
+cache `never` from that unrelated thread. Logger keeps two registrations of its
+same subscriber alive so registration consults live subscribers; the calling
+thread's scoped dispatch still owns delivery. No global dispatcher is installed.
+Fresh-process Rust coverage orders zero/one/multiple logger and lifetime cases,
+requires enclosing request/operation context and explicit thread transfer, and
+retains INFO acceptance, DEBUG filtering and sink-failure checks. Both CI
+diagnostic fixtures publish request/business evidence and raw sink originals
+before assertions and retain their temporary host on assertion failure.
+
+The existing projects migration consumer scopes Logger to its current operation
+preparation/execution, workflow generation/verification and inner owner handoff.
+Fixture preparation and registry validation publish phase boundaries without
+repeating their Git operation records. Operation logs retain actual argv/PID and
+ownership slot/generation through the existing runner. Native fixture capture
+adds its original capture address, argv/PID and entered child wait, actual join
+and return boundaries; its spawn/wait/stream/result behavior is unchanged. Rows
+write synchronously to the test's original stderr before a final libtest result.
+An entered boundary is diagnostic evidence, not a terminal result or explanation
+of the historical timeout. No new observer, deadline or polling channel is added.
+
+**Product and registration changes together:** migration-tests directly names
+the existing diagnostics/tracing dependencies, and the native fixture capture
+owner directly names already locked tracing. Current dependent lockfiles and
+the diagnostics compile edge are migrated. These rows add serialization, writes
+and retained stderr; total native storage and validation cost remains unmeasured.
+The original eight migration members, operation limits and default concurrency
+remain required by the current canonical plan.

@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 import tempfile
 import unittest
+import sys
 from unittest import mock
 
 import bootstrap
@@ -90,6 +91,82 @@ class OwnerPublication(unittest.TestCase):
 
 
 class ProducerSource(unittest.TestCase):
+    def published_fixture(self):
+        fixture, selected = self.selected_original_fixture()
+        host = fixture.host
+        profile = dict(host.config, install=[], report_path=".chrono-harness/state/bootstrap-fixture-stage.json",
+                       owner_stage={"source": "built-tool", "selected": selected.relative_to(fixture.root).as_posix()})
+        config_path = ".chrono-harness/ci/stage.json"
+        host.write_json(fixture.root / config_path, profile)
+        host.declare("write", "built-tool", "staged owner")
+        host.git("add", ".")
+        host.git("commit", "-qm", "new owner candidate")
+        with tempfile.TemporaryFile() as lease, mock.patch.object(bootstrap, "PASS_FDS", (lease.fileno(),)), mock.patch.dict(
+                os.environ, dict(host.environment, CHRONO_WORKTREE_BOOTSTRAP=str(fixture.root))), mock.patch.object(
+                sys, "argv", ["bootstrap.py", str(fixture.root), config_path]):
+            bootstrap.main()
+        original = fixture.root / profile["report_path"]
+        stage = json.loads(original.read_bytes())
+        publication = owner.publish_bytes(fixture.root, stage["owner_stage"])
+        adoption = {"schema": "chrono-worktree-owner-adoption/v1", "source_commit": stage["source"]["commit"],
+                    "stage_result": profile["report_path"], "stage_sha256": owner.shared.digest(original.read_bytes()),
+                    "installed": publication["installed"], "original_owner": stage["owner_stage"]["previous"],
+                    "original_protection": {"fixture": "unit-owned capability"}, "publication": publication,
+                    "terminal_handoff": "not-claimed", "task_completion": "not-claimed"}
+        receipt = ".chrono-harness/state/automatic-cleanup-v2/owner-adoption-fixture.json"
+        owner.shared.write_new(fixture.root / receipt, owner.shared.encode(adoption))
+        adoption["receipt"] = {"path": receipt, "sha256": owner.shared.digest((fixture.root / receipt).read_bytes())}
+        owner.shared.write_new(fixture.root / owner.CURRENT, owner.shared.encode(adoption))
+        return fixture, selected, adoption
+
+    def test_changed_candidate_qualifies_published_owner_after_interrupted_core_install(self):
+        fixture, selected, adoption = self.published_fixture()
+        (fixture.root / "next-candidate").write_text("ordinary later candidate")
+        fixture.host.git("add", ".")
+        fixture.host.git("commit", "-qm", "next candidate")
+        result = owner.qualified_selected_original(fixture.root, ".chrono-harness/state/bootstrap.json", selected)
+        self.assertEqual(result["source"]["commit"], adoption["source_commit"])
+        self.assertEqual(result["selected"], owner.file_binding(selected))
+
+    def test_published_owner_rejects_missing_changed_and_unqualified_originals(self):
+        fixture, selected, adoption = self.published_fixture()
+        report = json.loads((fixture.root / adoption["stage_result"]).read_bytes())
+        staged = fixture.root / report["owner_stage"]["staged"]["path"]
+        paths = [fixture.root / adoption["stage_result"], fixture.root / adoption["receipt"]["path"],
+                 fixture.root / report["operations"][0]["stdout"]["path"], staged,
+                 staged.parent / "previous-owner", staged.parent / "publication-intent.json",
+                 staged.parent / "publication-result.json"]
+        for path in paths:
+            raw = path.read_bytes()
+            for missing in (False, True):
+                with self.subTest(path=path, missing=missing):
+                    # Keep the original inode; an ordinary lost/changed original
+                    # must fail, even when selected executable bytes still match.
+                    saved = path.with_name(path.name + ".fixture-original")
+                    os.rename(path, saved)
+                    if not missing:
+                        path.write_bytes(b"changed original")
+                    try:
+                        with self.assertRaises((ValueError, KeyError, OSError, subprocess.CalledProcessError)):
+                            owner.qualified_selected_original(fixture.root, ".chrono-harness/state/bootstrap.json", selected)
+                    finally:
+                        if path.exists():
+                            path.unlink()
+                        os.rename(saved, path)
+                    self.assertEqual(path.read_bytes(), raw)
+        # Publication with a failed producer is not qualified by self-consistent
+        # new digests. Execution validation must still reject its original facts.
+        path = fixture.root / adoption["stage_result"]
+        report["status"] = "failed"
+        path.write_bytes(owner.shared.encode(report))
+        adoption["stage_sha256"] = owner.shared.digest(path.read_bytes())
+        receipt = fixture.root / adoption["receipt"]["path"]
+        receipt.write_bytes(owner.shared.encode({k:v for k,v in adoption.items() if k != "receipt"}))
+        adoption["receipt"]["sha256"] = owner.shared.digest(receipt.read_bytes())
+        (fixture.root / owner.CURRENT).write_bytes(owner.shared.encode(adoption))
+        with self.assertRaisesRegex(ValueError, "successful original execution"):
+            owner.qualified_selected_original(fixture.root, ".chrono-harness/state/bootstrap.json", selected)
+
     def selected_original_fixture(self):
         from bootstrap_shared_tests import SharedStartup
         fixture = SharedStartup()

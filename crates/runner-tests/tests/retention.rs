@@ -1833,6 +1833,19 @@ fn native_upload_cli_consumes_current_reference_and_rejects_pointer_digest_drift
         })
         .unwrap()
     };
+    // Ordinary preparation failure produces an acquisition original but no
+    // final report slot. Upload success cannot stand in for that report.
+    let absent = call("all");
+    assert_eq!(absent.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&absent.stderr).contains(slot),
+        "{absent:?}"
+    );
+    assert!(
+        ledger(h.path())["roots"]
+            .get("native-delivery:native-cli")
+            .is_some()
+    );
     fs::write(h.path().join(slot), pointer("0".repeat(64))).unwrap();
     assert_eq!(call("all").status.code(), Some(2));
     assert!(
@@ -1841,6 +1854,20 @@ fn native_upload_cli_consumes_current_reference_and_rejects_pointer_digest_drift
             .is_some()
     );
     fs::write(h.path().join(slot), pointer(chrono_harness::sha256(&raw))).unwrap();
+    let saved = h.path().join(format!("{original}.fixture-original"));
+    fs::rename(h.path().join(original), &saved).unwrap();
+    let missing = call("all");
+    fs::rename(saved, h.path().join(original)).unwrap();
+    assert_eq!(missing.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&missing.stderr).contains(original),
+        "{missing:?}"
+    );
+    assert!(
+        ledger(h.path())["roots"]
+            .get("native-delivery:native-cli")
+            .is_some()
+    );
     let result = call("all");
     assert_eq!(
         result.status.code(),

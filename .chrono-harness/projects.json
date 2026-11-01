@@ -265,6 +265,19 @@
             "protocol_v1",
             "prelaunch_diagnostics_"
           ]
+        },
+        "retention_delivery": {
+          "operation": "test.runner.retention-delivery",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--test",
+            "retention",
+            "native_"
+          ]
         }
       },
       "language": "rust"

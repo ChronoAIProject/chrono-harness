@@ -1,6 +1,6 @@
 use super::*;
 use std::collections::BTreeMap;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
@@ -70,70 +70,97 @@ fn event<'a>(rows: &'a [Value], name: &str) -> &'a Value {
 fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
     let h = host(None);
     let req = request(&h);
-    let sink = Sink::default();
-    let response = chrono_judge_ci::judge_with_diagnostic_sink(&req, sink.clone());
-    fail(&response, "operation exit 7");
-    let process = chrono_harness::full::expand_process(
-        &response.evidence["executed"][0]["receipt"]["process"],
-    )
-    .unwrap();
-    assert_eq!(process["stdout_bytes"], json!([255, 0, 10]));
-    assert_eq!(process["stderr_bytes"], json!([254, 0, 10]));
-    assert_eq!(process["exit_code"], 7);
-    let rows = records(&sink.0.lock().unwrap());
-    let launch = rows
-        .iter()
-        .find(|r| r["event"] == "process.launched" && r["context"]["operation"] == "test.suite")
+    let assert_result = std::panic::catch_unwind(|| {
+        let directory = h.root().join(".chrono-harness/state");
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(
+            directory.join("request.json"),
+            serde_json::to_vec(&req).unwrap(),
+        )
         .unwrap();
-    assert_eq!(launch["schema"], "chrono-log/v1");
-    assert_eq!(launch["context"]["request_id"], req.request_id);
-    assert_eq!(launch["context"]["candidate"], req.candidate);
-    assert_eq!(launch["context"]["config_sha256"], req.config_sha256);
-    assert_eq!(launch["context"]["operation"], "test.suite");
-    assert_eq!(
-        launch["context"]["plan"],
-        response.evidence["plan"]["identity"]
-    );
-    assert_eq!(launch["context"]["child_pid"], process["child_pid"]);
-    assert_eq!(launch["context"]["launcher_pid"], process["launcher_pid"]);
-    let argv: Value = serde_json::from_str(launch["fields"]["argv"].as_str().unwrap()).unwrap();
-    assert_eq!(argv, process["argv"]);
-    assert_eq!(launch["fields"]["executable_sha256"], process["sha256"]);
-    let phases: Vec<_> = rows
-        .iter()
-        .filter(|r| r["context"]["operation"] == "test.suite")
-        .map(|r| r["event"].as_str().unwrap())
-        .collect();
-    for pair in [
-        ["process.launched", "process.readers_ready_wait"],
-        ["process.readers_ready_wait", "process.monitor_wait"],
-        ["process.launched", "process.monitor_wait"],
-        ["process.monitor_wait", "process.ownership_drain"],
-        ["process.ownership_drain", "process.streams_join"],
-        ["process.streams_join", "process.completed"],
-        ["process.completed", "projects.operation_completed"],
-    ] {
-        assert!(
-            phases.iter().position(|s| *s == pair[0]).unwrap()
-                < phases.iter().position(|s| *s == pair[1]).unwrap()
+        let sink = fs::File::create(directory.join("diagnostics.jsonl")).unwrap();
+        let response = chrono_judge_ci::judge_with_diagnostic_sink(&req, sink);
+        fs::write(
+            directory.join("response.json"),
+            serde_json::to_vec(&response).unwrap(),
+        )
+        .unwrap();
+        fail(&response, "operation exit 7");
+        let process = chrono_harness::full::expand_process(
+            &response.evidence["executed"][0]["receipt"]["process"],
+        )
+        .unwrap();
+        assert_eq!(process["stdout_bytes"], json!([255, 0, 10]));
+        assert_eq!(process["stderr_bytes"], json!([254, 0, 10]));
+        assert_eq!(process["exit_code"], 7);
+        let rows = records(&fs::read(directory.join("diagnostics.jsonl")).unwrap());
+        let launch = rows
+            .iter()
+            .find(|r| r["event"] == "process.launched" && r["context"]["operation"] == "test.suite")
+            .unwrap();
+        assert_eq!(launch["schema"], "chrono-log/v1");
+        assert_eq!(launch["context"]["request_id"], req.request_id);
+        assert_eq!(launch["context"]["candidate"], req.candidate);
+        assert_eq!(launch["context"]["config_sha256"], req.config_sha256);
+        assert_eq!(launch["context"]["operation"], "test.suite");
+        assert_eq!(
+            launch["context"]["plan"],
+            response.evidence["plan"]["identity"]
         );
-    }
-    let joins = [
-        "projects.workers_join",
-        "projects.workers_joined",
-        "ci.evaluation_returned",
-    ];
-    for pair in joins.windows(2) {
-        assert!(
-            rows.iter().position(|r| r["event"] == pair[0]).unwrap()
-                < rows.iter().position(|r| r["event"] == pair[1]).unwrap()
+        assert_eq!(launch["context"]["child_pid"], process["child_pid"]);
+        assert_eq!(launch["context"]["launcher_pid"], process["launcher_pid"]);
+        let argv: Value = serde_json::from_str(launch["fields"]["argv"].as_str().unwrap()).unwrap();
+        assert_eq!(argv, process["argv"]);
+        assert_eq!(launch["fields"]["executable_sha256"], process["sha256"]);
+        let phases: Vec<_> = rows
+            .iter()
+            .filter(|r| r["context"]["operation"] == "test.suite")
+            .map(|r| r["event"].as_str().unwrap())
+            .collect();
+        for pair in [
+            ["process.launched", "process.readers_ready_wait"],
+            ["process.readers_ready_wait", "process.monitor_wait"],
+            ["process.launched", "process.monitor_wait"],
+            ["process.monitor_wait", "process.ownership_drain"],
+            ["process.ownership_drain", "process.streams_join"],
+            ["process.streams_join", "process.completed"],
+            ["process.completed", "projects.operation_completed"],
+        ] {
+            assert!(
+                phases.iter().position(|s| *s == pair[0]).unwrap()
+                    < phases.iter().position(|s| *s == pair[1]).unwrap()
+            );
+        }
+        let joins = [
+            "projects.workers_join",
+            "projects.workers_joined",
+            "ci.evaluation_returned",
+        ];
+        for pair in joins.windows(2) {
+            assert!(
+                rows.iter().position(|r| r["event"] == pair[0]).unwrap()
+                    < rows.iter().position(|r| r["event"] == pair[1]).unwrap()
+            );
+        }
+        assert_eq!(
+            event(&rows, "projects.operation_completed")["fields"]["status"],
+            "failed"
         );
+        assert_eq!(
+            rows.iter()
+                .find(|r| r["event"] == "process.completed"
+                    && r["context"]["operation"] == "test.suite")
+                .unwrap()["fields"]["exit_code"],
+            7
+        );
+    });
+    if let Err(error) = assert_result {
+        eprintln!(
+            "failed diagnostic fixture retained at {}",
+            h.dir.keep().display()
+        );
+        std::panic::resume_unwind(error);
     }
-    assert_eq!(
-        event(&rows, "projects.operation_completed")["fields"]["status"],
-        "failed"
-    );
-    assert_eq!(rows.iter().find(|r| r["event"] == "process.completed" && r["context"]["operation"] == "test.suite").unwrap()["fields"]["exit_code"], 7);
 }
 
 #[test]
@@ -141,43 +168,66 @@ fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let h = host(Some(listener.local_addr().unwrap().to_string()));
     let req = request(&h);
-    let directory = h.root().join(".chrono-harness/state");
-    fs::create_dir_all(&directory).unwrap();
-    let stdout = directory.join("producer.stdout");
-    let stderr = directory.join("producer.stderr");
-    let launch = directory.join("producer.launch.json");
-    let spec = chrono_harness::CommandSpec {
-        program: child().into(),
-        args: vec!["judge".into()],
-        env: BTreeMap::new(),
-        timeout_seconds: 1,
-        output_limit_bytes: 65536,
-    };
-    let digest = chrono_harness::file_identity(Path::new(child())).unwrap().0;
-    let input = serde_json::to_vec(&req).unwrap();
-    let result = std::thread::scope(|scope| {
-        let task = scope.spawn(|| {
-            chrono_harness::run_process_observed_retained(
-                h.root(),
-                &spec,
-                &input,
-                &digest,
-                &chrono_harness::ProcessEvidence {
-                    stdout: &stdout,
-                    stderr: &stderr,
-                    launch: &launch,
-                },
-            )
-            .unwrap()
-        });
-        // The original engine has its own finite deadline. This joins that task;
-        // a ready child is never released, so no final business report exists.
-        let result = task.join().unwrap();
-        result
-    });
-    // Keep the producer originals on failed assertions; successful fixtures are
-    // exclusively test-owned and the existing TempDir owner removes them.
     let assert_result = std::panic::catch_unwind(|| {
+        let directory = h.root().join(".chrono-harness/state");
+        fs::create_dir_all(&directory).unwrap();
+        let stdout = directory.join("producer.stdout");
+        let stderr = directory.join("producer.stderr");
+        let launch = directory.join("producer.launch.json");
+        let spec = chrono_harness::CommandSpec {
+            program: child().into(),
+            args: vec!["judge".into()],
+            env: BTreeMap::new(),
+            timeout_seconds: 1,
+            output_limit_bytes: 65536,
+        };
+        let digest = chrono_harness::file_identity(Path::new(child())).unwrap().0;
+        let input = serde_json::to_vec(&req).unwrap();
+        fs::write(directory.join("request.json"), &input).unwrap();
+        let result = std::thread::scope(|scope| {
+            let task = scope.spawn(|| {
+                chrono_harness::run_process_observed_retained(
+                    h.root(),
+                    &spec,
+                    &input,
+                    &digest,
+                    &chrono_harness::ProcessEvidence {
+                        stdout: &stdout,
+                        stderr: &stderr,
+                        launch: &launch,
+                    },
+                )
+                .unwrap()
+            });
+            // The original engine has its own finite deadline. This joins that task;
+            // a ready child is never released, so no final business report exists.
+            let result = task.join().unwrap();
+            result
+        });
+        fs::write(
+            directory.join("result.json"),
+            serde_json::to_vec(&result).unwrap(),
+        )
+        .unwrap();
+        // Observe only the already joined producer's actual handshake, without
+        // adding a readiness wait or changing the enclosing engine deadline.
+        listener.set_nonblocking(true).unwrap();
+        let readiness = match listener.accept() {
+            Ok((mut socket, peer)) => {
+                socket.set_nonblocking(true).unwrap();
+                let mut bytes = Vec::new();
+                let read = socket.read_to_end(&mut bytes);
+                json!({"peer":peer.to_string(),"bytes":bytes,"read_error":read.err().map(|e|e.to_string())})
+            }
+            Err(error) => json!({"accept_error":error.to_string()}),
+        };
+        fs::write(
+            directory.join("readiness.json"),
+            serde_json::to_vec(&readiness).unwrap(),
+        )
+        .unwrap();
+        // Keep the producer originals on failed assertions; successful fixtures are
+        // exclusively test-owned and the existing TempDir owner removes them.
         assert_eq!(result.failure.as_deref(), Some("process timed out"));
         assert_eq!(fs::read(&stdout).unwrap(), result.stdout_bytes);
         assert!(
