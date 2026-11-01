@@ -10,7 +10,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 mod collect;
+pub use collect::{UnitOriginals, unit_originals};
 mod units;
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub enum ExecutionDiagnostics {
+    #[serde(rename = "chrono-log-stderr/v1")]
+    StderrV1,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -31,6 +38,10 @@ impl Default for CollectionLimits {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_diagnostics: Option<ExecutionDiagnostics>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_evidence: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report_publication: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -156,6 +167,12 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
         return Err("v1 cannot declare facts_config, including null".into());
     }
     let p: Policy = serde_json::from_value(c.policy.clone()).map_err(|e| e.to_string())?;
+    if c.policy
+        .get("selection_evidence")
+        .is_some_and(|v| v != "explicit-graph/v1")
+    {
+        return Err("unsupported selection_evidence representation".into());
+    }
     if c.schema == "chrono-ci-check/v2" {
         let path = p
             .facts_config
@@ -203,6 +220,17 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
 }
 fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
     let fm = json(&at(reader, root, oid, &p.filemap)?)?;
+    let registration = p
+        .registration_config
+        .as_ref()
+        .map(|config| reader.registry_snapshot(root, oid, config))
+        .transpose()?;
+    let fm = chrono_judge_registration::select_filemap(
+        &fm,
+        registration
+            .as_ref()
+            .map(|snapshot| snapshot.effective_path.as_str()),
+    )?;
     let pr = json(&at(reader, root, oid, &p.projects)?)?;
     if ![object!(1), object!(2)].contains(&fm["schema_version"])
         || ![object!(1), object!(2)].contains(&pr["schema_version"])
@@ -254,8 +282,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
     let mut owner_nodes = BTreeMap::new();
     let mut ops = BTreeMap::new();
     let mut nodes = BTreeSet::new();
-    if let Some(config) = &p.registration_config {
-        let snapshot = reader.registry_snapshot(root, oid, config)?;
+    if let Some(snapshot) = &registration {
         let config = snapshot
             .values
             .get(&snapshot.effective_path)
@@ -701,7 +728,21 @@ fn ci_impact(
         .collect();
     selected.extend(extras.keys().cloned());
     let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
-    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    // The explicit graph and seed causes already determine every predecessor
+    // and contributing-seed set. Opted-in hosts publish that sufficient source
+    // once rather than repeating those derived strings for each (seed, node).
+    let replay = new.policy.selection_evidence.as_deref() == Some("explicit-graph/v1");
+    let closure_evidence = if replay {
+        object!({"schema":"chrono-ci-reachability/v1",
+            "reached":closure.reached.keys().collect::<Vec<_>>(),
+            "selected_tests":closure.selected_tests()})
+    } else {
+        object!(&closure)
+    };
+    let mut explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure_evidence, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    if replay {
+        explanation["representation"] = object!("explicit-graph/v1");
+    }
     let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
     if old.is_none() {
         affected.extend(new.owner_nodes.values().cloned());
@@ -718,10 +759,66 @@ fn ci_impact(
 }
 
 pub fn judge(req: &Request) -> Response {
+    #[cfg(unix)]
+    let sink = chrono_harness::NativeOutput::new(std::io::stderr());
+    #[cfg(not(unix))]
+    let sink = std::io::stderr();
+    judge_with_diagnostic_sink(req, sink)
+}
+
+/// Explicit sink adoption; the sealed host profile still selects diagnostics.
+/// Child streams and verdicts do not pass through this diagnostic sink.
+pub fn judge_with_diagnostic_sink<W: std::io::Write + Send + 'static>(
+    req: &Request,
+    sink: W,
+) -> Response {
     let mut reader = Reader::legacy();
     let mut opening = Value::Null;
     let mut scope = "chrono-ci-check/v1".to_owned();
-    let result = evaluate(req, &mut reader, &mut opening, &mut scope);
+    let mut diagnostic_errors = Vec::new();
+    let result = Profile::load(req).and_then(|profile| {
+        scope = profile.config.schema.clone();
+        if profile.policy.execution_diagnostics.is_none() {
+            return evaluate(req, &mut reader, &mut opening, &mut scope, profile);
+        }
+        let logger = chrono_diagnostics::logging::Logger::new(
+            "chrono-judge-ci",
+            chrono_diagnostics::logging::Level::INFO,
+            sink,
+        );
+        let result = logger.run(|| {
+            let span = tracing::info_span!(
+                "ci.check",
+                request_id = req.request_id,
+                candidate = req.candidate,
+                base = req.base.as_deref().unwrap_or(""),
+                config_sha256 = req.config_sha256,
+                judge_pid = std::process::id(),
+            );
+            let _entered = span.enter();
+            tracing::info!(
+                event_id = "ci.check_started",
+                "sealed request diagnostics adopted; input admission still required"
+            );
+            let result = evaluate(req, &mut reader, &mut opening, &mut scope, profile);
+            tracing::info!(
+                event_id = "ci.evaluation_returned",
+                has_response = result.is_ok(),
+                "judge evaluation returned; response publication is separate"
+            );
+            result
+        });
+        if let Err(errors) = logger.finish() {
+            use chrono_diagnostics::error::RecordedError;
+            diagnostic_errors.extend(errors.iter().map(|error| {
+                chrono_diagnostics::error::ErrorRecord {
+                    schema: chrono_diagnostics::error::ErrorSchema::V1,
+                    error: error.error_node(),
+                }
+            }));
+        }
+        result
+    });
     let mut response = match result {
         Ok(r) => r,
         Err(e) => Response {
@@ -741,6 +838,16 @@ pub fn judge(req: &Request) -> Response {
         response.evidence["git_facts"] = reader.observation();
     } else if !opening.is_null() {
         response.evidence["git_facts"] = opening;
+    }
+    if !diagnostic_errors.is_empty() {
+        response.status = Status::Failed;
+        response.results.push(CheckResult {
+            id: "ci.execution-diagnostics".into(),
+            status: Status::Failed,
+            cause: "execution diagnostic publication failed; original errors retained".into(),
+            exit_code: None,
+        });
+        response.evidence["diagnostic_errors"] = object!(diagnostic_errors);
     }
     response
 }
@@ -985,6 +1092,30 @@ pub fn collection_requirements(
     )
 }
 
+struct Profile {
+    bytes: Vec<u8>,
+    config: CheckConfig,
+    policy: Policy,
+}
+impl Profile {
+    fn load(req: &Request) -> Result<Self, String> {
+        if req.protocol != units::scope_protocol(req) || req.request_id.is_empty() {
+            return Err("invalid request protocol/identity".into());
+        }
+        relative_path(&req.config_path)?;
+        let bytes = fs::read(req.host_root.join(&req.config_path)).map_err(|e| e.to_string())?;
+        if sha256(&bytes) != req.config_sha256 {
+            return Err("config does not match candidate/request".into());
+        }
+        let config: CheckConfig = decode(&bytes)?;
+        let policy = policy(&config)?;
+        Ok(Self {
+            bytes,
+            config,
+            policy,
+        })
+    }
+}
 fn inventory(
     req: &Request,
     reader: &mut Reader,
@@ -993,18 +1124,32 @@ fn inventory(
     admit_entry: bool,
     verify_checkout: bool,
 ) -> Result<Inventory, String> {
-    if req.protocol != units::scope_protocol(req) || req.request_id.is_empty() {
-        return Err("invalid request protocol/identity".into());
-    }
-    relative_path(&req.config_path)?;
+    inventory_profile(
+        req,
+        reader,
+        opening,
+        scope,
+        admit_entry,
+        verify_checkout,
+        Profile::load(req)?,
+    )
+}
+fn inventory_profile(
+    req: &Request,
+    reader: &mut Reader,
+    opening: &mut Value,
+    scope: &mut String,
+    admit_entry: bool,
+    verify_checkout: bool,
+    profile: Profile,
+) -> Result<Inventory, String> {
     let root = &req.host_root;
-    let bytes = fs::read(root.join(&req.config_path)).map_err(|e| e.to_string())?;
-    if sha256(&bytes) != req.config_sha256 {
-        return Err("config does not match candidate/request".into());
-    }
-    let config: CheckConfig = decode(&bytes)?;
+    let Profile {
+        bytes,
+        config,
+        policy: p,
+    } = profile;
     *scope = config.schema.clone();
-    let p = policy(&config)?;
     if let Some(scope) = &req.scope {
         scope.report_path(&config)?;
     }
@@ -1370,6 +1515,7 @@ fn evaluate(
     reader: &mut Reader,
     opening: &mut Value,
     scope: &mut String,
+    profile: Profile,
 ) -> Result<Response, String> {
     let Inventory {
         config,
@@ -1388,7 +1534,13 @@ fn evaluate(
         environment_policy,
         declarations,
         methods,
-    } = inventory(req, reader, opening, scope, true, true)?;
+    } = tracing::info_span!("ci.phase", phase = "inventory").in_scope(|| {
+        tracing::info!(
+            event_id = "ci.phase_started",
+            "validating inventory and selected inputs"
+        );
+        inventory_profile(req, reader, opening, scope, true, true, profile)
+    })?;
     let root = &req.host_root;
     if let Some(chrono_harness::units::Scope::Collect { manifest }) = &req.scope {
         if !blocked.is_empty() {
@@ -1418,7 +1570,9 @@ fn evaluate(
         )?;
     }
     let plan = if blocked.is_empty() {
-        Some(chrono_judge_routes::prepare_scheduled(
+        Some(tracing::info_span!("ci.phase", phase = "prepare").in_scope(|| {
+            tracing::info!(event_id = "ci.phase_started", "preparing registered operation plan and tools");
+            chrono_judge_routes::prepare_scheduled(
             root,
             object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":req.request_id,"entry":req.observations["entry"]}),
             &selected,
@@ -1430,7 +1584,7 @@ fn evaluate(
             &reused,
             new.scheduling.clone(),
             false,
-        )?)
+        )})?)
     } else {
         None
     };
@@ -1455,7 +1609,13 @@ fn evaluate(
         })
     }
     if let Some(plan) = &plan {
-        let outcome = chrono_judge_projects::execute(plan)?;
+        let outcome = tracing::info_span!("ci.phase", phase = "execute").in_scope(|| {
+            tracing::info!(
+                event_id = "ci.phase_started",
+                "executing registered operations"
+            );
+            chrono_judge_projects::execute(plan)
+        })?;
         for result in outcome.executed.iter().chain(&outcome.blocked) {
             results.push(CheckResult {
                 id: result.operation.clone(),
@@ -1477,7 +1637,9 @@ fn evaluate(
                 }),
             });
             if let Some(receipt) = &result.receipt {
-                executed.push(object!({"operation":result.operation,"process":receipt.process,"receipt":receipt}));
+                let mut original = serde_json::to_value(receipt).map_err(|e| e.to_string())?;
+                original["process"] = chrono_harness::full::compact_process(&original["process"])?;
+                executed.push(object!({"operation":result.operation,"receipt":original}));
             }
         }
         for (old, replacement) in &removed {
@@ -1508,7 +1670,13 @@ fn evaluate(
             exit_code: None,
         });
     }
-    if let Err(e) = clean(reader, root, &req.candidate, &p) {
+    if let Err(e) = tracing::info_span!("ci.phase", phase = "post_snapshot").in_scope(|| {
+        tracing::info!(
+            event_id = "ci.phase_started",
+            "validating post-execution snapshot"
+        );
+        clean(reader, root, &req.candidate, &p)
+    }) {
         results.push(CheckResult {
             id: "ci.post-snapshot".into(),
             status: Status::Failed,
@@ -1528,7 +1696,7 @@ fn evaluate(
             Status::Passed
         },
         results,
-        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
+        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
     Ok(response)

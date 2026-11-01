@@ -63,12 +63,14 @@ dependencies = [
  "sha1",
  "sha2",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
 name = "chrono-judge-ci"
 version = "0.1.0"
 dependencies = [
+ "chrono-diagnostics",
  "chrono-harness",
  "chrono-judge-filemap",
  "chrono-judge-projects",
@@ -76,6 +78,7 @@ dependencies = [
  "chrono-judge-routes",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -118,6 +121,7 @@ dependencies = [
  "chrono-judge-routes",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

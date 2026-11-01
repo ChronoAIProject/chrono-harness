@@ -67,10 +67,12 @@ impl Host {
                 POLICY,
             ])
             .args(extra);
+        self._dir.bind(&mut c);
         c
     }
     pub(super) fn auto(&self, command: &str, extra: &[&str]) -> (i32, Value, String) {
-        self.received(self.auto_command(command, extra).output().unwrap())
+        let mut command = self.auto_command(command, extra);
+        self.received(self._dir.capture_bound(&mut command))
     }
     pub(super) fn ledger(&self) -> Value {
         json(&fs::read(self.root.join(STATE)).unwrap()).unwrap()
@@ -79,6 +81,442 @@ impl Host {
 fn output(target: &Path) {
     fs::create_dir_all(target.join("output λ")).unwrap();
     fs::write(target.join("output λ/data"), vec![42u8; 8192]).unwrap();
+}
+
+// Exercise the actual lifecycle CLI with the adopted finite owner, not an
+// alternate maintenance implementation. Failed cases retain their original host.
+fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        h.kernel_cleanup();
+        native_consumer(&h, "ordinary");
+        let bootstrap = ".chrono-harness/ci/capacity.json";
+        fs::create_dir_all(h.root.join(".chrono-harness/ci")).unwrap();
+        fs::write(h.root.join(bootstrap), serde_json::to_vec(&value!({
+            "schema":"chrono-bootstrap/v1", "participation":{"coordinator_root":"git-main-worktree"},
+            "entrypoint":{"tool":"consumer","script":"noop"}
+        })).unwrap()).unwrap();
+        // The registered Rust interface fixture returns immediately for noop;
+        // the real bootstrap participation dispatch still resolves and joins it.
+        fs::write(h.root.join("noop"), include_bytes!("support/consumer.rs")).unwrap();
+        fs::write(
+            h.root.join(POLICY_PATH),
+            serde_json::to_vec(&value!({
+                "schema":"chrono-output-retention/v1",
+                "producers":{"check-original":[".chrono-harness/state/"],
+                    "lifecycle-original":[".chrono-harness/state/worktrees/"]},
+                "keep_seconds":0,"max_entries":512,"max_summaries":128,
+                "max_nodes_per_round":256,"max_bytes_per_round":67108864,
+                "max_millis_per_round":25,"max_output_bytes":1073741824,
+                "max_total_bytes":8589934592u64,"max_manifest_nodes":16384,
+                "max_metadata_bytes_per_round":67108864
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+        for path in [POLICY_PATH, bootstrap, "noop"] {
+            fm["files"]
+                .as_array_mut()
+                .unwrap()
+                .push(file(path, value!([])));
+        }
+        fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let source_bytes = fs::read(h.root.join("payload")).unwrap();
+        let index = fs::read(h.root.join(".git/index")).unwrap();
+        let inventory = || Inventory::adopted(&h.root).unwrap().unwrap();
+        let state = || {
+            json(
+                &fs::read(
+                    h.root
+                        .join(".chrono-harness/state/output-retention-v1/inventory.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+        };
+        fs::create_dir_all(h.root.join(".chrono-harness/state/worktrees")).unwrap();
+        let mut ids = Vec::new();
+        let mut live = None;
+        for n in 0..512 {
+            let path = format!(".chrono-harness/state/worktrees/history-{n}.json");
+            fs::write(h.root.join(&path), format!("original {n}\n")).unwrap();
+            let publication = inventory()
+                .begin(
+                    "lifecycle-original",
+                    &path,
+                    value!({"status":"not-established"}),
+                )
+                .unwrap();
+            ids.push(publication.id().to_owned());
+            if n == 0 {
+                live = Some(publication); // Actual unfinished producer capability.
+            } else {
+                publication
+                    .complete(if n == 1 {
+                        value!({"status":"failed","error":"original failure"})
+                    } else if n == 2 {
+                        value!({"status":"not-established","publication":"interrupted"})
+                    } else {
+                        value!({"status":"cleaned"})
+                    })
+                    .unwrap();
+            }
+        }
+        inventory()
+            .reference("consumer:lifecycle-recheck:failure", &[ids[1].clone()])
+            .unwrap();
+        inventory()
+            .reference(
+                "consumer:publication-recheck:interrupted",
+                &[ids[2].clone()],
+            )
+            .unwrap();
+        inventory()
+            .reference("native-delivery:pending", &[ids[3].clone()])
+            .unwrap();
+        inventory()
+            .reference("current-report:exact", &[ids[4].clone()])
+            .unwrap();
+        inventory()
+            .dependencies(&ids[4], &[ids[5].clone()])
+            .unwrap();
+        inventory()
+            .dependencies(&ids[6], &[ids[7].clone()])
+            .unwrap();
+        let reader = inventory().consume(&ids[6]).unwrap();
+        if all_rooted {
+            inventory()
+                .reference("consumer:required-originals", &ids)
+                .unwrap();
+        }
+        let before = state();
+        assert_eq!(before["outputs"].as_array().unwrap().len(), 512);
+        let invoke = |phase: &str| {
+            let extra = if operation == "bootstrap" {
+                vec!["--bootstrap-config", bootstrap]
+            } else {
+                vec![]
+            };
+            let mut command = h.auto_command(operation, &extra);
+            let out = h._dir.capture_bound(&mut command);
+            let dir = h.root.join(".chrono-harness/state");
+            fs::write(dir.join(format!("capacity-{phase}.stdout")), &out.stdout).unwrap();
+            fs::write(dir.join(format!("capacity-{phase}.stderr")), &out.stderr).unwrap();
+            fs::write(
+                dir.join(format!("capacity-{phase}.status")),
+                out.status.to_string(),
+            )
+            .unwrap();
+            h.received(out)
+        };
+        // An independent active collector still roots the whole family. The
+        // new entrant must not remove evidence to make room for its own report.
+        let activity = inventory().report_activity().unwrap();
+        let (code, _, error) = invoke("active");
+        assert_eq!(code, 2, "{error}");
+        assert!(
+            error.contains("protected output inventory capacity"),
+            "{error}"
+        );
+        assert_eq!(state()["outputs"], before["outputs"]);
+        drop(activity);
+        let (code, report, error) = invoke("excluded");
+        if all_rooted {
+            assert_eq!(code, 2, "{report} {error}");
+            assert!(
+                error.contains("protected output inventory capacity"),
+                "{error}"
+            );
+            assert_eq!(state()["outputs"], before["outputs"]);
+        } else {
+            assert_eq!(code, 0, "{report} {error}");
+            assert_eq!(
+                report["status"],
+                if operation == "maintain" {
+                    "maintained"
+                } else {
+                    "used"
+                }
+            );
+            if operation == "bootstrap" {
+                assert_eq!(report["managed_process"]["exit_code"], 0);
+                assert_eq!(
+                    report["managed_process"]["argv"],
+                    value!([
+                        env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
+                        "noop",
+                        h.root,
+                        bootstrap
+                    ])
+                );
+            }
+            let after = state();
+            assert!(
+                after["summaries"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
+            );
+            assert!(after["outputs"].as_array().unwrap().len() <= 512);
+            assert!(
+                after["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|o| o["path"] == report["report_path"])
+            );
+            assert_eq!(after["roots"], before["roots"]);
+        }
+        let after = state();
+        for n in 0..if all_rooted { 512 } else { 8 } {
+            assert_eq!(
+                fs::read(
+                    h.root
+                        .join(format!(".chrono-harness/state/worktrees/history-{n}.json"))
+                )
+                .unwrap(),
+                format!("original {n}\n").as_bytes()
+            );
+            let original = before["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["id"] == ids[n])
+                .unwrap();
+            assert_eq!(
+                after["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|o| o["id"] == ids[n])
+                    .unwrap(),
+                original
+            );
+        }
+        assert_eq!(fs::read(h.root.join("payload")).unwrap(), source_bytes);
+        assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
+        drop(reader);
+        drop(live);
+    }));
+    if let Err(failure) = result {
+        eprintln!(
+            "original capacity fixture retained at {}",
+            h.parent.display()
+        );
+        std::mem::forget(h);
+        std::panic::resume_unwind(failure);
+    }
+}
+
+#[test]
+fn ordinary_report_capacity_maintenance_reclaims_only_eligible_originals() {
+    ordinary_report_capacity("maintain", false);
+}
+
+#[test]
+fn ordinary_report_capacity_bootstrap_admits_after_bounded_recovery() {
+    ordinary_report_capacity("bootstrap", false);
+}
+
+#[test]
+fn ordinary_report_capacity_required_originals_still_refuse_admission() {
+    ordinary_report_capacity("maintain", true);
+}
+
+pub(super) fn inventory_row<'a>(report: &'a Value, target: &Path) -> &'a Value {
+    report["worktree_inventory"]
+        .as_array()
+        .expect("shared drain must publish its Git inventory")
+        .iter()
+        .find(|row| row["path"] == value!(target))
+        .expect("Git-registered worktree must be reported")
+}
+
+#[test]
+fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    native_git(&h, "inventory-failure", value!({}));
+    let target = h.parent.join("inventory-failure");
+    assert_eq!(h.invoke("feature", "inventory-failure", &target).0, 0);
+    output(&target);
+    let ledger = h.ledger();
+    fs::write(h.parent.join("fail-inventory"), "fail").unwrap();
+    for command in ["maintain", "use"] {
+        let extra = if command == "use" {
+            vec![
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ]
+        } else {
+            vec![]
+        };
+        let (code, report, error) = h.auto(command, &extra);
+        assert_eq!(code, 2, "{report} {error}");
+        assert!(
+            report["error"]
+                .as_str()
+                .unwrap()
+                .contains("original inventory failure")
+        );
+        assert_eq!(report["cleanup_failures"], value!([]));
+        assert_eq!(report["worktree_inventory"], value!([]));
+        assert!(report["managed_process"].is_null());
+        assert_eq!(h.ledger(), ledger);
+        assert!(target.join("output λ/data").exists());
+    }
+}
+
+#[test]
+fn automatic_inventory_preserves_ledgerless_dirty_locked_and_prunable_worktrees() {
+    for fault in ["dirty", "locked", "prunable"] {
+        let h = Host::new("payload");
+        h.kernel_cleanup();
+        let target = h.parent.join("unowned");
+        git(
+            &h.root,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "unowned",
+                target.to_str().unwrap(),
+                "HEAD",
+            ],
+        );
+        output(&target);
+        fs::write(target.join("payload"), "unretained commit").unwrap();
+        commit(&target);
+        let head = git(&target, &["rev-parse", "HEAD"]);
+        let gitfile = fs::read(target.join(".git")).unwrap();
+        match fault {
+            "dirty" => fs::write(target.join("payload"), "real dirty work").unwrap(),
+            "locked" => {
+                git(
+                    &h.root,
+                    &[
+                        "worktree",
+                        "lock",
+                        "--reason",
+                        "live external validation",
+                        target.to_str().unwrap(),
+                    ],
+                );
+            }
+            _ => {
+                fs::rename(&target, h.parent.join("preserved-missing-checkout")).unwrap();
+            }
+        }
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{fault}: {report} {error}");
+        let row = inventory_row(&report, &target);
+        assert_eq!(row["head"], head);
+        assert_eq!(row["branch"], "refs/heads/unowned");
+        assert_eq!(row["enrollment_match"], false);
+        assert!(
+            row["preserved_reason"]
+                .as_str()
+                .unwrap()
+                .contains("no current enrollment")
+        );
+        assert_eq!(row["locked"], fault == "locked");
+        assert_eq!(row["prunable"], fault == "prunable");
+        assert_eq!(
+            row["status"],
+            if fault == "prunable" {
+                "blocked"
+            } else {
+                "preserved"
+            }
+        );
+        assert_eq!(h.ledger()["entries"], value!([]));
+        assert_eq!(git(&h.root, &["rev-parse", "refs/heads/unowned"]), head);
+        let retained = if fault == "prunable" {
+            h.parent.join("preserved-missing-checkout")
+        } else {
+            target.clone()
+        };
+        assert_eq!(fs::read(retained.join(".git")).unwrap(), gitfile);
+        assert!(retained.join("output λ/data").exists());
+        if fault == "dirty" {
+            assert_eq!(
+                fs::read_to_string(retained.join("payload")).unwrap(),
+                "real dirty work"
+            );
+        }
+        let main = inventory_row(&report, &h.root);
+        assert_eq!(main["status"], "preserved");
+        assert_eq!(main["preserved_reason"], "coordinator worktree");
+    }
+}
+
+#[test]
+fn automatic_inventory_requires_current_attachment_but_accepts_advanced_head() {
+    for fault in ["advanced", "gitfile", "metadata", "unreadable"] {
+        let h = Host::new("payload");
+        h.kernel_cleanup();
+        let target = h.parent.join("enrolled");
+        assert_eq!(h.invoke("feature", "enrolled", &target).0, 0);
+        output(&target);
+        let metadata = PathBuf::from(git(&target, &["rev-parse", "--absolute-git-dir"]));
+        match fault {
+            "advanced" => {
+                fs::write(target.join("payload"), "new committed source").unwrap();
+                commit(&target);
+            }
+            "gitfile" => {
+                fs::rename(target.join(".git"), h.parent.join("original-gitfile")).unwrap();
+                fs::write(
+                    target.join(".git"),
+                    fs::read(h.parent.join("original-gitfile")).unwrap(),
+                )
+                .unwrap();
+            }
+            "metadata" => {
+                let original = metadata.with_extension("original");
+                fs::rename(&metadata, &original).unwrap();
+                retain_fixture_state(&original, &metadata).unwrap();
+            }
+            _ => {
+                fs::write(target.join(".git"), "unreadable attachment").unwrap();
+            }
+        }
+        let ledger = h.ledger();
+        let (code, report, error) = h.auto("maintain", &[]);
+        let row = inventory_row(&report, &target);
+        if fault == "advanced" {
+            assert_eq!(code, 0, "{report} {error}");
+            assert_eq!(row["status"], "enrolled");
+            assert_eq!(row["enrollment_match"], true);
+            assert_eq!(row["head"], git(&target, &["rev-parse", "HEAD"]));
+            assert!(!target.join("output λ").exists());
+            assert_eq!(h.ledger()["entries"][0]["status"], "active");
+            assert!(h.ledger()["entries"][0]["terminal"].is_null());
+        } else {
+            assert_ne!(code, 0, "{fault}: {report} {error}");
+            assert_eq!(row["status"], "blocked");
+            assert_eq!(row["enrollment_match"], false);
+            assert!(
+                row["preserved_reason"]
+                    .as_str()
+                    .unwrap()
+                    .contains("attachment")
+            );
+            assert!(target.join("output λ/data").exists());
+            assert_eq!(
+                h.ledger()["entries"][0]["attachment"],
+                ledger["entries"][0]["attachment"]
+            );
+        }
+    }
 }
 
 #[test]
@@ -351,6 +789,12 @@ fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
                     "dev",
                 ],
             );
+            let before_observation = h.ledger();
+            let (code, observed, error) = h.auto("maintain", &[]);
+            assert_eq!(code, 0, "{observed} {error}");
+            assert_eq!(inventory_row(&observed, &target)["enrollment_match"], false);
+            assert_eq!(inventory_row(&observed, &target)["status"], "preserved");
+            assert_eq!(h.ledger(), before_observation);
             let (code, r, e) = h.auto("import", &["--path", target.to_str().unwrap()]);
             assert_eq!(code, 0, "{r} {e}");
             assert_eq!(h.ledger()["entries"][2]["enrollment"]["kind"], "import");

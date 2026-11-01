@@ -199,3 +199,116 @@ without these retained originals is insufficient for the corresponding evidence
 claim. The [shared-startup handoff](filemap-impact.md#bounded-internal-causal-consumption)
 owns the existing source/artifact/run/attempt predicates; no new workflow or
 alternate diagnostic test recipe is introduced.
+
+## Scoped CI execution progress adoption
+
+The current host's existing `.chrono-harness/ci/check.json` selects
+`policy.execution_diagnostics: "chrono-log-stderr/v1"`. This adopts the existing
+`Logger` at info level with the CI judge as producer and stderr as its sink.
+Unknown values reject. Omitting the choice leaves the library caller's existing
+scoped dispatcher alone. This is configuration of the single canonical check,
+not another runner, process observer, acquisition path or check entry.
+
+The judge first decodes the request and verifies the profile bytes against its
+request digest, then scopes logging across inventory, operation/tool preparation,
+execution and the post-execution snapshot. These phases include engine calls
+outside operation execution. Records carry the request ID, fixed candidate/base,
+profile digest and judge PID. These are request identities, not a claim that
+input admission has passed. Projects adds the validated plan identity and
+operation identity, explicitly transfers the dispatcher and parent span to each
+owned worker, and records scheduler waits with their running operation IDs.
+Worker results and the subsequent scoped-worker join remain distinct events.
+
+The existing process engine emits its actual launch argv once, executable and
+input/environment digests, cwd, PID pair and unchanged bounds. Its existing
+ownership owner records that launch's slot/generation/parent slot (4096 is the
+root parent sentinel). Subsequent records identify entry into the monitor,
+stream-reader start barrier, descendant drain, any required child join,
+stream/writer joins, scoped-worker joins, scope exit and
+the existing kernel-observer join. A process result event follows the return of
+owned work and stream-retention completion and carries original exit/failure,
+stream lengths and digests. It contains no stream body. No extra status probe,
+process discovery, timer, thread, descriptor or wake channel is added. A stage
+record describes an observed boundary; it does not certify successful operation,
+child terminal state, a completed check, successful original publication or a
+causal explanation for an ensuing timeout. Only the existing result and kernel
+ownership contracts establish those facts.
+
+Each logger record uses the existing synchronous JSONL write/flush path. The
+runner's already selected `retained-reference/v2` producer writes the judge's
+actual stderr to its existing retained stream while the judge is running; it
+does not wait for the final check report. These remain stream originals, with the
+same retention/collection and protected-source/consumer rules. There is no
+second diagnostic store, copied-body original, new producer acknowledgement or
+relaxation for a missing final report. An unavailable sink is not repaired by
+replaying the log. On normal return, `finish()` failures append a failing
+`ci.execution-diagnostics` result and typed `chrono-error/v1` records to the
+existing response without discarding operation receipts or their failures. An
+abruptly terminated judge cannot publish that final response; any unavailable
+record remains unavailable. Native stderr uses the existing runner `NativeOutput`
+adapter on Unix; other platforms retain their standard stderr adapter.
+
+**Product and host policy change together:** runner process/ownership boundaries,
+projects worker context, and CI judge adoption change together with the selected
+profile. FILEMAP declares the two Rust fixture sources and the direct diagnostics
+compile dependency. Current registered lockfiles add direct dependencies on the
+already locked `tracing`/`chrono-diagnostics` libraries; no external package or
+version is introduced. The dedicated CI Rust project has one registered focused
+feedback operation, `test.ci.execution-diagnostics`, over the current v3 unit path with retained-reference/v2 and real shared execution.
+It checks exact failing-operation bytes/exits and request/plan/launch
+association, a real enclosing timeout with original streams before a final
+aggregate, and logging IO failure alongside the original business failure.
+It also checks healthy verdicts, selected/omitted/unknown configuration and the
+slot/generation relationship to the original timeout ownership snapshot.
+Its Rust subprocess fixture is built by that project's existing Cargo test
+operation. Canonical verification still uses the full declared DELTA closure;
+this focused feedback does not establish committed canonical or native acceptance.
+
+Progress output scales with executed invocations/operations and launch argv size,
+not elapsed wait time or captured stdout/stderr size. Identity context repeats
+per record; request bodies, environment values and stream bodies are not copied.
+The existing judge stream/output/report bounds remain in force, including failure
+on overflow. Additional per-record serialization, synchronous writes, retained
+stderr and uploaded bytes are new costs; whole-host/native/CI cost is unmeasured.
+Feedback timing and byte observations belong to the worker handoff, not a claim
+of timeout improvement. General subprocess propagation to independently launched
+programs and broader SPEC §7.1/§7.2 adoption remain incomplete.
+
+This adoption addresses the attribution gap in the fixed failed native execution
+`41315147398/1` at candidate `1b762bc47641aca69bc34fe7820b29ca9f06f0a3`.
+Its participation original still records timeout at 2400 seconds; the last
+recorded child being terminal does not identify its argv or explain why enclosing
+launchers remained incomplete. The historical root cause remains unresolved.
+The missing final unit report and resulting post-upload acknowledgement refusal
+remain real failures. This change neither fixes that timeout speculatively nor
+permits releasing originals when final publication is absent.
+
+Scoped Logger registration also covers unrelated uninstrumented first use of
+shared callsites. The locked tracing-core 0.1.36 single-dispatch fast path can
+cache `never` from that unrelated thread. Logger keeps two registrations of its
+same subscriber alive so registration consults live subscribers; the calling
+thread's scoped dispatch still owns delivery. No global dispatcher is installed.
+Fresh-process Rust coverage orders zero/one/multiple logger and lifetime cases,
+requires enclosing request/operation context and explicit thread transfer, and
+retains INFO acceptance, DEBUG filtering and sink-failure checks. Both CI
+diagnostic fixtures publish request/business evidence and raw sink originals
+before assertions and retain their temporary host on assertion failure.
+
+The existing projects migration consumer scopes Logger to its current operation
+preparation/execution, workflow generation/verification and inner owner handoff.
+Fixture preparation and registry validation publish phase boundaries without
+repeating their Git operation records. Operation logs retain actual argv/PID and
+ownership slot/generation through the existing runner. Native fixture capture
+adds its original capture address, argv/PID and entered child wait, actual join
+and return boundaries; its spawn/wait/stream/result behavior is unchanged. Rows
+write synchronously to the test's original stderr before a final libtest result.
+An entered boundary is diagnostic evidence, not a terminal result or explanation
+of the historical timeout. No new observer, deadline or polling channel is added.
+
+**Product and registration changes together:** migration-tests directly names
+the existing diagnostics/tracing dependencies, and the native fixture capture
+owner directly names already locked tracing. Current dependent lockfiles and
+the diagnostics compile edge are migrated. These rows add serialization, writes
+and retained stderr; total native storage and validation cost remains unmeasured.
+The original eight migration members, operation limits and default concurrency
+remain required by the current canonical plan.

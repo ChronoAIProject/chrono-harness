@@ -2,6 +2,8 @@
 mod history;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
+#[path = "support/temporary.rs"]
+mod temporary;
 use chrono_harness::{facts, observation, wire};
 use chrono_judge_registration::{execution, interpret};
 use chrono_judge_routes::{execute_actions, prepare_scoped};
@@ -605,7 +607,12 @@ fn adopt_fixture_bindings(_root: &std::path::Path, config: &mut Value) {
         .unwrap();
     *input = fixture.git_input.clone();
 }
-fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+fn migration_host() -> (
+    temporary::FixtureDirectory,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     migration_host_with_alias_collision(false)
 }
 fn copy_nested_receipts(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
@@ -631,6 +638,7 @@ fn execution_failure(
     reason: &str,
     result: &chrono_judge_projects::Results,
 ) -> String {
+    let protection = temporary::retain_diagnostic(root, reason);
     let directory = source().join(".chrono-harness/state/migration-tests");
     let retained = (|| -> Result<String, Box<dyn std::error::Error>> {
         fs::create_dir_all(&directory)?;
@@ -662,6 +670,9 @@ fn execution_failure(
     })()
     .unwrap_or_else(|error| format!("original execution retention failed: {error}"));
     let mut summary = format!("{reason}; {retained}");
+    if let Err(error) = protection {
+        summary.push_str(&format!("; diagnostic reference failed: {error}"));
+    }
     for row in result.executed.iter().chain(&result.blocked) {
         if row.status == "passed" {
             continue;
@@ -687,12 +698,14 @@ fn execution_failure(
 }
 fn migration_host_with_alias_collision(
     collision: bool,
-) -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+) -> (
+    temporary::FixtureDirectory,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     let source = fs::canonicalize(source()).unwrap();
-    let dir = tempfile::Builder::new()
-        .prefix("migration actual host ")
-        .tempdir()
-        .unwrap();
+    let dir = temporary::migration_directory("migration actual host ");
     let root = fs::canonicalize(dir.path()).unwrap();
     historical_input().export(&root).unwrap();
     if collision {
@@ -761,11 +774,10 @@ fn migration_host_with_alias_collision(
         ("runner", "chrono-harness"),
         ("judge-ci", "chrono-judge-ci"),
     ] {
-        fs::copy(
-            source.join(format!("crates/{project}/target/debug/{name}")),
-            root.join(format!(".chrono-harness/bin/{name}")),
-        )
-        .unwrap();
+        let original = source.join(format!("crates/{project}/target/debug/{name}"));
+        let destination = root.join(format!(".chrono-harness/bin/{name}"));
+        temporary::copied_fixture_input(&root, &original, &destination);
+        fs::copy(original, destination).unwrap();
     }
     // The copied candidate is a test host on the executing native platform.
     // Preserve the historical snapshot; install only the explicitly selected
@@ -840,46 +852,98 @@ fn decoded_historical_bindings_preserve_original_aliases_and_ambiguity() {
         assert_eq!(execute_actions(&current)["test:ci-tests"], "test.ci-tests");
     }
 }
+// Scope only current operation phases; historical-data preparation keeps its
+// existing captures without repeating every Git operation in stderr.
+fn migration_phase<T>(
+    logger: &chrono_diagnostics::logging::Logger<std::io::Stderr>,
+    parent: &tracing::Span,
+    phase: &str,
+    trace_operations: bool,
+    work: impl FnOnce() -> T,
+) -> T {
+    logger.run(|| {
+        let _parent = parent.enter();
+        let span = tracing::info_span!("migration.phase", phase);
+        let _entered = span.enter();
+        tracing::info!(
+            event_id = "migration.phase_entered",
+            "entering fixture phase"
+        );
+        let result = if trace_operations {
+            work()
+        } else {
+            tracing::dispatcher::with_default(&tracing::Dispatch::none(), work)
+        };
+        tracing::info!(
+            event_id = "migration.phase_returned",
+            "fixture phase returned"
+        );
+        result
+    })
+}
+
 #[test]
 fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift() {
-    let (_dir, root, base, candidate) = migration_host();
-    let raw = facts::registry_values(&root, &base, CONFIG).unwrap();
-    let new = facts::registry_values(&root, &candidate, CONFIG).unwrap();
-    let mut missing_mapping = new.clone();
-    missing_mapping.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["mappings"] = json!([]);
-    let mut env: BTreeMap<String, String> = std::env::vars().collect();
-    env.insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
-    env.insert("CARGO_TERM_COLOR".into(), "never".into());
-    // The historical decoder retains the original method. The current host
-    // explicitly replaces its provider; standalone consumers may not infer it.
-    let mut missing_method = new.clone();
-    missing_method.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]
-        .as_object_mut()
-        .unwrap()
-        .remove("method_replacements");
-    let error = interpret(
-        &root,
-        &base,
-        &candidate,
-        CONFIG,
-        raw.clone(),
-        missing_method.clone(),
-        &env,
-    )
-    .err()
-    .expect("missing method replacement unexpectedly accepted");
-    assert!(
-        error.contains("historical method changed"),
-        "unexpected historical method error: {error}"
-    );
-    let old_action = raw[PROJECTS]["scripts"][0]["actions"]["execute"].clone();
-    missing_method.get_mut(PROJECTS).unwrap()["projects"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|p| p["id"] == "ci")
-        .unwrap()["actions"]["execute"] = old_action;
-    interpret(
+    let logger = chrono_diagnostics::logging::Logger::stderr("projects-migration-test");
+    let context = logger.run(|| {
+        tracing::info_span!(
+            "migration.test",
+            test = "real_historical_profile_repair_preserves_obligations_and_verify_detects_drift",
+            test_pid = std::process::id(),
+            root = tracing::field::Empty,
+            base = tracing::field::Empty,
+            candidate = tracing::field::Empty
+        )
+    });
+    let (_dir, root, base, candidate) =
+        migration_phase(&logger, &context, "fixture.prepare", false, migration_host);
+    context.record("root", root.to_str().unwrap());
+    context.record("base", base.as_str());
+    context.record("candidate", candidate.as_str());
+    let (old, current, view, env) = migration_phase(
+        &logger,
+        &context,
+        "registry.validation",
+        false,
+        || {
+            let raw = facts::registry_values(&root, &base, CONFIG).unwrap();
+            let new = facts::registry_values(&root, &candidate, CONFIG).unwrap();
+            let mut missing_mapping = new.clone();
+            missing_mapping.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["mappings"] =
+                json!([]);
+            let mut env: BTreeMap<String, String> = std::env::vars().collect();
+            env.insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
+            env.insert("CARGO_TERM_COLOR".into(), "never".into());
+            // The historical decoder retains the original method. The current host
+            // explicitly replaces its provider; standalone consumers may not infer it.
+            let mut missing_method = new.clone();
+            missing_method.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("method_replacements");
+            let error = interpret(
+                &root,
+                &base,
+                &candidate,
+                CONFIG,
+                raw.clone(),
+                missing_method.clone(),
+                &env,
+            )
+            .err()
+            .expect("missing method replacement unexpectedly accepted");
+            assert!(
+                error.contains("historical method changed"),
+                "unexpected historical method error: {error}"
+            );
+            let old_action = raw[PROJECTS]["scripts"][0]["actions"]["execute"].clone();
+            missing_method.get_mut(PROJECTS).unwrap()["projects"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|p| p["id"] == "ci")
+                .unwrap()["actions"]["execute"] = old_action;
+            interpret(
         &root,
         &base,
         &candidate,
@@ -891,112 +955,122 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
     .unwrap_or_else(|error| {
         panic!("omitted replacements must retain the original strict unchanged-method contract: {error}")
     });
-    for (pointer, value) in [
-        ("/from/argv", json!(["invented historical method"])),
-        ("/from/owner", json!("script:missing")),
-        ("/to/argv", json!(["stale candidate method"])),
-        ("/to/tool", json!("missing-tool")),
-        ("/to/owner", json!("project:runner")),
-        ("/to/operation", json!("renamed.operation")),
-        ("/to/argv", json!("not-an-array")),
-        ("/reason", json!("")),
-    ] {
-        let mut invalid = new.clone();
-        *invalid.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["method_replacements"][0]
+            for (pointer, value) in [
+                ("/from/argv", json!(["invented historical method"])),
+                ("/from/owner", json!("script:missing")),
+                ("/to/argv", json!(["stale candidate method"])),
+                ("/to/tool", json!("missing-tool")),
+                ("/to/owner", json!("project:runner")),
+                ("/to/operation", json!("renamed.operation")),
+                ("/to/argv", json!("not-an-array")),
+                ("/reason", json!("")),
+            ] {
+                let mut invalid = new.clone();
+                *invalid.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["method_replacements"][0]
             .pointer_mut(pointer)
             .unwrap() = value;
-        assert!(
-            interpret(&root, &base, &candidate, CONFIG, raw.clone(), invalid, &env).is_err(),
-            "unbound replacement accepted: {pointer}"
-        );
-    }
-    for variant in [
-        "duplicate",
-        "unknown-field",
-        "unchanged",
-        "unused",
-        "ambiguous-target",
-    ] {
-        let mut invalid = new.clone();
-        let rows =
+                assert!(
+                    interpret(&root, &base, &candidate, CONFIG, raw.clone(), invalid, &env)
+                        .is_err(),
+                    "unbound replacement accepted: {pointer}"
+                );
+            }
+            for variant in [
+                "duplicate",
+                "unknown-field",
+                "unchanged",
+                "unused",
+                "ambiguous-target",
+            ] {
+                let mut invalid = new.clone();
+                let rows =
             invalid.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["method_replacements"]
                 .as_array_mut()
                 .unwrap();
-        match variant {
-            "duplicate" => rows.push(rows[0].clone()),
-            "unknown-field" => rows[0]["waiver"] = json!(true),
-            "unchanged" => rows[0]["to"] = rows[0]["from"].clone(),
-            "unused" => {
-                rows[0]["from"]["operation"] = json!("unused.operation");
-                rows[0]["to"]["operation"] = json!("unused.operation");
+                match variant {
+                    "duplicate" => rows.push(rows[0].clone()),
+                    "unknown-field" => rows[0]["waiver"] = json!(true),
+                    "unchanged" => rows[0]["to"] = rows[0]["from"].clone(),
+                    "unused" => {
+                        rows[0]["from"]["operation"] = json!("unused.operation");
+                        rows[0]["to"]["operation"] = json!("unused.operation");
+                    }
+                    "ambiguous-target" => {
+                        let action = invalid.get_mut(PROJECTS).unwrap()["projects"]
+                            .as_array_mut()
+                            .unwrap()
+                            .iter_mut()
+                            .find(|p| p["id"] == "ci")
+                            .unwrap()["actions"]
+                            .as_object_mut()
+                            .unwrap();
+                        action.insert("duplicate".into(), action["execute"].clone());
+                    }
+                    _ => unreachable!(),
+                }
+                assert!(
+                    interpret(&root, &base, &candidate, CONFIG, raw.clone(), invalid, &env)
+                        .is_err(),
+                    "invalid method replacement accepted: {variant}"
+                );
             }
-            "ambiguous-target" => {
-                let action = invalid.get_mut(PROJECTS).unwrap()["projects"]
-                    .as_array_mut()
-                    .unwrap()
-                    .iter_mut()
-                    .find(|p| p["id"] == "ci")
-                    .unwrap()["actions"]
-                    .as_object_mut()
-                    .unwrap();
-                action.insert("duplicate".into(), action["execute"].clone());
-            }
-            _ => unreachable!(),
-        }
-        assert!(
-            interpret(&root, &base, &candidate, CONFIG, raw.clone(), invalid, &env).is_err(),
-            "invalid method replacement accepted: {variant}"
-        );
-    }
-    let (old, current, view) =
-        interpret(&root, &base, &candidate, CONFIG, raw.clone(), new, &env).unwrap();
-    assert!(
-        interpret(
-            &root,
-            &base,
-            &candidate,
-            CONFIG,
-            raw.clone(),
-            missing_mapping,
-            &env
-        )
-        .err()
-        .unwrap()
-        .contains("mapping")
-    );
-    assert_eq!(
-        old.node_data()["test:ci-verify"].definitions[0].value,
-        &raw[PROJECTS]["scripts"][0]
-    );
-    assert_eq!(old.filemap()["project_edges"], raw[FM]["project_edges"]);
-    assert_eq!(old.filemap()["test_costs"], raw[FM]["test_costs"]);
-    assert_eq!(
-        view["conversion"]["input_digest"],
-        wire::digest(&view["conversion"]["input"]).unwrap()
-    );
-    assert_eq!(view["conversion"]["input"]["original"], json!(raw));
-    assert_eq!(
-        chrono_judge_registration::replacements(&current).unwrap()["test:ci-verify"],
-        "test:ci-tests"
+            let (old, current, view) =
+                interpret(&root, &base, &candidate, CONFIG, raw.clone(), new, &env).unwrap();
+            assert!(
+                interpret(
+                    &root,
+                    &base,
+                    &candidate,
+                    CONFIG,
+                    raw.clone(),
+                    missing_mapping,
+                    &env
+                )
+                .err()
+                .unwrap()
+                .contains("mapping")
+            );
+            assert_eq!(
+                old.node_data()["test:ci-verify"].definitions[0].value,
+                &raw[PROJECTS]["scripts"][0]
+            );
+            assert_eq!(old.filemap()["project_edges"], raw[FM]["project_edges"]);
+            assert_eq!(old.filemap()["test_costs"], raw[FM]["test_costs"]);
+            assert_eq!(
+                view["conversion"]["input_digest"],
+                wire::digest(&view["conversion"]["input"]).unwrap()
+            );
+            assert_eq!(view["conversion"]["input"]["original"], json!(raw));
+            assert_eq!(
+                chrono_judge_registration::replacements(&current).unwrap()["test:ci-verify"],
+                "test:ci-tests"
+            );
+            (old, current, view, env)
+        },
     );
     let plans = execution::plans(current.filemap()).unwrap();
     for operation in &execution::plans(old.filemap()).unwrap()["test:ci-verify"].operations {
         assert!(plans["test:ci-tests"].operations.contains(operation));
     }
     let selected = BTreeSet::from(["test:ci-tests".into()]);
-    let plan = prepare_scoped(
-        &root,
-        json!({"base":base,"candidate":candidate,"run":"real-ci-consumer"}),
-        &selected,
-        &plans,
-        &execution::methods(current.projects()).unwrap(),
-        &execute_actions(&current),
-        &current.config()["tools"],
-        env,
-        &chrono_judge_registration::reused_tools(&view).unwrap(),
-    )
+    let plan = migration_phase(&logger, &context, "operations.prepare", true, || {
+        prepare_scoped(
+            &root,
+            json!({"base":base,"candidate":candidate,"run":"real-ci-consumer"}),
+            &selected,
+            &plans,
+            &execution::methods(current.projects()).unwrap(),
+            &execute_actions(&current),
+            &current.config()["tools"],
+            env,
+            &chrono_judge_registration::reused_tools(&view).unwrap(),
+        )
+    })
     .unwrap();
-    let result = chrono_judge_projects::execute(&plan).unwrap();
+    let result = migration_phase(&logger, &context, "operations.execute", true, || {
+        chrono_judge_projects::execute(&plan)
+    })
+    .unwrap();
     let verify = result
         .executed
         .iter()
@@ -1019,16 +1093,18 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         "{}",
         execution_failure(&root, "ci.verify did not diagnose drift", &result)
     );
-    let output = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
-        .args([
-            "generate",
-            "--host-root",
-            root.to_str().unwrap(),
-            "--config",
-            ".chrono-harness/ci/units.json",
-        ])
-        .output()
-        .unwrap();
+    let output = migration_phase(&logger, &context, "workflow.generate", true, || {
+        temporary::capture_native(
+            &root,
+            Command::new(root.join(".chrono-harness/bin/chrono-ci")).args([
+                "generate",
+                "--host-root",
+                root.to_str().unwrap(),
+                "--config",
+                ".chrono-harness/ci/units.json",
+            ]),
+        )
+    });
     assert!(
         output.status.success(),
         "workflow repair failed: {output:?}"
@@ -1049,12 +1125,68 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         timeout_seconds: 30,
         output_limit_bytes: 4096,
     };
-    let verified = chrono_harness::run_process_observed(&root, &spec, &[], &tool.sha256).unwrap();
+    let verified = migration_phase(&logger, &context, "workflow.verify", true, || {
+        chrono_harness::run_process_observed(&root, &spec, &[], &tool.sha256)
+    })
+    .unwrap();
     assert_eq!(verified.exit_code, 0, "{}", verified.stderr);
     assert!(
         verified.failure.is_none(),
         "workflow verify failed: {verified:?}"
     );
+    // These consumers have joined and the repaired workflow has been consumed.
+    // This distinct Git host owns its nested fixtures; the outer allocation's
+    // drain cannot reach them. Keep the owner's original result before judging
+    // its exact member disposal/protection outcomes. Earlier failures retain the
+    // fixture through the existing diagnostic guard without this handoff.
+    let argv = vec![
+        "maintain".to_owned(),
+        "--host-root".to_owned(),
+        root.to_str().unwrap().to_owned(),
+    ];
+    let owner = migration_phase(&logger, &context, "inner-owner.maintain", true, || {
+        tracing::info!(event_id = "migration.owner_call", argv = %json!(argv),
+            operation = "worktree.maintain", "calling existing in-process owner");
+        chrono_worktree::run(&argv)
+    });
+    let directory = source().join(".chrono-harness/state/migration-tests");
+    fs::create_dir_all(&directory).unwrap();
+    let (file, original) = tempfile::Builder::new()
+        .prefix("inner-owner-handoff-")
+        .suffix(".json")
+        .tempfile_in(directory)
+        .unwrap()
+        .keep()
+        .unwrap();
+    serde_json::to_writer(
+        file,
+        &json!({"argv":argv,"exit_code":owner.exit_code,
+            "stdout_bytes":owner.stdout.as_bytes(),"stderr_bytes":owner.stderr.as_bytes()}),
+    )
+    .unwrap();
+    assert_eq!(
+        owner.exit_code,
+        0,
+        "inner owner handoff failed; original result at {}",
+        original.display()
+    );
+    let handoff: Value = serde_json::from_str(&owner.stdout).unwrap();
+    assert_eq!(handoff["status"], "maintained");
+    assert_eq!(handoff["invoking_root"], json!(root));
+    assert_eq!(handoff["lifecycle_coordinator_root"], json!(root));
+    assert!(
+        handoff["producer_objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|member| member["producer"] == "ci-test-host"
+                && member["path"].is_string()
+                && member["status"].is_string()),
+        "inner fixture member outcomes missing; original result at {}",
+        original.display()
+    );
+    migration_phase(&logger, &context, "test.completed", true, || ());
+    logger.finish().unwrap();
 }
 
 #[test]
@@ -1068,10 +1200,10 @@ fn migration_binding_failure_retains_expected_and_observed_version() {
         .iter_mut()
         .find(|t| t["id"] == "python3")
         .unwrap();
-    let observed = Command::new(tool["program"].as_str().unwrap())
-        .arg("--version")
-        .output()
-        .unwrap();
+    let observed = temporary::capture_native(
+        &root,
+        Command::new(tool["program"].as_str().unwrap()).arg("--version"),
+    );
     tool["expected_version"] = json!("Python deliberately-wrong");
     let env: BTreeMap<String, String> = std::env::vars().collect();
     let error = interpret(&root, &base, &candidate, CONFIG, raw, new, &env)

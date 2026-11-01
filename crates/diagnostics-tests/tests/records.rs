@@ -233,6 +233,72 @@ fn explicit_dispatch_and_parent_span_preserve_context_across_threads() {
 }
 
 #[test]
+fn scoped_callsites_survive_uninstrumented_first_use() {
+    const MODE: &str = "CHRONO_DIAGNOSTIC_FIRST_USE";
+    let Ok(mode) = std::env::var(MODE) else {
+        let mut failures = Vec::new();
+        for mode in ["zero", "one", "multiple", "lifetime"] {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "scoped_callsites_survive_uninstrumented_first_use",
+                    "--nocapture",
+                ])
+                .env(MODE, mode)
+                .output()
+                .unwrap();
+            if !output.status.success() {
+                failures.push(format!("{mode}: {output:?}"));
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+        return;
+    };
+    fn shared() {
+        let span = tracing::debug_span!("operation", operation = "test.suite");
+        let _entered = span.enter();
+        tracing::info!(event_id = "process.launched", message = "shared callsite");
+        tracing::debug!(event_id = "filtered", message = "must stay filtered");
+    }
+    if mode == "zero" {
+        shared();
+    }
+    let output = Captured::default();
+    let mut logger = Logger::new("request", tracing::Level::INFO, output.clone());
+    let other = (mode == "multiple")
+        .then(|| Logger::new("other", tracing::Level::INFO, Captured::default()));
+    if mode == "lifetime" {
+        logger.finish().unwrap();
+        drop(logger);
+        logger = Logger::new("request", tracing::Level::INFO, output.clone());
+    }
+    // Exactly ordered, unrelated first use. No inherited thread dispatcher.
+    std::thread::spawn(shared).join().unwrap();
+    let parent = logger.run(|| tracing::info_span!("request", request = "first-use"));
+    let dispatch = logger.dispatch();
+    std::thread::spawn(move || {
+        tracing::dispatcher::with_default(&dispatch, || {
+            let _entered = parent.enter();
+            shared();
+        })
+    })
+    .join()
+    .unwrap();
+    logger.finish().unwrap();
+    // Publish actual rows before any assertion can discard the evidence.
+    eprintln!(
+        "first-use {mode} rows: {}",
+        String::from_utf8_lossy(&output.0.lock().unwrap())
+    );
+    let rows = output.records();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].event, "process.launched");
+    assert_eq!(rows[0].context["request"], "first-use");
+    assert_eq!(rows[0].context["operation"], "test.suite");
+    drop(other);
+}
+
+#[test]
 fn error_event_preserves_the_full_record_and_success_does_not_erase_it() {
     let output = Captured::default();
     let logger = Logger::new("fixture", tracing::Level::INFO, output.clone());

@@ -151,6 +151,15 @@ pub fn parent(args: &[String]) {
         );
     } else if args[1].contains("/contents/") {
         contents(&args[1], mode == "wrong-source");
+    } else if args[1].contains("/artifacts?") {
+        if mode == "typed-metadata-timeout" {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+        if mode == "typed-metadata-output" {
+            println!("{}", "x".repeat(8192));
+        } else {
+            println!("{}", data["artifact_pages"]);
+        }
     } else if args[1].contains("/jobs?") {
         let mut rows = vec![json!({"id":200,"run_id":101,"run_attempt":2,
             "name":"Detect registered DELTA","status":"completed", "conclusion":"success",

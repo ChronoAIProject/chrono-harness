@@ -63,6 +63,7 @@ dependencies = [
  "sha1",
  "sha2",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -95,6 +96,7 @@ dependencies = [
  "chrono-judge-routes",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -138,8 +140,24 @@ dependencies = [
  "chrono-harness",
  "chrono-judge-registration",
  "chrono-judge-workflow",
+ "chrono-worktree",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "chrono-worktree"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-registration",
+ "chrono-judge-workflow",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "time",
+ "tracing",
 ]
 
 [[package]]

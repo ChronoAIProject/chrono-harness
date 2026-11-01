@@ -20,6 +20,7 @@ test = false
 bench = false
 
 [dependencies]
+tracing = { version = "0.1", default-features = false, features = ["std"] }
 chrono-harness = { path = "../runner" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-judge-workflow = { path = "../judge-workflow" }

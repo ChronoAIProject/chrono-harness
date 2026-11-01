@@ -368,6 +368,12 @@ where
 /// A dispatcher clone is the explicit handoff for another thread or task.
 pub struct Logger<W> {
     dispatch: Dispatch,
+    // tracing-core 0.1.36's single-dispatch fast path registers new callsites
+    // against the calling thread, which may have no scoped subscriber. Keep
+    // two registrations of the same subscriber alive so registration consults
+    // the live subscribers even on unrelated, uninstrumented threads. Neither
+    // registration changes the thread's default dispatcher or duplicates events.
+    _callsite_dispatch: Dispatch,
     sink: Arc<Mutex<Sink<W>>>,
 }
 
@@ -384,8 +390,10 @@ impl<W: Write + Send + 'static> Logger<W> {
             max_level,
             sink: sink.clone(),
         };
+        let subscriber = Arc::new(Registry::default().with(layer));
         Self {
-            dispatch: Dispatch::new(Registry::default().with(layer)),
+            dispatch: Dispatch::new(subscriber.clone()),
+            _callsite_dispatch: Dispatch::new(subscriber),
             sink,
         }
     }

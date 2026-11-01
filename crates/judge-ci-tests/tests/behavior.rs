@@ -6,6 +6,67 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 const CONFIG: &str = ".chrono-harness/ci/check.json";
+
+#[test]
+fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_output_bound() {
+    let h = Host::new();
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["selection_evidence"] = json!("explicit-graph/v1")
+    });
+    let base = h.commit();
+    let names: Vec<_> = (0..2697)
+        .map(|i| format!("registered-input-{}-{i:04}", "x".repeat(64)))
+        .collect();
+    for name in &names {
+        h.write(name, "declared input\n");
+    }
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        for name in &names {
+            v["files"].as_array_mut().unwrap().push(json!({"path":name,"owner":"host","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:lib"}]}));
+        }
+    });
+    let candidate = h.commit();
+    let r = h.check(&base, &candidate);
+    pass(&r);
+    assert_eq!(h.calls(), 1);
+    let e = &r.evidence["selection_explanation"];
+    assert_eq!(e["representation"], "explicit-graph/v1");
+    assert_eq!(e["closure"]["selected_tests"], json!(["test:suite"]));
+    for name in &names {
+        assert!(
+            e["seeds"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(format!("file:{name}")))
+        );
+        assert!(
+            e["seed_causes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|s| s["node"] == format!("file:{name}"))
+        );
+    }
+    assert!(
+        e["closure"]["reached"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("test:suite"))
+    );
+    assert!(e["closure"].get("predecessors").is_none());
+    assert!(serde_json::to_vec(&r).unwrap().len() < 8 * 1024 * 1024);
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["selection_evidence"] = json!("unknown")
+    });
+    let invalid = h.commit();
+    let rejected = h.check(&candidate, &invalid);
+    assert_eq!(rejected.status, Status::Failed);
+    assert_eq!(
+        h.calls(),
+        1,
+        "unknown representation must fail before business effects"
+    );
+}
 #[path = "checkout.rs"]
 mod checkout;
 #[path = "git_facts.rs"]
@@ -156,7 +217,7 @@ fn source_closure_executes_real_command() {
     assert_eq!(h.calls(), 1);
     assert_eq!(r.evidence["selected"], json!(["test:suite"]));
     assert!(
-        r.evidence["executed"][0]["process"]["sha256"]
+        r.evidence["executed"][0]["receipt"]["process"]["sha256"]
             .as_str()
             .unwrap()
             .len()
@@ -274,7 +335,10 @@ fn operation_only_change_is_selected_and_failure_is_real() {
     let c = h.commit();
     let r = h.check(&b, &c);
     fail(&r, "exit 7");
-    assert_eq!(r.evidence["executed"][0]["process"]["exit_code"], 7);
+    assert_eq!(
+        r.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+        7
+    );
 }
 #[test]
 fn removed_affected_binding_fails_closed() {
@@ -615,7 +679,10 @@ fn index_flags_created_by_operations_fail_the_post_snapshot_guard() {
         let candidate = h.commit();
         let result = h.check(&base, &candidate);
         fail(&result, reason);
-        assert_eq!(result.evidence["executed"][0]["process"]["exit_code"], 0);
+        assert_eq!(
+            result.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+            0
+        );
         let guard = result
             .results
             .iter()
@@ -943,3 +1010,6 @@ fn v2_languages_schema_only_adoption_checks_existing_declarations() {
     fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
     assert_eq!(h.calls(), 0);
 }
+
+#[path = "diagnostics.rs"]
+mod diagnostics;
