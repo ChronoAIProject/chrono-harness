@@ -1909,6 +1909,16 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
             .unwrap()
             .success()
     );
+    native_completion.write_all(b"show").unwrap();
+    let mut shown = [0; 5];
+    native_completion.read_exact(&mut shown).unwrap();
+    assert_eq!(
+        &shown,
+        b"shown",
+        "native output after both launchers exited: {}",
+        fs::read_to_string(target.join(".chrono-harness/state/native-io-error"))
+            .unwrap_or_default()
+    );
     assert_eq!(h.auto("maintain", &[]).0, 0);
     let preserved_while_native_live = target.join("output λ/cache").exists();
     let protected = maintain_allocation();
@@ -1922,6 +1932,16 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
         .expect("original native completion channel");
     assert_eq!(&done, b"done");
     assert!(target.join(".chrono-harness/state/native-done").exists());
+    assert!(
+        fs::read_to_string(target.join(".chrono-harness/state/native.stdout"))
+            .unwrap()
+            .contains("original native progress after launcher exit")
+    );
+    assert!(
+        fs::read_to_string(target.join(".chrono-harness/state/native.stderr"))
+            .unwrap()
+            .contains("original native diagnostic after launcher exit")
+    );
     assert!(
         preserved_while_native_live,
         "actual native Cargo child completed after cleanup but lost enrollment lease"

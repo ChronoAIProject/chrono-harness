@@ -1490,3 +1490,12 @@ The child still publishes its original release/completion files, and the test
 checks both the socket response and completion file. A closed or timed-out native
 channel fails with its original IO error; file polling cannot stand in for that
 completion. Its existing ten-second completion bound is unchanged.
+
+Before signaling readiness, that native fixture binds its own stdout/stderr to
+retained original files. Cargo and the managed launcher can then exit without
+closing the native child's output destination. After both wrappers exit, the
+parent requests real progress and diagnostic writes and verifies their original
+bytes before maintenance and the existing release/join assertions. A write error
+retains its OS error and fails the regression. The completion message still
+reports the fixture function's completion; it does not independently establish
+the entire libtest process's terminal status or all caller task obligations.
