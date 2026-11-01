@@ -1867,8 +1867,31 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let cargo_output = target.join(".chrono-harness/state/cargo-case/target");
     assert!(cargo_output.is_dir(), "the actual Cargo output must exist");
     output(&target);
+    let synchronization = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    fs::write(
+        target.join(".chrono-harness/state/native-sync"),
+        synchronization.local_addr().unwrap().to_string(),
+    )
+    .unwrap();
     let mut owner = wrapper(&h, &target);
     owner.await_file(&target.join(".chrono-harness/state/native-holder"));
+    use std::{
+        io::{Read, Write},
+        os::fd::AsRawFd,
+    };
+    let mut ready = libc::pollfd {
+        fd: synchronization.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    assert_eq!(unsafe { libc::poll(&mut ready, 1, 10_000) }, 1);
+    let (mut native_completion, _) = synchronization.accept().unwrap();
+    native_completion
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    let mut connected = [0; 5];
+    native_completion.read_exact(&mut connected).unwrap();
+    assert_eq!(&connected, b"ready");
     let cargo = fs::read_to_string(target.join(".chrono-harness/state/cargo-wrapper")).unwrap();
     let native = fs::read_to_string(target.join(".chrono-harness/state/native-pid")).unwrap();
     eprintln!("CARGO_HANDOFF launcher_pid={cargo} native_pid={native}");
@@ -1892,7 +1915,13 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     assert!(cargo_output.is_dir(), "{protected}");
     assert_eq!(protected["status"], "protected", "{protected}");
     fs::write(target.join(".chrono-harness/state/native-release"), "join").unwrap();
-    await_file(&target.join(".chrono-harness/state/native-done"));
+    native_completion.write_all(b"join").unwrap();
+    let mut done = [0; 4];
+    native_completion
+        .read_exact(&mut done)
+        .expect("original native completion channel");
+    assert_eq!(&done, b"done");
+    assert!(target.join(".chrono-harness/state/native-done").exists());
     assert!(
         preserved_while_native_live,
         "actual native Cargo child completed after cleanup but lost enrollment lease"

@@ -18,8 +18,16 @@ fn native_holder() {
         std::env::var("CHRONO_PROCESS_FDS").expect("native capability carrier"),
     )
     .unwrap();
-    while !std::path::Path::new(".chrono-harness/state/native-release").exists() {
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
+    use std::io::{Read, Write};
+    let mut synchronization = std::net::TcpStream::connect(
+        std::fs::read_to_string(".chrono-harness/state/native-sync").unwrap(),
+    ).unwrap();
+    synchronization.set_read_timeout(Some(std::time::Duration::from_secs(30))).unwrap();
+    synchronization.write_all(b"ready").unwrap();
+    let mut release = [0; 4];
+    synchronization.read_exact(&mut release).unwrap();
+    assert_eq!(&release, b"join");
+    assert!(std::path::Path::new(".chrono-harness/state/native-release").exists());
     std::fs::write(".chrono-harness/state/native-done", "joined").unwrap();
+    synchronization.write_all(b"done").unwrap();
 }
