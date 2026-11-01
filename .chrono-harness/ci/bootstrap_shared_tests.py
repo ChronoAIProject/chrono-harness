@@ -492,7 +492,7 @@ class RealAttempt:
     production. Source and original evidence retain their paths after disposal.
     """
 
-    def __init__(self, owner, source, deadline, output_limit):
+    def __init__(self, owner, source, deadline, output_limit, recovery_owner=None, recovery_environment=None):
         owner.mkdir(parents=True, exist_ok=True)
         self.evidence = owner / "pending-attempt"
         # Preserve every settled original in place. Atomic mkdir reserves the
@@ -504,13 +504,22 @@ class RealAttempt:
                 break
             except FileExistsError:
                 try:
-                    self.require_settled(self.evidence)
+                    try:
+                        self.require_settled(self.evidence)
+                    except (OSError, ValueError, KeyError, TypeError):
+                        if recovery_owner is None:
+                            raise
+                        self.recover_setup(self.evidence, recovery_owner, recovery_environment, deadline, output_limit)
+                        self.require_settled(self.evidence)
                 except (OSError, ValueError, KeyError, TypeError) as error:
                     raise ValueError("unresolved real-consumer attempt; protected custody: " + str(self.evidence)) from error
                 number += 1
                 self.evidence = owner / ("pending-attempt-" + str(number))
+        self.initialize(source, deadline, output_limit)
+
+    def initialize(self, source, deadline, output_limit, root=None):
         self.deadline, self.output_limit = deadline, output_limit
-        self.result = {"source": source, "fixture": str(self.evidence / "fixture"),
+        self.result = {"source": source, "fixture": str(self.evidence / "fixture" if root is None else root),
                        "status": "running", "commands": [],
                        "custody": {"status": "protected-pending", "descendants_quiescent": None,
                                    "disposal": "not-requested",
@@ -533,25 +542,129 @@ class RealAttempt:
         if evidence.is_symlink():
             raise ValueError("attempt ownership is unknown")
         result = json.loads((evidence / "result.json").read_bytes())
-        if result["status"] != "passed":
-            raise ValueError("producer success is unresolved")
+        if result["status"] not in ("passed", "failed"):
+            raise ValueError("producer completion is unresolved")
         custody, root = result["custody"], Path(result["fixture"])
         reports = {}
         for command in result["commands"]:
-            if command["status"] != "passed" or command["exit_code"] != 0:
-                raise ValueError("producer command did not succeed")
+            code = command["exit_code"]
+            if not isinstance(code, int) or command["status"] != ("passed" if code == 0 else "failed"):
+                raise ValueError("producer command has not joined with its original outcome")
+            if code != 0 and (result["status"] != "failed" or command["name"] != "managed-use"):
+                raise ValueError("producer setup/release did not succeed")
             raw = cls.original(command["stdout"])
             cls.original(command["stderr"])
             reports[command["name"]] = raw
+        if "managed_report" not in custody:
+            cls.require_setup_release(evidence, result)
+            return
         managed = cls.original(custody["managed_report"])
         released = cls.original(custody["release_report"])
         if reports.get("managed-use") != managed or not any(
                 name.startswith("owner-release-") and raw == released for name, raw in reports.items()):
             raise ValueError("owner reports are not retained command originals")
         report = json.loads(managed)
-        if report["status"] != "used" or report["managed_process"]["exit_code"] != 0 or report["managed_process"]["failure"] is not None:
-            raise ValueError("managed producer did not succeed")
+        command = next(row for row in result["commands"] if row["name"] == "managed-use")
+        process = report["managed_process"]
+        if result["status"] == "passed":
+            if command["exit_code"] != 0 or report["status"] != "used" or process["exit_code"] != 0 or process["failure"] is not None:
+                raise ValueError("managed producer success differs from its original")
+        elif command["exit_code"] == 0 or report["status"] != "failed" or not isinstance(process["exit_code"], int):
+            raise ValueError("managed producer failure lacks a joined original")
+        # Release only the cache-attempt admission slot after exclusive disposal.
+        # Failed originals and their consumers keep their outcomes and identities.
         cls.verify_disposal(root, custody["declared_outputs"], json.loads(released))
+
+    @classmethod
+    def setup_source(cls, evidence, result):
+        import bootstrap
+        if result["status"] != "failed" or any(key in result["custody"] for key in
+                ("owner_executable", "managed_report", "declared_outputs", "release_report")):
+            raise ValueError("not a failed attempt before owner management")
+        names = {"clone", "source-origin", "fixture-remote", "fixture-origin", "fixture-base"}
+        for command in result["commands"]:
+            if command["name"] not in names or command["status"] != "passed" or command["exit_code"] != 0:
+                raise ValueError("setup command has no joined successful original")
+            cls.original(command["stdout"])
+            cls.original(command["stderr"])
+        root = Path(result["fixture"])
+        if (result["source"].get("dirty") is not False or result["source"].get("error") is not None
+                or root.resolve() != root or root.is_symlink() or bootstrap.observe_source(root) != result["source"]):
+            raise ValueError("setup fixture source/identity differs from its original")
+        return root
+
+    @classmethod
+    def verify_setup_release(cls, root, outputs, report, source):
+        if report.get("status") != "finished" or report.get("source_root") != str(root):
+            raise ValueError("missing actual setup owner release")
+        released = json.loads(cls.original(report["main_cache_release"], root))
+        if (released.get("schema") != "chrono-main-cache-release/v1" or released.get("path") != str(root)
+                or released.get("head") != source["commit"] or released.get("task_completion") != "not-claimed"):
+            raise ValueError("setup release identity differs")
+        for name in outputs:
+            if (root / name).exists() or (root / name).is_symlink():
+                raise ValueError("setup fixture output has unknown production: " + name)
+
+    @classmethod
+    def require_setup_release(cls, evidence, result):
+        root = cls.setup_source(evidence, result)
+        recovered = json.loads((evidence / "setup-recovery/result.json").read_bytes())
+        if (recovered["status"] != "passed" or recovered["source"] != result["source"]
+                or recovered["fixture"] != str(root) or recovered["setup_original"]["path"] != str(evidence / "result.json")
+                or cls.original(recovered["setup_original"]) != (evidence / "result.json").read_bytes()):
+            raise ValueError("setup recovery has no bound terminal original")
+        commands = recovered["commands"]
+        if len(commands) != 2 or commands[0]["name"] != "owner-import" or not commands[1]["name"].startswith("owner-release-"):
+            raise ValueError("setup recovery commands differ")
+        for command in commands:
+            if command["exit_code"] != 0 or command["status"] != "passed":
+                raise ValueError("setup recovery did not join successfully")
+            cls.original(command["stdout"])
+            cls.original(command["stderr"])
+        custody = recovered["custody"]
+        imported_raw = cls.original(custody["import_report"])
+        if imported_raw != cls.original(commands[0]["stdout"]):
+            raise ValueError("setup import is not its command original")
+        imported = json.loads(imported_raw)
+        if imported["status"] != "imported" or imported["source_root"] != str(root) or "managed_process" in imported:
+            raise ValueError("setup recovery has no unproduced owner import")
+        released = cls.original(custody["release_report"])
+        if cls.original(commands[1]["stdout"]) != released:
+            raise ValueError("setup release is not its command original")
+        outputs = [row["path"] for row in json.loads((root / ".chrono-harness/cleanup.json").read_bytes())["artifacts"]
+                   if row["disposition"] == "dispose"]
+        if custody["declared_outputs"] != outputs:
+            raise ValueError("setup recovery output declaration differs")
+        cls.verify_setup_release(root, outputs, json.loads(released), result["source"])
+
+    @classmethod
+    def recover_setup(cls, evidence, program, environment, deadline, output_limit):
+        import bootstrap
+        original = evidence / "result.json"
+        result = json.loads(original.read_bytes())
+        root = cls.setup_source(evidence, result)
+        recovery = cls.__new__(cls)
+        recovery.evidence = evidence / "setup-recovery"
+        try:
+            recovery.evidence.mkdir()
+        except FileExistsError:
+            cls.require_setup_release(evidence, result)
+            return
+        recovery.initialize(result["source"], deadline, output_limit, root)
+        recovery.result["setup_original"] = {"path": str(original), "sha256": bootstrap.file_digest(original),
+                                              "size": original.stat().st_size}
+        recovery.publish()
+        try:
+            recovery.manage(root, program, environment)
+            recovery.run("owner-import", [str(program), "import", "--host-root", str(root), "--path", str(root)],
+                         root, environment, output_limit=recovery.owner_output_limit)
+            if recovery.retain_owner_report("owner-import", "import_report") is None:
+                raise ValueError("setup import lacks its actual owner original")
+            recovery.dispose(setup_only=True)
+        except BaseException as error:
+            recovery.finish("failed", repr(error))
+            raise
+        recovery.finish("passed")
 
     def publish(self):
         path = self.evidence / "result.json"
@@ -635,7 +748,7 @@ class RealAttempt:
         self.publish()
         return descriptor
 
-    def dispose(self):
+    def dispose(self, setup_only=False):
         custody = self.result["custody"]
         custody.update(status="protected-pending", disposal="requested", descendants_quiescent=None,
                        reason="No verified release/disposal receipt for this request.")
@@ -650,7 +763,10 @@ class RealAttempt:
                 released = self.retain_owner_report(name, "release_report")
             if released is None:
                 raise ValueError("owner release has no valid original report; preserve pending attempt")
-            self.verify_disposal(self.root, self.outputs, json.loads(self.original(released)))
+            if setup_only:
+                self.verify_setup_release(self.root, self.outputs, json.loads(self.original(released)), self.result["source"])
+            else:
+                self.verify_disposal(self.root, self.outputs, json.loads(self.original(released)))
         except Exception as error:
             custody["error"] = repr(error)
             self.publish()
@@ -882,7 +998,7 @@ class ManagedAttemptCustody(unittest.TestCase):
                              "returncode=128", "stdout=b''", "stderr=b", "fatal:"):
                 self.assertIn(expected, message)
 
-    def host(self, mode):
+    def host(self, mode, manage=True):
         base = SOURCE.parents[1] / ".chrono-harness/state/bootstrap-custody-tests"
         base.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix=mode + "-", dir=base)).resolve()
@@ -920,9 +1036,79 @@ class ManagedAttemptCustody(unittest.TestCase):
             acquire("commit", [git, "-C", str(root), *args], root)
         import bootstrap
         attempt = RealAttempt(directory / "evidence", bootstrap.observe_source(root), time.monotonic() + 40, 1048576)
-        attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", environment)
+        if manage:
+            attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", environment)
+        else:
+            attempt.result["fixture"] = str(root)
+            attempt.publish()
+        attempt.fixture_environment = environment
         print("custody fixture originals: " + str(attempt.evidence), flush=True)
         return root, attempt
+
+    def test_failed_setup_recovers_actual_owner_release_without_changing_original(self):
+        root, attempt = self.host("success", manage=False)
+        attempt.finish("failed", "pre-management input assertion")
+        original = (attempt.evidence / "result.json").read_bytes()
+        with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+            RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 10, 1048576)
+
+        owner = SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree"
+        admitted = RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 40, 1048576,
+                               recovery_owner=owner, recovery_environment=attempt.fixture_environment)
+        self.assertNotEqual(admitted.evidence, attempt.evidence)
+        self.assertEqual((attempt.evidence / "result.json").read_bytes(), original)
+        recovery_path = attempt.evidence / "setup-recovery/result.json"
+        recovery_raw = recovery_path.read_bytes()
+        recovery = json.loads(recovery_raw)
+        self.assertEqual(recovery["status"], "passed")
+        self.assertEqual([row["name"] for row in recovery["commands"]], ["owner-import", "owner-release-1"])
+        release = json.loads(RealAttempt.original(recovery["custody"]["release_report"]))
+        receipt = json.loads(RealAttempt.original(release["main_cache_release"], root))
+        self.assertEqual(receipt["task_completion"], "not-claimed")
+        self.assertNotIn("managed_process", release)
+        self.assertFalse((root / "crates/runner/target").exists())
+        self.assertTrue((root / ".git").is_dir())
+        self.assertTrue((root / fixture.OPERATION).is_file())
+        for defect in ("missing-release", "changed-stream", "unknown-command", "false-source"):
+            with self.subTest(defect=defect):
+                changed = json.loads(recovery_raw)
+                if defect == "missing-release":
+                    del changed["custody"]["release_report"]
+                elif defect == "changed-stream":
+                    changed["commands"][1]["stdout"]["sha256"] = "0" * 64
+                elif defect == "unknown-command":
+                    changed["commands"][0]["name"] = "unjoined-consumer"
+                else:
+                    changed["setup_original"]["sha256"] = "0" * 64
+                recovery_path.write_text(json.dumps(changed))
+                with self.assertRaises((ValueError, KeyError)):
+                    RealAttempt.require_settled(attempt.evidence)
+                self.assertEqual((attempt.evidence / "result.json").read_bytes(), original)
+        recovery_path.write_bytes(recovery_raw)
+        RealAttempt.require_settled(attempt.evidence)
+        with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+            RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 10, 1048576)
+
+    def test_setup_recovery_preserves_running_changed_and_unmanaged_production(self):
+        for defect in ("running", "unknown-command", "source-drift", "unknown-output"):
+            with self.subTest(defect=defect):
+                root, attempt = self.host("success", manage=False)
+                if defect == "unknown-command":
+                    attempt.run("unmanaged-production", [sys.executable, "-B", str(SOURCE / "fixtures/bootstrap-operation.py"),
+                                "fail", "0"], root, attempt.fixture_environment)
+                elif defect == "source-drift":
+                    (root / fixture.OPERATION).write_bytes(b"changed source")
+                elif defect == "unknown-output":
+                    (root / "crates/runner/target").mkdir(parents=True)
+                if defect != "running":
+                    attempt.finish("failed", "unresolved original setup")
+                original = (attempt.evidence / "result.json").read_bytes()
+                with self.assertRaises((ValueError, AssertionError)):
+                    RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 40, 1048576,
+                                recovery_owner=SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree",
+                                recovery_environment=attempt.fixture_environment)
+                self.assertEqual((attempt.evidence / "result.json").read_bytes(), original)
+                self.assertEqual(sorted(path.name for path in attempt.evidence.parent.iterdir()), ["pending-attempt"])
 
     def test_owned_success_failure_timeout_dispose_outputs_keep_source_and_originals(self):
         for mode in ("success", "failure", "timeout"):
@@ -968,13 +1154,15 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertEqual(attempt.result["custody"]["descendants_quiescent"], True)
                 attempt.finish("passed" if mode == "success" else "failed")
                 originals = {path: path.read_bytes() for path in attempt.evidence.rglob("*") if path.is_file()}
-                for defect in ("running", "failed", "interrupted", "unknown", "missing-release", "altered-release", "missing-stream", "labels-only"):
+                for defect in ("running", "false-outcome", "interrupted", "unknown", "missing-release", "altered-release", "missing-stream", "labels-only"):
                     with self.subTest(defect=defect), tempfile.TemporaryDirectory() as directory:
                         owner = Path(directory)
                         pending = owner / "pending-attempt"
                         pending.mkdir()
                         retained = json.loads((attempt.evidence / "result.json").read_bytes())
-                        if defect in ("running", "failed", "interrupted", "unknown"):
+                        if defect == "false-outcome":
+                            retained["status"] = "failed" if mode == "success" else "passed"
+                        elif defect in ("running", "interrupted", "unknown"):
                             retained["status"] = defect
                         elif defect == "missing-release":
                             del retained["custody"]["release_report"]
@@ -994,23 +1182,19 @@ class ManagedAttemptCustody(unittest.TestCase):
                             RealAttempt(owner, {}, time.monotonic() + 5, 1048576)
                         self.assertEqual((pending / "result.json").read_bytes(), raw)
                         self.assertEqual(list(owner.iterdir()), [pending])
-                if mode == "success":
-                    with ThreadPoolExecutor(max_workers=2) as workers:
-                        entrants = [workers.submit(RealAttempt, attempt.evidence.parent, {},
-                                                   time.monotonic() + 5, 1048576) for _ in range(2)]
-                    admitted = [entry.result() for entry in entrants if entry.exception() is None]
-                    rejected = [entry.exception() for entry in entrants if entry.exception() is not None]
-                    self.assertEqual(len(admitted), 1)
-                    self.assertEqual(len(rejected), 1)
-                    self.assertIsInstance(rejected[0], ValueError)
-                    self.assertIn("unresolved real-consumer attempt", str(rejected[0]))
-                    next_attempt = admitted[0]
-                    self.assertNotEqual(next_attempt.evidence, attempt.evidence)
-                    with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
-                        RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
-                else:
-                    with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
-                        RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
+                with ThreadPoolExecutor(max_workers=2) as workers:
+                    entrants = [workers.submit(RealAttempt, attempt.evidence.parent, {},
+                                               time.monotonic() + 5, 1048576) for _ in range(2)]
+                admitted = [entry.result() for entry in entrants if entry.exception() is None]
+                rejected = [entry.exception() for entry in entrants if entry.exception() is not None]
+                self.assertEqual(len(admitted), 1)
+                self.assertEqual(len(rejected), 1)
+                self.assertIsInstance(rejected[0], ValueError)
+                self.assertIn("unresolved real-consumer attempt", str(rejected[0]))
+                next_attempt = admitted[0]
+                self.assertNotEqual(next_attempt.evidence, attempt.evidence)
+                with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+                    RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
                 for path, raw in originals.items():
                     self.assertEqual(path.read_bytes(), raw)
 
@@ -1100,12 +1284,18 @@ class RealSharedStartup(unittest.TestCase):
         filemap = json.loads((source_root / ".chrono-harness/FILEMAP.json").read_bytes())
         bounds = filemap["execution_plans"]["test:host-bootstrap-tests"]
         deadline = time.monotonic() + bounds["timeout_seconds"]
+        # Qualify the installed producer before reserving/cloning an attempt.
+        installed = json.loads((source_root / ".chrono-harness/state/bootstrap.json").read_bytes())
+        self.assertEqual(installed["source"]["after"], observed)
+        owner = source_root / ".chrono-harness/bin/chrono-worktree"
+        record = next(row for row in installed["installed"] if row["path"] == ".chrono-harness/bin/chrono-worktree")
+        self.assertEqual(bootstrap.file_digest(owner), record["sha256"])
+        environment = dict(os.environ)
+        for key in ("CHRONO_WORKTREE_BOOTSTRAP", "CHRONO_WORKTREE_CHECK", "CHRONO_CHECK_SOURCE"):
+            environment.pop(key, None)
         with RealAttempt(source_root / ".chrono-harness/state/bootstrap-real", observed,
-                         deadline, bounds["output_limit_bytes"]) as attempt:
+                         deadline, bounds["output_limit_bytes"], owner, environment) as attempt:
             evidence, root = attempt.evidence, Path(attempt.result["fixture"])
-            environment = dict(os.environ)
-            for key in ("CHRONO_WORKTREE_BOOTSTRAP", "CHRONO_WORKTREE_CHECK", "CHRONO_CHECK_SOURCE"):
-                environment.pop(key, None)
             environment["GITHUB_OUTPUT"] = str(evidence / "github-output")
             host = fixture_host_config(source_root)
             tools = {row["id"]: row["program"] for row in host["tools"]}
@@ -1117,11 +1307,6 @@ class RealSharedStartup(unittest.TestCase):
             print("real bootstrap consumer originals: " + str(evidence), flush=True)
             acquire_parent_source(source_root, root, tools["git"], run)
             self.assertEqual(bootstrap.observe_source(root), observed)
-            installed = json.loads((source_root / ".chrono-harness/state/bootstrap.json").read_bytes())
-            self.assertEqual(installed["source"]["after"], observed)
-            owner = source_root / ".chrono-harness/bin/chrono-worktree"
-            record = next(row for row in installed["installed"] if row["path"] == ".chrono-harness/bin/chrono-worktree")
-            self.assertEqual(bootstrap.file_digest(owner), record["sha256"])
             attempt.manage(root, owner, environment)
             try:
                 attempt.managed("host.bootstrap-real-fixture")

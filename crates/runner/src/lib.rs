@@ -1419,10 +1419,27 @@ fn run_process_inner_with_stdout(
                 }
             }
             #[cfg(unix)]
-            child.ownership.wait_for_wake(Duration::from_millis(10));
+            child
+                .ownership
+                .wait_for_wake(timeout.saturating_sub(start.elapsed()));
             #[cfg(not(unix))]
             std::thread::park_timeout(Duration::from_millis(10));
         };
+        #[cfg(unix)]
+        if let Some(message) = &failure {
+            failure_detail = Some(
+                failure_detail
+                    .take()
+                    .unwrap_or_else(|| Failure::new("E_PROCESS", message.clone()))
+                    .at(
+                        "ownership_at_monitor_end",
+                        child.ownership.monitor_observation(),
+                    )
+                    .at("monitor_elapsed_millis", start.elapsed().as_millis() as u64)
+                    .at("monitor_timeout_millis", timeout.as_millis() as u64)
+                    .at("terminal_deadline_ns", terminal_deadline),
+            );
+        }
         // Record the child's original terminal signal before cleanup can kill
         // the owned group. Engine cancellation and bounds keep their own cause.
         #[cfg(unix)]

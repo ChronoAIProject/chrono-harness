@@ -125,6 +125,51 @@ cleanup remain independent guards. The private mapping identity versions this
 layout, so coupled nested binaries must be upgraded together; incompatible
 inherited owners fail instead of silently reinterpreting shared memory.
 
+On macOS/Linux, the operation monitor blocks on its existing private notification
+socket until an exit/stream/lifecycle hint or the remaining execution deadline.
+The sole exit observer blocks on registered kernel identities and the existing
+launch-registration socket. Cancellation, slot release and observer shutdown
+notify that same socket; completed descendant retirement is closed within the
+event batch before blocking again. Notifications never substitute for the actual
+child join or establish a successful result. The private mapping v5 requires
+these lifecycle hints, so coupled nested executables must use the same version.
+Lifecycle and identity events notify the retained launch endpoints. A shared
+observer can therefore wake siblings when actual tree events occur; it does not
+schedule periodic status probes. This also covers the drain predicate's shared
+in-progress reservations as well as explicit descendants.
+The stop handle shares the existing descriptor without increasing the descriptor
+budget. No task daemon, status-polling channel or execution-time extension is added.
+
+Monitor failures retain the launch identity, terminal/cancellation markers,
+observer timestamp, parent markers and finite slot counts before cleanup changes
+them, together with elapsed and allowed monitor milliseconds. These are explicitly
+independent atomic reads, not a coherent tree snapshot or a causal verdict. They
+distinguish missing exit observations from other completion failures without a
+process probe, extra task or changed deadline.
+The same failure observation retains every occupied slot in that explicit launch
+tree, including its slot/generation, parent slot, recorded PID and terminal,
+launcher-terminal and cancellation markers. Collection is bounded by the existing
+4096-slot capacity and happens once before cleanup. It does not discover processes
+or infer liveness from a PID. The nested-timeout regression checks actual retained
+child identities and parent links before verifying their eventual cleanup.
+
+The runner regression `completion_wait_blocks_without_periodic_status_probes`
+isolates one engine in a native child process, with a real child that closes both
+streams and delays 1500 ms before exit 7. It counts macOS `PROC_PIDTASKINFO`
+process context switches or Linux `RUSAGE_SELF` voluntary context switches from
+the child's post-launch, closed-stream socket handshake until the actual engine
+join, including its observer/readers, and requires fewer than 64. The child
+begins its unchanged delay only after the counter window opens. Executable
+hashing/loading and ownership setup precede the window; their context switches
+do not measure completion probes. The handshake blocks on a native socket.
+The counters have different platform meanings and are not compared across OSes;
+this finite quiet-wait regression does not prove all task ownership or host
+notification behavior. Existing timeout, output-bound, suspended-monitor,
+interrupted-launcher, nested-cancellation and descriptor-exhaustion cases retain
+their original obligations. External caller task handles, lost-channel recovery
+and host-provided completion channels remain the caller/host's responsibility
+under SPEC §7.4.
+
 An operation timeout cancels only that launch subtree. Nested engines terminate
 their groups and reap their children before the enclosing engine joins its child
 and stream workers. The existing one-second cleanup allowance follows the

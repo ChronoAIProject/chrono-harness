@@ -2009,6 +2009,49 @@ fn outer_timeout_contains_nested_owned_operation() {
         assert_eq!(p.failure.as_deref(), Some("process timed out"), "{p:?}");
         let pid = std::fs::read_to_string(d.path().join("nested.pid")).unwrap();
         let pid: libc::pid_t = pid.parse().unwrap();
+        let observation =
+            &p.failure_record.as_ref().unwrap().error.context["ownership_at_monitor_end"];
+        let launches = observation["launches"]
+            .as_array()
+            .expect("timeout retains the explicitly owned launch identities");
+        let outer = launches
+            .iter()
+            .find(|launch| launch["child_pid"] == value!(p.child_pid))
+            .expect("the timed-out launch remains identified before cleanup");
+        assert_eq!(outer["slot"], observation["slot"]);
+        assert_eq!(outer["generation"], observation["generation"]);
+        // A canonical runner check itself has an inherited launch ancestry.
+        // Standalone tests start a new tree; both must retain their real links.
+        if !outer["parent_slot"].is_null() {
+            assert!(
+                launches
+                    .iter()
+                    .any(|launch| launch["slot"] == outer["parent_slot"])
+            );
+        }
+        let nested = launches
+            .iter()
+            .find(|launch| launch["child_pid"] == pid)
+            .expect("the actual live nested child is identified before cleanup");
+        assert_eq!(nested["terminal"], false);
+        assert_eq!(nested["launcher_terminal"], false);
+        assert_eq!(nested["state"], 2);
+        let parent = launches
+            .iter()
+            .find(|launch| launch["slot"] == nested["parent_slot"])
+            .expect("nested launch keeps its explicit parent identity");
+        assert_eq!(parent["state"], 2);
+        let mut ancestor = nested;
+        for _ in 0..launches.len() {
+            if ancestor["slot"] == outer["slot"] {
+                break;
+            }
+            ancestor = launches
+                .iter()
+                .find(|launch| launch["slot"] == ancestor["parent_slot"])
+                .expect("the nested child must retain its path to the timed-out owner");
+        }
+        assert_eq!(ancestor["slot"], outer["slot"]);
         let state = unsafe { libc::kill(pid, 0) };
         let error = std::io::Error::last_os_error();
         if state == 0 {
@@ -2533,6 +2576,13 @@ fn closed_output_streams_preserve_child_exit_and_timeout() {
                 Some("process timed out"),
                 "{result:?}; markers={markers:?}"
             );
+            let record = result.failure_record.as_ref().unwrap();
+            let observed = &record.error.context["ownership_at_monitor_end"];
+            assert_eq!(observed["child_pid"], value!(result.child_pid));
+            assert_eq!(observed["state"], 2);
+            assert_eq!(observed["terminal"], false);
+            assert_eq!(observed["cancelled"], false);
+            assert!(observed["generation"].as_u64().unwrap() > 0);
             assert!(!root.path().join("completed").exists());
         }
     }
@@ -2544,6 +2594,129 @@ fn unexpected_exec_helper() {
     if std::env::var_os("CHRONO_UNEXPECTED_EXEC").is_some() {
         fs::File::create_new("unexpected-exec").unwrap();
     }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn completion_wait_resource_helper() {
+    let Ok(root) = std::env::var("CHRONO_WAIT_RESOURCE_FIXTURE") else {
+        return;
+    };
+    let root = std::path::Path::new(&root);
+    #[cfg(target_os = "linux")]
+    let switches = || {
+        let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+        assert_eq!(unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) }, 0);
+        usage.ru_nvcsw
+    };
+    #[cfg(target_os = "macos")]
+    let switches = || {
+        let mut usage: libc::proc_taskinfo = unsafe { std::mem::zeroed() };
+        let size = std::mem::size_of_val(&usage) as i32;
+        assert_eq!(
+            unsafe {
+                libc::proc_pidinfo(
+                    libc::getpid(),
+                    libc::PROC_PIDTASKINFO,
+                    0,
+                    (&mut usage as *mut libc::proc_taskinfo).cast(),
+                    size,
+                )
+            },
+            size
+        );
+        i64::from(usage.pti_csw)
+    };
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec![
+            "closed-streams".into(),
+            "1500".into(),
+            listener.local_addr().unwrap().to_string(),
+        ],
+        env: Default::default(),
+        timeout_seconds: 10,
+        output_limit_bytes: 4096,
+    };
+    let (result, context_switches) = std::thread::scope(|scope| {
+        let engine = scope.spawn(|| {
+            chrono_harness::run_process_observed(
+                root,
+                &spec,
+                &[],
+                &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
+            )
+            .unwrap()
+        });
+        // Start the observation only after the actual child has launched and
+        // closed its output streams. Executable loading, hashing and ownership
+        // setup have no relation to periodic completion probes.
+        use std::os::fd::AsRawFd;
+        let mut ready = libc::pollfd {
+            fd: listener.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        assert_eq!(unsafe { libc::poll(&mut ready, 1, 10_000) }, 1);
+        let (mut child, _) = listener.accept().unwrap();
+        let before = switches();
+        std::io::Write::write_all(&mut child, b"begin quiet delay").unwrap();
+        let result = engine.join().unwrap();
+        (result, switches() - before)
+    });
+    fs::write(
+        root.join("wait-resource.json"),
+        value!({"context_switches": context_switches, "process": result}).to_string(),
+    )
+    .unwrap();
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn completion_wait_blocks_without_periodic_status_probes() {
+    // Isolate the native process counter from other Rust test workers. Count
+    // context switches in this engine invocation (including observer/readers),
+    // after the real child closes both streams, until the engine joins it.
+    // A finite allowance accommodates launch/EOF/exit/join events; 2-ms and
+    // 10-ms periodic waits exceed it even when the child is entirely quiet.
+    use std::os::unix::process::CommandExt;
+    let root = tempfile::tempdir().unwrap();
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
+        .args(["--exact", "completion_wait_resource_helper", "--nocapture"])
+        .env("CHRONO_WAIT_RESOURCE_FIXTURE", root.path());
+    unsafe {
+        command.pre_exec(|| {
+            // Start this counter window with its own native exit observer.
+            // Preserve every inherited worktree capability descriptor.
+            for fd in [198, 199, 200] {
+                if libc::close(fd) < 0 {
+                    let error = std::io::Error::last_os_error();
+                    if error.raw_os_error() != Some(libc::EBADF) {
+                        return Err(error);
+                    }
+                }
+            }
+            Ok(())
+        });
+    }
+    let original = command.output().unwrap();
+    assert!(original.status.success(), "{original:?}");
+    let report: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.path().join("wait-resource.json")).unwrap()).unwrap();
+    assert_eq!(report["process"]["exit_code"], 7, "{report}");
+    assert_eq!(
+        report["process"]["failure"],
+        serde_json::Value::Null,
+        "{report}"
+    );
+    assert!(root.path().join("completed").exists(), "{report}");
+    let switches = report["context_switches"].as_i64().unwrap();
+    println!(
+        "quiet completion wait: {switches} native process context switches over a 1500-ms child delay"
+    );
+    assert!((0..64).contains(&switches), "{report}");
 }
 
 #[cfg(target_os = "macos")]
