@@ -319,7 +319,7 @@ fn launch_endpoints(root: &Path, base: &str, candidate: &str, suffix: &[&str]) -
         out.stdout.len()
     );
     if !out.status.success() {
-        println!("FAILURE findings={} transport={}", report["findings"],json!(report["judges"].as_array().into_iter().flatten().filter(|j|j["transport_failure"].is_string()).map(|j|json!({"id":j["id"],"state":j["state"],"transport_failure":j["transport_failure"],"exit_code":j["exit_code"]})).collect::<Vec<_>>()));
+        println!("FAILURE findings={} transport={}", report["findings"],json!(report["judges"].as_array().into_iter().flatten().filter(|j|j["transport_failure"].is_string()).map(|j|json!({"id":j["id"],"state":j["state"],"transport_failure":j["transport_failure"],"transport_diagnostic":j["transport_diagnostic"],"exit_code":j["exit_code"]})).collect::<Vec<_>>()));
     }
     (out.status.code().unwrap(), report)
 }
