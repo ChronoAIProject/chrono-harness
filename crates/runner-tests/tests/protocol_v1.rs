@@ -2009,6 +2009,30 @@ fn outer_timeout_contains_nested_owned_operation() {
         assert_eq!(p.failure.as_deref(), Some("process timed out"), "{p:?}");
         let pid = std::fs::read_to_string(d.path().join("nested.pid")).unwrap();
         let pid: libc::pid_t = pid.parse().unwrap();
+        let observation =
+            &p.failure_record.as_ref().unwrap().error.context["ownership_at_monitor_end"];
+        let launches = observation["launches"]
+            .as_array()
+            .expect("timeout retains the explicitly owned launch identities");
+        let outer = launches
+            .iter()
+            .find(|launch| launch["child_pid"] == value!(p.child_pid))
+            .expect("the timed-out launch remains identified before cleanup");
+        assert_eq!(outer["slot"], observation["slot"]);
+        assert_eq!(outer["generation"], observation["generation"]);
+        assert_eq!(outer["parent_slot"], serde_json::Value::Null);
+        let nested = launches
+            .iter()
+            .find(|launch| launch["child_pid"] == pid)
+            .expect("the actual live nested child is identified before cleanup");
+        assert_eq!(nested["terminal"], false);
+        assert_eq!(nested["launcher_terminal"], false);
+        assert_eq!(nested["state"], 2);
+        let parent = launches
+            .iter()
+            .find(|launch| launch["slot"] == nested["parent_slot"])
+            .expect("nested launch keeps its explicit parent identity");
+        assert_eq!(parent["state"], 2);
         let state = unsafe { libc::kill(pid, 0) };
         let error = std::io::Error::last_os_error();
         if state == 0 {
