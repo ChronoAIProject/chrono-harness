@@ -1379,6 +1379,13 @@ for that producer. The existing shared-startup validator accepts an explicit
 immutable producer reader for this role; this does not install a CI consumer.
 Missing Git-main tools retain the original seed behavior. Linked missing or
 incompatible coordinators retain refusal. Unknown installed bytes refuse.
+An opted-in `selected_original` additionally qualifies a subsequently installed
+owner from its actual original bootstrap report. The candidate reads that
+producer's fixed commit/tree and registrations as data, checks its complete
+execution and retained streams, and verifies every installed payload plus the
+selected owner's physical identity. The producer must belong to this physical
+host and uniquely install the selected destination. A changed live candidate
+does not replace the old producer's configuration or bytes.
 
 The supplied owner's existing `migrate` and `bootstrap` protect construction with
 the original admission/enrollment protocol. The internal stage profile builds
@@ -1456,11 +1463,20 @@ its source66 adoption receipt. The construction issuer remains exact source51;
 this selected-input addition does not reclassify the issuer or seed ownership.
 Current-candidate canonical/native/review/landing obligations remain distinct.
 
-That exact selected-byte admission is finite input qualification, not support for
-arbitrary subsequently adopted owner binaries or future source iterations. Same
-source publication/reentry is covered by the original receipt path; other newly
-installed bytes still need original producer qualification. No generalized
-post-adoption compatibility claim follows from this registration-only transition.
+Exact selected-byte admissions remain finite input qualifications. Same-source
+publication/reentry uses the original receipt path. A new source iteration can
+qualify a previously installed owner through `selected_original`; missing,
+changed or incomplete originals refuse before construction. Its validated report
+and qualification are copied into the existing retained construction attempt
+before any construction command. The source51 issuer still owns protected
+construction; a staged current owner still acquires the actual exclusive leases
+before replacement. Qualification grants neither compatibility nor completion.
+
+**Product and host policy change together:** the Python owner reuses shared
+producer validation with an immutable source reader, and this host selects its
+existing bootstrap report as the additional input. It replaces repeated manual
+hash-list additions for originally produced owners. Additional file hashing and
+stream validation cost is unmeasured; deadlines and lifecycle exclusion remain.
 
 The finite list also admits installed owner `2f3886db…`, qualified by the original
 clean-source core bootstrap of `c09e50bef6a41fbdb4347aca8b441a08763af7aa`.

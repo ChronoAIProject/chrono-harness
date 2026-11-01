@@ -1,6 +1,7 @@
 """Behavioral checks for the bootstrap byte owner; lifecycle exclusion is Rust-owned."""
 import json
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -89,6 +90,48 @@ class OwnerPublication(unittest.TestCase):
 
 
 class ProducerSource(unittest.TestCase):
+    def selected_original_fixture(self):
+        from bootstrap_shared_tests import SharedStartup
+        fixture = SharedStartup()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.produce()
+        selected = fixture.root / fixture.host.config["install"][0]["destination"]
+        return fixture, selected
+
+    def test_selected_installed_owner_qualifies_from_its_original_fixed_producer(self):
+        fixture, selected = self.selected_original_fixture()
+        original_source = bootstrap.observe_source(fixture.root)
+        (fixture.root / "later-source").write_text("later candidate\n")
+        fixture.host.git("add", "later-source")
+        fixture.host.git("commit", "-qm", "later candidate")
+        self.assertNotEqual(bootstrap.observe_source(fixture.root)["commit"], original_source["commit"])
+        result = owner.qualified_selected_original(
+            fixture.root, ".chrono-harness/state/bootstrap.json", selected)
+        self.assertEqual(result["source"]["commit"], original_source["commit"])
+        self.assertEqual(result["selected"], owner.file_binding(selected))
+
+    def test_selected_original_rejects_changed_bytes_streams_and_report_before_construction(self):
+        for change in ("selected", "stream", "source", "unproduced"):
+            with self.subTest(change=change):
+                fixture, selected = self.selected_original_fixture()
+                path = fixture.root / ".chrono-harness/state/bootstrap.json"
+                report = json.loads(path.read_bytes())
+                if change == "selected":
+                    selected.write_bytes(b"different installed owner")
+                elif change == "stream":
+                    stream = report["operations"][0]["stdout"]["path"]
+                    (fixture.root / stream).write_bytes(b"different original stream")
+                elif change == "source":
+                    report["source"]["commit"] = "0" * 40
+                    path.write_text(json.dumps(report))
+                else:
+                    selected = fixture.root / ".chrono-harness/bin/unproduced-owner"
+                    selected.write_bytes(b"not in the original installation")
+                with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                    owner.qualified_selected_original(
+                        fixture.root, ".chrono-harness/state/bootstrap.json", selected)
+
     def test_writable_homes_resolve_inside_this_host_without_pregrant_creation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -21,6 +21,7 @@
     "638c638a4f2e21f06510994b3e8b84fab7f08f3fa9030c551fc510cf7abbb079",
     "2f3886dbbf1d7c16dfacdf1137c6359595bd5cd18cf649ff07170dd65c5c15cc"
   ],
+  "selected_original": ".chrono-harness/state/bootstrap.json",
   "stage_config": ".chrono-harness/ci/bootstrap-owner-stage.json",
   "retention": {
     "owner": "caller current engineering/PR acceptance",

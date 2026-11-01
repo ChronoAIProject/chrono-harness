@@ -3282,6 +3282,18 @@
             "--",
             "--test-threads=1"
           ]
+        },
+        "update_lockfile": {
+          "operation": "lock.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--package",
+            "chrono-worktree-tests"
+          ]
         }
       },
       "tests_for": "worktree",

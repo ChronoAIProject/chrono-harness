@@ -96,7 +96,7 @@ def registration(root, path, read_input=read):
     return config, profiles, digest(raw)
 
 
-def original_report(root, item, profile, observed):
+def original_report(root, item, profile, observed, read_input=read):
     path = bootstrap.report_destination(root, profile)
     data = path.read_bytes()
     report = json.loads(data)
@@ -110,7 +110,7 @@ def original_report(root, item, profile, observed):
                 for i in profile["install"]]
     if report["installed"] != expected:
         raise ValueError("startup producer report differs from installed tools")
-    validate_execution(root, profile, report)
+    validate_execution(root, profile, report, read_input)
     validate_streams(root, report)
     return data
 

@@ -77,6 +77,35 @@ def qualified_supply(root, declaration):
     return data, manifest, originals
 
 
+def qualified_selected_original(root, reference, selected):
+    """Qualify installed input from its actual producer, before construction."""
+    selected_before = file_binding(selected)
+    path = shared.safe(root, reference, ".chrono-harness/state/")
+    original = path.read_bytes()
+    report = json.loads(original)
+    identity = report["source"]
+    source = {key: identity[key] for key in ("commit", "tree")}
+    observed = dict(source, dirty=False, error=None)
+    if (identity != bootstrap.source_identity(observed, observed)
+            or report.get("host_root") != str(root)):
+        raise ValueError("selected owner requires its original clean producer in this host")
+    read_input = committed_reader(root, source)
+    profile_path = report["config"]
+    profile = json.loads(read_input(root, profile_path, ".chrono-harness/ci/"))
+    if bootstrap.report_destination(root, profile) != path:
+        raise ValueError("selected owner original differs from its producer destination")
+    destination = selected.relative_to(root).as_posix()
+    installed = [item for item in profile["install"] if item["destination"] == destination]
+    if len(installed) != 1:
+        raise ValueError("selected owner was not uniquely installed by this producer")
+    validated = shared.original_report(
+        root, {"config": profile_path}, profile, observed, read_input)
+    if validated != original or file_binding(selected) != selected_before:
+        raise ValueError("selected owner or its original changed during qualification")
+    return {"schema": "chrono-bootstrap-selected-original/v1", "path": reference,
+            "sha256": shared.digest(original), "source": source, "selected": selected_before}
+
+
 def check_shared_install(root, source, target):
     if os.environ.get("CHRONO_WORKTREE_BOOTSTRAP") == str(root):
         if not target.exists() or file_binding(source)["sha256"] != file_binding(target)["sha256"]:
@@ -251,12 +280,23 @@ def upgrade(root, config_path, config):
             # A real current-source seed/ordinary producer already installed the
             # exact declared set. Its original execution, not a marker, binds it.
             return
+    qualification = None
     if file_binding(selected)["sha256"] not in declaration["selected_sha256"]:
-        raise ValueError("selected ordinary owner has no qualified upgrade input")
+        reference = declaration.get("selected_original")
+        if reference is None:
+            raise ValueError("selected ordinary owner has no qualified upgrade input")
+        qualification = qualified_selected_original(root, reference, selected)
     data, _, _ = qualified_supply(root, declaration)
     parent = shared.safe(root, ".chrono-harness/state/bootstrap-owner-supply")
     parent.mkdir(parents=True, exist_ok=True)
     directory = Path(tempfile.mkdtemp(prefix="attempt-", dir=parent))
+    if qualification is not None:
+        original = shared.safe(root, qualification["path"], ".chrono-harness/state/").read_bytes()
+        if (shared.digest(original) != qualification["sha256"]
+                or file_binding(selected) != qualification["selected"]):
+            raise ValueError("qualified selected owner changed before construction")
+        shared.write_new(directory / "selected-producer.json", original)
+        shared.write_new(directory / "selected-qualification.json", shared.encode(qualification))
     carrier = directory / "construction-owner"
     with carrier.open("xb") as output:
         output.write(data)
