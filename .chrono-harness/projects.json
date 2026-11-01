@@ -654,6 +654,28 @@
             "--manifest-path",
             "crates/judge-ci-tests/Cargo.toml"
           ]
+        },
+        "execution_diagnostics": {
+          "operation": "test.ci.execution-diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml",
+            "--test",
+            "behavior",
+            "execution_diagnostics_"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"

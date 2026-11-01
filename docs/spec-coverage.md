@@ -78,7 +78,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 34 unknown/malformed CLI | implemented: L `unknown_and_malformed_commands_are_errors` | — |
 | 35 spec status | implemented: L `status_help_and_version_are_information_only` | — |
 | 36 help/version | implemented: L same test | — |
-| 37 standard program diagnostics | partial: Rust library and runner invalid-argument entry | complete producer adoption, registered sinks and context propagation across process boundaries |
+| 37 standard program diagnostics | partial: Rust library, runner boundaries and registered scoped CI execution progress | complete producer adoption, general registered sinks and context propagation across process boundaries |
 | 38 multilayer/cross-process error chain | partial: explicit typed source/related API and versioned record import | actual native adapters, judge transport adoption and immutable evidence references |
 | 39 handled exception and eventual success | partial: recovery events retain the original error record | adopt every handling/retry/recovery boundary in products and adapters |
 | 40 secondary handling/publication failure | partial: source/related API and sink failures retain attempted records | publish combined failures through the declared emergency/evidence boundary without fabricated references |
@@ -1117,3 +1117,11 @@ canonical/native guard/build/tests/aggregate originals, final independent triple
 landing/posterior and clean dev sync; historical J/N results keep their exact scope.
 Verification, CI, IO and storage total costs remain unmeasured; raw observation
 cost and existing resource bounds are unchanged.
+
+The current scoped CI profile adopts the existing structured logger across inventory,
+preparation, operation execution and post-snapshot work. Request/plan/operation,
+actual launch and existing wait/join stages reach the retained judge stderr before
+a final aggregate. Focused Rust v3-unit/retained-engine tests cover this bounded
+consumer; see [the adoption and limits](diagnostics.md#scoped-ci-execution-progress-adoption).
+The fixed native timeout root cause, committed canonical/native acceptance, broader
+SPEC 7.1/7.2 adoption and full SPEC delivery remain unresolved.

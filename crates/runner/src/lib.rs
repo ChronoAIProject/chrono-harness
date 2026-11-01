@@ -1069,6 +1069,17 @@ fn run_process_inner_with_stdout(
     stdout_limit: usize,
     evidence: Option<&ProcessEvidence<'_>>,
 ) -> Result<ProcessResult, ProcessFailure> {
+    let span = tracing::info_span!(
+        "process",
+        launcher_pid = std::process::id(),
+        child_pid = tracing::field::Empty,
+    );
+    let _entered = span.enter();
+    tracing::info!(
+        event_id = "process.preparing",
+        program = s.program,
+        "preparing bounded process invocation"
+    );
     validate_command(s)?;
     if stdout_limit == 0 || stdout_limit > 64 * 1024 * 1024 {
         return Err("invalid immutable input transport bound".into());
@@ -1279,6 +1290,17 @@ fn run_process_inner_with_stdout(
             joined: false,
         };
         let pid = child.id();
+        span.record("child_pid", pid);
+        tracing::info!(
+            event_id = "process.launched",
+            argv = %serde_json::to_string(&std::iter::once(executable.to_string_lossy().as_ref()).chain(s.args.iter().map(String::as_str)).collect::<Vec<_>>()).expect("argv serialize"),
+            cwd = %root.display(), executable_sha256 = hash,
+            environment_sha256 = environment_digest, stdin_sha256,
+            timeout_seconds = s.timeout_seconds, output_limit_bytes = s.output_limit_bytes,
+            "actual child started; no terminal result established",
+        );
+        #[cfg(unix)]
+        child.ownership.log_identity();
         let publication_failure = evidence.as_ref().and_then(|paths| {
             let record = serde_json::json!({
                 "schema": "chrono-process-launch/v1",
@@ -1409,6 +1431,10 @@ fn run_process_inner_with_stdout(
             })
         }
         let readers_ready = Arc::new(Barrier::new(3));
+        tracing::info!(
+            event_id = "process.readers_start",
+            "starting original stream readers"
+        );
         let stdout = reader(
             scope,
             child.stdout.take().ok_or("missing stdout")?,
@@ -1429,6 +1455,10 @@ fn run_process_inner_with_stdout(
             "stderr",
             readers_ready.clone(),
         );
+        tracing::info!(
+            event_id = "process.readers_ready_wait",
+            "waiting at the existing stream-reader start barrier"
+        );
         readers_ready.wait();
         // Read the shared clock first: this evidence cutoff cannot extend the
         // existing monitor deadline, including a delay between the two reads.
@@ -1437,6 +1467,10 @@ fn run_process_inner_with_stdout(
         let start = Instant::now();
         let mut failure = None;
         let mut failure_detail = None;
+        tracing::info!(
+            event_id = "process.monitor_wait",
+            "entering existing bounded process monitor"
+        );
         let mut status = loop {
             #[cfg(unix)]
             if child.ownership.cancelled() {
@@ -1507,6 +1541,13 @@ fn run_process_inner_with_stdout(
             }
         }
         #[cfg(unix)]
+        tracing::info!(
+            event_id = "process.ownership_drain",
+            child_joined = status.is_some(),
+            monitor_failure = failure.as_deref().unwrap_or(""),
+            "entering owned descendant drain"
+        );
+        #[cfg(unix)]
         if !child.ownership.drain() {
             if failure_detail.is_none() {
                 failure_detail = failure
@@ -1534,6 +1575,10 @@ fn run_process_inner_with_stdout(
             libc::kill(-(pid as i32), libc::SIGKILL);
         }
         if status.is_none() {
+            tracing::info!(
+                event_id = "process.child_join",
+                "joining child after cancellation or monitor failure"
+            );
             let _ = child.kill();
             match child.wait() {
                 Ok(v) => status = Some(v),
@@ -1556,6 +1601,11 @@ fn run_process_inner_with_stdout(
             }
         }
         child.joined = status.is_some();
+        tracing::info!(
+            event_id = "process.streams_join",
+            child_joined = child.joined,
+            "joining original stdout/stderr readers and stdin writer"
+        );
         let stdout_result = stdout.join();
         let stderr_result = stderr.join();
         if let Some(writer) = writer {
@@ -1657,6 +1707,10 @@ fn run_process_inner_with_stdout(
             }
             process.launch_original = launch_descriptor(&process.cwd, paths.launch);
         }
+        tracing::info!(
+            event_id = "process.scope_exit",
+            "leaving process scope; owned destructors and scoped tasks still must join"
+        );
         Ok(process)
     });
     if let Ok(process) = &mut result {
@@ -1680,7 +1734,18 @@ fn run_process_inner_with_stdout(
             }
         }
     }
-    Ok(result?)
+    let process = result?;
+    tracing::info!(
+        event_id = "process.completed",
+        exit_code = process.exit_code,
+        failure = process.failure.as_deref().unwrap_or(""),
+        stdout_bytes = process.stdout_bytes.len(),
+        stderr_bytes = process.stderr_bytes.len(),
+        stdout_sha256 = process.stdout_sha256,
+        stderr_sha256 = process.stderr_sha256,
+        "process engine returned its original result after owned work joined",
+    );
+    Ok(process)
 }
 pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String> {
     validate_response_protocol(r, id, exit, PROTOCOL)

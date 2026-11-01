@@ -1010,3 +1010,6 @@ fn v2_languages_schema_only_adoption_checks_existing_declarations() {
     fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
     assert_eq!(h.calls(), 0);
 }
+
+#[path = "diagnostics.rs"]
+mod diagnostics;

@@ -60,6 +60,12 @@ impl Results {
 /// Shared by full projects and the explicitly scoped CI adapter; no alternate process engine.
 pub fn execute(plan: &Execution) -> Result<Results, String> {
     plan.validate()?;
+    let span = tracing::info_span!("projects.execution", plan = plan.identity);
+    let _entered = span.enter();
+    tracing::info!(
+        event_id = "projects.execution_started",
+        "registered execution started"
+    );
     let mut statuses: BTreeMap<String, String> = BTreeMap::new();
     let mut results = Results {
         plan: plan.identity.clone(),
@@ -109,6 +115,11 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
                     .iter()
                     .any(|id| statuses.get(id).is_some_and(|s| s != "passed"))
                 {
+                    tracing::info!(
+                        event_id = "projects.operation_blocked",
+                        operation = op.method.operation,
+                        "failed prerequisite"
+                    );
                     let row = OperationResult {
                         operation: op.method.operation.clone(),
                         status: "blocked".into(),
@@ -138,17 +149,42 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
                 running.insert(index);
                 progressed = true;
                 let tx = tx.clone();
+                let dispatch = tracing::dispatcher::get_default(Clone::clone);
+                let parent = tracing::Span::current();
+                tracing::info!(
+                    event_id = "projects.operation_dispatched",
+                    operation = op.method.operation,
+                    "operation worker dispatched"
+                );
                 let launch = std::thread::Builder::new().spawn_scoped(scope, move || {
-                    let row = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        execute_operation(plan, op)
-                    }))
-                    .unwrap_or_else(|_| OperationResult {
-                        operation: op.method.operation.clone(),
-                        status: "error".into(),
-                        receipt: None,
-                        error: Some("operation worker panicked".into()),
+                    tracing::dispatcher::with_default(&dispatch, || {
+                        let _parent = parent.enter();
+                        let span = tracing::info_span!(
+                            "projects.operation",
+                            operation = op.method.operation
+                        );
+                        let _entered = span.enter();
+                        tracing::info!(
+                            event_id = "projects.operation_started",
+                            "operation worker started"
+                        );
+                        let row = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            execute_operation(plan, op)
+                        }))
+                        .unwrap_or_else(|_| OperationResult {
+                            operation: op.method.operation.clone(),
+                            status: "error".into(),
+                            receipt: None,
+                            error: Some("operation worker panicked".into()),
+                        });
+                        tracing::info!(
+                            event_id = "projects.operation_completed",
+                            status = row.status,
+                            has_receipt = row.receipt.is_some(),
+                            "operation result available; enclosing execution may be incomplete"
+                        );
+                        let _ = tx.send((index, row));
                     });
-                    let _ = tx.send((index, row));
                 });
                 if let Err(error) = launch {
                     running.remove(&index);
@@ -163,6 +199,11 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
                 }
             }
             if !running.is_empty() {
+                let operations: Vec<_> = running
+                    .iter()
+                    .map(|i| &plan.operations[*i].method.operation)
+                    .collect();
+                tracing::info!(event_id = "projects.scheduler_wait", running_operations = %serde_json::to_string(&operations).expect("operation identities serialize"), "waiting for an owned worker result");
                 let (index, row) = rx.recv().expect("owned workers always send terminal rows");
                 running.remove(&index);
                 statuses.insert(row.operation.clone(), row.status.clone());
@@ -173,8 +214,16 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
                 unreachable!("validated operation graph has no ready work");
             }
         }
+        tracing::info!(
+            event_id = "projects.workers_join",
+            "leaving scheduler scope; owned worker threads must still join"
+        );
         rows
     });
+    tracing::info!(
+        event_id = "projects.workers_joined",
+        "all operation workers joined"
+    );
     for row in rows.into_values() {
         if row.status == "blocked" {
             results.blocked.push(row);

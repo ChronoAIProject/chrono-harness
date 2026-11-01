@@ -5,10 +5,12 @@ edition = "2024"
 publish = false
 autotests = false
 
-[dev-dependencies]
+[dependencies]
 chrono-judge-ci = { path = "../judge-ci" }
 chrono-harness = { path = "../runner" }
 serde_json = "1"
+
+[dev-dependencies]
 tempfile = "3"
 
 [[test]]
@@ -17,3 +19,9 @@ path = "tests/behavior.rs"
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+[[bin]]
+name = "chrono-test-ci-diagnostics"
+path = "tests/support/diagnostics_child.rs"
+test = false
+bench = false

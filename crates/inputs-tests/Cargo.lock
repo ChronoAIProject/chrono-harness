@@ -63,6 +63,7 @@ dependencies = [
  "sha1",
  "sha2",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]
@@ -120,6 +121,7 @@ dependencies = [
  "chrono-judge-routes",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

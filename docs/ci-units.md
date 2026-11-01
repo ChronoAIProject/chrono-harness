@@ -1017,3 +1017,14 @@ selected reference and receives no alias replacement. This avoids duplicate
 report bodies in the actual gathered closure; separate acquisition attempts
 still retain their diagnostic input closures. It is neither global artifact
 reclamation nor retirement of current manifest readers.
+
+The current scoped check profile also adopts the
+[CI execution progress diagnostics](diagnostics.md#scoped-ci-execution-progress-adoption)
+on the existing retained judge stderr stream. Collection of a complete unit and
+post-upload acknowledgement still require their original final reports; progress
+records never satisfy or waive those contracts. For a failed/incomplete unit,
+retain its producer launch and actual judge stream originals before expecting a
+final aggregate, and associate request/candidate/profile, plan/operation and
+PID/ownership identities from those records. Native validation of this adoption
+still requires the committed candidate and declared DELTA units; a focused Rust
+fixture does not establish a repaired native timeout or merge/landing.
