@@ -200,12 +200,22 @@ fn marker(path: &str) {
     write!(file, "{}", time.as_nanos()).unwrap();
 }
 
-fn closed_streams(delay: u64) {
+fn closed_streams(delay: u64, synchronization: Option<String>) {
     marker("started");
     // Closing the runner's pipes must not signal process exit.
     unsafe {
         drop(File::from_raw_fd(1));
         drop(File::from_raw_fd(2));
+    }
+    if let Some(address) = synchronization {
+        use std::io::Read;
+        let mut stream = std::net::TcpStream::connect(address).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let mut begin = [0; 17];
+        stream.read_exact(&mut begin).unwrap();
+        assert_eq!(&begin, b"begin quiet delay");
     }
     thread::sleep(Duration::from_millis(delay));
     marker("completed");
@@ -301,7 +311,9 @@ fn main() {
         "exit" => std::process::exit(arguments.next().unwrap().parse().unwrap()),
         "child" => child(),
         "controller" => controller(&arguments.next().unwrap()),
-        "closed-streams" => closed_streams(arguments.next().unwrap().parse().unwrap()),
+        "closed-streams" => {
+            closed_streams(arguments.next().unwrap().parse().unwrap(), arguments.next())
+        }
         "interrupted-child" => interrupted_child(&arguments.next().unwrap()),
         "interrupted-observer" => interrupted_observer(),
         "nested" => {

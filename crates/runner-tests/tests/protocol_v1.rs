@@ -2718,22 +2718,44 @@ fn completion_wait_resource_helper() {
         );
         i64::from(usage.pti_csw)
     };
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let spec = chrono_harness::CommandSpec {
         program: PROCESS_FIXTURE.into(),
-        args: vec!["closed-streams".into(), "1500".into()],
+        args: vec![
+            "closed-streams".into(),
+            "1500".into(),
+            listener.local_addr().unwrap().to_string(),
+        ],
         env: Default::default(),
         timeout_seconds: 10,
         output_limit_bytes: 4096,
     };
-    let before = switches();
-    let result = chrono_harness::run_process_observed(
-        root,
-        &spec,
-        &[],
-        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
-    )
-    .unwrap();
-    let context_switches = switches() - before;
+    let (result, context_switches) = std::thread::scope(|scope| {
+        let engine = scope.spawn(|| {
+            chrono_harness::run_process_observed(
+                root,
+                &spec,
+                &[],
+                &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
+            )
+            .unwrap()
+        });
+        // Start the observation only after the actual child has launched and
+        // closed its output streams. Executable loading, hashing and ownership
+        // setup have no relation to periodic completion probes.
+        use std::os::fd::AsRawFd;
+        let mut ready = libc::pollfd {
+            fd: listener.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        assert_eq!(unsafe { libc::poll(&mut ready, 1, 10_000) }, 1);
+        let (mut child, _) = listener.accept().unwrap();
+        let before = switches();
+        std::io::Write::write_all(&mut child, b"begin quiet delay").unwrap();
+        let result = engine.join().unwrap();
+        (result, switches() - before)
+    });
     fs::write(
         root.join("wait-resource.json"),
         value!({"context_switches": context_switches, "process": result}).to_string(),
@@ -2746,7 +2768,7 @@ fn completion_wait_resource_helper() {
 fn completion_wait_blocks_without_periodic_status_probes() {
     // Isolate the native process counter from other Rust test workers. Count
     // context switches in this engine invocation (including observer/readers),
-    // while the real child keeps both output streams closed for 1.5 seconds.
+    // after the real child closes both streams, until the engine joins it.
     // A finite allowance accommodates launch/EOF/exit/join events; 2-ms and
     // 10-ms periodic waits exceed it even when the child is entirely quiet.
     use std::os::unix::process::CommandExt;
