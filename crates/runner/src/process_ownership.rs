@@ -14,7 +14,9 @@ use std::{
 };
 const TREE_FD: i32 = 198;
 const CONTEXT_FD: i32 = 199;
-const MAGIC: u64 = 0x4348524f4e4f5034;
+// V5 also requires lifecycle wake hints. An older observer cannot provide the
+// blocking wait contract, even though the shared slot layout is unchanged.
+const MAGIC: u64 = 0x4348524f4e4f5035;
 const OBSERVER_FD: i32 = 200;
 // Private copies must not alias the fixed inherited transport descriptors.
 pub(crate) const PRIVATE_FD_MIN: i32 = 202;
@@ -225,7 +227,7 @@ impl ReceiveSnapshot {
 struct Tree {
     file: File,
     memory: NonNull<Shared>,
-    registration: File,
+    registration: Arc<File>,
     observer: Option<ExitObserver>,
 }
 // MAP_SHARED is synchronized exclusively by the atomic slot protocol.
@@ -275,7 +277,7 @@ impl Tree {
         Ok(Arc::new(Self {
             file,
             memory: NonNull::new(p.cast()).unwrap(),
-            registration,
+            registration: Arc::new(registration),
             observer: None,
         }))
     }
@@ -309,6 +311,7 @@ impl Tree {
         }
         let observer = ExitObserver::start(
             File::from(std::os::fd::OwnedFd::from(receiver)),
+            tree.registration.clone(),
             tree.memory.as_ptr() as usize,
         )?;
         Arc::get_mut(&mut tree).unwrap().observer = Some(observer);
@@ -427,6 +430,7 @@ impl Drop for Launch {
         // current batch of identity events has finished writing their markers.
         if self.acknowledged.load(Ordering::Acquire) {
             slot.state.store(3, Ordering::Release);
+            notify(self.tree.registration.as_raw_fd());
         }
     }
 }
@@ -677,6 +681,9 @@ impl Launch {
         self.tree.slots()[self.index]
             .cancelled
             .store(true, Ordering::Release);
+        // Wake the sole existing observer so it can relay cancellation to live
+        // nested launches, including those waiting with no output activity.
+        notify(self.tree.registration.as_raw_fd());
         let start = Instant::now();
         let mut abandoned = Vec::new();
         loop {
@@ -735,7 +742,12 @@ impl Launch {
                 }
                 return false;
             }
-            std::thread::sleep(Duration::from_millis(10));
+            let next = if start.elapsed() < Duration::from_millis(500) {
+                Duration::from_millis(500)
+            } else {
+                Duration::from_secs(1)
+            };
+            self.wait_for_wake(next.saturating_sub(start.elapsed()));
         }
     }
 }
@@ -745,16 +757,18 @@ impl Launch {
 // root even if an intermediate launcher is killed. No process discovery occurs.
 struct ExitObserver {
     stop: Arc<AtomicBool>,
+    wake: Arc<File>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 impl ExitObserver {
     fn join(&mut self) {
         self.stop.store(true, Ordering::Release);
+        notify(self.wake.as_raw_fd());
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
     }
-    fn start(receiver: File, memory: usize) -> Result<Self, ProcessFailure> {
+    fn start(receiver: File, wake: Arc<File>, memory: usize) -> Result<Self, ProcessFailure> {
         let flags = unsafe { libc::fcntl(receiver.as_raw_fd(), libc::F_GETFL) };
         if flags < 0
             || unsafe {
@@ -776,6 +790,7 @@ impl ExitObserver {
                 let shared = unsafe { &*(memory as *const Shared) };
                 let mut wake = BTreeMap::new();
                 while !stopping.load(Ordering::Acquire) {
+                    let mut changed = false;
                     // Receive only explicit launch handoffs. The reply descriptor is
                     // specific to this child, so sibling registrations cannot steal it.
                     loop {
@@ -801,6 +816,13 @@ impl ExitObserver {
                             break;
                         }
                         let header = unsafe { libc::CMSG_FIRSTHDR(&msg) };
+                        if n == 1 && header.is_null() {
+                            // A lifecycle transition or observer shutdown, on
+                            // the same channel as launch handoffs. This hint
+                            // carries no task identity or terminal verdict.
+                            changed = true;
+                            continue;
+                        }
                         if n as usize != std::mem::size_of_val(&data) || header.is_null() {
                             observe_receive_failure(&shared.incomplete_handoffs, msg.msg_flags);
                             continue;
@@ -839,6 +861,7 @@ impl ExitObserver {
                             );
                         }
                         if ack == 0 {
+                            changed = true;
                             wake.entry(generation * CAPACITY * 2 + index * 2)
                                 .or_insert(reply);
                         }
@@ -857,6 +880,7 @@ impl ExitObserver {
                         let index = (cookie / 2) % CAPACITY;
                         let generation = cookie / (CAPACITY * 2);
                         if shared.slots[index].generation.load(Ordering::Acquire) == generation {
+                            changed = true;
                             if cookie % 2 == 0 {
                                 if let Some(observed) = monotonic_ns() {
                                     shared.slots[index]
@@ -864,9 +888,6 @@ impl ExitObserver {
                                         .store(observed, Ordering::Release);
                                 }
                                 shared.slots[index].terminal.store(true, Ordering::Release);
-                                if let Some(reply) = wake.remove(&cookie) {
-                                    notify(reply.as_raw_fd());
-                                }
                             } else {
                                 shared.slots[index]
                                     .launcher_terminal
@@ -877,32 +898,52 @@ impl ExitObserver {
                     // This thread is the sole slot recycler. Complete the event
                     // batch before freeing any slot: a delayed event cannot pass
                     // a generation check and then write into a reused slot.
-                    for (index, slot) in shared.slots.iter().enumerate() {
-                        if slot.state.load(Ordering::Acquire) == 3 {
-                            slot.state.store(0, Ordering::Release);
-                            continue;
+                    // Retire newly eligible ancestors in this event batch too:
+                    // there may be no later kernel event to wake another pass.
+                    for _ in 0..CAPACITY {
+                        let mut released = false;
+                        for (index, slot) in shared.slots.iter().enumerate() {
+                            if slot.state.load(Ordering::Acquire) == 3 {
+                                slot.state.store(0, Ordering::Release);
+                                released = true;
+                                continue;
+                            }
+                            if slot.state.load(Ordering::Acquire) == 2
+                                && slot.terminal.load(Ordering::Acquire)
+                                && slot.launcher_terminal.load(Ordering::Acquire)
+                                && !shared.slots.iter().enumerate().any(|(child, child_slot)| {
+                                    child != index
+                                        && child_slot.state.load(Ordering::Acquire) == 2
+                                        && descendant(&shared.slots, child, index)
+                                })
+                            {
+                                slot.state.store(0, Ordering::Release);
+                                released = true;
+                            }
                         }
-                        if slot.state.load(Ordering::Acquire) == 2
-                            && slot.terminal.load(Ordering::Acquire)
-                            && slot.launcher_terminal.load(Ordering::Acquire)
-                            && !shared.slots.iter().enumerate().any(|(child, child_slot)| {
-                                child != index
-                                    && child_slot.state.load(Ordering::Acquire) == 2
-                                    && descendant(&shared.slots, child, index)
-                            })
-                        {
-                            slot.state.store(0, Ordering::Release);
+                        if !released {
+                            break;
+                        }
+                        changed = true;
+                    }
+                    if changed {
+                        // Retain endpoints through terminal observation until
+                        // slot release. An enclosing join also needs child and
+                        // launcher retirement notifications. Each receiver still
+                        // checks its own identity, cancellation and real exit.
+                        for reply in wake.values() {
+                            notify(reply.as_raw_fd());
                         }
                     }
-                    // Both new handoffs and already registered exits wake the
-                    // observer. A quiet registration socket must not defer an
-                    // available exit until the periodic maintenance interval.
-                    identities.wait(receiver.as_raw_fd());
+                    if !stopping.load(Ordering::Acquire) {
+                        identities.wait(receiver.as_raw_fd());
+                    }
                 }
             })
             .map_err(ProcessFailure::from)?;
         Ok(Self {
             stop,
+            wake,
             thread: Some(thread),
         })
     }
@@ -1120,8 +1161,9 @@ impl ExitIdentities {
             .collect();
         // Readiness is only a wake hint. completed() still obtains the actual
         // kernel event, checks its identity and records the observation time.
-        // Keep the existing bound for stop, cancellation and slot recycling.
-        unsafe { libc::poll(pending.as_mut_ptr(), pending.len() as _, 2) };
+        // Stop, cancellation and slot recycling notify the same registration
+        // socket. With no transition, block until a real registered kernel event.
+        unsafe { libc::poll(pending.as_mut_ptr(), pending.len() as _, -1) };
     }
 }
 #[cfg(target_os = "linux")]

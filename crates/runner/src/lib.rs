@@ -1419,7 +1419,9 @@ fn run_process_inner_with_stdout(
                 }
             }
             #[cfg(unix)]
-            child.ownership.wait_for_wake(Duration::from_millis(10));
+            child
+                .ownership
+                .wait_for_wake(timeout.saturating_sub(start.elapsed()));
             #[cfg(not(unix))]
             std::thread::park_timeout(Duration::from_millis(10));
         };

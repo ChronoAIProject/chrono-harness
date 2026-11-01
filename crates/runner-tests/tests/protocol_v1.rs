@@ -2546,6 +2546,91 @@ fn unexpected_exec_helper() {
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn completion_wait_resource_helper() {
+    let Ok(root) = std::env::var("CHRONO_WAIT_RESOURCE_FIXTURE") else {
+        return;
+    };
+    let root = std::path::Path::new(&root);
+    #[cfg(target_os = "linux")]
+    let switches = || {
+        let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+        assert_eq!(unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) }, 0);
+        usage.ru_nvcsw
+    };
+    #[cfg(target_os = "macos")]
+    let switches = || {
+        let mut usage: libc::proc_taskinfo = unsafe { std::mem::zeroed() };
+        let size = std::mem::size_of_val(&usage) as i32;
+        assert_eq!(
+            unsafe {
+                libc::proc_pidinfo(
+                    libc::getpid(),
+                    libc::PROC_PIDTASKINFO,
+                    0,
+                    (&mut usage as *mut libc::proc_taskinfo).cast(),
+                    size,
+                )
+            },
+            size
+        );
+        i64::from(usage.pti_csw)
+    };
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec!["closed-streams".into(), "1500".into()],
+        env: Default::default(),
+        timeout_seconds: 10,
+        output_limit_bytes: 4096,
+    };
+    let before = switches();
+    let result = chrono_harness::run_process_observed(
+        root,
+        &spec,
+        &[],
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
+    )
+    .unwrap();
+    let context_switches = switches() - before;
+    fs::write(
+        root.join("wait-resource.json"),
+        value!({"context_switches": context_switches, "process": result}).to_string(),
+    )
+    .unwrap();
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn completion_wait_blocks_without_periodic_status_probes() {
+    // Isolate the native process counter from other Rust test workers. Count
+    // context switches in this engine invocation (including observer/readers),
+    // while the real child keeps both output streams closed for 1.5 seconds.
+    // A finite allowance accommodates launch/EOF/exit/join events; 2-ms and
+    // 10-ms periodic waits exceed it even when the child is entirely quiet.
+    let root = tempfile::tempdir().unwrap();
+    let original = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "completion_wait_resource_helper", "--nocapture"])
+        .env("CHRONO_WAIT_RESOURCE_FIXTURE", root.path())
+        .output()
+        .unwrap();
+    assert!(original.status.success(), "{original:?}");
+    let report: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.path().join("wait-resource.json")).unwrap()).unwrap();
+    assert_eq!(report["process"]["exit_code"], 7, "{report}");
+    assert_eq!(
+        report["process"]["failure"],
+        serde_json::Value::Null,
+        "{report}"
+    );
+    assert!(root.path().join("completed").exists(), "{report}");
+    let switches = report["context_switches"].as_i64().unwrap();
+    println!(
+        "quiet completion wait: {switches} native process context switches over a 1500-ms child delay"
+    );
+    assert!((0..128).contains(&switches), "{report}");
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn failed_live_identity_registration_helper() {
