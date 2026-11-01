@@ -123,8 +123,12 @@ class Acquisition(unittest.TestCase):
         def tick():
             clock[0] += 1.0
         remote, source = self.remote(archive(FIXTURE.read_bytes()), deadline=deadline, tick=tick)
-        with self.assertRaises(TimeoutError):
+        with self.assertRaises((TimeoutError, zipfile.BadZipFile)) as failure:
             product.acquire(remote, 'explicit-extra/opaque-original.raw', 1024)
+        # Python 3.9 ZIP metadata parsing translates OSError subclasses. The
+        # failure must still originate from this deadline, not a corrupt ZIP.
+        if isinstance(failure.exception, zipfile.BadZipFile):
+            self.assertIsInstance(failure.exception.__context__, TimeoutError)
         self.assertGreaterEqual(len(source.requests), 2)
         with self.assertRaises(TimeoutError):
             remote.read(1)

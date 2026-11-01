@@ -210,7 +210,9 @@ fn validate_originals_with_artifacts(
     transport: Option<&ArtifactTransport>,
     artifacts: Option<&Value>,
 ) -> Result<(), String> {
-    validate_originals_with_reader(p, &mut |o| read_binding_original(root, o, transport, artifacts))
+    validate_originals_with_reader(p, &mut |o| {
+        read_binding_original(root, o, transport, artifacts)
+    })
 }
 
 fn validate_originals_with_reader(
@@ -296,7 +298,10 @@ pub fn validate_portable_binding_with_reader(
         original_path(o, transport)?;
         let raw = read(o)?;
         if raw.len() > 64 * 1024 * 1024 || sha256(&raw) != o.sha256 {
-            return Err(format!("original evidence digest/limit mismatch: {}", o.path));
+            return Err(format!(
+                "original evidence digest/limit mismatch: {}",
+                o.path
+            ));
         }
         Ok(raw)
     };

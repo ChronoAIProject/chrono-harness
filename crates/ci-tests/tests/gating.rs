@@ -35,7 +35,11 @@ fn typed_parent_generation_verifies_and_retires_only_exact_legacy_projections() 
     fs::write(h.root.join(".github/workflows/host.yml"), b"host-owned\n").unwrap();
 
     // Verification diagnoses adoption drift without changing any old projection.
-    assert!(generate(&h.root, PROVIDER, true).unwrap_err().contains("drift"));
+    assert!(
+        generate(&h.root, PROVIDER, true)
+            .unwrap_err()
+            .contains("drift")
+    );
     for (path, bytes) in paths.iter().zip(&legacy) {
         assert_eq!(fs::read(h.root.join(path)).unwrap(), *bytes);
     }
@@ -48,11 +52,19 @@ fn typed_parent_generation_verifies_and_retires_only_exact_legacy_projections() 
 
     // Already adopted parents still diagnose and protect obsolete host edits.
     fs::write(h.root.join(paths[1]), &legacy[1]).unwrap();
-    assert!(generate(&h.root, PROVIDER, true).unwrap_err().contains("obsolete owned"));
+    assert!(
+        generate(&h.root, PROVIDER, true)
+            .unwrap_err()
+            .contains("obsolete owned")
+    );
     assert_eq!(fs::read(h.root.join(paths[1])).unwrap(), legacy[1]);
     let edited = [legacy[1].as_slice(), b"# host edit\n"].concat();
     fs::write(h.root.join(paths[1]), &edited).unwrap();
-    assert!(generate(&h.root, PROVIDER, false).unwrap_err().contains("obsolete workflow differs"));
+    assert!(
+        generate(&h.root, PROVIDER, false)
+            .unwrap_err()
+            .contains("obsolete workflow differs")
+    );
     assert_eq!(fs::read(h.root.join(paths[1])).unwrap(), edited);
     assert_eq!(fs::read(h.root.join(paths[0])).unwrap(), parent);
     fs::write(h.root.join(paths[1]), &legacy[1]).unwrap();
@@ -60,7 +72,10 @@ fn typed_parent_generation_verifies_and_retires_only_exact_legacy_projections() 
     assert!(!h.root.join(paths[1]).exists());
     assert!(!generate(&h.root, PROVIDER, true).unwrap());
     assert_eq!(fs::read(h.root.join(PROVIDER)).unwrap(), source);
-    assert_eq!(fs::read(h.root.join(".github/workflows/host.yml")).unwrap(), b"host-owned\n");
+    assert_eq!(
+        fs::read(h.root.join(".github/workflows/host.yml")).unwrap(),
+        b"host-owned\n"
+    );
 }
 
 #[test]
@@ -72,16 +87,29 @@ fn typed_runtime_configuration_rejections_preserve_all_workflow_outputs() {
         ".github/workflows/beta.yml",
     ];
     let outputs = paths.map(|path| fs::read(h.root.join(path)).unwrap());
-    let mut valid: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
+    let mut valid: Value =
+        serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
     valid["job_gating"] = gating();
     typed_acquisition(&mut valid);
-    for case in ["missing-parent", "legacy-provider", "credential", "deadline", "script", "program"] {
+    for case in [
+        "missing-parent",
+        "legacy-provider",
+        "credential",
+        "deadline",
+        "script",
+        "program",
+    ] {
         let mut invalid = valid.clone();
         match case {
-            "missing-parent" => { invalid.as_object_mut().unwrap().remove("job_gating"); }
+            "missing-parent" => {
+                invalid.as_object_mut().unwrap().remove("job_gating");
+            }
             "legacy-provider" => {
                 invalid["collection"]["schema"] = json!("chrono-github-ci/v1");
-                invalid["collection"].as_object_mut().unwrap().remove("facts_config");
+                invalid["collection"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("facts_config");
             }
             "credential" => invalid["gather"]["credential_environment"] = json!([]),
             "deadline" => invalid["gather"]["timeout_seconds"] = json!(61),
@@ -95,11 +123,18 @@ fn typed_runtime_configuration_rejections_preserve_all_workflow_outputs() {
         if case == "legacy-provider" {
             assert!(error.contains("job gating requires"), "{case}: {error}");
         } else if matches!(case, "missing-parent" | "credential" | "deadline") {
-            assert!(error.contains("typed acquisition requires"), "{case}: {error}");
+            assert!(
+                error.contains("typed acquisition requires"),
+                "{case}: {error}"
+            );
         }
         assert_eq!(fs::read(h.root.join(PROVIDER)).unwrap(), source);
         for (path, bytes) in paths.iter().zip(&outputs) {
-            assert_eq!(fs::read(h.root.join(path)).unwrap(), *bytes, "{case}: {path}");
+            assert_eq!(
+                fs::read(h.root.join(path)).unwrap(),
+                *bytes,
+                "{case}: {path}"
+            );
         }
     }
 }
@@ -2037,16 +2072,33 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     );
 }
 
-
 #[test]
 fn typed_acquisition_preserves_metadata_runtime_and_budget_failures_without_manifest() {
-    for mode in ["missing", "misbound", "runtime", "typed-metadata-timeout", "typed-metadata-output"] {
+    for mode in [
+        "missing",
+        "misbound",
+        "runtime",
+        "typed-metadata-timeout",
+        "typed-metadata-output",
+    ] {
         let mut h = GatedHost::new();
         let helper = ".chrono-harness/ci/artifact_members.py";
-        fs::write(h.host.root.join(helper), include_bytes!("../../../.chrono-harness/ci/artifact_members.py")).unwrap();
-        if mode == "runtime" { fs::write(h.host.root.join(helper), b"changed runtime").unwrap(); }
+        fs::write(
+            h.host.root.join(helper),
+            include_bytes!("../../../.chrono-harness/ci/artifact_members.py"),
+        )
+        .unwrap();
+        if mode == "runtime" {
+            fs::write(h.host.root.join(helper), b"changed runtime").unwrap();
+        }
         h.host.modify(".chrono-harness/FILEMAP.json", |fm| {
-            let mut row = fm["files"].as_array().unwrap().iter().find(|r| r["path"] == PROVIDER).unwrap().clone();
+            let mut row = fm["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["path"] == PROVIDER)
+                .unwrap()
+                .clone();
             row["path"] = json!(helper);
             row["edges"] = json!([]);
             fm["files"].as_array_mut().unwrap().push(row);
@@ -2055,17 +2107,25 @@ fn typed_acquisition_preserves_metadata_runtime_and_budget_failures_without_mani
             c["policy"]["report_publication"] = json!("retained-reference/v2");
         });
         h.host.modify(PROVIDER, |c| {
-            c["gather"]["typed_acquisition"] = json!({"program":"/usr/bin/python3","script":helper});
-            if mode == "typed-metadata-timeout" { c["gather"]["timeout_seconds"] = json!(1); }
-            if mode == "typed-metadata-output" { c["gather"]["output_limit_bytes"] = json!(1024); }
+            c["gather"]["typed_acquisition"] =
+                json!({"program":"/usr/bin/python3","script":helper});
+            if mode == "typed-metadata-timeout" {
+                c["gather"]["timeout_seconds"] = json!(1);
+            }
+            if mode == "typed-metadata-output" {
+                c["gather"]["output_limit_bytes"] = json!(1024);
+            }
         });
         h.change(&["a.txt", "b.txt"]);
         let d = h.detection();
         h.units(&d);
         h.mock(&d, mode);
         let data_path = ".chrono-harness/state/parent-data.json";
-        let mut data: Value = serde_json::from_slice(&fs::read(h.host.root.join(data_path)).unwrap()).unwrap();
-        data["artifact_pages"] = if mode == "missing" { json!([{"artifacts":[]}]) } else {
+        let mut data: Value =
+            serde_json::from_slice(&fs::read(h.host.root.join(data_path)).unwrap()).unwrap();
+        data["artifact_pages"] = if mode == "missing" {
+            json!([{"artifacts":[]}])
+        } else {
             json!([{"artifacts":[{"id":99,"name":"chrono-unit-alpha-101-2","expired":false,
                 "workflow_run":{"id":101,"head_sha":"incorrect-source"},"size_in_bytes":100,
                 "archive_download_url":"https://api.github.com/repos/owner/host/actions/artifacts/99/zip"}]}])
@@ -2073,15 +2133,36 @@ fn typed_acquisition_preserves_metadata_runtime_and_budget_failures_without_mani
         json_file(&h.host.root, data_path, &data);
         let n = needs(&h, &d);
         let output = h.command(&["check", "--collect"], &d, &n).output().unwrap();
-        assert!(!output.status.success(), "accepted typed acquisition failure {mode}");
-        let gather: Value = serde_json::from_slice(&fs::read(h.host.root.join(
-            ".chrono-harness/state/collection/gather.json")).unwrap()).unwrap();
+        assert!(
+            !output.status.success(),
+            "accepted typed acquisition failure {mode}"
+        );
+        let gather: Value = serde_json::from_slice(
+            &fs::read(
+                h.host
+                    .root
+                    .join(".chrono-harness/state/collection/gather.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
         assert!(gather["result"].is_null(), "{gather}");
         assert!(gather["error"].is_string(), "{gather}");
-        assert!(!h.host.root.join(".chrono-harness/state/collection/manifest.json").exists());
+        assert!(
+            !h.host
+                .root
+                .join(".chrono-harness/state/collection/manifest.json")
+                .exists()
+        );
         if mode.starts_with("typed-metadata-") {
-            assert!(gather["processes"].as_array().unwrap().iter().any(|p|
-                !p["failure"].is_null() && p["acquisition"].is_object()), "{gather}");
+            assert!(
+                gather["processes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|p| !p["failure"].is_null() && p["acquisition"].is_object()),
+                "{gather}"
+            );
         }
     }
 }

@@ -157,8 +157,13 @@ impl<'a> Transport<'a> {
     }
 
     fn process_program(
-        &mut self, executable: &str, digest: &str, args: &[String], stdin: &[u8],
-        remaining: Duration, output_limit: usize,
+        &mut self,
+        executable: &str,
+        digest: &str,
+        args: &[String],
+        stdin: &[u8],
+        remaining: Duration,
+        output_limit: usize,
     ) -> Result<ProcessResult, String> {
         let spec = CommandSpec {
             program: executable.into(),
@@ -548,13 +553,20 @@ fn inner(
         return Err("collection command context mismatch".into());
     }
     let typed_profile = if c.gather.typed_acquisition.is_some() {
-        let profile = chrono_harness::load_config(&no_symlink_parents(root, &c.collection.check_config)?)?;
+        let profile =
+            chrono_harness::load_config(&no_symlink_parents(root, &c.collection.check_config)?)?;
         if !chrono_harness::units::reference_publication(&profile)?
-            || !chrono_harness::units::stream_publication(&profile) {
-            return Err("typed acquisition supports the adopted retained-reference/v2 collector only".into());
+            || !chrono_harness::units::stream_publication(&profile)
+        {
+            return Err(
+                "typed acquisition supports the adopted retained-reference/v2 collector only"
+                    .into(),
+            );
         }
         Some(profile)
-    } else { None };
+    } else {
+        None
+    };
     let completed = if c.job_gating.is_some() {
         parent_units(root, c, repository, &context, transport)?
     } else {
@@ -671,11 +683,22 @@ fn inner(
             format!("chrono-unit-{unit}-{id}-{attempt}")
         };
         let mut typed = if typed_profile.is_some() {
-            Some(typed::Artifact::new(transport, id, repository, &artifact, &destination, candidate)?)
-        } else { None };
+            Some(typed::Artifact::new(
+                transport,
+                id,
+                repository,
+                &artifact,
+                &destination,
+                candidate,
+            )?)
+        } else {
+            None
+        };
         let destination = if let Some(acquisition) = &typed {
             acquisition.directory.clone()
-        } else { transport.download(id, repository, &artifact, &destination)? };
+        } else {
+            transport.download(id, repository, &artifact, &destination)?
+        };
         let downloaded = |input: &str| -> Result<String, String> {
             let relative = input
                 .strip_prefix(&w.artifact_directory)
@@ -684,23 +707,54 @@ fn inner(
             Ok(format!("{destination}/{relative}"))
         };
         if let (Some(acquisition), Some(profile)) = (typed.as_mut(), typed_profile.as_ref()) {
-            let context_member = w.context_path.strip_prefix(&w.artifact_directory)
+            let context_member = w
+                .context_path
+                .strip_prefix(&w.artifact_directory)
                 .ok_or("typed context outside uploaded root")?;
-            acquisition.member(transport, context_member,
-                Some(run["production"]["context_sha256"].as_str().ok_or("original context identity missing")?),
-                64 * 1024 * 1024)?;
-            let report_member = registered[&unit].report_path.strip_prefix(&w.artifact_directory)
+            acquisition.member(
+                transport,
+                context_member,
+                Some(
+                    run["production"]["context_sha256"]
+                        .as_str()
+                        .ok_or("original context identity missing")?,
+                ),
+                64 * 1024 * 1024,
+            )?;
+            let report_member = registered[&unit]
+                .report_path
+                .strip_prefix(&w.artifact_directory)
                 .ok_or("typed report outside uploaded root")?;
-            let limits: chrono_judge_ci::CollectionLimits = profile.policy.get("collection_limits")
-                .cloned().map(serde_json::from_value).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
-            let bytes = acquisition.member(transport, report_member,
-                Some(run["production"]["report_sha256"].as_str().ok_or("original report identity missing")?),
-                limits.report_bytes)?;
+            let limits: chrono_judge_ci::CollectionLimits = profile
+                .policy
+                .get("collection_limits")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            let bytes = acquisition.member(
+                transport,
+                report_member,
+                Some(
+                    run["production"]["report_sha256"]
+                        .as_str()
+                        .ok_or("original report identity missing")?,
+                ),
+                limits.report_bytes,
+            )?;
             let mapping = chrono_harness::prepared::ArtifactTransport {
-                source_directory: w.artifact_directory.clone(), directory: format!("{destination}/"),
+                source_directory: w.artifact_directory.clone(),
+                directory: format!("{destination}/"),
             };
-            chrono_judge_ci::unit_originals(root, profile, &unit, &bytes, Some(&mapping),
-                |original, limit| acquisition.original(transport, original, &mapping, limit))?;
+            chrono_judge_ci::unit_originals(
+                root,
+                profile,
+                &unit,
+                &bytes,
+                Some(&mapping),
+                |original, limit| acquisition.original(transport, original, &mapping, limit),
+            )?;
             acquisition.finish()?;
         }
         if c.job_gating.is_some() {
@@ -797,7 +851,9 @@ fn inner(
         ];
         let source = if let Some(acquisition) = typed.as_mut() {
             acquisition.run(transport, &source_args)?
-        } else { transport.run(&source_args)? };
+        } else {
+            transport.run(&source_args)?
+        };
         if source != fs::read(root.join(workflow_path)).map_err(|e| e.to_string())? {
             return Err(format!("unit {unit} executed a different workflow source"));
         }
@@ -827,7 +883,9 @@ fn inner(
         let endpoint = format!("repos/{repository}/actions/runs/{id}");
         let fresh = if let Some(acquisition) = typed.as_mut() {
             decode(&acquisition.run(transport, &["api".into(), endpoint])?)?
-        } else { transport.api(&endpoint, false)? };
+        } else {
+            transport.api(&endpoint, false)?
+        };
         if c.job_gating.is_some() {
             let d =
                 serde_json::from_value(context["detection"].clone()).map_err(|e| e.to_string())?;
@@ -850,7 +908,9 @@ fn inner(
                 return Err("unit run changed while collecting original evidence".into());
             }
         }
-        if let Some(acquisition) = &typed { acquisition.finish()?; }
+        if let Some(acquisition) = &typed {
+            acquisition.finish()?;
+        }
         identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"job_id":run["unit_job_id"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
     }
     if identities.iter().any(|i| i["conclusion"] != "success") {

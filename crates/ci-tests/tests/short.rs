@@ -20,13 +20,17 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
     let reference: Value = serde_json::from_slice(&published).unwrap();
     let raw = fs::read(h.root.join(reference["original"]["path"].as_str().unwrap())).unwrap();
     let mut report: Value = serde_json::from_slice(&raw).unwrap();
-    let mut config = chrono_harness::load_config(&h.root.join(".chrono-harness/ci/check.json")).unwrap();
-    let complete = chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None,
-        |o, limit| {
+    let mut config =
+        chrono_harness::load_config(&h.root.join(".chrono-harness/ci/check.json")).unwrap();
+    let complete =
+        chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None, |o, limit| {
             let bytes = prepared::read_original(&h.root, o, None)?;
-            if bytes.len() as u64 > limit { return Err("fixture read limit".into()); }
+            if bytes.len() as u64 > limit {
+                return Err("fixture read limit".into());
+            }
             Ok(bytes)
-        }).unwrap();
+        })
+        .unwrap();
 
     // This is a typed stream address outside the prior fixed-reader census.
     // No collector or transport path list changes to consume it.
@@ -41,48 +45,90 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
     let bytes = serde_json::to_vec(&report).unwrap();
     fs::write(h.root.join(report_path), &bytes).unwrap();
     let published = serde_json::to_vec(&json!({"schema":"chrono-check-reference/v1",
-        "original":{"path":report_path,"sha256":sha256(&bytes)}})).unwrap();
+        "original":{"path":report_path,"sha256":sha256(&bytes)}}))
+    .unwrap();
     fs::write(h.root.join(slot), &published).unwrap();
     let after = h.command(&["check", "--collect"]).output().unwrap();
     assert!(after.status.success(), "{after:?}");
     let canonical = stream_report(&h.root, ".chrono-harness/state/check.json", &after);
     assert_eq!(canonical["response"]["status"], "passed");
     assert_eq!(canonical["response"]["evidence"]["executed"], json!([]));
-    assert_eq!(fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap(), calls);
+    assert_eq!(
+        fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap(),
+        calls
+    );
     let mut reads = std::collections::BTreeSet::new();
-    let acquired = chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None,
-        |o, _| { reads.insert(o.path.clone()); prepared::read_original(&h.root, o, None) }).unwrap();
+    let acquired =
+        chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None, |o, _| {
+            reads.insert(o.path.clone());
+            prepared::read_original(&h.root, o, None)
+        })
+        .unwrap();
     assert!(reads.contains(extra));
-    assert_eq!(serde_json::to_value(&acquired.request).unwrap(), serde_json::to_value(&complete.request).unwrap());
-    assert_eq!(serde_json::to_value(&acquired.producer).unwrap(), serde_json::to_value(&complete.producer).unwrap());
+    assert_eq!(
+        serde_json::to_value(&acquired.request).unwrap(),
+        serde_json::to_value(&complete.request).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&acquired.producer).unwrap(),
+        serde_json::to_value(&complete.producer).unwrap()
+    );
 
     // Metadata and all restored judge originals share the existing report budget.
-    let stream_bytes: u64 = ["stdout_original", "stderr_original", "launch_original"].into_iter()
+    let stream_bytes: u64 = ["stdout_original", "stderr_original", "launch_original"]
+        .into_iter()
         .filter_map(|field| report["judge"].get(field))
-        .map(|o| fs::metadata(h.root.join(o["path"].as_str().unwrap())).unwrap().len()).sum();
+        .map(|o| {
+            fs::metadata(h.root.join(o["path"].as_str().unwrap()))
+                .unwrap()
+                .len()
+        })
+        .sum();
     let limit = bytes.len() as u64 + stream_bytes;
     config.policy["collection_limits"] = json!({"manifest_bytes":4096,"report_bytes":limit});
-    chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None,
-        |o, _| prepared::read_original(&h.root, o, None)).unwrap();
+    chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None, |o, _| {
+        prepared::read_original(&h.root, o, None)
+    })
+    .unwrap();
     config.policy["collection_limits"]["report_bytes"] = json!(limit - 1);
-    assert!(chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None,
-        |o, _| prepared::read_original(&h.root, o, None)).is_err());
+    assert!(
+        chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None, |o, _| {
+            prepared::read_original(&h.root, o, None)
+        })
+        .is_err()
+    );
     config.policy["collection_limits"]["report_bytes"] = json!(limit);
     for missing in &reads {
         for corrupt in [false, true] {
-            let result = chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None, |o, _| {
-                if &o.path == missing {
-                    if corrupt { return Ok(b"altered original".to_vec()); }
-                    return Err("fixture missing declared original".into());
-                }
-                prepared::read_original(&h.root, o, None)
-            });
-            assert!(result.is_err(), "accepted missing/corrupt original {missing}");
+            let result = chrono_judge_ci::unit_originals(
+                &h.root,
+                &config,
+                "alpha",
+                &published,
+                None,
+                |o, _| {
+                    if &o.path == missing {
+                        if corrupt {
+                            return Ok(b"altered original".to_vec());
+                        }
+                        return Err("fixture missing declared original".into());
+                    }
+                    prepared::read_original(&h.root, o, None)
+                },
+            );
+            assert!(
+                result.is_err(),
+                "accepted missing/corrupt original {missing}"
+            );
         }
     }
     let unsupported = serde_json::to_vec(&json!({"schema":"unsupported-report/v1"})).unwrap();
-    assert!(chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &unsupported, None,
-        |o, _| prepared::read_original(&h.root, o, None)).is_err());
+    assert!(
+        chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &unsupported, None, |o, _| {
+            prepared::read_original(&h.root, o, None)
+        })
+        .is_err()
+    );
 }
 use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
@@ -1805,22 +1851,34 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
         prepared::validate_portable_binding_with_reader(&h.root, binding, Some(&mapping), |o| {
             reads.insert(o.path.clone());
             prepared::read_original(&h.root, o, None)
-        }).unwrap();
+        })
+        .unwrap();
         for field in ["originals", "receipts"] {
-            let refs = if field == "originals" { &binding["result"][field] } else { &binding[field] };
+            let refs = if field == "originals" {
+                &binding["result"][field]
+            } else {
+                &binding[field]
+            };
             for original in refs.as_array().unwrap() {
                 assert!(reads.contains(original["path"].as_str().unwrap()));
             }
         }
         let last = reads.last().unwrap();
         for corrupt in [false, true] {
-            let failed = prepared::validate_portable_binding_with_reader(&h.root, binding, Some(&mapping), |o| {
-                if &o.path == last {
-                    if corrupt { return Ok(b"corrupt original".to_vec()); }
-                    return Err("fixture missing typed original".into());
-                }
-                prepared::read_original(&h.root, o, None)
-            });
+            let failed = prepared::validate_portable_binding_with_reader(
+                &h.root,
+                binding,
+                Some(&mapping),
+                |o| {
+                    if &o.path == last {
+                        if corrupt {
+                            return Ok(b"corrupt original".to_vec());
+                        }
+                        return Err("fixture missing typed original".into());
+                    }
+                    prepared::read_original(&h.root, o, None)
+                },
+            );
             assert!(failed.is_err(), "accepted incomplete typed preparation");
         }
 

@@ -79,18 +79,30 @@ pub fn unit_originals(
     transport: Option<&chrono_harness::prepared::ArtifactTransport>,
     mut read: impl FnMut(&chrono_harness::prepared::Original, u64) -> Result<Vec<u8>, String>,
 ) -> Result<UnitOriginals, String> {
-    let mut read = |o: &chrono_harness::prepared::Original, limit: u64| -> Result<Vec<u8>, String> {
-        chrono_harness::prepared::original_path(o, transport)?;
-        let raw = read(o, limit)?;
-        if raw.len() as u64 > limit {
-            return Err(format!("unit original digest/limit mismatch: {}", o.path));
-        }
-        Ok(raw)
-    };
+    let mut read =
+        |o: &chrono_harness::prepared::Original, limit: u64| -> Result<Vec<u8>, String> {
+            chrono_harness::prepared::original_path(o, transport)?;
+            let raw = read(o, limit)?;
+            if raw.len() as u64 > limit {
+                return Err(format!("unit original digest/limit mismatch: {}", o.path));
+            }
+            Ok(raw)
+        };
     let published = json(bytes)?;
     let retained_streams = chrono_harness::units::stream_publication(config);
-    let report_schema = if retained_streams { chrono_harness::scoped_report::SCHEMA } else { "chrono-check-report/v1" };
-    let limits: CollectionLimits = config.policy.get("collection_limits").cloned().map(serde_json::from_value).transpose().map_err(|e| e.to_string())?.unwrap_or_default();
+    let report_schema = if retained_streams {
+        chrono_harness::scoped_report::SCHEMA
+    } else {
+        "chrono-check-report/v1"
+    };
+    let limits: CollectionLimits = config
+        .policy
+        .get("collection_limits")
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
     let mut retained_report_path = None;
     let (report, mut remaining) = if chrono_harness::units::reference_publication(config)? {
         let reference: chrono_harness::units::ReportReference =
@@ -98,10 +110,7 @@ pub fn unit_originals(
         if reference.schema != chrono_harness::units::REPORT_REFERENCE {
             return Err("unit report reference schema mismatch".into());
         }
-        let path = chrono_harness::prepared::original_path(
-            &reference.original,
-            transport,
-        )?;
+        let path = chrono_harness::prepared::original_path(&reference.original, transport)?;
         let raw = read(&reference.original, limits.report_bytes)?;
         if sha256(&raw) != reference.original.sha256 {
             return Err(format!(
@@ -132,7 +141,10 @@ pub fn unit_originals(
         .filter(|b| b.is_object())
     {
         chrono_harness::prepared::validate_portable_binding_with_reader(
-            root, binding, transport, |o| read(o, 64 * 1024 * 1024),
+            root,
+            binding,
+            transport,
+            |o| read(o, 64 * 1024 * 1024),
         )?;
         let prepared: chrono_harness::prepared::PreparedCheck =
             serde_json::from_value(binding["result"].clone()).map_err(|e| e.to_string())?;
@@ -154,7 +166,12 @@ pub fn unit_originals(
     } else {
         serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?
     };
-    Ok(UnitOriginals { report, request: original, producer, retained_report_path })
+    Ok(UnitOriginals {
+        report,
+        request: original,
+        producer,
+        retained_report_path,
+    })
 }
 
 pub(super) fn collect(
@@ -238,20 +255,39 @@ pub(super) fn collect(
         {
             return Err("original evidence transport is not a declared artifact".into());
         }
-        let originals = unit_originals(&req.host_root, config, &input.unit, &bytes,
-            input.artifacts.as_ref(), |o, limit| {
+        let originals = unit_originals(
+            &req.host_root,
+            config,
+            &input.unit,
+            &bytes,
+            input.artifacts.as_ref(),
+            |o, limit| {
                 let path = chrono_harness::prepared::original_path(o, input.artifacts.as_ref())?;
-                read(&req.host_root, &path, p, "report_bytes (original/stream budget)", limit)
-            })?;
+                read(
+                    &req.host_root,
+                    &path,
+                    p,
+                    "report_bytes (original/stream budget)",
+                    limit,
+                )
+            },
+        )?;
         retained_originals.extend(originals.retained_report_path);
         let report = originals.report;
         let original = originals.request;
         let producer = originals.producer;
-        if let Some(binding) = original.observations.get("preparation").filter(|b| b.is_object()) {
+        if let Some(binding) = original
+            .observations
+            .get("preparation")
+            .filter(|b| b.is_object())
+        {
             let prepared: chrono_harness::prepared::PreparedCheck =
                 serde_json::from_value(binding["result"].clone()).map_err(|e| e.to_string())?;
-            if prepared.base != req.base || prepared.candidate != req.candidate
-                || prepared.profile != req.config_path || prepared.scope != original.scope {
+            if prepared.base != req.base
+                || prepared.candidate != req.candidate
+                || prepared.profile != req.config_path
+                || prepared.scope != original.scope
+            {
                 return Err("original preparation differs from collected unit".into());
             }
         }
