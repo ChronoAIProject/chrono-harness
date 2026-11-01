@@ -562,7 +562,8 @@ base 只提供历史事实，不启动旧判官，也不要求取得、重建或
 
 schema 版本变更要登记当前替代：旧/新版本、受影响消费者、记录变化与删除原因。
 无需维持旧接口、旧格式执行或配对历史兼容测试；验证当前合同的成功、失败和边界行为。
-workflow.migrations 中 script/test 必须引用已登记脚本，mappings 元素为 `{from, to}`，
+workflow.migrations 保留版本、mappings 和 reason；仅实际数据转换时成对登记 script/test，
+二者必须引用已登记脚本。mappings 元素为 `{from, to}`，
 from/to 可为 null 表示新增/删除，但不能同时为 null；删除原因放同条 reason。
 仅现役消费者确需转换已有数据时才登记一次性迁移及其行为验证；不为历史兼容创建脚本或适配器。
 candidate 按当前合同读取固定基线所需事实，保留原始记录、变化与摘要；缺失必要事实明确失败，不落回默认配置。
