@@ -378,6 +378,43 @@ fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_o
 }
 
 #[test]
+fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution() {
+    let h = main_host();
+    let index = fs::read(h.root.join(".git/index")).unwrap();
+    let refs = git(&h.root, &["show-ref"]);
+    let (code, imported, error) = h.auto("import", &[]);
+    assert_eq!(code, 0, "{imported} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["cache_only"], true);
+    assert_eq!(entry["enrollment"]["kind"], "main-cache");
+    assert_eq!(entry["uses"], value!([]));
+    assert_eq!(imported["managed_process"], Value::Null);
+    let (code, released, error) = h.auto("finish", &[]);
+    assert_eq!(code, 0, "{released} {error}");
+    let descriptor = &released["main_cache_release"];
+    let raw = fs::read(h.root.join(descriptor["path"].as_str().unwrap())).unwrap();
+    assert_eq!(sha256(&raw), descriptor["sha256"]);
+    let release = json(&raw).unwrap();
+    assert_eq!(release["path"], value!(h.root));
+    assert_eq!(release["task_completion"], "not-claimed");
+    assert_eq!(released["drain"], value!([]));
+    assert!(!h.root.join("output λ").exists());
+    assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
+    assert_eq!(git(&h.root, &["show-ref"]), refs);
+    assert_eq!(h.ledger()["entries"][0]["terminal"], Value::Null);
+    // A policy that did not opt in still admits only linked worktrees.
+    let ordinary = Host::new("payload");
+    ordinary.kernel_cleanup();
+    let (code, report, error) = ordinary.auto("import", &[]);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report
+            .to_string()
+            .contains("enrollment branch is not a registered work branch")
+    );
+}
+
+#[test]
 fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
     let h = main_host();
     let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);

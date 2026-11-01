@@ -2210,7 +2210,13 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 "import" => manager.enroll(
                     r,
                     target.as_ref().unwrap(),
-                    "import",
+                    if manager.policy.main_cache_only
+                        && target.as_ref().unwrap() == &manager.policy.coordinator_root
+                    {
+                        "main-cache"
+                    } else {
+                        "import"
+                    },
                     value!({"report_path":report["report_path"],"historical_birth":"not-claimed"}),
                 ),
                 "migrate" => {
