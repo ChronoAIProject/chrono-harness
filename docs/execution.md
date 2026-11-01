@@ -146,6 +146,12 @@ them, together with elapsed and allowed monitor milliseconds. These are explicit
 independent atomic reads, not a coherent tree snapshot or a causal verdict. They
 distinguish missing exit observations from other completion failures without a
 process probe, extra task or changed deadline.
+The same failure observation retains every occupied slot in that explicit launch
+tree, including its slot/generation, parent slot, recorded PID and terminal,
+launcher-terminal and cancellation markers. Collection is bounded by the existing
+4096-slot capacity and happens once before cleanup. It does not discover processes
+or infer liveness from a PID. The nested-timeout regression checks actual retained
+child identities and parent links before verifying their eventual cleanup.
 
 The runner regression `completion_wait_blocks_without_periodic_status_probes`
 isolates one engine in a native child process, with a real child that closes both

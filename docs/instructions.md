@@ -25,6 +25,13 @@ CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`
 
 ## 新默认的宿主采用边界
 
+**产品默认与宿主政策同改（用户明确要求无需历史兼容）：**双语
+`method.host-tools` 与 `owner.migration` 同步采用当前规范合同；同步迁移现役消费者与
+登记，并移除仅服务历史版本、格式、接口和路径的分支、适配器与测试。
+旧格式支持和历史兼容测试不再是交付义务。固定基线事实、仍有用途的源码与失败原件
+保留其数据／证据用途，不赋予旧合同运行时权威。根和英文输出经同一登记入口生成，
+不新增措辞形状测试；生成与适用检查的成本归本轮原报告，总生命周期成本仍未知。
+
 新宿主执行 init 即采用该二进制内嵌默认；既有宿主升级二进制或重复 init 仍保留已采用 catalog、manifest、context 和根块外内容。没有自动升级／合并或更新子系统。
 
 既有宿主采用本方法时，以所选产品源码版本的 `assets/instructions/catalog.json`、`default-manifest.json` 为比较输入，在宿主自己的 catalog 中合入所需原子正文及 `workflow` 布局，再在 manifest 的 root 输出选择相应 roots／layout；保留自定义 atoms、locale、file 源、其他输出、上下文和块外内容。不要整份覆盖宿主 catalog／manifest。已有 opaque file 方法仍由原 file 所有者编辑；不要用 init 替换它。随后从宿主登记的 `instructions.generate` 入口 generate，核真实根、AGENTS 字面链接和所有选中 Markdown／skill 消费者，再重复生成核无写入。本仓采用的是自己的登记源与三个既有输出，产品默认仍只生成根。

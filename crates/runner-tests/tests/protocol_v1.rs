@@ -2143,6 +2143,49 @@ fn outer_timeout_contains_nested_owned_operation() {
         assert_eq!(p.failure.as_deref(), Some("process timed out"), "{p:?}");
         let pid = std::fs::read_to_string(d.path().join("nested.pid")).unwrap();
         let pid: libc::pid_t = pid.parse().unwrap();
+        let observation =
+            &p.failure_record.as_ref().unwrap().error.context["ownership_at_monitor_end"];
+        let launches = observation["launches"]
+            .as_array()
+            .expect("timeout retains the explicitly owned launch identities");
+        let outer = launches
+            .iter()
+            .find(|launch| launch["child_pid"] == value!(p.child_pid))
+            .expect("the timed-out launch remains identified before cleanup");
+        assert_eq!(outer["slot"], observation["slot"]);
+        assert_eq!(outer["generation"], observation["generation"]);
+        // A canonical runner check itself has an inherited launch ancestry.
+        // Standalone tests start a new tree; both must retain their real links.
+        if !outer["parent_slot"].is_null() {
+            assert!(
+                launches
+                    .iter()
+                    .any(|launch| launch["slot"] == outer["parent_slot"])
+            );
+        }
+        let nested = launches
+            .iter()
+            .find(|launch| launch["child_pid"] == pid)
+            .expect("the actual live nested child is identified before cleanup");
+        assert_eq!(nested["terminal"], false);
+        assert_eq!(nested["launcher_terminal"], false);
+        assert_eq!(nested["state"], 2);
+        let parent = launches
+            .iter()
+            .find(|launch| launch["slot"] == nested["parent_slot"])
+            .expect("nested launch keeps its explicit parent identity");
+        assert_eq!(parent["state"], 2);
+        let mut ancestor = nested;
+        for _ in 0..launches.len() {
+            if ancestor["slot"] == outer["slot"] {
+                break;
+            }
+            ancestor = launches
+                .iter()
+                .find(|launch| launch["slot"] == ancestor["parent_slot"])
+                .expect("the nested child must retain its path to the timed-out owner");
+        }
+        assert_eq!(ancestor["slot"], outer["slot"]);
         let state = unsafe { libc::kill(pid, 0) };
         let error = std::io::Error::last_os_error();
         if state == 0 {

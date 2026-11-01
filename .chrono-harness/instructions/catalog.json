@@ -383,14 +383,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "明确并完成迁移。 说明版本、所有权、升级方式，保留宿主原文与定制，冲突明确失败。兼容限于声明的迁移合同，不留第二套当前权威；完成后移除被替代路径与多余补偿，历史归版本库。"
+            "text": "完成现役迁移。 说明当前版本、所有权与升级方式，同步更新现役消费者和登记，保留仍适用的宿主原文与定制，冲突明确失败。无需历史兼容，不保留旧接口、旧格式的执行分支或第二套当前权威；迁移后移除被替代路径与多余补偿。历史源码和仍有用途的原件按用途保留，不赋予旧合同运行时权威。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Finish explicit migrations. State versions, owners and upgrades; preserve host text/customization, fail on conflicts. Compatibility needs a declared contract; no second current authority. After migration, remove superseded paths and needless compensation; version control keeps history."
+            "text": "Complete active migrations. State the current version, owners and upgrade, update active consumers and registrations together, preserve applicable host text/customization, and fail explicitly on conflicts. Historical compatibility is unnecessary: keep no execution branches for old interfaces or formats and no second current authority. Remove superseded paths and needless compensation after migration. Retain historical source and useful originals for their stated purposes without giving old contracts runtime authority."
           }
         }
       ]
@@ -531,14 +531,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "只开发真实缺口。 现有能力不足时，绑定实际消费者和验收再开发，不造空调用、重复平台或未来扩展层。新增依赖、原生工具链要求、自研机制或框架、防御机制、兼容层或验证路径，须有当前需求／消费者并说明成熟方案或现有能力为何不足；不为另一个无必要机制或假想未来需求增加它们。产品共性与宿主政策分居；脚本、插件、判官及配置由宿主在 `.chrono-harness/` 显式登记，可替换演进，不写死宿主实例或改全局配置。"
+            "text": "只开发真实缺口。 以当前规范为准，无需兼容历史版本、格式、接口或执行路径；变更时同步迁移现役消费者与登记，移除仅为历史兼容保留的分支、适配器和测试。现有能力不足时，绑定实际消费者和验收再开发，不造空调用、重复平台或未来扩展层。新增依赖、原生工具链要求、自研机制或框架、防御机制或验证路径，须有当前需求／消费者并说明成熟方案或现有能力为何不足；不为另一个无必要机制或假想未来需求增加它们。产品共性与宿主政策分居；脚本、插件、判官及配置由宿主在 `.chrono-harness/` 显式登记，可替换演进，不写死宿主实例或改全局配置。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Develop real gaps. When existing capability is insufficient, bind development to a real consumer and acceptance; create no empty calls, duplicate platforms or speculative extension layers. A new dependency, native toolchain requirement, custom mechanism/framework, defense, compatibility layer or validation path needs a current requirement/consumer and an explanation of why proven solutions or existing capability are insufficient. Do not add them to support another unneeded mechanism or speculative future need. Separate common product behavior from host policy. Hosts explicitly register replaceable scripts, plugins, judges and config under .chrono-harness/; do not hardcode host instances or edit global config."
+            "text": "Develop real gaps. Follow the current specification; historical versions, formats, interfaces and execution paths need no compatibility. Update active consumers and registrations together, and remove branches, adapters and tests kept only for historical compatibility. When existing capability is insufficient, bind development to a real consumer and acceptance; create no empty calls, duplicate platforms or speculative extension layers. A new dependency, native toolchain requirement, custom mechanism/framework, defense or validation path needs a current requirement/consumer and an explanation of why proven solutions or existing capability are insufficient. Do not add them to support another unneeded mechanism or speculative future need. Separate common product behavior from host policy. Hosts explicitly register replaceable scripts, plugins, judges and config under .chrono-harness/; do not hardcode host instances or edit global config."
           }
         }
       ]
