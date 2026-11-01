@@ -7,6 +7,103 @@ fn gating() -> Value {
     json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["host-tools-only"],"sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}})
 }
 
+fn typed_acquisition(c: &mut Value) {
+    c["gather"]["typed_acquisition"] = json!({
+        "program": "/usr/bin/python3",
+        "script": ".chrono-harness/ci/artifact_members.py"
+    });
+    c["gather"]["timeout_seconds"] = json!(60);
+}
+
+#[test]
+fn typed_parent_generation_verifies_and_retires_only_exact_legacy_projections() {
+    let h = ShortHost::new();
+    let paths = [
+        ".github/workflows/collection.yml",
+        ".github/workflows/alpha.yml",
+        ".github/workflows/beta.yml",
+    ];
+    let legacy = paths.map(|path| fs::read(h.root.join(path)).unwrap());
+    let mut c: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
+    c["job_gating"] = gating();
+    c["gather"]["timeout_seconds"] = json!(60);
+    let runtime: chrono_ci::units::Config = serde_json::from_value(c.clone()).unwrap();
+    let expected = chrono_ci::units::render(&runtime, PROVIDER).unwrap();
+    typed_acquisition(&mut c);
+    json_file(&h.root, PROVIDER, &c);
+    let source = fs::read(h.root.join(PROVIDER)).unwrap();
+    fs::write(h.root.join(".github/workflows/host.yml"), b"host-owned\n").unwrap();
+
+    // Verification diagnoses adoption drift without changing any old projection.
+    assert!(generate(&h.root, PROVIDER, true).unwrap_err().contains("drift"));
+    for (path, bytes) in paths.iter().zip(&legacy) {
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), *bytes);
+    }
+    assert!(generate(&h.root, PROVIDER, false).unwrap());
+    let parent = fs::read(h.root.join(paths[0])).unwrap();
+    assert_eq!(parent, expected[paths[0]].as_bytes());
+    assert!(!h.root.join(paths[1]).exists());
+    assert!(!h.root.join(paths[2]).exists());
+    assert!(!generate(&h.root, PROVIDER, true).unwrap());
+
+    // Already adopted parents still diagnose and protect obsolete host edits.
+    fs::write(h.root.join(paths[1]), &legacy[1]).unwrap();
+    assert!(generate(&h.root, PROVIDER, true).unwrap_err().contains("obsolete owned"));
+    assert_eq!(fs::read(h.root.join(paths[1])).unwrap(), legacy[1]);
+    let edited = [legacy[1].as_slice(), b"# host edit\n"].concat();
+    fs::write(h.root.join(paths[1]), &edited).unwrap();
+    assert!(generate(&h.root, PROVIDER, false).unwrap_err().contains("obsolete workflow differs"));
+    assert_eq!(fs::read(h.root.join(paths[1])).unwrap(), edited);
+    assert_eq!(fs::read(h.root.join(paths[0])).unwrap(), parent);
+    fs::write(h.root.join(paths[1]), &legacy[1]).unwrap();
+    assert!(generate(&h.root, PROVIDER, false).unwrap());
+    assert!(!h.root.join(paths[1]).exists());
+    assert!(!generate(&h.root, PROVIDER, true).unwrap());
+    assert_eq!(fs::read(h.root.join(PROVIDER)).unwrap(), source);
+    assert_eq!(fs::read(h.root.join(".github/workflows/host.yml")).unwrap(), b"host-owned\n");
+}
+
+#[test]
+fn typed_runtime_configuration_rejections_preserve_all_workflow_outputs() {
+    let h = ShortHost::new();
+    let paths = [
+        ".github/workflows/collection.yml",
+        ".github/workflows/alpha.yml",
+        ".github/workflows/beta.yml",
+    ];
+    let outputs = paths.map(|path| fs::read(h.root.join(path)).unwrap());
+    let mut valid: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
+    valid["job_gating"] = gating();
+    typed_acquisition(&mut valid);
+    for case in ["missing-parent", "legacy-provider", "credential", "deadline", "script", "program"] {
+        let mut invalid = valid.clone();
+        match case {
+            "missing-parent" => { invalid.as_object_mut().unwrap().remove("job_gating"); }
+            "legacy-provider" => {
+                invalid["collection"]["schema"] = json!("chrono-github-ci/v1");
+                invalid["collection"].as_object_mut().unwrap().remove("facts_config");
+            }
+            "credential" => invalid["gather"]["credential_environment"] = json!([]),
+            "deadline" => invalid["gather"]["timeout_seconds"] = json!(61),
+            "script" => invalid["gather"]["typed_acquisition"]["script"] = json!("/outside.py"),
+            "program" => invalid["gather"]["typed_acquisition"]["program"] = json!(""),
+            _ => unreachable!(),
+        }
+        json_file(&h.root, PROVIDER, &invalid);
+        let source = fs::read(h.root.join(PROVIDER)).unwrap();
+        let error = generate(&h.root, PROVIDER, false).unwrap_err();
+        if case == "legacy-provider" {
+            assert!(error.contains("job gating requires"), "{case}: {error}");
+        } else if matches!(case, "missing-parent" | "credential" | "deadline") {
+            assert!(error.contains("typed acquisition requires"), "{case}: {error}");
+        }
+        assert_eq!(fs::read(h.root.join(PROVIDER)).unwrap(), source);
+        for (path, bytes) in paths.iter().zip(&outputs) {
+            assert_eq!(fs::read(h.root.join(path)).unwrap(), *bytes, "{case}: {path}");
+        }
+    }
+}
+
 #[test]
 fn parent_registration_preserves_unit_settings_and_retires_only_owned_outputs() {
     let h = ShortHost::new();
@@ -1197,6 +1294,7 @@ fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_e
         let mut c: Value =
             serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
         c["job_gating"] = gating();
+        typed_acquisition(&mut c);
         json_file(&h.root, PROVIDER, &c);
         fs::write(h.root.join(".github/workflows/host.yml"), "host-owned\n").unwrap();
         if conflict == "obsolete" {
@@ -1254,6 +1352,7 @@ fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_e
     );
     let mut c: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
     c["job_gating"] = gating();
+    typed_acquisition(&mut c);
     c["units"]["alpha"]["runs_on"] = json!("new-custom");
     json_file(&h.root, PROVIDER, &c);
     let report = chrono_ci::dispatch(&[

@@ -574,6 +574,8 @@ fn projection_changes(
     let legacy_outputs = if c.job_gating.is_some() {
         let mut legacy = c.clone();
         legacy.job_gating = None;
+        // Parent transport settings do not belong to legacy workflow ownership.
+        legacy.gather.typed_acquisition = None;
         legacy.gather.resource_observation = None;
         legacy.native_adoption = None;
         legacy.persistent_cache = None;
@@ -606,12 +608,7 @@ fn projection_changes(
     }
     let mut retire = vec![];
     if c.job_gating.is_some() {
-        let mut legacy = c.clone();
-        legacy.job_gating = None;
-        legacy.gather.resource_observation = None;
-        legacy.native_adoption = None;
-        legacy.persistent_cache = None;
-        for (path, bytes) in render(&legacy, path)? {
+        for (path, bytes) in legacy_outputs {
             if outputs.contains_key(&path) {
                 continue;
             }
