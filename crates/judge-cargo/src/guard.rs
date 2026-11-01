@@ -47,6 +47,8 @@ pub struct Report {
     operation_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     registry_binding: Option<facts::ConfigIdentity>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    policy_binding: Option<crate::inputs::PolicyBinding>,
     tool: Option<observation::Tool>,
     compiler: Option<observation::Tool>,
     native_target: Option<ProcessResult>,
@@ -72,6 +74,7 @@ pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
         error: None,
         operation_id: operation.into(),
         registry_binding: None,
+        policy_binding: None,
         tool: None,
         compiler: None,
         native_target: None,
@@ -125,7 +128,7 @@ fn evaluate(
         registrations.config(),
         &Value::Object(inherited),
     )?;
-    let check = measure("prepare-inputs", || {
+    let mut check = measure("prepare-inputs", || {
         crate::inputs::prepare(
             &root,
             &registrations,
@@ -136,6 +139,7 @@ fn evaluate(
             &snapshot.bytes,
         )
     })?;
+    report.policy_binding = check.policy_binding.take();
     report.configuration = Some(check.configuration.evidence.clone());
     report.toolchain = check.toolchain.clone();
     if report.toolchain.is_some() {

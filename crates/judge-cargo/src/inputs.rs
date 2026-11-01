@@ -132,6 +132,7 @@ struct Kind {
 }
 pub(crate) struct Check {
     pub contract: Contract,
+    pub policy_binding: Option<PolicyBinding>,
     pub configuration: crate::configuration::Checked,
     pub tool_inputs: BTreeMap<String, ToolInput>,
     pub toolchain: Option<ToolchainEvidence>,
@@ -142,6 +143,30 @@ pub(crate) struct Check {
     absent_inputs: Vec<PathBuf>,
     strict_inputs: Vec<PathBuf>,
     directories: Vec<DirectoryBinding>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PolicySelector {
+    schema: String,
+    configurations: BTreeMap<String, String>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct PolicyBinding {
+    schema: &'static str,
+    entry_path: String,
+    entry_sha256: String,
+    effective_path: String,
+    effective_sha256: String,
+    config_path: String,
+}
+
+fn policy_bytes(root: &Path, path: &str) -> Result<Vec<u8>> {
+    if !path.starts_with(".chrono-harness/") {
+        return Err(error("policy must be under .chrono-harness/"));
+    }
+    fs::read(no_symlink_parents(root, path)?).map_err(|e| error(format!("{path}: {e}")))
 }
 
 fn error(s: impl std::fmt::Display) -> String {
@@ -324,11 +349,53 @@ pub(crate) fn prepare(
     registry_bytes: &BTreeMap<String, Vec<u8>>,
 ) -> Result<Check> {
     use std::cell::RefCell;
-    if !policy.starts_with(".chrono-harness/") {
-        return Err(error("policy must be under .chrono-harness/"));
-    }
-    let policy_path = no_symlink_parents(root, policy)?;
-    let value = json(&fs::read(&policy_path).map_err(error)?)?;
+    let entry_bytes = policy_bytes(root, policy)?;
+    let mut value = json(&entry_bytes)?;
+    let mut policy_inputs = BTreeMap::from([(policy.to_string(), entry_bytes.clone())]);
+    let policy_binding = if value["schema"] == "chrono-cargo-input-policies/v1" {
+        let selector = PolicySelector::deserialize(&value).map_err(error)?;
+        debug_assert_eq!(selector.schema, "chrono-cargo-input-policies/v1");
+        for (config_path, policy_path) in &selector.configurations {
+            for path in [config_path, policy_path] {
+                chrono_harness::relative_path(path).map_err(error)?;
+                if !path.starts_with(".chrono-harness/") {
+                    return Err(error("configuration/policy must be under .chrono-harness/"));
+                }
+            }
+        }
+        let config_path = r.effective_config_path();
+        let selected = selector.configurations.get(config_path).ok_or_else(|| {
+            error(format!(
+                "no Cargo policy for effective configuration {config_path}"
+            ))
+        })?;
+        let bytes = policy_bytes(root, selected)?;
+        value = json(&bytes)?;
+        if !value["schema"].as_str().is_some_and(|schema| {
+            matches!(
+                schema,
+                "chrono-cargo-inputs/v2"
+                    | "chrono-cargo-inputs/v3"
+                    | "chrono-cargo-inputs/v4"
+                    | "chrono-cargo-inputs/v5"
+                    | "chrono-cargo-inputs/v6"
+            )
+        }) {
+            return Err(error("must select a direct Cargo input policy"));
+        }
+        let binding = PolicyBinding {
+            schema: "chrono-cargo-policy-selection/v1",
+            entry_path: policy.into(),
+            entry_sha256: sha256(&entry_bytes),
+            effective_path: selected.clone(),
+            effective_sha256: sha256(&bytes),
+            config_path: config_path.into(),
+        };
+        policy_inputs.insert(selected.clone(), bytes);
+        Some(binding)
+    } else {
+        None
+    };
     let contract = Contract::deserialize(&value).map_err(error)?;
     let version_valid = match contract.schema.as_str() {
         "chrono-cargo-inputs/v2" => {
@@ -508,10 +575,12 @@ pub(crate) fn prepare(
     );
     let connected = |node: &str| ancestors.reached.contains_key(node);
     let files = r.filemap()["files"].as_array().unwrap();
-    if !files.iter().any(|f| f["path"] == policy) || !connected(&format!("file:{policy}")) {
-        return Err(error(
-            "Cargo policy is not registered/connected to its consumer",
-        ));
+    for path in policy_inputs.keys() {
+        if !files.iter().any(|f| f["path"] == *path) || !connected(&format!("file:{path}")) {
+            return Err(error(format!(
+                "Cargo policy {path} is not registered/connected to its consumer"
+            )));
+        }
     }
     let retained = RefCell::new(BTreeMap::new());
     let retain = |path: PathBuf, expected: Option<&str>| -> Result<PathBuf> {
@@ -520,15 +589,26 @@ pub(crate) fn prepare(
         if expected.is_some_and(|s| s != digest) {
             return Err(error(format!("input identity changed: {}", path.display())));
         }
-        retained
-            .borrow_mut()
-            .insert(path, (canonical.clone(), digest));
+        let identity = (canonical.clone(), digest);
+        let mut retained = retained.borrow_mut();
+        if let Some(previous) = retained.get(&path) {
+            if previous != &identity {
+                return Err(error(format!(
+                    "input changed during guarded operation: {}",
+                    path.display()
+                )));
+            }
+        } else {
+            retained.insert(path, identity);
+        }
         Ok(canonical)
     };
     for (path, bytes) in registry_bytes {
         retain(root.join(path), Some(&sha256(bytes)))?;
     }
-    retain(policy_path, None)?;
+    for (path, bytes) in &policy_inputs {
+        retain(root.join(path), Some(&sha256(bytes)))?;
+    }
     for f in files
         .iter()
         .filter(|f| connected(&format!("file:{}", f["path"].as_str().unwrap())))
@@ -894,6 +974,7 @@ pub(crate) fn prepare(
     let target_directory = root.join(&root_project.output);
     Ok(Check {
         contract,
+        policy_binding,
         configuration,
         tool_inputs,
         toolchain: toolchain_evidence,

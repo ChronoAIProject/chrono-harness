@@ -7,6 +7,191 @@ use std::fs;
 use std::process::Command;
 
 const SELECTED_CONFIG: &str = ".chrono-harness/selected.json";
+const SELECTED_POLICY: &str = ".chrono-harness/cargo/selected.json";
+
+fn select_policy(f: &mut Fixture, config: &str) {
+    f.values.insert(SELECTED_POLICY.into(), f.contract.clone());
+    f.contract = json!({
+        "schema":"chrono-cargo-input-policies/v1",
+        "configurations":{config:SELECTED_POLICY}
+    });
+    let mut row = file(
+        SELECTED_POLICY,
+        json!([{"kind":"build-input","to":"project:t"}]),
+    );
+    row["owner"] = "t".into();
+    row["surface"] = "judge-policy".into();
+    f.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(row);
+    f.save();
+}
+
+#[test]
+fn guard_policy_selection_uses_effective_configuration_and_retains_both_identities() {
+    for version in [0, 1, 2] {
+        let mut f = Fixture::new();
+        if version != 0 {
+            select_configuration(&mut f, version);
+        }
+        let config = if version == 0 {
+            CONFIG
+        } else {
+            SELECTED_CONFIG
+        };
+        select_policy(&mut f, config);
+        let (code, report, stderr) = f.call();
+        assert_eq!(code, 0, "v{version}: {report} {stderr}");
+        let binding = &report["policy_binding"];
+        assert_eq!(binding["entry_path"], POLICY);
+        assert_eq!(binding["effective_path"], SELECTED_POLICY);
+        assert_eq!(binding["config_path"], config);
+        for (field, path) in [
+            ("entry_sha256", POLICY),
+            ("effective_sha256", SELECTED_POLICY),
+        ] {
+            assert_eq!(
+                binding[field],
+                sha256(&fs::read(f.root().join(path)).unwrap())
+            );
+        }
+        assert_eq!(report["metadata"]["exit_code"], 0);
+        assert_eq!(report["operation"]["exit_code"], 0);
+        assert_eq!(
+            fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+            b"ran"
+        );
+    }
+}
+
+#[test]
+fn guard_policy_selection_rejects_missing_ambiguous_or_unregistered_inputs_before_cargo() {
+    for (case, expected) in [
+        ("unmapped", "no Cargo policy for effective configuration"),
+        ("nested", "must select a direct Cargo input policy"),
+        ("missing", "No such file"),
+        ("outside", "policy must be under .chrono-harness/"),
+        ("self", "must select a direct Cargo input policy"),
+        ("unregistered", "not registered/connected"),
+        ("disconnected", "not registered/connected"),
+        ("entry-disconnected", "not registered/connected"),
+        ("extra", "unknown field"),
+        ("entry-bypass", "registered Cargo guard entry"),
+        ("traversal", "invalid relative path"),
+        ("symlink", "symlink path is not allowed"),
+    ] {
+        let mut f = Fixture::new();
+        select_policy(&mut f, CONFIG);
+        match case {
+            "unmapped" => f.contract["configurations"] = json!({SELECTED_CONFIG:SELECTED_POLICY}),
+            "nested" => {
+                f.values.insert(SELECTED_POLICY.into(), f.contract.clone());
+            }
+            "missing" => {
+                f.contract["configurations"][CONFIG] = json!(".chrono-harness/missing.json")
+            }
+            "outside" => f.contract["configurations"][CONFIG] = json!("outside.json"),
+            "self" => f.contract["configurations"][CONFIG] = json!(POLICY),
+            "unregistered" => f.values.get_mut(FM).unwrap()["files"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|row| row["path"] != SELECTED_POLICY),
+            "disconnected" | "entry-disconnected" => {
+                let path = if case == "disconnected" {
+                    SELECTED_POLICY
+                } else {
+                    POLICY
+                };
+                let rows = f.values.get_mut(FM).unwrap()["files"]
+                    .as_array_mut()
+                    .unwrap();
+                rows.iter_mut().find(|row| row["path"] == path).unwrap()["edges"] = json!([]);
+            }
+            "extra" => f.contract["fallback"] = json!(SELECTED_POLICY),
+            "entry-bypass" => {
+                f.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"]
+                    [6] = json!(SELECTED_POLICY)
+            }
+            "traversal" => {
+                f.contract["configurations"][CONFIG] = json!(".chrono-harness/../outside.json")
+            }
+            "symlink" => {}
+            _ => unreachable!(),
+        }
+        f.save();
+        if case == "symlink" {
+            let path = f.root().join(SELECTED_POLICY);
+            let original = f.root().join(".chrono-harness/cargo/original.json");
+            fs::rename(&path, &original).unwrap();
+            std::os::unix::fs::symlink(original, path).unwrap();
+        }
+        let (code, report, stderr) = f.call();
+        assert_ne!(code, 0, "{case}: {report} {stderr}");
+        assert!(
+            report["error"].as_str().unwrap().contains(expected),
+            "{case}: {report}"
+        );
+        assert!(report["metadata"].is_null() && report["operation"].is_null());
+        assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+    }
+}
+
+#[test]
+fn guard_policy_selection_detects_entry_and_selected_drift_after_every_child() {
+    for path in [POLICY, SELECTED_POLICY] {
+        for phase in ["--version", "metadata", "test"] {
+            let mut f = Fixture::new();
+            install_drift_proxy(&mut f, path, phase);
+            select_policy(&mut f, CONFIG);
+            let (code, report, stderr) = f.call();
+            assert_ne!(code, 0, "{path} {phase}: {report} {stderr}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("input changed during guarded operation"),
+                "{path} {phase}: {report}"
+            );
+            assert_eq!(report["metadata"].is_null(), phase == "--version");
+            assert_eq!(report["operation"].is_null(), phase != "test");
+            if phase == "test" {
+                assert_eq!(report["operation"]["exit_code"], 0);
+                assert_eq!(
+                    fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+                    b"ran"
+                );
+            }
+        }
+    }
+}
+
+fn install_drift_proxy(f: &mut Fixture, path: &str, phase: &str) {
+    let proxy = f.root().join(".chrono-harness/state/cargo-proxy");
+    let output = Command::new(
+        f.values[CONFIG]["environment"]["values"]["RUSTC"]
+            .as_str()
+            .unwrap(),
+    )
+    .args(["--edition=2024", "--crate-name", "configuration_drift"])
+    .arg(source().join("crates/judge-cargo-tests/tests/fixtures/configuration-drift.rs"))
+    .arg("-o")
+    .arg(&proxy)
+    .output()
+    .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let cargo = f.values[CONFIG]["tools"][0]["program"].clone();
+    f.values.get_mut(CONFIG).unwrap()["tools"][0]["program"] = json!(proxy);
+    let mutation_target = f.root().join(path);
+    let env = &mut f.values.get_mut(CONFIG).unwrap()["environment"]["values"];
+    env["CHRONO_REAL_CARGO"] = cargo;
+    env["CHRONO_MUTATION_PHASE"] = json!(phase);
+    env["CHRONO_MUTATION_TARGET"] = json!(mutation_target);
+}
 
 fn select_configuration(f: &mut Fixture, version: u8) {
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
@@ -131,30 +316,7 @@ fn guard_configuration_selection_retains_entry_and_target_across_every_child_bou
     for path in [CONFIG, SELECTED_CONFIG] {
         for phase in ["--version", "metadata", "test"] {
             let mut f = Fixture::new();
-            let proxy = f.root().join(".chrono-harness/state/cargo-proxy");
-            let output = Command::new(
-                f.values[CONFIG]["environment"]["values"]["RUSTC"]
-                    .as_str()
-                    .unwrap(),
-            )
-            .args(["--edition=2024", "--crate-name", "configuration_drift"])
-            .arg(source().join("crates/judge-cargo-tests/tests/fixtures/configuration-drift.rs"))
-            .arg("-o")
-            .arg(&proxy)
-            .output()
-            .unwrap();
-            assert!(
-                output.status.success(),
-                "{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            let cargo = f.values[CONFIG]["tools"][0]["program"].clone();
-            f.values.get_mut(CONFIG).unwrap()["tools"][0]["program"] = json!(proxy);
-            let mutation_target = f.root().join(path);
-            let env = &mut f.values.get_mut(CONFIG).unwrap()["environment"]["values"];
-            env["CHRONO_REAL_CARGO"] = cargo;
-            env["CHRONO_MUTATION_PHASE"] = json!(phase);
-            env["CHRONO_MUTATION_TARGET"] = json!(mutation_target);
+            install_drift_proxy(&mut f, path, phase);
             select_configuration(&mut f, 2);
             let (code, report, stderr) = f.call();
             assert_ne!(code, 0, "{path} {phase}: {report} {stderr}");

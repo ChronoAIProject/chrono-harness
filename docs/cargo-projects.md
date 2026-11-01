@@ -98,6 +98,29 @@ are checked before child execution and after metadata and the consumer. A
 selector does not qualify another host's toolchain or inputs; unknown identities
 and selection/binding mismatches fail before Cargo runs.
 
+The guarded policy entry can also be `chrono-cargo-input-policies/v1`, with only
+`schema` and `configurations`. The latter maps explicit effective configuration
+paths to direct `chrono-cargo-inputs/v2`–`v6` policy paths. Selection uses the
+already acquired registry identity; it does not probe the platform or choose an
+available toolchain. Both paths must be literal host `.chrono-harness/` paths,
+and both policy files must be registered and connected to the actual consumer.
+Missing mappings/files, nested selectors, aliases, traversal and a direct-target
+argument bypass fail. The registered operation continues to name one entry.
+Additive `policy_binding` reports both original hashes and the effective config;
+both originals are retained and checked after every child boundary.
+
+Policy and product change together in this host's diagnostics adoption: the
+old native policy bytes move to `cargo/diagnostics-native.json`; the stable
+`cargo/diagnostics.json` entry selects that file for pinned native configuration
+or `cargo/diagnostics-local.json` for macOS 27. The local policy binds the actual
+selected Rust/SDK roots and the original inventory root through `manifest_root`.
+Local declared input paths were relocated only after checking their existing
+digests or absences. The differently valued rustix index retains its original
+owner's exact bytes, and is not represented as the selected Cargo home's index.
+These proposed declarations do not establish full input closure or parity.
+This adds one bounded policy read and identity rechecks; total validation cost
+remains unmeasured. The existing deadlines and guarded operations still apply.
+
 The registered development build of the guard uses optimization level 1, as do
 the other inventory judges. Large selected sysroot/SDK inventories still receive
 every original file, directory, alias and boundary check; this changes compiled
