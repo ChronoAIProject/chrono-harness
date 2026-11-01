@@ -464,12 +464,26 @@ pub(super) fn collect(
         if e["operations"] != object!(expected_ops) || executed.len() != operations.len() {
             return Err("unit execution coverage missing or extra".into());
         }
+        let receipt_only = match e.get("execution_evidence_schema") {
+            None => false,
+            Some(Value::String(schema)) if schema == "chrono-ci-executions/v2" => true,
+            Some(_) => return Err("unsupported unit execution evidence schema".into()),
+        };
         for (operation, row) in operations.iter().zip(executed) {
-            let receipt: Receipt =
-                serde_json::from_value(row["receipt"].clone()).map_err(|e| e.to_string())?;
+            let mut original = row["receipt"].clone();
+            if receipt_only {
+                if row.get("process").is_some() {
+                    return Err("unit execution has duplicate process evidence".into());
+                }
+                if original["process"].get("encoding").is_none() {
+                    return Err("unit execution process encoding required".into());
+                }
+                original["process"] = chrono_harness::full::expand_process(&original["process"])?;
+            }
+            let receipt: Receipt = serde_json::from_value(original).map_err(|e| e.to_string())?;
             chrono_judge_routes::compare(&plan, operation, Some(&receipt))?;
             if row["operation"] != operation.method.operation
-                || row["process"] != object!(receipt.process)
+                || (!receipt_only && row["process"] != object!(receipt.process))
                 || receipt.process.exit_code != 0
                 || receipt.process.failure.is_some()
                 || !response.results.iter().any(|r| {

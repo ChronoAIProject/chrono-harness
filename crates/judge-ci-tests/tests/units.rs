@@ -100,7 +100,7 @@ fn filemap_v2_bound_delta(key: &str, old: u64, candidate: u64, body: &str, reaso
     assert_eq!(e["not_required"], json!(["test:other"]));
     assert_eq!(e["executed"].as_array().unwrap().len(), 1);
     assert_eq!(e["executed"][0]["operation"], "test.suite");
-    assert_eq!(e["executed"][0]["process"]["exit_code"], 0);
+    assert_eq!(e["executed"][0]["receipt"]["process"]["exit_code"], 0);
     assert_eq!(e["plan"]["operations"][0][key], json!(candidate));
     assert_eq!(
         e["selection_explanation"]["extra_selections"]["test:suite"],
@@ -354,6 +354,119 @@ fn collect(h: &Host, b: &str, c: &str, reports: Value) -> Response {
     req["protocol"] = json!("chrono-ci-judge/v2");
     req["scope"] = json!({"kind":"collect","manifest":manifest});
     judge(&chrono_harness::decode(&serde_json::to_vec(&req).unwrap()).unwrap())
+}
+
+#[test]
+fn execution_originals_use_one_lossless_receipt_and_collect_without_reexecution() {
+    let h = report_host();
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["operation_output_limit_bytes"] = json!(100_000)
+    });
+    let b = h.commit();
+    h.write("check.sh", "mkdir -p .chrono-harness/state\nprintf 'called\\n' >> .chrono-harness/state/calls\nprintf '%080000d' 0\nprintf '\\377\\000λ\\n'\nprintf 'original diagnostic\\n' >&2\n");
+    let c = h.commit();
+    let started = std::time::Instant::now();
+    let input = write_report(&h, &b, &c, "alpha");
+    let report = h.read(input["path"].as_str().unwrap());
+    let evidence = &report["response"]["evidence"];
+    assert_eq!(
+        evidence["execution_evidence_schema"],
+        "chrono-ci-executions/v2"
+    );
+    let row = &evidence["executed"][0];
+    assert!(
+        row.get("process").is_none(),
+        "the receipt is the single process owner"
+    );
+    let original = chrono_harness::full::expand_process(&row["receipt"]["process"]).unwrap();
+    let process: chrono_harness::ProcessResult = serde_json::from_value(original).unwrap();
+    let mut expected = vec![b'0'; 80_000];
+    expected.extend_from_slice(b"\xff\x00\xce\xbb\n");
+    assert_eq!(process.stdout_bytes, expected);
+    assert_eq!(process.stderr_bytes, b"original diagnostic\n");
+    assert_eq!(process.stdout_sha256, sha256(&expected));
+    let bytes = serde_json::to_vec(&report["response"]).unwrap().len();
+    assert!(
+        bytes < 80_000,
+        "bounded original must fit without expanding byte aliases: {bytes}"
+    );
+    pass(&collect(&h, &b, &c, json!([input])));
+    assert_eq!(h.calls(), 1);
+    eprintln!(
+        "80,005 stdout bytes plus 20 stderr bytes: {bytes} response bytes; producer and collection {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn collection_preserves_legacy_receipts_and_rejects_conflicting_or_corrupt_current_evidence() {
+    let h = report_host();
+    let b = h.head();
+    h.write("src.txt", "two");
+    let c = h.commit();
+    let input = write_report(&h, &b, &c, "alpha");
+    let path = input["path"].as_str().unwrap();
+    let original = h.read(path);
+    let publish = |report: &mut Value| {
+        let stdout = serde_json::to_vec(&report["response"]).unwrap();
+        report["judge"]["stdout_bytes"] = json!(stdout);
+        report["judge"]["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+        report["judge"]["stdout_sha256"] = json!(sha256(&stdout));
+        h.json(path, report);
+        let mut reference = input.clone();
+        reference["sha256"] = json!(sha256(&fs::read(h.root().join(path)).unwrap()));
+        reference
+    };
+    let mut legacy = original.clone();
+    let e = &mut legacy["response"]["evidence"];
+    e.as_object_mut()
+        .unwrap()
+        .remove("execution_evidence_schema");
+    for row in e["executed"].as_array_mut().unwrap() {
+        let process = chrono_harness::full::expand_process(&row["receipt"]["process"]).unwrap();
+        row["receipt"]["process"] = process.clone();
+        row["process"] = process;
+    }
+    let reference = publish(&mut legacy);
+    pass(&collect(&h, &b, &c, json!([reference])));
+    legacy["response"]["evidence"]["executed"][0]["process"]["exit_code"] = json!(19);
+    let reference = publish(&mut legacy);
+    fail(&collect(&h, &b, &c, json!([reference])), "disagrees");
+
+    for mode in [
+        "schema",
+        "duplicate",
+        "missing-encoding",
+        "encoding",
+        "digest",
+        "receipt",
+    ] {
+        let mut report = original.clone();
+        let e = &mut report["response"]["evidence"];
+        match mode {
+            "schema" => e["execution_evidence_schema"] = json!("chrono-ci-executions/v999"),
+            "duplicate" => {
+                e["executed"][0]["process"] = e["executed"][0]["receipt"]["process"].clone()
+            }
+            "missing-encoding" => {
+                e["executed"][0]["receipt"]["process"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("encoding");
+            }
+            "encoding" => e["executed"][0]["receipt"]["process"]["encoding"] = json!("unknown"),
+            "digest" => {
+                e["executed"][0]["receipt"]["process"]["stdout_sha256"] = json!("0".repeat(64))
+            }
+            _ => e["executed"][0]["receipt"]["digest"] = json!("0".repeat(64)),
+        }
+        let reference = publish(&mut report);
+        let response = collect(&h, &b, &c, json!([reference]));
+        assert_eq!(response.status, Status::Failed, "{mode}: {response:?}");
+    }
+    h.json(path, &original);
+    pass(&collect(&h, &b, &c, json!([input])));
+    assert_eq!(h.calls(), 1);
 }
 
 #[test]

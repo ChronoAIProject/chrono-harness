@@ -1510,7 +1510,9 @@ fn evaluate(
                 }),
             });
             if let Some(receipt) = &result.receipt {
-                executed.push(object!({"operation":result.operation,"process":receipt.process,"receipt":receipt}));
+                let mut original = serde_json::to_value(receipt).map_err(|e| e.to_string())?;
+                original["process"] = chrono_harness::full::compact_process(&original["process"])?;
+                executed.push(object!({"operation":result.operation,"receipt":original}));
             }
         }
         for (old, replacement) in &removed {
@@ -1561,7 +1563,7 @@ fn evaluate(
             Status::Passed
         },
         results,
-        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
+        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
     Ok(response)

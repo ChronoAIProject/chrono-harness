@@ -1,5 +1,14 @@
 # Optional Cargo project judge
 
+The local diagnostics adoption also binds package source locations to its
+selected private Cargo home. The actual metadata refusal identified the previous
+home's `cfg-if` manifest. All 1,127 remaining package paths were relocated only
+after checking their original expected digests against the selected bytes; no
+expected package digest changed. The Rustup settings input likewise uses the
+selected home with its original digest. These changes repair declared input
+locations; successful guarded build, canonical and native adoption still require
+their own actual results.
+
 `judge-cargo` / `judge-cargo-tests` is an independent production/test pair. Generic
 registration and projects have no dependency on it or on TOML. A host adopts the
 adapter by registering its binary, arguments, policy input and FILEMAP edges. A

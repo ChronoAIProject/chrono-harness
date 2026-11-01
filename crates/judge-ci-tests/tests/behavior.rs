@@ -217,7 +217,7 @@ fn source_closure_executes_real_command() {
     assert_eq!(h.calls(), 1);
     assert_eq!(r.evidence["selected"], json!(["test:suite"]));
     assert!(
-        r.evidence["executed"][0]["process"]["sha256"]
+        r.evidence["executed"][0]["receipt"]["process"]["sha256"]
             .as_str()
             .unwrap()
             .len()
@@ -335,7 +335,10 @@ fn operation_only_change_is_selected_and_failure_is_real() {
     let c = h.commit();
     let r = h.check(&b, &c);
     fail(&r, "exit 7");
-    assert_eq!(r.evidence["executed"][0]["process"]["exit_code"], 7);
+    assert_eq!(
+        r.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+        7
+    );
 }
 #[test]
 fn removed_affected_binding_fails_closed() {
@@ -676,7 +679,10 @@ fn index_flags_created_by_operations_fail_the_post_snapshot_guard() {
         let candidate = h.commit();
         let result = h.check(&base, &candidate);
         fail(&result, reason);
-        assert_eq!(result.evidence["executed"][0]["process"]["exit_code"], 0);
+        assert_eq!(
+            result.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+            0
+        );
         let guard = result
             .results
             .iter()

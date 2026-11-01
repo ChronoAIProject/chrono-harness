@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import unittest
+import zlib
 
 sys.dont_write_bytecode = True
 SOURCE = Path(__file__).resolve().parent
@@ -1492,6 +1493,36 @@ class RealSharedStartup(unittest.TestCase):
                     attempt.publish()
 
 
+def runner_execution_process(evidence, row):
+    """Read the versioned Rust report interface, preserving original byte checks."""
+    schema = evidence.get("execution_evidence_schema")
+    if schema is None:
+        return row["process"]
+    if schema != "chrono-ci-executions/v2" or "process" in row:
+        raise AssertionError("unsupported or duplicate runner execution evidence")
+    process = dict(row["receipt"]["process"])
+    encoding = process.get("encoding")
+    if encoding not in ("chrono-retained-process/v1", "chrono-retained-process/v2"):
+        raise AssertionError("unsupported runner process encoding")
+    for stream in ("stdout", "stderr"):
+        if stream in process or stream + "_bytes" in process:
+            raise AssertionError("conflicting runner stream aliases")
+        if encoding == "chrono-retained-process/v1":
+            raw = bytes.fromhex(process[stream + "_hex"])
+        else:
+            size = process[stream + "_length"]
+            if type(size) is not int or not 0 <= size <= 64 * 1024 * 1024:
+                raise AssertionError("runner original stream bound")
+            decoder = zlib.decompressobj()
+            raw = decoder.decompress(bytes.fromhex(process[stream + "_zlib_hex"]), size + 1)
+            if len(raw) != size or not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+                raise AssertionError("runner original stream length or encoding differs")
+        if len(raw) > 64 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != process[stream + "_sha256"]:
+            raise AssertionError("runner original stream identity differs")
+        process[stream] = raw.decode("utf-8", errors="replace")
+    return process
+
+
 def consume_runner_operation(response, candidate, registered):
     """Consume selected execution or explicitly exercise the registered action.
 
@@ -1519,7 +1550,7 @@ def consume_runner_operation(response, candidate, registered):
     runner = [row for row in evidence["executed"] if row["operation"] == "test.runner-tests"]
     if len(runner) != 1:
         raise AssertionError("startup alone cannot satisfy the later independent Cargo action")
-    process = runner[0]["process"]
+    process = runner_execution_process(evidence, runner[0])
     if process["exit_code"] != 0 or process["failure"] is not None or "test result: ok" not in process["stdout"]:
         raise AssertionError("independent runner tests did not pass")
     return {"operation": "test.runner-tests", "evidence": "runner-check"}
@@ -1575,6 +1606,27 @@ class RunnerConsumption(unittest.TestCase):
         self.assertEqual(self.consume(), {"operation": "test.runner-tests", "evidence": "runner-check"})
         self.assertEqual(self.attempt.result["commands"], [])
         self.assertFalse((self.root / "runner-consumed").exists())
+
+    def test_current_single_receipt_preserves_originals_and_rejects_drift(self):
+        self.selected()
+        evidence = self.response["evidence"]
+        row = evidence["executed"][0]
+        process = row.pop("process")
+        for stream in ("stdout", "stderr"):
+            raw = process.pop(stream, "").encode("utf-8")
+            process[stream + "_zlib_hex"] = zlib.compress(raw).hex()
+            process[stream + "_length"] = len(raw)
+            process[stream + "_sha256"] = hashlib.sha256(raw).hexdigest()
+        process["encoding"] = "chrono-retained-process/v2"
+        row["receipt"] = {"process": process}
+        evidence["execution_evidence_schema"] = "chrono-ci-executions/v2"
+        before = json.dumps(self.response, sort_keys=True)
+        self.assertEqual(self.consume()["evidence"], "runner-check")
+        self.assertEqual(json.dumps(self.response, sort_keys=True), before)
+        self.assertEqual(self.attempt.result["commands"], [])
+        process["stdout_sha256"] = "0" * 64
+        with self.assertRaisesRegex(AssertionError, "identity differs"):
+            self.consume()
 
     def test_missing_duplicate_failed_or_unselected_execution_never_substitutes(self):
         for defect in ("missing", "duplicate", "exit", "failure", "no-tests", "unselected", "blocked",

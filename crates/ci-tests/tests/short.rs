@@ -768,7 +768,10 @@ fn scoped_stream_reports_keep_business_failure_and_transport_failure_originals()
             &out,
         );
         if unit == "alpha" {
-            let process = &report["response"]["evidence"]["executed"][0]["receipt"]["process"];
+            let process = chrono_harness::full::expand_process(
+                &report["response"]["evidence"]["executed"][0]["receipt"]["process"],
+            )
+            .unwrap();
             assert_eq!(process["exit_code"], 19);
             assert_eq!(process["stderr"], "original-business-failure");
         }
@@ -2102,7 +2105,7 @@ fn published_report(root: &Path, unit: Option<&str>, out: &std::process::Output)
 fn short_console_large_original_success_has_constant_output_and_no_extra_operations() {
     let mut h = ShortHost::new();
     // A large genuine business process receipt must stay in the original report.
-    fs::write(h.root.join("a.sh"), "mkdir -p .chrono-harness/state\nprintf alpha >> .chrono-harness/state/calls-a\n/usr/bin/python3 -c 'print(\"large-original-evidence\" * 50000)'\n").unwrap();
+    fs::write(h.root.join("a.sh"), format!("mkdir -p .chrono-harness/state\nprintf alpha >> .chrono-harness/state/calls-a\n'{}' large-original\n", env!("CARGO_BIN_EXE_chrono-ci-test-transport"))).unwrap();
     h.modify(".chrono-harness/FILEMAP.json", |f| {
         f["execution_plans"]["test:a"]["output_limit_bytes"] = json!(2_000_000)
     });
@@ -2129,8 +2132,16 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
     let retained = h.root.join(report["retained_report"].as_str().unwrap());
     let original = fs::read(&retained).unwrap();
     assert!(original.len() > 1_000_000);
-    let process = &report["response"]["evidence"]["executed"][0]["process"];
+    let process = chrono_harness::full::expand_process(
+        &report["response"]["evidence"]["executed"][0]["receipt"]["process"],
+    )
+    .unwrap();
     let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+    assert_eq!(bytes.len(), 1100024);
+    assert_eq!(
+        sha256(&bytes),
+        "ce8706fa58860f7da2c102730c879bb0a2aebb68c4b526398f0bf2c90d66e0f8"
+    );
     assert_eq!(process["stdout_sha256"], sha256(&bytes));
     assert!(String::from_utf8_lossy(&bytes).contains("large-original-evidence"));
     assert!(!String::from_utf8_lossy(&out.stdout).contains("large-original-evidence"));

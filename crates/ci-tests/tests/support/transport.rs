@@ -144,6 +144,19 @@ fn main() {
     io::copy(&mut io::stdin().lock(), &mut io::sink()).unwrap();
     let mut stdout = io::stdout().lock();
     match mode.as_str() {
+        "large-original" => {
+            stdout.write_all(b"large-original-evidence\n").unwrap();
+            let mut state = 0x12345678u32;
+            let mut bytes = vec![0; 1_100_000];
+            for byte in &mut bytes {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                *byte = (state >> 24) as u8;
+            }
+            stdout.write_all(&bytes).unwrap();
+            stdout.flush().unwrap();
+        }
         "timeout-partial" => {
             stdout.write_all(b"{\n").unwrap();
             stdout.flush().unwrap();

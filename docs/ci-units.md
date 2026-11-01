@@ -601,6 +601,31 @@ Missing or duplicate evidence, stale bindings, edited output and unsuccessful
 units cannot pass. It executes no business test operations. An empty DELTA can
 be collected with an explicitly empty report list.
 
+Current scoped execution evidence declares
+`execution_evidence_schema: "chrono-ci-executions/v2"`. Each executed row owns one
+receipt, whose process uses the existing lossless `chrono-retained-process`
+encoding; the duplicate row-level process and text/byte aliases are absent.
+Collection expands and checks the original stream digests before comparing the
+unchanged receipt digest, method, plan and outcome. Historical evidence without
+the new marker retains its original two-process-view agreement check. Unknown
+schemas, duplicate current process views, missing encodings, corrupted streams
+and changed receipt digests fail. No execution or output bound increases.
+Product and host input policy change together in this candidate: the report
+producer/collector and their Rust/Python consumers migrate, while local diagnostics
+selects verified package locations in its current private home. Existing FILEMAP
+edges carry their applicable checks; broader build, CI and storage costs remain
+unmeasured beyond the bounded observation below.
+
+The regression preserves 80,005 stdout bytes (including invalid UTF-8 and NUL)
+and 20 stderr bytes through production and offline collection. Its former inline
+response exceeded the existing 1 MiB fixture transport bound. The single encoded
+receipt produced a 17,619-byte response and completed production plus collection
+in about 1.12 seconds on this local host; that finite observation is not a native
+CI or whole-workflow cost claim. The large-original console regression retains
+its greater-than-1-MiB original-file obligation using a deterministic native
+binary stream, with exact size/digest assertions and unchanged no-extra-work
+and immutable-original checks.
+
 Scoped v3 reports use compact JSON so retained byte arrays do not acquire one
 indented line per byte. The parsed report, original process bytes and their hashes
 are unchanged. Short calls (`check`, `check --unit ID`, `check --collect`) print

@@ -100,14 +100,17 @@ The original map and producer reports retain the detailed methods and identities
 | P5 default/distribution | Bootstrap/distribution owner: default 14-tool installed consumption and any chosen portable/release replacement; artifact `12961832338` already qualifies all 18 original members and five executable payloads, including core tools 1–4, for exact native 51 core/detector supply only |
 | P6 historical custody | Original capture/archive owner: authentic e21/3083 snapshots and referenced blobs; prior allowed-source recovery did not supply them |
 
-Current protected-owner correction `d04bf3004d17f438bfcbadde3bd4d85023eb08c3`
-retains successful focused 3 Rust/68 Python cases and actual 51-protected candidate
-construction. Official bootstrap still exits 2 on the unqualified unmanaged
-consumer handoff, preserving installed owner `985e45d9…`; it is not host adoption.
-After that prerequisite is satisfied, candidate installation and actual both-end
-canonical DELTA checks, local/linked/native adoption, independent review, actual
-landing SHA/tree and installed-consumer postconditions remain required. PR163
-remains continuing; this disposition neither closes it nor completes SPEC.
+The earlier protected-owner correction
+`d04bf3004d17f438bfcbadde3bd4d85023eb08c3` retains its focused 3 Rust/68 Python
+cases, protected construction and original unmanaged-consumer refusal. Subsequent
+candidate `b09f4506cba077b9ecb8b15e4aa8823467965c76` completed protected bootstrap
+publication and actual owner adoption, with installed payload hashes and the
+original Rust adoption receipt checked. This does not establish full host scope.
+PR163 was closed for historical custody on 2026-11-01; its remaining obligations
+continue in PR214. PRs 172, 170, 205, 208, 209 and 211 were likewise dispositioned
+with their source branches retained. Closure is not feature delivery. Current
+candidate checks, local/linked/native adoption, actual landing SHA/tree and
+installed-consumer postconditions remain required for their respective changes.
 
 Native owners retain the original Developer alias escape and other failed/missing
 domains, job/process streams and run/attempt/workflow identities. Lifecycle L1/L2
