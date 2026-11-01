@@ -540,41 +540,53 @@ impl Drop for ShortHost {
 
 #[test]
 fn failed_short_fixture_retains_original_state_before_removing_host() {
-    let directory = tempfile::tempdir().unwrap();
-    let root = directory.path().join("failed fixture");
-    let original = b"{\"failure\":\"timeout\",\"raw\":[255,0,10]}\n";
-    let report = ".chrono-harness/state/preparation/acquisition.json";
-    fs::create_dir_all(root.join(".chrono-harness/state/preparation")).unwrap();
-    fs::write(root.join(report), original).unwrap();
-    let evidence = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../.chrono-harness/state/ci-test-failures")
-        })
-        .join(sha256(root.as_os_str().as_encoded_bytes()));
-    assert!(!evidence.exists());
-    let host = ShortHost {
-        _dir: crate::tools::FixtureDirectory::Ephemeral(directory),
-        root: root.clone(),
-        remote: root.join("remote"),
-        base: String::new(),
-        candidate: String::new(),
-    };
-    let failed = std::panic::catch_unwind(move || {
-        let _host = host;
-        panic!("fixture consumer failed before reading its original report");
-    });
-    assert!(failed.is_err());
-    assert!(
-        !root.exists(),
-        "fixture teardown must still remove the host"
-    );
-    assert_eq!(
-        fs::read(evidence.join("preparation/acquisition.json")).unwrap(),
-        original
-    );
-    fs::remove_dir_all(evidence).unwrap();
+    for separate_consumer in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("failed fixture");
+        let original = b"{\"failure\":\"timeout\",\"raw\":[255,0,10]}\n";
+        let report = ".chrono-harness/state/preparation/acquisition.json";
+        fs::create_dir_all(root.join(".chrono-harness/state/preparation")).unwrap();
+        fs::write(root.join(report), original).unwrap();
+        let mut host = ShortHost {
+            _dir: crate::tools::FixtureDirectory::Ephemeral(directory),
+            root: root.clone(),
+            remote: root.join("remote"),
+            base: String::new(),
+            candidate: String::new(),
+        };
+        if separate_consumer {
+            let consumer = host._dir.path().join("separate artifact consumer λ");
+            let unavailable = host._dir.path().join("unavailable original checkout");
+            fs::rename(&host.root, unavailable).unwrap();
+            fs::create_dir_all(consumer.join(".chrono-harness/state/preparation")).unwrap();
+            fs::write(consumer.join(report), original).unwrap();
+            assert!(!host.root.exists());
+            host.root = consumer;
+        }
+        let active_root = host.root.clone();
+        let evidence = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../.chrono-harness/state/ci-test-failures")
+            })
+            .join(sha256(active_root.as_os_str().as_encoded_bytes()));
+        assert!(!evidence.exists());
+        let failed = std::panic::catch_unwind(move || {
+            let _host = host;
+            panic!("fixture consumer failed before reading its original report");
+        });
+        assert!(failed.is_err());
+        assert!(
+            !active_root.exists(),
+            "fixture teardown must still remove the host"
+        );
+        assert_eq!(
+            fs::read(evidence.join("preparation/acquisition.json")).unwrap(),
+            original
+        );
+        fs::remove_dir_all(evidence).unwrap();
+    }
 }
 
 #[test]
@@ -830,6 +842,7 @@ fn scoped_stream_reports_enforce_the_combined_original_read_budget() {
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["collection_limits"] = json!({"manifest_bytes":1048576,"report_bytes":limit})
     });
+    let mut expected_cause = None;
     for unit in ["alpha", "beta"] {
         let out = h.command(&["check", "--unit", unit]).output().unwrap();
         assert!(out.status.success(), "{out:?}");
@@ -848,16 +861,32 @@ fn scoped_stream_reports_enforce_the_combined_original_read_budget() {
         .unwrap()
         .len();
         assert!(meta < limit && meta + bytes > limit);
+        if unit == "alpha" {
+            expected_cause = Some(format!(
+                "collection input exceeds report_bytes (original/stream budget): {} ({} > {} bytes)",
+                report["judge"]["stdout_original"]["path"].as_str().unwrap(),
+                bytes,
+                limit - meta
+            ));
+        }
     }
+    let calls = ["a", "b"]
+        .map(|id| fs::read(h.root.join(format!(".chrono-harness/state/calls-{id}"))).unwrap());
     let out = h.command(&["check", "--collect"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let failed = stream_report(&h.root, ".chrono-harness/state/check.json", &out);
-    assert!(
-        failed["response"]["results"][0]["cause"]
-            .as_str()
-            .unwrap()
-            .contains("remaining original/stream budget")
+    assert_eq!(
+        failed["response"]["results"][0]["cause"].as_str().unwrap(),
+        expected_cause.as_deref().unwrap(),
+        "{out:?}"
     );
+    assert_eq!(failed["response"]["evidence"]["executed"], json!([]));
+    for (id, original) in ["a", "b"].into_iter().zip(calls) {
+        assert_eq!(
+            fs::read(h.root.join(format!(".chrono-harness/state/calls-{id}"))).unwrap(),
+            original
+        );
+    }
 }
 
 #[test]
@@ -1920,6 +1949,9 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     )
     .unwrap();
     fs::rename(&h.root, h._dir.path().join("unavailable original checkout")).unwrap();
+    assert!(!h.root.exists());
+    // Failure diagnostics belong to the active consumer after producer relocation.
+    h.root = consumer.clone();
     install_mock_transport(&consumer, "success", &h.candidate);
     json_file(&consumer, ".chrono-harness/state/event.json", &payload);
     let command = || {
@@ -1996,9 +2028,8 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     let path = format!(".chrono-harness/state/mock-artifacts/alpha/check.json");
     let original: Value = serde_json::from_slice(&fs::read(consumer.join(path)).unwrap()).unwrap();
     let binding = &original["request"]["observations"]["preparation"];
-    let receipt = binding["receipts"][0]["path"]
-        .as_str()
-        .unwrap()
+    let receipt_original = binding["receipts"][0]["path"].as_str().unwrap();
+    let receipt = receipt_original
         .strip_prefix(&format!("{prefix}alpha/"))
         .unwrap();
     let receipt = consumer.join(format!(
@@ -2007,21 +2038,37 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     let bytes = fs::read(&receipt).unwrap();
     fs::write(&receipt, b"{}").unwrap();
     let bad = command().output().unwrap();
-    assert_eq!(bad.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&bad.stdout).contains("original evidence digest mismatch"));
+    assert_eq!(bad.status.code(), Some(1), "{bad:?}");
+    let failed = published_report(&consumer, None, &bad);
+    assert_eq!(failed["response"]["status"], "failed", "{bad:?}");
+    assert_eq!(
+        failed["response"]["results"][0]["cause"],
+        format!("original evidence digest/limit mismatch: {receipt_original}"),
+        "{bad:?}"
+    );
+    assert_eq!(failed["response"]["evidence"]["executed"], json!([]));
     fs::write(&receipt, bytes).unwrap();
     let payload = binding["result"]["evidence"]["payload"]["path"]
         .as_str()
         .unwrap()
         .strip_prefix(&format!("{prefix}alpha/"))
         .unwrap();
-    fs::remove_file(consumer.join(format!(
+    let payload = consumer.join(format!(
         ".chrono-harness/state/mock-artifacts/alpha/{payload}"
-    )))
-    .unwrap();
+    ));
+    fs::remove_file(&payload).unwrap();
+    let missing = fs::symlink_metadata(&payload).unwrap_err();
+    assert_eq!(missing.kind(), std::io::ErrorKind::NotFound);
     let bad = command().output().unwrap();
-    assert_eq!(bad.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&bad.stdout).contains("missing original evidence"));
+    assert_eq!(bad.status.code(), Some(1), "{bad:?}");
+    let failed = published_report(&consumer, None, &bad);
+    assert_eq!(failed["response"]["status"], "failed", "{bad:?}");
+    assert_eq!(
+        failed["response"]["results"][0]["cause"],
+        missing.to_string(),
+        "{bad:?}"
+    );
+    assert_eq!(failed["response"]["evidence"]["executed"], json!([]));
     assert!(!consumer.join(".chrono-harness/state/calls-a").exists());
     assert!(!consumer.join(".chrono-harness/state/calls-b").exists());
 }
