@@ -119,6 +119,24 @@
         "--version"
       ],
       "expected_version": "rustup 1.29.1 (d95a37b6a 2026-08-13)"
+    },
+    {
+      "id": "chrono-inputs",
+      "program": ".chrono-harness/bin/chrono-inputs",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-inputs 0.1.0"
+    },
+    {
+      "id": "cargo-guard",
+      "program": ".chrono-harness/bin/chrono-judge-cargo",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-judge-cargo 0.1.0"
     }
   ],
   "protocol": {

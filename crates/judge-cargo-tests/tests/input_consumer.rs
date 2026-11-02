@@ -17,11 +17,7 @@ fn nested(report: &Value, consumer: Consumer) -> Value {
     let rows = executions(report, consumer);
     assert_eq!(rows.len(), 1, "{report}");
     assert_eq!(rows[0]["operation"], "test.t");
-    let process = if consumer == Consumer::Full {
-        &rows[0]["receipt"]["process"]
-    } else {
-        &rows[0]["process"]
-    };
+    let process = chrono_harness::full::expand_process(&rows[0]["receipt"]["process"]).unwrap();
     serde_json::from_slice(
         &serde_json::from_value::<Vec<u8>>(process["stdout_bytes"].clone()).unwrap(),
     )
@@ -131,10 +127,13 @@ fn full_and_scoped_consumers_keep_absence_checks_and_documentation_locality() {
                 f.committed_check(if case == "docs" { "docs" } else { "source" }, consumer);
             if case == "mutation" {
                 assert_ne!(exit, 0, "{r}");
+                let actual = nested(&r, consumer);
                 assert!(
-                    r.to_string()
+                    actual["error"]
+                        .as_str()
+                        .unwrap()
                         .contains("absent input changed during guarded operation"),
-                    "{r}"
+                    "{actual}"
                 );
                 assert_eq!(fs::read(path).unwrap(), b"created");
             } else {

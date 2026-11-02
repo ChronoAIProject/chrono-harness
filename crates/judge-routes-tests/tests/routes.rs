@@ -136,7 +136,11 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     let startup = plans.get_mut("test:host-bootstrap-tests").unwrap();
     assert_eq!(
         startup.operations,
-        ["host.bootstrap-tests", "host.bootstrap-real-consumer"]
+        [
+            "host.bootstrap-provision-tests",
+            "host.bootstrap-tests",
+            "host.bootstrap-real-consumer"
+        ]
     );
     assert!(startup.operation_bounds.is_empty());
     startup.operations.insert(0, "build.distribution".into());
@@ -173,6 +177,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     );
     for (operation, timeout) in [
         ("build.distribution", 600),
+        ("host.bootstrap-provision-tests", 900),
         ("host.bootstrap-tests", 900),
         ("test.distribution-tests", 600),
         ("release.tests.integration", 600),
@@ -188,6 +193,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         plans["test:host-bootstrap-tests"].operations,
         [
             "build.distribution",
+            "host.bootstrap-provision-tests",
             "host.bootstrap-tests",
             "host.bootstrap-real-consumer"
         ]

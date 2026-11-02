@@ -1,6 +1,7 @@
 //! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
 mod cache_adoption;
 mod migration;
+mod owner_deployment;
 mod producer;
 // Explicit file custody uses these same admission/enrollment capabilities, without
 // draining unrelated entries or migrating a historical checkout's policy.
@@ -179,7 +180,7 @@ use crate::{
 };
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
 use chrono_judge_registration::Registrations;
-pub use producer::RetainedArtifact;
+pub use producer::{RetainedArtifact, TemporaryHost};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
@@ -1640,11 +1641,105 @@ impl Manager {
         report["terminal_receipt"] = value!(receipt);
         Ok(())
     }
-    fn drain(&mut self, exclude: &[PathBuf], report: &mut Value) -> Result<(), String> {
+    /// Observe Git's explicit owner inventory without enrolling or leasing rows.
+    /// This is diagnostic input, never authority for a later cleanup effect.
+    fn observe_inventory(
+        &self,
+        r: &mut Runner,
+        exclude: &[PathBuf],
+        report: &mut Value,
+    ) -> Result<(), String> {
+        report["worktree_inventory"] = value!([]);
+        for git in r.inventory(&self.policy.coordinator_root)? {
+            let path = PathBuf::from(&git["worktree"]);
+            let entry = self.current_entry(&path).map(|i| &self.ledger.entries[i]);
+            let mut row = value!({"path":path,"head":git.get("HEAD"),"branch":git.get("branch"),
+                "locked":git.contains_key("locked"),"prunable":git.contains_key("prunable"),
+                "git":git,"enrollment_match":false});
+            if let Some(e) = entry {
+                row["enrollment_status"] = value!(e.status);
+            }
+            let observed = (|| {
+                absolute(&path, false)?;
+                let checkout = r.checkout_identity(&path)?;
+                row["checkout_identity"] = value!({"top":checkout.top,"common":checkout.common,
+                    "metadata":checkout.metadata,"head":checkout.head,"branch":checkout.branch});
+                if checkout.top != path || absolute(&checkout.common, false)? != self.ledger.common
+                {
+                    return Err(
+                        "checkout attachment belongs to a different physical repository".into(),
+                    );
+                }
+                let attached = if path == self.policy.coordinator_root {
+                    main_attachment(&path, &checkout.metadata)?
+                } else {
+                    attachment_at(&path, &checkout.metadata)?
+                };
+                row["attachment"] = value!(attached);
+                if let Some(e) = entry {
+                    if attached != e.attachment {
+                        return Err("current enrollment attachment changed".into());
+                    }
+                    // HEAD and branch are mutable checkout state, not birth identity.
+                    row["enrollment_match"] = value!(true);
+                }
+                Ok::<(), String>(())
+            })();
+            if let Err(error) = &observed {
+                row["attachment_error"] = value!(error);
+            }
+            let reason = if path == self.policy.coordinator_root {
+                Some("coordinator worktree".to_owned())
+            } else if exclude.contains(&path) {
+                Some("invoking source or destination".to_owned())
+            } else if entry.is_none() {
+                Some(
+                    "Git-registered worktree has no current enrollment; explicit import required"
+                        .to_owned(),
+                )
+            } else if let Err(error) = &observed {
+                Some(format!("unverified checkout attachment: {error}"))
+            } else if git.contains_key("locked") || git.contains_key("prunable") {
+                Some("Git worktree is locked or prunable; preserve its attachment".to_owned())
+            } else {
+                None
+            };
+            row["status"] = value!(if observed.is_err()
+                && path != self.policy.coordinator_root
+                && !exclude.contains(&path)
+            {
+                "blocked"
+            } else if reason.is_some() {
+                "preserved"
+            } else {
+                "enrolled"
+            });
+            if let Some(reason) = reason {
+                row["preserved_reason"] = value!(reason);
+            }
+            report["worktree_inventory"]
+                .as_array_mut()
+                .unwrap()
+                .push(row);
+        }
+        Ok(())
+    }
+    fn drain(
+        &mut self,
+        r: &mut Runner,
+        exclude: &[PathBuf],
+        report: &mut Value,
+    ) -> Result<(), String> {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
         report["producer_objects"] = value!([]);
         report["producer_drains"] = value!([]);
+        report["output_retention"] = value!(
+            chrono_harness::retained_artifacts::retention::maintain_adopted(
+                &self.policy.coordinator_root
+            )?
+        );
+        self.observe_inventory(r, exclude, report)?;
         let mut failures = vec![];
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
@@ -1837,10 +1932,11 @@ impl Manager {
     /// Coordinator/state publication failures still prevent admission.
     fn drain_for_admission(
         &mut self,
+        r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
     ) -> Result<(), String> {
-        match self.drain(exclude, report) {
+        match self.drain(r, exclude, report) {
             Err(_)
                 if report["cleanup_failures"]
                     .as_array()
@@ -2071,7 +2167,7 @@ pub(crate) fn create(
         true,
     )?;
     manager.preflight_birth(r, &destination)?;
-    manager.drain_for_admission(&[o.root.clone(), destination.clone()], report)?;
+    manager.drain_for_admission(r, &[o.root.clone(), destination.clone()], report)?;
     manager.stable(r)?;
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
@@ -2138,6 +2234,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--unit",
             "--bootstrap-config",
             "--adopt-cache",
+            "--adopt-fixtures",
+            "--stage-result",
+            "--stage-sha256",
         ]
         .contains(&key.as_str())
             || n + 1 >= args.len()
@@ -2148,7 +2247,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         }
         n += 2;
     }
-    if (values.contains_key("--bootstrap-config") && operation != "bootstrap")
+    if (values.contains_key("--bootstrap-config")
+        && !matches!(operation.as_str(), "bootstrap" | "deploy-owner"))
         || (operation == "bootstrap" && !values.contains_key("--bootstrap-config"))
         || (values.contains_key("--path") && operation == "bootstrap")
         || (values.contains_key("--unit") && operation != "check")
@@ -2160,6 +2260,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (operation == "maintain" && values.contains_key("--path"))
         || (operation == "migrate" && !values.contains_key("--path"))
         || (values.contains_key("--adopt-cache") && operation != "migrate")
+        || (values.contains_key("--adopt-fixtures") && operation != "migrate")
+        || (values.contains_key("--stage-result") && operation != "deploy-owner")
+        || (values.contains_key("--stage-sha256") && operation != "deploy-owner")
+        || (operation == "deploy-owner"
+            && (!values.contains_key("--bootstrap-config")
+                || !values.contains_key("--stage-result")
+                || !values.contains_key("--stage-sha256")
+                || values.contains_key("--path")))
     {
         return Err("invalid lifecycle command arguments".into());
     }
@@ -2187,6 +2295,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         "maintain" => "maintained",
         "import" => "imported",
         "migrate" => "migrated",
+        "deploy-owner" => "owner-deployed",
         "use" | "check" | "bootstrap" => "used",
         _ => return Err("unknown lifecycle operation".into()),
     };
@@ -2206,7 +2315,15 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             report["lifecycle_coordinator_root"] = value!(manager.policy.coordinator_root);
             report["source_commit"] = value!(manager.anchor_head);
             match operation.as_str() {
-                "maintain" => manager.drain(&[invoking.clone()], report),
+                "deploy-owner" => manager.deploy_owner(
+                    r,
+                    &invoking,
+                    values["--bootstrap-config"],
+                    values["--stage-result"],
+                    values["--stage-sha256"],
+                    report,
+                ),
+                "maintain" => manager.drain(r, &[invoking.clone()], report),
                 "import" => manager.enroll(
                     r,
                     target.as_ref().unwrap(),
@@ -2225,6 +2342,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if let Some(plan) = values.get("--adopt-cache") {
                         manager.adopt_main_cache(r, target, plan, report)?;
                     }
+                    if let Some(plan) = values.get("--adopt-fixtures") {
+                        manager.adopt_fixture_bodies(r, target, plan, report)?;
+                    }
                     Ok(())
                 }
                 "finish" => {
@@ -2237,11 +2357,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         token,
                         report,
                     )?;
-                    manager.drain(&[invoking.clone()], report)
+                    manager.drain(r, &[invoking.clone()], report)
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
-                    manager.drain_for_admission(&[invoking.clone(), target.clone()], report)?;
+                    manager.drain_for_admission(r, &[invoking.clone(), target.clone()], report)?;
                     if manager.current_entry(target).is_none()
                         && target == &manager.policy.coordinator_root
                         && manager.policy.main_cache_only
@@ -2396,6 +2516,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             process.exit_code, process.failure
                         ));
                     }
+                    let mut post_use_cleanup = value!({});
+                    let cleanup = manager.drain_for_admission(
+                        r,
+                        &[invoking.clone(), target.clone()],
+                        &mut post_use_cleanup,
+                    );
+                    report["post_use_cleanup"] = post_use_cleanup;
+                    cleanup?;
                     Ok(())
                 }
                 _ => unreachable!(),
@@ -2572,6 +2700,17 @@ pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> 
     let target = no_symlink_parents(&root, path)?;
     fs::create_dir_all(target.parent().ok_or("lifecycle report parent")?)
         .map_err(|e| e.to_string())?;
-    write_json(&target, report, true)?;
+    let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
+    raw.push(b'\n');
+    if !chrono_harness::retained_artifacts::retention::publish_owned_original(
+        &root,
+        "lifecycle-original",
+        path,
+        &raw,
+        crate::recovery::publication_outcome(report, &raw),
+    )? {
+        write_bytes(&target, &raw, true)?;
+    }
+    crate::recovery::settle_report(&root, report)?;
     Ok(())
 }

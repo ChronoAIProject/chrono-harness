@@ -16,6 +16,9 @@ test = false
 bench = false
 
 [dev-dependencies]
+chrono-diagnostics = { path = "../diagnostics" }
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+chrono-worktree = { path = "../worktree" }
 chrono-judge-projects = { path = "../judge-projects" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-judge-filemap = { path = "../judge-filemap" }

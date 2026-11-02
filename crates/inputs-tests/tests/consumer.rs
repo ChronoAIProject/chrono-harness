@@ -25,10 +25,10 @@ fn fixture() -> Host {
             ],
         ),
     ] {
-        let bytes =
-            fs::read(source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}")))
-                .unwrap();
+        let original = source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}"));
+        let bytes = fs::read(&original).unwrap();
         let path = format!(".chrono-harness/bin/chrono-judge-{id}");
+        host::copied_fixture_input(&h.root(), &original, &h.root().join(&path));
         fs::write(h.root().join(&path), &bytes).unwrap();
         #[cfg(unix)]
         {
@@ -64,7 +64,7 @@ fn native_v3(h: &mut Host) {
     v2(h);
     let git =
         fs::canonicalize(chrono_harness::resolve_program(&h.root(), "git", None).unwrap()).unwrap();
-    let version = Command::new(&git).arg("--version").output().unwrap();
+    let version = h.capture_native(Command::new(&git).arg("--version"));
     assert!(version.status.success());
     let cfg = h.values.get_mut(CONFIG).unwrap();
     cfg["schema_version"] = json!(3);
@@ -129,21 +129,21 @@ fn select_config(h: &mut Host, target: &str) {
 }
 
 fn pair_captures(h: &Host, base: &str, candidate: &str) -> Value {
-    let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir("/")
-        .args([
-            "pair",
-            "--host-root",
-            h.root().to_str().unwrap(),
-            "--base-snapshot",
-            &format!(".chrono-harness/state/{base}.json"),
-            "--candidate-snapshot",
-            &format!(".chrono-harness/state/{candidate}.json"),
-            "--output",
-            &format!(".chrono-harness/state/paired-{base}-{candidate}.json"),
-        ])
-        .output()
-        .unwrap();
+    let out = h.capture_native(
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir("/")
+            .args([
+                "pair",
+                "--host-root",
+                h.root().to_str().unwrap(),
+                "--base-snapshot",
+                &format!(".chrono-harness/state/{base}.json"),
+                "--candidate-snapshot",
+                &format!(".chrono-harness/state/{candidate}.json"),
+                "--output",
+                &format!(".chrono-harness/state/paired-{base}-{candidate}.json"),
+            ]),
+    );
     assert!(
         out.status.success(),
         "{}",
@@ -154,14 +154,14 @@ fn pair_captures(h: &Host, base: &str, candidate: &str) -> Value {
 
 fn snapshots(h: &Host) -> Value {
     let invoke = |args: &[&str]| {
-        let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-            .current_dir("/")
-            .env("DECLARED_EMPTY", "")
-            .env_remove("DECLARED_ABSENT")
-            .args(args)
-            .args(["--host-root", h.root().to_str().unwrap()])
-            .output()
-            .unwrap();
+        let out = h.capture_native(
+            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                .current_dir("/")
+                .env("DECLARED_EMPTY", "")
+                .env_remove("DECLARED_ABSENT")
+                .args(args)
+                .args(["--host-root", h.root().to_str().unwrap()]),
+        );
         assert!(
             out.status.success(),
             "{}",
@@ -360,22 +360,22 @@ fn data_state(h: &mut Host, absent: bool) {
     }
 }
 fn capture(h: &Host, name: &str) -> Value {
-    let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args([
-            "capture",
-            "--host-root",
-            h.root().to_str().unwrap(),
-            "--config",
-            CONFIG,
-            "--commit",
-            &h.candidate,
-            "--output",
-            &format!(".chrono-harness/state/{name}.json"),
-        ])
-        .output()
-        .unwrap();
+    let out = h.capture_native(
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "capture",
+                "--host-root",
+                h.root().to_str().unwrap(),
+                "--config",
+                CONFIG,
+                "--commit",
+                &h.candidate,
+                "--output",
+                &format!(".chrono-harness/state/{name}.json"),
+            ]),
+    );
     assert!(
         out.status.success(),
         "{}",
@@ -1038,21 +1038,21 @@ fn selected_produced_pairs_preserve_endpoint_targets_old_edges_and_docs_locality
         capture(&h, "transition-after");
         if candidate_target != CONFIG {
             let output = ".chrono-harness/state/linked-capture.json";
-            let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-                .current_dir("/")
-                .args([
-                    "capture",
-                    "--host-root",
-                    h.root().to_str().unwrap(),
-                    "--config",
-                    linked_entry,
-                    "--commit",
-                    &h.candidate,
-                    "--output",
-                    output,
-                ])
-                .output()
-                .unwrap();
+            let out = h.capture_native(
+                Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                    .current_dir("/")
+                    .args([
+                        "capture",
+                        "--host-root",
+                        h.root().to_str().unwrap(),
+                        "--config",
+                        linked_entry,
+                        "--commit",
+                        &h.candidate,
+                        "--output",
+                        output,
+                    ]),
+            );
             assert_eq!(out.status.code(), Some(2));
             assert!(String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"));
             assert!(out.stdout.is_empty());

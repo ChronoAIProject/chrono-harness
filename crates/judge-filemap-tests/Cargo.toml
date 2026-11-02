@@ -6,6 +6,7 @@ publish = false
 autotests = false
 
 [dev-dependencies]
+chrono-worktree = { path = "../worktree" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-harness = { path = "../runner" }

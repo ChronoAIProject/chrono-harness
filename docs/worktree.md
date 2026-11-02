@@ -192,6 +192,12 @@ CLI exits 0 or 2 respectively. `governance` remains `not-evaluated` and `parity`
 remains `unestablished`. The partial `context` is an input for later work, not a
 complete check context or integration certificate.
 
+New reports and their matching CLI stdout use compact JSON with one trailing
+newline. Historical originals retain their representation and byte identity.
+Complete process captures, their byte arrays, hashes, exit codes and bounds
+remain present. This avoids indentation expansion of captured Git bytes in
+bounded lifecycle consumers while preserving exact stored/stdout equality.
+
 The dedicated tests use real bare remotes, advanced remote commits, arbitrary
 host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and
 remote policy drift, missing remotes, tool mismatch and real checkout hooks. The
@@ -1274,4 +1280,246 @@ initial judge runs; the producer itself never publishes inventory success.
 
 CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式平台 Git 输入；不把源宿主已部署的 Git 摘要／版本当作原生 fixture 的政策，也不改源宿主绑定。原错误与 passing control 均由实际命令产生。worktree 的未保留 commit-tree fixture 显式提供作者姓名／邮箱。
 
-真实 Cargo retained-rebuild handshake 位于冷构建之后；该 fixture 等待现役 managed process 的实际结果，沿用其原登记的 30 秒进程上限，不用另一个 10 秒 readiness 时钟杀死编译过程。其它 readiness 等待仍为 10 秒。缺 marker 时消费并保留真实退出与过程原件，退出前未完成则仍不产生成功；专属负例用缺失 manifest 检查失败和加入子进程。原生旧失败只留下空 outer 流与 use intent，不能据此断定具体编译阶段或停滞原因；支持平台的修复后原生验证仍待调用方执行。
+真实 Cargo retained-rebuild handshake 位于冷构建之后；该 fixture 等待现役 managed process 的实际结果，沿用其原登记的 30 秒进程上限，不用另一个 10 秒 readiness 时钟杀死编译过程。普通 participating check 的本地输入准备也等待现役有界生产者的实际结果，不以另一个 readiness 时钟提前杀死它；其它 readiness 等待仍为 10 秒。缺 marker 时消费并保留真实退出与过程原件，退出前未完成则仍不产生成功；专属负例用缺失 manifest 检查失败和加入子进程。原生旧失败只留下空 outer 流与 use intent，不能据此断定具体编译阶段或停滞原因；支持平台的修复后原生验证仍待调用方执行。
+
+
+### Prospective fixture custody and inventory observations
+
+**Product and host policy change:** the candidate adds `TemporaryHost` to the
+existing retained producer owner and five finite fixture producers in
+cleanup.json. Binary and committed coordinator/producer policy must be deployed
+together. The current Git configuration v2 identity selection and worktree v3
+identity declarations keep their meanings; unknown identities still fail before
+execution. Historical stores and unestablished release migrations stay protected.
+Implementation, verification, storage and migration costs remain unknown.
+
+`TemporaryHost::registered_store` uses the same committed policy, Git main owner
+and admission as `RetainedArtifact`. Allocation publishes an intent before
+fixture output production, listing exact generated directories and their declared
+Git source roots. Dropping the handle makes no task-completion or producer-success
+claim. Ordinary reentry can recover eligible outputs after the final supported
+holder and explicit diagnostic consumer release, without a remembered finish.
+Missing allocations/leases, unknown objects, partial copies and changed identities
+preserve their original outcomes; independently eligible siblings can progress.
+Inventory itself never enrolls or removes a Git attachment.
+
+Selected native adapters configure argv/environment before a single
+`bind_command`, forwarding existing kernel capabilities to actual native/Cargo
+children. Commands retain their owned descriptor copies across scope release and
+thread handoff; rebinding fails. `capture_output` binds an unbound command;
+`capture_bound_output` captures an already bound route. Both retain intent and raw
+stdout/stderr files before spawn. `capture_bound_input` also retains the original
+stdin bytes and supplies those exact bytes and EOF. Only a real wait publishes a
+joined exit. Spawn failure and interruption preserve empty/partial originals
+without a fabricated result. These captures never enter generated membership.
+
+`register_copy` retains a verified source original and records the exact future
+destination before the real copy. `relocate_copies` carries only enrolled members
+before the actual within-allocation rename. `fixture_bodies` explicitly opts into
+member recovery. Git identity/objects, committed/index source, original captures
+and unknown members remain protected; only an explicitly enrolled copied hook
+leaf may be a member inside Git metadata. Source/index and physical identities
+are rechecked before each effect. Copied members and their retained originals
+have distinct lifetimes. Final-original retention/publication and the compatible
+shared-effect composition are separate work; this API does not release originals.
+
+Copied-body admission runs once in the shared effect owner's immediate
+pre-unlink callback. It verifies current member content and identity, retained
+original identity, live Git source/index, coordinator policy/HEAD, allocation,
+consumer leases and final-original exclusion there; the effect owner rechecks
+physical identity before unlinking. Intent publication precedes that admission,
+so a refused member retains its intent and failed result. The native migration
+timeout reached this owner after its nested CI command joined and left 254
+completed body-disposal results. Removing duplicate pre-intent reads preserves
+the existing 900-second operation limit. The local source/index regression first
+observed three reads for two checked members and now observes two; seven
+body-custody tests pass, including content drift of unchanged length. This does
+not establish native end-to-end timing or complete SPEC acceptance.
+
+After a joined managed `use`, `check` or `bootstrap` command succeeds, the owner
+runs the same guarded drain before returning. This recovers eligible fixture
+bodies created during that command before a following artifact upload. The
+separate `post_use_cleanup` report retains this pass without replacing admission's
+drain or the original managed process and use receipt. The invoking source and
+target keep their existing exclusion and live leases; producer recovery still
+requires exact membership, original bytes and released holders and consumers.
+Failed commands retain their original failure and skip this post-success pass,
+preserving partial diagnostics. Cleanup does not release original evidence or
+declare lifecycle completion. Native artifact size and collection-time savings
+require observation of the resulting candidate.
+
+`migrate --path WORKTREE --adopt-fixtures STATE_PATH` consumes a finite
+`chrono-fixture-body-custody/v1` declaration through the existing migration owner.
+It binds current HEAD, allocation/intent/physical identity, exact member bytes,
+recipe and Git root, plus any nested registry/lease references and actual current
+consumer release. It preserves historical producer outcomes and does no disposal.
+Nested diagnostic references must release as well as their actual holders before
+an enclosing member may be reclaimed. No scan supplies membership or roots.
+
+The real worktree Cargo/hook/full-native fixtures, CI short/full fixtures and
+shared projects Host use this owner. The shared Host's registered FILEMAP, inputs,
+Cargo and workflow consumers each depend on the same worktree library. Workflow
+native tools and historical migration have distinct finite producer declarations;
+source, external inputs, manifests/locks and offline originals remain retained.
+Copy/hard-link/native capture adapters keep their real operations. Panics and
+requested diagnostics acquire persistent `fixture-diagnostic` references before
+allocation custody releases; their actual diagnostic custodian releases them
+through `RetainedArtifact` after consuming originals. No scope-wide TMPDIR or
+parallel registry/cleanup service is introduced.
+
+The shared drain also publishes `worktree_inventory` from Git's explicit owner
+inventory: current HEAD/branch, locked/prunable observations, physical attachment,
+current enrollment match and preservation reason. An inventory process failure
+is fatal before effects/admission; an unreadable row remains a diagnostic blocked
+observation. Ledgerless, changed and disposed-path-reuse attachments are never
+enrolled by observation. Mutable HEAD is separate from birth attachment identity.
+These rows never authorize disposal; existing effect guards acquire fresh facts.
+
+The five shared test owners register `lock.<owner>` at their own
+`update_lockfile` action. It delegates to Cargo's offline update of that exact
+local test package, preserving independent manifests/lockfiles/targets. Local
+canonical verification, compatible real coordinator deployment, exact native
+collection, independent review, historical migrations and landing are separate
+acceptance obligations; source adaptation alone establishes none of them.
+
+## Protected ordinary bootstrap owner construction
+
+The public bootstrap-core entry can select an explicitly bound produced first
+issuer for an ordinary incompatible installed owner. Its supply registration
+keeps the original producer commit/tree, platform, startup registration, reports,
+streams, all tool bytes and manifest binding. Candidate source is never substituted
+for that producer. The existing shared-startup validator accepts an explicit
+immutable producer reader for this role; this does not install a CI consumer.
+Missing Git-main tools retain the original seed behavior. Linked missing or
+incompatible coordinators retain refusal. Unknown installed bytes refuse.
+An opted-in `selected_original` additionally qualifies a subsequently installed
+owner from its actual original bootstrap report. The candidate reads that
+producer's fixed commit/tree and registrations as data, checks its complete
+execution and retained streams, and verifies every installed payload plus the
+selected owner's physical identity. The producer must belong to this physical
+host and uniquely install the selected destination. A changed live candidate
+does not replace the old producer's configuration or bytes.
+
+The supplied owner's existing `migrate` and `bootstrap` protect construction with
+the original admission/enrollment protocol. The internal stage profile builds
+`build.worktree` and retains its distinct candidate executable under
+`.chrono-harness/bin/owner-stages/`, which the unchanged cleanup policy retains.
+The construction command and children join before the staged executable requests
+EX. Ordinary shared bootstrap can reuse identical lifecycle bytes; changing them
+requires the owner deployment callback. Python owns byte validation, original-inode
+preservation, atomic replacement and interrupted-publication reentry. Rust owns
+physical attachment, committed endpoints, original admission/enrollment EX and
+publication/adoption checks. The original protection stays held throughout. An
+immutable publication result alone never establishes adoption or task completion.
+
+**Product and host policy change together:** Python/Rust behavior plus the core
+supply selection, internal stage/actions and FILEMAP input edges change. Previous
+ordinary bootstrap delegated immediately to the incompatible installed decoder;
+the new construction path can use qualified source51 bytes before building C.
+The stage no longer declares a consumer scope. The deployment owner produces its
+actual exclusion set from the original coordinator ledger and Git owner inventory.
+Admission prevents new ordinary enrollment/use; deployment acquires original EX
+for every unresolved enrollment of that physical coordinator, including linked
+attachments, before any selected-byte effect. It retains those capabilities through
+Python publication and adoption, rechecking admission, ledger bytes, inventory,
+attachment, committed endpoints and lease identities. The adoption receipt records
+the actual protected attachment and enrollment identities; it makes no universal
+unmanaged-process claim. Live descendants, unknown or unavailable affected
+attachments, missing kernel ownership and unjoined use inputs refuse specifically,
+preserving selected bytes and originals. Disposed historical generations do not
+become live consumers; another physical coordinator is outside this exclusion set.
+An actually bound out-of-protocol producer still requires its identified original
+custodian's join/exclusion. Historical unknown tasks do not establish such binding.
+
+**Additional product and host policy change:** Rust's static scope refusal and
+main-only exclusion become actual coordinator enrollment exclusion; the host stage
+removes the unsupported scope declaration. Existing FILEMAP compile edges to
+`project:worktree` / `project:worktree-tests` and stage runtime/test edges to
+`script:host-bootstrap` / `test:host-bootstrap-tests` carry the change. No Python
+byte-publisher or supply-issuer change is needed. Runtime validation scales with
+the explicitly affected enrollments; total IO/build/CI costs remain unmeasured.
+Source51 provenance and prior scoped passes stay fixed. Actual current-candidate
+construction, official bootstrap, both-end canonical DELTA, local/linked/native
+adoption, independent review and landing remain distinct acceptance obligations.
+
+Supply carriers, staged candidates, preserved previous-owner inodes and original
+reports/streams belong to caller current engineering/PR acceptance. Review their
+retention on 2026-11-05T00:00:00Z after all acceptance/debug consumers end; preserve
+unique work and original failures until then. No age-only deletion or lifecycle
+completion is authorized. Additional build, verification and storage costs remain
+unmeasured until the actual operations report them; product bounds are unchanged.
+
+The selected profiles resolve writable HOME/CARGO_HOME/TMPDIR through the existing
+bootstrap host-path owner, under this physical host's state directory. Resolution
+has no pre-grant effects; directory creation happens after ordinary participation
+or the existing missing-main seed path. The locked Cargo input-fetch operations
+populate that private Cargo home with an explicit online selection. This is a
+changed local input domain, not local/CI parity. The original received offline
+selection and missing-package failure remain evidence; product time/output bounds
+are unchanged.
+
+The current macOS host environment registration selects those same primary private
+writable homes for canonical consumers, with ordinary online Cargo acquisition.
+This replaces the historical diagnostics-root HOME/CARGO_HOME/TMPDIR and offline
+selection. The existing environment and macOS registration FILEMAP edges select
+the affected tests at both endpoints; native profiles and source51 toolchain
+roles are unchanged. This input selection does not establish local/native parity.
+
+At committed source `66fe0f999fdee8cef2f434b0ce8ed80a0b674d50`, the
+public core bootstrap completed original-protected publication/adoption and kept
+prior owner `985e45d9…` at its original inode. Candidate canonical then refused in
+`ci.inventory` because the declared Cargo guard was absent. The core registration
+now also builds/installs the declared Cargo guard and input producer; it uses the
+same public bootstrap entry and private homes. The existing exact-byte upgrade
+input list separately admits the observed adopted candidate `638c638a…`, bound by
+its source66 adoption receipt. The construction issuer remains exact source51;
+this selected-input addition does not reclassify the issuer or seed ownership.
+Current-candidate canonical/native/review/landing obligations remain distinct.
+
+Exact selected-byte admissions remain finite input qualifications. Same-source
+publication/reentry uses the original receipt path. A new source iteration can
+qualify a previously installed owner through `selected_original`; missing,
+changed or incomplete originals refuse before construction. Its validated report
+and qualification are copied into the existing retained construction attempt
+before any construction command. The source51 issuer still owns protected
+construction; a staged current owner still acquires the actual exclusive leases
+before replacement. Qualification grants neither compatibility nor completion.
+
+When exclusive owner publication succeeded but the following core installation
+failed, the selected owner's producer is its retained stage, rather than the
+older full-install report. Current Python qualifies that fixed producer as data:
+the original clean source/registrations, toolchain execution and streams, staged
+and previous inode identities, publication intent/result, and original Rust
+adoption receipt must agree with the installed owner. Missing or changed originals
+still refuse. This read does not rewrite the old full-install report or adoption
+index, execute a historical bootstrap, acquire replacement authority or claim
+that core installation completed. Subsequent construction and deployment retain
+the existing owner and kernel exclusion path.
+
+**Product and host policy change together:** the Python owner reuses shared
+producer validation with an immutable source reader, and this host selects its
+existing bootstrap report as the additional input. It replaces repeated manual
+hash-list additions for originally produced owners. Additional file hashing and
+stream validation cost is unmeasured; deadlines and lifecycle exclusion remain.
+
+The finite list also admits installed owner `2f3886db…`, qualified by the original
+clean-source core bootstrap of `c09e50bef6a41fbdb4347aca8b441a08763af7aa`.
+Its retained producer report and installed-byte digest were checked before this
+selection. This extends host input policy to that exact owner; the source51
+construction issuer and exclusive deployment method keep their existing roles.
+
+The native Cargo wrapper-survival regression joins its actual native child over
+a blocking socket after the existing wrapper interruption and maintenance checks.
+The child still publishes its original release/completion files, and the test
+checks both the socket response and completion file. A closed or timed-out native
+channel fails with its original IO error; file polling cannot stand in for that
+completion. Its existing ten-second completion bound is unchanged.
+
+Before signaling readiness, that native fixture binds its own stdout/stderr to
+retained original files. Cargo and the managed launcher can then exit without
+closing the native child's output destination. After both wrappers exit, the
+parent requests real progress and diagnostic writes and verifies their original
+bytes before maintenance and the existing release/join assertions. A write error
+retains its OS error and fails the regression. The completion message still
+reports the fixture function's completion; it does not independently establish
+the entire libtest process's terminal status or all caller task obligations.

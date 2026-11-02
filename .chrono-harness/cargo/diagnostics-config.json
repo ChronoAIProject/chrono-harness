@@ -1,0 +1,18 @@
+{
+  "schema": "chrono-git-configs/v2",
+  "platforms": {
+    "macos-aarch64": {
+      "program": "/usr/bin/git",
+      "configurations": [
+        {
+          "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
+          "path": ".chrono-harness/git/pinned-macos-diagnostics.json"
+        },
+        {
+          "sha256": "34129c71a01a74f7f3b2443521519b2e5447553fa187f5fcafaaf8c42cc192e2",
+          "path": ".chrono-harness/git/macos-27.json"
+        }
+      ]
+    }
+  }
+}

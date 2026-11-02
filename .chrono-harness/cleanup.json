@@ -169,6 +169,92 @@
         "original-state/cargo/producer/target/",
         "original-state/cargo/tests/target/"
       ]
+    },
+    {
+      "id": "worktree-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/worktree/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "source with spaces/independent/producer/target/",
+        "source with spaces/independent/tests/target/",
+        "cargo-linked/independent/producer/target/",
+        "cargo-linked/independent/tests/target/",
+        "native-cargo/.chrono-harness/state/cargo-case/target/"
+      ],
+      "source_roots": [
+        "source with spaces/",
+        "cargo-linked/",
+        "native-cargo/"
+      ]
+    },
+    {
+      "id": "ci-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/ci/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "arbitrary non Cargo layout/.chrono-harness/state/cargo/producer/target/",
+        "arbitrary non Cargo layout/.chrono-harness/state/cargo/tests/target/",
+        "unavailable original checkout/.chrono-harness/state/cargo/producer/target/",
+        "unavailable original checkout/.chrono-harness/state/cargo/tests/target/"
+      ],
+      "source_roots": [
+        "arbitrary non Cargo layout/",
+        "unavailable original checkout/"
+      ]
+    },
+    {
+      "id": "projects-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/projects/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "fixture/p/target/",
+        "fixture/t/target/",
+        "fixture/p2/target/",
+        "fixture/t2/target/",
+        "retained-offline-checkout/p/target/",
+        "retained-offline-checkout/t/target/",
+        "retained-offline-checkout/p2/target/",
+        "retained-offline-checkout/t2/target/"
+      ],
+      "source_roots": [
+        "fixture/",
+        "retained-offline-checkout/"
+      ]
+    },
+    {
+      "id": "workflow-test-tools",
+      "directory": ".chrono-harness/state/temporary-hosts/workflow-tools/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "fixture/local-lane/p/target/",
+        "fixture/local-lane/t/target/",
+        "fixture/local-lane/p2/target/",
+        "fixture/local-lane/t2/target/"
+      ],
+      "source_roots": [
+        "fixture/local-lane/"
+      ]
+    },
+    {
+      "id": "projects-migration-host",
+      "directory": ".chrono-harness/state/temporary-hosts/migration/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "fixture/crates/runner/target/",
+        "fixture/crates/judge-registration/target/",
+        "fixture/crates/judge-ci/target/",
+        "fixture/crates/ci/target/",
+        "fixture/crates/worktree/target/",
+        "fixture/crates/ci-tests/target/"
+      ],
+      "source_roots": [
+        "fixture/"
+      ]
     }
   ]
 }

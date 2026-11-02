@@ -8,6 +8,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// A compact outcome points to the already published complete diagnostic.
+/// Keeping the error body again in inventory would duplicate the original and
+/// could prevent publication of a legitimate large failure.
+pub(crate) fn publication_outcome(report: &Value, raw: &[u8]) -> Value {
+    let mut outcome = value!({"operation":report["operation"],"status":report["status"]});
+    if !report["error"].is_null() {
+        outcome["error_original"] = value!({"path":report["report_path"],
+            "sha256":sha256(raw),"pointer":"/error"});
+    }
+    outcome
+}
+
 fn state_path(root: &Path, path: &str) -> Result<PathBuf, String> {
     relative_path(path)?;
     if !path.starts_with(".chrono-harness/state/") {
@@ -87,6 +99,24 @@ pub(crate) fn publish_fields(
     let target = state_path(root, &path)?;
     let mut bytes = serde_json::to_vec_pretty(&intent).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
+    if chrono_harness::retained_artifacts::retention::publish_owned_original(
+        root,
+        "lifecycle-original",
+        &path,
+        &bytes,
+        value!({"kind":"recovery-intent","completion":"not-established"}),
+    )? {
+        if let Some(inventory) =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+        {
+            inventory.reference_paths(
+                &format!("recovery:{}", intent["report_path"].as_str().unwrap()),
+                &[path.clone(), intent["report_path"].as_str().unwrap().into()],
+            )?;
+        }
+        report[binding] = value!({"path":path,"sha256":sha256(&bytes)});
+        return Ok(());
+    }
     let mut output = tempfile::Builder::new()
         .prefix("intent-")
         .tempfile_in(target.parent().ok_or("intent directory missing")?)
@@ -118,6 +148,7 @@ pub(crate) struct Evidence {
     intent_bytes: Vec<u8>,
     result_path: String,
     result_bytes: Option<Vec<u8>>,
+    _retention: Vec<chrono_harness::ownership::Lease>,
 }
 impl Evidence {
     pub(crate) fn stable(&self) -> Result<(), String> {
@@ -300,7 +331,16 @@ fn observe_result_kind(
     if report["original_outcome"] != "failed" {
         report["original_outcome"] = value!("unknown");
     }
+    let mut retention = Vec::new();
+    for original in [path, result_path] {
+        if let Some(guard) =
+            chrono_harness::retained_artifacts::retention::read_guard(root, original)?
+        {
+            retention.push(guard);
+        }
+    }
     Ok(Evidence {
+        _retention: retention,
         descriptor,
         root: root.into(),
         intent_path: path.into(),
@@ -308,4 +348,35 @@ fn observe_result_kind(
         result_path: result_path.into(),
         result_bytes: result,
     })
+}
+
+/// A producer terminal result ends its interrupted-operation recovery need.
+/// A failed rebind has an explicit resume consumer and keeps that root.
+pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
+    let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+    else {
+        return Ok(());
+    };
+    let path = report["report_path"]
+        .as_str()
+        .ok_or("lifecycle result path")?;
+    let mut originals = Vec::new();
+    for binding in ["recovery_intent", "fetch_intent"] {
+        if let Some(path) = report[binding]["path"].as_str() {
+            originals.push(path.into());
+        }
+    }
+    inventory.dependencies_paths(path, &originals)?;
+    if report["status"] == "failed" {
+        inventory.protect_path_consumer(
+            &format!("lifecycle-recheck:{}", sha256(path.as_bytes())),
+            path,
+        )?;
+    }
+    // The joined terminal producer accounts its unfinished-operation role.
+    // Failed rebind still has a distinct actual resume consumer.
+    if report["operation"] != "rebind" || report["status"] != "failed" {
+        inventory.reference_paths(&format!("recovery:{path}"), &[])?;
+    }
+    Ok(())
 }

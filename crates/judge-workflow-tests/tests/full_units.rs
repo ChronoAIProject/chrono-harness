@@ -2,18 +2,18 @@ use super::*;
 use chrono_harness::wire::{self, Binding, Request};
 use std::{os::unix::fs::PermissionsExt, path::Path, process::Command, time::Instant};
 
-fn rust_host() -> (Host, tempfile::TempDir) {
+fn rust_host() -> (Host, host::FixtureDirectory) {
     let mut h = git_facts::bound_host();
-    let tools = tempfile::tempdir().unwrap();
+    let tools = host::tool_directory("workflow native tools λ ");
     let tool_root = fs::canonicalize(tools.path()).unwrap();
     let root = h.root();
     let wrapper = tool_root.join("cargo-fixture");
     let cargo = chrono_harness::resolve_program(&root, "cargo", None).unwrap();
-    native_tools::install(&wrapper);
+    native_tools::install(&tool_root, &wrapper);
     // The declared Git producer remains available independently of all unit roots.
     let git_tool = tool_root.join("facts-git");
     let real_git = chrono_harness::resolve_program(&root, "git", None).unwrap();
-    native_tools::install(&git_tool);
+    native_tools::install(&tool_root, &git_tool);
     h.tool = wrapper.clone();
     let cfg = h.values.get_mut(CONFIG).unwrap();
     for t in cfg["tools"].as_array_mut().unwrap() {
@@ -24,7 +24,7 @@ fn rust_host() -> (Host, tempfile::TempDir) {
             t["program"] = json!(git_tool);
         }
     }
-    let version = Command::new(&cargo).arg("--version").output().unwrap();
+    let version = host::capture_native(&root, Command::new(&cargo).arg("--version"));
     cfg["tools"][0]["expected_version"] =
         json!(String::from_utf8(version.stdout).unwrap().trim_end());
     // The fixture needs Cargo and system tools, not the caller's editor/agent
@@ -160,13 +160,14 @@ fn rust_host() -> (Host, tempfile::TempDir) {
         .unwrap();
         for id in [prod, test] {
             assert!(
-                Command::new(&cargo)
-                    .args(["generate-lockfile", "--offline", "--manifest-path"])
-                    .arg(root.join(format!("{id}/Cargo.toml")))
-                    .output()
-                    .unwrap()
-                    .status
-                    .success()
+                host::capture_native(
+                    &root,
+                    Command::new(&cargo)
+                        .args(["generate-lockfile", "--offline", "--manifest-path"])
+                        .arg(root.join(format!("{id}/Cargo.toml")))
+                )
+                .status
+                .success()
             );
         }
     }
@@ -206,21 +207,36 @@ fn copy_tree(from: &Path, to: &Path) {
         }
     }
 }
-fn clone_host(h: &Host) -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
+fn copy_program_tree(from: &Path, to: &Path, root: &Path) {
+    fs::create_dir_all(to).unwrap();
+    for entry in fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let destination = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_program_tree(&entry.path(), &destination, root);
+        } else {
+            host::copied_fixture_input(root, &entry.path(), &destination);
+            fs::copy(entry.path(), destination).unwrap();
+        }
+    }
+}
+fn clone_host(h: &Host) -> host::FixtureDirectory {
+    let dir = host::fixture_directory("workflow copied host λ ");
     assert!(
-        Command::new("git")
-            .args(["clone", "--quiet", "--no-hardlinks"])
-            .arg(h.root())
-            .arg(dir.path())
-            .output()
-            .unwrap()
-            .status
-            .success()
+        host::capture_native(
+            dir.path(),
+            Command::new("git")
+                .args(["clone", "--quiet", "--no-hardlinks"])
+                .arg(h.root())
+                .arg(dir.path())
+        )
+        .status
+        .success()
     );
-    copy_tree(
+    copy_program_tree(
         &h.root().join(".chrono-harness/bin"),
         &dir.path().join(".chrono-harness/bin"),
+        &dir.path(),
     );
     copy_tree(
         &h.root().join(".chrono-harness/state"),
@@ -247,14 +263,15 @@ fn launch_entry(root: &Path, h: &Host, cwd: &Path, config: &str, suffix: &[&str]
             .unwrap()
             .into(),
     ];
-    let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
-        .current_dir(cwd)
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args(&argv)
-        .args(suffix)
-        .output()
-        .unwrap();
+    let out = host::capture_native(
+        &root,
+        Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+            .current_dir(cwd)
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args(&argv)
+            .args(suffix),
+    );
     let report: Value = serde_json::from_slice(&out.stdout)
         .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
     (out.status.code().unwrap(), report)
@@ -277,14 +294,15 @@ fn launch_endpoints(root: &Path, base: &str, candidate: &str, suffix: &[&str]) -
             .into(),
     ];
     let started = Instant::now();
-    let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
-        .current_dir("/")
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args(&argv)
-        .args(suffix)
-        .output()
-        .unwrap();
+    let out = host::capture_native(
+        &root,
+        Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+            .current_dir("/")
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args(&argv)
+            .args(suffix),
+    );
     let report: Value = serde_json::from_slice(&out.stdout)
         .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
     println!(
@@ -474,8 +492,8 @@ fn independent_rust_pairs_retry_offline_collection_and_delivery() {
     manifest(collector.path(), &["one", "two"]);
     let old_one = h.root();
     let old_two = two.path().to_path_buf();
-    fs::remove_dir_all(&old_one).unwrap();
-    fs::remove_dir_all(&old_two).unwrap();
+    h.make_checkout_unavailable();
+    two.make_checkout_unavailable().unwrap();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     assert!(!old_one.exists() && !old_two.exists());
     let before = marker(tools.path());
@@ -1296,11 +1314,11 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
     let baseline = original.base.clone();
     let mut h = git_facts::bind_host(original);
     h.base = baseline;
-    let tools = tempfile::tempdir().unwrap();
+    let tools = host::tool_directory("workflow native tools λ ");
     let tool_root = fs::canonicalize(tools.path()).unwrap();
     let wrapper = tool_root.join("python-migration");
     let python = fs::canonicalize(&h.tool).unwrap();
-    native_tools::install(&wrapper);
+    native_tools::install(&tool_root, &wrapper);
     native_tools::bind(
         &mut h,
         "CHRONO_WORKFLOW_REAL_PYTHON",
@@ -1633,7 +1651,7 @@ fn collection_binds_canonical_runner_resolution_to_original_declaration() {
         passed(e, &r);
     }
     let collector = clone_host(&h);
-    fs::remove_dir_all(h.root()).unwrap();
+    h.make_checkout_unavailable();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     let before = marker(tools.path());
     manifest(collector.path(), &["one", "two"]);
@@ -1741,25 +1759,26 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
     fs::remove_file(tools.path().join("two-sdk")).unwrap();
     // A wrong-shaped unrelated live location must never be opened by capture.
     fs::create_dir(tools.path().join("two-sdk")).unwrap();
-    let capture = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir(&root)
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args([
-            "capture",
-            "--host-root",
-            ".",
-            "--config",
-            CONFIG,
-            "--commit",
-            &h.candidate,
-            "--output",
-            ".chrono-harness/state/one-captured.json",
-            "--unit",
-            "renamed",
-        ])
-        .output()
-        .unwrap();
+    let capture = host::capture_native(
+        &root,
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(&root)
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "capture",
+                "--host-root",
+                ".",
+                "--config",
+                CONFIG,
+                "--commit",
+                &h.candidate,
+                "--output",
+                ".chrono-harness/state/one-captured.json",
+                "--unit",
+                "renamed",
+            ]),
+    );
     assert!(
         capture.status.success(),
         "{}",
@@ -1993,29 +2012,30 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
     h.save();
     git_facts::prepare_bound(&h, "integration", None);
     let capture = |commit: &str, unit: &str, output: &str| {
-        let p = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-            .current_dir(&root)
-            .env("DECLARED_EMPTY", "")
-            .env_remove("DECLARED_ABSENT")
-            .args([
-                "capture",
-                "--host-root",
-                ".",
-                "--config",
-                CONFIG,
-                "--commit",
-                commit,
-                "--base",
-                &h.base,
-                "--candidate",
-                &h.candidate,
-                "--unit",
-                unit,
-                "--output",
-                output,
-            ])
-            .output()
-            .unwrap();
+        let p = host::capture_native(
+            &root,
+            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                .current_dir(&root)
+                .env("DECLARED_EMPTY", "")
+                .env_remove("DECLARED_ABSENT")
+                .args([
+                    "capture",
+                    "--host-root",
+                    ".",
+                    "--config",
+                    CONFIG,
+                    "--commit",
+                    commit,
+                    "--base",
+                    &h.base,
+                    "--candidate",
+                    &h.candidate,
+                    "--unit",
+                    unit,
+                    "--output",
+                    output,
+                ]),
+        );
         assert!(
             p.status.success(),
             "{unit}: {}",
@@ -2038,21 +2058,22 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
             unit,
             &format!(".chrono-harness/state/candidate-{unit}.json"),
         );
-        let p = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-            .current_dir(&root)
-            .args([
-                "pair",
-                "--host-root",
-                ".",
-                "--base-snapshot",
-                &format!(".chrono-harness/state/base-{unit}.json"),
-                "--candidate-snapshot",
-                &format!(".chrono-harness/state/candidate-{unit}.json"),
-                "--output",
-                &format!(".chrono-harness/state/pair-{unit}.json"),
-            ])
-            .output()
-            .unwrap();
+        let p = host::capture_native(
+            &root,
+            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                .current_dir(&root)
+                .args([
+                    "pair",
+                    "--host-root",
+                    ".",
+                    "--base-snapshot",
+                    &format!(".chrono-harness/state/base-{unit}.json"),
+                    "--candidate-snapshot",
+                    &format!(".chrono-harness/state/candidate-{unit}.json"),
+                    "--output",
+                    &format!(".chrono-harness/state/pair-{unit}.json"),
+                ]),
+        );
         assert!(p.status.success(), "{}", String::from_utf8_lossy(&p.stderr));
     }
     let collector = clone_host(&h);
@@ -2104,33 +2125,34 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
             .unwrap(),
     )
     .unwrap();
-    fs::remove_dir_all(&root).unwrap();
+    h.make_checkout_unavailable();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     for (_, path, _) in &identities {
         fs::remove_file(path).unwrap();
     }
     let before = marker(tools.path());
-    let compose = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir(collector.path())
-        .args([
-            "compose",
-            "--host-root",
-            ".",
-            "--config",
-            CONFIG,
-            "--base",
-            &h.base,
-            "--candidate",
-            &h.candidate,
-            "--manifest",
-            ".chrono-harness/state/compose.json",
-            "--output",
-            ".chrono-harness/state/full-composed.json",
-            "--receipt",
-            ".chrono-harness/state/full-composed-receipt.json",
-        ])
-        .output()
-        .unwrap();
+    let compose = host::capture_native(
+        collector.path(),
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(collector.path())
+            .args([
+                "compose",
+                "--host-root",
+                ".",
+                "--config",
+                CONFIG,
+                "--base",
+                &h.base,
+                "--candidate",
+                &h.candidate,
+                "--manifest",
+                ".chrono-harness/state/compose.json",
+                "--output",
+                ".chrono-harness/state/full-composed.json",
+                "--receipt",
+                ".chrono-harness/state/full-composed-receipt.json",
+            ]),
+    );
     assert!(
         compose.status.success(),
         "{}",

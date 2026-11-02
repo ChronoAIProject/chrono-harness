@@ -1,0 +1,931 @@
+{
+  "directories": [
+    {
+      "entries": [
+        "bin",
+        "etc",
+        "lib",
+        "libexec",
+        "share"
+      ],
+      "path": "."
+    },
+    {
+      "entries": [
+        "cargo",
+        "cargo-fmt",
+        "rust-gdb",
+        "rust-gdbgui",
+        "rust-lldb",
+        "rustc",
+        "rustdoc",
+        "rustfmt"
+      ],
+      "path": "bin"
+    },
+    {
+      "entries": [
+        "bash_completion.d",
+        "target-spec-json-schema.json"
+      ],
+      "path": "etc"
+    },
+    {
+      "entries": [
+        "cargo"
+      ],
+      "path": "etc/bash_completion.d"
+    },
+    {
+      "entries": [
+        "librustc-stable_rt.asan.dylib",
+        "librustc-stable_rt.lsan.dylib",
+        "librustc-stable_rt.rtsan.dylib",
+        "librustc-stable_rt.tsan.dylib",
+        "librustc_driver-eea6b8737cd03a8e.dylib",
+        "rustlib"
+      ],
+      "path": "lib"
+    },
+    {
+      "entries": [
+        "aarch64-apple-darwin",
+        "components",
+        "etc",
+        "manifest-cargo-aarch64-apple-darwin",
+        "manifest-rust-std-aarch64-apple-darwin",
+        "manifest-rustc-aarch64-apple-darwin",
+        "manifest-rustfmt-preview-aarch64-apple-darwin",
+        "multirust-channel-manifest.toml",
+        "multirust-config.toml",
+        "rust-installer-version"
+      ],
+      "path": "lib/rustlib"
+    },
+    {
+      "entries": [
+        "bin",
+        "lib"
+      ],
+      "path": "lib/rustlib/aarch64-apple-darwin"
+    },
+    {
+      "entries": [
+        "gcc-ld",
+        "rust-lld",
+        "rust-objcopy",
+        "wasm-component-ld"
+      ],
+      "path": "lib/rustlib/aarch64-apple-darwin/bin"
+    },
+    {
+      "entries": [
+        "ld.lld",
+        "ld64.lld",
+        "lld-link",
+        "wasm-ld"
+      ],
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld"
+    },
+    {
+      "entries": [
+        "libaddr2line-97baf34dac76a634.rlib",
+        "libaddr2line-97baf34dac76a634.rmeta",
+        "libadler2-b3027e57d0f1d7f0.rlib",
+        "libadler2-b3027e57d0f1d7f0.rmeta",
+        "liballoc-27f2e54513492a5b.rlib",
+        "liballoc-27f2e54513492a5b.rmeta",
+        "libcfg_if-f48fb0bfdb32cc1e.rlib",
+        "libcfg_if-f48fb0bfdb32cc1e.rmeta",
+        "libcompiler_builtins-da5ac53f4a183f75.rlib",
+        "libcompiler_builtins-da5ac53f4a183f75.rmeta",
+        "libcore-871f345264ba13dd.rlib",
+        "libcore-871f345264ba13dd.rmeta",
+        "libgetopts-4409557bcb151114.rlib",
+        "libgetopts-4409557bcb151114.rmeta",
+        "libgimli-710b978a6e7f8872.rlib",
+        "libgimli-710b978a6e7f8872.rmeta",
+        "libhashbrown-76edcfff92e1fd47.rlib",
+        "libhashbrown-76edcfff92e1fd47.rmeta",
+        "liblibc-2d1423290f1ed328.rlib",
+        "liblibc-2d1423290f1ed328.rmeta",
+        "libmemchr-98367e4b3983da35.rlib",
+        "libmemchr-98367e4b3983da35.rmeta",
+        "libminiz_oxide-571d19c55fdaabed.rlib",
+        "libminiz_oxide-571d19c55fdaabed.rmeta",
+        "libobject-a29b3bb9e63ad803.rlib",
+        "libobject-a29b3bb9e63ad803.rmeta",
+        "libpanic_abort-5a568c11acd6701d.rlib",
+        "libpanic_abort-5a568c11acd6701d.rmeta",
+        "libpanic_unwind-f63ec5b6ab7e4580.rlib",
+        "libpanic_unwind-f63ec5b6ab7e4580.rmeta",
+        "libproc_macro-b2df7becc8165bcb.rlib",
+        "libproc_macro-b2df7becc8165bcb.rmeta",
+        "libprofiler_builtins-6649f735c9ab3586.rlib",
+        "libprofiler_builtins-6649f735c9ab3586.rmeta",
+        "librustc-stable_rt.asan.dylib",
+        "librustc-stable_rt.lsan.dylib",
+        "librustc-stable_rt.rtsan.dylib",
+        "librustc-stable_rt.tsan.dylib",
+        "librustc_demangle-1b0862f4834fc89c.rlib",
+        "librustc_demangle-1b0862f4834fc89c.rmeta",
+        "librustc_literal_escaper-5f2e6c3644adb640.rlib",
+        "librustc_literal_escaper-5f2e6c3644adb640.rmeta",
+        "librustc_std_workspace_alloc-6df298fbf7f6f10b.rlib",
+        "librustc_std_workspace_alloc-6df298fbf7f6f10b.rmeta",
+        "librustc_std_workspace_core-78867bca7a418012.rlib",
+        "librustc_std_workspace_core-78867bca7a418012.rmeta",
+        "librustc_std_workspace_std-036ed47b4c729746.rlib",
+        "librustc_std_workspace_std-036ed47b4c729746.rmeta",
+        "libstd-09bec66e14073fe6.dylib",
+        "libstd-09bec66e14073fe6.rlib",
+        "libstd-09bec66e14073fe6.rmeta",
+        "libstd_detect-c2d961f54f972754.rlib",
+        "libstd_detect-c2d961f54f972754.rmeta",
+        "libsysroot-f22a1b6cb0a0e8ac.rlib",
+        "libsysroot-f22a1b6cb0a0e8ac.rmeta",
+        "libtest-edb0939a1f950e0e.rlib",
+        "libtest-edb0939a1f950e0e.rmeta",
+        "libunwind-05d4ae7ab29d97df.rlib",
+        "libunwind-05d4ae7ab29d97df.rmeta"
+      ],
+      "path": "lib/rustlib/aarch64-apple-darwin/lib"
+    },
+    {
+      "entries": [
+        "gdb_load_rust_pretty_printers.py",
+        "gdb_lookup.py",
+        "gdb_providers.py",
+        "lldb_commands",
+        "lldb_lookup.py",
+        "lldb_providers.py",
+        "rust_types.py"
+      ],
+      "path": "lib/rustlib/etc"
+    },
+    {
+      "entries": [
+        "rust-analyzer-proc-macro-srv"
+      ],
+      "path": "libexec"
+    },
+    {
+      "entries": [
+        "doc",
+        "man",
+        "zsh"
+      ],
+      "path": "share"
+    },
+    {
+      "entries": [
+        "cargo",
+        "rust",
+        "rustfmt"
+      ],
+      "path": "share/doc"
+    },
+    {
+      "entries": [
+        "LICENSE-APACHE",
+        "LICENSE-MIT",
+        "LICENSE-THIRD-PARTY",
+        "README.md"
+      ],
+      "path": "share/doc/cargo"
+    },
+    {
+      "entries": [
+        "COPYRIGHT-library.html",
+        "COPYRIGHT.html",
+        "README.md",
+        "licenses"
+      ],
+      "path": "share/doc/rust"
+    },
+    {
+      "entries": [
+        "Apache-2.0.txt",
+        "BSD-2-Clause.txt",
+        "CC-BY-SA-4.0.txt",
+        "GCC-exception-3.1.txt",
+        "GPL-2.0-only.txt",
+        "GPL-3.0-or-later.txt",
+        "ISC.txt",
+        "LLVM-exception.txt",
+        "MIT.txt",
+        "NCSA.txt",
+        "OFL-1.1.txt",
+        "Unicode-3.0.txt"
+      ],
+      "path": "share/doc/rust/licenses"
+    },
+    {
+      "entries": [
+        "LICENSE-APACHE",
+        "LICENSE-MIT",
+        "README.md"
+      ],
+      "path": "share/doc/rustfmt"
+    },
+    {
+      "entries": [
+        "man1"
+      ],
+      "path": "share/man"
+    },
+    {
+      "entries": [
+        "cargo-add.1",
+        "cargo-bench.1",
+        "cargo-build.1",
+        "cargo-check.1",
+        "cargo-clean.1",
+        "cargo-doc.1",
+        "cargo-fetch.1",
+        "cargo-fix.1",
+        "cargo-generate-lockfile.1",
+        "cargo-help.1",
+        "cargo-info.1",
+        "cargo-init.1",
+        "cargo-install.1",
+        "cargo-locate-project.1",
+        "cargo-login.1",
+        "cargo-logout.1",
+        "cargo-metadata.1",
+        "cargo-new.1",
+        "cargo-owner.1",
+        "cargo-package.1",
+        "cargo-pkgid.1",
+        "cargo-publish.1",
+        "cargo-remove.1",
+        "cargo-report-future-incompatibilities.1",
+        "cargo-report.1",
+        "cargo-run.1",
+        "cargo-rustc.1",
+        "cargo-rustdoc.1",
+        "cargo-search.1",
+        "cargo-test.1",
+        "cargo-tree.1",
+        "cargo-uninstall.1",
+        "cargo-update.1",
+        "cargo-vendor.1",
+        "cargo-version.1",
+        "cargo-yank.1",
+        "cargo.1",
+        "rustc.1",
+        "rustdoc.1"
+      ],
+      "path": "share/man/man1"
+    },
+    {
+      "entries": [
+        "site-functions"
+      ],
+      "path": "share/zsh"
+    },
+    {
+      "entries": [
+        "_cargo"
+      ],
+      "path": "share/zsh/site-functions"
+    }
+  ],
+  "files": [
+    {
+      "path": "bin/cargo",
+      "sha256": "c512bff73c86143b557463f021d0c3d5b0490d97d65040ba59ea2b3427784758"
+    },
+    {
+      "path": "bin/cargo-fmt",
+      "sha256": "00f31e9dea5dc9c165472b76fd80d405ab851e955be08dc1448fdd4d2043828d"
+    },
+    {
+      "path": "bin/rust-gdb",
+      "sha256": "557985ec5a31f5617d25d26bd6fe23c4b8d6f85b1498e1aae82831ca0d7f17fe"
+    },
+    {
+      "path": "bin/rust-gdbgui",
+      "sha256": "bc60613775a098e59b49fa4584cea73631697fe1456c44284c337d6700340315"
+    },
+    {
+      "path": "bin/rust-lldb",
+      "sha256": "142c31bb3900c03b2b71693b6bd16d6da1174971d93628506db8438050fa69d7"
+    },
+    {
+      "path": "bin/rustc",
+      "sha256": "b829b733131d4e1673eeebd1f34d06ae1e9ff4977b051313cf42e2a9e79ecf1c"
+    },
+    {
+      "path": "bin/rustdoc",
+      "sha256": "59bc6a1caf617032284a2edc2aa03916396e70589c435a8b51e3957887f90ce5"
+    },
+    {
+      "path": "bin/rustfmt",
+      "sha256": "2462eda2ece5926a3b09538850c6c21ffd9100c3bc4573093c9e9b0f60785c6f"
+    },
+    {
+      "path": "etc/bash_completion.d/cargo",
+      "sha256": "550c5fc0196b45bd950c8aa1da27259be44324674e8ead4dc572f9a7a176614e"
+    },
+    {
+      "path": "etc/target-spec-json-schema.json",
+      "sha256": "4758912a1f680a33c9ea29cc94940e49f1cfe7ca47f6a2b08eadea6de234cce0"
+    },
+    {
+      "path": "lib/librustc-stable_rt.asan.dylib",
+      "sha256": "8bcf06d48726932f7ff7ef30cb5aa7d45a11614b6101543ec18ab41aa1692f9f"
+    },
+    {
+      "path": "lib/librustc-stable_rt.lsan.dylib",
+      "sha256": "976d82808e5cd9a7fb71fc4bcf4cc5ed31b957f0ba9d82e1580e2d288172e54c"
+    },
+    {
+      "path": "lib/librustc-stable_rt.rtsan.dylib",
+      "sha256": "1e791dfea52b4d6dc441f75784605eefe8b5099f8f9dd70fe2c16db1d87d8854"
+    },
+    {
+      "path": "lib/librustc-stable_rt.tsan.dylib",
+      "sha256": "2f48772b6ba4150ac7c864dd1dccba81960be9d0e3904f40e8e58c98f3c0eed1"
+    },
+    {
+      "path": "lib/librustc_driver-eea6b8737cd03a8e.dylib",
+      "sha256": "d41766d9ed6e9c7959eeb7678b9a6bb301f70948664cd39a8a0d2d83ad23d54e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/ld.lld",
+      "sha256": "415de9de6d3b522b3410e8c24409d95aff703511b4700f427faa7d85378fac68"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/ld64.lld",
+      "sha256": "415de9de6d3b522b3410e8c24409d95aff703511b4700f427faa7d85378fac68"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/lld-link",
+      "sha256": "415de9de6d3b522b3410e8c24409d95aff703511b4700f427faa7d85378fac68"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld",
+      "sha256": "415de9de6d3b522b3410e8c24409d95aff703511b4700f427faa7d85378fac68"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/rust-lld",
+      "sha256": "96df7b3559f741be99cc2047cfaff84eeb5367dc9268a87c22ac9d376d98c60b"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/rust-objcopy",
+      "sha256": "eaef4f1b3d003e17e16174cfb471ee7eb811d749a9f6cf70c6d590849cd51f28"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/wasm-component-ld",
+      "sha256": "5ed46177a30d2f0e6e6b79c9140d2fe65dbd1b7cc53f7bf81243955a474655f6"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libaddr2line-97baf34dac76a634.rlib",
+      "sha256": "3cdef70bb1438277a4b5a6f3f6f03e5594c998ba39dc5a6ef88efc8a5a3eb30a"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libaddr2line-97baf34dac76a634.rmeta",
+      "sha256": "1b2d75a6b7a73c772e51393f38c8e92e915f2f770b07476625abca4c366bfcd9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libadler2-b3027e57d0f1d7f0.rlib",
+      "sha256": "87f4eda749e87b8bc2a8ac6f1e74de01ba7f90ea1d8d7a8b0f937766dee2a265"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libadler2-b3027e57d0f1d7f0.rmeta",
+      "sha256": "092e6bc112958d41ad77628276ef0a9382151b69a852d88b785358126c1c6103"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/liballoc-27f2e54513492a5b.rlib",
+      "sha256": "5e6f6cfbaf3eed434035b39c90d82d214ca0d4b67b86f30b7a88837ce375f538"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/liballoc-27f2e54513492a5b.rmeta",
+      "sha256": "903ae4b01101b6170cfadfa3f9bbfd742dca8a8a0980c3f4260992dc22c6422e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcfg_if-f48fb0bfdb32cc1e.rlib",
+      "sha256": "a0f675b68e381ac0162796ab12b1337823bd03fe89ab421bf2f24cfb7e83f295"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcfg_if-f48fb0bfdb32cc1e.rmeta",
+      "sha256": "0be5c69bb0aad664a28c5bf0b55ec83ad287c7f723a62b3dda09462ffe5762f9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcompiler_builtins-da5ac53f4a183f75.rlib",
+      "sha256": "10c965331110c1c53556eab71fe6db80f199a71c1f746d68eafba96f4ac841cb"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcompiler_builtins-da5ac53f4a183f75.rmeta",
+      "sha256": "40f541962fbbb796f9880575f500fd4671a8f95c15b055fcf4a7f80672b3a05c"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcore-871f345264ba13dd.rlib",
+      "sha256": "40074b19e085ce8ee9559582a6be145d7bb99de0b12fd095c1d12f21710198e9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcore-871f345264ba13dd.rmeta",
+      "sha256": "030e6ab0c084d0454e8ee762c3671c923f32b7529ab5800dd6edd00b7c822ff5"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libgetopts-4409557bcb151114.rlib",
+      "sha256": "a228c0296878b52e413e0033da608e7abe8d90844599d60e542b1dc168f66693"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libgetopts-4409557bcb151114.rmeta",
+      "sha256": "e9ffe810438d3fddf6c48ba171a34efd1a112b503b138cd8efced803eba2f9db"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libgimli-710b978a6e7f8872.rlib",
+      "sha256": "fec448f05ee8447c7f7b566533226b85bc50372e59b40c551658c01e9d4509cd"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libgimli-710b978a6e7f8872.rmeta",
+      "sha256": "25406e647171676f1d9045e11cd75fdbc54b7f6719633ef963b230352bd33d2f"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libhashbrown-76edcfff92e1fd47.rlib",
+      "sha256": "5687e4940e1413bde9e1c07a3a7ec9b4e21864ed4c766287705032f1cd37e1c9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libhashbrown-76edcfff92e1fd47.rmeta",
+      "sha256": "b692236b1136ae34c8a44c188723f83f277cf65c699afea8da3ac1f9657c823e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/liblibc-2d1423290f1ed328.rlib",
+      "sha256": "b15dfaad6c0cc1e205dd73604c58dcfc3f7742a987139408d3fe3fb86598886a"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/liblibc-2d1423290f1ed328.rmeta",
+      "sha256": "54e6e4fb403cab60693b58ba28a0aeeec29768961e89461e7734b9e0adcc22f4"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libmemchr-98367e4b3983da35.rlib",
+      "sha256": "0ad82f8c8303ac7181eba8700ea08fa100e95811e75945963cad4995bd07c41e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libmemchr-98367e4b3983da35.rmeta",
+      "sha256": "a25663bf6cea4beaf999e7c132cfda68278a1f920f06596768f8a6fcc974eaa7"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libminiz_oxide-571d19c55fdaabed.rlib",
+      "sha256": "47990188ad00c76e4a98e68a68ac4db35d83583a1e5307c392dd77ac086ffb73"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libminiz_oxide-571d19c55fdaabed.rmeta",
+      "sha256": "ceabd7f5f1a6312cc943f0df0c412deef37f4ce4ac9519f31d67fab8d83b6293"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libobject-a29b3bb9e63ad803.rlib",
+      "sha256": "53adada58ec7893351c75d596f50d44e852ce6e51e28f967be2146e47d2b3912"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libobject-a29b3bb9e63ad803.rmeta",
+      "sha256": "30aa90c25108092f34032b5a81d86ab9e8068286809477e6bb6ba8578232c85e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libpanic_abort-5a568c11acd6701d.rlib",
+      "sha256": "0f31eb022bd8856e2ddc689e993f460528f545ecd275f1acf502d16fd5ce7c66"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libpanic_abort-5a568c11acd6701d.rmeta",
+      "sha256": "e0fba69860b9919e8ae0a7db3094d570f65d441db7ff31f81f9b22de77c6e6a8"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libpanic_unwind-f63ec5b6ab7e4580.rlib",
+      "sha256": "a0c61395d268ce723a23067b56ff526ee239b987b9c1a210d24cfdb3feaa66ae"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libpanic_unwind-f63ec5b6ab7e4580.rmeta",
+      "sha256": "c9fec36e61a03f3a058b963bce8fc0270fd64bb88804fedb79ad0cc1fe2ff56a"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libproc_macro-b2df7becc8165bcb.rlib",
+      "sha256": "07fa79b4c10f55291bc9d7c76c2976461cedb2d4b55da06b8fd40718024387d1"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libproc_macro-b2df7becc8165bcb.rmeta",
+      "sha256": "9eb0c59443c16eb55756081c8ab6f7ce947a8c2d90247125ca99a558532b8a91"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libprofiler_builtins-6649f735c9ab3586.rlib",
+      "sha256": "4aa38191d27769b2309212fd6a5329584e7c422925f1d52c5e99b9fa8239fa2f"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libprofiler_builtins-6649f735c9ab3586.rmeta",
+      "sha256": "e9ce13623f5c02db388598f4dca35412d6c0b1fab84fced60897a8e928b7b31b"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc-stable_rt.asan.dylib",
+      "sha256": "8bcf06d48726932f7ff7ef30cb5aa7d45a11614b6101543ec18ab41aa1692f9f"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc-stable_rt.lsan.dylib",
+      "sha256": "976d82808e5cd9a7fb71fc4bcf4cc5ed31b957f0ba9d82e1580e2d288172e54c"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc-stable_rt.rtsan.dylib",
+      "sha256": "1e791dfea52b4d6dc441f75784605eefe8b5099f8f9dd70fe2c16db1d87d8854"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc-stable_rt.tsan.dylib",
+      "sha256": "2f48772b6ba4150ac7c864dd1dccba81960be9d0e3904f40e8e58c98f3c0eed1"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_demangle-1b0862f4834fc89c.rlib",
+      "sha256": "e480d2ddf08e8622abea05f42e2093b31250cd7945e8bf39e54b4ca815c67d4b"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_demangle-1b0862f4834fc89c.rmeta",
+      "sha256": "75312713519df442b6c4d111c8f2eddb87a34373f855cff3f861e1fe7810b0f2"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_literal_escaper-5f2e6c3644adb640.rlib",
+      "sha256": "6d98c24bce3f7345b87eaab9e3fe0788ddd7dd67eca6f7bebd212e1d60d3585c"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_literal_escaper-5f2e6c3644adb640.rmeta",
+      "sha256": "785a790d39a86ab805936d370fc4f8c704eeb33aa39ec7ac22324514c7b63d2c"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_alloc-6df298fbf7f6f10b.rlib",
+      "sha256": "801e21d7f401446243861c48f41b72d6aa1db8642f03b25e33b6029c85d3b3cf"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_alloc-6df298fbf7f6f10b.rmeta",
+      "sha256": "ad7b9bba122e71d2f0013089de2cd571d26078a959d6c883d705507caa7f6479"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_core-78867bca7a418012.rlib",
+      "sha256": "049c04df5d4b50a3b49649c2d9556dc77306c87c248f1b1a2ea5c7d5d33d6952"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_core-78867bca7a418012.rmeta",
+      "sha256": "998049e865c8b155cb8581cfa2880b1aee538dc209bd628b09e71a1edd6b0f0d"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_std-036ed47b4c729746.rlib",
+      "sha256": "a1ed9aedd8c46493c69b5562c52a3fc59ae97b9b0220a47485621cfe0ba71a2e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_std-036ed47b4c729746.rmeta",
+      "sha256": "979db35bb06b10f40cc6aabf1b6cd166be1ba01ec1ba11c45b92a725af968ca9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd-09bec66e14073fe6.dylib",
+      "sha256": "c2d7f24d421eb1c074b4d8ea7e3322772681cd6bee9dde89557421808b174fc4"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd-09bec66e14073fe6.rlib",
+      "sha256": "4ad1c4e712b013147dca4e6cf0c30360959f5999f18bd51e45e0735d3054a464"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd-09bec66e14073fe6.rmeta",
+      "sha256": "51a386f4d4eb86fc195bd2b1680820c299c50ce793bb9332ad10e2576ed13e29"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd_detect-c2d961f54f972754.rlib",
+      "sha256": "f9ceffd236e2931df942d4d0c54dabe32bb53e30988732da240439b00b836ac0"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd_detect-c2d961f54f972754.rmeta",
+      "sha256": "b2a74d6fd5f082fab4d51d39af772de019f75f990af341a0c88fef63a05317ca"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libsysroot-f22a1b6cb0a0e8ac.rlib",
+      "sha256": "f73e5600e44154b429c40776f2ce710901abf33a468a9cfa4074e1b95c70bcbc"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libsysroot-f22a1b6cb0a0e8ac.rmeta",
+      "sha256": "7dde3483e581f277661d0acf57ae83ed1a4de7b7fea22962403d05743b462365"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libtest-edb0939a1f950e0e.rlib",
+      "sha256": "f8978661ef23ec0ad7afd86e42edad4830176612baf3f281a64c35a7b7aef0b2"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libtest-edb0939a1f950e0e.rmeta",
+      "sha256": "41e463d491e0b3439f2bd118856f6263e6591312b23c9fa5e7a5d766cc21ea65"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libunwind-05d4ae7ab29d97df.rlib",
+      "sha256": "a42bb45c33ec5c82969c61095452facd71c85647afda64f9848b9643342dc029"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libunwind-05d4ae7ab29d97df.rmeta",
+      "sha256": "3f42a8292442a11409e0a7c41f107d806d4f4216f289b5b6dec91f179f1d8f2d"
+    },
+    {
+      "path": "lib/rustlib/etc/gdb_load_rust_pretty_printers.py",
+      "sha256": "a32e7857651bc7ed7c52dfc71131cbbea01a5cd1886399876032c4de60fa4886"
+    },
+    {
+      "path": "lib/rustlib/etc/gdb_lookup.py",
+      "sha256": "818a6b374ccadd535bf0c30b0fbf17861fdfe231d42bd7069d8cffff7a571b97"
+    },
+    {
+      "path": "lib/rustlib/etc/gdb_providers.py",
+      "sha256": "75cef8535fe4e581a036e4860c1b1fb28c32dab43afadd348c20f94c169a4382"
+    },
+    {
+      "path": "lib/rustlib/etc/lldb_commands",
+      "sha256": "fd612f214b349941ee37153fbf5e6b698a20abf1fb470d9bc29f7e5d0330c4f6"
+    },
+    {
+      "path": "lib/rustlib/etc/lldb_lookup.py",
+      "sha256": "70ecb41fa5f72718d5ef10a12f038d00de5616de1e5ac0fec4ee145625152916"
+    },
+    {
+      "path": "lib/rustlib/etc/lldb_providers.py",
+      "sha256": "6acd9ff6b02fcab177057d9690b41d56740fc470de4f5bd1d0bc087d4e03d761"
+    },
+    {
+      "path": "lib/rustlib/etc/rust_types.py",
+      "sha256": "60f1a53d1fb0b6b394440588b94f36a472f5303965a58b87d1240c8aa4c81762"
+    },
+    {
+      "path": "lib/rustlib/manifest-cargo-aarch64-apple-darwin",
+      "sha256": "5b2160ec3635b8c8f3129f12cbeee078d55d882f9362313e56e9fd484febe8ba"
+    },
+    {
+      "path": "lib/rustlib/manifest-rust-std-aarch64-apple-darwin",
+      "sha256": "d0ef7387bfd744f75b117a32678b91b570fcd6c8990e537eacca713fa0fb63c2"
+    },
+    {
+      "path": "lib/rustlib/manifest-rustc-aarch64-apple-darwin",
+      "sha256": "e907eb77896d1e82c6261b8cbbaa923dfe2a13bbaafcf68d38ef536786a9bacd"
+    },
+    {
+      "path": "lib/rustlib/manifest-rustfmt-preview-aarch64-apple-darwin",
+      "sha256": "f131ba42a6667b5237b9fdca791e2da1fecd7b5cabf522b50efe5113aaaa60d7"
+    },
+    {
+      "path": "lib/rustlib/multirust-channel-manifest.toml",
+      "sha256": "46c1f8d1bcef24174217545ece8c22eb395a42e3534f618736c17a759a31e255"
+    },
+    {
+      "path": "lib/rustlib/multirust-config.toml",
+      "sha256": "5015fc594dab4217b0454c8b03d4e15c7e1c526bb7a36a0da649ac3baca4a745"
+    },
+    {
+      "path": "lib/rustlib/rust-installer-version",
+      "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
+    },
+    {
+      "path": "libexec/rust-analyzer-proc-macro-srv",
+      "sha256": "05fce7ce75a9c37822aeaed51044a3d2545453f4557e2f01168ac34dbe0e7ef0"
+    },
+    {
+      "path": "share/doc/cargo/LICENSE-APACHE",
+      "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb"
+    },
+    {
+      "path": "share/doc/cargo/LICENSE-MIT",
+      "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+    },
+    {
+      "path": "share/doc/cargo/LICENSE-THIRD-PARTY",
+      "sha256": "cbc759b1f17a2ac38fe3eb9e9563b1a08ba0f900611c49faaf68b46907b6d898"
+    },
+    {
+      "path": "share/doc/cargo/README.md",
+      "sha256": "d9b7b448fdd1bcdff86dc4034733602b8bcb60bdc1a14c37148525b67a157054"
+    },
+    {
+      "path": "share/doc/rust/COPYRIGHT-library.html",
+      "sha256": "90567e2718bf7fd65a71a3a43c5596488e80e5f51ed02bfea6fec54458b5f3d1"
+    },
+    {
+      "path": "share/doc/rust/COPYRIGHT.html",
+      "sha256": "9bd02a099a3f9fdf977f9dd6ea3dc664723e992a267d86f447ea9e7d068824ac"
+    },
+    {
+      "path": "share/doc/rust/README.md",
+      "sha256": "b3f6ef2fef88b98cb9ec013a5c86213095e53e40eb228679574e4d06517f33c8"
+    },
+    {
+      "path": "share/doc/rust/licenses/Apache-2.0.txt",
+      "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff"
+    },
+    {
+      "path": "share/doc/rust/licenses/BSD-2-Clause.txt",
+      "sha256": "f32fb3b417a194167cfad068223fc975ba96c5960513a10f66a3c28720aec1df"
+    },
+    {
+      "path": "share/doc/rust/licenses/CC-BY-SA-4.0.txt",
+      "sha256": "23ee78c8bae49cf08ea2f0c84945c66b987ebe4520881fb51b3dad4fb43d07c2"
+    },
+    {
+      "path": "share/doc/rust/licenses/GCC-exception-3.1.txt",
+      "sha256": "a3966c9410ef94a1efbfa9ec04e9c1994026a70623fbf0885ce36737bfba3b54"
+    },
+    {
+      "path": "share/doc/rust/licenses/GPL-2.0-only.txt",
+      "sha256": "54b212ba1f97f6948fa5486239ab505dd820b02e50cbfd296b4062c8609a70af"
+    },
+    {
+      "path": "share/doc/rust/licenses/GPL-3.0-or-later.txt",
+      "sha256": "05315fce6c35f79b8a35454828995fa26336f235895ac64557abc028f4ffcea2"
+    },
+    {
+      "path": "share/doc/rust/licenses/ISC.txt",
+      "sha256": "0ff61769b238634e042ab759dddfd104a8e69d091e3600ae3410e401a6164381"
+    },
+    {
+      "path": "share/doc/rust/licenses/LLVM-exception.txt",
+      "sha256": "e34c58338bd89d43e709e226610d8f32b3e3c47f4ad9a99a8dc1d4ac7842488e"
+    },
+    {
+      "path": "share/doc/rust/licenses/MIT.txt",
+      "sha256": "b85dcd3e453d05982552c52b5fc9e0bdd6d23c6f8e844b984a88af32570b0cc0"
+    },
+    {
+      "path": "share/doc/rust/licenses/NCSA.txt",
+      "sha256": "39cb0234065c92b9e6cee3830cbb52b1aa289aa8fe9ba2e66730fec5cf05c630"
+    },
+    {
+      "path": "share/doc/rust/licenses/OFL-1.1.txt",
+      "sha256": "8eea8287e5876b539670cadb82e99f9a7afddec6f6730811be1daf25d2e9bcfd"
+    },
+    {
+      "path": "share/doc/rust/licenses/Unicode-3.0.txt",
+      "sha256": "f5062c9a188d81dfe66b56db4182dcf9e4b17c0d9b0d311a8e20b3a1b075c443"
+    },
+    {
+      "path": "share/doc/rustfmt/LICENSE-APACHE",
+      "sha256": "092c8e82c47fb859d7385253c1b04052dbd65a8bcf0bbd8b6f7dba58a9e8753d"
+    },
+    {
+      "path": "share/doc/rustfmt/LICENSE-MIT",
+      "sha256": "ae0f1f791e3b4faccf981c0b530199235a8b8a021c7ef0c3c85c6c676ea4d27f"
+    },
+    {
+      "path": "share/doc/rustfmt/README.md",
+      "sha256": "851c5128590f0c9e63263a9afe534a6a27df9e1a065334534a1e0e77fa4dcb7d"
+    },
+    {
+      "path": "share/man/man1/cargo-add.1",
+      "sha256": "e37eb5889856fcb19ff43dd2a7952aef092d8a5fc1f808b200a3c99d18c7dd79"
+    },
+    {
+      "path": "share/man/man1/cargo-bench.1",
+      "sha256": "51cc284d3718901a71ac8b2e812b2317890b1377f641eaf8989e865ccdcd8c05"
+    },
+    {
+      "path": "share/man/man1/cargo-build.1",
+      "sha256": "ea0cb3adad4278bb427abb8fd7d2a96eff295d5b13a3f1d5c4b0933d5b3da9b0"
+    },
+    {
+      "path": "share/man/man1/cargo-check.1",
+      "sha256": "006c2a65dc3a8a5c56e351511678748c3bbdd3c3eeb5bfcf95b9e20828b04505"
+    },
+    {
+      "path": "share/man/man1/cargo-clean.1",
+      "sha256": "ac1056f03dccba5d6a082f4491e83498507e0984a34551d7be7d4c1b4dfc7273"
+    },
+    {
+      "path": "share/man/man1/cargo-doc.1",
+      "sha256": "679cbbbb74c0352ea0d295a9d573419bb9533d10868866e260781caeffdd97bd"
+    },
+    {
+      "path": "share/man/man1/cargo-fetch.1",
+      "sha256": "014fd2e78b79fe9134f5e3fc38e8a2906d2a3f4ca6ba4a236ae13aefdae70ec5"
+    },
+    {
+      "path": "share/man/man1/cargo-fix.1",
+      "sha256": "5c7c676229879e262a3135298c22800c5c1afb57710ec19cc6dd2c8d23224ea6"
+    },
+    {
+      "path": "share/man/man1/cargo-generate-lockfile.1",
+      "sha256": "9d673faf1b7c2bb645e1711592440da8d681c8a99744a8f8a927d6144446bc48"
+    },
+    {
+      "path": "share/man/man1/cargo-help.1",
+      "sha256": "70802931560ae6e6028f054896046b410d0e569f26111effe1ded8d0ad57463b"
+    },
+    {
+      "path": "share/man/man1/cargo-info.1",
+      "sha256": "7bfd5996cd2fc7ddc3921be5013d2acd4de6425ac1856aa4b365fbb6f11e5e3b"
+    },
+    {
+      "path": "share/man/man1/cargo-init.1",
+      "sha256": "574759d2269dff096b1c04bc1ae906c3a80389830966e6b5b2130410181f3a9d"
+    },
+    {
+      "path": "share/man/man1/cargo-install.1",
+      "sha256": "3c068e1c8a345ad6e64cd535db30fb25642d61936abf5bd8e309c3602b75429a"
+    },
+    {
+      "path": "share/man/man1/cargo-locate-project.1",
+      "sha256": "021abaf05ac72ac32bb7373ed9805bba19e204db25675895d2d41c013646f8d4"
+    },
+    {
+      "path": "share/man/man1/cargo-login.1",
+      "sha256": "53a957a73cfcac30b751a5c6277f94b5a8511ce3cc2af144678a285a598c417a"
+    },
+    {
+      "path": "share/man/man1/cargo-logout.1",
+      "sha256": "0f98f10235921e4fd2dd82e76c7fbf551121bef88cf8ef28027072c5d3ff5857"
+    },
+    {
+      "path": "share/man/man1/cargo-metadata.1",
+      "sha256": "572a3e2f8d7753855d6dab6941961deb5ac9b99c9ad7d4d3423d8e5f6bc61196"
+    },
+    {
+      "path": "share/man/man1/cargo-new.1",
+      "sha256": "920fa6698c28a2f5c2b2cfe69d1e4599e2698a0bceb3d514f19d891ec23b446b"
+    },
+    {
+      "path": "share/man/man1/cargo-owner.1",
+      "sha256": "23e71b0c6b5f2701f978b818420835db0e74a938dccdc251ddb2f1c163f20d3d"
+    },
+    {
+      "path": "share/man/man1/cargo-package.1",
+      "sha256": "7c2c62f0aa11d7fbb4a5095377316b9a691deb594168ae886cd0a7aa9ea157ff"
+    },
+    {
+      "path": "share/man/man1/cargo-pkgid.1",
+      "sha256": "f9353443ca1c342f95845579e56dd69410e7517116dd76efda9ab3845c074058"
+    },
+    {
+      "path": "share/man/man1/cargo-publish.1",
+      "sha256": "6d4859d5a12d4a8c814cc50b389d2f3d286bc6baae59d5c70e4cebb40058216c"
+    },
+    {
+      "path": "share/man/man1/cargo-remove.1",
+      "sha256": "ba248f85986b141882454f3313eafb5a64a8f244b6abcbb1f9e7114c56fbfbf2"
+    },
+    {
+      "path": "share/man/man1/cargo-report-future-incompatibilities.1",
+      "sha256": "a7642c840631e5659ef653271035760b1dc6c3fcf998b8d347fb49965a3ad35a"
+    },
+    {
+      "path": "share/man/man1/cargo-report.1",
+      "sha256": "be9d8fe4a569a90e7e5d48c35c5daa74d1728133dc0f43240121654045b6f815"
+    },
+    {
+      "path": "share/man/man1/cargo-run.1",
+      "sha256": "85650a39631df37c75e2d894e723710c39f65b86096c4330ede6a99c3b4fd0be"
+    },
+    {
+      "path": "share/man/man1/cargo-rustc.1",
+      "sha256": "b7fba799920da5bb8c510e8c9e3c91bde56abb6feb705efeca9a3a42d15cccf2"
+    },
+    {
+      "path": "share/man/man1/cargo-rustdoc.1",
+      "sha256": "9c558ed0899cf8e966d417dc2fea86d837c88b854bcdb0c62c30656fc41949d0"
+    },
+    {
+      "path": "share/man/man1/cargo-search.1",
+      "sha256": "4761782dd91b5c471bf1b3fc5a3c7912c3c6935706383f3b2b44efb3a1893bea"
+    },
+    {
+      "path": "share/man/man1/cargo-test.1",
+      "sha256": "daa865ffe6624ad518390a328d2632a4a6eacfafdfacf99b9c13d6f4d0c6a358"
+    },
+    {
+      "path": "share/man/man1/cargo-tree.1",
+      "sha256": "9b0213fbb4e50ccaffc3bf1ab5bd3f7a50204059262f3b194dc99c12535f0ebb"
+    },
+    {
+      "path": "share/man/man1/cargo-uninstall.1",
+      "sha256": "145d9580dc8a5e5a73cc4a8dd27827e0413e2bad589b2e62fa4dff8798ffc980"
+    },
+    {
+      "path": "share/man/man1/cargo-update.1",
+      "sha256": "b4fd2b6269aff5ee8eb696273315056d94c9de231130b7d6d2e68d98298662d9"
+    },
+    {
+      "path": "share/man/man1/cargo-vendor.1",
+      "sha256": "a8c4742f6b0b6d46da8b9cdc69766412efa72e02bf307753242c51394815bce4"
+    },
+    {
+      "path": "share/man/man1/cargo-version.1",
+      "sha256": "1dc8ad353b33ef871660f7d5af5e977b07a32bf718adce2deb85efdd5568e44b"
+    },
+    {
+      "path": "share/man/man1/cargo-yank.1",
+      "sha256": "a324983332e33580330c0902af4ee7713940bf219c44a1e3a12fc9b8b0d58309"
+    },
+    {
+      "path": "share/man/man1/cargo.1",
+      "sha256": "c483b800c9aceb307fb15ea4138783838cb379b6f4e306a8dabe84af8fd4b01d"
+    },
+    {
+      "path": "share/man/man1/rustc.1",
+      "sha256": "7c1064dc3ad4e2bc9624058a42d0d4bcd501d1895e1e328e434d7dd1306ed559"
+    },
+    {
+      "path": "share/man/man1/rustdoc.1",
+      "sha256": "12589c7d0539e29d7d15711b3adf28ef7d2344d0705357a90ee103e41818ef71"
+    },
+    {
+      "path": "share/zsh/site-functions/_cargo",
+      "sha256": "2ba73906f7446d884ed5c466ed851046e6df6620c8d9cd02f192dfb784a6cb98"
+    }
+  ],
+  "root": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin",
+  "schema": "chrono-input-directory/v3",
+  "symlinks": []
+}

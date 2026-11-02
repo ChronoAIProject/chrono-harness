@@ -1,8 +1,12 @@
 #![allow(dead_code)]
+#[path = "temporary.rs"]
+mod temporary;
 use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
+pub use temporary::{FixtureDirectory, fixture_directory, tool_directory};
+pub use temporary::{capture_native, copied_fixture_input, retain_diagnostic};
 
 pub enum FixtureProbe {
     Version,
@@ -17,11 +21,8 @@ pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureP
         if error.kind() == std::io::ErrorKind::NotFound));
     // A joined copy owns all writable descriptors before concurrent test
     // children can inherit them. Each host retains its own executable file.
-    let copied = Command::new("/bin/cp")
-        .arg(source)
-        .arg(&destination)
-        .output()
-        .unwrap();
+    copied_fixture_input(root, &source, &destination);
+    let copied = capture_native(root, Command::new("/bin/cp").arg(source).arg(&destination));
     assert!(copied.status.success(), "fixture installation: {copied:?}");
     let digest = sha256(&fs::read(&destination).unwrap());
     let mut command = Command::new(&destination);
@@ -37,7 +38,7 @@ pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureP
             command.args(["--protocol", "chrono-judge/v1"]);
         }
     }
-    let ready = command.output().unwrap();
+    let ready = capture_native(root, &mut command);
     match probe {
         FixtureProbe::Version => {
             assert!(
@@ -86,7 +87,7 @@ impl CommandEvidence {
     }
 }
 pub struct Host {
-    dir: tempfile::TempDir,
+    dir: FixtureDirectory,
     last_result: RefCell<Option<CommandEvidence>>,
     pub base: String,
     pub candidate: String,
@@ -96,10 +97,7 @@ pub struct Host {
 }
 impl Host {
     pub fn new(script: bool) -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("execution host space ")
-            .tempdir()
-            .unwrap();
+        let dir = fixture_directory("execution host space ");
         let root = fs::canonicalize(dir.path()).unwrap();
         git(&root, &["init", "-q"]);
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
@@ -142,8 +140,13 @@ impl Host {
             }
         }
         let tool = chrono_harness::resolve_program(&root, "python3", None).unwrap();
-        let version = Command::new(&tool).arg("--version").output().unwrap();
-        let external = tempfile::NamedTempFile::new().unwrap();
+        let version = capture_native(&root, Command::new(&tool).arg("--version"));
+        let input_directory = dir.temporary_path().join("fixture-inputs");
+        fs::create_dir(&input_directory).unwrap();
+        let external = tempfile::Builder::new()
+            .disable_cleanup(true)
+            .tempfile_in(input_directory)
+            .unwrap();
         fs::write(external.path(), b"bounded input\n").unwrap();
         v.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] = json!([
             ".chrono-harness/bin/chrono-harness",
@@ -249,6 +252,9 @@ impl Host {
     pub fn root(&self) -> std::path::PathBuf {
         fs::canonicalize(self.dir.path()).unwrap()
     }
+    pub fn make_checkout_unavailable(&self) -> std::path::PathBuf {
+        self.dir.make_checkout_unavailable().unwrap()
+    }
     pub fn save(&mut self) {
         write_values(&self.root(), &self.values);
         self.candidate = commit(&self.root());
@@ -290,7 +296,8 @@ impl Host {
     ) -> (i32, Value) {
         self.prepare_with_context(edit, context_edit);
         let root = self.root();
-        let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+        let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+        command
             .current_dir("/")
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")
@@ -306,9 +313,8 @@ impl Host {
                 root.join(".chrono-harness/state/context.json")
                     .to_str()
                     .unwrap(),
-            ])
-            .output()
-            .unwrap();
+            ]);
+        let out = self.dir.capture_output(&mut command).unwrap();
         self.retain_command_result("check", &out);
         let v = serde_json::from_slice(&out.stdout)
             .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
@@ -328,11 +334,31 @@ impl Host {
             self.last_result.replace(Some(evidence));
             return;
         };
+        let protection = self
+            .dir
+            .retain_diagnostic("requested full-test originals are still consumed");
         static NUMBER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let number = NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let destination = std::path::Path::new(&directory)
             .join(format!("{}-{number}-{label}", std::process::id()));
         evidence.write(&destination).unwrap();
+        protection.unwrap_or_else(|error| {
+            panic!(
+                "original command exit {:?} retained at {}; diagnostic reference failed: {error}",
+                out.status.code(),
+                destination.display()
+            )
+        });
+    }
+    pub fn capture_native(&self, command: &mut Command) -> std::process::Output {
+        self.dir.capture_output(command).unwrap()
+    }
+    pub fn capture_native_input(
+        &self,
+        command: &mut Command,
+        input: &[u8],
+    ) -> std::process::Output {
+        self.dir.capture_input(command, input).unwrap()
     }
 }
 impl Drop for Host {
