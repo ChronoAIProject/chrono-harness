@@ -1228,10 +1228,12 @@ impl Inventory {
             .collect();
         // Retire an unrooted report before the originals it references. This
         // spends a bounded round on retiring the consumer first and prevents
-        // an obsolete report from outliving reclaimed inputs. Stable sorting
-        // preserves the durable cursor among peers; cycles remain reclaimable.
+        // an obsolete report from outliving reclaimed inputs. Continue partial
+        // disposal before opening new candidates, and prefer independent
+        // continuations so a dependency closure cannot consume the whole
+        // admission window. Stable sorting preserves the durable cursor among
+        // peers; cycles remain reclaimable.
         let referenced: BTreeSet<_> = l.outputs.iter().flat_map(|o| o.references.iter()).collect();
-        order.sort_by_key(|id| referenced.contains(id));
         let mut consumers: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for output in &l.outputs {
             for original in &output.references {
@@ -1241,6 +1243,18 @@ impl Inventory {
                     .push(output.id.clone());
             }
         }
+        order.sort_by_key(|id| {
+            let output = l
+                .outputs
+                .iter()
+                .find(|o| o.id == *id)
+                .expect("output disappeared");
+            (
+                output.phase != "disposing",
+                consumers.contains_key(id) || !output.references.is_empty(),
+                referenced.contains(id),
+            )
+        });
         for id in order {
             if !self.metadata_room()
                 || nodes >= self.policy.max_nodes_per_round
@@ -1448,8 +1462,15 @@ impl Inventory {
                     .manifest
                     .bytes
                     .saturating_sub(l.outputs[i].removed_logical_bytes);
+                let entered_disposal = l.outputs[i].phase != "disposing";
                 l.outputs[i].phase = "disposing".into();
-                self.save(&l, &gate)?;
+                // A regular output already in disposal has a durable phase and
+                // manifest. Defer the replacement write until its bounded
+                // physical effect (or the round's final save), avoiding a full
+                // inventory sync before every one-file retirement.
+                if entered_disposal || o.tree {
+                    self.save(&l, &gate)?;
+                }
                 while self.metadata_room()
                     && nodes < self.policy.max_nodes_per_round
                     && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
@@ -1462,7 +1483,9 @@ impl Inventory {
                     match fs::symlink_metadata(&path) {
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                             l.outputs[i].manifest.entries.pop();
-                            self.save(&l, &gate)?;
+                            if o.tree {
+                                self.save(&l, &gate)?;
+                            }
                             continue;
                         }
                         Err(e) => return Err(e.to_string()),
@@ -1520,7 +1543,12 @@ impl Inventory {
                     l.outputs[i].reserved_bytes =
                         l.outputs[i].reserved_bytes.saturating_sub(entry.bytes);
                     l.outputs[i].manifest.entries.pop();
-                    self.save(&l, &gate)?;
+                    // Missing regular entries are safely reconciled from the
+                    // durable disposing manifest on the next round. Tree and
+                    // partial-disposal cursors retain their per-step writes.
+                    if o.tree {
+                        self.save(&l, &gate)?;
+                    }
                 }
                 Ok(l.outputs[i].manifest.entries.is_empty())
             })();

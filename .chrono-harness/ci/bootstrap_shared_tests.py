@@ -901,7 +901,22 @@ class RealAttempt:
     def owner_report(self, stdout):
         import bootstrap
         report = json.loads(stdout.read_bytes())
-        path = self.root / report["report_path"]
+        source_root = report.get("source_root")
+        if not isinstance(source_root, str):
+            raise ValueError("lifecycle report source root missing")
+        source = Path(source_root)
+        if not source.is_absolute() or source != source.resolve():
+            raise ValueError("lifecycle report source root is not canonical")
+        report_path = report.get("report_path")
+        if not isinstance(report_path, str):
+            raise ValueError("lifecycle report path missing")
+        relative = Path(report_path)
+        if (relative.is_absolute() or ".." in relative.parts
+                or not report_path.startswith(".chrono-harness/state/")):
+            raise ValueError("lifecycle report path is outside registered state")
+        path = source / relative
+        if path != path.resolve():
+            raise ValueError("lifecycle report path is not canonical")
         # The actual owner's original remains authoritative; stdout is retained too.
         if json.loads(path.read_bytes()) != report:
             raise ValueError("lifecycle stdout differs from original report")

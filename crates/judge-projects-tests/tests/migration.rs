@@ -1107,7 +1107,12 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
     });
     assert!(
         output.status.success(),
-        "workflow repair failed: {output:?}"
+        "workflow repair failed: status={} stdout_bytes={} stderr_bytes={}; original native capture retained under {}",
+        output.status,
+        output.stdout.len(),
+        output.stderr.len(),
+        root.join(".chrono-harness/state/command-captures")
+            .display()
     );
     // The repair changes only workflow bytes; rerun its single registered method with a new input binding.
     let action = current.projects()["projects"]
@@ -1132,7 +1137,11 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
     assert_eq!(verified.exit_code, 0, "{}", verified.stderr);
     assert!(
         verified.failure.is_none(),
-        "workflow verify failed: {verified:?}"
+        "workflow verify failed: exit={} failure={:?} stdout_bytes={} stderr_bytes={}",
+        verified.exit_code,
+        verified.failure,
+        verified.stdout_bytes.len(),
+        verified.stderr_bytes.len()
     );
     // These consumers have joined and the repaired workflow has been consumed.
     // This distinct Git host owns its nested fixtures; the outer allocation's
