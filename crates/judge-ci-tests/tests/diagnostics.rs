@@ -94,74 +94,29 @@ fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
         assert_eq!(process["stderr_bytes"], json!([254, 0, 10]));
         assert_eq!(process["exit_code"], 7);
         let rows = records(&fs::read(directory.join("diagnostics.jsonl")).unwrap());
-        let launch = rows
-            .iter()
-            .find(|r| r["event"] == "process.launched" && r["context"]["operation"] == "test.suite")
-            .unwrap();
-        assert_eq!(launch["schema"], "chrono-log/v1");
-        assert_eq!(launch["context"]["request_id"], req.request_id);
-        assert_eq!(launch["context"]["candidate"], req.candidate);
-        assert_eq!(launch["context"]["config_sha256"], req.config_sha256);
-        assert_eq!(launch["context"]["operation"], "test.suite");
+        // INFO reports the domain operation and its outcome. Process details
+        // remain in the original receipt and the explicitly selected DEBUG log.
+        assert!(
+            rows.iter()
+                .all(|r| !r["event"].as_str().unwrap().starts_with("process.")),
+            "process detail leaked into normal INFO diagnostics"
+        );
+        let started = event(&rows, "projects.operation_started");
+        assert_eq!(started["context"]["request_id"], req.request_id);
+        assert_eq!(started["context"]["candidate"], req.candidate);
+        assert_eq!(started["context"]["config_sha256"], req.config_sha256);
+        assert_eq!(started["context"]["operation"], "test.suite");
         assert_eq!(
-            launch["context"]["plan"],
+            started["context"]["plan"],
             response.evidence["plan"]["identity"]
         );
-        assert_eq!(launch["context"]["child_pid"], process["child_pid"]);
-        assert_eq!(launch["context"]["launcher_pid"], process["launcher_pid"]);
-        let argv: Value = serde_json::from_str(launch["fields"]["argv"].as_str().unwrap()).unwrap();
-        assert_eq!(argv, process["argv"]);
-        assert_eq!(launch["fields"]["executable_sha256"], process["sha256"]);
-        let phases: Vec<_> = rows
-            .iter()
-            .filter(|r| r["context"]["operation"] == "test.suite")
-            .map(|r| r["event"].as_str().unwrap())
-            .collect();
         assert!(
-            phases
-                .iter()
-                .position(|s| *s == "process.preparing")
+            rows.iter()
+                .position(|r| r["event"] == "projects.operation_started")
                 .unwrap()
-                < phases
+                < rows
                     .iter()
-                    .position(|s| *s == "process.launched")
-                    .unwrap()
-        );
-        assert!(
-            phases
-                .iter()
-                .position(|s| *s == "process.launched")
-                .unwrap()
-                < phases
-                    .iter()
-                    .position(|s| *s == "process.completed")
-                    .unwrap()
-        );
-        for detail in [
-            "process.ownership_identity",
-            "process.readers_start",
-            "process.readers_ready_wait",
-            "process.monitor_wait",
-            "process.ownership_drain",
-            "process.child_join",
-            "process.streams_join",
-            "process.scope_exit",
-            "process.observer_join",
-            "process.observer_joined",
-        ] {
-            assert!(
-                !phases.contains(&detail),
-                "verbose lifecycle event {detail} leaked into the INFO stream"
-            );
-        }
-        assert!(
-            phases
-                .iter()
-                .position(|s| *s == "process.completed")
-                .unwrap()
-                < phases
-                    .iter()
-                    .position(|s| *s == "projects.operation_completed")
+                    .position(|r| r["event"] == "projects.operation_completed")
                     .unwrap()
         );
         let joins = [
@@ -179,13 +134,6 @@ fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
             event(&rows, "projects.operation_completed")["fields"]["status"],
             "failed"
         );
-        assert_eq!(
-            rows.iter()
-                .find(|r| r["event"] == "process.completed"
-                    && r["context"]["operation"] == "test.suite")
-                .unwrap()["fields"]["exit_code"],
-            7
-        );
     });
     if let Err(error) = assert_result {
         eprintln!(
@@ -200,6 +148,15 @@ fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
 fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let h = host(Some(listener.local_addr().unwrap().to_string()));
+    // Omit the optional INFO adoption so the child fixture can use the existing
+    // caller-scoped DEBUG logger without a new product logging API or policy.
+    h.change_registry(CONFIG, |v| {
+        v["policy"]
+            .as_object_mut()
+            .unwrap()
+            .remove("execution_diagnostics");
+    });
+    h.commit();
     let req = request(&h);
     let assert_result = std::panic::catch_unwind(|| {
         let directory = h.root().join(".chrono-harness/state");
@@ -209,7 +166,7 @@ fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
         let launch = directory.join("producer.launch.json");
         let spec = chrono_harness::CommandSpec {
             program: child().into(),
-            args: vec!["judge".into()],
+            args: vec!["judge-debug".into()],
             env: BTreeMap::new(),
             timeout_seconds: 1,
             output_limit_bytes: 65536,
@@ -276,23 +233,14 @@ fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
         assert_eq!(launch["context"]["request_id"], req.request_id);
         assert_eq!(launch["context"]["candidate"], req.candidate);
         assert!(launch["context"]["child_pid"].is_number());
-        for detail in [
-            "process.ownership_identity",
-            "process.readers_start",
-            "process.readers_ready_wait",
-            "process.monitor_wait",
-            "process.ownership_drain",
-            "process.child_join",
-            "process.streams_join",
-            "process.scope_exit",
-            "process.observer_join",
-            "process.observer_joined",
-        ] {
-            assert!(
-                !rows.iter().any(|r| r["event"] == detail),
-                "verbose lifecycle event {detail} leaked into the INFO stream"
-            );
-        }
+        assert_eq!(launch["level"], "debug");
+        let identity = rows
+            .iter()
+            .find(|r| {
+                r["event"] == "process.ownership_identity"
+                    && r["context"]["child_pid"] == launch["context"]["child_pid"]
+            })
+            .unwrap();
         assert!(
             !rows
                 .iter()
@@ -311,9 +259,12 @@ fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
             .iter()
             .find(|row| row["child_pid"] == launch["context"]["child_pid"])
             .unwrap();
-        assert!(owned["slot"].is_number());
-        assert!(owned["generation"].is_number());
-        assert!(owned["parent_slot"].is_number());
+        for key in ["slot", "generation", "parent_slot"] {
+            assert_eq!(
+                owned[key], identity["fields"][key],
+                "ownership identity drift: {key}"
+            );
+        }
     });
     if let Err(error) = assert_result {
         eprintln!(
@@ -321,6 +272,130 @@ fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
             h.dir.keep().display()
         );
         std::panic::resume_unwind(error);
+    }
+}
+
+#[test]
+fn execution_diagnostics_debug_process_preserves_context_and_originals() {
+    use chrono_diagnostics::logging::{Level, Logger};
+    for (argument, exit) in [("success", 0), ("failure", 7)] {
+        let h = Host::new();
+        let directory = h.root().join(".chrono-harness/state");
+        fs::create_dir_all(&directory).unwrap();
+        let stdout = directory.join("stdout.bytes");
+        let stderr = directory.join("stderr.bytes");
+        let launch = directory.join("launch.json");
+        let input = [0, 255, 10];
+        let spec = chrono_harness::CommandSpec {
+            program: child().into(),
+            args: if exit == 0 {
+                vec!["operation".into(), argument.into()]
+            } else {
+                vec!["operation".into()]
+            },
+            env: BTreeMap::new(),
+            timeout_seconds: 30,
+            output_limit_bytes: 4096,
+        };
+        let digest = chrono_harness::file_identity(Path::new(child())).unwrap().0;
+        let sink = Sink::default();
+        let logger = Logger::new("real-process-test", Level::DEBUG, sink.clone());
+        let process = logger.run(|| {
+            let span = tracing::info_span!(
+                "test.operation",
+                request_id = "real-process-request",
+                operation = argument
+            );
+            let _entered = span.enter();
+            chrono_harness::run_process_observed_retained(
+                h.root(),
+                &spec,
+                &input,
+                &digest,
+                &chrono_harness::ProcessEvidence {
+                    stdout: &stdout,
+                    stderr: &stderr,
+                    launch: &launch,
+                },
+            )
+            .unwrap()
+        });
+        logger.finish().unwrap();
+        let bytes = sink.0.lock().unwrap().clone();
+        // Retain producer originals before assertions; failed fixtures survive.
+        fs::write(directory.join("debug.jsonl"), &bytes).unwrap();
+        fs::write(
+            directory.join("process.json"),
+            serde_json::to_vec(&process).unwrap(),
+        )
+        .unwrap();
+        let asserted = std::panic::catch_unwind(|| {
+            assert_eq!(process.exit_code, exit);
+            assert!(process.failure.is_none());
+            assert_eq!(process.stdout_bytes, [255, 0, 10]);
+            assert_eq!(process.stderr_bytes, [254, 0, 10]);
+            assert_eq!(fs::read(&stdout).unwrap(), process.stdout_bytes);
+            assert_eq!(fs::read(&stderr).unwrap(), process.stderr_bytes);
+            let original: Value = serde_json::from_slice(&fs::read(&launch).unwrap()).unwrap();
+            let rows = records(&bytes);
+            let started = event(&rows, "process.launched");
+            assert_eq!(started["level"], "debug");
+            assert_eq!(started["context"]["request_id"], "real-process-request");
+            assert_eq!(started["context"]["operation"], argument);
+            for key in ["child_pid", "launcher_pid"] {
+                assert_eq!(started["context"][key], original[key]);
+            }
+            let argv: Value =
+                serde_json::from_str(started["fields"]["argv"].as_str().unwrap()).unwrap();
+            assert_eq!(argv, original["argv"]);
+            for key in [
+                "cwd",
+                "stdin_sha256",
+                "timeout_seconds",
+                "output_limit_bytes",
+            ] {
+                assert_eq!(started["fields"][key], original[key]);
+            }
+            assert_eq!(
+                started["fields"]["stdin_sha256"],
+                chrono_harness::sha256(&input)
+            );
+            assert_eq!(started["fields"]["executable_sha256"], original["sha256"]);
+            assert_eq!(
+                started["fields"]["environment_sha256"],
+                original["environment_digest"]
+            );
+            let completed = event(&rows, "process.completed");
+            assert_eq!(completed["level"], "debug");
+            assert_eq!(completed["context"]["child_pid"], original["child_pid"]);
+            assert_eq!(completed["fields"]["exit_code"], exit);
+            assert_eq!(completed["fields"]["stdout_sha256"], process.stdout_sha256);
+            assert_eq!(completed["fields"]["stderr_sha256"], process.stderr_sha256);
+            assert_eq!(completed["fields"]["stdout_bytes"], 3);
+            assert_eq!(completed["fields"]["stderr_bytes"], 3);
+            let phases = [
+                "process.preparing",
+                "process.launched",
+                "process.ownership_identity",
+                "process.monitor_wait",
+                "process.streams_join",
+                "process.scope_exit",
+                "process.completed",
+            ];
+            for pair in phases.windows(2) {
+                assert!(
+                    rows.iter().position(|r| r["event"] == pair[0]).unwrap()
+                        < rows.iter().position(|r| r["event"] == pair[1]).unwrap()
+                );
+            }
+        });
+        if let Err(error) = asserted {
+            eprintln!(
+                "failed real process fixture retained at {}",
+                h.dir.keep().display()
+            );
+            std::panic::resume_unwind(error);
+        }
     }
 }
 

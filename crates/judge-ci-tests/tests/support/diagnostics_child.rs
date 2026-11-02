@@ -8,11 +8,29 @@ fn main() -> ExitCode {
         println!("chrono-test-ci-diagnostics/v1");
         return ExitCode::SUCCESS;
     }
-    if args == ["judge"] {
+    if args == ["judge-debug"] {
         let mut input = Vec::new();
         std::io::stdin().read_to_end(&mut input).unwrap();
-        let request = chrono_harness::decode(&input).unwrap();
-        let response = chrono_judge_ci::judge(&request);
+        let request: chrono_harness::Request = chrono_harness::decode(&input).unwrap();
+        // The fixture selects the existing library caller's DEBUG dispatcher;
+        // its host omits CI's optional INFO adoption, so real engine records
+        // retain this actual request context through the operation worker.
+        let logger = chrono_diagnostics::logging::Logger::new(
+            "ci-diagnostics-fixture",
+            chrono_diagnostics::logging::Level::DEBUG,
+            std::io::stderr(),
+        );
+        let response = logger.run(|| {
+            let span = tracing::info_span!(
+                "fixture.check",
+                request_id = request.request_id,
+                candidate = request.candidate,
+                config_sha256 = request.config_sha256
+            );
+            let _entered = span.enter();
+            chrono_judge_ci::judge(&request)
+        });
+        logger.finish().unwrap();
         serde_json::to_writer(std::io::stdout(), &response).unwrap();
         return ExitCode::from(if response.status == chrono_harness::Status::Passed {
             0

@@ -234,12 +234,16 @@ child terminal state, a completed check, successful original publication or a
 causal explanation for an ensuing timeout. Only the existing result and kernel
 ownership contracts establish those facts.
 
-Normal `info` output keeps the invocation phase, actual launch identity and
-terminal result. Reader barriers, monitor and ownership waits, joins and scope
-bookkeeping are `debug` lifecycle details; selecting `debug` or `trace` exposes
-them without multiplying ordinary process output. This level choice does not
-alter the retained child streams, launch record, exit status, digests or typed
-failure chain.
+Normal `info` output reports domain activity and outcomes through the existing
+projects operation, CI evaluation and migration phase events. The shared process
+engine's preparing, actual launch and completed-result events are `debug`, along
+with reader barriers, monitor and ownership waits, joins and scope bookkeeping.
+Selecting `debug` or `trace` exposes the real process facts and enclosing span
+context for every command, including nested maintenance. This shared level rule
+does not depend on a command or phase list. Original process receipts and launch
+descriptors retain argv, cwd, PID, bounds, digests, raw streams, exit status and
+typed failure chains at either level. A library return still leaves error
+handling and publication with the responsible domain boundary.
 
 Each logger record uses the existing synchronous JSONL write/flush path. The
 runner's already selected `retained-reference/v2` producer writes the judge's
@@ -265,14 +269,19 @@ feedback operation, `test.ci.execution-diagnostics`, over the current v3 unit pa
 It checks exact failing-operation bytes/exits and request/plan/launch
 association, a real enclosing timeout with original streams before a final
 aggregate, and logging IO failure alongside the original business failure.
-It also checks healthy verdicts, selected/omitted/unknown configuration and the
-slot/generation relationship to the original timeout ownership snapshot.
+It also checks healthy verdicts, selected/omitted/unknown configuration, actual
+DEBUG success/failure processes and equality of slot, generation and parent slot
+with the original timeout ownership snapshot. INFO coverage requires operation
+context and results while rejecting process detail events. DEBUG coverage uses
+the existing caller-scoped Logger with real shared-engine invocations; no new
+logging policy or API is introduced.
 Its Rust subprocess fixture is built by that project's existing Cargo test
 operation. Canonical verification still uses the full declared DELTA closure;
 this focused feedback does not establish committed canonical or native acceptance.
 
-Progress output scales with executed invocations/operations and launch argv size,
-not elapsed wait time or captured stdout/stderr size. Identity context repeats
+Normal progress output scales with domain operations and phases. DEBUG output
+also scales with process invocations and launch argv size, not elapsed wait time
+or captured stdout/stderr size. Identity context repeats
 per record; request bodies, environment values and stream bodies are not copied.
 The existing judge stream/output/report bounds remain in force, including failure
 on overflow. Additional per-record serialization, synchronous writes, retained
@@ -319,3 +328,16 @@ the diagnostics compile edge are migrated. These rows add serialization, writes
 and retained stderr; total native storage and validation cost remains unmeasured.
 The original eight migration members, operation limits and default concurrency
 remain required by the current canonical plan.
+
+The process-level repair changes product event semantics and its dedicated Rust
+test registration together: the CI test owner directly names the already locked
+`chrono-diagnostics` and `tracing` libraries and FILEMAP declares that compile
+edge. Previously every engine invocation emitted three INFO detail records; now
+those records require DEBUG while domain INFO and original evidence remain
+available. This intentionally replaces the failed per-process INFO contract.
+Focused real INFO/DEBUG, sink, prelaunch and publication regressions plus one
+complete eight-test migration under its original 900-second/1-MiB bounds are the
+engineering validation cost. Timings and original captures belong to the finite
+PR214 acceptance handoff; canonical/native validation, delivery and complete SPEC
+adoption remain caller-owned obligations. No general fit guarantee is made for
+arbitrary business output.

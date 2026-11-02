@@ -85,10 +85,12 @@ dependencies = [
 name = "chrono-judge-ci-tests"
 version = "0.1.0"
 dependencies = [
+ "chrono-diagnostics",
  "chrono-harness",
  "chrono-judge-ci",
  "serde_json",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]

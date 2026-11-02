@@ -1075,7 +1075,7 @@ fn run_process_inner_with_stdout(
         child_pid = tracing::field::Empty,
     );
     let _entered = span.enter();
-    tracing::info!(
+    tracing::debug!(
         event_id = "process.preparing",
         program = s.program,
         "preparing bounded process invocation"
@@ -1291,7 +1291,7 @@ fn run_process_inner_with_stdout(
         };
         let pid = child.id();
         span.record("child_pid", pid);
-        tracing::info!(
+        tracing::debug!(
             event_id = "process.launched",
             argv = %serde_json::to_string(&std::iter::once(executable.to_string_lossy().as_ref()).chain(s.args.iter().map(String::as_str)).collect::<Vec<_>>()).expect("argv serialize"),
             cwd = %root.display(), executable_sha256 = hash,
@@ -1735,7 +1735,7 @@ fn run_process_inner_with_stdout(
         }
     }
     let process = result?;
-    tracing::info!(
+    tracing::debug!(
         event_id = "process.completed",
         exit_code = process.exit_code,
         failure = process.failure.as_deref().unwrap_or(""),
