@@ -1431,7 +1431,7 @@ fn run_process_inner_with_stdout(
             })
         }
         let readers_ready = Arc::new(Barrier::new(3));
-        tracing::info!(
+        tracing::debug!(
             event_id = "process.readers_start",
             "starting original stream readers"
         );
@@ -1455,7 +1455,7 @@ fn run_process_inner_with_stdout(
             "stderr",
             readers_ready.clone(),
         );
-        tracing::info!(
+        tracing::debug!(
             event_id = "process.readers_ready_wait",
             "waiting at the existing stream-reader start barrier"
         );
@@ -1467,7 +1467,7 @@ fn run_process_inner_with_stdout(
         let start = Instant::now();
         let mut failure = None;
         let mut failure_detail = None;
-        tracing::info!(
+        tracing::debug!(
             event_id = "process.monitor_wait",
             "entering existing bounded process monitor"
         );
@@ -1541,7 +1541,7 @@ fn run_process_inner_with_stdout(
             }
         }
         #[cfg(unix)]
-        tracing::info!(
+        tracing::debug!(
             event_id = "process.ownership_drain",
             child_joined = status.is_some(),
             monitor_failure = failure.as_deref().unwrap_or(""),
@@ -1575,7 +1575,7 @@ fn run_process_inner_with_stdout(
             libc::kill(-(pid as i32), libc::SIGKILL);
         }
         if status.is_none() {
-            tracing::info!(
+            tracing::debug!(
                 event_id = "process.child_join",
                 "joining child after cancellation or monitor failure"
             );
@@ -1601,7 +1601,7 @@ fn run_process_inner_with_stdout(
             }
         }
         child.joined = status.is_some();
-        tracing::info!(
+        tracing::debug!(
             event_id = "process.streams_join",
             child_joined = child.joined,
             "joining original stdout/stderr readers and stdin writer"
@@ -1707,7 +1707,7 @@ fn run_process_inner_with_stdout(
             }
             process.launch_original = launch_descriptor(&process.cwd, paths.launch);
         }
-        tracing::info!(
+        tracing::debug!(
             event_id = "process.scope_exit",
             "leaving process scope; owned destructors and scoped tasks still must join"
         );

@@ -439,7 +439,7 @@ impl Launch {
     /// or additional ownership/terminal observation is performed.
     pub(crate) fn log_identity(&self) {
         let slot = &self.tree.slots()[self.index];
-        tracing::info!(
+        tracing::debug!(
             event_id = "process.ownership_identity",
             slot = self.index,
             generation = slot.generation.load(Ordering::Acquire),
@@ -827,12 +827,12 @@ impl ExitObserver {
         self.stop.store(true, Ordering::Release);
         notify(self.wake.as_raw_fd());
         if let Some(thread) = self.thread.take() {
-            tracing::info!(
+            tracing::debug!(
                 event_id = "process.observer_join",
                 "joining the existing kernel exit observer"
             );
             let result = thread.join();
-            tracing::info!(
+            tracing::debug!(
                 event_id = "process.observer_joined",
                 panicked = result.is_err(),
                 "kernel exit observer join returned"

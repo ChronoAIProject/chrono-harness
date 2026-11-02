@@ -234,6 +234,13 @@ child terminal state, a completed check, successful original publication or a
 causal explanation for an ensuing timeout. Only the existing result and kernel
 ownership contracts establish those facts.
 
+Normal `info` output keeps the invocation phase, actual launch identity and
+terminal result. Reader barriers, monitor and ownership waits, joins and scope
+bookkeeping are `debug` lifecycle details; selecting `debug` or `trace` exposes
+them without multiplying ordinary process output. This level choice does not
+alter the retained child streams, launch record, exit status, digests or typed
+failure chain.
+
 Each logger record uses the existing synchronous JSONL write/flush path. The
 runner's already selected `retained-reference/v2` producer writes the judge's
 actual stderr to its existing retained stream while the judge is running; it

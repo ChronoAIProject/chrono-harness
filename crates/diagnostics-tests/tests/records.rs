@@ -212,6 +212,21 @@ fn structured_events_preserve_unicode_newlines_span_context_and_level_filter() {
     assert_eq!(row.fields["ready"], true);
     assert!(row.timestamp.ends_with('Z'));
     assert!(row.error.is_none());
+
+    let verbose_output = Captured::default();
+    let verbose_logger = Logger::new("fixture", tracing::Level::DEBUG, verbose_output.clone());
+    verbose_logger.run(|| {
+        tracing::info!(event_id = "process.launched", message = "actual child");
+        tracing::debug!(
+            event_id = "process.monitor_wait",
+            message = "internal boundary"
+        );
+    });
+    verbose_logger.finish().unwrap();
+    let verbose_rows = verbose_output.records();
+    assert_eq!(verbose_rows.len(), 2);
+    assert_eq!(verbose_rows[1].event, "process.monitor_wait");
+    assert_eq!(verbose_rows[1].level, "debug");
 }
 
 #[test]

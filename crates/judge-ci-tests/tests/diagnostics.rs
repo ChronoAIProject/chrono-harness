@@ -117,20 +117,53 @@ fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
             .filter(|r| r["context"]["operation"] == "test.suite")
             .map(|r| r["event"].as_str().unwrap())
             .collect();
-        for pair in [
-            ["process.launched", "process.readers_ready_wait"],
-            ["process.readers_ready_wait", "process.monitor_wait"],
-            ["process.launched", "process.monitor_wait"],
-            ["process.monitor_wait", "process.ownership_drain"],
-            ["process.ownership_drain", "process.streams_join"],
-            ["process.streams_join", "process.completed"],
-            ["process.completed", "projects.operation_completed"],
+        assert!(
+            phases
+                .iter()
+                .position(|s| *s == "process.preparing")
+                .unwrap()
+                < phases
+                    .iter()
+                    .position(|s| *s == "process.launched")
+                    .unwrap()
+        );
+        assert!(
+            phases
+                .iter()
+                .position(|s| *s == "process.launched")
+                .unwrap()
+                < phases
+                    .iter()
+                    .position(|s| *s == "process.completed")
+                    .unwrap()
+        );
+        for detail in [
+            "process.ownership_identity",
+            "process.readers_start",
+            "process.readers_ready_wait",
+            "process.monitor_wait",
+            "process.ownership_drain",
+            "process.child_join",
+            "process.streams_join",
+            "process.scope_exit",
+            "process.observer_join",
+            "process.observer_joined",
         ] {
             assert!(
-                phases.iter().position(|s| *s == pair[0]).unwrap()
-                    < phases.iter().position(|s| *s == pair[1]).unwrap()
+                !phases.contains(&detail),
+                "verbose lifecycle event {detail} leaked into the INFO stream"
             );
         }
+        assert!(
+            phases
+                .iter()
+                .position(|s| *s == "process.completed")
+                .unwrap()
+                < phases
+                    .iter()
+                    .position(|s| *s == "projects.operation_completed")
+                    .unwrap()
+        );
         let joins = [
             "projects.workers_join",
             "projects.workers_joined",
@@ -240,18 +273,26 @@ fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
             .iter()
             .find(|r| r["event"] == "process.launched" && r["context"]["operation"] == "test.suite")
             .unwrap();
-        let waiting = rows
-            .iter()
-            .find(|r| {
-                r["event"] == "process.monitor_wait" && r["context"]["operation"] == "test.suite"
-            })
-            .unwrap();
         assert_eq!(launch["context"]["request_id"], req.request_id);
-        assert_eq!(waiting["context"]["candidate"], req.candidate);
-        assert_eq!(
-            waiting["context"]["child_pid"],
-            launch["context"]["child_pid"]
-        );
+        assert_eq!(launch["context"]["candidate"], req.candidate);
+        assert!(launch["context"]["child_pid"].is_number());
+        for detail in [
+            "process.ownership_identity",
+            "process.readers_start",
+            "process.readers_ready_wait",
+            "process.monitor_wait",
+            "process.ownership_drain",
+            "process.child_join",
+            "process.streams_join",
+            "process.scope_exit",
+            "process.observer_join",
+            "process.observer_joined",
+        ] {
+            assert!(
+                !rows.iter().any(|r| r["event"] == detail),
+                "verbose lifecycle event {detail} leaked into the INFO stream"
+            );
+        }
         assert!(
             !rows
                 .iter()
@@ -262,13 +303,6 @@ fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
                 .unwrap();
         assert_eq!(original["child_pid"], result.child_pid.unwrap());
         assert_eq!(launch["context"]["launcher_pid"], original["child_pid"]);
-        let identity = rows
-            .iter()
-            .find(|r| {
-                r["event"] == "process.ownership_identity"
-                    && r["context"]["operation"] == "test.suite"
-            })
-            .unwrap();
         let snapshot =
             &result.failure_record.as_ref().unwrap().error.context["ownership_at_monitor_end"];
         let owned = snapshot["launches"]
@@ -277,9 +311,9 @@ fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
             .iter()
             .find(|row| row["child_pid"] == launch["context"]["child_pid"])
             .unwrap();
-        assert_eq!(identity["fields"]["slot"], owned["slot"]);
-        assert_eq!(identity["fields"]["generation"], owned["generation"]);
-        assert_eq!(identity["fields"]["parent_slot"], owned["parent_slot"]);
+        assert!(owned["slot"].is_number());
+        assert!(owned["generation"].is_number());
+        assert!(owned["parent_slot"].is_number());
     });
     if let Err(error) = assert_result {
         eprintln!(
