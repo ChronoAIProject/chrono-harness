@@ -33,13 +33,16 @@ enum Kind {
 }
 
 impl Binding {
-    pub(super) fn unchanged(&self) -> Result {
+    pub(super) fn unchanged<'a>(
+        &'a self,
+        verified_files: &mut BTreeMap<&'a Path, &'a str>,
+    ) -> Result {
         crate::guard::measure(
             &format!("directory-unchanged:{}", self.source.display()),
-            || self.unchanged_inner(),
+            || self.unchanged_inner(verified_files),
         )
     }
-    fn unchanged_inner(&self) -> Result {
+    fn unchanged_inner<'a>(&'a self, verified_files: &mut BTreeMap<&'a Path, &'a str>) -> Result {
         if fs::canonicalize(&self.source).map_err(error)? != self.root {
             return Err(error(format!(
                 "toolchain directory root changed during guarded operation: {}",
@@ -52,10 +55,11 @@ impl Binding {
                 self.root.display()
             )));
         }
-        // Validation is a fresh pass: only repeated physical directory-prefix
-        // checks are shared within it. File bytes, children and aliases are
-        // always observed again, including after every guarded child.
-        let mut physical_directories = validate_files(&self.root, &self.files, false)?;
+        // Earlier directory bindings may have verified the same physical file
+        // in this unchanged-inputs pass. Every binding still checks its paths,
+        // children and aliases; no content observation crosses a child boundary.
+        let mut physical_directories =
+            validate_files(&self.root, &self.files, false, verified_files)?;
         for (path, entries) in &self.directories {
             let relative = path
                 .strip_prefix(&self.root)
@@ -70,7 +74,13 @@ impl Binding {
             )?;
         }
         self.check_links(&mut physical_directories)?;
-        check_physical_directories(&physical_directories)
+        check_physical_directories(&physical_directories)?;
+        verified_files.extend(
+            self.files
+                .iter()
+                .map(|(path, digest)| (path.as_path(), digest.as_str())),
+        );
+        Ok(())
     }
 
     fn check_links(&self, physical_directories: &mut BTreeSet<PathBuf>) -> Result {
@@ -217,11 +227,12 @@ fn validate_files(
     root: &Path,
     files: &[(PathBuf, String)],
     initial: bool,
+    verified_files: &BTreeMap<&Path, &str>,
 ) -> Result<BTreeSet<PathBuf>> {
-    // Hash the same complete inventory with two bounded lanes. Each lane owns
-    // its prefix checks; both are joined before any child can execute, and the
-    // merged parents are revalidated at pass completion. Nothing survives the
-    // pass or a guarded-child boundary.
+    // Keep the two bounded lanes and every regular-path check. Only content
+    // already verified by a completed binding in this same pass can be reused.
+    // Both lanes join and their parents are rechecked before recording new
+    // verified files. Nothing survives a guarded-child boundary.
     let lanes = usize::from(files.len() > 1) + 1;
     let validate = |lane| {
         let mut physical_directories = BTreeSet::new();
@@ -232,7 +243,11 @@ fn validate_files(
                 .to_str()
                 .ok_or_else(|| error("non UTF-8 directory input"))?;
             regular_path(root, relative, &mut physical_directories)?;
-            if file_identity(path).map_err(error)?.0 != *digest {
+            let matches = match verified_files.get(path.as_path()) {
+                Some(verified) => *verified == digest.as_str(),
+                None => file_identity(path).map_err(error)?.0 == *digest,
+            };
+            if !matches {
                 return Err(error(format!(
                     "{}: {}",
                     if initial {
@@ -426,7 +441,7 @@ fn bind_inner(
     if files.is_empty() {
         return Err(error("directory inventory must contain a file"));
     }
-    let mut physical_directories = validate_files(&directory, &files, true)?;
+    let mut physical_directories = validate_files(&directory, &files, true, &BTreeMap::new())?;
     let file_count = files.len();
     let mut directories = Vec::new();
     for entry in parsed.directories.unwrap_or_default() {

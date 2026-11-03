@@ -1020,8 +1020,9 @@ impl Check {
                 )));
             }
         }
+        let mut verified_directory_files = BTreeMap::new();
         for directory in &self.directories {
-            directory.unchanged()?;
+            directory.unchanged(&mut verified_directory_files)?;
         }
         for p in self
             .contract
