@@ -27,3 +27,7 @@ chrono-judge-routes = { path = "../judge-routes" }
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+# Registry custody belongs to chrono-worktree; use its production dev optimization.
+[profile.dev.package.chrono-worktree]
+opt-level = 1

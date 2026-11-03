@@ -117,13 +117,21 @@ fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> 
 }
 impl Drop for Host {
     fn drop(&mut self) {
-        let directory = std::env::var_os("CHRONO_WORKTREE_TEST_RECEIPTS")
+        let Some(directory) = Self::diagnostic_directory(std::thread::panicking()) else {
+            return;
+        };
+        self.retain_fixture_diagnostics(&directory);
+    }
+}
+impl Host {
+    fn diagnostic_directory(failed: bool) -> Option<PathBuf> {
+        std::env::var_os("CHRONO_WORKTREE_TEST_RECEIPTS")
             .map(PathBuf::from)
             .or_else(|| {
-                std::thread::panicking()
-                    .then(|| source().join(".chrono-harness/state/worktree-test-failures"))
-            });
-        let Some(directory) = directory else { return };
+                failed.then(|| source().join(".chrono-harness/state/worktree-test-failures"))
+            })
+    }
+    fn retain_fixture_diagnostics(&self, directory: &Path) {
         if let Err(error) = self._dir.retain_diagnostic(
             "actual requested or failed fixture diagnostics remain to be consumed",
         ) {
@@ -184,6 +192,7 @@ impl Drop for Host {
         }
     }
 }
+
 impl Host {
     fn new(layout: &str) -> Self {
         let dir = tempfile::Builder::new()

@@ -83,12 +83,77 @@ fn output(target: &Path) {
     fs::write(target.join("output λ/data"), vec![42u8; 8192]).unwrap();
 }
 
+fn capacity_fixture_with_diagnostics(
+    host: &Host,
+    directory: &Path,
+    body: impl FnOnce(),
+) -> std::thread::Result<()> {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(body));
+    if result.is_err() {
+        host.retain_fixture_diagnostics(directory);
+    }
+    result
+}
+
+#[test]
+fn caught_capacity_failure_exports_original_inventory_and_command_streams() {
+    let host = Host::new("payload");
+    let destination = tempfile::tempdir().unwrap();
+    let originals = [
+        (
+            "output-retention-v1/inventory.json",
+            b"original inventory\0\xff".as_slice(),
+        ),
+        (
+            "capacity-excluded.stdout",
+            b"partial stdout\0\xfe".as_slice(),
+        ),
+        (
+            "capacity-excluded.stderr",
+            b"original capacity refusal\0\xfd".as_slice(),
+        ),
+        ("capacity-excluded.status", b"exit status: 2".as_slice()),
+    ];
+    for (name, bytes) in &originals {
+        let path = host.root.join(".chrono-harness/state").join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+    let source_bytes = fs::read(host.root.join("payload")).unwrap();
+    let index = fs::read(host.root.join(".git/index")).unwrap();
+    let result = capacity_fixture_with_diagnostics(&host, destination.path(), || {
+        panic!("controlled original capacity fixture failure");
+    });
+    let failure = result.unwrap_err();
+    assert_eq!(
+        failure.downcast_ref::<&str>(),
+        Some(&"controlled original capacity fixture failure")
+    );
+    let retained = destination.path().join(format!(
+        "fixture-{}",
+        sha256(host.root.as_os_str().as_encoded_bytes())
+    ));
+    for (name, bytes) in originals {
+        assert_eq!(
+            fs::read(retained.join("coordinator-state").join(name)).unwrap(),
+            bytes
+        );
+        assert_eq!(
+            fs::read(host.root.join(".chrono-harness/state").join(name)).unwrap(),
+            bytes
+        );
+    }
+    assert_eq!(fs::read(host.root.join("payload")).unwrap(), source_bytes);
+    assert_eq!(fs::read(host.root.join(".git/index")).unwrap(), index);
+}
+
 // Exercise the actual lifecycle CLI with the adopted finite owner, not an
 // alternate maintenance implementation. Failed cases retain their original host.
 fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = Host::new("payload");
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let directory = Host::diagnostic_directory(true).unwrap();
+    let result = capacity_fixture_with_diagnostics(&h, &directory, || {
         h.kernel_cleanup();
         native_consumer(&h, "ordinary");
         let bootstrap = ".chrono-harness/ci/capacity.json";
@@ -302,7 +367,7 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
         assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
         drop(reader);
         drop(live);
-    }));
+    });
     if let Err(failure) = result {
         eprintln!(
             "original capacity fixture retained at {}",

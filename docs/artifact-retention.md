@@ -102,6 +102,18 @@ windows 8.00 s and 12.59 s); filesystem and unrelated fixture costs varied, so n
 end-to-end saving is established. The canonical candidate check remains the
 acceptance authority. No inventory format, release rule or product bound changes.
 
+The worktree production and dedicated test manifests adopt the runner's same
+`opt-level = 1` development profile. The projects test manifest applies that
+optimization to its `chrono-worktree` dependency, which owns the actual fixture
+registry transactions. Cargo profiles are selected by the invoking manifest;
+profiles in a path dependency do not configure its caller's build. Debug
+assertions, original test concurrency and all time/output/capacity bounds remain
+in force. The existing capacity and projects admission regressions are the
+behavioral consumers of these build inputs. This addresses the observed build
+configuration discrepancy; it does not identify an unobserved historical lock
+holder or establish a universal latency guarantee. Additional compilation and
+whole local/native validation costs remain unmeasured until actual execution.
+
 ## Bounded recovery and migration
 
 Lifecycle entry and output admission perform their existing bounded retention
@@ -126,6 +138,16 @@ interruption, current-report and delivery roots, and unchanged source/index
 bytes. Fully rooted exhaustion still refuses admission. Bootstrap participation
 uses the existing registered Rust interface fixture; it does not establish a
 real bootstrap build, host recovery, canonical adoption or native acceptance.
+
+Caught capacity-fixture panics use the existing Host diagnostic exporter before
+the host is retained and the original panic is propagated. The exporter preserves
+the inventory and command stdout, stderr and status bytes, including incomplete
+disposal state. A dedicated Rust regression checks those original binary bytes,
+the unchanged source/index and the original panic payload. This repairs diagnostic
+availability; capacity recovery remains subject to its unchanged bounded round.
+Default test concurrency, the 512-entry capacity and the 25 ms / 256-node bounds
+are unchanged. The additional export runs only for failed fixtures; its total
+native IO, storage and validation costs remain unmeasured.
 
 The supported owner entry is:
 
