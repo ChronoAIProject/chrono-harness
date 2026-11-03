@@ -45,6 +45,58 @@ fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
     original
 }
 
+#[test]
+fn duplicate_producer_map_members_and_nested_fields_refuse_publication() {
+    let h = host();
+    let (store, allocation) = allocation(&h);
+    let root = allocation.path();
+    let original = copy(&store, root, "body.bin");
+    let path = store.join("objects.json");
+    let before = fs::read(&path).unwrap();
+    let registry = json(&before).unwrap();
+    let text = registry.to_string();
+    let body = registry["objects"][0]["bodies"]["body.bin"].to_string();
+    let reference = r#"{"released":false,"reason":"actual diagnostic","receipt":null}"#;
+    let bodies = format!(r#""bodies":{{"body.bin":{body}}}"#);
+    let duplicate_receipt = body.replacen(r#""sha256":"#, r#""sha256":"duplicate","sha256":"#, 1);
+    let changes = [
+        (r#""generated":{}"#.to_owned(), r#""generated":{"cache/":"one","cache/":"two"}"#.to_owned()),
+        (r#""evidence":{}"#.to_owned(), r#""evidence":{"probe":null,"probe":{}}"#.to_owned()),
+        (r#""evidence":{}"#.to_owned(), r#""evidence":{"probe":[{"field":1,"field":2}]}"#.to_owned()),
+        (r#""consumers":{}"#.to_owned(), format!(r#""consumers":{{"reader":{reference},"reader":{reference}}}"#)),
+        (r#""consumers":{}"#.to_owned(), r#""consumers":{"reader":{"released":false,"reason":"one","reason":"two","receipt":null}}"#.to_owned()),
+        (bodies.clone(), format!(r#""bodies":{{"body.bin":{body},"b\u006fdy.bin":{body}}}"#)),
+        (bodies, format!(r#""bodies":{{"body.bin":{duplicate_receipt}}}"#)),
+    ];
+    for (old, replacement) in changes {
+        assert_eq!(text.matches(&old).count(), 1, "fixture marker {old}");
+        let damaged = text.replacen(&old, &replacement, 1);
+        fs::write(&path, &damaged).unwrap();
+        let error = chrono_worktree::TemporaryHost::allocate(
+            &store,
+            "test-allocation",
+            &[],
+            "must refuse duplicate ",
+        )
+        .err()
+        .expect("duplicate registry must refuse allocation");
+        assert!(error.contains("duplicate"), "{error}");
+        assert_eq!(fs::read(&path).unwrap(), damaged.as_bytes());
+        assert_eq!(fs::read(root.join("body.bin")).unwrap(), [0, 255, 7, 8]);
+        assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
+    }
+    fs::write(&path, &before).unwrap();
+    let next = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &[],
+        "restored valid registry ",
+    )
+    .unwrap();
+    assert!(next.path().is_dir());
+    assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
+}
+
 fn joined_command_body(outcome: &str) {
     use std::io::{Read, Write};
 

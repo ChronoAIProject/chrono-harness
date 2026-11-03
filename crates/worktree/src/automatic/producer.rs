@@ -43,7 +43,7 @@ struct Object {
     publication: Option<Receipt>,
     #[serde(deserialize_with = "strict_map")]
     generated: BTreeMap<String, String>,
-    #[serde(deserialize_with = "strict_map")]
+    #[serde(deserialize_with = "strict_evidence")]
     evidence: BTreeMap<String, Value>,
     #[serde(deserialize_with = "strict_map")]
     consumers: BTreeMap<String, Reference>,
@@ -67,12 +67,42 @@ struct Registry {
     objects: Vec<Object>,
 }
 
-// Keep typed registry decoding strict at each dynamic map without constructing
-// a second generic tree for the complete object inventory.
+// Decode typed members directly. Large copied-body maps otherwise construct
+// and deserialize a second JSON tree while the shared registry lease is held.
 fn strict_map<'de, D, T>(d: D) -> Result<BTreeMap<String, T>, D::Error>
 where
     D: serde::Deserializer<'de>,
-    T: serde::de::DeserializeOwned,
+    T: Deserialize<'de>,
+{
+    struct Entries<T>(std::marker::PhantomData<T>);
+    impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for Entries<T> {
+        type Value = BTreeMap<String, T>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a map without duplicate members")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(
+            self,
+            mut map: A,
+        ) -> Result<Self::Value, A::Error> {
+            let mut out = BTreeMap::new();
+            while let Some(key) = map.next_key::<String>()? {
+                if out.contains_key(&key) {
+                    return Err(serde::de::Error::custom(format!(
+                        "duplicate JSON member {key}"
+                    )));
+                }
+                out.insert(key, map.next_value::<T>()?);
+            }
+            Ok(out)
+        }
+    }
+    d.deserialize_map(Entries(std::marker::PhantomData))
+}
+
+// Opaque evidence still needs recursive duplicate detection inside its values.
+fn strict_evidence<'de, D>(d: D) -> Result<BTreeMap<String, Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
 {
     serde_json::from_value(chrono_harness::strict_json_value(d)?).map_err(serde::de::Error::custom)
 }
