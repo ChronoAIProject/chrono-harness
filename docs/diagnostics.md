@@ -361,7 +361,8 @@ the test receives these readiness bytes on a single blocking native socket befor
 the one-second interruption, keeps that socket live until engine join, and requires
 DEBUG launch/ownership records, original
 launch identity, exact original streams, real timeout and monitor-end
-slot/generation/parent-slot equality, with no completed operation or final response.
+slot/generation/parent-slot equality. That snapshot must identify the operation
+and its launcher as nonterminal. No final check response may be published.
 A second case holds the real version-admission call for over one second on that
 socket before preparation completes. Its elapsed/read-error original distinguishes
 admission from the subsequent short execution monitor. Default concurrency and
@@ -370,15 +371,17 @@ registered execution phase from admission; it does not assert that whole-check
 admission fits inside one second. Missing readiness remains failure with retained
 originals.
 
-The finite engineering run exposed a remaining gap after real readiness: the
-runner cooperatively cancels and joins nested engines before killing the enclosing
+The finite engineering run exposed an invalid absence assertion after real
+readiness: the runner cooperatively cancels and joins nested engines before killing the enclosing
 process. Projects can therefore publish a genuine error operation completion
-during shutdown. The unchanged no-completed-operation assertion fails on that
-schedule. Earlier passing cases do not establish the required invariant; this
-fixture is not accepted as a deterministic repair. No event is filtered, assertion
-removed or shutdown/deadline policy changed to conceal that result. A composition
-satisfying that obligation remains unresolved. Failed fixtures retain their
-original streams, launch, request, prepared plan, readiness and engine result.
+during shutdown. The fixture now checks any such event against the exact request,
+candidate, configuration, plan and operation, requires its error status and real
+receipt, and checks any process completion against the launched child, enclosing
+cancellation and original stream digests. Absence after cancellation is not an
+execution invariant. The monitor snapshot, timeout and empty final response
+remain independent assertions; shutdown and deadline policy are unchanged.
+Failed fixtures retain their original streams, launch, request, prepared plan,
+readiness and engine result.
 The optional `CHRONO_CI_TEST_RECEIPTS` destination retains these same originals
 after passing assertions for the finite caller evidence consumer; its descriptor
 states the caller's debugging/acceptance release obligation.

@@ -341,11 +341,47 @@ fn incomplete_execution(delayed_admission: bool) {
                     && r["context"]["child_pid"] == launch["context"]["child_pid"]
             })
             .unwrap();
-        assert!(
-            !rows
-                .iter()
-                .any(|r| r["event"] == "projects.operation_completed")
-        );
+        // The monitor observes live execution before cancellation. Cleanup
+        // can still join the nested engine and publish its genuine error
+        // outcome before the enclosing process is killed. Such an event is
+        // distinct from a final check response or a successful operation.
+        for completed in rows
+            .iter()
+            .filter(|r| r["event"] == "projects.operation_completed")
+        {
+            for key in [
+                "request_id",
+                "candidate",
+                "config_sha256",
+                "plan",
+                "operation",
+            ] {
+                assert_eq!(completed["context"][key], launch["context"][key]);
+            }
+            assert_eq!(completed["fields"]["status"], "error");
+            assert_eq!(completed["fields"]["has_receipt"], true);
+        }
+        for completed in rows.iter().filter(|r| {
+            r["event"] == "process.completed" && r["context"]["operation"] == "test.suite"
+        }) {
+            assert_eq!(
+                completed["context"]["child_pid"],
+                launch["context"]["child_pid"]
+            );
+            assert_eq!(completed["fields"]["exit_code"], -1);
+            assert_eq!(
+                completed["fields"]["failure"],
+                "process cancelled by enclosing owner"
+            );
+            assert_eq!(
+                completed["fields"]["stdout_sha256"],
+                chrono_harness::sha256(&[255, 0, 10])
+            );
+            assert_eq!(
+                completed["fields"]["stderr_sha256"],
+                chrono_harness::sha256(&[254, 0, 10])
+            );
+        }
         let original: Value =
             serde_json::from_slice(&fs::read(&directory.join("producer.launch.json")).unwrap())
                 .unwrap();
@@ -365,6 +401,9 @@ fn incomplete_execution(delayed_admission: bool) {
             .iter()
             .find(|row| row["child_pid"] == launch["context"]["child_pid"])
             .unwrap();
+        assert_eq!(owned["terminal"], false);
+        assert_eq!(owned["launcher_terminal"], false);
+        assert_eq!(owned["terminal_observed_ns"], 0);
         for key in ["slot", "generation", "parent_slot"] {
             assert_eq!(
                 owned[key], identity["fields"][key],
