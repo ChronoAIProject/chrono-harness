@@ -183,6 +183,60 @@ fn absent_temporary_outputs_do_not_rewrite_producer_state_or_publish_disposal() 
 }
 
 #[test]
+fn one_drain_keeps_every_released_artifact_disposal_and_original() {
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::RetainedArtifact::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    fs::create_dir_all(&store).unwrap();
+    let mut paths = vec![];
+    for name in ["first", "middle", "last"] {
+        let path = store.join(name);
+        fs::create_dir(&path).unwrap();
+        fs::write(path.join("source.rs"), format!("original source {name}")).unwrap();
+        for (file, bytes) in [
+            ("stdout.bin", "actual fixture producer stdout"),
+            ("stderr.bin", "actual fixture producer stderr"),
+            ("binding.json", "{\"fixture_producer\":\"same-drain\"}"),
+        ] {
+            fs::write(path.join(file), bytes).unwrap();
+        }
+        fs::create_dir(path.join("cache 空白")).unwrap();
+        fs::write(path.join("cache 空白/generated"), "rebuildable output").unwrap();
+        let artifact = chrono_worktree::RetainedArtifact::begin(
+            &store,
+            "test-allocation",
+            &path,
+            &outputs,
+            "actual-assertion",
+            "three released independent artifacts in one drain",
+        )
+        .unwrap();
+        artifact.seal().unwrap();
+        artifact
+            .release("actual-assertion", "output assertions consumed")
+            .unwrap();
+        paths.push(path);
+    }
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    assert_eq!(registry["objects"].as_array().unwrap().len(), 3);
+    for (object, path) in registry["objects"].as_array().unwrap().iter().zip(paths) {
+        assert_eq!(object["disposed"], true);
+        assert_eq!(object["attempts"].as_array().unwrap().len(), 1);
+        assert!(!path.join("cache 空白").exists());
+        assert_eq!(
+            fs::read_to_string(path.join("source.rs")).unwrap(),
+            format!(
+                "original source {}",
+                path.file_name().unwrap().to_str().unwrap()
+            )
+        );
+    }
+}
+
+#[test]
 fn unavailable_allocation_preserves_originals_and_does_not_block_eligible_sibling() {
     let h = host();
     let (store, outputs) =

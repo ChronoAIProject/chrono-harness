@@ -241,7 +241,7 @@ fn register(
             "original_custody":"retained", "historical_producer_outcome":"unchanged"
         }),
     )?;
-    store.registry.objects[i].bodies.insert(
+    Arc::make_mut(&mut store.registry.objects[i]).bodies.insert(
         member.into(),
         Body {
             intent,
@@ -254,7 +254,7 @@ fn register(
         },
     );
     lease.stable()?;
-    store.save()?;
+    store.save(i)?;
     Ok(store.directory.join(name))
 }
 
