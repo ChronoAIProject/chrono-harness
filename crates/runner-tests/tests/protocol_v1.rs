@@ -2722,6 +2722,18 @@ fn closed_output_streams_preserve_child_exit_and_timeout() {
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn kernel_exit_with_pending_child_join_needs_no_further_advisory_hint() {
+    let output = std::process::Command::new(PROCESS_FIXTURE)
+        .arg("ordered-completion")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("actual joined exit=7"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("expired=true"));
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn unexpected_exec_helper() {

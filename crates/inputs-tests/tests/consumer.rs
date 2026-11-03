@@ -754,16 +754,9 @@ print('selected workflow migration compatibility checked')
         // Keep an actual downstream request for view-integrity rejection tests.
         // The wrapper forwards original stdin/stdout to the real FILEMAP judge.
         let wrapper = ".chrono-harness/bin/record-filemap";
-        let code = format!(
-            "#!{}\nimport os,pathlib,subprocess,sys\nb=sys.stdin.buffer.read()\npathlib.Path('.chrono-harness/state/filemap-request.json').write_bytes(b)\nfds=tuple(int(fd) for fd in os.environ.get('CHRONO_PROCESS_FDS','').split(',') if fd)\nr=subprocess.run(['.chrono-harness/bin/chrono-judge-filemap']+sys.argv[1:],input=b,pass_fds=fds,stdout=subprocess.PIPE,stderr=subprocess.PIPE)\nsys.stdout.buffer.write(r.stdout)\nsys.stderr.buffer.write(r.stderr)\nsys.exit(r.returncode)\n",
-            h.tool.display()
-        );
-        fs::write(h.root().join(wrapper), &code).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(h.root().join(wrapper), fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        let helper = std::path::Path::new(env!("CARGO_BIN_EXE_chrono-inputs-test-record-filemap"));
+        host::copied_fixture_input(&h.root(), helper, &h.root().join(wrapper));
+        fs::copy(helper, h.root().join(wrapper)).unwrap();
         let judge = h.values.get_mut(JUDGES).unwrap()["judges"]
             .as_array_mut()
             .unwrap()
@@ -771,7 +764,7 @@ print('selected workflow migration compatibility checked')
             .find(|j| j["id"] == "filemap")
             .unwrap();
         judge["executable"] = json!(wrapper);
-        judge["sha256"] = json!(sha256(code.as_bytes()));
+        judge["sha256"] = json!(sha256(&fs::read(helper).unwrap()));
     }
     h.save();
     h.base = h.candidate.clone();

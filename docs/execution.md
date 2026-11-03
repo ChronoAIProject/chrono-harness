@@ -126,7 +126,19 @@ layout, so coupled nested binaries must be upgraded together; incompatible
 inherited owners fail instead of silently reinterpreting shared memory.
 
 On macOS/Linux, the operation monitor blocks on its existing private notification
-socket until an exit/stream/lifecycle hint or the remaining execution deadline.
+socket until an exit/join/stream/lifecycle hint or the remaining execution deadline.
+If a timely kernel exit observation still leaves `Child::try_wait` pending before
+the deadline, the direct owner transfers that same `Child` to one native blocking
+`Child::wait` thread. The thread publishes its actual status or wait error before
+notifying the existing socket. This closes the interval between exit observation
+and waitability without requiring another advisory event or periodic status
+probes. No waiter starts after the execution deadline. The monitor continues to
+enforce cancellation, output limits and the original deadline; cleanup or unwind
+terminates the owned child when necessary and joins the waiter before returning.
+The controlled ordering regression uses a real kernel exit event, one deliberately
+pending status probe and no further advisory hints, then requires the real joined
+status and original streams. This proves that transition, not the cause of any
+particular native timeout. Additional waiter cost is unmeasured.
 The sole exit observer blocks on registered kernel identities and the existing
 launch-registration socket. Cancellation, slot release and observer shutdown
 notify that same socket; completed descendant retirement is closed within the

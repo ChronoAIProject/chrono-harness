@@ -5,6 +5,7 @@ mod checkout;
 pub mod facts;
 mod facts_binding;
 mod facts_configs;
+mod process_child;
 #[cfg(unix)]
 mod process_ownership;
 /// Existing selector owner resolves a host policy for provider consumers.
@@ -973,13 +974,13 @@ fn cleanup_evidence_path(path: &Path) -> Result<(), ProcessFailure> {
 }
 // The existing process engine owns termination on errors and unwinding too.
 struct OwnedProcess {
-    child: std::process::Child,
+    child: process_child::DirectChild,
     #[cfg(unix)]
     ownership: process_ownership::Launch,
     joined: bool,
 }
 impl std::ops::Deref for OwnedProcess {
-    type Target = std::process::Child;
+    type Target = process_child::DirectChild;
     fn deref(&self) -> &Self::Target {
         &self.child
     }
@@ -1284,7 +1285,7 @@ fn run_process_inner_with_stdout(
             }
         };
         let mut child = OwnedProcess {
-            child,
+            child: process_child::DirectChild::new(child),
             #[cfg(unix)]
             ownership,
             joined: false,
@@ -1490,7 +1491,16 @@ fn run_process_inner_with_stdout(
                 failure = Some("process timed out".into());
                 break None;
             }
-            match child.try_wait() {
+            #[cfg(unix)]
+            let joined_wake = child.ownership.wake();
+            #[cfg(not(unix))]
+            let joined_wake = std::thread::current();
+            match child.probe(timely_exit, expired, move || {
+                #[cfg(unix)]
+                joined_wake.notify();
+                #[cfg(not(unix))]
+                joined_wake.unpark();
+            }) {
                 Ok(Some(v)) => break Some(v),
                 // A kernel observation never substitutes for joining the child
                 // and never grants another wait interval beyond the deadline.

@@ -20,6 +20,12 @@ test = false
 bench = false
 
 [[bin]]
+name = "chrono-inputs-test-record-filemap"
+path = "tests/support/record_filemap.rs"
+test = false
+bench = false
+
+[[bin]]
 name = "chrono-inputs-test-zero"
 path = "tests/support/zero.rs"
 test = false
