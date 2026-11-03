@@ -294,7 +294,12 @@ fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained:
             Err(error) if error.kind() == std::io::ErrorKind::NotFound
         ));
         if retained {
-            crate::tools::copied_fixture_input(root, &built, &bin.join(name));
+            crate::tools::copied_fixture_input(
+                root,
+                &built,
+                &bin.join(name),
+                "crates/ci-tests/tests/units.rs::install_retained_tools",
+            );
         }
         copy.arg(built);
     }

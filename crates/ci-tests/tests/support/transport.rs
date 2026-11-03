@@ -99,6 +99,82 @@ fn declared_git() -> ! {
     panic!("declared Git execution: {error}");
 }
 
+fn preparation_fixture() {
+    use serde_json::{Value, json};
+    use std::fs::{self, OpenOptions};
+    use std::io::Read;
+
+    let fixture: Value =
+        serde_json::from_slice(&fs::read(".chrono-harness/state/producer-fixture.json").unwrap())
+            .unwrap();
+    let case = fixture["case"].as_str().unwrap();
+    let mut trace = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(".chrono-harness/state/producer-calls")
+        .unwrap();
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        if case == "version" {
+            trace.write_all(b"probe").unwrap();
+            println!("{}", "wrong-probe-version".repeat(20000));
+        } else {
+            println!("chrono-worktree 0.1.0");
+        }
+        return;
+    }
+    trace.write_all(b"acquisition").unwrap();
+    match case {
+        "failed" => {
+            println!("{}", "producer-stdout-original".repeat(20000));
+            eprintln!(
+                "E_FIXTURE_ACQUISITION: fetch failed {}",
+                "stderr-original".repeat(20000)
+            );
+            std::process::exit(9);
+        }
+        "decode" => println!("{}", "not-json-original".repeat(20000)),
+        "validation" => {
+            let mut raw = Vec::new();
+            io::stdin().read_to_end(&mut raw).unwrap();
+            let request: Value = serde_json::from_slice(&raw).unwrap();
+            println!(
+                "{}",
+                json!({
+                    "schema": "wrong-input-schema",
+                    "request_sha256": chrono_harness::sha256(&raw),
+                    "source": request["source"], "profile": request["profile"],
+                    "base": fixture["base"], "candidate": "b".repeat(40),
+                    "initial": false, "scope": null, "context": null,
+                    "originals": [],
+                    "evidence": {"note": "original-validation-evidence".repeat(20000)},
+                })
+            );
+        }
+        _ => panic!("unknown preparation fixture: {case}"),
+    }
+}
+
+fn retention_failure_fixture() {
+    use serde_json::{Value, json};
+    use std::fs;
+
+    fs::rename(
+        ".chrono-harness/state/preparation",
+        ".chrono-harness/state/saved-preparation",
+    )
+    .unwrap();
+    std::os::unix::fs::symlink("saved-preparation", ".chrono-harness/state/preparation").unwrap();
+    let request: Value = serde_json::from_reader(io::stdin().lock()).unwrap();
+    println!(
+        "{}",
+        json!({
+            "protocol": request["protocol"], "request_id": request["request_id"],
+            "status": "passed", "results": [{"id": "fixture", "status": "passed",
+                "cause": "actual", "exit_code": 0}], "evidence": {"actual": true},
+        })
+    );
+}
+
 fn main() {
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
@@ -113,6 +189,8 @@ fn main() {
     }
     let executable = std::env::args_os().next().unwrap();
     match Path::new(&executable).file_name().unwrap().as_bytes() {
+        b"fixture-producer" => return preparation_fixture(),
+        b"retention-failure" => return retention_failure_fixture(),
         b"declared-git" => declared_git(),
         b"parent-gh" => return provider::parent(&std::env::args().skip(1).collect::<Vec<_>>()),
         b"$CHRONO_BASE" => {

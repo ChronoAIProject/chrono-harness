@@ -2194,6 +2194,21 @@ fn script(root: &Path, path: &str, body: &str) {
     fs::set_permissions(root.join(path), fs::Permissions::from_mode(0o755)).unwrap();
 }
 
+fn native_fixture(root: &Path, path: &str) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let original = Path::new(env!("CARGO_BIN_EXE_chrono-ci-test-transport"));
+    let destination = root.join(path);
+    crate::tools::copied_fixture_input(
+        root,
+        original,
+        &destination,
+        "crates/ci-tests/tests/short.rs::native_fixture",
+    );
+    fs::copy(original, &destination).unwrap();
+    fs::set_permissions(destination, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
 fn native_transport_ready(root: &Path) -> &'static str {
     let program = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
     let output = Command::new(program)
@@ -2231,34 +2246,15 @@ fn retained_receipt(root: &Path, prefix: &str) -> (String, Vec<u8>, Value) {
 fn short_producer_failure_version_decode_and_validation_keep_originals() {
     for case in ["failed", "version", "decode", "validation"] {
         let mut h = ShortHost::new();
-        let body = if case == "version" {
-            "#!/bin/sh\nprintf probe >> .chrono-harness/state/producer-calls\n/usr/bin/python3 -c 'print(\"wrong-probe-version\" * 20000)'\n"
-        } else {
-            "#!/bin/sh\nif [ \"$1\" = --version ]; then printf 'chrono-worktree 0.1.0\\n'; exit 0; fi\nprintf acquisition >> .chrono-harness/state/producer-calls\nexec /usr/bin/python3 .chrono-harness/state/producer.py\n"
-        };
-        script(&h.root, ".chrono-harness/bin/fixture-producer", body);
-        let code = match case {
-            "failed" => "import sys\nprint('producer-stdout-original' * 20000)\nprint('E_FIXTURE_ACQUISITION: fetch failed ' + 'stderr-original' * 20000, file=sys.stderr)\nsys.exit(9)\n".to_string(),
-            "decode" => "print('not-json-original' * 20000)\n".into(),
-            "validation" => format!("import json,sys,hashlib\nr=sys.stdin.buffer.read(); q=json.loads(r)\nprint(json.dumps(dict(schema='chrono-check-inputs/v1',request_sha256=hashlib.sha256(r).hexdigest(),source=q['source'],profile=q['profile'],base='{}',candidate='{}',initial=False,scope=None,context=None,originals=[],evidence=dict(note='original-validation-evidence'*20000))))\n", h.base, "b".repeat(40)),
-            _ => String::new(),
-        };
+        native_fixture(&h.root, ".chrono-harness/bin/fixture-producer");
         json_file(
             &h.root,
-            ".chrono-harness/state/placeholder.json",
-            &json!({}),
+            ".chrono-harness/state/producer-fixture.json",
+            &json!({"case": case, "base": h.base}),
         );
-        fs::write(h.root.join(".chrono-harness/state/producer.py"), code).unwrap();
         h.modify(".chrono-harness/config.json", |c| {
             c["tools"][1]["program"] = json!(".chrono-harness/bin/fixture-producer")
         });
-        // Invalid identity must be rejected, independent of the presentation.
-        if case == "validation" {
-            let code = fs::read_to_string(h.root.join(".chrono-harness/state/producer.py"))
-                .unwrap()
-                .replace("chrono-check-inputs/v1", "wrong-input-schema");
-            fs::write(h.root.join(".chrono-harness/state/producer.py"), code).unwrap();
-        }
         let out = h.command(&["check"]).output().unwrap();
         assert_eq!(out.status.code(), Some(2));
         assert!(out.stdout.is_empty());
@@ -2367,11 +2363,7 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
     // Force the evidence owner to become unavailable after acquisition, in the
     // judge process. Publication and outer-error retention must both fail.
     fs::remove_file(h.root.join(".chrono-harness/state/blocked")).unwrap();
-    script(
-        &h.root,
-        ".chrono-harness/bin/retention-failure",
-        "#!/bin/sh\nmv .chrono-harness/state/preparation .chrono-harness/state/saved-preparation\nln -s saved-preparation .chrono-harness/state/preparation\nexec /usr/bin/python3 -c 'import json,sys; r=json.load(sys.stdin); print(json.dumps(dict(protocol=r[\"protocol\"],request_id=r[\"request_id\"],status=\"passed\",results=[dict(id=\"fixture\",status=\"passed\",cause=\"actual\",exit_code=0)],evidence=dict(actual=True))))'\n",
-    );
+    native_fixture(&h.root, ".chrono-harness/bin/retention-failure");
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["report_path"] = json!(".chrono-harness/state/check.json");
         c["judge"]["program"] = json!(".chrono-harness/bin/retention-failure");

@@ -144,9 +144,19 @@ def qualified_publication(root, current, selected):
             "source": {k: report["source"][k] for k in ("commit", "tree")}, "selected": installed}
 
 
-def check_shared_install(root, source, target):
+def check_shared_install(root, source, target, adoption):
     if os.environ.get("CHRONO_WORKTREE_BOOTSTRAP") == str(root):
-        if not target.exists() or file_binding(source)["sha256"] != file_binding(target)["sha256"]:
+        anchor = bootstrap.coordinator_root(root, adoption)
+        local = bootstrap.host_path(root, adoption["program"], ".chrono-harness/bin/")
+        if target != local:
+            raise ValueError("lifecycle install destination differs from participation")
+        current = file_binding(target) if target.exists() else None
+        if anchor != root:
+            selected = bootstrap.host_path(anchor, adoption["program"], ".chrono-harness/bin/")
+            coordinator = file_binding(selected)
+            if current is None or current["identity"] != coordinator["identity"]:
+                return
+        if current is None or file_binding(source)["sha256"] != current["sha256"]:
             raise ValueError("changed lifecycle executable requires exclusive owner deployment")
 
 

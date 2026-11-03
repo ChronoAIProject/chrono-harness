@@ -79,6 +79,19 @@ def observe_source(root):
     return observed
 
 
+def coordinator_root(root, adoption):
+    if set(adoption) != {"coordinator_root", "program", "git", "config"} or adoption["coordinator_root"] != "git-main-worktree":
+        raise ValueError("unsupported bootstrap participation declaration")
+    program = Path(adoption["program"])
+    if program.is_absolute() or ".." in program.parts or program.parts[:2] != (".chrono-harness", "bin"):
+        raise ValueError("bootstrap participant must be a registered host binary")
+    inventory = subprocess.check_output([adoption["git"], "--no-optional-locks", "-C", str(root), "worktree", "list", "--porcelain", "-z"], pass_fds=PASS_FDS)
+    first = inventory.split(b"\0", 1)[0]
+    if not first.startswith(b"worktree "):
+        raise ValueError("coordinator Git owner inventory is missing")
+    return Path(os.fsdecode(first[len(b"worktree "):]))
+
+
 def participate(root, config_path, config):
     adoption = config.get("participation")
     if adoption is None:
@@ -90,17 +103,8 @@ def participate(root, config_path, config):
         if ("owner_upgrade" in config or "owner_stage" in config) and not PASS_FDS:
             raise ValueError("bootstrap participation requires original ownership descriptors")
         return False
-    if set(adoption) != {"coordinator_root", "program", "git", "config"} or adoption["coordinator_root"] != "git-main-worktree":
-        raise ValueError("unsupported bootstrap participation declaration")
-    program = Path(adoption["program"])
-    if program.is_absolute() or ".." in program.parts or program.parts[:2] != (".chrono-harness", "bin"):
-        raise ValueError("bootstrap participant must be a registered host binary")
-    inventory = subprocess.check_output([adoption["git"], "--no-optional-locks", "-C", str(root), "worktree", "list", "--porcelain", "-z"], pass_fds=PASS_FDS)
-    first = inventory.split(b"\0", 1)[0]
-    if not first.startswith(b"worktree "):
-        raise ValueError("coordinator Git owner inventory is missing")
-    anchor = Path(os.fsdecode(first[len(b"worktree "):]))
-    owner = anchor / program
+    anchor = coordinator_root(root, adoption)
+    owner = anchor / adoption["program"]
     if anchor == root and (root / ".git").is_dir() and not owner.exists():
         # Git main cannot enroll as a disposable linked attachment; it may seed tools.
         return False
@@ -543,7 +547,7 @@ def main():
                 raise ValueError("missing built tool: " + str(source))
             if item["destination"] == config.get("participation", {}).get("program"):
                 import bootstrap_owner
-                bootstrap_owner.check_shared_install(root, source, target)
+                bootstrap_owner.check_shared_install(root, source, target, config["participation"])
                 if target.exists() and file_digest(source) == file_digest(target):
                     result["installed"].append({"path": item["destination"], "sha256": file_digest(target)})
                     continue

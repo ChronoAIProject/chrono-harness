@@ -1421,8 +1421,14 @@ the original admission/enrollment protocol. The internal stage profile builds
 `build.worktree` and retains its distinct candidate executable under
 `.chrono-harness/bin/owner-stages/`, which the unchanged cleanup policy retains.
 The construction command and children join before the staged executable requests
-EX. Ordinary shared bootstrap can reuse identical lifecycle bytes; changing them
-requires the owner deployment callback. Python owns byte validation, original-inode
+EX. Ordinary shared bootstrap can reuse identical coordinator-owner bytes;
+changing them requires the owner deployment callback. A linked checkout installs
+its separately owned local tool under the existing enrollment protection.
+Bootstrap resolves the declared Git-main inventory before classifying that
+destination, rejects symlink paths, and applies the coordinator-owner byte gate
+to any local hard link sharing the coordinator's inode. Real Git worktree
+regressions cover first installation, local replacement, unchanged coordinator
+identity and bytes, and direct/ancestor symlink and inode aliases. Python owns byte validation, original-inode
 preservation, atomic replacement and interrupted-publication reentry. Rust owns
 physical attachment, committed endpoints, original admission/enrollment EX and
 publication/adoption checks. The original protection stays held throughout. An
