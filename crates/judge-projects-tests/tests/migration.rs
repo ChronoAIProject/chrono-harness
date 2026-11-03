@@ -1182,10 +1182,31 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
     assert_eq!(handoff["status"], "maintained");
     assert_eq!(handoff["invoking_root"], json!(root));
     assert_eq!(handoff["lifecycle_coordinator_root"], json!(root));
+    let objects: Vec<_> = handoff["producer_drains"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|entry| {
+            let input = &entry["input"];
+            assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
+            assert_eq!(input["format"], "receipt");
+            assert_eq!(entry["receipt"]["path"], input["path"]);
+            assert_eq!(entry["receipt"]["sha256"], input["sha256"]);
+            let bytes = fs::read(
+                Path::new(input["source_root"].as_str().unwrap())
+                    .join(input["path"].as_str().unwrap()),
+            )
+            .unwrap();
+            assert_eq!(bytes.len() as u64, input["byte_length"].as_u64().unwrap());
+            assert_eq!(chrono_harness::sha256(&bytes), input["sha256"]);
+            let child: Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(child["status"], entry["status"]);
+            assert_eq!(child["error"], entry["error"]);
+            child["producer_objects"].as_array().unwrap().clone()
+        })
+        .collect();
     assert!(
-        handoff["producer_objects"]
-            .as_array()
-            .unwrap()
+        objects
             .iter()
             .any(|member| member["producer"] == "ci-test-host"
                 && member["path"].is_string()

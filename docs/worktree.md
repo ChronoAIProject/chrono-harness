@@ -1381,6 +1381,17 @@ preserving partial diagnostics. Cleanup does not release original evidence or
 declare lifecycle completion. Native artifact size and collection-time savings
 require observation of the resulting candidate.
 
+Each pass lists producer cleanup originals in `producer_drains`, with exact
+`receipt` and `chrono-worktree-retained-input/v1` identity references. Consumers
+verify the referenced bytes and read `producer_objects` from that producer's
+original; parent reports do not copy those rows. Lifecycle publication registers
+the admission and post-use receipt dependencies with the adopted retention owner,
+so a current parent consumer retains its producer originals. Releasing that
+consumer allows the ordinary bounded policy to reclaim the unrooted closure;
+historical references alone do not keep it alive. Original status, error and
+process evidence remain in each producer report. Other duplicated report content,
+physical savings and complete SPEC §10.1 acceptance remain unverified.
+
 `migrate --path WORKTREE --adopt-fixtures STATE_PATH` consumes a finite
 `chrono-fixture-body-custody/v1` declaration through the existing migration owner.
 It binds current HEAD, allocation/intent/physical identity, exact member bytes,

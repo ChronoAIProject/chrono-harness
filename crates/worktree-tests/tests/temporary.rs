@@ -166,7 +166,8 @@ fn absent_temporary_outputs_do_not_rewrite_producer_state_or_publish_disposal() 
     let before = fs::read(store.join("objects.json")).unwrap();
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
-    let row = report["producer_objects"]
+    let objects = producer_objects(&report);
+    let row = objects
         .as_array()
         .unwrap()
         .iter()
@@ -288,7 +289,8 @@ fn unavailable_allocation_preserves_originals_and_does_not_block_eligible_siblin
         fs::read(retained.join("source.rs")).unwrap(),
         b"original source"
     );
-    let row = report["producer_objects"]
+    let objects = producer_objects(&report);
+    let row = objects
         .as_array()
         .unwrap()
         .iter()
@@ -958,7 +960,7 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     let protected = maintain();
     assert!(project.join("target").exists());
     assert!(
-        protected["producer_objects"]
+        producer_objects(&protected)
             .as_array()
             .unwrap()
             .iter()
