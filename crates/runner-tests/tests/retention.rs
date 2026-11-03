@@ -604,7 +604,9 @@ fn no_finish_preserves_live_producer_then_recovers_unknown_partial_publication()
     ) {
         return;
     }
-    let h = host(256, 16);
+    // Exercise the owner's bounded continuation instead of relying on all
+    // manifest and disposal IO finishing within a single maintenance round.
+    let h = host(3, 16);
     let p = tree(h.path(), "interrupted");
     let publication = inventory(h.path())
         .begin(
@@ -626,7 +628,18 @@ fn no_finish_preserves_live_producer_then_recovers_unknown_partial_publication()
     assert!(h.path().join(&p).exists());
     // Simulate the kernel capability closing without any finish/completion callback.
     drop(publication);
-    let r = inventory(h.path()).maintain().unwrap();
+    let mut r = inventory(h.path()).maintain().unwrap();
+    assert!(r["nodes"].as_u64().unwrap() <= 3, "{r}");
+    assert_eq!(r["remaining_outputs"], 1, "{r}");
+    for _ in 0..8 {
+        r = retained_artifacts::retention::maintain_adopted(h.path())
+            .unwrap()
+            .unwrap();
+        assert!(r["nodes"].as_u64().unwrap() <= 3, "{r}");
+        if r["remaining_outputs"] == 0 {
+            break;
+        }
+    }
     if r["remaining_outputs"] != 0 {
         let original = ledger(h.path());
         let path = h.keep();
@@ -636,6 +649,7 @@ fn no_finish_preserves_live_producer_then_recovers_unknown_partial_publication()
         );
     }
     assert_eq!(r["remaining_outputs"], 0, "{r}");
+    assert!(!h.path().join(&p).exists());
     assert_eq!(
         ledger(h.path())["summaries"][0]["original_outcome"]["completion"],
         "not-established"
