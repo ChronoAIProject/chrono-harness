@@ -1510,6 +1510,105 @@ fn inventory_profile(
         methods,
     })
 }
+/// The admitted execution phase of a scoped check. Admission/tool preparation
+/// has completed; executing this value does not publish a final CI response.
+/// The diagnostics consumer transports this same plan across its process boundary.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PreparedExecution {
+    pub request: Request,
+    pub plan: chrono_judge_routes::Execution,
+}
+impl PreparedExecution {
+    pub fn execute(&self) -> Result<chrono_judge_projects::Results, String> {
+        if self.plan.root != self.request.host_root
+            || self.plan.binding["candidate"] != self.request.candidate
+            || self.plan.binding["config"] != self.request.config_sha256
+            || self.plan.binding["run"] != self.request.request_id
+        {
+            return Err("prepared CI execution request/plan binding differs".into());
+        }
+        execute_plan(&self.request, &self.plan)
+    }
+}
+
+/// Admit the actual registered unit through the ordinary inventory and routes
+/// owners. Collection and blocked obligations cannot produce an execution.
+pub fn prepare_execution(req: &Request) -> Result<PreparedExecution, String> {
+    let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope else {
+        return Err("prepared execution requires a scoped unit".into());
+    };
+    let i = inventory(
+        req,
+        &mut Reader::legacy(),
+        &mut Value::Null,
+        &mut String::new(),
+        true,
+        true,
+    )?;
+    if !i.blocked.is_empty() {
+        return Err(format!("blocked global obligations: {:?}", i.blocked));
+    }
+    let selected = units::selection(
+        i.p.units
+            .as_ref()
+            .ok_or("unit profile missing assignments")?,
+        &i.global_selected,
+        unit,
+    )?;
+    let plan = prepare_plan(
+        req,
+        &selected,
+        &i.new,
+        &i.methods,
+        &i.declarations,
+        i.environment,
+        &i.reused,
+    )?;
+    Ok(PreparedExecution {
+        request: req.clone(),
+        plan,
+    })
+}
+
+fn prepare_plan(
+    req: &Request,
+    selected: &BTreeSet<String>,
+    new: &Snapshot,
+    methods: &BTreeMap<String, Vec<chrono_judge_registration::execution::Method>>,
+    declarations: &Value,
+    environment: BTreeMap<String, String>,
+    reused: &BTreeMap<String, chrono_harness::observation::Tool>,
+) -> Result<chrono_judge_routes::Execution, String> {
+    tracing::info_span!("ci.phase", phase = "prepare").in_scope(|| {
+        tracing::info!(event_id = "ci.phase_started", "preparing registered operation plan and tools");
+        chrono_judge_routes::prepare_scheduled(
+            &req.host_root,
+            object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":req.request_id,"entry":req.observations["entry"]}),
+            selected, &new.plans, methods, &new.execute, declarations, environment, reused, new.scheduling.clone(), false,
+        )
+    })
+}
+
+fn execute_plan(
+    req: &Request,
+    plan: &chrono_judge_routes::Execution,
+) -> Result<chrono_judge_projects::Results, String> {
+    let span = tracing::info_span!(
+        "ci.execution",
+        request_id = req.request_id,
+        candidate = req.candidate,
+        config_sha256 = req.config_sha256,
+        phase = "execute"
+    );
+    let _entered = span.enter();
+    tracing::info!(
+        event_id = "ci.phase_started",
+        "executing registered operations"
+    );
+    chrono_judge_projects::execute(plan)
+}
+
 fn evaluate(
     req: &Request,
     reader: &mut Reader,
@@ -1570,21 +1669,15 @@ fn evaluate(
         )?;
     }
     let plan = if blocked.is_empty() {
-        Some(tracing::info_span!("ci.phase", phase = "prepare").in_scope(|| {
-            tracing::info!(event_id = "ci.phase_started", "preparing registered operation plan and tools");
-            chrono_judge_routes::prepare_scheduled(
-            root,
-            object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":req.request_id,"entry":req.observations["entry"]}),
+        Some(prepare_plan(
+            req,
             &selected,
-            &new.plans,
+            &new,
             &methods,
-            &new.execute,
             &declarations,
             environment,
             &reused,
-            new.scheduling.clone(),
-            false,
-        )})?)
+        )?)
     } else {
         None
     };
@@ -1609,13 +1702,7 @@ fn evaluate(
         })
     }
     if let Some(plan) = &plan {
-        let outcome = tracing::info_span!("ci.phase", phase = "execute").in_scope(|| {
-            tracing::info!(
-                event_id = "ci.phase_started",
-                "executing registered operations"
-            );
-            chrono_judge_projects::execute(plan)
-        })?;
+        let outcome = execute_plan(req, plan)?;
         for result in outcome.executed.iter().chain(&outcome.blocked) {
             results.push(CheckResult {
                 id: result.operation.clone(),

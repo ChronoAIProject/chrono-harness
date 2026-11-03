@@ -341,3 +341,53 @@ engineering validation cost. Timings and original captures belong to the finite
 PR214 acceptance handoff; canonical/native validation, delivery and complete SPEC
 adoption remain caller-owned obligations. No general fit guarantee is made for
 arbitrary business output.
+
+### Admitted execution interruption fixture
+
+The incomplete-execution fixture now obtains `PreparedExecution` from the CI
+owner's `prepare_execution`. It admits the actual scoped request, both endpoint
+inventories, selection and routes/tool preparation before the short monitor.
+Ordinary CI evaluation and this API share the same plan preparation and execution
+functions; execution delegates to the existing projects scheduler. The transported
+request/plan binding is checked before execution and supplies actual request,
+candidate, config, plan and operation logging context. This is a phase API for the
+current diagnostics consumer, not a final check response or acceptance entry.
+It adds no dependency, engine, deadline policy or alternate business recipe.
+
+The native fixture executes that actual admitted plan under the existing
+one-second/65536-byte engine monitor. The registered operation keeps its existing
+3-second/4096-byte bounds. Its native socket sends its actual PID before blocking;
+the test receives these readiness bytes on a single blocking native socket before
+the one-second interruption, keeps that socket live until engine join, and requires
+DEBUG launch/ownership records, original
+launch identity, exact original streams, real timeout and monitor-end
+slot/generation/parent-slot equality, with no completed operation or final response.
+A second case holds the real version-admission call for over one second on that
+socket before preparation completes. Its elapsed/read-error original distinguishes
+admission from the subsequent short execution monitor. Default concurrency and
+enclosing registered limits remain unchanged. This separates an interrupted check's
+registered execution phase from admission; it does not assert that whole-check
+admission fits inside one second. Missing readiness remains failure with retained
+originals.
+
+The finite engineering run exposed a remaining gap after real readiness: the
+runner cooperatively cancels and joins nested engines before killing the enclosing
+process. Projects can therefore publish a genuine error operation completion
+during shutdown. The unchanged no-completed-operation assertion fails on that
+schedule. Earlier passing cases do not establish the required invariant; this
+fixture is not accepted as a deterministic repair. No event is filtered, assertion
+removed or shutdown/deadline policy changed to conceal that result. A composition
+satisfying that obligation remains unresolved. Failed fixtures retain their
+original streams, launch, request, prepared plan, readiness and engine result.
+The optional `CHRONO_CI_TEST_RECEIPTS` destination retains these same originals
+after passing assertions for the finite caller evidence consumer; its descriptor
+states the caller's debugging/acceptance release obligation.
+
+Product/fixture change visibility: CI factors the existing preparation/execution
+boundaries into the above API to serve this consumer. Existing successful/failed
+whole-check tests still exercise CI aggregation and post-snapshot validation.
+Verification uses unfiltered `test.judge-ci-tests` with existing Rust methods and
+recorded environment. Direct engineering action receipts do not establish
+canonical outer-engine or source binding. Canonical candidate bootstrap/check and
+native acceptance remain separate caller obligations; costs outside the observed
+suite are unknown.

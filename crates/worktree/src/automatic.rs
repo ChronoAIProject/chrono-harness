@@ -2237,6 +2237,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--adopt-fixtures",
             "--stage-result",
             "--stage-sha256",
+            "--report-consumer",
         ]
         .contains(&key.as_str())
             || n + 1 >= args.len()
@@ -2273,6 +2274,12 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     }
     let invoking = fs::canonicalize(values.get("--host-root").copied().unwrap_or("."))
         .map_err(|e| e.to_string())?;
+    if values
+        .get("--report-consumer")
+        .is_some_and(|name| name.trim().is_empty() || name.len() > 247)
+    {
+        return Err("invalid bounded report consumer identity".into());
+    }
     let config_path = values
         .get("--config")
         .copied()
@@ -2300,17 +2307,28 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         _ => return Err("unknown lifecycle operation".into()),
     };
     let mut use_guard = None;
-    start::with_report(
+    // The explicit caller consumes coordinator originals even when its
+    // invocation belongs to a linked checkout. Keep publication/receipt
+    // assembly protected until with_report has bound the exact closure.
+    let mut coordinator_reports = None;
+    start::with_report_for_consumer(
         &invoking,
         config_path,
         config,
         &bytes,
         operation,
         success,
+        values.get("--report-consumer").copied(),
         |r, token, report| {
             report["invoking_root"] = value!(invoking);
             let mut manager = Manager::open(r, &invoking, config_path, &bytes, token)?
                 .ok_or("automatic cleanup is not opted in")?;
+            if values.contains_key("--report-consumer") {
+                coordinator_reports =
+                    chrono_harness::retained_artifacts::retention::report_activity(
+                        &manager.policy.coordinator_root,
+                    )?;
+            }
             report["source_root"] = value!(manager.policy.coordinator_root);
             report["lifecycle_coordinator_root"] = value!(manager.policy.coordinator_root);
             report["source_commit"] = value!(manager.anchor_head);
@@ -2688,27 +2706,54 @@ fn canonical_command(
 
 // Lifecycle wrapper publication continues only at the validated surviving owner,
 // after managed use of the disposable checkout has been released.
-pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> {
+pub(crate) fn publish_result(
+    root: &Path,
+    report: &mut Value,
+    consumer: Option<&str>,
+) -> Result<(), String> {
     let root = absolute(root, false)?;
     let path = report["report_path"]
         .as_str()
-        .ok_or("lifecycle report path")?;
-    relative_path(path)?;
+        .ok_or("lifecycle report path")?
+        .to_owned();
+    relative_path(&path)?;
     if !path.starts_with(".chrono-harness/state/") {
         return Err("lifecycle report must remain registered state".into());
     }
-    let target = no_symlink_parents(&root, path)?;
+    let target = no_symlink_parents(&root, &path)?;
     fs::create_dir_all(target.parent().ok_or("lifecycle report parent")?)
         .map_err(|e| e.to_string())?;
-    let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
-    raw.push(b'\n');
-    if !chrono_harness::retained_artifacts::retention::publish_owned_original(
+    if consumer.is_none() {
+        let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
+        raw.push(b'\n');
+        if !chrono_harness::retained_artifacts::retention::publish_owned_original(
+            &root,
+            "lifecycle-original",
+            &path,
+            &raw,
+            crate::recovery::publication_outcome(report, &raw),
+        )? {
+            write_bytes(&target, &raw, true)?;
+        }
+        return crate::recovery::settle_report(&root, report);
+    }
+    if chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?.is_none() {
+        return Err("report consumer requires adopted lifecycle retention".into());
+    }
+    let publication = chrono_harness::retained_artifacts::retention::create_adopted(
         &root,
         "lifecycle-original",
-        path,
-        &raw,
-        crate::recovery::publication_outcome(report, &raw),
-    )? {
+        &target,
+        false,
+        value!({"outcome":"not-established"}),
+    )?;
+    crate::recovery::protect_report_consumer(report, publication.as_ref(), consumer)?;
+    let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
+    raw.push(b'\n');
+    if let Some(publication) = publication {
+        publication.replace_file(&target, &raw)?;
+        publication.complete(crate::recovery::publication_outcome(report, &raw))?;
+    } else {
         write_bytes(&target, &raw, true)?;
     }
     crate::recovery::settle_report(&root, report)?;

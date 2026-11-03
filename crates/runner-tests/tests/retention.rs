@@ -707,6 +707,48 @@ fn live_consumer_protects_references_even_after_retention_window_expires() {
 }
 
 #[test]
+fn publication_transfers_consumer_before_acquisition_and_release_reclaims_closure() {
+    if !isolated_capability_test(
+        "publication_transfers_consumer_before_acquisition_and_release_reclaims_closure",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let receipt = tree(h.path(), "receipt");
+    let p = inventory(h.path())
+        .begin("fixture", &receipt, json!({"exit":0}))
+        .unwrap();
+    let receipt_id = p.id().to_owned();
+    p.complete(json!({"exit":0})).unwrap();
+    let report = tree(h.path(), "report");
+    let p = inventory(h.path())
+        .begin("fixture", &report, json!(null))
+        .unwrap();
+    inventory(h.path())
+        .dependencies(p.id(), &[receipt_id])
+        .unwrap();
+    let original = p.protect_consumer("assertions").unwrap();
+    let declaration = consumer_input(h.path(), "assertions", json!([original]));
+    p.complete(json!({"exit":0})).unwrap();
+    // The producer is gone and the caller has not acquired/read the original.
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        2
+    );
+    let reader = inventory(h.path()).consume(&original.id).unwrap();
+    let release = consumer_release(h.path(), &declaration, "released");
+    assert_eq!(consumer_call(h.path(), release.clone()).exit_code, 2);
+    drop(reader);
+    assert_eq!(consumer_call(h.path(), release).exit_code, 0);
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        0
+    );
+    assert!(!h.path().join(report).exists());
+    assert!(!h.path().join(receipt).exists());
+}
+
+#[test]
 fn retained_capacity_round_retires_unrelated_outputs_without_probing_all_leases() {
     if !isolated_capability_test(
         "retained_capacity_round_retires_unrelated_outputs_without_probing_all_leases",

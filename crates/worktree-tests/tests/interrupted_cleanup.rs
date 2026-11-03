@@ -21,6 +21,81 @@ fn output(target: &Path) {
     fs::create_dir_all(target.join("output λ")).unwrap();
     fs::write(target.join("output λ/cache"), "reproducible").unwrap();
 }
+
+#[test]
+fn caller_report_consumer_protects_primary_and_coordinator_publication() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let retention = chrono_harness::retained_artifacts::retention::POLICY_PATH;
+    fs::write(h.root.join(retention), serde_json::to_vec(&value!({
+        "schema":"chrono-output-retention/v1","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},
+        "keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,
+        "max_bytes_per_round":1048576,"max_millis_per_round":1000
+    })).unwrap()).unwrap();
+    let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    fm["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(retention, value!([])));
+    fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("caller-report");
+    assert_eq!(h.invoke("feature", "caller-report", &target).0, 0);
+    output(&target);
+    for (root, consumer) in [(&h.root, "primary-reader"), (&target, "linked-reader")] {
+        let mut command =
+            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        command
+            .current_dir(root)
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap())
+            .args([
+                "maintain",
+                "--host-root",
+                root.to_str().unwrap(),
+                "--config",
+                POLICY,
+                "--report-consumer",
+                consumer,
+            ]);
+        h._dir.bind(&mut command);
+        let output = h._dir.capture_bound(&mut command);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report = json(&output.stdout).unwrap();
+        let path = h.root.join(report["report_path"].as_str().unwrap());
+        let raw = fs::read(&path).unwrap();
+        assert_eq!(json(&raw).unwrap(), report);
+        let i = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap();
+        i.maintain().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), raw);
+        for item in report["drain"].as_array().unwrap() {
+            if let Some(receipt) = item.get("receipt") {
+                let bytes = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+                assert_eq!(sha256(&bytes), receipt["sha256"]);
+                let child = json(&bytes).unwrap();
+                if let Some(intent) = child.get("cache_intent") {
+                    let bytes = fs::read(h.root.join(intent["path"].as_str().unwrap())).unwrap();
+                    assert_eq!(sha256(&bytes), intent["sha256"]);
+                }
+            }
+        }
+        let originals: Vec<chrono_harness::retained_artifacts::retention::OriginalIdentity> =
+            serde_json::from_value(report["report_consumer"]["originals"].clone()).unwrap();
+        i.release_consumer(consumer, &originals, &"1".repeat(64), &"2".repeat(64))
+            .unwrap();
+        i.maintain().unwrap();
+        assert!(!path.exists());
+        assert!(root.join(".git").exists());
+        assert!(root.join("payload").exists());
+    }
+}
 #[test]
 fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
     let h = Host::new("payload");

@@ -1922,6 +1922,18 @@ impl Publication {
     pub fn id(&self) -> &str {
         &self.id
     }
+    /// Transfer an explicitly named consumer before the producer capability ends.
+    pub fn protect_consumer(&self, consumer: &str) -> Result<OriginalIdentity, String> {
+        self.lease.stable()?;
+        let original = OriginalIdentity {
+            id: self.id.clone(),
+            path: self.path.clone(),
+            identity: self.identity.borrow().clone(),
+        };
+        self.inventory
+            .protect_consumer(consumer, &[original.clone()])?;
+        Ok(original)
+    }
     /// Keep producer status distinct from storage status; no synthetic success on interruption.
     pub fn complete(self, outcome: Value) -> Result<(), String> {
         self.complete_with_release(outcome, None)

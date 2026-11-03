@@ -115,14 +115,20 @@ fn allocate(producer: &'static str, prefix: &str) -> FixtureDirectory {
 /// Configure arguments/environment before this single native binding.
 /// Existing thread scopes supply held allocations; Command owns its copies.
 pub fn capture_native(root: &Path, command: &mut Command) -> Output {
-    let (_, directory) = binding(root).unwrap();
-    let relative = root.strip_prefix(directory).unwrap();
-    let allocation = directory.join(relative.components().next().unwrap().as_os_str());
+    let allocation = capture_allocation(root);
     // Clone destinations must remain empty until the real Git clone. Captures
     // and incidental temporary files belong beside that checkout, not inside it.
     command.env("TMPDIR", &allocation);
     chrono_harness::process_fds::forward_command(command, &[]).unwrap();
     TemporaryHost::capture_bound_output(&allocation, command).unwrap()
+}
+pub fn capture_directory(root: &Path) -> PathBuf {
+    capture_allocation(root).join(".chrono-harness/state/command-captures")
+}
+fn capture_allocation(root: &Path) -> PathBuf {
+    let (_, directory) = binding(root).unwrap();
+    let relative = root.strip_prefix(directory).unwrap();
+    directory.join(relative.components().next().unwrap().as_os_str())
 }
 
 /// Only explicit executable-copy publishers call this; evidence copies do not.

@@ -596,10 +596,32 @@ pub(super) fn create(
 pub(crate) fn with_report(
     root: &Path,
     config_path: &str,
+    config: Config,
+    bytes: &[u8],
+    operation: &str,
+    success: &str,
+    execute: impl FnOnce(&mut Runner, &str, &mut Value) -> Result<(), String>,
+) -> Result<Value, String> {
+    with_report_for_consumer(
+        root,
+        config_path,
+        config,
+        bytes,
+        operation,
+        success,
+        None,
+        execute,
+    )
+}
+
+pub(crate) fn with_report_for_consumer(
+    root: &Path,
+    config_path: &str,
     mut config: Config,
     bytes: &[u8],
     operation: &str,
     success: &str,
+    consumer: Option<&str>,
     execute: impl FnOnce(&mut Runner, &str, &mut Value) -> Result<(), String>,
 ) -> Result<Value, String> {
     if fs::canonicalize(root).map_err(|e| e.to_string())? != root {
@@ -773,11 +795,13 @@ pub(crate) fn with_report(
     ) {
         if let Some(coordinator) = report["lifecycle_coordinator_root"].as_str() {
             if Path::new(coordinator) != root {
-                crate::automatic::publish_result(Path::new(coordinator), &report)?;
+                let coordinator = Path::new(coordinator).to_owned();
+                crate::automatic::publish_result(&coordinator, &mut report, consumer)?;
                 return Ok(report);
             }
         }
     }
+    crate::recovery::protect_report_consumer(&mut report, report_publication.as_ref(), consumer)?;
     let mut data = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
     data.push(b'\n');
     if let Some(publication) = &report_publication {

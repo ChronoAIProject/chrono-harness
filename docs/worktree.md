@@ -1523,3 +1523,41 @@ bytes before maintenance and the existing release/join assertions. A write error
 retains its OS error and fails the regression. The completion message still
 reports the fixture function's completion; it does not independently establish
 the entire libtest process's terminal status or all caller task obligations.
+
+## Explicit lifecycle report consumers
+
+The current `finish`, `maintain`, `import` and managed lifecycle entry accepts
+`--report-consumer ID`. This names the caller's real original-consumption
+obligation, independently of cache use/release. The existing retention producer
+transfers an exact consumer root before closing its publication capability and
+returns its `chrono-retention-consumer/v1` declaration in `report_consumer`.
+It requires adopted lifecycle retention. The coordinator publishes and binds the
+actual coordinator original when invocation comes from a linked checkout.
+The report's declared recovery, fetch, cache and main-release receipts and drain
+reports are explicit retention dependencies; no JSON discovery supplies edges.
+
+The bootstrap fixture custodian uses that declaration, verifies actual producer
+paths, physical identity, bytes and typed receipt closure, and keeps it across
+maintenance, cache disposal, setup recovery, re-admission and subsequent assertions.
+Its successful assertion owner releases the exact declaration through the existing
+runner retention command with its own release receipt. A terminal assertion receipt
+binds the unchanged attempt and exact domain/owner release originals; later admission
+consumes that receipt after original consumption has ended, while another original
+assertion still requires the actual bytes. It never substitutes a report body. Failed assertions or
+unresolved custody preserve originals. The separately invoked real bootstrap
+consumer leaves caller acceptance/review protection in place for that caller's
+actual handoff. Cache disposal and source/index/live-consumer exclusions retain
+their existing owner. Neither cache release nor a saved stdout substitutes for
+an original or certifies a later release.
+
+Product/fixture change visibility: publication gains an opt-in caller consumer;
+the host's ordinary policy and zero retention window are unchanged. Validation
+uses the dedicated runner/worktree Rust suites and the registered unfiltered
+bootstrap fixture suite. A direct dirty-source engineering invocation is not
+canonical source-bound acceptance. Temporary engineering process originals for
+this finite repair are owned under
+`.chrono-harness/state/pr214-repair-engineering-20261103/` for caller inspection;
+keep failed originals until debugging and acceptance obligations finish, then
+release them to the existing lifecycle owner. Each action keeps its existing
+900-second/1-MiB bounds; no retry or test-thread override is part of the method.
+Build/CI/storage cost beyond these actual observations remains unknown.

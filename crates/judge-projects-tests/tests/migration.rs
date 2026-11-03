@@ -1111,8 +1111,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         output.status,
         output.stdout.len(),
         output.stderr.len(),
-        root.join(".chrono-harness/state/command-captures")
-            .display()
+        temporary::capture_directory(&root).display()
     );
     // The repair changes only workflow bytes; rerun its single registered method with a new input binding.
     let action = current.projects()["projects"]

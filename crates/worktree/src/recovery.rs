@@ -350,6 +350,23 @@ fn observe_result_kind(
     })
 }
 
+/// Hand the actual caller its exact root before relinquishing publication.
+pub(crate) fn protect_report_consumer(
+    report: &mut Value,
+    publication: Option<&chrono_harness::retained_artifacts::retention::Publication>,
+    consumer: Option<&str>,
+) -> Result<(), String> {
+    if let Some(consumer) = consumer {
+        let original = publication
+            .ok_or("report consumer requires adopted lifecycle retention")?
+            .protect_consumer(consumer)?;
+        report["report_consumer"] = value!({"schema":"chrono-retention-consumer/v1",
+            "consumer":consumer,"purpose":"Lifecycle caller consumes producer original and declared receipt closure",
+            "originals":[original]});
+    }
+    Ok(())
+}
+
 /// A producer terminal result ends its interrupted-operation recovery need.
 /// A failed rebind has an explicit resume consumer and keeps that root.
 pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
@@ -361,8 +378,18 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
         .as_str()
         .ok_or("lifecycle result path")?;
     let mut originals = Vec::new();
-    for binding in ["recovery_intent", "fetch_intent"] {
+    for binding in [
+        "recovery_intent",
+        "fetch_intent",
+        "cache_intent",
+        "main_cache_release",
+    ] {
         if let Some(path) = report[binding]["path"].as_str() {
+            originals.push(path.into());
+        }
+    }
+    for item in report["drain"].as_array().into_iter().flatten() {
+        if let Some(path) = item["receipt"]["path"].as_str() {
             originals.push(path.into());
         }
     }
