@@ -1223,9 +1223,6 @@ impl Inventory {
         let mut disposed = vec![];
         let count = l.outputs.len();
         let start = if count == 0 { 0 } else { l.cursor % count };
-        let mut order: Vec<_> = (0..count)
-            .map(|n| l.outputs[(start + n) % count].id.clone())
-            .collect();
         // Retire an unrooted report before the originals it references. This
         // spends a bounded round on retiring the consumer first and prevents
         // an obsolete report from outliving reclaimed inputs. Continue partial
@@ -1243,19 +1240,24 @@ impl Inventory {
                     .push(output.id.clone());
             }
         }
-        order.sort_by_key(|id| {
-            let output = l
-                .outputs
-                .iter()
-                .find(|o| o.id == *id)
-                .expect("output disappeared");
-            (
-                output.phase != "disposing",
-                consumers.contains_key(id) || !output.references.is_empty(),
-                referenced.contains(id),
-            )
-        });
-        for id in order {
+        // Compute priorities from each existing output once. Looking up the
+        // output inside every comparison makes preparation quadratic and can
+        // exhaust a bounded round before any retirement is attempted.
+        let mut order: Vec<_> = (0..count)
+            .map(|n| {
+                let output = &l.outputs[(start + n) % count];
+                (
+                    output.id.clone(),
+                    (
+                        output.phase != "disposing",
+                        consumers.contains_key(&output.id) || !output.references.is_empty(),
+                        referenced.contains(&output.id),
+                    ),
+                )
+            })
+            .collect();
+        order.sort_by_key(|(_, priority)| *priority);
+        for (id, _) in order {
             if !self.metadata_room()
                 || nodes >= self.policy.max_nodes_per_round
                 || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
