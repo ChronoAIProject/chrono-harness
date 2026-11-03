@@ -466,6 +466,63 @@ fn incomplete_execution(delayed_admission: bool) {
 }
 
 #[test]
+#[cfg(unix)]
+fn execution_diagnostics_prepared_consumer_matches_real_host_root_before_effects() {
+    let h = host(Some("success".into()));
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["tools"] = json!({"sh":"/bin/sh"});
+    });
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        v["projects"][1]["actions"]["execute"]["tool"] = json!("sh");
+        v["projects"][1]["actions"]["execute"]["argv"] = json!(["check.sh"]);
+    });
+    h.commit();
+    let aliases = tempfile::tempdir().unwrap();
+    let alias = aliases.path().join("host-link");
+    std::os::unix::fs::symlink(fs::canonicalize(h.root()).unwrap(), &alias).unwrap();
+    let mut req = request(&h);
+    req.host_root = alias;
+    let prepared = chrono_judge_ci::prepare_execution(&req).unwrap();
+    assert_ne!(prepared.plan.root, req.host_root);
+    assert_eq!(
+        prepared.plan.root,
+        fs::canonicalize(&req.host_root).unwrap()
+    );
+    let prepared: chrono_judge_ci::PreparedExecution =
+        chrono_harness::decode(&serde_json::to_vec(&prepared).unwrap()).unwrap();
+    let other = Host::new();
+    for field in ["root", "candidate", "config", "run"] {
+        let mut changed = prepared.clone();
+        changed.request.host_root = changed.plan.root.clone();
+        match field {
+            "root" => changed.request.host_root = other.root().to_path_buf(),
+            "candidate" => changed.request.candidate = "0".repeat(40),
+            "config" => changed.request.config_sha256 = "0".repeat(64),
+            "run" => changed.request.request_id.push_str("-changed"),
+            _ => unreachable!(),
+        }
+        assert!(changed.execute().unwrap_err().contains("binding differs"));
+        assert_eq!(
+            h.calls(),
+            0,
+            "{field} mismatch executed business operations"
+        );
+        assert_eq!(other.calls(), 0);
+    }
+    let mut invalid = prepared.clone();
+    invalid.request.host_root = invalid.plan.root.clone();
+    invalid.plan.identity.push_str("-changed");
+    assert!(invalid.execute().unwrap_err().contains("E_PLAN_IDENTITY"));
+    assert_eq!(h.calls(), 0);
+    assert!(prepared.execute().unwrap().passed());
+    assert_eq!(h.calls(), 1);
+    let mut canonical = prepared;
+    canonical.request.host_root = canonical.plan.root.clone();
+    assert!(canonical.execute().unwrap().passed());
+    assert_eq!(h.calls(), 2);
+}
+
+#[test]
 fn execution_diagnostics_prepared_consumer_validates_request_and_uses_registered_execution() {
     let h = host(Some("success".into()));
     let req = request(&h);

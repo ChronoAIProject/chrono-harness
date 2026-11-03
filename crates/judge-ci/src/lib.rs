@@ -1521,7 +1521,8 @@ pub struct PreparedExecution {
 }
 impl PreparedExecution {
     pub fn execute(&self) -> Result<chrono_judge_projects::Results, String> {
-        if self.plan.root != self.request.host_root
+        let root = fs::canonicalize(&self.request.host_root).map_err(|e| e.to_string())?;
+        if self.plan.root != root
             || self.plan.binding["candidate"] != self.request.candidate
             || self.plan.binding["config"] != self.request.config_sha256
             || self.plan.binding["run"] != self.request.request_id
