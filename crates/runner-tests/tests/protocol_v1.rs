@@ -3093,12 +3093,14 @@ fn signal_termination_precedes_json_decode_for_delta_and_initial_transport() {
 #[cfg(target_os = "macos")]
 #[test]
 fn failed_handoff_receive_helper() {
+    use std::io::{Read, Write};
     use std::os::fd::AsRawFd;
     use std::os::unix::fs::FileExt;
     let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
         return;
     };
     let root = std::path::Path::new(&root);
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let spec = chrono_harness::CommandSpec {
         program: std::env::current_exe().unwrap().to_str().unwrap().into(),
         args: vec![
@@ -3106,10 +3108,16 @@ fn failed_handoff_receive_helper() {
             "failed_handoff_receive_child_helper".into(),
             "--nocapture".into(),
         ],
-        env: [(
-            "CHRONO_FAILED_HANDOFF".into(),
-            root.to_string_lossy().into(),
-        )]
+        env: [
+            (
+                "CHRONO_FAILED_HANDOFF".into(),
+                root.to_string_lossy().into(),
+            ),
+            (
+                "CHRONO_HANDOFF_READY".into(),
+                listener.local_addr().unwrap().to_string(),
+            ),
+        ]
         .into(),
         timeout_seconds: 30,
         output_limit_bytes: 65536,
@@ -3145,11 +3153,23 @@ fn failed_handoff_receive_helper() {
     }
     let result = std::thread::scope(|scope| {
         let task = scope.spawn(|| chrono_harness::run_process_observed(root, &spec, &[], &digest));
-        let started = std::time::Instant::now();
-        while !root.join("ready").exists() {
-            assert!(started.elapsed().as_secs() < 10, "child readiness missing");
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        }
+        let mut ready = libc::pollfd {
+            fd: listener.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        assert_eq!(unsafe { libc::poll(&mut ready, 1, 10_000) }, 1);
+        let (mut child, _) = listener.accept().unwrap();
+        child
+            .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+            .unwrap();
+        let mut eof = [0];
+        child.read_exact(&mut eof).unwrap();
+        assert_eq!(&eof, b"E");
+        // Close setup-only descriptors before filling the observer's table.
+        // Child readiness follows stdin EOF, so that close cannot free a slot
+        // after exhaustion and let the real ownership receive succeed.
+        drop(listener);
         // Only the observer process exhausts descriptors. The already-running
         // nested launcher retains its independent descriptor budget.
         let mut held = Vec::new();
@@ -3171,7 +3191,7 @@ fn failed_handoff_receive_helper() {
                 0,
             )
             .unwrap();
-        release.write_all_at(b"go", 0).unwrap();
+        child.write_all(b"go").unwrap();
         let result = task.join().unwrap();
         drop(held);
         result
@@ -3189,17 +3209,28 @@ fn failed_handoff_receive_helper() {
 #[cfg(target_os = "macos")]
 #[test]
 fn failed_handoff_receive_child_helper() {
+    use std::io::{Read, Write};
     let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
         return;
     };
     check_launch_allocations();
     let root = std::path::Path::new(&root);
-    fs::File::create_new(root.join("ready")).unwrap();
-    let started = std::time::Instant::now();
-    while fs::metadata(root.join("release")).unwrap().len() == 0 {
-        assert!(started.elapsed().as_secs() < 10, "release missing");
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
+    let mut input = Vec::new();
+    std::io::stdin().read_to_end(&mut input).unwrap();
+    assert!(input.is_empty());
+    let address = std::env::var("CHRONO_HANDOFF_READY").unwrap();
+    let mut observer = std::net::TcpStream::connect_timeout(
+        &address.parse().unwrap(),
+        std::time::Duration::from_secs(10),
+    )
+    .unwrap();
+    observer
+        .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+        .unwrap();
+    observer.write_all(b"E").unwrap();
+    let mut release = [0; 2];
+    observer.read_exact(&mut release).unwrap();
+    assert_eq!(&release, b"go");
     let spec = chrono_harness::CommandSpec {
         program: std::env::current_exe().unwrap().to_str().unwrap().into(),
         args: vec![
