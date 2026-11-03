@@ -15,6 +15,21 @@ and consumes those shared mechanics through an explicit adapter. Its
 `selection_explanation.extra_selections` explains legacy rules, with
 `legacy_only_selections` identifying selections outside test-execution edges;
 these do not become full-policy edges. See [the impact contract](filemap-impact.md).
+
+Scoped policy may explicitly select `selection_evidence: "explicit-graph/v1"`.
+This representation retains the complete endpoint union `edges`, `seeds`,
+`seed_causes`, extra selections and their reasons. Its
+`closure.schema: "chrono-ci-reachability/v1"` publishes sorted `reached` nodes and
+graph-selected `selected_tests`; the retained explicit graph and causes can
+reconstruct predecessor and contributing-seed tables. It omits those repeated
+derived strings from transport without changing selection or execution. Omission
+preserves the previous explanation shape; null and unknown formats fail before
+business operations. This host adopts it after 2697 private declarations caused
+the original response to exceed its unchanged 8 MiB limit. Rust tests retain all
+2697 explicit seed inputs and the output bound. Full FILEMAP impact output keeps
+its existing versioned shape. Source/bootstrap/canonical/native acceptance and
+total validation costs remain separate obligations.
+
 `ci` owns the GitHub workflow projection and event input
 preparation. It does not select tests or judge outcomes. `instructions` remains
 independent and its catalogs, layouts and relative root alias are unchanged.
@@ -168,6 +183,12 @@ Acquisition is preparation of committed input; bootstrap does not download or
 learn expectations, and continues to use existing rustup provisioning.
 
 The profiles use rustup selection directly, with no personal installation path.
+When the caller supplies private Rustup/Cargo homes, its inherited `PATH` must
+put the selected toolchain's `bin` before Rustup proxies. Dedicated consumers
+clear unrelated Rustup variables; their Cargo doctests must still resolve
+`rustdoc` from the same selected installation. Bootstrap changes its child
+environment, not the caller's later canonical-check environment. Record the
+actual paths and identities without changing global toolchain defaults.
 For older inline relocatable bindings, a repeated declared/configured original
 path is a historical location and is not probed, even if stale or absent. A
 separate explicitly configured current executable must still exist and match;

@@ -20,6 +20,7 @@ test = false
 bench = false
 
 [dependencies]
+tracing = { version = "0.1", default-features = false, features = ["std"] }
 chrono-harness = { path = "../runner" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-judge-workflow = { path = "../judge-workflow" }
@@ -31,3 +32,7 @@ time = { version = "0.3", features = ["formatting"] }
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+# Match the runner development profile for the shared inventory implementation.
+[profile.dev]
+opt-level = 1

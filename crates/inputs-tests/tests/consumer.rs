@@ -25,10 +25,10 @@ fn fixture() -> Host {
             ],
         ),
     ] {
-        let bytes =
-            fs::read(source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}")))
-                .unwrap();
+        let original = source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}"));
+        let bytes = fs::read(&original).unwrap();
         let path = format!(".chrono-harness/bin/chrono-judge-{id}");
+        host::copied_fixture_input(&h.root(), &original, &h.root().join(&path));
         fs::write(h.root().join(&path), &bytes).unwrap();
         #[cfg(unix)]
         {
@@ -64,7 +64,7 @@ fn native_v3(h: &mut Host) {
     v2(h);
     let git =
         fs::canonicalize(chrono_harness::resolve_program(&h.root(), "git", None).unwrap()).unwrap();
-    let version = Command::new(&git).arg("--version").output().unwrap();
+    let version = h.capture_native(Command::new(&git).arg("--version"));
     assert!(version.status.success());
     let cfg = h.values.get_mut(CONFIG).unwrap();
     cfg["schema_version"] = json!(3);
@@ -129,21 +129,21 @@ fn select_config(h: &mut Host, target: &str) {
 }
 
 fn pair_captures(h: &Host, base: &str, candidate: &str) -> Value {
-    let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .current_dir("/")
-        .args([
-            "pair",
-            "--host-root",
-            h.root().to_str().unwrap(),
-            "--base-snapshot",
-            &format!(".chrono-harness/state/{base}.json"),
-            "--candidate-snapshot",
-            &format!(".chrono-harness/state/{candidate}.json"),
-            "--output",
-            &format!(".chrono-harness/state/paired-{base}-{candidate}.json"),
-        ])
-        .output()
-        .unwrap();
+    let out = h.capture_native(
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir("/")
+            .args([
+                "pair",
+                "--host-root",
+                h.root().to_str().unwrap(),
+                "--base-snapshot",
+                &format!(".chrono-harness/state/{base}.json"),
+                "--candidate-snapshot",
+                &format!(".chrono-harness/state/{candidate}.json"),
+                "--output",
+                &format!(".chrono-harness/state/paired-{base}-{candidate}.json"),
+            ]),
+    );
     assert!(
         out.status.success(),
         "{}",
@@ -154,14 +154,14 @@ fn pair_captures(h: &Host, base: &str, candidate: &str) -> Value {
 
 fn snapshots(h: &Host) -> Value {
     let invoke = |args: &[&str]| {
-        let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-            .current_dir("/")
-            .env("DECLARED_EMPTY", "")
-            .env_remove("DECLARED_ABSENT")
-            .args(args)
-            .args(["--host-root", h.root().to_str().unwrap()])
-            .output()
-            .unwrap();
+        let out = h.capture_native(
+            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                .current_dir("/")
+                .env("DECLARED_EMPTY", "")
+                .env_remove("DECLARED_ABSENT")
+                .args(args)
+                .args(["--host-root", h.root().to_str().unwrap()]),
+        );
         assert!(
             out.status.success(),
             "{}",
@@ -360,22 +360,22 @@ fn data_state(h: &mut Host, absent: bool) {
     }
 }
 fn capture(h: &Host, name: &str) -> Value {
-    let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args([
-            "capture",
-            "--host-root",
-            h.root().to_str().unwrap(),
-            "--config",
-            CONFIG,
-            "--commit",
-            &h.candidate,
-            "--output",
-            &format!(".chrono-harness/state/{name}.json"),
-        ])
-        .output()
-        .unwrap();
+    let out = h.capture_native(
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "capture",
+                "--host-root",
+                h.root().to_str().unwrap(),
+                "--config",
+                CONFIG,
+                "--commit",
+                &h.candidate,
+                "--output",
+                &format!(".chrono-harness/state/{name}.json"),
+            ]),
+    );
     assert!(
         out.status.success(),
         "{}",
@@ -754,16 +754,9 @@ print('selected workflow migration compatibility checked')
         // Keep an actual downstream request for view-integrity rejection tests.
         // The wrapper forwards original stdin/stdout to the real FILEMAP judge.
         let wrapper = ".chrono-harness/bin/record-filemap";
-        let code = format!(
-            "#!{}\nimport os,pathlib,subprocess,sys\nb=sys.stdin.buffer.read()\npathlib.Path('.chrono-harness/state/filemap-request.json').write_bytes(b)\nfds=tuple(int(fd) for fd in os.environ.get('CHRONO_PROCESS_FDS','').split(',') if fd)\nr=subprocess.run(['.chrono-harness/bin/chrono-judge-filemap']+sys.argv[1:],input=b,pass_fds=fds,stdout=subprocess.PIPE,stderr=subprocess.PIPE)\nsys.stdout.buffer.write(r.stdout)\nsys.stderr.buffer.write(r.stderr)\nsys.exit(r.returncode)\n",
-            h.tool.display()
-        );
-        fs::write(h.root().join(wrapper), &code).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(h.root().join(wrapper), fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        let helper = std::path::Path::new(env!("CARGO_BIN_EXE_chrono-inputs-test-record-filemap"));
+        host::copied_fixture_input(&h.root(), helper, &h.root().join(wrapper));
+        fs::copy(helper, h.root().join(wrapper)).unwrap();
         let judge = h.values.get_mut(JUDGES).unwrap()["judges"]
             .as_array_mut()
             .unwrap()
@@ -771,7 +764,7 @@ print('selected workflow migration compatibility checked')
             .find(|j| j["id"] == "filemap")
             .unwrap();
         judge["executable"] = json!(wrapper);
-        judge["sha256"] = json!(sha256(code.as_bytes()));
+        judge["sha256"] = json!(sha256(&fs::read(helper).unwrap()));
     }
     h.save();
     h.base = h.candidate.clone();
@@ -1038,21 +1031,21 @@ fn selected_produced_pairs_preserve_endpoint_targets_old_edges_and_docs_locality
         capture(&h, "transition-after");
         if candidate_target != CONFIG {
             let output = ".chrono-harness/state/linked-capture.json";
-            let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
-                .current_dir("/")
-                .args([
-                    "capture",
-                    "--host-root",
-                    h.root().to_str().unwrap(),
-                    "--config",
-                    linked_entry,
-                    "--commit",
-                    &h.candidate,
-                    "--output",
-                    output,
-                ])
-                .output()
-                .unwrap();
+            let out = h.capture_native(
+                Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                    .current_dir("/")
+                    .args([
+                        "capture",
+                        "--host-root",
+                        h.root().to_str().unwrap(),
+                        "--config",
+                        linked_entry,
+                        "--commit",
+                        &h.candidate,
+                        "--output",
+                        output,
+                    ]),
+            );
             assert_eq!(out.status.code(), Some(2));
             assert!(String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"));
             assert!(out.stdout.is_empty());

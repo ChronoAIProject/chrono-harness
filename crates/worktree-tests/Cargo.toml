@@ -7,10 +7,11 @@ autotests = false
 
 [dependencies]
 serde_json = "1"
+chrono-harness = { path = "../runner" }
 
 [dev-dependencies]
-chrono-worktree = { path = "../worktree" }
-chrono-harness = { path = "../runner" }
+libc = "0.2"
+chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-judge-registration = { path = "../judge-registration" }
 tempfile = "3"
 
@@ -50,3 +51,13 @@ name = "chrono-worktree-test-version-probe"
 path = "tests/support/version_probe.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-worktree-owner-publication-probe"
+path = "tests/support/owner_publication_probe.rs"
+test = false
+bench = false
+
+# Match the runner development profile for the shared inventory implementation.
+[profile.dev]
+opt-level = 1

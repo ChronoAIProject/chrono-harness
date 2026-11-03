@@ -1,0 +1,58 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "platforms": [
+    "macos-aarch64"
+  ],
+  "environment": {
+    "inherit": [
+      "TMPDIR"
+    ],
+    "values": {
+      "HOME": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/home",
+      "CARGO_HOME": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/cargo",
+      "RUSTUP_HOME": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/rustup",
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": "",
+      "PATH": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin:/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/manager:/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/cargo/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+      "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+      "DEVELOPER_DIR": "/Applications/Xcode.app/Contents/Developer",
+      "RUSTC": "/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+      "RUSTFLAGS": "--sysroot=/Users/macstudio2/chrono-lifecycle-validation-20261028/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang"
+    }
+  },
+  "operations": [
+    {
+      "id": "xcode.distribution",
+      "program": "/usr/bin/xcodebuild",
+      "argv": [
+        "-version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    }
+  ],
+  "files": [
+    {
+      "id": "xcode.distribution",
+      "location": {
+        "path": "/Applications/Xcode.app/Contents/version.plist"
+      }
+    }
+  ],
+  "directories": [
+    {
+      "id": "developer",
+      "location": {
+        "path": "/Applications/Xcode.app/Contents"
+      },
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/isolated-rust/acquired/xcode-contents.json",
+        "root": "/Applications/Xcode.app/Contents"
+      }
+    }
+  ]
+}

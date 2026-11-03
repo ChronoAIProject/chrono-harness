@@ -6,11 +6,348 @@ use serde_json::json;
 use std::fs;
 use std::process::Command;
 
+const SELECTED_CONFIG: &str = ".chrono-harness/selected.json";
+const SELECTED_POLICY: &str = ".chrono-harness/cargo/selected.json";
+
+fn select_policy(f: &mut Fixture, config: &str) {
+    f.values.insert(SELECTED_POLICY.into(), f.contract.clone());
+    f.contract = json!({
+        "schema":"chrono-cargo-input-policies/v1",
+        "configurations":{config:SELECTED_POLICY}
+    });
+    let mut row = file(
+        SELECTED_POLICY,
+        json!([{"kind":"build-input","to":"project:t"}]),
+    );
+    row["owner"] = "t".into();
+    row["surface"] = "judge-policy".into();
+    f.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(row);
+    f.save();
+}
+
+#[test]
+fn guard_policy_selection_uses_effective_configuration_and_retains_both_identities() {
+    for version in [0, 1, 2] {
+        let mut f = Fixture::new();
+        if version != 0 {
+            select_configuration(&mut f, version);
+        }
+        let config = if version == 0 {
+            CONFIG
+        } else {
+            SELECTED_CONFIG
+        };
+        select_policy(&mut f, config);
+        let (code, report, stderr) = f.call();
+        assert_eq!(code, 0, "v{version}: {report} {stderr}");
+        let binding = &report["policy_binding"];
+        assert_eq!(binding["entry_path"], POLICY);
+        assert_eq!(binding["effective_path"], SELECTED_POLICY);
+        assert_eq!(binding["config_path"], config);
+        for (field, path) in [
+            ("entry_sha256", POLICY),
+            ("effective_sha256", SELECTED_POLICY),
+        ] {
+            assert_eq!(
+                binding[field],
+                sha256(&fs::read(f.root().join(path)).unwrap())
+            );
+        }
+        assert_eq!(report["metadata"]["exit_code"], 0);
+        assert_eq!(report["operation"]["exit_code"], 0);
+        assert_eq!(
+            fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+            b"ran"
+        );
+    }
+}
+
+#[test]
+fn guard_policy_selection_rejects_missing_ambiguous_or_unregistered_inputs_before_cargo() {
+    for (case, expected) in [
+        ("unmapped", "no Cargo policy for effective configuration"),
+        ("nested", "must select a direct Cargo input policy"),
+        ("missing", "No such file"),
+        ("outside", "policy must be under .chrono-harness/"),
+        ("self", "must select a direct Cargo input policy"),
+        ("unregistered", "not registered/connected"),
+        ("disconnected", "not registered/connected"),
+        ("entry-disconnected", "not registered/connected"),
+        ("extra", "unknown field"),
+        ("entry-bypass", "registered Cargo guard entry"),
+        ("traversal", "invalid relative path"),
+        ("symlink", "symlink path is not allowed"),
+    ] {
+        let mut f = Fixture::new();
+        select_policy(&mut f, CONFIG);
+        match case {
+            "unmapped" => f.contract["configurations"] = json!({SELECTED_CONFIG:SELECTED_POLICY}),
+            "nested" => {
+                f.values.insert(SELECTED_POLICY.into(), f.contract.clone());
+            }
+            "missing" => {
+                f.contract["configurations"][CONFIG] = json!(".chrono-harness/missing.json")
+            }
+            "outside" => f.contract["configurations"][CONFIG] = json!("outside.json"),
+            "self" => f.contract["configurations"][CONFIG] = json!(POLICY),
+            "unregistered" => f.values.get_mut(FM).unwrap()["files"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|row| row["path"] != SELECTED_POLICY),
+            "disconnected" | "entry-disconnected" => {
+                let path = if case == "disconnected" {
+                    SELECTED_POLICY
+                } else {
+                    POLICY
+                };
+                let rows = f.values.get_mut(FM).unwrap()["files"]
+                    .as_array_mut()
+                    .unwrap();
+                rows.iter_mut().find(|row| row["path"] == path).unwrap()["edges"] = json!([]);
+            }
+            "extra" => f.contract["fallback"] = json!(SELECTED_POLICY),
+            "entry-bypass" => {
+                f.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"]
+                    [6] = json!(SELECTED_POLICY)
+            }
+            "traversal" => {
+                f.contract["configurations"][CONFIG] = json!(".chrono-harness/../outside.json")
+            }
+            "symlink" => {}
+            _ => unreachable!(),
+        }
+        f.save();
+        if case == "symlink" {
+            let path = f.root().join(SELECTED_POLICY);
+            let original = f.root().join(".chrono-harness/cargo/original.json");
+            fs::rename(&path, &original).unwrap();
+            std::os::unix::fs::symlink(original, path).unwrap();
+        }
+        let (code, report, stderr) = f.call();
+        assert_ne!(code, 0, "{case}: {report} {stderr}");
+        assert!(
+            report["error"].as_str().unwrap().contains(expected),
+            "{case}: {report}"
+        );
+        assert!(report["metadata"].is_null() && report["operation"].is_null());
+        assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+    }
+}
+
+#[test]
+fn guard_policy_selection_detects_entry_and_selected_drift_after_every_child() {
+    for path in [POLICY, SELECTED_POLICY] {
+        for phase in ["--version", "metadata", "test"] {
+            let mut f = Fixture::new();
+            install_drift_proxy(&mut f, path, phase);
+            select_policy(&mut f, CONFIG);
+            let (code, report, stderr) = f.call();
+            assert_ne!(code, 0, "{path} {phase}: {report} {stderr}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("input changed during guarded operation"),
+                "{path} {phase}: {report}"
+            );
+            assert_eq!(report["metadata"].is_null(), phase == "--version");
+            assert_eq!(report["operation"].is_null(), phase != "test");
+            if phase == "test" {
+                assert_eq!(report["operation"]["exit_code"], 0);
+                assert_eq!(
+                    fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+                    b"ran"
+                );
+            }
+        }
+    }
+}
+
+fn install_drift_proxy(f: &mut Fixture, path: &str, phase: &str) {
+    let proxy = f.root().join(".chrono-harness/state/cargo-proxy");
+    let output = Command::new(
+        f.values[CONFIG]["environment"]["values"]["RUSTC"]
+            .as_str()
+            .unwrap(),
+    )
+    .args(["--edition=2024", "--crate-name", "configuration_drift"])
+    .arg(source().join("crates/judge-cargo-tests/tests/fixtures/configuration-drift.rs"))
+    .arg("-o")
+    .arg(&proxy)
+    .output()
+    .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let cargo = f.values[CONFIG]["tools"][0]["program"].clone();
+    f.values.get_mut(CONFIG).unwrap()["tools"][0]["program"] = json!(proxy);
+    let mutation_target = f.root().join(path);
+    let env = &mut f.values.get_mut(CONFIG).unwrap()["environment"]["values"];
+    env["CHRONO_REAL_CARGO"] = cargo;
+    env["CHRONO_MUTATION_PHASE"] = json!(phase);
+    env["CHRONO_MUTATION_TARGET"] = json!(mutation_target);
+}
+
+fn select_configuration(f: &mut Fixture, version: u8) {
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let git = "/usr/bin/git";
+    let digest = sha256(&fs::read(git).unwrap());
+    let output = Command::new(git).arg("--version").output().unwrap();
+    assert!(output.status.success());
+    let mut direct = f.values.remove(CONFIG).unwrap();
+    direct["schema_version"] = json!(3);
+    direct["facts_git"] = json!({"tool":"git","input":"git-binary"});
+    direct["input_closure"] = json!({"status":"incomplete","unresolved":["fixture scope"]});
+    direct["tools"].as_array_mut().unwrap().push(json!({
+        "id":"git","program":git,"resolution":"PATH-once","version_argv":["--version"],
+        "expected_version":String::from_utf8(output.stdout).unwrap().trim()
+    }));
+    let inputs = direct["environment"]["inputs"].as_array_mut().unwrap();
+    for row in &mut *inputs {
+        row["presence"] = json!("present");
+    }
+    inputs.push(json!({"id":"git-binary","location":git,"presence":"present","sha256":digest}));
+    f.values.insert(SELECTED_CONFIG.into(), direct);
+    f.values.insert(
+        CONFIG.into(),
+        json!({
+            "schema":format!("chrono-git-configs/v{version}"),
+            "platforms":{platform:if version == 1 {json!(SELECTED_CONFIG)} else {
+                json!({"program":git,"configurations":[{"sha256":digest,"path":SELECTED_CONFIG}]})
+            }}
+        }),
+    );
+    f.save();
+}
+
+#[test]
+fn guard_configuration_selection_runs_direct_and_both_existing_selectors() {
+    for version in [1, 2, 0] {
+        let mut f = Fixture::new();
+        if version != 0 {
+            select_configuration(&mut f, version);
+        }
+        let (code, report, stderr) = f.call();
+        assert_eq!(code, 0, "v{version}: {report} {stderr}");
+        assert_eq!(report["metadata"]["exit_code"], 0);
+        assert_eq!(report["operation"]["exit_code"], 0);
+        assert_eq!(report["registry_binding"]["entry_path"], CONFIG);
+        assert_eq!(
+            report["registry_binding"]["effective_path"],
+            if version == 0 {
+                CONFIG
+            } else {
+                SELECTED_CONFIG
+            }
+        );
+        assert_eq!(
+            report["registry_binding"]["selection"].is_null(),
+            version == 0
+        );
+        assert_eq!(
+            fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+            b"ran"
+        );
+    }
+}
+
+#[test]
+fn guard_configuration_selection_rejects_invalid_identity_and_entry_before_cargo() {
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    for (case, expected) in [
+        ("unknown-digest", "no registered executable identity"),
+        ("binding", "identity differs from selected policy binding"),
+        ("platform", "no registered platform"),
+        ("nested", "never another selector"),
+        ("missing", "No such file"),
+        ("entry", "registered Cargo guard entry"),
+    ] {
+        let mut f = Fixture::new();
+        select_configuration(&mut f, 2);
+        match case {
+            "unknown-digest" => {
+                f.values.get_mut(CONFIG).unwrap()["platforms"][&platform]["configurations"][0]["sha256"] =
+                    json!("0".repeat(64))
+            }
+            "binding" => {
+                f.values.get_mut(SELECTED_CONFIG).unwrap()["environment"]["inputs"]
+                    .as_array_mut()
+                    .unwrap()
+                    .last_mut()
+                    .unwrap()["sha256"] = json!("0".repeat(64))
+            }
+            "platform" => {
+                f.values.get_mut(CONFIG).unwrap()["platforms"] =
+                    json!({"unknown-platform":f.values[CONFIG]["platforms"][&platform]})
+            }
+            "nested" => {
+                f.values
+                    .insert(SELECTED_CONFIG.into(), f.values[CONFIG].clone());
+            }
+            "missing" => {
+                f.values.get_mut(CONFIG).unwrap()["platforms"][&platform]["configurations"][0]["path"] =
+                    json!(".chrono-harness/missing.json")
+            }
+            "entry" => {
+                f.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"]
+                    [4] = json!(SELECTED_CONFIG)
+            }
+            _ => unreachable!(),
+        }
+        f.save();
+        let (code, report, stderr) = f.call_unchecked();
+        assert_ne!(code, 0, "{case}: {report} {stderr}");
+        assert!(
+            report["error"].as_str().unwrap().contains(expected),
+            "{case}: {report}"
+        );
+        assert!(report["metadata"].is_null() && report["operation"].is_null());
+        assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+    }
+}
+
+#[test]
+fn guard_configuration_selection_retains_entry_and_target_across_every_child_boundary() {
+    for path in [CONFIG, SELECTED_CONFIG] {
+        for phase in ["--version", "metadata", "test"] {
+            let mut f = Fixture::new();
+            install_drift_proxy(&mut f, path, phase);
+            select_configuration(&mut f, 2);
+            let (code, report, stderr) = f.call();
+            assert_ne!(code, 0, "{path} {phase}: {report} {stderr}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("input changed during guarded operation"),
+                "{path} {phase}: {report}"
+            );
+            assert_eq!(report["metadata"].is_null(), phase == "--version");
+            assert_eq!(report["operation"].is_null(), phase != "test");
+            if phase == "test" {
+                assert_eq!(report["operation"]["exit_code"], 0);
+                assert_eq!(
+                    fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+                    b"ran"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn pinned_git_package_executes_and_changed_revision_blocks_the_consumer() {
     let mut f = Fixture::new();
     let root = f.root();
-    let upstream = tempfile::tempdir().unwrap();
+    let upstream = tempfile::Builder::new()
+        .prefix("pinned Git 空白 λ ")
+        .tempdir()
+        .unwrap();
     write(
         upstream.path(),
         "Cargo.toml",
@@ -19,10 +356,23 @@ fn pinned_git_package_executes_and_changed_revision_blocks_the_consumer() {
     write(upstream.path(), "src/lib.rs", "pub fn value()->u32 { 0 }\n");
     git(upstream.path(), &["init", "-q"]);
     let revision = commit(upstream.path());
-    let url = format!(
-        "file://{}",
-        fs::canonicalize(upstream.path()).unwrap().display()
-    );
+    // Cargo canonicalizes a file URL in the lockfile. Encode the actual UTF-8
+    // allocation path so the declared source has that same identity, including
+    // the adopted parent's spaces and Unicode.
+    let path = fs::canonicalize(upstream.path()).unwrap();
+    let encoded: String = path
+        .to_str()
+        .unwrap()
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"/-_.~".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect();
+    let url = format!("file://{encoded}");
     let manifest = f.root().join("p/Cargo.toml");
     let mut text = fs::read_to_string(&manifest).unwrap();
     text.push_str(&format!(
@@ -159,6 +509,172 @@ fn guarded_registry_and_transitive_inputs_execute_real_cargo_test() {
         fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
         b"ran"
     );
+}
+
+#[test]
+fn registered_named_suites_filters_and_libtest_tails_preserve_real_listings_and_assertions() {
+    let mut f = Fixture::new();
+    write(
+        &f.root(),
+        "t/tests/groups.rs",
+        "#[test] fn core_pass() { assert_eq!(p::value(),43); }\n#[test] fn detail_pass() { assert_eq!(p::value(),43); }\n#[test] fn selected_failure() { panic!(\"real selected assertion\"); }\n",
+    );
+    let mut row = file(
+        "t/tests/groups.rs",
+        json!([{"kind":"compile","to":"project:t"}]),
+    );
+    row["owner"] = "t".into();
+    f.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(row);
+    let original = f.contract["operations"]["test.t"]["argv"]
+        .as_array()
+        .unwrap()
+        .clone();
+    for (tail, expected, listing) in [
+        (
+            vec!["--test", "groups", "--", "--list"],
+            0,
+            "core_pass: test",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "detail",
+                "--",
+                "--list",
+                "--exact",
+                "detail_pass",
+            ],
+            0,
+            "detail_pass: test",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "--",
+                "--skip",
+                "selected_failure",
+                "--test-threads=1",
+            ],
+            0,
+            "2 passed",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "selected_failure",
+                "--",
+                "--exact",
+                "--nocapture",
+            ],
+            101,
+            "selected_failure",
+        ),
+    ] {
+        let mut argv = original.clone();
+        argv.extend(tail.iter().map(|s| json!(s)));
+        f.contract["operations"]["test.t"]["argv"] = json!(argv);
+        f.save();
+        let (code, report, stderr) = f.call();
+        assert_eq!(code, expected, "{report} {stderr}");
+        let process = &report["operation"];
+        assert_eq!(process["exit_code"], expected, "{report}");
+        assert!(
+            process["stdout"].as_str().unwrap().contains(listing),
+            "{report}"
+        );
+        let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+        assert_eq!(process["stdout_sha256"], sha256(&bytes));
+    }
+}
+
+#[test]
+fn native_v6_keeps_the_original_output_layout_and_checks_real_host_and_offline_selection() {
+    for case in [
+        "native",
+        "wrong-host",
+        "target-env",
+        "online",
+        "old-schema",
+        "format",
+    ] {
+        let mut f = Fixture::new();
+        toolchain_binding(&mut f);
+        f.contract["schema"] = json!("chrono-cargo-inputs/v6");
+        f.contract["target_mode"] = json!("native");
+        f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_NET_OFFLINE"] =
+            json!("true");
+        let argv = f.contract["operations"]["test.t"]["argv"]
+            .as_array_mut()
+            .unwrap();
+        let index = argv.iter().position(|v| v == "--target").unwrap();
+        argv.drain(index..index + 2);
+        argv.retain(|v| v != "--offline");
+        match case {
+            "wrong-host" => {
+                f.contract["target"] = json!("wrong-native-host");
+                let argv = f.contract["metadata"]["argv"].as_array_mut().unwrap();
+                let index = argv.iter().position(|v| v == "--filter-platform").unwrap();
+                argv[index + 1] = json!("wrong-native-host");
+            }
+            "target-env" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_BUILD_TARGET"] =
+                    f.contract["target"].clone()
+            }
+            "online" => f.values.get_mut(CONFIG).unwrap()["environment"]["values"]
+                .as_object_mut()
+                .unwrap()
+                .remove("CARGO_NET_OFFLINE")
+                .map(|_| ())
+                .unwrap(),
+            "old-schema" => f.contract["schema"] = json!("chrono-cargo-inputs/v5"),
+            "format" => f.contract["operations"]["test.t"]["argv"][0] = json!("fmt"),
+            _ => {}
+        }
+        f.save();
+        let (code, report, stderr) = f.call();
+        if case == "native" {
+            assert_eq!(code, 0, "{report} {stderr}");
+            assert!(
+                report["native_target"]["stdout"]
+                    .as_str()
+                    .unwrap()
+                    .contains("host: ")
+            );
+            assert!(
+                report["operation"]["stdout"]
+                    .as_str()
+                    .unwrap()
+                    .contains("1 passed")
+            );
+            assert!(f.root().join("t/target/debug/deps").is_dir());
+            assert!(
+                !f.root()
+                    .join("t/target")
+                    .join(f.contract["target"].as_str().unwrap())
+                    .exists()
+            );
+        } else {
+            assert_ne!(code, 0, "{case}: {report} {stderr}");
+            assert!(report["operation"].is_null());
+            assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+            if case == "wrong-host" {
+                assert!(report["native_target"].is_object(), "{report}");
+                assert!(
+                    report["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("native host differs"),
+                    "{report}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
@@ -898,6 +1414,170 @@ fn save_sdk_links(f: &mut Fixture, manifest: &serde_json::Value) {
 
 #[cfg(unix)]
 #[test]
+fn v3_directory_aliases_cover_empty_and_alias_only_directories_and_detect_drift() {
+    use std::os::unix::fs::symlink;
+    for case in ["accepted", "v2", "missing", "extra-child", "mutation"] {
+        let mut f = Fixture::new();
+        let mut manifest = sdk_links(&mut f);
+        let sdk = f.root().join(".chrono-harness/state/sdk");
+        fs::create_dir(sdk.join("empty")).unwrap();
+        fs::create_dir(sdk.join("container")).unwrap();
+        symlink("../empty", sdk.join("container/leaf")).unwrap();
+        symlink("container", sdk.join("container-alias")).unwrap();
+        manifest["schema"] = json!("chrono-input-directory/v3");
+        manifest["directories"] =
+            json!([{"path":"empty","entries":[]},{"path":"container","entries":["leaf"]}]);
+        manifest["symlinks"].as_array_mut().unwrap().extend([
+            json!({"path":"container/leaf","target":"../empty","kind":"directory"}),
+            json!({"path":"container-alias","target":"container","kind":"directory"}),
+        ]);
+        match case {
+            "v2" => manifest["schema"] = json!("chrono-input-directory/v2"),
+            "missing" => {
+                manifest.as_object_mut().unwrap().remove("directories");
+            }
+            "extra-child" => fs::write(sdk.join("empty/unlisted"), b"changed").unwrap(),
+            "mutation" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
+                    json!(sdk.join("empty/unlisted"));
+                write(
+                    &f.root(),
+                    "t/src/lib.rs",
+                    "#[test] fn change_directory() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"changed\").unwrap(); }\n",
+                );
+            }
+            _ => {}
+        }
+        save_sdk_links(&mut f, &manifest);
+        let (exit, report, stderr) = f.call();
+        if case == "accepted" {
+            assert_eq!(exit, 0, "{report} {stderr}");
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            if case == "mutation" {
+                assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+                assert!(
+                    report["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("directory children differ"),
+                    "{report}"
+                );
+            } else {
+                assert!(report["operation"].is_null());
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn observer_v3_original_is_consumed_by_the_guard_and_detects_real_topology_drift() {
+    use std::os::unix::fs::symlink;
+    for case in [
+        "accepted",
+        "file-drift",
+        "root-addition",
+        "nested-addition",
+        "missing",
+        "alias-drift",
+        "escape",
+        "mutation",
+    ] {
+        let mut f = Fixture::new();
+        sdk_links(&mut f);
+        let root = f.root();
+        let sdk = root.join(".chrono-harness/state/sdk");
+        fs::create_dir_all(sdk.join("nested/empty")).unwrap();
+        symlink("nested/empty", sdk.join("empty-alias")).unwrap();
+        let manifest_path = ".chrono-harness/state/observed-sdk.json";
+        let declaration = json!({"schema":"chrono-input-observation/v1",
+            "environment":{"inherit":[],"values":{}},"operations":[],"files":[],
+            "directories":[{"id":"sdk","location":{"path":".chrono-harness/state/sdk"},
+                "max_entries":32,"manifest":{"path":manifest_path,"root":".chrono-harness/state/sdk"}}]});
+        write(
+            &root,
+            ".chrono-harness/observe-sdk.json",
+            &declaration.to_string(),
+        );
+        let observed = chrono_inputs::observe(
+            &root,
+            ".chrono-harness/observe-sdk.json",
+            ".chrono-harness/state/sdk-observation.json",
+        )
+        .unwrap();
+        let original =
+            serde_json::from_value(observed["directories"]["sdk"]["manifest"].clone()).unwrap();
+        let bytes = chrono_harness::prepared::read_original(&root, &original, None).unwrap();
+        // Point the real guard at exactly the published original; no manifest
+        // regeneration, reconstruction or fixture replacement supplies topology.
+        let input = f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|r| r["id"] == "toolchain.sdk.manifest")
+            .unwrap();
+        input["location"] = json!(manifest_path);
+        input["sha256"] = json!(sha256(&bytes));
+        match case {
+            "file-drift" => fs::write(sdk.join("include/header"), b"changed").unwrap(),
+            "root-addition" => fs::write(sdk.join("new-child"), b"unlisted").unwrap(),
+            "nested-addition" => {
+                fs::write(sdk.join("nested/empty/new-child"), b"unlisted").unwrap()
+            }
+            "missing" => fs::remove_dir(sdk.join("nested/empty")).unwrap(),
+            "alias-drift" | "escape" => {
+                fs::remove_file(sdk.join("alias")).unwrap();
+                symlink(
+                    if case == "escape" {
+                        "../build-script.input"
+                    } else {
+                        "include/header"
+                    },
+                    sdk.join("alias"),
+                )
+                .unwrap();
+            }
+            "mutation" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
+                    json!(sdk.join("new-child"));
+                write(
+                    &root,
+                    "t/src/lib.rs",
+                    "#[test] fn add_root_child() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"changed\").unwrap(); }\n",
+                );
+            }
+            _ => {}
+        }
+        f.save();
+        let (exit, report, stderr) = f.call();
+        if case == "accepted" {
+            assert_eq!(exit, 0, "{report} {stderr}");
+            assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+        } else if case == "mutation" {
+            assert_ne!(exit, 0, "{report} {stderr}");
+            assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("directory children differ"),
+                "{report}"
+            );
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            assert!(report["operation"].is_null(), "{case}: {report}");
+            assert!(
+                report["error"].as_str().unwrap().contains("directory"),
+                "{case}: {report}"
+            );
+        }
+        assert_eq!(fs::read(root.join(manifest_path)).unwrap(), bytes);
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn directory_links_are_explicit_and_consumed_by_the_real_compiler() {
     let mut f = Fixture::new();
     let mut manifest = sdk_links(&mut f);
@@ -1080,6 +1760,7 @@ fn replace_declared_regular_file() {
     std::fs::rename(sdk.join("SDKROOT.marker"), sdk.join("same-content")).unwrap();
     std::os::unix::fs::symlink("same-content", sdk.join("SDKROOT.marker")).unwrap();
 }
+
 "#,
     );
     fs::write(lib, source).unwrap();
@@ -1092,5 +1773,197 @@ fn replace_declared_regular_file() {
             .unwrap()
             .contains("directory inventory contains symlink"),
         "{report}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn shared_directory_ancestors_recheck_every_file_and_parent_after_the_consumer() {
+    for case in ["unchanged", "bytes", "other-file-bytes", "parent-alias"] {
+        let mut f = Fixture::new();
+        toolchain_binding(&mut f);
+        let sdk = f.root().join(".chrono-harness/state/sdk");
+        fs::create_dir_all(sdk.join("shared/nested")).unwrap();
+        let mut files = vec![json!({"path":"SDKROOT.marker","sha256":sha256(b"declared sdk\n")})];
+        for name in ["a", "b", "c"] {
+            let path = format!("shared/nested/{name}");
+            fs::write(sdk.join(&path), b"original").unwrap();
+            files.push(json!({"path":path,"sha256":sha256(b"original")}));
+        }
+        save_sdk_links(
+            &mut f,
+            &json!({
+                "schema":"chrono-input-directory/v2", "root":".chrono-harness/state/sdk",
+                "files":files, "symlinks":[]
+            }),
+        );
+        let mutation = match case {
+            "unchanged" => "",
+            "bytes" => "std::fs::write(sdk.join(\"shared/nested/c\"), b\"modified\").unwrap();",
+            "other-file-bytes" => {
+                "std::fs::write(sdk.join(\"shared/nested/b\"), b\"modified\").unwrap();"
+            }
+            "parent-alias" => {
+                "std::fs::rename(sdk.join(\"shared\"), sdk.join(\"same-content\")).unwrap(); std::os::unix::fs::symlink(\"same-content\", sdk.join(\"shared\")).unwrap();"
+            }
+            _ => unreachable!(),
+        };
+        let lib = f.root().join("t/src/lib.rs");
+        let mut source = fs::read_to_string(&lib).unwrap();
+        source.push_str(&format!(
+            "\n#[test] fn inventory_boundary() {{ let sdk=std::path::PathBuf::from(std::env::var(\"CHRONO_SDK_ROOT\").unwrap()); {mutation} }}\n"
+        ));
+        fs::write(lib, source).unwrap();
+        let (exit, report, stderr) = f.call();
+        assert_eq!(
+            report["operation"]["exit_code"], 0,
+            "{case}: {report} {stderr}"
+        );
+        if case == "unchanged" {
+            assert_eq!(exit, 0, "{report} {stderr}");
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            assert!(
+                report["error"].as_str().unwrap().contains(
+                    if matches!(case, "bytes" | "other-file-bytes") {
+                        "directory input changed"
+                    } else {
+                        "directory inventory contains symlink"
+                    }
+                ),
+                "{case}: {report}"
+            );
+        }
+    }
+}
+
+// Explicit host experiment, separate from the portable fixture suite. The
+// registered production consumer and all its input/guard bounds remain intact.
+#[test]
+#[ignore = "requires the host's selected isolated toolchain and SDK inventories"]
+fn isolated_production_within_joinable_observation_window() {
+    observe_q1_consumer(false);
+}
+
+#[test]
+#[ignore = "requires the host's selected isolated toolchain and SDK inventories"]
+fn isolated_guard_within_joinable_observation_window() {
+    observe_q1_consumer(true);
+}
+
+fn observe_q1_consumer(guard_only: bool) {
+    let root = source();
+    let evidence_root = root.join(".chrono-harness/state/input-q1-repair");
+    fs::create_dir_all(&evidence_root).unwrap();
+    let destination = tempfile::Builder::new()
+        .prefix(if guard_only {
+            "representative-guard-"
+        } else {
+            "representative-retained-"
+        })
+        .tempdir_in(evidence_root)
+        .unwrap()
+        .keep();
+    fs::create_dir_all(destination.join("tmp")).unwrap();
+    let mut environment: std::collections::BTreeMap<String, String> = std::env::vars().collect();
+    environment.insert(
+        "TMPDIR".into(),
+        destination.join("tmp").to_str().unwrap().into(),
+    );
+    let command = chrono_harness::CommandSpec {
+        program: root
+            .join(".chrono-harness/bin/chrono-worktree")
+            .to_str()
+            .unwrap()
+            .into(),
+        args: Vec::new(),
+        env: environment,
+        // The host terminal can join one 300-second observation. A timeout here
+        // is a distinct inconclusive observation against the unchanged 600s guard.
+        timeout_seconds: 300,
+        output_limit_bytes: 67108864,
+    };
+    // Consume the current action verbatim. The outer registered experiment
+    // holds use already; another wrapper would duplicate lifecycle report bytes.
+    let projects: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
+            .unwrap();
+    let operation = if guard_only {
+        "guard.check.runner"
+    } else {
+        "inputs.provision-isolated"
+    };
+    let action = projects["projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|p| p["actions"].as_object().unwrap().values())
+        .find(|a| a["operation"] == operation)
+        .unwrap();
+    let args: Vec<String> = serde_json::from_value(action["argv"].clone()).unwrap();
+    let command = if guard_only {
+        let config = &args[args.iter().position(|a| a == "--config").unwrap() + 1];
+        let config: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join(config)).unwrap()).unwrap();
+        let tool = config["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == action["tool"])
+            .unwrap();
+        chrono_harness::CommandSpec {
+            program: root
+                .join(tool["program"].as_str().unwrap())
+                .to_str()
+                .unwrap()
+                .into(),
+            args,
+            output_limit_bytes: 4194304,
+            ..command
+        }
+    } else {
+        assert_eq!(action["tool"], "chrono-worktree");
+        chrono_harness::CommandSpec { args, ..command }
+    };
+    let digest = chrono_harness::file_identity(std::path::Path::new(&command.program))
+        .unwrap()
+        .0;
+    let started = std::time::Instant::now();
+    let process = chrono_harness::run_process_observed(&root, &command, &[], &digest).unwrap();
+    let elapsed = started.elapsed().as_secs_f64();
+    fs::write(destination.join("stdout.bytes"), &process.stdout_bytes).unwrap();
+    fs::write(destination.join("stderr.bytes"), &process.stderr_bytes).unwrap();
+    fs::write(
+        destination.join("process.json"),
+        serde_json::to_vec(&process).unwrap(),
+    )
+    .unwrap();
+    fs::write(destination.join("measurement.json"), serde_json::to_vec(&json!({
+        "elapsed_seconds":elapsed, "observation_timeout_seconds":300,
+        "production_guard_timeout_seconds":600,
+        "stdout_bytes":process.stdout_bytes.len(), "stderr_bytes":process.stderr_bytes.len(),
+        "purpose":"Q1 actual registered consumer measurement; retain until acceptance and caller handoff",
+    })).unwrap()).unwrap();
+    assert!(
+        process.failure.is_none(),
+        "bounded observation incomplete; originals: {}",
+        destination.display()
+    );
+    assert_eq!(
+        process.exit_code,
+        0,
+        "consumer failed; originals: {}",
+        destination.display()
+    );
+    let report: serde_json::Value = serde_json::from_slice(&process.stdout_bytes).unwrap();
+    assert_eq!(
+        report["status"],
+        if guard_only { "passed" } else { "used" },
+        "{}",
+        destination.display()
+    );
+    println!(
+        "Q1 consumer originals: {}; elapsed {elapsed:.3}s",
+        destination.display()
     );
 }

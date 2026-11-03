@@ -1,0 +1,73 @@
+name: Registered native initial acquisition
+description: Forward host.acquire-native-macos/linux and retain their original evidence; no full admission.
+inputs:
+  platform:
+    description: The workflow's registered macos or linux candidate.
+    required: true
+outputs:
+  artifact-id:
+    description: Original acquisition artifact ID from the existing transport.
+    value: ${{ steps.evidence.outputs.artifact-id }}
+  artifact-digest:
+    description: Original artifact digest from the existing transport.
+    value: ${{ steps.evidence.outputs.artifact-digest }}
+runs:
+  using: composite
+  steps:
+    - name: Invoke the registered bootstrap action
+      id: acquire
+      shell: bash
+      env:
+        CHRONO_NATIVE_PLATFORM: ${{ inputs.platform }}
+        CHRONO_NATIVE_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+      run: |
+        retain() {
+          local directory="$1"
+          shift
+          mkdir -p -- "$directory"
+          set -o noclobber
+          printf '%s\0' "$@" > "$directory/job.argv"
+          cat -- "$GITHUB_EVENT_PATH" > "$directory/event.json"
+          printf 'run_id\t%s\nattempt\t%s\njob\t%s\ncandidate\t%s\nref\t%s\nworkflow_revision\t%s\nevent\t%s\nrunner_os\t%s\nrunner_arch\t%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_JOB" "$GITHUB_SHA" \
+            "$GITHUB_REF" "$CHRONO_NATIVE_WORKFLOW_REVISION" "$GITHUB_EVENT_NAME" \
+            "$RUNNER_OS" "$RUNNER_ARCH" > "$directory/job.identity.tsv"
+          local code=0
+          # Bash 3.2's exec-error reporter exits 1 under -e before returning 126/127.
+          # Disable -e only for the command; retention writes keep errexit/noclobber.
+          ( set +e; "$@" ) > "$directory/job.stdout" 2> "$directory/job.stderr" || code=$?
+          printf '%s\n' "$code" > "$directory/job.exit"
+          exit "$code"
+        }
+        retain ".chrono-harness/state/native/$CHRONO_NATIVE_PLATFORM/job" \
+          /usr/bin/python3 -B .chrono-harness/ci/bootstrap.py . \
+          ".chrono-harness/ci/bootstrap-acquire-$CHRONO_NATIVE_PLATFORM.json"
+    - name: Preserve original acquisition closure
+      id: evidence
+      if: ${{ always() }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: chrono-native-acquisition-${{ inputs.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+        # Exact install destinations shared by bootstrap-acquire-macos/linux.json.
+        path: |
+          .chrono-harness/state/native/${{ inputs.platform }}/
+          .chrono-harness/state/inputs/
+          .chrono-harness/bin/chrono-harness
+          .chrono-harness/bin/chrono-judge-ci
+          .chrono-harness/bin/chrono-ci
+          .chrono-harness/bin/chrono-judge-registration
+          .chrono-harness/bin/chrono-judge-filemap
+          .chrono-harness/bin/chrono-judge-routes
+          .chrono-harness/bin/chrono-judge-projects
+          .chrono-harness/bin/chrono-judge-cost
+          .chrono-harness/bin/chrono-judge-mixed
+          .chrono-harness/bin/chrono-judge-workflow
+          .chrono-harness/bin/chrono-inputs
+          .chrono-harness/bin/chrono-distribution
+          .chrono-harness/bin/chrono-judge-cargo
+          .chrono-harness/bin/chrono-worktree
+          !.chrono-harness/state/native/${{ inputs.platform }}/rustup/**
+          !.chrono-harness/state/native/${{ inputs.platform }}/cargo/**
+        if-no-files-found: error
+        include-hidden-files: true
+        retention-days: 7

@@ -100,6 +100,8 @@ pub fn consume(
     binding: &Value,
     observation: Option<&Value>,
 ) -> Result<Value, String> {
+    let _report_activity =
+        chrono_harness::retained_artifacts::retention::report_activity(&req.candidate.root)?;
     let digest = ctx["integration_evidence"]
         .as_str()
         .ok_or("E_INTEGRATION_REQUIRED: no evidence digest")?;
@@ -217,6 +219,10 @@ pub fn consume(
         {
             return Err("collected producer report exceeds registered bound".into());
         }
+        let _retention = chrono_harness::retained_artifacts::retention::read_guard(
+            &req.candidate.root,
+            &physical,
+        )?;
         let report_bytes = fs::read(&report_file)
             .map_err(|e| format!("producer report absent/not finalized: {e}"))?;
         let report = json(&report_bytes)?;

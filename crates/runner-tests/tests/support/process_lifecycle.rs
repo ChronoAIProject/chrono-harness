@@ -1,3 +1,6 @@
+#[path = "../../../runner/src/process_child.rs"]
+mod process_child;
+
 use std::{
     fs::{self, File},
     io::Write,
@@ -301,9 +304,101 @@ fn retained_tamper_launch(path: &str) {
     fs::write(path, b"{}").unwrap();
 }
 
+fn ordered_completion() {
+    use std::{io::Read, os::unix::net::UnixDatagram, process::Stdio};
+    for expired in [false, true] {
+        let mut native = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("ordered-child")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut input = native.stdin.take().unwrap();
+        let mut stdout = native.stdout.take().unwrap();
+        let mut stderr = native.stderr.take().unwrap();
+        let mut child = process_child::DirectChild::new(native);
+        let pid = child.id();
+        let exit = Exit::register(pid as _);
+        input.write_all(b"exit").unwrap();
+        drop(input);
+        exit.wait(pid as _, 2);
+
+        let (receiver, sender) = UnixDatagram::pair().unwrap();
+        let sender = std::sync::Arc::new(sender);
+        let joined_sender = sender.clone();
+        let started = std::time::Instant::now();
+        let status = child
+            .probe_with(
+                true,
+                expired,
+                move || {
+                    joined_sender.send(b"joined").unwrap();
+                },
+                |actual| {
+                    assert_eq!(actual.id(), pid);
+                    // One controlled pending probe after a genuine NOTE_EXIT/pidfd
+                    // event. No stream, lifecycle or second exit hint follows it.
+                    Ok(None)
+                },
+            )
+            .unwrap();
+        assert!(status.is_none());
+        let mut pending = libc::pollfd {
+            fd: receiver.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let status = if expired {
+            assert_eq!(
+                unsafe { libc::poll(&mut pending, 1, 0) },
+                0,
+                "an expired monitor must not start another join wait"
+            );
+            let status = child.wait().unwrap();
+            // Check after joining too: an incorrectly started waiter could
+            // still have been between its spawn and notification at the first
+            // readiness check. Its published hint cannot outlive this join.
+            assert_eq!(unsafe { libc::poll(&mut pending, 1, 0) }, 0);
+            status
+        } else {
+            assert_eq!(
+                unsafe { libc::poll(&mut pending, 1, 1000) },
+                1,
+                "real Child join did not wake the owner after its final kernel hint"
+            );
+            let mut hint = [0u8; 32];
+            let length = receiver.recv(&mut hint).unwrap();
+            assert_eq!(&hint[..length], b"joined");
+            child.probe(true, false, || {}).unwrap().unwrap()
+        };
+        assert_eq!(status.code(), Some(7));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        let mut original_stdout = Vec::new();
+        let mut original_stderr = Vec::new();
+        stdout.read_to_end(&mut original_stdout).unwrap();
+        stderr.read_to_end(&mut original_stderr).unwrap();
+        assert_eq!(original_stdout, b"ordered stdout\xff");
+        assert_eq!(original_stderr, b"ordered stderr\xfe");
+        println!(
+            "genuine kernel exit pid={pid}; expired={expired}; one controlled pending Child probe; actual joined exit=7; original streams preserved"
+        );
+    }
+}
+
 fn main() {
     let mut arguments = std::env::args().skip(1);
     match arguments.next().unwrap().as_str() {
+        "ordered-completion" => ordered_completion(),
+        "ordered-child" => {
+            use std::io::Read;
+            let mut release = [0u8; 4];
+            std::io::stdin().read_exact(&mut release).unwrap();
+            assert_eq!(&release, b"exit");
+            std::io::stdout().write_all(b"ordered stdout\xff").unwrap();
+            std::io::stderr().write_all(b"ordered stderr\xfe").unwrap();
+            std::process::exit(7);
+        }
         "marker" => fs::write(arguments.next().unwrap(), "yes").unwrap(),
         "terminated" => terminated(arguments.next().as_deref() == Some("streams")),
         "retained" => retained(&arguments.next().unwrap()),

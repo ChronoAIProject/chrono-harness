@@ -258,6 +258,9 @@ impl Fixture {
     }
     pub fn call(&self) -> (i32, Value, String) {
         Registrations::load(&self.values, CONFIG).unwrap();
+        self.call_unchecked()
+    }
+    pub fn call_unchecked(&self) -> (i32, Value, String) {
         let binary = source().join("crates/judge-cargo/target/debug/chrono-judge-cargo");
         let out = Command::new(binary)
             .current_dir("/")

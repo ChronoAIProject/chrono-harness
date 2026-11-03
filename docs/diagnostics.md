@@ -199,3 +199,198 @@ without these retained originals is insufficient for the corresponding evidence
 claim. The [shared-startup handoff](filemap-impact.md#bounded-internal-causal-consumption)
 owns the existing source/artifact/run/attempt predicates; no new workflow or
 alternate diagnostic test recipe is introduced.
+
+## Scoped CI execution progress adoption
+
+The current host's existing `.chrono-harness/ci/check.json` selects
+`policy.execution_diagnostics: "chrono-log-stderr/v1"`. This adopts the existing
+`Logger` at info level with the CI judge as producer and stderr as its sink.
+Unknown values reject. Omitting the choice leaves the library caller's existing
+scoped dispatcher alone. This is configuration of the single canonical check,
+not another runner, process observer, acquisition path or check entry.
+
+The judge first decodes the request and verifies the profile bytes against its
+request digest, then scopes logging across inventory, operation/tool preparation,
+execution and the post-execution snapshot. These phases include engine calls
+outside operation execution. Records carry the request ID, fixed candidate/base,
+profile digest and judge PID. These are request identities, not a claim that
+input admission has passed. Projects adds the validated plan identity and
+operation identity, explicitly transfers the dispatcher and parent span to each
+owned worker, and records scheduler waits with their running operation IDs.
+Worker results and the subsequent scoped-worker join remain distinct events.
+
+The existing process engine emits its actual launch argv once, executable and
+input/environment digests, cwd, PID pair and unchanged bounds. Its existing
+ownership owner records that launch's slot/generation/parent slot (4096 is the
+root parent sentinel). Subsequent records identify entry into the monitor,
+stream-reader start barrier, descendant drain, any required child join,
+stream/writer joins, scoped-worker joins, scope exit and
+the existing kernel-observer join. A process result event follows the return of
+owned work and stream-retention completion and carries original exit/failure,
+stream lengths and digests. It contains no stream body. No extra status probe,
+process discovery, timer, thread, descriptor or wake channel is added. A stage
+record describes an observed boundary; it does not certify successful operation,
+child terminal state, a completed check, successful original publication or a
+causal explanation for an ensuing timeout. Only the existing result and kernel
+ownership contracts establish those facts.
+
+Normal `info` output reports domain activity and outcomes through the existing
+projects operation, CI evaluation and migration phase events. The shared process
+engine's preparing, actual launch and completed-result events are `debug`, along
+with reader barriers, monitor and ownership waits, joins and scope bookkeeping.
+Selecting `debug` or `trace` exposes the real process facts and enclosing span
+context for every command, including nested maintenance. This shared level rule
+does not depend on a command or phase list. Original process receipts and launch
+descriptors retain argv, cwd, PID, bounds, digests, raw streams, exit status and
+typed failure chains at either level. A library return still leaves error
+handling and publication with the responsible domain boundary.
+
+Each logger record uses the existing synchronous JSONL write/flush path. The
+runner's already selected `retained-reference/v2` producer writes the judge's
+actual stderr to its existing retained stream while the judge is running; it
+does not wait for the final check report. These remain stream originals, with the
+same retention/collection and protected-source/consumer rules. There is no
+second diagnostic store, copied-body original, new producer acknowledgement or
+relaxation for a missing final report. An unavailable sink is not repaired by
+replaying the log. On normal return, `finish()` failures append a failing
+`ci.execution-diagnostics` result and typed `chrono-error/v1` records to the
+existing response without discarding operation receipts or their failures. An
+abruptly terminated judge cannot publish that final response; any unavailable
+record remains unavailable. Native stderr uses the existing runner `NativeOutput`
+adapter on Unix; other platforms retain their standard stderr adapter.
+
+**Product and host policy change together:** runner process/ownership boundaries,
+projects worker context, and CI judge adoption change together with the selected
+profile. FILEMAP declares the two Rust fixture sources and the direct diagnostics
+compile dependency. Current registered lockfiles add direct dependencies on the
+already locked `tracing`/`chrono-diagnostics` libraries; no external package or
+version is introduced. The dedicated CI Rust project has one registered focused
+feedback operation, `test.ci.execution-diagnostics`, over the current v3 unit path with retained-reference/v2 and real shared execution.
+It checks exact failing-operation bytes/exits and request/plan/launch
+association, a real enclosing timeout with original streams before a final
+aggregate, and logging IO failure alongside the original business failure.
+It also checks healthy verdicts, selected/omitted/unknown configuration, actual
+DEBUG success/failure processes and equality of slot, generation and parent slot
+with the original timeout ownership snapshot. INFO coverage requires operation
+context and results while rejecting process detail events. DEBUG coverage uses
+the existing caller-scoped Logger with real shared-engine invocations; no new
+logging policy or API is introduced.
+Its Rust subprocess fixture is built by that project's existing Cargo test
+operation. Canonical verification still uses the full declared DELTA closure;
+this focused feedback does not establish committed canonical or native acceptance.
+
+Normal progress output scales with domain operations and phases. DEBUG output
+also scales with process invocations and launch argv size, not elapsed wait time
+or captured stdout/stderr size. Identity context repeats
+per record; request bodies, environment values and stream bodies are not copied.
+The existing judge stream/output/report bounds remain in force, including failure
+on overflow. Additional per-record serialization, synchronous writes, retained
+stderr and uploaded bytes are new costs; whole-host/native/CI cost is unmeasured.
+Feedback timing and byte observations belong to the worker handoff, not a claim
+of timeout improvement. General subprocess propagation to independently launched
+programs and broader SPEC §7.1/§7.2 adoption remain incomplete.
+
+This adoption addresses the attribution gap in the fixed failed native execution
+`41315147398/1` at candidate `1b762bc47641aca69bc34fe7820b29ca9f06f0a3`.
+Its participation original still records timeout at 2400 seconds; the last
+recorded child being terminal does not identify its argv or explain why enclosing
+launchers remained incomplete. The historical root cause remains unresolved.
+The missing final unit report and resulting post-upload acknowledgement refusal
+remain real failures. This change neither fixes that timeout speculatively nor
+permits releasing originals when final publication is absent.
+
+Scoped Logger registration also covers unrelated uninstrumented first use of
+shared callsites. The locked tracing-core 0.1.36 single-dispatch fast path can
+cache `never` from that unrelated thread. Logger keeps two registrations of its
+same subscriber alive so registration consults live subscribers; the calling
+thread's scoped dispatch still owns delivery. No global dispatcher is installed.
+Fresh-process Rust coverage orders zero/one/multiple logger and lifetime cases,
+requires enclosing request/operation context and explicit thread transfer, and
+retains INFO acceptance, DEBUG filtering and sink-failure checks. Both CI
+diagnostic fixtures publish request/business evidence and raw sink originals
+before assertions and retain their temporary host on assertion failure.
+
+The existing projects migration consumer scopes Logger to its current operation
+preparation/execution, workflow generation/verification and inner owner handoff.
+Fixture preparation and registry validation publish phase boundaries without
+repeating their Git operation records. Operation logs retain actual argv/PID and
+ownership slot/generation through the existing runner. Native fixture capture
+adds its original capture address, argv/PID and entered child wait, actual join
+and return boundaries; its spawn/wait/stream/result behavior is unchanged. Rows
+write synchronously to the test's original stderr before a final libtest result.
+An entered boundary is diagnostic evidence, not a terminal result or explanation
+of the historical timeout. No new observer, deadline or polling channel is added.
+
+**Product and registration changes together:** migration-tests directly names
+the existing diagnostics/tracing dependencies, and the native fixture capture
+owner directly names already locked tracing. Current dependent lockfiles and
+the diagnostics compile edge are migrated. These rows add serialization, writes
+and retained stderr; total native storage and validation cost remains unmeasured.
+The original eight migration members, operation limits and default concurrency
+remain required by the current canonical plan.
+
+The process-level repair changes product event semantics and its dedicated Rust
+test registration together: the CI test owner directly names the already locked
+`chrono-diagnostics` and `tracing` libraries and FILEMAP declares that compile
+edge. Previously every engine invocation emitted three INFO detail records; now
+those records require DEBUG while domain INFO and original evidence remain
+available. This intentionally replaces the failed per-process INFO contract.
+Focused real INFO/DEBUG, sink, prelaunch and publication regressions plus one
+complete eight-test migration under its original 900-second/1-MiB bounds are the
+engineering validation cost. Timings and original captures belong to the finite
+PR214 acceptance handoff; canonical/native validation, delivery and complete SPEC
+adoption remain caller-owned obligations. No general fit guarantee is made for
+arbitrary business output.
+
+### Admitted execution interruption fixture
+
+The incomplete-execution fixture now obtains `PreparedExecution` from the CI
+owner's `prepare_execution`. It admits the actual scoped request, both endpoint
+inventories, selection and routes/tool preparation before the short monitor.
+Ordinary CI evaluation and this API share the same plan preparation and execution
+functions; execution delegates to the existing projects scheduler. The transported
+request/plan binding is checked before execution and supplies actual request,
+candidate, config, plan and operation logging context. This is a phase API for the
+current diagnostics consumer, not a final check response or acceptance entry.
+It adds no dependency, engine, deadline policy or alternate business recipe.
+
+The native fixture executes that actual admitted plan under the existing
+one-second/65536-byte engine monitor. The registered operation keeps its existing
+3-second/4096-byte bounds. Its native socket sends its actual PID before blocking;
+the test receives these readiness bytes on a single blocking native socket before
+the one-second interruption, keeps that socket live until engine join, and requires
+DEBUG launch/ownership records, original
+launch identity, exact original streams, real timeout and monitor-end
+slot/generation/parent-slot equality. That snapshot must identify the operation
+and its launcher as nonterminal. No final check response may be published.
+A second case holds the real version-admission call for over one second on that
+socket before preparation completes. Its elapsed/read-error original distinguishes
+admission from the subsequent short execution monitor. Default concurrency and
+enclosing registered limits remain unchanged. This separates an interrupted check's
+registered execution phase from admission; it does not assert that whole-check
+admission fits inside one second. Missing readiness remains failure with retained
+originals.
+
+The finite engineering run exposed an invalid absence assertion after real
+readiness: the runner cooperatively cancels and joins nested engines before killing the enclosing
+process. Projects can therefore publish a genuine error operation completion
+during shutdown. The fixture now checks any such event against the exact request,
+candidate, configuration, plan and operation, requires its error status and real
+receipt, and checks any process completion against the launched child, enclosing
+cancellation and original stream digests. Absence after cancellation is not an
+execution invariant. The monitor snapshot, timeout and empty final response
+remain independent assertions; shutdown and deadline policy are unchanged.
+Failed fixtures retain their original streams, launch, request, prepared plan,
+readiness and engine result.
+The optional `CHRONO_CI_TEST_RECEIPTS` destination retains these same originals
+after passing assertions for the finite caller evidence consumer; its descriptor
+states the caller's debugging/acceptance release obligation.
+
+Product/fixture change visibility: CI factors the existing preparation/execution
+boundaries into the above API to serve this consumer. Existing successful/failed
+whole-check tests still exercise CI aggregation and post-snapshot validation.
+Verification uses unfiltered `test.judge-ci-tests` with existing Rust methods and
+recorded environment. Direct engineering action receipts do not establish
+canonical outer-engine or source binding. Canonical candidate bootstrap/check and
+native acceptance remain separate caller obligations; costs outside the observed
+suite are unknown.

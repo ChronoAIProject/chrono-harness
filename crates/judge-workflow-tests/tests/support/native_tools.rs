@@ -1,8 +1,10 @@
 use super::*;
 use std::{os::unix::fs::PermissionsExt, path::Path};
 
-pub(super) fn install(path: &Path) {
-    fs::copy(env!("CARGO_BIN_EXE_chrono-workflow-test-tool"), path).unwrap();
+pub(super) fn install(root: &Path, path: &Path) {
+    let original = Path::new(env!("CARGO_BIN_EXE_chrono-workflow-test-tool"));
+    host::copied_fixture_input(root, original, path);
+    fs::copy(original, path).unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
 }
 

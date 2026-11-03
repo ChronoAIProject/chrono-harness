@@ -10,11 +10,11 @@ pub(super) fn bind_host(mut h: Host) -> Host {
     fs::create_dir_all(&state).unwrap();
     let selected = state.join("selected Git λ");
     let real = chrono_harness::resolve_program(&root, "git", None).unwrap();
-    native_tools::install(&selected);
+    native_tools::install(&root, &selected);
     let shadow = state.join("shadow");
     fs::create_dir(&shadow).unwrap();
-    native_tools::install(&shadow.join("git"));
-    let version = Command::new(&real).arg("--version").output().unwrap();
+    native_tools::install(&root, &shadow.join("git"));
+    let version = h.capture_native(Command::new(&real).arg("--version"));
     assert!(version.status.success());
     h.tool = fs::canonicalize(&h.tool).unwrap();
     let cfg = h.values.get_mut(CONFIG).unwrap();
@@ -368,11 +368,13 @@ fn full_ci_consumer(selected: bool) {
         serde_json::to_vec(&provider).unwrap(),
     )
     .unwrap();
-    let generated = Command::new(&ci)
-        .current_dir(&root)
-        .args(["generate", "--host-root", ".", "--config", source_path])
-        .output()
-        .unwrap();
+    let generated = h.capture_native(Command::new(&ci).current_dir(&root).args([
+        "generate",
+        "--host-root",
+        ".",
+        "--config",
+        source_path,
+    ]));
     assert!(
         generated.status.success(),
         "{}",
@@ -401,23 +403,19 @@ fn full_ci_consumer(selected: bool) {
             .unwrap(),
         )
         .unwrap();
-        let out = Command::new(&ci)
-            .current_dir(&root)
-            .args([
-                "prepare",
-                "--host-root",
-                ".",
-                "--config",
-                source_path,
-                "--event",
-                "workflow_dispatch",
-                "--payload",
-                payload.to_str().unwrap(),
-                "--workflow-revision",
-                &h.candidate,
-            ])
-            .output()
-            .unwrap();
+        let out = h.capture_native(Command::new(&ci).current_dir(&root).args([
+            "prepare",
+            "--host-root",
+            ".",
+            "--config",
+            source_path,
+            "--event",
+            "workflow_dispatch",
+            "--payload",
+            payload.to_str().unwrap(),
+            "--workflow-revision",
+            &h.candidate,
+        ]));
         assert!(
             out.status.success(),
             "{}",
@@ -438,13 +436,13 @@ fn full_ci_consumer(selected: bool) {
             context
         );
         let argv: Vec<String> = serde_json::from_value(prepared["canonical_argv"].clone()).unwrap();
-        let out = Command::new(root.join(&argv[0]))
-            .current_dir(&root)
-            .env("DECLARED_EMPTY", "")
-            .env_remove("DECLARED_ABSENT")
-            .args(&argv[1..])
-            .output()
-            .unwrap();
+        let out = h.capture_native(
+            Command::new(root.join(&argv[0]))
+                .current_dir(&root)
+                .env("DECLARED_EMPTY", "")
+                .env_remove("DECLARED_ABSENT")
+                .args(&argv[1..]),
+        );
         h.retain_command_result("prepared-check", &out);
         let report: Value = serde_json::from_slice(&out.stdout).unwrap();
         assert_eq!(
@@ -481,23 +479,23 @@ fn full_ci_consumer(selected: bool) {
     // keeps its legacy alias behavior; a selector must reach the shared guard
     // with its supplied entry still intact, before Git or business operations.
     let invoke = |cwd: &std::path::Path, config: &str| {
-        Command::new(root.join(".chrono-harness/bin/chrono-harness"))
-            .current_dir(cwd)
-            .env("DECLARED_EMPTY", "")
-            .env_remove("DECLARED_ABSENT")
-            .args([
-                "check",
-                "--config",
-                config,
-                "--base",
-                &h.base,
-                "--candidate",
-                &h.candidate,
-                "--context",
-                ".chrono-harness/state/context.json",
-            ])
-            .output()
-            .unwrap()
+        h.capture_native(
+            Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+                .current_dir(cwd)
+                .env("DECLARED_EMPTY", "")
+                .env_remove("DECLARED_ABSENT")
+                .args([
+                    "check",
+                    "--config",
+                    config,
+                    "--base",
+                    &h.base,
+                    "--candidate",
+                    &h.candidate,
+                    "--context",
+                    ".chrono-harness/state/context.json",
+                ]),
+        )
     };
     // Pair direct-policy path kinds with distinct caller contexts to avoid
     // redundant full judge chains. Selectors retain all nine combinations.
@@ -569,23 +567,19 @@ fn full_ci_consumer(selected: bool) {
             .unwrap();
             let trace = fs::read(root.join(".chrono-harness/state/git-trace")).unwrap();
             let order = fs::read(root.join(".chrono-harness/state/order")).unwrap();
-            let out = Command::new(&ci)
-                .current_dir(&root)
-                .args([
-                    "prepare",
-                    "--host-root",
-                    ".",
-                    "--config",
-                    source_path,
-                    "--event",
-                    "workflow_dispatch",
-                    "--payload",
-                    ".chrono-harness/state/payload.json",
-                    "--workflow-revision",
-                    &h.candidate,
-                ])
-                .output()
-                .unwrap();
+            let out = h.capture_native(Command::new(&ci).current_dir(&root).args([
+                "prepare",
+                "--host-root",
+                ".",
+                "--config",
+                source_path,
+                "--event",
+                "workflow_dispatch",
+                "--payload",
+                ".chrono-harness/state/payload.json",
+                "--workflow-revision",
+                &h.candidate,
+            ]));
             assert_eq!(out.status.code(), Some(1));
             assert!(String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"));
             assert_eq!(
@@ -643,28 +637,28 @@ fn full_unit_real_seven_judge_contribution() {
     assert_eq!(control_exit, 0, "direct control failed");
     let certificate = h.root().join(".chrono-harness/state/integration.json");
     fs::remove_file(&certificate).unwrap();
-    let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
-        .current_dir("/")
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args([
-            "check",
-            "--config",
-            h.root().join(CONFIG).to_str().unwrap(),
-            "--base",
-            &h.base,
-            "--candidate",
-            &h.candidate,
-            "--context",
-            h.root()
-                .join(".chrono-harness/state/context.json")
-                .to_str()
-                .unwrap(),
-            "--unit",
-            "one",
-        ])
-        .output()
-        .unwrap();
+    let out = h.capture_native(
+        Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+            .current_dir("/")
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "check",
+                "--config",
+                h.root().join(CONFIG).to_str().unwrap(),
+                "--base",
+                &h.base,
+                "--candidate",
+                &h.candidate,
+                "--context",
+                h.root()
+                    .join(".chrono-harness/state/context.json")
+                    .to_str()
+                    .unwrap(),
+                "--unit",
+                "one",
+            ]),
+    );
     fs::write(
         h.root().join(".chrono-harness/state/unit-probe.json"),
         &out.stdout,
@@ -693,28 +687,28 @@ fn full_unit_real_seven_judge_contribution() {
     println!("REPORT_SIZE unit_bytes={}", unit_bytes.len());
     fs::write(h.root().join(manifest_path),serde_json::to_vec(&json!({"schema":"chrono-full-collection/v1","reports":[{"unit":"one","path":".chrono-harness/state/unit-one.json","sha256":sha256(&unit_bytes)}]})).unwrap()).unwrap();
     let before = fs::read(h.root().join(".chrono-harness/state/order")).unwrap();
-    let collected = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
-        .current_dir("/")
-        .env("DECLARED_EMPTY", "")
-        .env_remove("DECLARED_ABSENT")
-        .args([
-            "check",
-            "--config",
-            h.root().join(CONFIG).to_str().unwrap(),
-            "--base",
-            &h.base,
-            "--candidate",
-            &h.candidate,
-            "--context",
-            h.root()
-                .join(".chrono-harness/state/context.json")
-                .to_str()
-                .unwrap(),
-            "--collect",
-            manifest_path,
-        ])
-        .output()
-        .unwrap();
+    let collected = h.capture_native(
+        Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+            .current_dir("/")
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "check",
+                "--config",
+                h.root().join(CONFIG).to_str().unwrap(),
+                "--base",
+                &h.base,
+                "--candidate",
+                &h.candidate,
+                "--context",
+                h.root()
+                    .join(".chrono-harness/state/context.json")
+                    .to_str()
+                    .unwrap(),
+                "--collect",
+                manifest_path,
+            ]),
+    );
     fs::write(
         h.root().join(".chrono-harness/state/collect-probe.json"),
         &collected.stdout,

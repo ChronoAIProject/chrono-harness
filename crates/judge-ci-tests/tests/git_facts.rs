@@ -512,7 +512,10 @@ fn scoped_v2_post_execution_rechecks_with_bound_reader() {
     let candidate = h.host.commit();
     let result = h.host.check(&h.base, &candidate);
     fail(&result, "dirty tracked");
-    assert_eq!(result.evidence["executed"][0]["process"]["exit_code"], 0);
+    assert_eq!(
+        result.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+        0
+    );
     assert!(
         result
             .results

@@ -1,6 +1,7 @@
 //! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
 mod cache_adoption;
 mod migration;
+mod owner_deployment;
 mod producer;
 // Explicit file custody uses these same admission/enrollment capabilities, without
 // draining unrelated entries or migrating a historical checkout's policy.
@@ -179,7 +180,7 @@ use crate::{
 };
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
 use chrono_judge_registration::Registrations;
-pub use producer::RetainedArtifact;
+pub use producer::{RetainedArtifact, TemporaryHost};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
@@ -322,7 +323,7 @@ impl Drop for Gate {
         }
     }
 }
-struct Manager {
+struct PolicyInputs {
     policy: Policy,
     policy_path: String,
     policy_bytes: Vec<u8>,
@@ -331,6 +332,10 @@ struct Manager {
     anchor_head: String,
     registrations: Registrations,
     registry_digest: String,
+    common: PathBuf,
+}
+struct Manager {
+    inputs: PolicyInputs,
     ledger: Ledger,
     directory: PathBuf,
     _gate: Gate,
@@ -501,13 +506,12 @@ fn load_policy(
     }
     Ok(Some((p, path, policy_bytes)))
 }
-impl Manager {
-    fn open(
+impl PolicyInputs {
+    fn load(
         r: &mut Runner,
         root: &Path,
         config_path: &str,
         bytes: &[u8],
-        token: &str,
     ) -> Result<Option<Self>, String> {
         let Some((policy, policy_path, policy_bytes)) = load_policy(r, root, config_path, bytes)?
         else {
@@ -567,6 +571,49 @@ impl Manager {
             }
         }
         start::registered_policy(&registrations, config_path, &r.config.report_directory)?;
+        Ok(Some(Self {
+            policy,
+            policy_path,
+            policy_bytes,
+            config_path: config_path.into(),
+            config_bytes: bytes.into(),
+            anchor_head,
+            registrations,
+            registry_digest,
+            common,
+        }))
+    }
+    fn stable(&self, r: &mut Runner) -> Result<(), String> {
+        let anchor = &self.policy.coordinator_root;
+        if r.oid(anchor, "HEAD")? != self.anchor_head
+            || fs::read(no_symlink_parents(anchor, &self.config_path)?)
+                .map_err(|e| e.to_string())?
+                != self.config_bytes
+            || fs::read(no_symlink_parents(anchor, &self.policy_path)?)
+                .map_err(|e| e.to_string())?
+                != self.policy_bytes
+        {
+            return Err(
+                "coordinator HEAD/configuration/policy changed; preserve pending work".into(),
+            );
+        }
+        Ok(())
+    }
+}
+impl Manager {
+    fn open(
+        r: &mut Runner,
+        root: &Path,
+        config_path: &str,
+        bytes: &[u8],
+        token: &str,
+    ) -> Result<Option<Self>, String> {
+        let Some(inputs) = PolicyInputs::load(r, root, config_path, bytes)? else {
+            return Ok(None);
+        };
+        let policy = &inputs.policy;
+        let anchor = &policy.coordinator_root;
+        let common = inputs.common.clone();
         let directory = no_symlink_parents(anchor, policy.state_directory.trim_end_matches('/'))?;
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let kernel = policy.schema == "chrono-worktree-automatic-cleanup/v2";
@@ -707,14 +754,7 @@ impl Manager {
             absolute(&e.path, true)?;
         }
         Ok(Some(Self {
-            policy,
-            policy_path,
-            policy_bytes,
-            config_path: config_path.into(),
-            config_bytes: bytes.into(),
-            anchor_head,
-            registrations,
-            registry_digest,
+            inputs,
             ledger,
             directory,
             _gate: gate,
@@ -722,8 +762,8 @@ impl Manager {
     }
     fn save(&self) -> Result<(), String> {
         no_symlink_parents(
-            &self.policy.coordinator_root,
-            &format!("{}ledger.json", self.policy.state_directory),
+            &self.inputs.policy.coordinator_root,
+            &format!("{}ledger.json", self.inputs.policy.state_directory),
         )?;
         write_json(&self.directory.join("ledger.json"), &self.ledger, false)?;
         Ok(())
@@ -732,29 +772,19 @@ impl Manager {
         if let Some(lease) = &self._gate.lease {
             lease.stable()?;
         }
-        let anchor = &self.policy.coordinator_root;
-        if r.oid(anchor, "HEAD")? != self.anchor_head
-            || fs::read(no_symlink_parents(anchor, &self.config_path)?)
-                .map_err(|e| e.to_string())?
-                != self.config_bytes
-            || fs::read(no_symlink_parents(anchor, &self.policy_path)?)
-                .map_err(|e| e.to_string())?
-                != self.policy_bytes
-        {
-            return Err(
-                "coordinator HEAD/configuration/policy changed; preserve pending work".into(),
-            );
-        }
-        Ok(())
+        self.inputs.stable(r)
     }
     fn pinned_retention(&self, r: &mut Runner, t: &Terminal) -> Result<(), String> {
         if r.command(
-            &self.policy.coordinator_root,
-            &["symbolic-ref", "--quiet", &self.policy.retained_ref],
+            &self.inputs.policy.coordinator_root,
+            &["symbolic-ref", "--quiet", &self.inputs.policy.retained_ref],
         )?
         .exit_code
             != 1
-            || r.oid(&self.policy.coordinator_root, &self.policy.retained_ref)? != t.retained_commit
+            || r.oid(
+                &self.inputs.policy.coordinator_root,
+                &self.inputs.policy.retained_ref,
+            )? != t.retained_commit
         {
             return Err(
                 "retained reference changed after terminal handoff; preserve checkout".into(),
@@ -770,7 +800,7 @@ impl Manager {
     ) -> Result<BTreeMap<String, Option<String>>, String> {
         let tree = r.tree(target, head)?;
         let mut inputs = BTreeMap::new();
-        for path in [&self.config_path, &self.policy_path] {
+        for path in [&self.inputs.config_path, &self.inputs.policy_path] {
             let physical = no_symlink_parents(target, path)?;
             let digest = if tree.contains_key(path) {
                 let committed = r.blob(target, head, path)?;
@@ -804,7 +834,7 @@ impl Manager {
         lock: Option<&str>,
     ) -> Result<(), String> {
         let binding = self.policy_binding(e)?;
-        if binding.policy_sha256 != sha256(&self.policy_bytes) {
+        if binding.policy_sha256 != sha256(&self.inputs.policy_bytes) {
             return Err("enrolled policy changed; explicit migration is required".into());
         }
         self.check_attachment(r, e, head, lock)?;
@@ -831,6 +861,7 @@ impl Manager {
                 }
             }
             let registered: BTreeSet<_> = self
+                .inputs
                 .policy
                 .artifacts
                 .iter()
@@ -860,17 +891,20 @@ impl Manager {
             );
         }
         if let Some(owner) = &e.ownership {
-            if self._gate.lease.is_none() || !owner.path.starts_with(&self.policy.state_directory) {
+            if self._gate.lease.is_none()
+                || !owner.path.starts_with(&self.inputs.policy.state_directory)
+            {
                 return Err("enrollment ownership policy mismatch".into());
             }
-            let path = no_symlink_parents(&self.policy.coordinator_root, &owner.path)?;
+            let path = no_symlink_parents(&self.inputs.policy.coordinator_root, &owner.path)?;
             if crate::ownership::identity(&path)? != owner.id {
                 return Err("enrollment lease identity changed".into());
             }
         }
         absolute(&e.path, false)?;
         if e.cache_only {
-            if !self.policy.main_cache_only || e.path != self.policy.coordinator_root {
+            if !self.inputs.policy.main_cache_only || e.path != self.inputs.policy.coordinator_root
+            {
                 return Err("main cache ownership is not adopted at this coordinator".into());
             }
             let observed = r.checkout_identity(&e.path)?;
@@ -886,7 +920,7 @@ impl Manager {
         }
         let observed = maintenance::identity(
             r,
-            &self.policy.coordinator_root,
+            &self.inputs.policy.coordinator_root,
             &e.path,
             &e.branch,
             head,
@@ -905,7 +939,7 @@ impl Manager {
             self.ledger.common.join("packed-refs.lock"),
             self.ledger.common.join("config.lock"),
         ];
-        let mut references = vec![self.policy.retained_ref.clone()];
+        let mut references = vec![self.inputs.policy.retained_ref.clone()];
         match main_branch {
             Some("HEAD") => (), // Detached main has no branch-removal authority.
             Some(reference) => references.push(reference.into()),
@@ -948,7 +982,7 @@ impl Manager {
             Err(e) => return Err(e.to_string()),
             Ok(_) => return Err("birth destination must be absent before enrollment".into()),
         }
-        if r.inventory(&self.policy.coordinator_root)?
+        if r.inventory(&self.inputs.policy.coordinator_root)?
             .iter()
             .any(|row| row.get("worktree").is_some_and(|p| Path::new(p) == target))
         {
@@ -974,15 +1008,15 @@ impl Manager {
                 .to_owned()
         };
         if cache_only
-            && (!self.policy.main_cache_only
+            && (!self.inputs.policy.main_cache_only
                 || self._gate.lease.is_none()
-                || target != self.policy.coordinator_root)
+                || target != self.inputs.policy.coordinator_root)
         {
             return Err("main cache ownership is not explicitly adopted".into());
         }
         if !cache_only
             && !["feature_prefix", "integration_prefix"].iter().any(|k| {
-                self.registrations.workflow()[k]
+                self.inputs.registrations.workflow()[k]
                     .as_str()
                     .is_some_and(|p| branch.starts_with(p))
             })
@@ -998,8 +1032,10 @@ impl Manager {
         };
         let policy_inputs = self.target_policy_inputs(r, &target, &head)?;
         if kind == "birth"
-            && (policy_inputs.get(&self.config_path) != Some(&Some(sha256(&self.config_bytes)))
-                || policy_inputs.get(&self.policy_path) != Some(&Some(sha256(&self.policy_bytes))))
+            && (policy_inputs.get(&self.inputs.config_path)
+                != Some(&Some(sha256(&self.inputs.config_bytes)))
+                || policy_inputs.get(&self.inputs.policy_path)
+                    != Some(&Some(sha256(&self.inputs.policy_bytes))))
         {
             return Err("new birth did not adopt the coordinator policy/configuration".into());
         }
@@ -1010,10 +1046,10 @@ impl Manager {
                 .ok_or("enrollment receipt identity")?;
             let path = format!(
                 "{}enrollment-{}.lease",
-                self.policy.state_directory,
+                self.inputs.policy.state_directory,
                 sha256(token.as_bytes())
             );
-            let physical = no_symlink_parents(&self.policy.coordinator_root, &path)?;
+            let physical = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
             if physical.exists() {
                 return Err("enrollment lease identity already exists".into());
             }
@@ -1039,6 +1075,7 @@ impl Manager {
         let mut historical_artifacts = vec![];
         if cache_only {
             for artifact in self
+                .inputs
                 .policy
                 .artifacts
                 .iter()
@@ -1062,7 +1099,7 @@ impl Manager {
             path: target,
             branch,
             attachment: attached,
-            policy_sha256: sha256(&self.policy_bytes),
+            policy_sha256: sha256(&self.inputs.policy_bytes),
             status: "active".into(),
             enrollment,
             uses: vec![],
@@ -1076,17 +1113,21 @@ impl Manager {
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = r.config.host_config.clone();
-        let target_snapshot =
-            if head == self.anchor_head && host_config == self.registrations.entry_path() {
-                None
-            } else {
-                Some(start::registrations(r, &entry.path, &head, &host_config)?)
-            };
+        let target_snapshot = if head == self.inputs.anchor_head
+            && host_config == self.inputs.registrations.entry_path()
+        {
+            None
+        } else {
+            Some(start::registrations(r, &entry.path, &head, &host_config)?)
+        };
         let target_registrations = target_snapshot
             .as_ref()
-            .map_or(&self.registrations, |(registrations, _)| registrations);
+            .map_or(&self.inputs.registrations, |(registrations, _)| {
+                registrations
+            });
         artifact_disposal::registered(
             &self
+                .inputs
                 .policy
                 .artifacts
                 .iter()
@@ -1099,7 +1140,7 @@ impl Manager {
                 start::registered_policy(
                     &target_registrations,
                     path,
-                    &self.policy.state_directory,
+                    &self.inputs.policy.state_directory,
                 )?;
             }
         }
@@ -1172,8 +1213,8 @@ impl Manager {
             .ok_or("birth original report path")?;
         let name = format!("interrupted-birth-{}.json", sha256(report_path.as_bytes()));
         let physical = no_symlink_parents(
-            &self.policy.coordinator_root,
-            &format!("{}{name}", self.policy.state_directory),
+            &self.inputs.policy.coordinator_root,
+            &format!("{}{name}", self.inputs.policy.state_directory),
         )?;
         let binding = Self::birth_binding(&e);
         // Reuse an already-published reconciliation on repeated interruption.
@@ -1189,7 +1230,7 @@ impl Manager {
                 }
                 self.verify_inputs(&original)?;
                 Receipt {
-                    path: format!("{}{name}", self.policy.state_directory),
+                    path: format!("{}{name}", self.inputs.policy.state_directory),
                     sha256: sha256(&bytes),
                 }
             }
@@ -1222,7 +1263,7 @@ impl Manager {
                 let sealed_original = token
                     .map(|t| {
                         self.result_input(
-                            &format!("{}birth-{t}.json", self.policy.state_directory),
+                            &format!("{}birth-{t}.json", self.inputs.policy.state_directory),
                             None,
                         )
                     })
@@ -1242,8 +1283,8 @@ impl Manager {
     }
     fn immutable(&self, name: &str, v: &Value) -> Result<Receipt, String> {
         relative_path(name)?;
-        let path = format!("{}{name}", self.policy.state_directory);
-        let target = no_symlink_parents(&self.policy.coordinator_root, &path)?;
+        let path = format!("{}{name}", self.inputs.policy.state_directory);
+        let target = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
         let b = write_json(&target, v, true)?;
         Ok(Receipt {
             path,
@@ -1251,8 +1292,8 @@ impl Manager {
         })
     }
     fn immutable_reconciled(&self, name: &str, value: &Value) -> Result<Receipt, String> {
-        let path = format!("{}{name}", self.policy.state_directory);
-        let physical = no_symlink_parents(&self.policy.coordinator_root, &path)?;
+        let path = format!("{}{name}", self.inputs.policy.state_directory);
+        let physical = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
         match fs::read(&physical) {
             Ok(bytes) => {
                 if json(&bytes)? != *value {
@@ -1268,7 +1309,7 @@ impl Manager {
         }
     }
     fn receipt(&self, receipt: &Receipt) -> Result<Vec<u8>, String> {
-        let b = crate::recovery::state_bytes(&self.policy.coordinator_root, &receipt.path)?;
+        let b = crate::recovery::state_bytes(&self.inputs.policy.coordinator_root, &receipt.path)?;
         if sha256(&b) != receipt.sha256 {
             return Err("original lifecycle receipt changed".into());
         }
@@ -1278,7 +1319,7 @@ impl Manager {
     fn retained_input(&self, path: &str, bytes: &[u8], format: &str) -> Value {
         value!(RetainedInput {
             schema: "chrono-worktree-retained-input/v1".into(),
-            source_root: self.policy.coordinator_root.clone(),
+            source_root: self.inputs.policy.coordinator_root.clone(),
             path: path.into(),
             sha256: sha256(bytes),
             byte_length: bytes.len(),
@@ -1287,11 +1328,17 @@ impl Manager {
     }
     /// Preserve partial/unsealed bytes independently of their mutable source.
     fn retain_bytes(&self, bytes: &[u8]) -> Result<Value, String> {
-        let path = format!("{}input-{}.bin", self.policy.state_directory, sha256(bytes));
-        let physical = no_symlink_parents(&self.policy.coordinator_root, &path)?;
+        let path = format!(
+            "{}input-{}.bin",
+            self.inputs.policy.state_directory,
+            sha256(bytes)
+        );
+        let physical = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
         match fs::symlink_metadata(&physical) {
             Ok(_) => {
-                if crate::recovery::state_bytes(&self.policy.coordinator_root, &path)? != bytes {
+                if crate::recovery::state_bytes(&self.inputs.policy.coordinator_root, &path)?
+                    != bytes
+                {
                     return Err("retained lifecycle input changed".into());
                 }
             }
@@ -1353,7 +1400,7 @@ impl Manager {
         Self::collect_inputs(report, &mut inputs)?;
         while let Some(input) = inputs.pop() {
             if input.schema != "chrono-worktree-retained-input/v1"
-                || input.source_root != self.policy.coordinator_root
+                || input.source_root != self.inputs.policy.coordinator_root
                 || !matches!(input.format.as_str(), "bytes" | "receipt")
             {
                 return Err("invalid retained lifecycle input binding".into());
@@ -1381,10 +1428,12 @@ impl Manager {
             .ownership
             .as_ref()
             .ok_or("enrollment has no kernel ownership; preserve legacy state")?;
-        if self._gate.lease.is_none() || !owner.path.starts_with(&self.policy.state_directory) {
+        if self._gate.lease.is_none()
+            || !owner.path.starts_with(&self.inputs.policy.state_directory)
+        {
             return Err("enrollment lease policy mismatch".into());
         }
-        let path = no_symlink_parents(&self.policy.coordinator_root, &owner.path)?;
+        let path = no_symlink_parents(&self.inputs.policy.coordinator_root, &owner.path)?;
         Lease::acquire(&path, Some(&owner.id), false, exclusive, None)
     }
     fn reconcile_uses(&mut self, i: usize, lease: &Lease) -> Result<(), String> {
@@ -1392,9 +1441,12 @@ impl Manager {
         let e = self.ledger.entries[i].clone();
         for token in &e.uses {
             relative_path(token)?;
-            let intent_path = format!("{}use-intent-{token}.json", self.policy.state_directory);
+            let intent_path = format!(
+                "{}use-intent-{token}.json",
+                self.inputs.policy.state_directory
+            );
             let intent_bytes =
-                crate::recovery::state_bytes(&self.policy.coordinator_root, &intent_path)?;
+                crate::recovery::state_bytes(&self.inputs.policy.coordinator_root, &intent_path)?;
             let intent = json(&intent_bytes)?;
             if intent["path"] != value!(e.path)
                 || intent["attachment"] != value!(e.attachment)
@@ -1404,7 +1456,7 @@ impl Manager {
             {
                 return Err("interrupted use intent binding changed; preserve record".into());
             }
-            let path = format!("{}use-{token}.json", self.policy.state_directory);
+            let path = format!("{}use-{token}.json", self.inputs.policy.state_directory);
             let original = self.result_input(&path, None)?;
             let receipt = self.immutable_reconciled(&format!("interrupted-use-{token}.json"), &value!({
                 "schema":"chrono-worktree-interrupted-use/v2", "path":e.path, "token":token,
@@ -1437,7 +1489,7 @@ impl Manager {
                 value!({"presence":"present","sha256":sha256(&bytes),"input":self.retained_input(path, &bytes, "receipt"),"receipt":receipt}),
             );
         }
-        let physical = no_symlink_parents(&self.policy.coordinator_root, path)?;
+        let physical = no_symlink_parents(&self.inputs.policy.coordinator_root, path)?;
         match fs::read(physical) {
             Ok(bytes) => Ok(
                 value!({"presence":"present","sha256":sha256(&bytes),"input":self.retain_bytes(&bytes)?,"original_outcome":"unknown"}),
@@ -1468,6 +1520,7 @@ impl Manager {
             None
         };
         let names: Vec<_> = self
+            .inputs
             .policy
             .artifacts
             .iter()
@@ -1481,25 +1534,25 @@ impl Manager {
         // check_entry just verified the live attachment and common repository.
         // Equal immutable commits use the already observed coordinator registry;
         // different commits acquire their own snapshot. No live check is reused.
-        let target_snapshot =
-            if head == self.anchor_head && host_config == self.registrations.entry_path() {
-                None
-            } else {
-                Some(start::registrations(r, &e.path, &head, &host_config)?)
-            };
-        let (target_regs, target_digest) = target_snapshot
-            .as_ref()
-            .map_or((&self.registrations, &self.registry_digest), |(r, d)| {
-                (r, d)
-            });
+        let target_snapshot = if head == self.inputs.anchor_head
+            && host_config == self.inputs.registrations.entry_path()
+        {
+            None
+        } else {
+            Some(start::registrations(r, &e.path, &head, &host_config)?)
+        };
+        let (target_regs, target_digest) = target_snapshot.as_ref().map_or(
+            (&self.inputs.registrations, &self.inputs.registry_digest),
+            |(r, d)| (r, d),
+        );
         artifact_disposal::registered(
             &names,
-            &[self.registrations.config(), target_regs.config()],
+            &[self.inputs.registrations.config(), target_regs.config()],
         )?;
         let paths = artifact_disposal::paths(r, &e.path, &head, &names)?;
         let binding = value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,
-            "head":head,"policy_sha256":self.policy_binding(&e)?.policy_sha256,"config_sha256":sha256(&self.config_bytes),
-            "anchor_registry_digest":chrono_harness::wire::digest(&value!(self.registrations.filemap()))?,
+            "head":head,"policy_sha256":self.policy_binding(&e)?.policy_sha256,"config_sha256":sha256(&self.inputs.config_bytes),
+            "anchor_registry_digest":chrono_harness::wire::digest(&value!(self.inputs.registrations.filemap()))?,
             "target_registry_digest":target_digest,"artifacts":names,"generation":owner.generation});
         if let Some(prior) = e
             .cache_attempts
@@ -1596,13 +1649,16 @@ impl Manager {
                 "worktree is terminal or has active/unknown managed use; preserve it".into(),
             );
         }
-        if dispose_evidence && !self.policy.allow_evidence_disposal {
+        if dispose_evidence && !self.inputs.policy.allow_evidence_disposal {
             return Err("policy does not authorize terminal evidence disposal".into());
         }
         self.birth_ready(&e)?;
         let head = r.oid(&target, "HEAD")?;
         self.check_entry(r, &e, &head, None)?;
-        let retained_commit = r.oid(&self.policy.coordinator_root, &self.policy.retained_ref)?;
+        let retained_commit = r.oid(
+            &self.inputs.policy.coordinator_root,
+            &self.inputs.policy.retained_ref,
+        )?;
         if let Some(pin) = pin {
             facts::full_oid(pin)?;
             if pin != retained_commit {
@@ -1611,7 +1667,7 @@ impl Manager {
         }
         let receipt=self.immutable(&format!("terminal-{token}.json"),&value!({
             "schema":"chrono-worktree-terminal/v1","path":target,"branch":e.branch,"head":head,"attachment":e.attachment,
-            "policy_sha256":self.policy_binding(&e)?.policy_sha256,"retained_ref":self.policy.retained_ref,"retained_commit":retained_commit,
+            "policy_sha256":self.policy_binding(&e)?.policy_sha256,"retained_ref":self.inputs.policy.retained_ref,"retained_commit":retained_commit,
             "dispose_evidence":dispose_evidence,"artifacts_only":artifacts_only,
             "handoff":"caller-joined-owned-jobs-and-established-completion","report_path":report["report_path"]
         }))?;
@@ -1640,11 +1696,105 @@ impl Manager {
         report["terminal_receipt"] = value!(receipt);
         Ok(())
     }
-    fn drain(&mut self, exclude: &[PathBuf], report: &mut Value) -> Result<(), String> {
+    /// Observe Git's explicit owner inventory without enrolling or leasing rows.
+    /// This is diagnostic input, never authority for a later cleanup effect.
+    fn observe_inventory(
+        &self,
+        r: &mut Runner,
+        exclude: &[PathBuf],
+        report: &mut Value,
+    ) -> Result<(), String> {
+        report["worktree_inventory"] = value!([]);
+        for git in r.inventory(&self.inputs.policy.coordinator_root)? {
+            let path = PathBuf::from(&git["worktree"]);
+            let entry = self.current_entry(&path).map(|i| &self.ledger.entries[i]);
+            let mut row = value!({"path":path,"head":git.get("HEAD"),"branch":git.get("branch"),
+                "locked":git.contains_key("locked"),"prunable":git.contains_key("prunable"),
+                "git":git,"enrollment_match":false});
+            if let Some(e) = entry {
+                row["enrollment_status"] = value!(e.status);
+            }
+            let observed = (|| {
+                absolute(&path, false)?;
+                let checkout = r.checkout_identity(&path)?;
+                row["checkout_identity"] = value!({"top":checkout.top,"common":checkout.common,
+                    "metadata":checkout.metadata,"head":checkout.head,"branch":checkout.branch});
+                if checkout.top != path || absolute(&checkout.common, false)? != self.ledger.common
+                {
+                    return Err(
+                        "checkout attachment belongs to a different physical repository".into(),
+                    );
+                }
+                let attached = if path == self.inputs.policy.coordinator_root {
+                    main_attachment(&path, &checkout.metadata)?
+                } else {
+                    attachment_at(&path, &checkout.metadata)?
+                };
+                row["attachment"] = value!(attached);
+                if let Some(e) = entry {
+                    if attached != e.attachment {
+                        return Err("current enrollment attachment changed".into());
+                    }
+                    // HEAD and branch are mutable checkout state, not birth identity.
+                    row["enrollment_match"] = value!(true);
+                }
+                Ok::<(), String>(())
+            })();
+            if let Err(error) = &observed {
+                row["attachment_error"] = value!(error);
+            }
+            let reason = if path == self.inputs.policy.coordinator_root {
+                Some("coordinator worktree".to_owned())
+            } else if exclude.contains(&path) {
+                Some("invoking source or destination".to_owned())
+            } else if entry.is_none() {
+                Some(
+                    "Git-registered worktree has no current enrollment; explicit import required"
+                        .to_owned(),
+                )
+            } else if let Err(error) = &observed {
+                Some(format!("unverified checkout attachment: {error}"))
+            } else if git.contains_key("locked") || git.contains_key("prunable") {
+                Some("Git worktree is locked or prunable; preserve its attachment".to_owned())
+            } else {
+                None
+            };
+            row["status"] = value!(if observed.is_err()
+                && path != self.inputs.policy.coordinator_root
+                && !exclude.contains(&path)
+            {
+                "blocked"
+            } else if reason.is_some() {
+                "preserved"
+            } else {
+                "enrolled"
+            });
+            if let Some(reason) = reason {
+                row["preserved_reason"] = value!(reason);
+            }
+            report["worktree_inventory"]
+                .as_array_mut()
+                .unwrap()
+                .push(row);
+        }
+        Ok(())
+    }
+    fn drain(
+        &mut self,
+        r: &mut Runner,
+        exclude: &[PathBuf],
+        report: &mut Value,
+    ) -> Result<(), String> {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
         report["producer_objects"] = value!([]);
         report["producer_drains"] = value!([]);
+        report["output_retention"] = value!(
+            chrono_harness::retained_artifacts::retention::maintain_adopted(
+                &self.inputs.policy.coordinator_root
+            )?
+        );
+        self.observe_inventory(r, exclude, report)?;
         let mut failures = vec![];
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
@@ -1697,10 +1847,12 @@ impl Manager {
                 );
                 continue;
             }
-            let (config, bytes) =
-                crate::configuration(&self.policy.coordinator_root, &self.config_path)?;
-            let root = self.policy.coordinator_root.clone();
-            let config_path = self.config_path.clone();
+            let (config, bytes) = crate::configuration(
+                &self.inputs.policy.coordinator_root,
+                &self.inputs.config_path,
+            )?;
+            let root = self.inputs.policy.coordinator_root.clone();
+            let config_path = self.inputs.config_path.clone();
             let outcome = start::with_report(
                 &root,
                 &config_path,
@@ -1709,9 +1861,9 @@ impl Manager {
                 "cleanup",
                 "cleaned",
                 |r, token, attempt| {
-                    attempt["source_commit"] = value!(self.anchor_head);
+                    attempt["source_commit"] = value!(self.inputs.anchor_head);
                     attempt["registry_digest"] = value!(chrono_harness::wire::digest(&value!(
-                        self.registrations.filemap()
+                        self.inputs.registrations.filemap()
                     ))?);
                     attempt["automatic_cleanup"] = value!(true);
                     if let Some(lease) = &_lease {
@@ -1791,13 +1943,15 @@ impl Manager {
                 }
             }
         }
-        for producer in self.policy.retained_producers.clone() {
-            let (config, bytes) =
-                crate::configuration(&self.policy.coordinator_root, &self.config_path)?;
-            let root = &self.policy.coordinator_root;
+        for producer in self.inputs.policy.retained_producers.clone() {
+            let (config, bytes) = crate::configuration(
+                &self.inputs.policy.coordinator_root,
+                &self.inputs.config_path,
+            )?;
+            let root = &self.inputs.policy.coordinator_root;
             let result = start::with_report(
                 root,
-                &self.config_path,
+                &self.inputs.config_path,
                 config,
                 &bytes,
                 "producer-cleanup",
@@ -1837,10 +1991,11 @@ impl Manager {
     /// Coordinator/state publication failures still prevent admission.
     fn drain_for_admission(
         &mut self,
+        r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
     ) -> Result<(), String> {
-        match self.drain(exclude, report) {
+        match self.drain(r, exclude, report) {
             Err(_)
                 if report["cleanup_failures"]
                     .as_array()
@@ -1859,7 +2014,7 @@ impl Manager {
         report: &mut Value,
     ) -> Result<(), String> {
         if self.ledger.entries[i].cache_only
-            || self.ledger.entries[i].path == self.policy.coordinator_root
+            || self.ledger.entries[i].path == self.inputs.policy.coordinator_root
         {
             return Err("main checkout has no worktree deletion authority".into());
         }
@@ -1872,7 +2027,7 @@ impl Manager {
         report["terminal_receipt"] = value!(t.receipt);
         report["terminal_input"] =
             self.retained_input(&t.receipt.path, &self.receipt(&t.receipt)?, "receipt");
-        if self.policy_binding(&e)?.policy_sha256 != sha256(&self.policy_bytes) {
+        if self.policy_binding(&e)?.policy_sha256 != sha256(&self.inputs.policy_bytes) {
             return Err("enrolled policy changed; preserve terminal work".into());
         }
         self.stable(r)?;
@@ -1887,7 +2042,7 @@ impl Manager {
             report["prior_report"] = value!({"receipt":receipt,"input":self.retained_input(&receipt.path, &b, "receipt")});
             if e.path.exists() {
                 let locked = r
-                    .inventory(&self.policy.coordinator_root)?
+                    .inventory(&self.inputs.policy.coordinator_root)?
                     .into_iter()
                     .find(|row| row.get("worktree").is_some_and(|p| Path::new(p) == e.path))
                     .and_then(|row| row.get("locked").cloned());
@@ -1896,7 +2051,7 @@ impl Manager {
                     let tree = r.oid(&e.path, &format!("{}^{{tree}}", t.head))?;
                     maintenance::release_reconciled(
                         r,
-                        &self.policy.coordinator_root,
+                        &self.inputs.policy.coordinator_root,
                         report,
                         &prior_report,
                         &t.head,
@@ -1910,6 +2065,7 @@ impl Manager {
         self.git_locks(&e, None)?;
         self.pinned_retention(r, &t)?;
         let names: Vec<_> = self
+            .inputs
             .policy
             .artifacts
             .iter()
@@ -1923,6 +2079,7 @@ impl Manager {
         if t.artifacts_only {
             preserved = Some("terminal owner requested artifacts only".to_owned());
         } else if self
+            .inputs
             .policy
             .artifacts
             .iter()
@@ -1937,11 +2094,11 @@ impl Manager {
             if preserved.is_none() {
                 if let Err(error) = maintenance::saved_commit(
                     r,
-                    &self.policy.coordinator_root,
+                    &self.inputs.policy.coordinator_root,
                     &t.head,
-                    &self.policy.retained_ref,
+                    &self.inputs.policy.retained_ref,
                     &t.retained_commit,
-                    &self.policy.retention,
+                    &self.inputs.policy.retention,
                 ) {
                     preserved = Some(format!("commit retention unresolved: {error}"));
                 }
@@ -1981,17 +2138,17 @@ impl Manager {
             let (target_regs, _) = start::registrations(r, &e.path, &t.head, &host_config)?;
             artifact_disposal::registered(
                 &names,
-                &[self.registrations.config(), target_regs.config()],
+                &[self.inputs.registrations.config(), target_regs.config()],
             )?;
             artifact_disposal::paths(r, &e.path, &t.head, &names)?;
             report["destination"] = value!(e.path);
             report["branch_ref"] = value!(e.branch);
             report["head"] = value!(t.head);
             report["base"] = value!(t.head);
-            crate::recovery::publish(&self.policy.coordinator_root, report)?;
+            crate::recovery::publish(&self.inputs.policy.coordinator_root, report)?;
             let path = e.path.to_str().ok_or("path UTF-8")?;
             r.git(
-                &self.policy.coordinator_root,
+                &self.inputs.policy.coordinator_root,
                 &["worktree", "lock", "--reason", token, "--", path],
             )?;
             self.check_entry(r, &e, &t.head, Some(token))?;
@@ -2004,7 +2161,7 @@ impl Manager {
             self.pinned_retention(r, &t)?;
             start::unlock(
                 r,
-                &self.policy.coordinator_root,
+                &self.inputs.policy.coordinator_root,
                 path,
                 &format!("refs/heads/{}", e.branch),
                 &t.head,
@@ -2016,17 +2173,17 @@ impl Manager {
                 path: e.path.clone(),
                 branch: e.branch.clone(),
                 head: t.head.clone(),
-                retained_ref: self.policy.retained_ref.clone(),
+                retained_ref: self.inputs.policy.retained_ref.clone(),
                 retained_commit: t.retained_commit.clone(),
-                retention: self.policy.retention.clone(),
+                retention: self.inputs.policy.retention.clone(),
                 discard_artifacts: names,
-                remove_branch: self.policy.remove_branch,
+                remove_branch: self.inputs.policy.remove_branch,
                 allow_absent_worktree: !e.attempts.is_empty(),
             }
             .execute_checked(
                 r,
-                &self.policy.coordinator_root,
-                &self.registrations,
+                &self.inputs.policy.coordinator_root,
+                &self.inputs.registrations,
                 token,
                 report,
                 |r| {
@@ -2035,7 +2192,7 @@ impl Manager {
                     self.pinned_retention(r, &t)?;
                     if fs::symlink_metadata(&e.path).is_ok() {
                         let row = r
-                            .inventory(&self.policy.coordinator_root)?
+                            .inventory(&self.inputs.policy.coordinator_root)?
                             .into_iter()
                             .find(|row| row.get("worktree").is_some_and(|p| Path::new(p) == e.path))
                             .ok_or("enrolled checkout inventory disappeared")?;
@@ -2071,13 +2228,13 @@ pub(crate) fn create(
         true,
     )?;
     manager.preflight_birth(r, &destination)?;
-    manager.drain_for_admission(&[o.root.clone(), destination.clone()], report)?;
+    manager.drain_for_admission(r, &[o.root.clone(), destination.clone()], report)?;
     manager.stable(r)?;
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
     manager.stable(r)?;
     manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"]}))?;
-    report["cleanup_enrollment"] = value!({"coordinator_root":manager.policy.coordinator_root,"state_directory":manager.policy.state_directory,"kind":"birth"});
+    report["cleanup_enrollment"] = value!({"coordinator_root":manager.inputs.policy.coordinator_root,"state_directory":manager.inputs.policy.state_directory,"kind":"birth"});
     Ok(())
 }
 
@@ -2138,6 +2295,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--unit",
             "--bootstrap-config",
             "--adopt-cache",
+            "--adopt-fixtures",
+            "--stage-result",
+            "--stage-sha256",
+            "--report-consumer",
         ]
         .contains(&key.as_str())
             || n + 1 >= args.len()
@@ -2148,7 +2309,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         }
         n += 2;
     }
-    if (values.contains_key("--bootstrap-config") && operation != "bootstrap")
+    if (values.contains_key("--bootstrap-config")
+        && !matches!(operation.as_str(), "bootstrap" | "deploy-owner"))
         || (operation == "bootstrap" && !values.contains_key("--bootstrap-config"))
         || (values.contains_key("--path") && operation == "bootstrap")
         || (values.contains_key("--unit") && operation != "check")
@@ -2160,11 +2322,25 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (operation == "maintain" && values.contains_key("--path"))
         || (operation == "migrate" && !values.contains_key("--path"))
         || (values.contains_key("--adopt-cache") && operation != "migrate")
+        || (values.contains_key("--adopt-fixtures") && operation != "migrate")
+        || (values.contains_key("--stage-result") && operation != "deploy-owner")
+        || (values.contains_key("--stage-sha256") && operation != "deploy-owner")
+        || (operation == "deploy-owner"
+            && (!values.contains_key("--bootstrap-config")
+                || !values.contains_key("--stage-result")
+                || !values.contains_key("--stage-sha256")
+                || values.contains_key("--path")))
     {
         return Err("invalid lifecycle command arguments".into());
     }
     let invoking = fs::canonicalize(values.get("--host-root").copied().unwrap_or("."))
         .map_err(|e| e.to_string())?;
+    if values
+        .get("--report-consumer")
+        .is_some_and(|name| name.trim().is_empty() || name.len() > 247)
+    {
+        return Err("invalid bounded report consumer identity".into());
+    }
     let config_path = values
         .get("--config")
         .copied()
@@ -2187,31 +2363,51 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         "maintain" => "maintained",
         "import" => "imported",
         "migrate" => "migrated",
+        "deploy-owner" => "owner-deployed",
         "use" | "check" | "bootstrap" => "used",
         _ => return Err("unknown lifecycle operation".into()),
     };
     let mut use_guard = None;
-    start::with_report(
+    // The explicit caller consumes coordinator originals even when its
+    // invocation belongs to a linked checkout. Keep publication/receipt
+    // assembly protected until with_report has bound the exact closure.
+    let mut coordinator_reports = None;
+    start::with_report_for_consumer(
         &invoking,
         config_path,
         config,
         &bytes,
         operation,
         success,
+        values.get("--report-consumer").copied(),
         |r, token, report| {
             report["invoking_root"] = value!(invoking);
             let mut manager = Manager::open(r, &invoking, config_path, &bytes, token)?
                 .ok_or("automatic cleanup is not opted in")?;
-            report["source_root"] = value!(manager.policy.coordinator_root);
-            report["lifecycle_coordinator_root"] = value!(manager.policy.coordinator_root);
-            report["source_commit"] = value!(manager.anchor_head);
+            if values.contains_key("--report-consumer") {
+                coordinator_reports =
+                    chrono_harness::retained_artifacts::retention::report_activity(
+                        &manager.inputs.policy.coordinator_root,
+                    )?;
+            }
+            report["source_root"] = value!(manager.inputs.policy.coordinator_root);
+            report["lifecycle_coordinator_root"] = value!(manager.inputs.policy.coordinator_root);
+            report["source_commit"] = value!(manager.inputs.anchor_head);
             match operation.as_str() {
-                "maintain" => manager.drain(&[invoking.clone()], report),
+                "deploy-owner" => manager.deploy_owner(
+                    r,
+                    &invoking,
+                    values["--bootstrap-config"],
+                    values["--stage-result"],
+                    values["--stage-sha256"],
+                    report,
+                ),
+                "maintain" => manager.drain(r, &[invoking.clone()], report),
                 "import" => manager.enroll(
                     r,
                     target.as_ref().unwrap(),
-                    if manager.policy.main_cache_only
-                        && target.as_ref().unwrap() == &manager.policy.coordinator_root
+                    if manager.inputs.policy.main_cache_only
+                        && target.as_ref().unwrap() == &manager.inputs.policy.coordinator_root
                     {
                         "main-cache"
                     } else {
@@ -2225,6 +2421,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if let Some(plan) = values.get("--adopt-cache") {
                         manager.adopt_main_cache(r, target, plan, report)?;
                     }
+                    if let Some(plan) = values.get("--adopt-fixtures") {
+                        manager.adopt_fixture_bodies(r, target, plan, report)?;
+                    }
                     Ok(())
                 }
                 "finish" => {
@@ -2237,14 +2436,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         token,
                         report,
                     )?;
-                    manager.drain(&[invoking.clone()], report)
+                    manager.drain(r, &[invoking.clone()], report)
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
-                    manager.drain_for_admission(&[invoking.clone(), target.clone()], report)?;
+                    manager.drain_for_admission(r, &[invoking.clone(), target.clone()], report)?;
                     if manager.current_entry(target).is_none()
-                        && target == &manager.policy.coordinator_root
-                        && manager.policy.main_cache_only
+                        && target == &manager.inputs.policy.coordinator_root
+                        && manager.inputs.policy.main_cache_only
                     {
                         manager.enroll(
                             r,
@@ -2263,17 +2462,21 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     let i = match manager.current_entry(target) {
                         Some(i) => i,
                         None if matches!(operation.as_str(), "check" | "bootstrap")
-                            && target == &manager.policy.coordinator_root =>
+                            && target == &manager.inputs.policy.coordinator_root =>
                         {
                             let command = if operation == "bootstrap" {
                                 bootstrap_command(
                                     r,
                                     target,
-                                    &manager.registrations,
+                                    &manager.inputs.registrations,
                                     values["--bootstrap-config"],
                                 )?
                             } else {
-                                canonical_command(target, &manager.registrations, &selection)?
+                                canonical_command(
+                                    target,
+                                    &manager.inputs.registrations,
+                                    &selection,
+                                )?
                             };
                             drop(manager);
                             let digest =
@@ -2318,8 +2521,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     let head = r.oid(target, "HEAD")?;
                     manager.check_entry(r, &e, &head, None)?;
                     let host_config = r.config.host_config.clone();
-                    let target_snapshot = if head == manager.anchor_head
-                        && host_config == manager.registrations.entry_path()
+                    let target_snapshot = if head == manager.inputs.anchor_head
+                        && host_config == manager.inputs.registrations.entry_path()
                     {
                         None
                     } else {
@@ -2327,7 +2530,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     };
                     let target_regs = target_snapshot
                         .as_ref()
-                        .map_or(&manager.registrations, |(registrations, _)| registrations);
+                        .map_or(&manager.inputs.registrations, |(registrations, _)| {
+                            registrations
+                        });
                     let command = if operation == "check" {
                         canonical_command(target, target_regs, &selection)?
                     } else if operation == "bootstrap" {
@@ -2365,7 +2570,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     }
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
-                    let coordinator = manager.policy.coordinator_root.clone();
+                    let coordinator = manager.inputs.policy.coordinator_root.clone();
                     drop(manager);
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
                     let process = chrono_harness::prepared::process_identities(
@@ -2396,6 +2601,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             process.exit_code, process.failure
                         ));
                     }
+                    let mut post_use_cleanup = value!({});
+                    let cleanup = manager.drain_for_admission(
+                        r,
+                        &[invoking.clone(), target.clone()],
+                        &mut post_use_cleanup,
+                    );
+                    report["post_use_cleanup"] = post_use_cleanup;
+                    cleanup?;
                     Ok(())
                 }
                 _ => unreachable!(),
@@ -2560,18 +2773,56 @@ fn canonical_command(
 
 // Lifecycle wrapper publication continues only at the validated surviving owner,
 // after managed use of the disposable checkout has been released.
-pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> {
+pub(crate) fn publish_result(
+    root: &Path,
+    report: &mut Value,
+    consumer: Option<&str>,
+) -> Result<(), String> {
     let root = absolute(root, false)?;
     let path = report["report_path"]
         .as_str()
-        .ok_or("lifecycle report path")?;
-    relative_path(path)?;
+        .ok_or("lifecycle report path")?
+        .to_owned();
+    relative_path(&path)?;
     if !path.starts_with(".chrono-harness/state/") {
         return Err("lifecycle report must remain registered state".into());
     }
-    let target = no_symlink_parents(&root, path)?;
+    let target = no_symlink_parents(&root, &path)?;
     fs::create_dir_all(target.parent().ok_or("lifecycle report parent")?)
         .map_err(|e| e.to_string())?;
-    write_json(&target, report, true)?;
+    if consumer.is_none() {
+        let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
+        raw.push(b'\n');
+        if !chrono_harness::retained_artifacts::retention::publish_owned_original(
+            &root,
+            "lifecycle-original",
+            &path,
+            &raw,
+            crate::recovery::publication_outcome(report, &raw),
+        )? {
+            write_bytes(&target, &raw, true)?;
+        }
+        return crate::recovery::settle_report(&root, report);
+    }
+    if chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?.is_none() {
+        return Err("report consumer requires adopted lifecycle retention".into());
+    }
+    let publication = chrono_harness::retained_artifacts::retention::create_adopted(
+        &root,
+        "lifecycle-original",
+        &target,
+        false,
+        value!({"outcome":"not-established"}),
+    )?;
+    crate::recovery::protect_report_consumer(report, publication.as_ref(), consumer)?;
+    let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
+    raw.push(b'\n');
+    if let Some(publication) = publication {
+        publication.replace_file(&target, &raw)?;
+        publication.complete(crate::recovery::publication_outcome(report, &raw))?;
+    } else {
+        write_bytes(&target, &raw, true)?;
+    }
+    crate::recovery::settle_report(&root, report)?;
     Ok(())
 }

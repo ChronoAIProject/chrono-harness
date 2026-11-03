@@ -6,7 +6,37 @@ use chrono_harness::{
 use chrono_judge_registration::Registrations;
 use serde::Serialize;
 use serde_json::Value;
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::Path,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
+
+/// Bounded original phase evidence survives an enclosing timeout on stderr.
+/// This is observation only: every registered check still executes.
+pub(crate) fn measure<T>(
+    phase: &str,
+    action: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let start = Instant::now();
+    let timestamp = || {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    };
+    eprintln!(
+        "CHRONO_CARGO_PHASE {}",
+        serde_json::json!({"phase":phase,"event":"start","at_unix_millis":timestamp()})
+    );
+    let result = action();
+    eprintln!(
+        "CHRONO_CARGO_PHASE {}",
+        serde_json::json!({"phase":phase,"event":"terminal","at_unix_millis":timestamp(),"elapsed_millis":start.elapsed().as_millis(),"outcome":if result.is_ok(){"returned"}else{"error"}})
+    );
+    result
+}
 
 #[derive(Serialize)]
 pub struct Report {
@@ -15,8 +45,13 @@ pub struct Report {
     status: &'static str,
     error: Option<String>,
     operation_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    registry_binding: Option<facts::ConfigIdentity>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    policy_binding: Option<crate::inputs::PolicyBinding>,
     tool: Option<observation::Tool>,
     compiler: Option<observation::Tool>,
+    native_target: Option<ProcessResult>,
     linker: Option<observation::Tool>,
     toolchain: Option<crate::inputs::ToolchainEvidence>,
     metadata: Option<ProcessResult>,
@@ -38,8 +73,11 @@ pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
         status: "passed",
         error: None,
         operation_id: operation.into(),
+        registry_binding: None,
+        policy_binding: None,
         tool: None,
         compiler: None,
+        native_target: None,
         linker: None,
         toolchain: None,
         metadata: None,
@@ -47,7 +85,9 @@ pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
         configuration: None,
         input_closure_complete: false,
     };
-    if let Err(error) = evaluate(root, config, policy, operation, &mut report) {
+    if let Err(error) = measure("guard", || {
+        evaluate(root, config, policy, operation, &mut report)
+    }) {
         report.fail(1, error);
     }
     report
@@ -60,44 +100,46 @@ fn evaluate(
     report: &mut Report,
 ) -> Result<(), String> {
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-    let config_value =
-        json(&fs::read(no_symlink_parents(&root, config)?).map_err(|e| e.to_string())?)?;
-    let values: BTreeMap<_, _> = facts::registry_paths(&config_value, config)?
-        .into_iter()
-        .map(|path| {
-            Ok((
-                path.clone(),
-                json(&fs::read(no_symlink_parents(&root, &path)?).map_err(|e| e.to_string())?)?,
-            ))
-        })
-        .collect::<Result<_, String>>()?;
-    let registrations = Registrations::load(&values, config)?;
-    let snapshot: serde_json::Map<String, Value> = registrations.config()["environment"]["inherit"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|key| {
-            let key = key.as_str().unwrap();
-            let value = match std::env::var(key) {
-                Ok(v) => Value::String(v),
-                Err(std::env::VarError::NotPresent) => Value::Null,
-                Err(e) => return Err(format!("E_CARGO_INPUT: environment {key}: {e}")),
-            };
-            Ok((key.to_string(), value))
-        })
-        .collect::<Result<_, String>>()?;
+    let snapshot = facts::registry_snapshot_with(config, |path| {
+        fs::read(no_symlink_parents(&root, path)?).map_err(|e| e.to_string())
+    })?;
+    let registrations = Registrations::load(&snapshot.values, config)?;
+    report.registry_binding = Some(facts::ConfigIdentity {
+        entry_path: registrations.entry_path().into(),
+        effective_path: registrations.effective_config_path().into(),
+        selection: registrations.selection().cloned(),
+    });
+    let inherited: serde_json::Map<String, Value> =
+        registrations.config()["environment"]["inherit"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|key| {
+                let key = key.as_str().unwrap();
+                let value = match std::env::var(key) {
+                    Ok(v) => Value::String(v),
+                    Err(std::env::VarError::NotPresent) => Value::Null,
+                    Err(e) => return Err(format!("E_CARGO_INPUT: environment {key}: {e}")),
+                };
+                Ok((key.to_string(), value))
+            })
+            .collect::<Result<_, String>>()?;
     let environment = chrono_judge_registration::inputs::environment(
         registrations.config(),
-        &Value::Object(snapshot),
+        &Value::Object(inherited),
     )?;
-    let check = crate::inputs::prepare(
-        &root,
-        &registrations,
-        config,
-        policy,
-        operation,
-        &environment,
-    )?;
+    let mut check = measure("prepare-inputs", || {
+        crate::inputs::prepare(
+            &root,
+            &registrations,
+            config,
+            policy,
+            operation,
+            &environment,
+            &snapshot.bytes,
+        )
+    })?;
+    report.policy_binding = check.policy_binding.take();
     report.configuration = Some(check.configuration.evidence.clone());
     report.toolchain = check.toolchain.clone();
     if report.toolchain.is_some() {
@@ -147,14 +189,16 @@ fn evaluate(
                 ));
             }
         }
-        let tool = observation::tool(
-            &root,
-            program,
-            &version_argv,
-            &environment,
-            contract.timeout_seconds,
-            contract.output_limit_bytes,
-        )?;
+        let tool = measure(&format!("tool:{id}"), || {
+            observation::tool(
+                &root,
+                program,
+                &version_argv,
+                &environment,
+                contract.timeout_seconds,
+                contract.output_limit_bytes,
+            )
+        })?;
         if id == contract.metadata.tool {
             report.tool = Some(tool.clone());
         } else if contract
@@ -177,7 +221,7 @@ fn evaluate(
             &root,
             declaration["expected_version"].as_str(),
         )?;
-        check.unchanged()?;
+        measure("unchanged-inputs", || check.unchanged())?;
         if let Some(input) = check.tool_inputs.get(id) {
             if tool.path != input.path || tool.sha256 != input.sha256 {
                 return Err(format!(
@@ -188,6 +232,41 @@ fn evaluate(
         tools.insert(id, tool);
     }
     let tool = &tools[contract.metadata.tool.as_str()];
+    if let Some(target) = contract.native_target() {
+        let compiler = &tools[contract.compiler.as_ref().unwrap().tool.as_str()];
+        let process = measure("native-host", || {
+            run_process_observed(
+                &root,
+                &CommandSpec {
+                    program: compiler
+                        .path
+                        .to_str()
+                        .ok_or("E_CARGO_INPUT: compiler path UTF-8")?
+                        .into(),
+                    args: vec!["-vV".into()],
+                    env: environment.clone(),
+                    timeout_seconds: contract.timeout_seconds,
+                    output_limit_bytes: contract.output_limit_bytes,
+                },
+                &[],
+                &compiler.sha256,
+            )
+        })?;
+        report.native_target = Some(process);
+        let process = report.native_target.as_ref().unwrap();
+        observation::process_success(process)?;
+        let hosts: Vec<_> = process
+            .stdout
+            .lines()
+            .filter_map(|line| line.strip_prefix("host: "))
+            .collect();
+        if hosts != [target] {
+            return Err(format!(
+                "E_CARGO_INPUT: compiler native host differs from declared target {target}"
+            ));
+        }
+        measure("unchanged-inputs", || check.unchanged())?;
+    }
     let invoke = |argv: Vec<String>| {
         run_process_observed(
             &root,
@@ -206,7 +285,7 @@ fn evaluate(
             &tool.sha256,
         )
     };
-    let metadata = invoke(contract.metadata.argv.clone())?;
+    let metadata = measure("metadata", || invoke(contract.metadata.argv.clone()))?;
     report.metadata = Some(metadata);
     let metadata = report.metadata.as_ref().unwrap();
     if let Some(failure) = &metadata.failure {
@@ -223,11 +302,15 @@ fn evaluate(
         );
         return Ok(());
     }
-    check.validate(&json(&metadata.stdout_bytes)?)?;
-    check.unchanged()?;
-    let process = invoke(contract.operations[operation].argv.clone())?;
+    measure("validate-metadata", || {
+        check.validate(&json(&metadata.stdout_bytes)?)
+    })?;
+    measure("unchanged-inputs", || check.unchanged())?;
+    let process = measure("consumer", || {
+        invoke(contract.operations[operation].argv.clone())
+    })?;
     report.operation = Some(process);
-    check.unchanged()?;
+    measure("unchanged-inputs", || check.unchanged())?;
     let process = report.operation.as_ref().unwrap();
     if let Some(failure) = &process.failure {
         report.fail(2, format!("E_CARGO_PROCESS: operation: {failure}"));
