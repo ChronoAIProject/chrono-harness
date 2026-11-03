@@ -663,7 +663,7 @@ fn current_references_protect_closure_and_released_historical_cycles_are_not_roo
     ) {
         return;
     }
-    let h = host(256, 16);
+    let h = host(3, 16);
     let a = tree(h.path(), "a");
     let b = tree(h.path(), "b");
     let pa = inventory(h.path())
@@ -679,18 +679,50 @@ fn current_references_protect_closure_and_released_historical_cycles_are_not_roo
     let i = inventory(h.path());
     i.dependencies(&aid, &[bid.clone()]).unwrap();
     i.dependencies(&bid, &[aid.clone()]).unwrap();
-    i.reference("pending-native-rerun", &[aid.clone()]).unwrap();
-    assert_eq!(i.maintain().unwrap()["remaining_outputs"], 2);
-    i.reference("pending-native-rerun", &[]).unwrap();
-    assert_eq!(i.maintain().unwrap()["remaining_outputs"], 0);
-    let s = ledger(h.path());
-    let exits: Vec<_> = s["summaries"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|r| r["original_outcome"]["exit"].as_i64().unwrap())
-        .collect();
-    assert!(exits.contains(&0) && exits.contains(&9));
+    let mut rounds = Vec::new();
+    let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        i.reference("pending-native-rerun", &[aid.clone()]).unwrap();
+        rounds.push(i.maintain().unwrap());
+        assert_eq!(rounds[0]["remaining_outputs"], 2);
+        assert!(rounds[0]["nodes"].as_u64().unwrap() <= 3);
+        assert!(h.path().join(&a).is_dir() && h.path().join(&b).is_dir());
+        i.reference("pending-native-rerun", &[]).unwrap();
+        // Maintenance does actual bounded work on each call. Releasing the
+        // reference makes the cycle reclaimable, without promising that all
+        // manifest and disposal IO fits in a single round.
+        for _ in 0..8 {
+            let round = retained_artifacts::retention::maintain_adopted(h.path())
+                .unwrap()
+                .unwrap();
+            assert!(round["nodes"].as_u64().unwrap() <= 3, "{round}");
+            let completed = round["remaining_outputs"] == 0;
+            rounds.push(round);
+            if completed {
+                break;
+            }
+        }
+        assert_ne!(rounds[1]["remaining_outputs"], 0, "{rounds:?}");
+        assert_eq!(rounds.last().unwrap()["remaining_outputs"], 0, "{rounds:?}");
+        assert!(!h.path().join(&a).exists() && !h.path().join(&b).exists());
+        let s = ledger(h.path());
+        let exits: Vec<_> = s["summaries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["original_outcome"]["exit"].as_i64().unwrap())
+            .collect();
+        assert_eq!(exits.len(), 2);
+        assert!(exits.contains(&0) && exits.contains(&9));
+    }));
+    if let Err(failure) = verification {
+        let original = ledger(h.path());
+        let path = h.keep();
+        eprintln!(
+            "historical cycle verification failed; rounds: {rounds:?}; inventory: {original}; retained fixture: {}",
+            path.display()
+        );
+        std::panic::resume_unwind(failure);
+    }
 }
 #[test]
 fn live_consumer_protects_references_even_after_retention_window_expires() {
