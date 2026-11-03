@@ -308,10 +308,6 @@ fn incomplete_execution(delayed_admission: bool) {
         // exclusively test-owned and the existing TempDir owner removes them.
         assert_eq!(result.failure.as_deref(), Some("process timed out"));
         assert_eq!(fs::read(&stdout).unwrap(), result.stdout_bytes);
-        assert!(
-            result.stdout_bytes.is_empty(),
-            "incomplete judge must not invent a final response"
-        );
         assert_eq!(fs::read(&stderr).unwrap(), result.stderr_bytes);
         assert!(readiness["read_error"].is_null(), "{readiness}");
         assert!(
@@ -329,6 +325,32 @@ fn incomplete_execution(delayed_admission: bool) {
         assert_eq!(launch["context"]["config_sha256"], req.config_sha256);
         assert_eq!(launch["context"]["plan"], prepared.plan.identity);
         assert_eq!(launch["level"], "debug");
+        // The enclosing timeout remains a failure even when cancellation lets
+        // execute-debug join and serialize its genuine failed execution. A kill
+        // can also interrupt that serialization, leaving only a JSON prefix.
+        match serde_json::from_slice::<Value>(&result.stdout_bytes) {
+            Ok(execution) => {
+                assert_eq!(execution["plan"], prepared.plan.identity);
+                assert_eq!(execution["selected"], json!(["test:suite"]));
+                assert_eq!(execution["blocked"], json!([]));
+                assert_eq!(execution["tests"], json!({"test:suite":"failed"}));
+                assert_eq!(execution["removed"], json!({}));
+                let executed = execution["executed"].as_array().unwrap();
+                assert_eq!(executed.len(), 1);
+                assert_eq!(executed[0]["operation"], "test.suite");
+                assert_eq!(executed[0]["status"], "error");
+                assert_eq!(executed[0]["error"], "process cancelled by enclosing owner");
+                let process =
+                    chrono_harness::full::expand_process(&executed[0]["receipt"]["process"])
+                        .unwrap();
+                assert_eq!(process["child_pid"], launch["context"]["child_pid"]);
+                assert_eq!(process["exit_code"], -1);
+                assert_eq!(process["failure"], "process cancelled by enclosing owner");
+                assert_eq!(process["stdout_bytes"], json!([255, 0, 10]));
+                assert_eq!(process["stderr_bytes"], json!([254, 0, 10]));
+            }
+            Err(error) => assert!(error.is_eof(), "invalid execution output: {error}"),
+        }
         let ready: Vec<u8> = serde_json::from_value(readiness["bytes"].clone()).unwrap();
         assert_eq!(
             ready,
