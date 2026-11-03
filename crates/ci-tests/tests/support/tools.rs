@@ -35,14 +35,14 @@ fn temporary_store() -> &'static (PathBuf, Vec<String>) {
         .expect("committed selected CI fixture producer")
     })
 }
-pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path) {
+pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path, recipe: &str) {
     chrono_worktree::TemporaryHost::register_copy(
         &temporary_store().0,
         "ci-test-host",
         source,
         destination,
         Some(root),
-        "crates/ci-tests/tests/units.rs::install_retained_tools",
+        recipe,
     )
     .unwrap();
 }
