@@ -20,7 +20,7 @@ impl Manager {
         stage_sha: &str,
         report: &mut Value,
     ) -> Result<(), String> {
-        if root != self.policy.coordinator_root || self._gate.lease.is_none() {
+        if root != self.inputs.policy.coordinator_root || self._gate.lease.is_none() {
             return Err("owner deployment requires the original kernel Git-main owner".into());
         }
         let i = self
@@ -104,7 +104,7 @@ impl Manager {
         };
         stable(r)?;
         let head = r.oid(root, "HEAD")?;
-        let mut command = bootstrap_command(r, root, &self.registrations, profile)?;
+        let mut command = bootstrap_command(r, root, &self.inputs.registrations, profile)?;
         let profile_bytes =
             fs::read(no_symlink_parents(root, profile)?).map_err(|e| e.to_string())?;
         let policy = json(&profile_bytes)?;
@@ -155,7 +155,7 @@ impl Manager {
         let owner_identity = value!({"attachment":e.attachment,
             "admission":self._gate.lease.as_ref().unwrap().id(),
             "enrollment":e.ownership.as_ref().ok_or("kernel ownership")?.id,
-            "coordinator_root":self.policy.coordinator_root,"common":self.ledger.common,
+            "coordinator_root":self.inputs.policy.coordinator_root,"common":self.ledger.common,
             "enrollments":exclusions.iter().map(|(entry, head, lease)| value!({
                 "path":entry.path,"attachment":entry.attachment,"head":head,
                 "enrollment":{"path":entry.ownership.as_ref().unwrap().path,"id":lease.id()}

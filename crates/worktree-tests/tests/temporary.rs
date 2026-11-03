@@ -40,6 +40,113 @@ fn command_carrier_count(command: &Command) -> usize {
 }
 
 #[test]
+fn producer_store_resolution_does_not_acquire_maintenance_admission() {
+    let h = host();
+    h.policy(|p| p["timeout_seconds"] = value!(1));
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    let state = h.root.join(".chrono-harness/state/automatic-cleanup");
+    let owner = fs::read(state.join("owner.json")).unwrap();
+    let ledger = fs::read(state.join("ledger.json")).unwrap();
+    let identity = json(&owner).unwrap();
+    let admission = chrono_harness::ownership::Lease::acquire(
+        &state.join("admission.lease"),
+        Some(identity["admission_id"].as_str().unwrap()),
+        false,
+        true,
+        None,
+    )
+    .unwrap()
+    .expect("fixture owns the maintenance admission exclusively");
+    let expected = (
+        h.root.join(".chrono-harness/state/custom temporary λ"),
+        vec!["cache 空白/".to_owned()],
+    );
+    assert_eq!(
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .expect("read-only declaration resolution must not wait for maintenance"),
+        expected
+    );
+    assert_eq!(
+        chrono_worktree::RetainedArtifact::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap(),
+        expected
+    );
+    admission.stable().unwrap();
+    assert_eq!(fs::read(state.join("owner.json")).unwrap(), owner);
+    assert_eq!(fs::read(state.join("ledger.json")).unwrap(), ledger);
+}
+
+#[test]
+fn producer_store_resolution_checks_committed_inputs_without_creating_cleanup_state() {
+    for changed in [POLICY, ".chrono-harness/cleanup.json"] {
+        let h = host();
+        let state = h.root.join(".chrono-harness/state/automatic-cleanup");
+        assert!(!state.exists());
+        assert!(
+            chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "unknown")
+                .unwrap_err()
+                .contains("not declared")
+        );
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+        assert!(
+            !state.exists(),
+            "resolving a declaration must not initialize maintenance ownership"
+        );
+        let path = h.root.join(changed);
+        let mut bytes = fs::read(&path).unwrap();
+        bytes.push(b' ');
+        fs::write(path, bytes).unwrap();
+        assert!(
+            chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+                .is_err(),
+            "uncommitted input drift must reject resolution: {changed}"
+        );
+        assert!(!state.exists());
+    }
+    let h = host();
+    let path = h.root.join(FM);
+    let mut filemap = json(&fs::read(&path).unwrap()).unwrap();
+    filemap["files"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|file| file["path"] != ".chrono-harness/cleanup.json");
+    fs::write(path, serde_json::to_vec(&filemap).unwrap()).unwrap();
+    commit(&h.root);
+    assert!(
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap_err()
+            .contains("not explicitly registered")
+    );
+    assert!(
+        !h.root
+            .join(".chrono-harness/state/automatic-cleanup")
+            .exists()
+    );
+
+    let h = host();
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["retained_producers"][0]["temporary"] = value!(false);
+    policy["retained_producers"][0]["fixture_bodies"] = value!(false);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    assert!(
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap_err()
+            .contains("not prospectively adopted")
+    );
+    chrono_worktree::RetainedArtifact::registered_store(&h.root, POLICY, "test-allocation")
+        .unwrap();
+    assert!(
+        !h.root
+            .join(".chrono-harness/state/automatic-cleanup")
+            .exists()
+    );
+}
+
+#[test]
 fn absent_temporary_outputs_do_not_rewrite_producer_state_or_publish_disposal() {
     let h = host();
     let (store, outputs) =

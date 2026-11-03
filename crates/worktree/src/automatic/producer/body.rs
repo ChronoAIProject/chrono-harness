@@ -488,13 +488,13 @@ impl Manager {
         plan_path: &str,
         report: &mut Value,
     ) -> Result<(), String> {
-        if target != self.policy.coordinator_root {
+        if target != self.inputs.policy.coordinator_root {
             return Err("fixture custody requires surviving coordinator".into());
         }
         let bytes = crate::recovery::state_bytes(target, plan_path)?;
         let plan: Custody = decode(&bytes)?;
         if plan.schema != "chrono-fixture-body-custody/v1"
-            || plan.head != self.anchor_head
+            || plan.head != self.inputs.anchor_head
             || !plan.current_consumers_released
             || plan.reason.trim().is_empty()
             || plan.objects.is_empty()
@@ -516,6 +516,7 @@ impl Manager {
                     return Err("duplicate or empty fixture custody selection".into());
                 }
                 let policy = self
+                    .inputs
                     .policy
                     .retained_producers
                     .iter()
@@ -583,7 +584,7 @@ impl Manager {
                             "nested registered diagnostic consumer remains unreleased".into()
                         );
                     }
-                    let source = r.blob(target, &self.anchor_head, &member.recipe)?;
+                    let source = r.blob(target, &self.inputs.anchor_head, &member.recipe)?;
                     self.stable(r)?;
                     lease.stable()?;
                     let store = Store::open(&directory, &selected.producer, false)?;
@@ -610,7 +611,7 @@ impl Manager {
                         value!({"route":"current-custodian-transition", "custody":custody,
                         "reason":plan.reason, "recipe":member.recipe,"recipe_sha256":sha256(&source),
                         "member_identity":crate::ownership::identity(&physical)?,
-                        "candidate":self.anchor_head, "past_outcome":"unchanged"}),
+                        "candidate":self.inputs.anchor_head, "past_outcome":"unchanged"}),
                         &lease,
                         true,
                         |_| {},

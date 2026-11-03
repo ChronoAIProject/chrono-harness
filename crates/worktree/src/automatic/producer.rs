@@ -477,10 +477,10 @@ impl RetainedArtifact {
             &bytes,
             "producer-store",
             "resolved",
-            |r, token, report| {
-                let manager = Manager::open(r, &root, config_path, &bytes, token)?
+            |r, _token, report| {
+                let inputs = PolicyInputs::load(r, &root, config_path, &bytes)?
                     .ok_or("retained producer owner is not opted in")?;
-                let declaration = manager
+                let declaration = inputs
                     .policy
                     .retained_producers
                     .iter()
@@ -489,10 +489,10 @@ impl RetainedArtifact {
                 if temporary && !declaration.temporary {
                     return Err("temporary producer is not prospectively adopted".into());
                 }
-                let directory = declaration.directory(&manager.policy.coordinator_root)?;
-                manager.stable(r)?;
+                let directory = declaration.directory(&inputs.policy.coordinator_root)?;
+                inputs.stable(r)?;
                 report["producer"] = value!(producer);
-                report["coordinator_root"] = value!(manager.policy.coordinator_root);
+                report["coordinator_root"] = value!(inputs.policy.coordinator_root);
                 report["directory"] = value!(directory);
                 report["generated_outputs"] = value!(declaration.generated_outputs);
                 selected = Some((directory, declaration.generated_outputs.clone()));
@@ -1075,7 +1075,7 @@ impl ProducerPolicy {
         r: &mut Runner,
         report: &mut Value,
     ) -> Result<(), String> {
-        let root = &manager.policy.coordinator_root;
+        let root = &manager.inputs.policy.coordinator_root;
         let directory = self.directory(root)?;
         if !directory.exists() || !no_symlink_parents(&directory, "objects.json")?.exists() {
             report["producer_objects"].as_array_mut().unwrap().push(value!({"producer":self.id,
@@ -1296,7 +1296,7 @@ impl ProducerPolicy {
                         &value!({
                             "schema":"chrono-retained-artifact-cleanup-intent/v1","path":object.path,
                             "identity":object.identity,"producer_intent":object.intent,"generated":object.generated,
-                            "policy_sha256":sha256(&manager.policy_bytes),"released_consumers":object.consumers,
+                            "policy_sha256":sha256(&manager.inputs.policy_bytes),"released_consumers":object.consumers,
                             "cache_lease":object.cache_lease,"prospective_outputs":prospective,
                             "producer_outcome":"not-established-by-cache-recovery"
                         }),

@@ -75,7 +75,7 @@ impl Manager {
             .current_entry(target)
             .ok_or("current custody requires main enrollment")?;
         let e = self.ledger.entries[i].clone();
-        if !e.cache_only || e.status != "active" || target != self.policy.coordinator_root {
+        if !e.cache_only || e.status != "active" || target != self.inputs.policy.coordinator_root {
             return Err(
                 "current cache custody requires the active adopted Git main checkout".into(),
             );
@@ -102,6 +102,7 @@ impl Manager {
         if selected.len() != plan.artifacts.len()
             || selected.iter().any(|p| {
                 !self
+                    .inputs
                     .policy
                     .artifacts
                     .iter()
@@ -110,7 +111,7 @@ impl Manager {
         {
             return Err("current custody selects repeated or undeclared disposable outputs".into());
         }
-        artifact_disposal::registered(&plan.artifacts, &[self.registrations.config()])?;
+        artifact_disposal::registered(&plan.artifacts, &[self.inputs.registrations.config()])?;
         artifact_disposal::paths(r, target, &head, &plan.artifacts)?;
         let previous = self.main_cache_owned(&e)?;
         let newly_owned: Vec<_> = selected.difference(&previous).cloned().collect();
@@ -129,8 +130,8 @@ impl Manager {
         let record = value!({"schema":"chrono-main-cache-adoption/v1",
             "binding":Self::birth_binding(&e), "previous":previous, "next":next,
             "custody":custody, "declaration_input":self.retain_bytes(&bytes)?,
-            "coordinator_commit":self.anchor_head, "policy_sha256":sha256(&self.policy_bytes),
-            "registry_digest":self.registry_digest, "historical_producer_outcome":"unknown",
+            "coordinator_commit":self.inputs.anchor_head, "policy_sha256":sha256(&self.inputs.policy_bytes),
+            "registry_digest":self.inputs.registry_digest, "historical_producer_outcome":"unknown",
             "disposal":"not-performed", "terminal_handoff":"not-claimed"});
         let name = format!(
             "main-cache-adoption-{}.json",

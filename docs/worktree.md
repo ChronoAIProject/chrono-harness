@@ -987,7 +987,12 @@ a process never releases a receipt. The existing drain reads only that family's
 
 Publication resolves the selected producer through `RetainedArtifact::registered_store`,
 using the same committed worktree configuration, cleanup policy, registration,
-and physical Git main coordinator checks as drain. The default wrapper supplies
+and physical Git main coordinator checks as drain. Resolution reads these policy
+inputs without acquiring maintenance admission or initializing its owner/ledger;
+an active maintenance lease therefore does not block the declaration lookup.
+The final HEAD/configuration/policy stability check still applies. Actual
+publication and disposal retain their own registry and ownership gates.
+The default wrapper supplies
 its producer checkout separately from the command's fixture root, so a linked
 producer publishes below the main coordinator's declared evidence directory.
 `CHRONO_CI_TEST_RECEIPTS` may select only that exact physical store; undeclared,
@@ -1293,8 +1298,9 @@ identity declarations keep their meanings; unknown identities still fail before
 execution. Historical stores and unestablished release migrations stay protected.
 Implementation, verification, storage and migration costs remain unknown.
 
-`TemporaryHost::registered_store` uses the same committed policy, Git main owner
-and admission as `RetainedArtifact`. Allocation publishes an intent before
+`TemporaryHost::registered_store` uses the same read-only committed policy and
+Git main coordinator resolution as `RetainedArtifact`, and additionally requires
+the selected producer's prospective temporary adoption. Allocation publishes an intent before
 fixture output production, listing exact generated directories and their declared
 Git source roots. Dropping the handle makes no task-completion or producer-success
 claim. Ordinary reentry can recover eligible outputs after the final supported

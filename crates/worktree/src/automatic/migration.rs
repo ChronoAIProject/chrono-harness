@@ -90,13 +90,19 @@ impl Manager {
         self.birth_ready(&e)?;
         let previous = self.policy_binding(&e)?;
         let next = PolicyBinding {
-            policy_sha256: sha256(&self.policy_bytes),
+            policy_sha256: sha256(&self.inputs.policy_bytes),
             inputs: self.target_policy_inputs(r, &target, &head)?,
             head: head.clone(),
         };
         let adopted = BTreeMap::from([
-            (self.config_path.clone(), Some(sha256(&self.config_bytes))),
-            (self.policy_path.clone(), Some(sha256(&self.policy_bytes))),
+            (
+                self.inputs.config_path.clone(),
+                Some(sha256(&self.inputs.config_bytes)),
+            ),
+            (
+                self.inputs.policy_path.clone(),
+                Some(sha256(&self.inputs.policy_bytes)),
+            ),
         ]);
         if next.inputs != adopted {
             return Err(
@@ -113,15 +119,16 @@ impl Manager {
         let (target_regs, _) = start::registrations(r, &target, &head, &host_config)?;
         artifact_disposal::registered(
             &self
+                .inputs
                 .policy
                 .artifacts
                 .iter()
                 .map(|a| a.path.clone())
                 .collect::<Vec<_>>(),
-            &[self.registrations.config(), target_regs.config()],
+            &[self.inputs.registrations.config(), target_regs.config()],
         )?;
         for path in next.inputs.keys() {
-            start::registered_policy(&target_regs, path, &self.policy.state_directory)?;
+            start::registered_policy(&target_regs, path, &self.inputs.policy.state_directory)?;
         }
         if previous.policy_sha256 == next.policy_sha256 && previous.inputs == next.inputs {
             self.check_entry(r, &e, &head, None)?;
@@ -136,7 +143,7 @@ impl Manager {
         inputs.extend(self.migration_inputs(r, &target, &next, "next")?);
         let record = value!({"schema":"chrono-worktree-policy-migration/v1",
             "binding":Self::birth_binding(&e),"previous":previous,"next":next,
-            "coordinator_commit":self.anchor_head,"migration_inputs":inputs,
+            "coordinator_commit":self.inputs.anchor_head,"migration_inputs":inputs,
             "terminal_handoff":"not-claimed","disposal":"not-performed"});
         let name = format!(
             "policy-migration-{}.json",
