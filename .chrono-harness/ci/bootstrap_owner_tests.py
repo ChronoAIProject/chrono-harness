@@ -1,6 +1,7 @@
 """Behavioral checks for the bootstrap byte owner; lifecycle exclusion is Rust-owned."""
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 import tempfile
@@ -16,7 +17,10 @@ class OwnerPublication(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix="bootstrap-owner-")
         self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
+        self.root = Path(self.directory.name).resolve()
+        self.adoption = {"coordinator_root": "git-main-worktree",
+                         "program": ".chrono-harness/bin/chrono-worktree",
+                         "git": "git", "config": ".chrono-harness/worktree.json"}
         self.selected = self.root / ".chrono-harness/bin/chrono-worktree"
         self.selected.parent.mkdir(parents=True)
         self.selected.write_bytes(b"original installed owner")
@@ -83,11 +87,63 @@ class OwnerPublication(unittest.TestCase):
                 owner.require_capabilities(self.root)
 
     def test_ordinary_shared_install_may_only_reuse_identical_owner_bytes(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True, capture_output=True)
         with mock.patch.dict(os.environ, {"CHRONO_WORKTREE_BOOTSTRAP": str(self.root)}):
             with self.assertRaisesRegex(ValueError, "exclusive owner deployment"):
-                owner.check_shared_install(self.root, self.staged, self.selected)
+                owner.check_shared_install(self.root, self.staged, self.selected, self.adoption)
             self.staged.write_bytes(self.selected.read_bytes())
-            owner.check_shared_install(self.root, self.staged, self.selected)
+            owner.check_shared_install(self.root, self.staged, self.selected, self.adoption)
+
+    def linked_checkout(self):
+        def git(*args):
+            subprocess.run(["git", "-C", str(self.root), "-c", "user.name=Fixture",
+                            "-c", "user.email=fixture@example.invalid", *args],
+                           check=True, capture_output=True)
+        git("init", "-q")
+        (self.root / "source").write_bytes(b"fixed source")
+        git("add", "source")
+        git("commit", "-qm", "fixture source")
+        linked = self.root / "linked"
+        git("worktree", "add", "--detach", str(linked), "HEAD")
+        return linked
+
+    def test_linked_shared_install_publishes_local_tool_without_changing_coordinator(self):
+        linked = self.linked_checkout()
+        target = linked / ".chrono-harness/bin/chrono-worktree"
+        target.parent.mkdir(parents=True)
+        before = owner.file_binding(self.selected)
+        with mock.patch.dict(os.environ, {"CHRONO_WORKTREE_BOOTSTRAP": str(linked)}):
+            owner.check_shared_install(linked, self.staged, target, self.adoption)
+            shutil.copy2(self.staged, target)
+            self.assertEqual(target.read_bytes(), b"source-built correction")
+            target.write_bytes(b"previous local tool")
+            owner.check_shared_install(linked, self.staged, target, self.adoption)
+            shutil.copy2(self.staged, target)
+        self.assertEqual(owner.file_binding(self.selected), before)
+        self.assertEqual(target.read_bytes(), b"source-built correction")
+
+    def test_linked_shared_install_refuses_coordinator_inode_and_symlink_aliases(self):
+        linked = self.linked_checkout()
+        target = linked / ".chrono-harness/bin/chrono-worktree"
+        target.parent.mkdir(parents=True)
+        before = owner.file_binding(self.selected)
+        with mock.patch.dict(os.environ, {"CHRONO_WORKTREE_BOOTSTRAP": str(linked)}):
+            os.link(self.selected, target)
+            with self.assertRaisesRegex(ValueError, "exclusive owner deployment"):
+                owner.check_shared_install(linked, self.staged, target, self.adoption)
+            self.staged.write_bytes(self.selected.read_bytes())
+            owner.check_shared_install(linked, self.staged, target, self.adoption)
+            self.staged.write_bytes(b"source-built correction")
+            target.unlink()
+            target.symlink_to(self.selected)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                owner.check_shared_install(linked, self.staged, target, self.adoption)
+            target.unlink()
+            target.parent.rmdir()
+            target.parent.symlink_to(self.selected.parent)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                owner.check_shared_install(linked, self.staged, target, self.adoption)
+        self.assertEqual(owner.file_binding(self.selected), before)
 
 
 class ProducerSource(unittest.TestCase):
