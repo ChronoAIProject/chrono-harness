@@ -123,17 +123,18 @@ def acquire(remote, name, limit):
         if info.file_size > limit or info.flag_bits & 1:
             raise ValueError('declared ZIP member exceeds limit or is encrypted')
         with archive.open(info) as source:
-            result = bytearray()
-            while len(result) <= limit:
-                remote.deadline.remaining()
-                chunk = source.read(min(131072, limit + 1 - len(result)))
-                if not chunk:
-                    break
-                result.extend(chunk)
+            # The admitted uncompressed size bounds this read. Let zipfile
+            # request its compressed input together instead of turning every
+            # small decompression chunk into another network round trip.
+            remote.deadline.remaining()
+            result = source.read(info.file_size)
+            remote.deadline.remaining()
+            if source.read(1):
+                raise ValueError('declared ZIP member length mismatch')
         remote.deadline.remaining()
         if len(result) != info.file_size or len(result) > limit:
             raise ValueError('declared ZIP member length mismatch')
-        return bytes(result)
+        return result
 
 
 def signed_archive(url, deadline, token):

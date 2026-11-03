@@ -46,6 +46,226 @@ fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
 }
 
 #[test]
+fn preparing_a_copy_original_does_not_block_an_independent_allocation() {
+    use std::{sync::mpsc, thread, time::Duration};
+
+    let h = host();
+    let (store, allocation) = allocation(&h);
+    let source = h.root.join("actual-input.bin");
+    fs::write(&source, [0, 255, 7, 8]).unwrap();
+    let destination = allocation.path().join("copied.bin");
+    let copy_store = store.clone();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    thread::scope(|scope| {
+        let copy = scope.spawn(move || {
+            chrono_worktree::TemporaryHost::register_copy_with_observer(
+                &copy_store,
+                "test-allocation",
+                &source,
+                &destination,
+                None,
+                "actual copy with a controlled original transfer",
+                |stage| {
+                    if stage == "copy-original-entered" {
+                        entered_tx.send(()).unwrap();
+                        release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                    }
+                },
+            )
+        });
+        entered_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        let allocate_store = store.clone();
+        let referenced_allocation = allocation.path().to_owned();
+        let (done_tx, done_rx) = mpsc::channel();
+        let independent = scope.spawn(move || {
+            let result = (|| -> Result<PathBuf, String> {
+                let reference = chrono_worktree::RetainedArtifact::resume(
+                    &allocate_store,
+                    "test-allocation",
+                    &referenced_allocation,
+                )?;
+                reference.acquire("overlapping-copy", "actual concurrent diagnostic consumer")?;
+                chrono_worktree::TemporaryHost::allocate(
+                    &allocate_store,
+                    "test-allocation",
+                    &[],
+                    "independent admission ",
+                )
+                .map(|host| host.path().to_owned())
+            })();
+            done_tx.send(result).unwrap();
+        });
+        let before_release = done_rx.recv_timeout(Duration::from_secs(2));
+        release_tx.send(()).unwrap();
+        let original = copy.join().unwrap().unwrap();
+        independent.join().unwrap();
+        let admitted = before_release
+            .expect("copy IO must not hold the shared registry lease")
+            .unwrap();
+        assert!(admitted.is_dir());
+        assert_eq!(fs::read(original).unwrap(), [0, 255, 7, 8]);
+        let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+        assert_eq!(registry["objects"].as_array().unwrap().len(), 2);
+        let object = registry["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|object| {
+                object["path"] == allocation.path().file_name().unwrap().to_str().unwrap()
+            })
+            .unwrap();
+        assert_eq!(object["bodies"]["copied.bin"]["length"], 4);
+        assert_eq!(object["consumers"]["overlapping-copy"]["released"], false);
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", allocation.path())
+            .unwrap()
+            .release(
+                "overlapping-copy",
+                "concurrent diagnostic assertion consumed",
+            )
+            .unwrap();
+    });
+}
+
+#[test]
+fn concurrent_original_publications_keep_both_body_registrations() {
+    use std::{sync::mpsc, thread, time::Duration};
+
+    let h = host();
+    let (store, allocation) = allocation(&h);
+    let source = h.root.join("concurrent-input.bin");
+    fs::write(&source, [0, 255, 7, 8]).unwrap();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    thread::scope(|scope| {
+        let mut releases = vec![];
+        let mut tasks = vec![];
+        for member in ["first.bin", "second.bin"] {
+            let copy_store = store.clone();
+            let source = source.clone();
+            let destination = allocation.path().join(member);
+            let entered_tx = entered_tx.clone();
+            let (release_tx, release_rx) = mpsc::channel();
+            releases.push(release_tx);
+            tasks.push(scope.spawn(move || {
+                chrono_worktree::TemporaryHost::register_copy_with_observer(
+                    &copy_store,
+                    "test-allocation",
+                    &source,
+                    &destination,
+                    None,
+                    "two actual copies with concurrent original publication",
+                    |stage| {
+                        if stage == "copy-original-publish" {
+                            entered_tx.send(()).unwrap();
+                            release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                        }
+                    },
+                )
+            }));
+        }
+        let both_prepared = entered_rx
+            .recv_timeout(Duration::from_secs(10))
+            .and_then(|_| entered_rx.recv_timeout(Duration::from_secs(10)));
+        for release in releases {
+            let _ = release.send(());
+        }
+        let outcomes: Vec<_> = tasks.into_iter().map(|task| task.join()).collect();
+        both_prepared.expect("both original transfers must proceed outside the registry lease");
+        let originals: Vec<_> = outcomes
+            .into_iter()
+            .map(|outcome| outcome.unwrap().unwrap())
+            .collect();
+        assert_eq!(originals[0], originals[1]);
+        assert_eq!(fs::read(&originals[0]).unwrap(), [0, 255, 7, 8]);
+    });
+    let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let bodies = registry["objects"][0]["bodies"].as_object().unwrap();
+    assert_eq!(bodies.len(), 2);
+    assert_eq!(
+        bodies["first.bin"]["original"],
+        bodies["second.bin"]["original"]
+    );
+}
+
+#[test]
+fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() {
+    for drift in [
+        "allocation",
+        "intent",
+        "cache-lease",
+        "registry-lease",
+        "original",
+    ] {
+        let h = host();
+        let (store, allocation) = allocation(&h);
+        let source = h.root.join("drift-input.bin");
+        let bytes = [0, 255, 7, 8];
+        fs::write(&source, bytes).unwrap();
+        let destination = allocation.path().join("copied.bin");
+        let registry_path = store.join("objects.json");
+        let before = fs::read(&registry_path).unwrap();
+        let original = store.join(format!("body-inputs/{}.bin", sha256(&bytes)));
+        let mut changed_registry = None;
+        let result = chrono_worktree::TemporaryHost::register_copy_with_observer(
+            &store,
+            "test-allocation",
+            &source,
+            &destination,
+            None,
+            "actual transfer with a changed publication prerequisite",
+            |stage| {
+                if stage != "copy-original-prepared" {
+                    return;
+                }
+                if drift == "original" {
+                    let replacement = h.root.join("replacement-original.bin");
+                    fs::write(&replacement, [9, 9, 9, 9]).unwrap();
+                    fs::rename(replacement, &original).unwrap();
+                } else {
+                    let mut registry = json(&before).unwrap();
+                    match drift {
+                        "allocation" => registry["objects"][0]["identity"] = value!("changed"),
+                        "intent" => registry["objects"][0]["intent"]["sha256"] = value!("changed"),
+                        "cache-lease" => {
+                            registry["objects"][0]["cache_lease"]["id"] = value!("changed")
+                        }
+                        "registry-lease" => registry["lease_id"] = value!("changed"),
+                        _ => unreachable!(),
+                    }
+                    let changed = serde_json::to_vec(&registry).unwrap();
+                    fs::write(&registry_path, &changed).unwrap();
+                    changed_registry = Some(changed);
+                }
+            },
+        );
+        assert!(result.is_err(), "{drift} must prevent body publication");
+        assert!(!destination.exists());
+        assert_eq!(fs::read(&source).unwrap(), bytes);
+        assert_eq!(
+            fs::read(&registry_path).unwrap(),
+            changed_registry.unwrap_or_else(|| before.clone())
+        );
+        if drift == "original" {
+            assert_eq!(fs::read(&original).unwrap(), [9, 9, 9, 9]);
+            fs::write(&original, bytes).unwrap();
+        } else {
+            assert_eq!(fs::read(&original).unwrap(), bytes);
+        }
+        fs::write(&registry_path, before).unwrap();
+        let admitted = chrono_worktree::TemporaryHost::register_copy(
+            &store,
+            "test-allocation",
+            &source,
+            &destination,
+            None,
+            "restored actual publication prerequisites",
+        )
+        .unwrap();
+        assert_eq!(fs::read(admitted).unwrap(), bytes);
+    }
+}
+
+#[test]
 fn duplicate_producer_map_members_and_nested_fields_refuse_publication() {
     let h = host();
     let (store, allocation) = allocation(&h);

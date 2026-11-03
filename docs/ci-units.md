@@ -831,6 +831,12 @@ stdin object from gather and acquires only that named member through stdlib
 `zipfile` and verified HTTP byte ranges. The selected artifact ID, run, source,
 name and expiry bind its archive endpoint. ZIP central/local member mapping,
 regular-file status, length, CRC and every semantic digest remain checked.
+After admitting the uncompressed member length against the existing bound, the
+reader requests that length from `zipfile` together. This lets its compressed
+input arrive in one range instead of making a network request for every small
+decompression chunk. The same cumulative deadline applies before and after the
+read, and an extra read checks EOF; an empty original is valid at a zero-byte
+member limit. CRC and length failures remain errors.
 Ranges must be exact `206` responses with identity encoding; ignoring ranges
 fails without a whole-archive fallback. Original bytes appear at the same
 `ArtifactTransport` logical address. Complete producer uploads, source/fixture

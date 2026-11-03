@@ -85,10 +85,14 @@ fn input(path: &Path) -> Result<(String, u64), String> {
     Ok((digest, m.len()))
 }
 
-fn original(store: &Store, source: &Path) -> Result<(String, String, u64), String> {
+fn original(
+    directory: &Path,
+    source: &Path,
+    observer: &mut impl FnMut(&str),
+) -> Result<(String, String, u64, String), String> {
     let (digest, length) = input(source)?;
     let name = format!("body-inputs/{digest}.bin");
-    let path = no_symlink_parents(&store.directory, &name)?;
+    let path = no_symlink_parents(directory, &name)?;
     fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     if !path.exists() {
         let temporary =
@@ -100,18 +104,24 @@ fn original(store: &Store, source: &Path) -> Result<(String, String, u64), Strin
             return Err("copied input changed during original custody transfer".into());
         }
         temporary.as_file().sync_all().map_err(|e| e.to_string())?;
-        temporary
-            .persist_noclobber(&path)
-            .map_err(|e| e.to_string())?;
+        observer("copy-original-publish");
+        match temporary.persist_noclobber(&path) {
+            Ok(_) => (),
+            // Another protected copy can publish the same content-addressed
+            // original. Verify that winner below; never replace its bytes.
+            Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => (),
+            Err(error) => return Err(error.to_string()),
+        }
     }
-    if input(&path)? != (digest.clone(), length) {
+    let identity = fingerprint(&path)?;
+    if input(&path)? != (digest.clone(), length) || fingerprint(&path)? != identity {
         return Err("retained copied-input original differs; preserve bodies".into());
     }
-    Ok((name, digest, length))
+    Ok((name, digest, length, identity))
 }
 
 fn register(
-    store: &mut Store,
+    store: Store,
     i: usize,
     member: &str,
     source: &Path,
@@ -119,6 +129,9 @@ fn register(
     leases: Vec<CacheLease>,
     nested_consumers: Vec<NestedConsumer>,
     provenance: Value,
+    lease: &Lease,
+    require_released: bool,
+    mut observer: impl FnMut(&str),
 ) -> Result<PathBuf, String> {
     relative_path(member)?;
     if provenance.is_null() {
@@ -126,7 +139,14 @@ fn register(
     }
     let object = &store.registry.objects[i];
     store.stable(object)?;
-    if object.cache_lease.is_none() || object.evidence.contains_key(member) {
+    if object
+        .cache_lease
+        .as_ref()
+        .map(|binding| binding.id.as_str())
+        != Some(lease.id())
+        || object.disposed
+        || object.evidence.contains_key(member)
+    {
         return Err(
             "copied body needs temporary ownership and cannot replace original evidence".into(),
         );
@@ -154,7 +174,50 @@ fn register(
     {
         return Err("Git identity and unretained commits cannot be fixture bodies".into());
     }
-    let (name, digest, length) = original(store, source)?;
+    if require_released && object.consumers.values().any(|c| !c.released) {
+        return Err("fixture allocation has an unreleased diagnostic consumer".into());
+    }
+    let directory = store.directory.clone();
+    let producer = store.registry.producer.clone();
+    let registry_identity = store.registry.directory_id.clone();
+    let registry_lease = store.registry.lease_id.clone();
+    let allocation = object.path.clone();
+    let allocation_identity = object.identity.clone();
+    let producer_intent = object.intent.clone();
+    let cache_lease = object.cache_lease.clone();
+    // Allocation ownership protects the copy, while unrelated allocations and
+    // references must remain able to use the shared registry during file IO.
+    lease.stable()?;
+    drop(store);
+    observer("copy-original-entered");
+    let (name, digest, length, original_identity) = original(&directory, source, &mut observer)?;
+    observer("copy-original-prepared");
+    lease.stable()?;
+    let mut store = Store::open(&directory, &producer, false)?;
+    let i = store
+        .registry
+        .objects
+        .iter()
+        .position(|object| object.path == allocation)
+        .ok_or("copy allocation disappeared during original custody transfer")?;
+    let object = &store.registry.objects[i];
+    if store.registry.directory_id != registry_identity
+        || store.registry.lease_id != registry_lease
+        || object.identity != allocation_identity
+        || value!(object.intent) != value!(producer_intent)
+        || value!(object.cache_lease) != value!(cache_lease)
+        || object.disposed
+        || object.evidence.contains_key(member)
+    {
+        return Err("copy allocation binding changed during original custody transfer".into());
+    }
+    store.stable(object)?;
+    if require_released && object.consumers.values().any(|c| !c.released) {
+        return Err("fixture allocation has an unreleased diagnostic consumer".into());
+    }
+    if fingerprint(&no_symlink_parents(&directory, &name)?)? != original_identity {
+        return Err("retained copied-input original changed before registration".into());
+    }
     if let Some(existing) = object.bodies.get(member) {
         if existing.original != name
             || existing.sha256 != digest
@@ -190,6 +253,7 @@ fn register(
             nested_consumers,
         },
     );
+    lease.stable()?;
     store.save()?;
     Ok(store.directory.join(name))
 }
@@ -278,6 +342,49 @@ impl TemporaryHost {
         git_root: Option<&Path>,
         recipe: &str,
     ) -> Result<PathBuf, String> {
+        Self::register_copy_observed(
+            directory,
+            producer,
+            source,
+            destination,
+            git_root,
+            recipe,
+            |_| {},
+        )
+    }
+
+    /// Deterministic scheduling of the real copy transfer in dedicated tests.
+    #[cfg(feature = "producer-birth-test")]
+    #[doc(hidden)]
+    pub fn register_copy_with_observer(
+        directory: &Path,
+        producer: &str,
+        source: &Path,
+        destination: &Path,
+        git_root: Option<&Path>,
+        recipe: &str,
+        observer: impl FnMut(&str),
+    ) -> Result<PathBuf, String> {
+        Self::register_copy_observed(
+            directory,
+            producer,
+            source,
+            destination,
+            git_root,
+            recipe,
+            observer,
+        )
+    }
+
+    fn register_copy_observed(
+        directory: &Path,
+        producer: &str,
+        source: &Path,
+        destination: &Path,
+        git_root: Option<&Path>,
+        recipe: &str,
+        mut observer: impl FnMut(&str),
+    ) -> Result<PathBuf, String> {
         if recipe.trim().is_empty() {
             return Err("copy producer recipe is required".into());
         }
@@ -290,7 +397,7 @@ impl TemporaryHost {
             .and_then(|p| p.as_os_str().to_str())
             .ok_or("copy allocation UTF-8")?;
         let member = parts.as_path().to_str().ok_or("copy member UTF-8")?;
-        let mut store = Store::open(directory, producer, false)?;
+        let store = Store::open(directory, producer, false)?;
         let i = store
             .registry
             .objects
@@ -324,7 +431,7 @@ impl TemporaryHost {
             })
             .transpose()?;
         let retained = register(
-            &mut store,
+            store,
             i,
             member,
             source,
@@ -332,6 +439,9 @@ impl TemporaryHost {
             vec![],
             vec![],
             value!({"route":"actual-copy-producer", "recipe":recipe,"source":source}),
+            &lease,
+            false,
+            &mut observer,
         )?;
         lease.stable()?;
         Ok(retained)
@@ -412,7 +522,7 @@ impl Manager {
                     .find(|p| p.id == selected.producer && p.fixture_bodies)
                     .ok_or("fixture body class is not adopted for this producer")?;
                 let directory = policy.directory(target)?;
-                let mut store = Store::open(&directory, &selected.producer, false)?;
+                let store = Store::open(&directory, &selected.producer, false)?;
                 let i = store
                     .registry
                     .objects
@@ -441,6 +551,7 @@ impl Manager {
                 if object.consumers.values().any(|c| !c.released) {
                     return Err("fixture allocation has an unreleased diagnostic consumer".into());
                 }
+                drop(store);
                 let allocation = directory.join(&selected.allocation);
                 for member in selected.members {
                     let physical = no_symlink_parents(&allocation, &member.path)?;
@@ -475,8 +586,21 @@ impl Manager {
                     let source = r.blob(target, &self.anchor_head, &member.recipe)?;
                     self.stable(r)?;
                     lease.stable()?;
+                    let store = Store::open(&directory, &selected.producer, false)?;
+                    let i = store
+                        .registry
+                        .objects
+                        .iter()
+                        .position(|o| o.path == selected.allocation)
+                        .ok_or("custody allocation disappeared during original transfer")?;
+                    let object = &store.registry.objects[i];
+                    if object.identity != selected.identity
+                        || value!(object.intent) != value!(selected.intent)
+                    {
+                        return Err("custody selection changed during original transfer".into());
+                    }
                     register(
-                        &mut store,
+                        store,
                         i,
                         &member.path,
                         &physical,
@@ -487,6 +611,9 @@ impl Manager {
                         "reason":plan.reason, "recipe":member.recipe,"recipe_sha256":sha256(&source),
                         "member_identity":crate::ownership::identity(&physical)?,
                         "candidate":self.anchor_head, "past_outcome":"unchanged"}),
+                        &lease,
+                        true,
+                        |_| {},
                     )?;
                 }
                 Ok(())

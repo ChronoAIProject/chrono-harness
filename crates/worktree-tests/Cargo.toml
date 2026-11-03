@@ -11,7 +11,7 @@ chrono-harness = { path = "../runner" }
 
 [dev-dependencies]
 libc = "0.2"
-chrono-worktree = { path = "../worktree" }
+chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-judge-registration = { path = "../judge-registration" }
 tempfile = "3"
 

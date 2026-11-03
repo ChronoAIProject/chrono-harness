@@ -1315,7 +1315,17 @@ without a fabricated result. These captures never enter generated membership.
 
 `register_copy` retains a verified source original and records the exact future
 destination before the real copy. `relocate_copies` carries only enrolled members
-before the actual within-allocation rename. `fixture_bodies` explicitly opts into
+before the actual within-allocation rename. Copy preparation holds the allocation
+lease while hashing, copying and syncing outside the shared producer registry
+lease. Publication reopens the current registry, checks its original directory,
+lease, allocation and intent bindings, and preserves intervening allocations,
+body registrations and diagnostic references. Concurrent copies may retain one
+content-addressed original only after verifying the published winner's bytes;
+its physical fingerprint must remain unchanged through registration. Current
+custodian adoption uses the same owner with exclusive allocation custody and
+released-consumer checks. These checks preserve the existing admission bound and
+default test concurrency; the exact holder behind earlier registry timeouts
+remains unknown. `fixture_bodies` explicitly opts into
 member recovery. Git identity/objects, committed/index source, original captures
 and unknown members remain protected; only an explicitly enrolled copied hook
 leaf may be a member inside Git metadata. Source/index and physical identities

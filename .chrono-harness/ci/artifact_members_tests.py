@@ -1,4 +1,5 @@
 """Behavior tests for the paired artifact member acquisition implementation."""
+import hashlib
 import io
 from pathlib import Path
 import re
@@ -78,6 +79,22 @@ class Acquisition(unittest.TestCase):
         self.assertTrue(source.requests)
         self.assertEqual(remote.payload_bytes, sum(int(r.split('-')[1]) - int(r.split('=')[1].split('-')[0]) + 1
                                                   for r in source.requests))
+
+    def test_large_original_with_bounded_request_latency_keeps_artifact_deadline(self):
+        raw = hashlib.shake_256(b'actual incompressible original').digest(2 * 1024 * 1024)
+        clock = [0.0]
+        deadline = product.Deadline(60, lambda: clock[0])
+
+        def tick():
+            clock[0] += 5.0
+
+        remote, _ = self.remote(archive(raw), deadline=deadline, tick=tick)
+        self.assertEqual(product.acquire(remote, 'explicit-extra/opaque-original.raw', len(raw)), raw)
+        self.assertLess(clock[0], 60.0)
+
+    def test_empty_declared_original_is_valid_at_zero_byte_limit(self):
+        remote, _ = self.remote(archive(b''))
+        self.assertEqual(product.acquire(remote, 'explicit-extra/opaque-original.raw', 0), b'')
 
     def test_incorrect_range_length_status_and_encoding_fail(self):
         for mode in ['wrong-range', 'short', 'overlong', 'whole-response', 'encoded']:
