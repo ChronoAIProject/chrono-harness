@@ -65,8 +65,11 @@ declaration. Removed judges need declarations, never execution of old binaries.
 Historical test aliases may be repaired by naming every old definition and a
 unique replacement, including the same surviving alias. Old costs and definitions
 remain visible. Routes/projects defer changed historical methods when the
-configured downstream migration validator consumes their results. Standalone and
-scoped consumers preserve each old operation in its replacement plan.
+configured downstream migration validator consumes their results. A replacement
+runs its current registered plan; surviving current tests may evolve their
+methods. Removed operations do not become permanent compatibility obligations.
+Scoped CI and workflow share the registration owner's structural retirement
+check. Actual current replacement execution remains required separately.
 
 Historical profiles in workflow v2/v3 can explicitly register optional
 `method_replacements`. Each row contains `from`, `to`, and a nonempty `reason`;
@@ -92,8 +95,11 @@ conversion cannot use a transition that omits its pair.
 **Product and host contract change together:** current-only transitions no longer
 require conversion tools. Existing actual data conversions retain their evidence
 requirements. Registration, FILEMAP and the seven-judge consumer are validated;
-broader build/CI/storage costs remain unknown. The shipped host conversion remains the
-finite `chrono-ci-check/v1` plus FILEMAP v1 decoder. Workflow v3 additionally allows
+broader build/CI/storage costs remain unknown. This host's fixed
+`chrono-ci-check/v1` plus FILEMAP v1 decoder and its historical profile are retired;
+current host checks consume current plans directly. The generic conversion
+interfaces retain self-contained fixtures for actual retained-data conversion.
+Workflow v3 allows
 explicit `from_versions`/`to_versions` profile selection across all five registries,
 including config v1→v2; it runs the registered candidate script and requires its
 dedicated data-conversion test. Ambiguous matches fail, unmatched profiles never

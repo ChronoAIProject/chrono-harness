@@ -605,11 +605,12 @@ cost models remain visible in `removed` and `retirement_context`; null cost valu
 remain unknown. A surviving current test may evolve its methods without retaining
 deleted operations as compatibility obligations.
 
-Product/policy change warning: this replaces scoped CI's old requirement to retain
-every previous operation and adopts explicit retirement of the host's obsolete
+Product/policy change warning: this replaces scoped CI and standalone routes'
+old requirement to retain every previous operation and adopts explicit retirement of the host's obsolete
 decoder and migration group. It keeps structural rejection and actual current
 replacement execution. Verification includes the shared structure boundaries,
-real scoped success/failure cases, existing workflow consumers and the affected
+real scoped success/failure cases, actual standalone replacement execution,
+existing workflow consumers and the affected
 both-endpoint canonical/native DELTA. Total validation cost is not yet measured.
 
 The generic candidate conversion and transition interfaces retain synthetic,
