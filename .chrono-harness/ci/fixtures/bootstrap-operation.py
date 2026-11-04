@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -85,9 +86,12 @@ if mode == "custody":
     if outcome == "timeout":
         time.sleep(30)
     if outcome == "hold":
-        until = time.monotonic() + 15
-        while not (state / "custody-release").exists() and time.monotonic() < until:
-            time.sleep(0.02)
+        address = json.loads((state / "custody-channel.json").read_bytes())
+        with socket.create_connection((address["host"], address["port"]), timeout=15) as channel:
+            channel.sendall(b"R")
+            if channel.recv(1) != b"X":
+                raise AssertionError("custody consumer release channel closed without release")
+        (state / "custody-release").touch()
     sys.exit(7 if outcome == "failure" else 0)
 if mode == "timeout":
     sys.stdout.buffer.write(b"timeout stdout\x00\xff\n")

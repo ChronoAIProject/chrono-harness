@@ -275,6 +275,18 @@ retained assertion evidence and disposal receipts; it never needs the payload
 after `use` returns. Passing synthetic cases do not establish
 native/canonical or real Cargo acceptance. Historical real fixtures are untouched.
 
+The live custody test waits for the actual fixture's readiness through a local
+socket, alongside one native wait for the managed owner's original exit. Both
+notifications enter the same blocking selector. Readiness uses the existing
+40-second attempt deadline, including owner admission; the former separate
+10-second file-poll timer could expire during that admission. The fixture requires
+an actual release message and produces its release marker before exit. Its
+15-second hold bound, 20-second operation limit, 25-second final join and the
+registered suite bounds remain unchanged. Early owner rejection retains the
+original stderr and exit without waiting for a readiness file. The existing live
+consumer and rejected-owner cases exercise both paths; native acceptance and
+additional IO/process costs remain separate observations.
+
 Independent custody fixtures bind their own invoked Git path, version and bytes,
 and select the Python interpreter running the test for their managed action.
 Inherited parent-host expectations are not native fixture expectations. Regression

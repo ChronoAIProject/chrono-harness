@@ -1100,7 +1100,10 @@ fn main_host_observation_reuses_all_declared_cargo_acquisition_operations() {
             .unwrap();
         assert_eq!(declaration["manifest"]["path"], destination);
         if id == "developer" {
-            assert_eq!(declaration["manifest"]["root"], declaration["location"]["path"]);
+            assert_eq!(
+                declaration["manifest"]["root"],
+                declaration["location"]["path"]
+            );
         }
         assert_eq!(declaration["max_entries"], 200000);
     }
