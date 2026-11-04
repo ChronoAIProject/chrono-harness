@@ -724,44 +724,31 @@ fn incomplete_extra_output_rollback_reports_retained_file_and_allows_explicit_re
 
 #[cfg(unix)]
 #[test]
-fn both_known_legacy_identities_preserve_opaque_bytes_and_modes_under_init_and_generate() {
+fn raw_method_bytes_and_modes_survive_init_and_generate() {
     use std::os::unix::fs::PermissionsExt;
-    for v2 in [false, true] {
-        for init_command in [false, true] {
-            let host = legacy_host();
-            let mut m = legacy_manifest();
-            if v2 {
-                m["render"] = json!("literal-core/relative-alias/v2");
-                m["outputs"] = json!([{"role":"claude-guide","path":"CLAUDE.md"},{"role":"agents-relative-alias","path":"AGENTS.md"}]);
-            }
-            put(&host, MANIFEST, &m);
-            let body = "\u{feff}opaque arbitrary language\r\nno final newline";
-            host.write(METHOD, body);
-            fs::set_permissions(host.root.join(METHOD), fs::Permissions::from_mode(0o640)).unwrap();
-            let context = host.read(CONTEXT);
-            if init_command {
-                assert_eq!(cli_init(&host, None, None).exit_code, 0);
-            } else {
-                generate(&host.root).unwrap();
-            }
-            assert_eq!(host.read(METHOD), body.as_bytes());
-            assert_eq!(host.read(CONTEXT), context);
-            assert_eq!(
-                fs::metadata(host.root.join(METHOD))
-                    .unwrap()
-                    .permissions()
-                    .mode()
-                    & 0o777,
-                0o640
-            );
-            let cat = value(&host, CATALOG);
-            assert_eq!(
-                cat["atoms"],
-                json!([{"id":"legacy.method","requires":[],"variants":[{"locale":"und","source":{"type":"file","path":METHOD}}]}])
-            );
-            assert_eq!(value(&host, MANIFEST)["outputs"][0]["locale"], "und");
-            assert!(generate(&host.root).unwrap().is_empty());
+    for init_command in [false, true] {
+        let host = Host::new();
+        host.init().unwrap();
+        let body = "\u{feff}opaque arbitrary language\r\nno final newline";
+        host.write(METHOD, body);
+        fs::set_permissions(host.root.join(METHOD), fs::Permissions::from_mode(0o640)).unwrap();
+        let context = host.read(CONTEXT);
+        if init_command {
+            assert_eq!(cli_init(&host, None, None).exit_code, 0);
+        } else {
+            generate(&host.root).unwrap();
         }
+        assert_eq!(host.read(METHOD), body.as_bytes());
+        assert_eq!(host.read(CONTEXT), context);
+        assert_eq!(
+            fs::metadata(host.root.join(METHOD))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o640
+        );
+        assert!(generate(&host.root).unwrap().is_empty());
     }
 }
 

@@ -6,7 +6,6 @@ mod transaction;
 use catalog::{Atom, Catalog, Content, Format, Manifest, Variant};
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -34,61 +33,6 @@ impl InitSources {
             locale: None,
         })
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-struct Source {
-    role: String,
-    path: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-struct Registration {
-    schema_version: u32,
-    producer: String,
-    render: String,
-    sources: Vec<Source>,
-    outputs: Vec<Source>,
-}
-
-fn registration() -> Registration {
-    let source = |role: &str, path: &str| Source {
-        role: role.into(),
-        path: path.into(),
-    };
-    Registration {
-        schema_version: 1,
-        producer: "chrono-instructions/0.1.0".into(),
-        render: "literal-core/relative-alias/v2".into(),
-        sources: vec![
-            source("methodology", METHOD),
-            source("host-context", CONTEXT),
-        ],
-        outputs: vec![
-            source("claude-guide", "CLAUDE.md"),
-            source("agents-relative-alias", "AGENTS.md"),
-        ],
-    }
-}
-
-// Only this exact earlier identity is a forward migration input.
-fn legacy_registration() -> Registration {
-    let mut old = registration();
-    old.producer = "chrono-instructions/0.1.0".into();
-    old.render = "read-both/v1".into();
-    old.outputs = vec![
-        Source {
-            role: "agents-entrypoint".into(),
-            path: "AGENTS.md".into(),
-        },
-        Source {
-            role: "claude-entrypoint".into(),
-            path: "CLAUDE.md".into(),
-        },
-    ];
-    old
 }
 
 fn managed_block(manifest: &Manifest, frame: &str, body: &str) -> Vec<u8> {
@@ -377,39 +321,11 @@ fn prepare(
     let manifest_before = regular(&manifest_path)?;
     let mut changes = Vec::new();
     let mut pending = BTreeMap::<String, Vec<u8>>::new();
-    let mut new_manifest = false;
+    let new_manifest = manifest_before.is_none();
     let manifest: Manifest;
     if let Some(existing) = &manifest_before {
-        match catalog::parse::<Manifest>(&existing.bytes) {
-            Ok(parsed) => {
-                parsed.validate().map_err(|e| error(&manifest_path, e))?;
-                manifest = parsed;
-            }
-            Err(current_error) => {
-                let parsed: Registration = catalog::parse(&existing.bytes).map_err(|e| {
-                    error(
-                        &manifest_path,
-                        format!("invalid registration: {current_error}; legacy: {e}"),
-                    )
-                })?;
-                if parsed != registration() && parsed != legacy_registration() {
-                    return Err(error(
-                        &manifest_path,
-                        "unsupported registration: expected exact known v1/v2 migration identity",
-                    ));
-                }
-                // Retain old method/context files; only register an opaque reference.
-                if regular(&root.join(CATALOG))?.is_some() {
-                    return Err(error(
-                        &root.join(CATALOG),
-                        "reserved source collision during migration",
-                    ));
-                }
-                manifest = raw_manifest("und")?;
-                pending.insert(CATALOG.into(), catalog::bytes(&raw_catalog("und")?)?);
-                new_manifest = true;
-            }
-        }
+        manifest = catalog::parse(&existing.bytes)
+            .map_err(|e| error(&manifest_path, format!("invalid registration: {e}")))?;
     } else {
         let sources = selected.as_ref().ok_or_else(|| {
             error(
@@ -445,7 +361,6 @@ fn prepare(
         manifest = initial;
         pending.insert(CATALOG.into(), catalog_bytes);
         pending.insert(CONTEXT.into(), sources.context.clone().unwrap_or_default());
-        new_manifest = true;
     }
     manifest.validate().map_err(|e| error(&manifest_path, e))?;
     for path in [&manifest.catalog, &manifest.host_context] {

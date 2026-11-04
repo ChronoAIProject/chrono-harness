@@ -1050,9 +1050,9 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 
 根受管块保留宿主块外原文、sole donor 和预期整份比较语义。Markdown/skill 为带身份 envelope 的整文件投影，未拥有/畸形现有文件预写入拒绝。skill frontmatter 从首字节开始，元数据显式验证。当前 manifest 是唯一管理计划，删条目/改名保留旧输出，由授权 AI 显式退休；不建立历史 ledger 或扫描删除器。
 
-已知完整旧 read-both/v1 和 literal-core/relative-alias/v2 自动迁为 und file atom，保留旧方法/上下文的精确字节、路径、普通权限与根块外原文，不自动拆分、猜语言或采用新默认。init --locale 只绑定新根；省略选项保留采用数据，显式冲突报错。全计划预检、路径/链接/实际别名检查、父先子后建目录及多输出回滚复用现有 publisher；manifest 最后发布。当前 macOS 普通 IO 为已测边界，无跨平台、崩溃/并发保证。
+init/generate 只接受当前 schema 2 / atomic-rules/relative-alias/v3 manifest；不支持的格式在写入前报错，保全源、manifest 和根文件，不自动迁移旧格式。新宿主 init --methodology 将显式方法绑定为 file atom，未声明语言时为 und，保留原 UTF-8 字节。init --locale 只绑定新根；省略选项保留采用数据，显式冲突报错。全计划预检、路径/链接/实际别名检查、父先子后建目录及多输出回滚复用现有 publisher；新建 manifest 最后发布。当前 macOS 普通 IO 为已测边界，无跨平台、崩溃/并发保证。
 
-完整 schema、组合配方、CLI、迁移、所有权与恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护。
+完整 schema、组合配方、CLI、所有权与恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护。
 [来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
 五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。
 
