@@ -84,7 +84,12 @@ interface assumption.
 
 The registered verification operations additionally require `--compile` and
 explicit `--emit=link=OUTPUT,dep-info=OUTPUT.d`, so successful verification is followed by Rust compilation
-and compiler-produced dependency output. Verification success alone is not a
+and compiler-produced dependency output. They also require
+`-Zchecksum-hash-algorithm=sha256`; omitting the flag or selecting SHA-1 is rejected
+by the same proved canonical-argument predicate. The pinned compiler's emitted
+source checksums and unnormalized byte lengths have been compared with the
+actual source bytes. This observation does not bind a later report or candidate.
+Verification success alone is not a
 claim that these artifacts were produced or consumed. Their retained identities,
 source inventory parsing and correspondence checking are still migration work.
 The current coverage adapter therefore continues to report declaration scope.
@@ -99,11 +104,30 @@ list of nonempty paths, rejects ASCII controls, literal backslashes and unknown
 escapes, and proves that re-encoding accepted paths reproduces the exact input.
 Its executable result also matches the specification's complete success/error
 semantics. Verified examples cover those success, error and boundary cases.
-This is a bounded filename grammar for the current compiler observations. Target
-rule extraction, path normalization, retained artifact transport and actual
-coverage admission still require implementation and proof. The decoder alone
+This is a bounded filename grammar for the current compiler observations. The decoder alone
 does not clear any file's migration obligation or establish SPEC correspondence.
 Additional proof/build/storage costs remain unmeasured.
+
+`crates/judge-ci/src/verus_sources.rs`, included by the same proof root, now
+specifies and implements first-target dependency extraction and exact dependency
+file content comparison. Extraction requires the registered `OUTPUT.d` target,
+a nonempty decoded path list and a terminating LF. Content comparison requires
+a nonempty expected source inventory, both exact ordered target rules, all phony
+source rules and one matching checksum line per source in order. It allows blank
+lines and `# env-dep:` comments before the checksum block, then only blank lines
+after that block. Truncated lines and missing, altered or extra checksum content
+fail. Each checksum comparison binds the supplied path, digest bytes and byte
+length, including escaped filename spaces. Canonical decimal serialization of
+the expected `u64` avoids parsing arbitrary integer text; proved examples include
+zero, leading-zero rejection and the maximum `u64` boundary.
+
+These are content predicates against caller-supplied metadata, not a complete
+source-identity admission adapter. Binding and validating that metadata against
+explicit FILEMAP entries and immutable candidate bytes, path normalization,
+retained artifact capture/transport and actual coverage integration still require
+implementation and proof. The complete-content examples exercise an independent
+byte fixture, missing checksum content and a missing final newline. The source
+adapter's existing empty-root migration obligation remains intact.
 
 Product/policy change: both registered proof operations now request compilation
 and dependency output, and the proved argument predicate requires those flags.

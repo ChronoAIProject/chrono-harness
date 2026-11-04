@@ -4,6 +4,9 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[path = "verus_sources.rs"]
+pub mod sources;
+
 verus! {
 
 pub fn equal_text(actual: &str, expected: &str) -> (equal: bool)

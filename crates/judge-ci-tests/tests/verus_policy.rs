@@ -12,6 +12,169 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn dependency_content_requires_every_checksum_and_final_newline() {
+    proof {
+        reveal_strlit("# checksum:sha256="); reveal_strlit(" file_len:");
+        reveal_strlit("# env-dep:");
+        assert(vstd::string::is_ascii("# checksum:sha256="));
+        assert(vstd::string::is_ascii(" file_len:"));
+        assert(vstd::string::is_ascii("# env-dep:"));
+        vstd::string::is_ascii_spec_bytes("# checksum:sha256=");
+        vstd::string::is_ascii_spec_bytes(" file_len:");
+        vstd::string::is_ascii_spec_bytes("# env-dep:");
+    }
+    let input = [111u8, 46u8, 100u8, 58u8, 32u8, 97u8, 10u8, 10u8, 111u8, 58u8, 32u8, 97u8, 10u8, 10u8, 97u8, 58u8, 10u8, 35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 32u8, 97u8, 10u8];
+    let output = [111u8];
+    assert(input@ =~= seq![111u8, 46u8, 100u8, 58u8, 32u8, 97u8, 10u8, 10u8, 111u8, 58u8, 32u8, 97u8, 10u8, 10u8, 97u8, 58u8, 10u8, 35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 32u8, 97u8, 10u8]);
+    assert(output@ =~= seq![111u8]);
+    let source = policy::sources::SourceBinding {
+        path: vec![97u8], sha256: vec![102u8], length: 1,
+    };
+    let mut sources = Vec::new();
+    sources.push(source);
+    assert(sources.len() == 1);
+    assert(sources[0].path@ == seq![97u8]);
+    assert(sources[0].sha256@ == seq![102u8]);
+    let matched = policy::sources::matches_dependency_content(&input, &output, &sources);
+    reveal_with_fuel(policy::dependency_escape, 3);
+    reveal_with_fuel(policy::dependency_encoding, 3);
+    reveal_with_fuel(policy::sources::phony_rules, 3);
+    assert(policy::sources::source_paths(sources@) =~= seq![seq![97u8]]);
+    assert(sources@.drop_last() =~= Seq::<policy::sources::SourceBinding>::empty());
+    assert(policy::dependency_encoding(policy::sources::source_paths(sources@)) =~= seq![97u8]);
+    assert(policy::sources::phony_rules(sources@) =~= seq![97u8, 58u8, 10u8]);
+    assert(policy::sources::dependency_header(output@, sources@) =~= input@.take(17));
+    assert(input@.subrange(0, 17) =~= input@.take(17));
+    assert(policy::sources::checksum_line(&sources[0]) =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 32u8, 97u8]);
+    assert(input@.skip(17) =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 32u8, 97u8, 10u8]);
+    proof { policy::sources::next_byte_at(input@.skip(17), 0, 32, 10u8); }
+    reveal_with_fuel(policy::sources::checksum_trailer, 3);
+    assert(input@.skip(17).skip(33) =~= Seq::<u8>::empty());
+    assert(input@.skip(17).take(32) =~= policy::sources::checksum_line(&sources[0]));
+    assert(input@.skip(17).take(32)[2] == 99u8);
+    assert(vstd::utf8::encode_utf8("# env-dep:"@)[2] == 101u8);
+    assert(!policy::sources::prefix_at(input@.skip(17).take(32), 0, vstd::utf8::encode_utf8("# env-dep:"@)));
+    assert(matched);
+
+    let missing = policy::sources::copy_range(&input, 0, 17);
+    let missing_checksum = policy::sources::matches_dependency_content(missing.as_slice(), &output, &sources);
+    assert(missing@.skip(17) =~= Seq::<u8>::empty());
+    assert(!missing_checksum);
+
+    let truncated = policy::sources::copy_range(&input, 0, 49);
+    let no_final_lf = policy::sources::matches_dependency_content(truncated.as_slice(), &output, &sources);
+    assert(truncated@.skip(17) =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 32u8, 97u8]);
+    proof { policy::sources::next_byte_at(truncated@.skip(17), 0, 32, 10u8); }
+    assert(!no_final_lf);
+
+    let empty: Vec<policy::sources::SourceBinding> = Vec::new();
+    let no_sources = policy::sources::matches_dependency_content(&input, &output, &empty);
+    assert(!no_sources);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn dependency_target_requires_exact_output_and_terminated_nonempty_list() {
+    let input = [111u8, 46u8, 100u8, 58u8, 32u8, 97u8, 32u8, 98u8, 10u8];
+    let output = [111u8];
+    assert(input@ =~= seq![111u8, 46u8, 100u8, 58u8, 32u8, 97u8, 32u8, 98u8, 10u8]);
+    assert(output@ =~= seq![111u8]);
+    let parsed = policy::sources::compiler_dependency_paths(&input, &output);
+    reveal_with_fuel(policy::sources::next_byte, 5);
+    reveal_with_fuel(policy::dependency_scan, 5);
+    assert(input@.subrange(0, 5) =~= policy::sources::target_prefix(output@));
+    assert(input@.subrange(5, 8) =~= seq![97u8, 32u8, 98u8]);
+    assert(policy::dependency_scan(seq![97u8, 32u8, 98u8], Seq::empty(), Seq::empty())
+        == Some(seq![seq![97u8], seq![98u8]]));
+    assert(policy::sources::compiler_paths(input@, output@) == Some(seq![seq![97u8], seq![98u8]]));
+    assert(parsed.is_some());
+    let paths = parsed.unwrap();
+    assert(policy::dependency_values(paths@) == seq![seq![97u8], seq![98u8]]);
+    assert(paths.len() == 2 && paths[0]@ == seq![97u8] && paths[1]@ == seq![98u8]);
+    let wrong_output = [112u8];
+    let wrong = policy::sources::compiler_dependency_paths(&input, &wrong_output);
+    assert(wrong_output@ =~= seq![112u8]);
+    assert(input@.subrange(0, 5)[0] != policy::sources::target_prefix(wrong_output@)[0]);
+    assert(!policy::sources::prefix_at(input@, 0, policy::sources::target_prefix(wrong_output@)));
+    assert(wrong.is_none());
+    let unterminated = [111u8, 46u8, 100u8, 58u8, 32u8, 97u8];
+    assert(unterminated@ =~= seq![111u8, 46u8, 100u8, 58u8, 32u8, 97u8]);
+    let missing_lf = policy::sources::compiler_dependency_paths(&unterminated, &output);
+    assert(missing_lf.is_none());
+    let empty = [111u8, 46u8, 100u8, 58u8, 32u8, 10u8];
+    assert(empty@ =~= seq![111u8, 46u8, 100u8, 58u8, 32u8, 10u8]);
+    let empty_list = policy::sources::compiler_dependency_paths(&empty, &output);
+    assert(empty_list.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn decimal_serialization_includes_zero_and_digit_boundary() {
+    let zero = policy::sources::decimal_bytes(0);
+    let nine = policy::sources::decimal_bytes(9);
+    let ten = policy::sources::decimal_bytes(10);
+    reveal_with_fuel(policy::sources::decimal_text, 3);
+    assert(zero@ =~= seq![48u8]);
+    assert(nine@ =~= seq![57u8]);
+    assert(ten@ =~= seq![49u8, 48u8]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn decimal_serialization_includes_u64_maximum() {
+    let maximum = policy::sources::decimal_bytes(18446744073709551615u64);
+    reveal_with_fuel(policy::sources::decimal_text, 21);
+    assert(maximum@ =~= seq![49u8, 56u8, 52u8, 52u8, 54u8, 55u8, 52u8, 52u8, 48u8, 55u8,
+                            51u8, 55u8, 48u8, 57u8, 53u8, 53u8, 49u8, 54u8, 49u8, 53u8]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checksum_lines_bind_path_hash_and_source_length() {
+    proof {
+        reveal_strlit("# checksum:sha256="); reveal_strlit(" file_len:");
+
+    }
+    let source = policy::sources::SourceBinding {
+        path: vec![97u8, 32u8, 98u8], sha256: vec![102u8], length: 10,
+    };
+    let exact_input = [35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8];
+    assert(exact_input@ =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8]);
+    let exact = policy::sources::matches_checksum(
+        &exact_input, &source);
+    let wrong_hash_input = [35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 101u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8];
+    assert(wrong_hash_input@ =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 101u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8]);
+    let wrong_hash = policy::sources::matches_checksum(
+        &wrong_hash_input, &source);
+    let wrong_length_input = [35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 49u8, 32u8, 97u8, 92u8, 32u8, 98u8];
+    assert(wrong_length_input@ =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 49u8, 32u8, 97u8, 92u8, 32u8, 98u8]);
+    let wrong_length = policy::sources::matches_checksum(
+        &wrong_length_input, &source);
+    let wrong_path_input = [35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 99u8];
+    assert(wrong_path_input@ =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 99u8]);
+    let wrong_path = policy::sources::matches_checksum(
+        &wrong_path_input, &source);
+    let leading_zero_input = [35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 48u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8];
+    assert(leading_zero_input@ =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 48u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8]);
+    let leading_zero = policy::sources::matches_checksum(&leading_zero_input, &source);
+    let extra_input = [35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8, 120u8];
+    assert(extra_input@ =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8, 120u8]);
+    let extra = policy::sources::matches_checksum(
+        &extra_input, &source);
+    reveal_with_fuel(policy::sources::decimal_text, 3);
+    reveal_with_fuel(policy::dependency_escape, 4);
+    assert(policy::sources::decimal_text(10) =~= seq![49u8, 48u8]);
+    assert(policy::dependency_escape(source.path@) =~= seq![97u8, 92u8, 32u8, 98u8]);
+    assert(vstd::string::is_ascii("# checksum:sha256="));
+    assert(vstd::string::is_ascii(" file_len:"));
+    proof {
+        vstd::string::is_ascii_spec_bytes("# checksum:sha256=");
+        vstd::string::is_ascii_spec_bytes(" file_len:");
+    }
+    assert(vstd::utf8::encode_utf8("# checksum:sha256="@) =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8]);
+    assert(vstd::utf8::encode_utf8(" file_len:"@) =~= seq![32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8]);
+    assert(policy::sources::checksum_line(&source) =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8]);
+    assert(exact);
+    assert(!wrong_hash && !wrong_length && !wrong_path && !leading_zero && !extra);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn complete_inventory_is_accepted() {
     let mut ledger = policy::Ledger::new();
     ledger.record("first".to_owned(), true);
