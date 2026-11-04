@@ -73,6 +73,19 @@ before business tool observation or launch. There is no language, directory,
 call-graph or test discovery. All resource claims are exclusive; equal or nested
 output namespaces conflict. The declaration remains responsible for completeness.
 
+This host declares `coordinator-fixture-producers` for the CI, projects, workflow
+and worktree test operations that publish into its retained fixture stores. The
+worktree core native Cargo survival regression also invokes the actual source
+coordinator's `maintain`, which drains those same stores. Their existing separate
+suite inventory claims did not exclude that shared effect. The shared claim now
+prevents overlap within one canonical invocation; callers must still serialize
+independent lifecycle/check invocations using that coordinator. This policy
+correction preserves the operation cap, internal test threads, assertions and
+lease deadlines. Its required validation is the candidate canonical DELTA and
+native check; additional elapsed/CI cost is unknown. The earlier two projects
+registry-lease refusals remain original failures, without an established exact
+historical holder attribution.
+
 `priority` optionally lists distinct registered operation IDs in launch order.
 Listed ready operations precede unlisted ready operations; unlisted operations
 retain canonical plan order. Empty or absent priority retains the previous
