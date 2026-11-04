@@ -110,6 +110,19 @@ class ReleaseUnits(unittest.TestCase):
     def setUp(self):self.f=Fixture();self.addCleanup(self.f.close)
     def tearDown(self):retain_failed_fixture(self,Path(self.f.temp.name))
     def passed(self,p):self.assertEqual(p.returncode,0,p.stderr.decode(errors='replace'))
+    def test_retired_schema_is_rejected_before_tools_or_output(self):
+        f=self.f
+        f.cfg['schema']='chrono-release-build/v4'
+        for unit in f.cfg['units']:
+            unit.pop('rust_toolchain',None)
+        put(f.root/BUILD,f.cfg)
+        output=Path(f.temp.name)/'unsupported-output'
+        result=subprocess.run([sys.executable,str(SCRIPT),str(f.root),str(output)],
+                              env=dict(os.environ,CALLS=str(f.calls)),capture_output=True)
+        self.assertEqual(result.returncode,2,result.stderr.decode(errors='replace'))
+        self.assertIn(b'unsupported release build schema',result.stderr)
+        self.assertEqual(f.calls_read(),[])
+        self.assertFalse(output.exists())
     def test_producer_verifier_collector_execute_distinct_original_commands(self):
         f=self.f;f.ready();before=f.calls_read();p,out=f.run('package');self.passed(p)
         new=f.calls_read()[len(before):]
