@@ -630,7 +630,10 @@ fn invoke(
             let consumer: crate::retained_artifacts::retention::Consumer =
                 serde_json::from_value(consumer.clone()).map_err(|e| e.to_string())?;
             if consumer.originals.len() != 1
-                || !p.originals.iter().any(|original| original.path == consumer.originals[0].path)
+                || !p
+                    .originals
+                    .iter()
+                    .any(|original| original.path == consumer.originals[0].path)
                 || p.evidence["report_path"] != consumer.originals[0].path
             {
                 return Err("input producer handoff differs from its exact original".into());

@@ -103,11 +103,19 @@ fn produce(
         return Err("local input source/host binding mismatch".into());
     }
     let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(&req.host_root)?;
-    let retention = chrono_harness::retained_artifacts::retention::Inventory::adopted(&req.host_root)?;
-    let consumer = retention.as_ref().map(|_| {
-        chrono_harness::retained_artifacts::retention::unique_path(&req.host_root, "local-inputs-", "")
+    let retention =
+        chrono_harness::retained_artifacts::retention::Inventory::adopted(&req.host_root)?;
+    let consumer = retention
+        .as_ref()
+        .map(|_| {
+            chrono_harness::retained_artifacts::retention::unique_path(
+                &req.host_root,
+                "local-inputs-",
+                "",
+            )
             .map(|path| path.file_name().unwrap().to_str().unwrap().to_string())
-    }).transpose()?;
+        })
+        .transpose()?;
     let report = start::with_report_for_consumer(
         &req.host_root,
         path,
@@ -357,7 +365,11 @@ fn produce(
     if let Some(inventory) = retention {
         inventory.dependencies_paths(
             report["report_path"].as_str().ok_or("report path")?,
-            &originals.iter().skip(1).map(|original| original.path.clone()).collect::<Vec<_>>(),
+            &originals
+                .iter()
+                .skip(1)
+                .map(|original| original.path.clone())
+                .collect::<Vec<_>>(),
         )?;
     }
     Ok(PreparedCheck {

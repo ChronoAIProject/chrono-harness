@@ -1340,14 +1340,25 @@ impl Inventory {
             return Err("caller original handoff root differs".into());
         }
         let leases = self.original_leases(&l, &consumer.originals, false)?;
-        let target = l.outputs.iter().position(|o| o.path == destination && o.phase != "disposing")
+        let target = l
+            .outputs
+            .iter()
+            .position(|o| o.path == destination && o.phase != "disposing")
             .ok_or("caller handoff destination unavailable")?;
         if ids.contains(&l.outputs[target].id)
-            || !l.roots.values().any(|roots| roots.contains(&l.outputs[target].id))
+            || !l
+                .roots
+                .values()
+                .any(|roots| roots.contains(&l.outputs[target].id))
         {
             return Err("caller handoff requires a distinct protected destination".into());
         }
-        let references: BTreeSet<_> = l.outputs[target].references.iter().chain(&ids).cloned().collect();
+        let references: BTreeSet<_> = l.outputs[target]
+            .references
+            .iter()
+            .chain(&ids)
+            .cloned()
+            .collect();
         if references.len() > self.policy.max_entries {
             return Err("caller handoff dependency capacity".into());
         }
