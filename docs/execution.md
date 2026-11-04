@@ -75,7 +75,7 @@ output namespaces conflict. The declaration remains responsible for completeness
 
 This host declares `coordinator-fixture-producers` for the CI, projects, workflow
 and worktree test operations that publish into its retained fixture stores. The
-worktree core native Cargo survival regression also invokes the actual source
+worktree adoption native Cargo survival regression also invokes the actual source
 coordinator's `maintain`, which drains those same stores. Their existing separate
 suite inventory claims did not exclude that shared effect. The shared claim now
 prevents overlap within one canonical invocation; callers must still serialize
