@@ -156,10 +156,7 @@ pub fn retain_diagnostic(path: &Path, reason: &str) -> Result<(), String> {
 // Consult only stores actually initialized by these explicit publishers. The
 // owner still verifies exact allocation membership; no filesystem discovery.
 fn binding(path: &Path) -> Result<(&'static str, &'static Path), String> {
-    for (producer, selected) in [
-        (PRODUCER, &HOSTS),
-        ("workflow-test-tools", &TOOLS),
-    ] {
+    for (producer, selected) in [(PRODUCER, &HOSTS), ("workflow-test-tools", &TOOLS)] {
         if let Some(Ok((directory, _))) = selected.get() {
             if path.starts_with(directory) {
                 return Ok((producer, directory));

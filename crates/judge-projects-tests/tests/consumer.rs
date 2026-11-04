@@ -562,8 +562,12 @@ fn mapped_removed_obligation_executes_current_replacement_without_old_methods() 
             assert_eq!(v["tests"]["removed"]["test:t"], "test:replacement");
             assert_eq!(v["tests"]["tests"]["test:replacement"], "passed");
             assert_eq!(
-                v["tests"]["executed"].as_array().unwrap().iter()
-                    .map(|row| row["operation"].as_str().unwrap()).collect::<Vec<_>>(),
+                v["tests"]["executed"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|row| row["operation"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
                 ["prepare.current", "execute.current"]
             );
             assert_eq!(
