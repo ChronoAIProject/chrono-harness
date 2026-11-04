@@ -26,6 +26,13 @@ fn output(target: &Path) {
 fn caller_report_consumer_protects_primary_and_coordinator_publication() {
     let h = Host::new("payload");
     h.kernel_cleanup();
+    native_consumer(&h, "noop");
+    let cleanup = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&cleanup).unwrap()).unwrap();
+    policy["retained_producers"] = value!([{"id":"caller-fixture",
+        "directory":".chrono-harness/state/caller-fixtures/",
+        "temporary":true,"generated_outputs":[]}]);
+    fs::write(cleanup, serde_json::to_vec(&policy).unwrap()).unwrap();
     let retention = chrono_harness::retained_artifacts::retention::POLICY_PATH;
     fs::write(h.root.join(retention), serde_json::to_vec(&value!({
         "schema":"chrono-output-retention/v1","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},
@@ -40,10 +47,24 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
     fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "caller-fixture")
+            .unwrap();
+    let fixture = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "caller-fixture",
+        &outputs,
+        "actual caller report consumer ",
+    )
+    .unwrap();
     let target = h.parent.join("caller-report");
     assert_eq!(h.invoke("feature", "caller-report", &target).0, 0);
     output(&target);
-    for (root, consumer) in [(&h.root, "primary-reader"), (&target, "linked-reader")] {
+    for (root, consumer, operation) in [
+        (&h.root, "primary-reader", "maintain"),
+        (&target, "linked-reader", "maintain"),
+        (&target, "linked-use-reader", "use"),
+    ] {
         let mut command =
             Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
         command
@@ -51,7 +72,7 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .args([
-                "maintain",
+                operation,
                 "--host-root",
                 root.to_str().unwrap(),
                 "--config",
@@ -59,6 +80,14 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
                 "--report-consumer",
                 consumer,
             ]);
+        if operation == "use" {
+            command.args([
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ]);
+        }
         h._dir.bind(&mut command);
         let output = h._dir.capture_bound(&mut command);
         assert!(
@@ -70,11 +99,73 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
         let path = h.root.join(report["report_path"].as_str().unwrap());
         let raw = fs::read(&path).unwrap();
         assert_eq!(json(&raw).unwrap(), report);
+        let mut passes = vec![&report];
+        if operation == "use" {
+            assert_eq!(report["managed_process"]["exit_code"], 0);
+            assert!(report["post_use_cleanup"].is_object());
+            assert!(report["post_use_cleanup"].get("producer_objects").is_none());
+            passes.push(&report["post_use_cleanup"]);
+        }
+        let dependencies: Vec<_> = passes
+            .iter()
+            .flat_map(|pass| pass["producer_drains"].as_array().unwrap())
+            .map(|item| {
+                let receipt = &item["receipt"];
+                let path = h.root.join(receipt["path"].as_str().unwrap());
+                let bytes = fs::read(&path).unwrap();
+                assert_eq!(sha256(&bytes), receipt["sha256"]);
+                let child = json(&bytes).unwrap();
+                assert_eq!(child["status"], item["status"]);
+                assert_eq!(child["error"], item["error"]);
+                assert!(
+                    child["producer_objects"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|object| {
+                            object["producer"] == "caller-fixture"
+                                && object["status"] == "protected"
+                                && h.root.join(object["path"].as_str().unwrap()) == fixture.path()
+                        })
+                );
+                (path, bytes)
+            })
+            .collect();
+        assert_eq!(dependencies.len(), if operation == "use" { 2 } else { 1 });
+        assert_eq!(
+            dependencies
+                .iter()
+                .map(|(path, _)| path)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            dependencies.len(),
+            "admission and post-use cleanup retain distinct original operations"
+        );
+        let managed_receipt = if operation == "use" {
+            let receipt = &report["managed_use_receipt"];
+            let path = h.root.join(receipt["path"].as_str().unwrap());
+            let bytes = fs::read(&path).unwrap();
+            assert_eq!(sha256(&bytes), receipt["sha256"]);
+            assert_eq!(json(&bytes).unwrap()["process"]["exit_code"], 0);
+            Some((path, bytes))
+        } else {
+            None
+        };
         let i = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
             .unwrap()
             .unwrap();
         i.maintain().unwrap();
         assert_eq!(fs::read(&path).unwrap(), raw);
+        for (path, bytes) in &dependencies {
+            assert_eq!(
+                fs::read(path).expect("caller must retain the referenced original"),
+                *bytes
+            );
+        }
+        if let Some((path, bytes)) = &managed_receipt {
+            assert_eq!(fs::read(path).unwrap(), *bytes);
+        }
+        assert!(report.get("producer_objects").is_none());
         for item in report["drain"].as_array().unwrap() {
             if let Some(receipt) = item.get("receipt") {
                 let bytes = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
@@ -92,10 +183,162 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
             .unwrap();
         i.maintain().unwrap();
         assert!(!path.exists());
+        for (path, _) in dependencies {
+            assert!(
+                !path.exists(),
+                "released referenced original was not reclaimed"
+            );
+        }
+        if let Some((path, bytes)) = managed_receipt {
+            assert_eq!(
+                fs::read(path).unwrap(),
+                bytes,
+                "the fixture policy does not enroll automatic-cleanup state"
+            );
+        }
         assert!(root.join(".git").exists());
         assert!(root.join("payload").exists());
     }
 }
+
+#[test]
+fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let cleanup = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&cleanup).unwrap()).unwrap();
+    policy["retained_producers"] = value!([
+        {"id":"first-fixture","directory":".chrono-harness/state/first-fixture/",
+            "temporary":true,"generated_outputs":[]},
+        {"id":"second-fixture","directory":".chrono-harness/state/second-fixture/",
+            "temporary":true,"generated_outputs":[]}
+    ]);
+    fs::write(cleanup, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let retention = chrono_harness::retained_artifacts::retention::POLICY_PATH;
+    fs::write(
+        h.root.join(retention),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-output-retention/v1",
+            "producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},
+            "keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,
+            "max_bytes_per_round":1048576,"max_millis_per_round":1000
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    fm["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(retention, value!([])));
+    fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("unrooted-linked-report");
+    assert_eq!(h.invoke("feature", "unrooted-linked-report", &target).0, 0);
+    let mut previous = Vec::new();
+    for _ in 0..2 {
+        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+            .current_dir(&target)
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap())
+            .args(["maintain", "--config", POLICY])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report = json(&output.stdout).unwrap();
+        assert_eq!(report["status"], "maintained");
+        assert!(report.get("report_consumer").is_none());
+        for path in &previous {
+            assert!(
+                !h.root.join(path).exists(),
+                "ordinary reentry must reclaim an unrooted original"
+            );
+        }
+        previous.clear();
+        let path = report["report_path"].as_str().unwrap();
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), output.stdout);
+        previous.push(path.to_owned());
+        let drains = report["producer_drains"].as_array().unwrap();
+        assert_eq!(drains.len(), 2);
+        for (entry, producer) in drains.iter().zip(["first-fixture", "second-fixture"]) {
+            assert_eq!(entry["producer"], producer);
+            let original = drain_report(entry);
+            assert_eq!(original["status"], "cleaned");
+            assert_eq!(
+                original["producer_objects"][0]["status"],
+                "protected-unknown"
+            );
+            previous.push(entry["receipt"]["path"].as_str().unwrap().to_owned());
+        }
+    }
+    let destination = h.parent.join("linked-start-report");
+    let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        .current_dir(&target)
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .args([
+            "start",
+            "--host-root",
+            target.to_str().unwrap(),
+            "--config",
+            POLICY,
+            "--kind",
+            "feature",
+            "--name",
+            "linked-start-report",
+            "--path",
+            destination.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = json(&output.stdout).unwrap();
+    assert_eq!(report["status"], "created");
+    let parent = target.join(report["report_path"].as_str().unwrap());
+    assert_eq!(fs::read(&parent).unwrap(), output.stdout);
+    for path in &previous {
+        assert!(
+            !h.root.join(path).exists(),
+            "linked creation also reclaims unrooted coordinator reports"
+        );
+    }
+    previous.clear();
+    let drains = report["producer_drains"].as_array().unwrap();
+    assert_eq!(drains.len(), 2);
+    for entry in drains {
+        assert_eq!(drain_report(entry)["status"], "cleaned");
+        previous.push(entry["receipt"]["path"].as_str().unwrap().to_owned());
+    }
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap();
+    inventory.maintain().unwrap();
+    for path in previous {
+        assert!(
+            !h.root.join(path).exists(),
+            "publication adds no persistent consumer root"
+        );
+    }
+    chrono_harness::retained_artifacts::retention::Inventory::adopted(&target)
+        .unwrap()
+        .unwrap()
+        .maintain()
+        .unwrap();
+    assert!(!parent.exists());
+    for root in [&h.root, &target, &destination] {
+        assert!(root.join("payload").exists());
+    }
+}
+
 #[test]
 fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
     let h = Host::new("payload");
@@ -1714,10 +1957,8 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
         ".chrono-harness/ci/bootstrap.py",
         ".chrono-harness/ci/workflow-inventory.py",
         ".chrono-harness/ci/workflow-inventory-tests.py",
-        ".chrono-harness/migrations/scoped-v1.py",
-        ".chrono-harness/migrations/scoped-v1-tests.py",
     ];
-    for script in [sources[1], sources[2], sources[3], sources[5]] {
+    for script in [sources[1], sources[2], sources[3]] {
         let root = tempfile::tempdir().unwrap();
         for path in sources {
             let destination = root.path().join(path);
@@ -1737,11 +1978,7 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
             .output()
             .unwrap();
         assert!(loaded.status.success(), "{script}: {loaded:?}");
-        for parent in [
-            ".chrono-harness",
-            ".chrono-harness/ci",
-            ".chrono-harness/migrations",
-        ] {
+        for parent in [".chrono-harness", ".chrono-harness/ci"] {
             assert!(
                 !root.path().join(parent).join("__pycache__").exists(),
                 "{script} wrote unregistered bytecode in {parent}"
@@ -1759,22 +1996,15 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
 #[test]
 fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
     use std::os::unix::fs::symlink;
-    for route in ["bootstrap", "workflow-inventory", "scoped-v1-tests"] {
+    for route in ["bootstrap", "workflow-inventory"] {
         let h = Host::new("payload");
         h.kernel_cleanup();
-        let script = if route == "scoped-v1-tests" {
-            source().join(".chrono-harness/migrations/scoped-v1-tests.py")
-        } else {
-            source().join(format!(".chrono-harness/ci/{route}.py"))
-        };
+        let script = source().join(format!(".chrono-harness/ci/{route}.py"));
         let consumer = env!("CARGO_BIN_EXE_chrono-worktree-test-consumer");
         let tools = h.parent.join("python-tools");
         fs::create_dir(&tools).unwrap();
         for name in ["rustup", "cargo", "rustc"] {
             symlink(consumer, tools.join(name)).unwrap();
-        }
-        if route == "scoped-v1-tests" {
-            symlink(consumer, tools.join("git")).unwrap();
         }
         super::automatic::native_consumer_actions(&h, "python-consumer", "python-holder");
         let target = h.parent.join(format!("python-{route}"));
@@ -1844,7 +2074,6 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
                 )
                 .unwrap();
             }
-            "scoped-v1-tests" => (),
             _ => unreachable!(),
         }
         let mut owner = wrapper(&h, &target);
@@ -1897,7 +2126,7 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
             "allocation maintenance failed: {}",
             allocation.display()
         );
-        report["producer_objects"]
+        producer_objects(&report)
             .as_array()
             .unwrap()
             .iter()

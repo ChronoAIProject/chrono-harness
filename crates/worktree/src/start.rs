@@ -17,6 +17,7 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 pub(crate) struct Runner {
     pub(crate) config: Config,
     pub(crate) birth_lease: Option<crate::ownership::Lease>,
+    pub(crate) coordinator_reports: Option<crate::ownership::Lease>,
     environment: BTreeMap<String, String>,
     tool: observation::Tool,
     processes: Vec<Value>,
@@ -762,6 +763,7 @@ pub(crate) fn with_report_for_consumer(
     let mut runner = Runner {
         config,
         birth_lease: None,
+        coordinator_reports: None,
         environment,
         tool,
         processes: vec![],

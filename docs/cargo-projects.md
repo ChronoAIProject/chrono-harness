@@ -137,23 +137,36 @@ execution cost only. The isolated producer retains its 600-second guard deadline
 Its actual enclosing consumer must establish bound-compatible performance on
 the selected host; a build profile or small regression alone is insufficient.
 
-Directory validation shares a physical directory-prefix check only within one
-pass, and revalidates those parents at the end of that pass. Every declared regular file is still hashed, every declared child
-inventory is still read, and every alias is still checked. A new pass starts
-with an empty prefix set, so checks after each child still detect persistent
-parent replacement, file mutation and alias drift. This is no filesystem
-snapshot guarantee: changes restored between observations remain outside the
-existing contract. The optimization removes repeated metadata reads for shared
-parents; it does not cache file identities across validation boundaries.
+Directory validation derives physical parent paths from the explicit file
+declarations once. Each binding checks these parents before its file lanes,
+checks every leaf's non-link regular-file type and expected SHA-256, validates
+directory children and literal aliases, and rechecks all physical parents at
+the end. This avoids rebuilding the same parent paths for every file on every
+pass; it does not retain a physical observation between passes.
 
-Each directory pass hashes its declared files in two bounded threads, with a
-separate prefix set in each thread. Both threads finish before validation can
-return or any guarded child can run; an error in either thread fails the pass.
-Their merged physical parents receive the same final recheck. The selected host
-declares 14,466,038,905 logical file bytes per complete pass, including overlapping
-inventories. This concurrency bounds the hashing work without omitting bytes,
-changing expected digests or retaining identities between boundaries. Its actual
-enclosing performance still requires host measurement.
+Within initial preparation or one unchanged-inputs pass, a completed binding
+lends its verified canonical-root file paths and expected digests to later
+bindings. An overlapping declaration with the same path and digest reuses that
+content observation; a different digest rejects. Every binding still checks
+each declared physical path, directory children and aliases. Preparation has
+no child launch between these bindings, and only a fully validated binding
+contributes observations.
+
+Each unchanged-inputs pass starts with an empty file map, so checks after every
+child still detect persistent parent replacement, file mutation and alias drift.
+The map borrows existing declarations and holds at most one entry per distinct
+declared canonical-root file path in that pass; it retains no content observation
+across a child boundary. Allocation and lookup costs remain unmeasured. This is
+no filesystem snapshot guarantee: changes restored between observations remain
+outside the existing contract.
+
+Each binding uses the existing two bounded threads to check its declared files
+and hash files not already verified in that pass. Both threads finish before
+validation can return or any guarded child can run; an error in either thread
+fails the pass. The selected host declares 14,466,038,905
+logical file bytes per complete pass, including overlapping inventories; the
+distinct hashed byte count and actual enclosing performance require host
+measurement. Expected digests, child boundaries and execution limits are unchanged.
 
 This host registers `test.judge-cargo-isolated-observation` as an explicit
 experiment in the existing Rust test owner. It invokes the unchanged registered

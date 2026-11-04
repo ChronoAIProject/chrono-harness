@@ -19,8 +19,6 @@
     "judge-routes-tests",
     "judge-projects",
     "judge-projects-tests",
-    "scoped-v1",
-    "scoped-v1-tests",
     "judge-cost",
     "judge-cost-tests",
     "judge-mixed",
@@ -689,6 +687,19 @@
             "--manifest-path",
             "crates/judge-ci-tests/Cargo.toml"
           ]
+        },
+        "execute_retirement": {
+          "operation": "test.ci.retirement",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml",
+            "--test",
+            "behavior",
+            "retirement"
+          ]
         }
       },
       "language": "rust"
@@ -811,6 +822,17 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/ci/Cargo.toml"
+          ]
+        },
+        "generate_release": {
+          "operation": "ci.release.generate",
+          "tool": "chrono-ci",
+          "argv": [
+            "generate",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/release.json"
           ]
         }
       },
@@ -995,6 +1017,15 @@
             "--manifest-path",
             "crates/judge-registration/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1085,6 +1116,15 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-registration-tests/Cargo.toml"
           ]
@@ -1601,34 +1641,6 @@
             "crates/judge-projects-tests/Cargo.toml"
           ]
         },
-        "execute_core": {
-          "operation": "test.projects.core",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-projects-tests/Cargo.toml",
-            "--test",
-            "consumer",
-            "--test",
-            "execution",
-            "--test",
-            "languages"
-          ]
-        },
-        "execute_migration": {
-          "operation": "test.projects.migration",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-projects-tests/Cargo.toml",
-            "--test",
-            "migration"
-          ]
-        },
         "update_lockfile": {
           "operation": "lock.judge-projects-tests",
           "tool": "cargo",
@@ -1691,11 +1703,7 @@
           ]
         }
       },
-      "language": "rust",
-      "test_groups": {
-        "judge-projects-tests": "execute_core",
-        "judge-projects-migration": "execute_migration"
-      }
+      "language": "rust"
     },
     {
       "id": "judge-cost",
@@ -3752,38 +3760,6 @@
   ],
   "scripts": [
     {
-      "id": "scoped-v1",
-      "path": ".chrono-harness/migrations/scoped-v1.py",
-      "test_script": "scoped-v1-tests",
-      "actions": {
-        "execute": {
-          "operation": "migration.scoped-v1",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/migrations/scoped-v1.py"
-          ]
-        }
-      },
-      "language": "python"
-    },
-    {
-      "id": "scoped-v1-tests",
-      "path": ".chrono-harness/migrations/scoped-v1-tests.py",
-      "tests_for": "scoped-v1",
-      "actions": {
-        "execute": {
-          "operation": "migration.scoped-v1-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/migrations/scoped-v1-tests.py"
-          ]
-        }
-      },
-      "language": "python"
-    },
-    {
       "id": "workflow-inventory",
       "language": "python",
       "path": ".chrono-harness/ci/workflow-inventory.py",
@@ -3807,15 +3783,6 @@
             ".chrono-harness/ci/workflow-inventory.py",
             ".",
             ".chrono-harness/ci/worktree-inventory.json"
-          ]
-        },
-        "projects": {
-          "operation": "projects.inventory",
-          "tool": "python3",
-          "argv": [
-            ".chrono-harness/ci/workflow-inventory.py",
-            ".",
-            ".chrono-harness/ci/projects-inventory.json"
           ]
         }
       }
@@ -4012,18 +3979,6 @@
             "unit_judge-projects"
           ]
         },
-        "shared-install-unit_scoped-v1": {
-          "operation": "host.bootstrap-shared-install-unit_scoped-v1",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap_shared.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_scoped-v1"
-          ]
-        },
         "shared-install-unit_judge-cost": {
           "operation": "host.bootstrap-shared-install-unit_judge-cost",
           "tool": "python3",
@@ -4214,18 +4169,6 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "unit_cache"
-          ]
-        },
-        "shared-install-unit_judge-projects-migration": {
-          "operation": "host.bootstrap-shared-install-unit_judge-projects-migration",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap_shared.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_judge-projects-migration"
           ]
         },
         "shared-install-aggregate": {

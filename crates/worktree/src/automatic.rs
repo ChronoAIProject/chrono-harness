@@ -601,6 +601,19 @@ impl PolicyInputs {
     }
 }
 impl Manager {
+    fn protect_reports(&self, r: &mut Runner, invoking: &Path) -> Result<(), String> {
+        let coordinator = &self.inputs.policy.coordinator_root;
+        if coordinator != invoking && r.coordinator_reports.is_none() {
+            // with_report already maintains and protects the invoking root.
+            // A distinct coordinator must reclaim old unrooted reports before
+            // this invocation protects its producer originals through publication.
+            chrono_harness::retained_artifacts::retention::maintain_adopted(coordinator)?;
+            r.coordinator_reports =
+                chrono_harness::retained_artifacts::retention::report_activity(coordinator)?;
+        }
+        Ok(())
+    }
+
     fn open(
         r: &mut Runner,
         root: &Path,
@@ -1787,7 +1800,6 @@ impl Manager {
     ) -> Result<(), String> {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
-        report["producer_objects"] = value!([]);
         report["producer_drains"] = value!([]);
         report["output_retention"] = value!(
             chrono_harness::retained_artifacts::retention::maintain_adopted(
@@ -1964,18 +1976,13 @@ impl Manager {
             if result["status"] != "cleaned" {
                 failures.push(format!("producer {}: {}", producer.id, result["error"]));
             }
-            report["producer_objects"].as_array_mut().unwrap().extend(
-                result["producer_objects"]
-                    .as_array()
-                    .cloned()
-                    .unwrap_or_default(),
-            );
             let path = result["report_path"]
                 .as_str()
                 .ok_or("producer drain report path")?;
             let bytes = crate::recovery::state_bytes(root, path)?;
             report["producer_drains"].as_array_mut().unwrap().push(value!({"producer":producer.id,
-                "status":result["status"],"error":result["error"],"receipt":{"path":path,"sha256":sha256(&bytes)}}));
+                "status":result["status"],"error":result["error"],"receipt":{"path":path,"sha256":sha256(&bytes)},
+                "input":self.retained_input(path, &bytes, "receipt")}));
         }
         report["cleanup_failures"] = value!(failures);
         if failures.is_empty() {
@@ -2221,6 +2228,7 @@ pub(crate) fn create(
     let Some(mut manager) = Manager::open(r, &o.root, &o.config_path, bytes, token)? else {
         return create(r, report);
     };
+    manager.protect_reports(r, &o.root)?;
     let destination = absolute(
         &fs::canonicalize(o.destination.parent().ok_or("destination parent")?)
             .map_err(|e| e.to_string())?
@@ -2368,10 +2376,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         _ => return Err("unknown lifecycle operation".into()),
     };
     let mut use_guard = None;
-    // The explicit caller consumes coordinator originals even when its
-    // invocation belongs to a linked checkout. Keep publication/receipt
-    // assembly protected until with_report has bound the exact closure.
-    let mut coordinator_reports = None;
     start::with_report_for_consumer(
         &invoking,
         config_path,
@@ -2384,12 +2388,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             report["invoking_root"] = value!(invoking);
             let mut manager = Manager::open(r, &invoking, config_path, &bytes, token)?
                 .ok_or("automatic cleanup is not opted in")?;
-            if values.contains_key("--report-consumer") {
-                coordinator_reports =
-                    chrono_harness::retained_artifacts::retention::report_activity(
-                        &manager.inputs.policy.coordinator_root,
-                    )?;
-            }
+            manager.protect_reports(r, &invoking)?;
             report["source_root"] = value!(manager.inputs.policy.coordinator_root);
             report["lifecycle_coordinator_root"] = value!(manager.inputs.policy.coordinator_root);
             report["source_commit"] = value!(manager.inputs.anchor_head);

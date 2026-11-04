@@ -1,20 +1,8 @@
 use chrono_harness::{facts, wire::Request};
 use chrono_judge_projects::Results;
-use chrono_judge_registration::Registrations;
+use chrono_judge_registration::{Registrations, retirement_declaration as declaration};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-fn declaration<'a>(r: &'a Registrations, kind: &str, id: &str) -> Result<&'a Value, String> {
-    let rows: Vec<_> = r.workflow()["retirements"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|x| x["kind"] == kind && x["id"] == id)
-        .collect();
-    if rows.len() != 1 {
-        return Err(format!("E_RETIREMENT: missing/ambiguous {kind}:{id}"));
-    }
-    Ok(rows[0])
-}
 /// Adjudicate changed/removed identities; unchanged historical records are context.
 pub fn evaluate(
     reader: &facts::Reader,
@@ -60,74 +48,25 @@ pub fn evaluate(
             json!({"node":node,"definitions":definitions,"replacement":target,"status":"repaired"}),
         );
     }
-    for (node, defs) in &old {
+    for node in old.keys() {
         if !node.starts_with("test:") || new.contains_key(node) {
             continue;
         }
         let id = &node[5..];
-        let request = requests
-            .get(node)
-            .ok_or_else(|| format!("E_REQUIRED_TEST_REMOVED: {node}"))?;
-        match request {
-            Some(to) => {
-                if !new.get(to).is_some_and(|n| n.unique().is_some())
-                    || results.tests.get(to).map(String::as_str) != Some("passed")
-                {
-                    return Err(format!(
-                        "E_REQUIRED_TEST_REMOVED: replacement not executed: {node}"
-                    ));
-                }
-            }
-            None => {
-                for definition in &defs.definitions {
-                    let d = &definition.value;
-                    // A grouped test alias is opaque. Its suffix may differ from
-                    // the defining test project's ID, so resolve the typed owner
-                    // from the retained definition identity and value.
-                    let (collection, kind, pair, defining_id) =
-                        if let Some(id) = definition.identity.strip_prefix("project:") {
-                            ("projects", "project", "test_project", id)
-                        } else if let Some(id) = definition.identity.strip_prefix("script:") {
-                            ("scripts", "script", "test_script", id)
-                        } else {
-                            return Err(format!(
-                                "E_RETIREMENT: retired test has invalid defining owner: {node}"
-                            ));
-                        };
-                    let owner = d["tests_for"]
-                        .as_str()
-                        .ok_or("E_RETIREMENT: retired test has no producer")?;
-                    if d["id"].as_str() != Some(defining_id) {
-                        return Err(format!(
-                            "E_RETIREMENT: defining owner identity/value mismatch: {node}"
-                        ));
-                    }
-                    let originals: Vec<_> = a.projects()[collection]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .filter(|p| p["id"] == owner && p[pair] == defining_id)
-                        .collect();
-                    if originals.len() != 1
-                        || b.projects()[collection]
-                            .as_array()
-                            .unwrap()
-                            .iter()
-                            .any(|p| p["id"] == owner || p["id"] == defining_id)
-                        || !declaration(b, kind, owner)?["replacement"].is_null()
-                    {
-                        return Err(format!(
-                            "E_RETIREMENT: joint producer/test removal required: {node}"
-                        ));
-                    }
-                }
-            }
+        let request = chrono_judge_registration::validate_test_retirement(a, b, node)?;
+        if request
+            .as_ref()
+            .is_some_and(|to| results.tests.get(to).map(String::as_str) != Some("passed"))
+        {
+            return Err(format!(
+                "E_REQUIRED_TEST_REMOVED: replacement not executed: {node}"
+            ));
         }
         if impact["retired_tests"]
             .as_array()
             .unwrap()
             .contains(&json!(node))
-            && results.removed.get(node) != Some(request)
+            && results.removed.get(node) != Some(&request)
         {
             return Err("E_RETIREMENT: execution did not preserve removed obligation".into());
         }

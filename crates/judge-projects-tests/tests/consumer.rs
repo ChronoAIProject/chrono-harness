@@ -507,11 +507,15 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
 }
 
 #[test]
-fn mapped_removed_obligation_requires_successful_replacement_and_preserves_old_method() {
+fn mapped_removed_obligation_executes_current_replacement_without_old_methods() {
     for mapping in [true, false] {
         let mut h = Host::new(true);
         h.values.get_mut(PROJECTS).unwrap()["scripts"][0]["test_script"] = json!("replacement");
         h.values.get_mut(PROJECTS).unwrap()["scripts"][1]["id"] = json!("replacement");
+        h.values.get_mut(PROJECTS).unwrap()["scripts"][0]["actions"]["execute"]["operation"] =
+            json!("prepare.current");
+        h.values.get_mut(PROJECTS).unwrap()["scripts"][1]["actions"]["execute"]["operation"] =
+            json!("execute.current");
         h.values.get_mut(PROJECTS).unwrap()["owners"]
             .as_array_mut()
             .unwrap()
@@ -540,15 +544,16 @@ fn mapped_removed_obligation_requires_successful_replacement_and_preserves_old_m
                 e["to"] = json!("test:replacement");
             }
         }
-        let old = h.values.get_mut(FM).unwrap()["execution_plans"]
+        let mut current = h.values.get_mut(FM).unwrap()["execution_plans"]
             .as_object_mut()
             .unwrap()
             .remove("test:t")
             .unwrap();
-        h.values.get_mut(FM).unwrap()["execution_plans"]["test:replacement"] = old;
+        current["operations"] = json!(["prepare.current", "execute.current"]);
+        h.values.get_mut(FM).unwrap()["execution_plans"]["test:replacement"] = current;
         h.values.get_mut(FM).unwrap()["test_costs"][0]["test"] = json!("replacement");
         if mapping {
-            h.values.get_mut(WORKFLOW).unwrap()["retirements"] = json!([{"kind":"test","id":"t","replacement":"replacement","reason":"preserve original execute method"}]);
+            h.values.get_mut(WORKFLOW).unwrap()["retirements"] = json!([{"kind":"test","id":"t","replacement":"replacement","reason":"current replacement owns the evolved contract"}]);
         }
         h.save();
         let (code, v) = h.run(|_| {});
@@ -556,6 +561,19 @@ fn mapped_removed_obligation_requires_successful_replacement_and_preserves_old_m
             assert_eq!(code, 0, "{}", failure_summary(&v));
             assert_eq!(v["tests"]["removed"]["test:t"], "test:replacement");
             assert_eq!(v["tests"]["tests"]["test:replacement"], "passed");
+            assert_eq!(
+                v["tests"]["executed"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|row| row["operation"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                ["prepare.current", "execute.current"]
+            );
+            assert_eq!(
+                fs::read_to_string(h.root().join(".chrono-harness/state/order")).unwrap(),
+                "pt"
+            );
         } else {
             assert_ne!(code, 0);
             assert!(v.to_string().contains("E_REQUIRED_TEST_REMOVED"));

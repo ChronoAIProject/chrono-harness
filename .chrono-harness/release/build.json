@@ -43,7 +43,6 @@
     "test.judge-routes-tests",
     "test.judge-cost-tests",
     "test.judge-mixed-tests",
-    "migration.scoped-v1-tests",
     "workflow.inventory-tests",
     "release.tests.units",
     "release.tests.integration",
@@ -492,14 +491,6 @@
       "rust_toolchain": true
     },
     {
-      "id": "verify_scoped_v1_tests",
-      "kind": "verify",
-      "operation": "migration.scoped-v1-tests",
-      "needs": [],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_scoped_v1_tests",
-      "rust_toolchain": false
-    },
-    {
       "id": "verify_workflow_inventory_tests",
       "kind": "verify",
       "operation": "workflow.inventory-tests",
@@ -604,7 +595,6 @@
       "verify_judge_routes_tests",
       "verify_judge_cost_tests",
       "verify_judge_mixed_tests",
-      "verify_scoped_v1_tests",
       "verify_workflow_inventory_tests",
       "verify_release_build_tests",
       "verify_release_build_integration",
@@ -651,7 +641,6 @@
       "verify_judge_cost_tests": "linux_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "linux_verify_judge_mixed_tests",
       "package": "linux_package",
-      "verify_scoped_v1_tests": "linux_verify_scoped_v1_tests",
       "verify_workflow_inventory_tests": "linux_verify_workflow_inventory_tests",
       "verify_release_build_tests": "linux_verify_release_build_tests",
       "verify_release_build_integration": "linux_verify_release_build_integration",
@@ -693,7 +682,6 @@
       "verify_judge_cost_tests": "macos_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "macos_verify_judge_mixed_tests",
       "package": "macos_package",
-      "verify_scoped_v1_tests": "macos_verify_scoped_v1_tests",
       "verify_workflow_inventory_tests": "macos_verify_workflow_inventory_tests",
       "verify_release_build_tests": "macos_verify_release_build_tests",
       "verify_release_build_integration": "macos_verify_release_build_integration",
@@ -736,7 +724,6 @@
     "verify_judge_cost_tests": "unmeasured",
     "verify_judge_mixed_tests": "unmeasured",
     "package": "unmeasured",
-    "verify_scoped_v1_tests": "unmeasured",
     "verify_workflow_inventory_tests": "unmeasured",
     "verify_release_build_tests": "unmeasured",
     "verify_release_build_integration": "unmeasured",
@@ -913,10 +900,6 @@
         "chrono-distribution",
         "chrono-cache"
       ]
-    },
-    "verify_scoped_v1_tests": {
-      "need": "The original migration.scoped-v1-tests Python action checks decoder inputs and historical/current registry projections without release executables.",
-      "release_assets": []
     },
     "verify_workflow_inventory_tests": {
       "need": "The original workflow.inventory-tests Python action checks explicit inventory parsing, disjoint group membership and subprocess failures with isolated fixtures, without release executables.",

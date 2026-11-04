@@ -307,119 +307,24 @@
   },
   "retirements": [
     {
-      "kind": "test",
-      "id": "ci-verify",
-      "replacement": "ci-tests",
-      "reason": "ci.verify belongs to ci and the complete ci-tests plan; historical method replacement explicitly binds its current provider."
+      "kind": "script",
+      "id": "scoped-v1",
+      "replacement": null,
+      "reason": "Retire the fixed historical scoped host decoder and its dedicated tests; current hosts use the current specification without historical support."
     },
     {
-      "kind": "script",
-      "id": "ci-verify",
-      "replacement": "ci",
-      "reason": "Retire malformed pseudo-script; actual ci method owns execution."
+      "kind": "test",
+      "id": "scoped-v1-tests",
+      "replacement": null,
+      "reason": "Joint retirement with scoped-v1; the obsolete host conversion is no longer a supported operation."
+    },
+    {
+      "kind": "test",
+      "id": "judge-projects-migration",
+      "replacement": "judge-projects-tests",
+      "reason": "Retire fixed historical-host support and its tests. The remaining current projects contract runs through its original unfiltered dedicated test action; this replacement does not claim preservation of the retired historical assertions."
     }
   ],
-  "migrations": [
-    {
-      "from_version": 1,
-      "to_version": 2,
-      "script": "scoped-v1",
-      "test": "scoped-v1-tests",
-      "mappings": [
-        {
-          "from": "script:ci-verify",
-          "to": "project:ci"
-        },
-        {
-          "from": "test:ci-verify",
-          "to": "test:ci-tests"
-        },
-        {
-          "from": "owner:ci-verify",
-          "to": "owner:ci"
-        }
-      ],
-      "reason": "Finite historical chrono-ci-check/v1 binding decoder; workflow certification remains unresolved."
-    }
-  ],
-  "historical_profiles": [
-    {
-      "id": "chrono-ci-check/v1",
-      "filemap_version": 1,
-      "profile_path": ".chrono-harness/ci/check.json",
-      "script": "scoped-v1",
-      "test": "scoped-v1-tests",
-      "mappings": [
-        {
-          "from": "script:ci-verify",
-          "to": "project:ci"
-        },
-        {
-          "from": "test:ci-verify",
-          "to": "test:ci-tests"
-        },
-        {
-          "from": "owner:ci-verify",
-          "to": "owner:ci"
-        }
-      ],
-      "legacy_records": [
-        {
-          "collection": "scripts",
-          "id": "ci-verify",
-          "definition": {
-            "id": "ci-verify",
-            "kind": "test",
-            "actions": {
-              "execute": {
-                "operation": "ci.verify",
-                "tool": "chrono-ci",
-                "argv": [
-                  "verify",
-                  "--host-root",
-                  ".",
-                  "--config",
-                  ".chrono-harness/ci/github.json"
-                ]
-              }
-            }
-          },
-          "nodes": [
-            "script:ci-verify",
-            "test:ci-verify"
-          ]
-        }
-      ],
-      "ambiguities": [],
-      "method_replacements": [
-        {
-          "from": {
-            "owner": "script:ci-verify",
-            "operation": "ci.verify",
-            "tool": "chrono-ci",
-            "argv": [
-              "verify",
-              "--host-root",
-              ".",
-              "--config",
-              ".chrono-harness/ci/github.json"
-            ]
-          },
-          "to": {
-            "owner": "project:ci",
-            "operation": "ci.verify",
-            "tool": "chrono-ci",
-            "argv": [
-              "verify",
-              "--host-root",
-              ".",
-              "--config",
-              ".chrono-harness/ci/units.json"
-            ]
-          },
-          "reason": "Preserve the ci.verify operation and complete ci-tests plan while explicitly adopting the independent-unit provider."
-        }
-      ]
-    }
-  ]
+  "migrations": [],
+  "historical_profiles": []
 }

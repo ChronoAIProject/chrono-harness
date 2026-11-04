@@ -2727,6 +2727,7 @@
       "features": [
         "default",
         "float_roundtrip",
+        "raw_value",
         "std"
       ],
       "dependencies": [

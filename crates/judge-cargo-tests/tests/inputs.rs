@@ -1692,6 +1692,90 @@ fn change_declared_link() {
 
 #[cfg(unix)]
 #[test]
+fn overlapping_directory_inventories_preserve_each_binding_and_child_boundary() {
+    use std::os::unix::fs::symlink;
+
+    for case in ["stable", "digest", "file", "children", "alias"] {
+        let mut f = Fixture::new();
+        let outer = sdk_links(&mut f);
+        save_sdk_links(&mut f, &outer);
+        let nested_root = ".chrono-harness/state/sdk/include";
+        let nested = f.root().join(nested_root);
+        symlink("header", nested.join("header-alias")).unwrap();
+        let manifest_path = ".chrono-harness/state/nested-sdk.json";
+        let manifest = json!({
+            "schema": "chrono-input-directory/v3",
+            "root": nested_root,
+            "files": [{"path": "header", "sha256": sha256(if case == "digest" {
+                b"conflicting declaration"
+            } else {
+                b"registered header"
+            })}],
+            "symlinks": [{"path": "header-alias", "target": "header", "kind": "file"}],
+            "directories": [{"path": ".", "entries": ["header", "header-alias"]}],
+        });
+        let raw = serde_json::to_vec(&manifest).unwrap();
+        fs::write(f.root().join(manifest_path), &raw).unwrap();
+        f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_NESTED_SDK"] =
+            json!(nested);
+        f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id": "nested-sdk", "location": manifest_path, "sha256": sha256(&raw)}));
+        f.values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge("input:nested-sdk", "runtime-input", "project:t"));
+        f.contract["toolchain"]["sdks"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"root": nested_root, "manifest": "nested-sdk", "environment": "CHRONO_NESTED_SDK"}));
+        let mutation = match case {
+            "file" => "std::fs::write(sdk.join(\"header\"), b\"changed\").unwrap();",
+            "children" => "std::fs::write(sdk.join(\"extra\"), b\"new child\").unwrap();",
+            "alias" => {
+                "std::fs::remove_file(sdk.join(\"header-alias\")).unwrap(); std::os::unix::fs::symlink(\"./header\", sdk.join(\"header-alias\")).unwrap();"
+            }
+            _ => "",
+        };
+        if !mutation.is_empty() {
+            let lib = f.root().join("t/src/lib.rs");
+            let mut source = fs::read_to_string(&lib).unwrap();
+            source.push_str(&format!(
+                "\n#[test] fn change_nested_inventory() {{ let sdk=std::path::PathBuf::from(std::env::var(\"CHRONO_NESTED_SDK\").unwrap()); {mutation} }}\n"
+            ));
+            fs::write(lib, source).unwrap();
+        }
+        f.save();
+        let (exit, report, stderr) = f.call();
+        if case == "stable" {
+            assert_eq!(exit, 0, "{case}: {report} {stderr}");
+            assert_eq!(report["toolchain"]["sdks"][0]["files"], 2);
+            assert_eq!(report["toolchain"]["sdks"][1]["files"], 1);
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            let expected = match case {
+                "digest" => "directory inventory digest differs",
+                "file" => "toolchain directory input changed during guarded operation",
+                "children" => "directory children differ from declaration",
+                "alias" => "directory link target changed",
+                _ => unreachable!(),
+            };
+            assert!(
+                report["error"].as_str().unwrap().contains(expected),
+                "{case}: {report} {stderr}"
+            );
+            if case == "digest" {
+                assert!(report["metadata"].is_null() && report["operation"].is_null());
+            } else {
+                assert_eq!(report["operation"]["exit_code"], 0, "{case}: {report}");
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn directory_root_retargeting_preserves_the_successful_consumer_receipt() {
     use std::os::unix::fs::symlink;
     let mut f = Fixture::new();

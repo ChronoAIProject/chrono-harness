@@ -31727,42 +31727,6 @@
         "input_set": "environment-1e0fcae1d79e"
       },
       {
-        "id": "script.scoped-v1.python-runtime",
-        "consumer": "script:scoped-v1",
-        "kind": "python-runtime",
-        "input_set": "python-runtime-d13ddff342b2"
-      },
-      {
-        "id": "script.scoped-v1.git-facts",
-        "consumer": "script:scoped-v1",
-        "kind": "git-facts",
-        "input_set": "git-facts-88fdcd1efc32"
-      },
-      {
-        "id": "script.scoped-v1.environment",
-        "consumer": "script:scoped-v1",
-        "kind": "environment",
-        "input_set": "environment-1e0fcae1d79e"
-      },
-      {
-        "id": "script.scoped-v1-tests.python-runtime",
-        "consumer": "script:scoped-v1-tests",
-        "kind": "python-runtime",
-        "input_set": "python-runtime-d13ddff342b2"
-      },
-      {
-        "id": "script.scoped-v1-tests.git-facts",
-        "consumer": "script:scoped-v1-tests",
-        "kind": "git-facts",
-        "input_set": "git-facts-88fdcd1efc32"
-      },
-      {
-        "id": "script.scoped-v1-tests.environment",
-        "consumer": "script:scoped-v1-tests",
-        "kind": "environment",
-        "input_set": "environment-1e0fcae1d79e"
-      },
-      {
         "id": "script.workflow-inventory.python-runtime",
         "consumer": "script:workflow-inventory",
         "kind": "python-runtime",
@@ -32131,18 +32095,6 @@
       {
         "id": "project.release-build-tests.runtime-identity",
         "consumer": "project:release-build-tests",
-        "kind": "runtime-identity",
-        "input_set": "runtime-identity-cd9e4903b0d3"
-      },
-      {
-        "id": "script.scoped-v1.runtime-identity",
-        "consumer": "script:scoped-v1",
-        "kind": "runtime-identity",
-        "input_set": "runtime-identity-cd9e4903b0d3"
-      },
-      {
-        "id": "script.scoped-v1-tests.runtime-identity",
-        "consumer": "script:scoped-v1-tests",
         "kind": "runtime-identity",
         "input_set": "runtime-identity-cd9e4903b0d3"
       },
@@ -32994,32 +32946,6 @@
         },
         {
           "consumer": "project:release-build-tests",
-          "domains": [
-            "python-runtime",
-            "git-facts",
-            "environment",
-            "native-provisioning",
-            "runtime-platform",
-            "retained-endpoints",
-            "delegated-tools",
-            "runtime-identity"
-          ]
-        },
-        {
-          "consumer": "script:scoped-v1",
-          "domains": [
-            "python-runtime",
-            "git-facts",
-            "environment",
-            "native-provisioning",
-            "runtime-platform",
-            "retained-endpoints",
-            "delegated-tools",
-            "runtime-identity"
-          ]
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
           "domains": [
             "python-runtime",
             "git-facts",
@@ -36614,116 +36540,6 @@
           "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
         },
         {
-          "consumer": "script:scoped-v1",
-          "domain": "python-runtime",
-          "state": "bound",
-          "bindings": [
-            "script.scoped-v1.python-runtime"
-          ],
-          "reason": "Original explicit file inventory membership, with every listed native digest obtained from retained macOS records. Runtime consumers and full closure remain unverified."
-        },
-        {
-          "consumer": "script:scoped-v1",
-          "domain": "git-facts",
-          "state": "bound",
-          "bindings": [
-            "script.scoped-v1.git-facts"
-          ],
-          "reason": "Preserved consumer/input IDs; external bindings are authored only from authentic macOS acquisition originals. Required null hashes remain unresolved and fail their actual consumers; this row does not certify native execution."
-        },
-        {
-          "consumer": "script:scoped-v1",
-          "domain": "environment",
-          "state": "bound",
-          "bindings": [
-            "script.scoped-v1.environment"
-          ],
-          "reason": "Preserved consumer/input IDs; external bindings are authored only from authentic macOS acquisition originals. Required null hashes remain unresolved and fail their actual consumers; this row does not certify native execution."
-        },
-        {
-          "consumer": "script:scoped-v1",
-          "domain": "native-provisioning",
-          "state": "unresolved",
-          "bindings": [],
-          "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
-        },
-        {
-          "consumer": "script:scoped-v1",
-          "domain": "runtime-platform",
-          "state": "unresolved",
-          "bindings": [],
-          "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
-        },
-        {
-          "consumer": "script:scoped-v1",
-          "domain": "retained-endpoints",
-          "state": "unresolved",
-          "bindings": [],
-          "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
-        },
-        {
-          "consumer": "script:scoped-v1",
-          "domain": "delegated-tools",
-          "state": "unresolved",
-          "bindings": [],
-          "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
-          "domain": "python-runtime",
-          "state": "bound",
-          "bindings": [
-            "script.scoped-v1-tests.python-runtime"
-          ],
-          "reason": "Original explicit file inventory membership, with every listed native digest obtained from retained macOS records. Runtime consumers and full closure remain unverified."
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
-          "domain": "git-facts",
-          "state": "bound",
-          "bindings": [
-            "script.scoped-v1-tests.git-facts"
-          ],
-          "reason": "Preserved consumer/input IDs; external bindings are authored only from authentic macOS acquisition originals. Required null hashes remain unresolved and fail their actual consumers; this row does not certify native execution."
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
-          "domain": "environment",
-          "state": "bound",
-          "bindings": [
-            "script.scoped-v1-tests.environment"
-          ],
-          "reason": "Preserved consumer/input IDs; external bindings are authored only from authentic macOS acquisition originals. Required null hashes remain unresolved and fail their actual consumers; this row does not certify native execution."
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
-          "domain": "native-provisioning",
-          "state": "unresolved",
-          "bindings": [],
-          "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
-          "domain": "runtime-platform",
-          "state": "unresolved",
-          "bindings": [],
-          "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
-          "domain": "retained-endpoints",
-          "state": "unresolved",
-          "bindings": [],
-          "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
-          "domain": "delegated-tools",
-          "state": "unresolved",
-          "bindings": [],
-          "reason": "Initial macOS acquisition is observed/governance-not-evaluated; this domain still requires its original native/full producer and consumer."
-        },
-        {
           "consumer": "script:workflow-inventory",
           "domain": "python-runtime",
           "state": "bound",
@@ -37600,24 +37416,6 @@
           "state": "bound",
           "bindings": [
             "project.release-build-tests.runtime-identity"
-          ],
-          "reason": "Preserved consumer/input IDs; external bindings are authored only from authentic macOS acquisition originals. Required null hashes remain unresolved and fail their actual consumers; this row does not certify native execution."
-        },
-        {
-          "consumer": "script:scoped-v1",
-          "domain": "runtime-identity",
-          "state": "bound",
-          "bindings": [
-            "script.scoped-v1.runtime-identity"
-          ],
-          "reason": "Preserved consumer/input IDs; external bindings are authored only from authentic macOS acquisition originals. Required null hashes remain unresolved and fail their actual consumers; this row does not certify native execution."
-        },
-        {
-          "consumer": "script:scoped-v1-tests",
-          "domain": "runtime-identity",
-          "state": "bound",
-          "bindings": [
-            "script.scoped-v1-tests.runtime-identity"
           ],
           "reason": "Preserved consumer/input IDs; external bindings are authored only from authentic macOS acquisition originals. Required null hashes remain unresolved and fail their actual consumers; this row does not certify native execution."
         },
@@ -38756,12 +38554,6 @@
         ],
         "report_path": ".chrono-harness/state/native/macos/units/judge-projects/check.json"
       },
-      "scoped-v1": {
-        "tests": [
-          "test:scoped-v1-tests"
-        ],
-        "report_path": ".chrono-harness/state/native/macos/units/scoped-v1/check.json"
-      },
       "judge-cost": {
         "tests": [
           "test:judge-cost-tests"
@@ -38857,19 +38649,12 @@
           "test:cache-tests"
         ],
         "report_path": ".chrono-harness/state/native/macos/units/cache/check.json"
-      },
-      "judge-projects-migration": {
-        "tests": [
-          "test:judge-projects-migration"
-        ],
-        "report_path": ".chrono-harness/state/native/macos/units/judge-projects-migration/check.json"
       }
     },
     "shared_operations": {
       "build.ci": [
         "ci",
         "judge-projects",
-        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units",
@@ -38886,8 +38671,7 @@
         "ci",
         "judge-cargo",
         "judge-ci",
-        "judge-projects",
-        "judge-projects-migration"
+        "judge-projects"
       ],
       "build.judge-cost": [
         "inputs",
@@ -38905,7 +38689,6 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
-        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -38923,7 +38706,6 @@
         "judge-cargo",
         "judge-filemap",
         "judge-projects",
-        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -38936,7 +38718,6 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
-        "judge-projects-migration",
         "judge-registration",
         "judge-workflow",
         "judge-workflow-short",
@@ -38947,7 +38728,6 @@
         "judge-cargo",
         "judge-filemap",
         "judge-projects",
-        "judge-projects-migration",
         "judge-routes",
         "judge-workflow",
         "judge-workflow-short",
@@ -38969,7 +38749,6 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
-        "judge-projects-migration",
         "judge-registration",
         "judge-workflow",
         "judge-workflow-short",
@@ -39018,18 +38797,6 @@
       "worktree.inventory": [
         "worktree",
         "worktree-adoption"
-      ],
-      "fmt.judge-projects": [
-        "judge-projects",
-        "judge-projects-migration"
-      ],
-      "fmt.judge-projects-tests": [
-        "judge-projects",
-        "judge-projects-migration"
-      ],
-      "projects.inventory": [
-        "judge-projects",
-        "judge-projects-migration"
       ],
       "build.cache": [
         "cache",

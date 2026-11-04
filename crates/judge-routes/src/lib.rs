@@ -611,74 +611,15 @@ pub fn global_selection(
     deferred: bool,
 ) -> Result<BTreeSet<String>, String> {
     let mut selected: BTreeSet<_> = impact.tests.iter().cloned().collect();
-    let replacements = chrono_judge_registration::replacements(r)?;
-    let requests = chrono_judge_registration::retirement_requests(r)?;
     for test in &impact.retired_tests {
-        match requests.get(test) {
-            Some(Some(replacement)) => {
-                selected.insert(replacement.clone());
+        match chrono_judge_registration::validate_test_retirement(old, r, test)? {
+            Some(replacement) => {
+                selected.insert(replacement);
             }
-            Some(None) if deferred => {}
-            _ => return Err(format!("E_REQUIRED_TEST_REMOVED: {test}")),
-        }
-    }
-    let candidate_plans = chrono_judge_registration::execution::plans(r.filemap())?;
-    for required in &impact.required_tests {
-        // Explicit method replacement or joint retirement is adjudicated by the
-        // registered downstream validator; historical methods are retained data.
-        if deferred && requests.contains_key(&required.node) && !required.candidate_present {
-            continue;
-        }
-        let definitions = &impact.nodes[&required.node].base_definitions;
-        if deferred
-            && definitions.len() > 1
-            && chrono_judge_registration::ambiguity_repaired(
-                &r,
-                &required.node,
-                &definitions
-                    .iter()
-                    .map(|d| d.identity.clone())
-                    .collect::<Vec<_>>(),
-            )
-        {
-            continue;
-        }
-
-        let target = replacements.get(&required.node).unwrap_or(&required.node);
-        if required.candidate_present
-            && !impact.nodes[&required.node]
-                .base_definitions
-                .iter()
-                .skip(1)
-                .next()
-                .is_some()
-        {
-            continue;
-        }
-        let plan = candidate_plans
-            .get(target)
-            .ok_or("E_REQUIRED_TEST_REMOVED: missing replacement plan")?;
-        for definition in &impact.nodes[&required.node].base_definitions {
-            if let Some(operation) = definition.value["actions"]["execute"]["operation"].as_str() {
-                if !plan.operations.iter().any(|op| op == operation) {
-                    return Err(format!(
-                        "E_REQUIRED_TEST_REMOVED: replacement omits old execute obligation {operation}"
-                    ));
-                }
-            }
-        }
-        if let Some(old_plan) = old
-            .filemap()
-            .get("execution_plans")
-            .and_then(|p| p.get(&required.node))
-        {
-            for operation in old_plan["operations"].as_array().unwrap() {
-                if !plan.operations.iter().any(|op| operation == op) {
-                    return Err(
-                        "E_REQUIRED_TEST_REMOVED: replacement omits historical prerequisite".into(),
-                    );
-                }
-            }
+            // The downstream validator approves joint removal after consuming
+            // current execution results; historical methods remain input data.
+            None if deferred => {}
+            None => return Err(format!("E_REQUIRED_TEST_REMOVED: {test}")),
         }
     }
     Ok(selected)

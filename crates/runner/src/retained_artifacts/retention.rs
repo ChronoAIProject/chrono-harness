@@ -9,6 +9,7 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -97,11 +98,62 @@ struct Output {
     #[serde(default)]
     overflow_disposal: bool,
 }
+
+// One admitted ledger owns both representations of each output. Unchanged rows
+// can retain their exact validated JSON through its durable writes; requesting
+// mutable access invalidates only that row. Every new admission still reads and
+// decodes the complete current inventory under the existing exclusion lease.
+#[derive(Clone)]
+struct OutputRecord {
+    value: Output,
+    encoded: RefCell<Option<Arc<serde_json::value::RawValue>>>,
+}
+impl From<Output> for OutputRecord {
+    fn from(value: Output) -> Self {
+        Self {
+            value,
+            encoded: RefCell::new(None),
+        }
+    }
+}
+impl std::ops::Deref for OutputRecord {
+    type Target = Output;
+    fn deref(&self) -> &Output {
+        &self.value
+    }
+}
+impl std::ops::DerefMut for OutputRecord {
+    fn deref_mut(&mut self) -> &mut Output {
+        *self.encoded.get_mut() = None;
+        &mut self.value
+    }
+}
+impl Serialize for OutputRecord {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut encoded = self.encoded.borrow_mut();
+        if encoded.is_none() {
+            *encoded = Some(Arc::from(
+                serde_json::value::to_raw_value(&self.value).map_err(serde::ser::Error::custom)?,
+            ));
+        }
+        encoded.as_deref().unwrap().serialize(serializer)
+    }
+}
+impl<'de> Deserialize<'de> for OutputRecord {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let encoded = Box::<serde_json::value::RawValue>::deserialize(deserializer)?;
+        let value = serde_json::from_str(encoded.get()).map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            value,
+            encoded: RefCell::new(Some(Arc::from(encoded))),
+        })
+    }
+}
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Ledger {
     policy_sha256: String,
-    outputs: Vec<Output>,
+    outputs: Vec<OutputRecord>,
     #[serde(deserialize_with = "strict_roots")]
     roots: BTreeMap<String, Vec<String>>,
     #[serde(deserialize_with = "strict_summaries")]
@@ -622,7 +674,7 @@ impl Inventory {
             }
             l.roots.insert(role.clone(), vec![id.clone()]);
         }
-        l.outputs.push(object);
+        l.outputs.push(object.into());
         // Reservation is durable before the capability file is created. No producer
         // receives a capability until its exact identity has been attached.
         self.save(&l, &gate)?;
@@ -1556,7 +1608,7 @@ impl Inventory {
             })();
             match effect {
                 Ok(true) => {
-                    let o = l.outputs.remove(i);
+                    let o = l.outputs.remove(i).value;
                     let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null,"large_original_recheck":if o.length.is_some_and(|n|n>self.policy.max_bytes_per_round) {"sealed-identity-and-content-stamp; digest-not-reread"} else {"not-applicable"}});
                     disposed.push(summary.clone());
                     l.summaries.push(summary);
@@ -1961,6 +2013,7 @@ impl Publication {
             .iter_mut()
             .find(|o| o.id == self.id)
             .ok_or("publication identity missing")?;
+        let o = &mut **o;
         let path = no_symlink_parents(&self.inventory.root, &o.path)?;
         if identity(&path)? != o.identity {
             return Err("publication output identity changed".into());

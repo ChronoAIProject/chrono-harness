@@ -35,7 +35,7 @@
 
 候选必须已提交且检出干净。`--unit ID` 和无值 `--collect` 是同一入口的单元／汇总模式，汇总不重执行业务。schema4 从 config.json 的 `canonical_check` 选择 profile 与输入 action；`CHRONO_CHECK_SOURCE` 未设或 `local` 使用登记 worktree 生产者，`ci` 使用登记 CI 事件生产者，其余值或缺输入失败，不猜范围或回退。本地固定登记 remote 的 workflow target 和 clean HEAD；不手工 prepare。
 
-本宿主采用 scoped `chrono-ci-check/v3`、26 个单元、一个 DELTA detector 和 always aggregate，只要求 `chrono / collection`。开发／integration 分支通过指向 dev 的 PR 检查；push 只验 dev 落地 DELTA。parent 按 PR 号替换旧运行，push 按 run ID 保留各次 before/after。单元／报告归 check.json，拓扑／共享启动／上传归 units.json；[CI 单元所有者](../../docs/ci-units.md#conditional-jobs-and-the-required-aggregate)拥有原始 producer/artifact attempt 核验、成功前置沿用及共享安装合同，不能按当前重跑 attempt 猜产物。业务构建仍归独立计划，本地／发布保留源码构建。
+本宿主采用 scoped `chrono-ci-check/v3`、24 个单元、一个 DELTA detector 和 always aggregate，只要求 `chrono / collection`。开发／integration 分支通过指向 dev 的 PR 检查；push 只验 dev 落地 DELTA。parent 按 PR 号替换旧运行，push 按 run ID 保留各次 before/after。单元／报告归 check.json，拓扑／共享启动／上传归 units.json；[CI 单元所有者](../../docs/ci-units.md#conditional-jobs-and-the-required-aggregate)拥有原始 producer/artifact attempt 核验、成功前置沿用及共享安装合同，不能按当前重跑 attempt 猜产物。业务构建仍归独立计划，本地／发布保留源码构建。
 
 检查退出 0 须有有效 passing response；判官失败为 1，用法／配置／运输／协议／报告 IO 失败为 2。本宿主采用 `retained-reference/v2`：固定 check.json 引用原报告，报告引用 stdout／stderr 原字节；消费者核原件／流摘要后从原 stdout 解码，上传完整登记目录。`report_bytes` 约束元数据＋两流总量，固定引用另受同一上限约束。详见[报告消费](../../docs/ci-units.md#offline-collection)；生成／上传成功不等于检查通过。
 
@@ -68,7 +68,7 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 | 当前任务 | 自然所有者文档与材料条件 |
 | --- | --- |
 | 改登记、执行计划或测试 | [影响闭包](../../docs/filemap-impact.md)、[执行／分组／语言](../../docs/execution.md)、[单元库存](../../docs/ci-units.md)：本宿主 cap=2，不越依赖、共享 claim 或登记时限；跨调用隔离归调用方。分组、真实未过滤库存与原断言／线程／发布操作的保留合同在单元文档；语言声明不证明其余跨语言逻辑已迁移。 |
-| 改输入、Cargo 或 full 采用 | [输入与 parity](../../docs/inputs.md)、[Cargo guarded](../../docs/cargo-projects.md)、[Git facts](../../docs/git-facts.md)、[full CI](../../docs/full-ci.md)：快照不补依赖／改预期摘要／启用治理；candidate decoder 消费历史数据，不执行旧判官。full unscoped 需原 origin receipt／历史证据，缺失失败。解码测试由 `.chrono-harness/migrations/test-hosts.json` 显式选平台，未知平台不回退、不以实测版本生成预期；Linux fixture 不表示主宿主 full 采用。 |
+| 改输入、Cargo 或 full 采用 | [输入与 parity](../../docs/inputs.md)、[Cargo guarded](../../docs/cargo-projects.md)、[Git facts](../../docs/git-facts.md)、[full CI](../../docs/full-ci.md)：快照不补依赖／改预期摘要／启用治理；candidate decoder 消费历史数据，不执行旧判官。full unscoped 需原 origin receipt／历史证据，缺失失败。旧 scoped 宿主的专用解码器、工具 fixture、历史对象获取和迁移测试已退役；当前 projects 测试使用原未过滤 action。通用转换接口由自含合成 fixture 验证，不获取旧仓库，也不形成历史兼容入口。 |
 | 改 CI 缓存 | [缓存所有者](../../docs/ci-cache.md)：普通 plan/restore、producer-manifest 内容验证、失败恢复、原构建／测试、seal/save 和原始 outcome 报告保持；专属 Variables／PR 正文激活、manifest-removal fixture 及新增权限依赖已按用户要求退役，不增加替代入口。历史 C1 对两项缓存观察到坏内容保存／恢复／拒绝、重建与替换缓存，但原兼容域健康精确命中未达成（rustup 身份变化，最新 collection HTTP 502），保留部分结论及原件。外部所有权、linked transport 租约、其它消费者及完整验收仍未完成；只支持 primary checkout。缓存测试只在失败时保留原 fixture／探测配置／报告。 |
 | 改发布或消费关系 | [发布所有者](../../docs/release-ci.md)：v5 显式 needs／rust_toolchain／verification_consumers、原未过滤操作与 producer/run/attempt、失败证据；declared 不证明必要性，本地／原生／公开采用分别验收。 |
 | 读成本或排查失败 | [汇总观察](../../docs/ci-units.md#github-projection-and-transport)、[诊断边界](../../docs/diagnostics.md)：读原件；当前 attempt API 视图可含沿用结果，新 job ID 不证明重跑。canonical-check 含构建／测试／汇总，读数不是完整历史、重跑成本、计费或全流程总量，告警不证明冗余／节省。 |

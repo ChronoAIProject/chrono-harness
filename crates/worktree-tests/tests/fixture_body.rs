@@ -188,6 +188,46 @@ fn concurrent_original_publications_keep_both_body_registrations() {
 }
 
 #[test]
+fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
+    let h = host();
+    let (store, first) = allocation(&h);
+    let (_, middle) = allocation(&h);
+    let (_, last) = allocation(&h);
+    for allocation in [&first, &middle, &last] {
+        copy(&store, allocation.path(), "first.bin");
+    }
+    for allocation in [&first, &last] {
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", allocation.path())
+            .unwrap()
+            .acquire(
+                "actual-diagnostic",
+                "unrelated allocation still has a consumer",
+            )
+            .unwrap();
+    }
+    let before = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let original = copy(&store, middle.path(), "second.bin");
+    let after = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    assert_eq!(after["objects"].as_array().unwrap().len(), 3);
+    assert_eq!(after["objects"][0], before["objects"][0]);
+    assert_eq!(after["objects"][2], before["objects"][2]);
+    assert_eq!(after["objects"][1]["bodies"].as_object().unwrap().len(), 2);
+    assert_eq!(fs::read(original).unwrap(), [0, 255, 7, 8]);
+    for allocation in [&first, &middle, &last] {
+        assert_eq!(
+            fs::read(allocation.path().join("first.bin")).unwrap(),
+            [0, 255, 7, 8]
+        );
+    }
+    for allocation in [&first, &last] {
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", allocation.path())
+            .unwrap()
+            .release("actual-diagnostic", "copy-preservation assertion consumed")
+            .unwrap();
+    }
+}
+
+#[test]
 fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() {
     for drift in [
         "allocation",
@@ -263,6 +303,57 @@ fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() 
         .unwrap();
         assert_eq!(fs::read(admitted).unwrap(), bytes);
     }
+}
+
+#[test]
+fn same_length_body_declaration_change_refuses_cached_registration() {
+    let h = host();
+    let (store, allocation) = allocation(&h);
+    let root = allocation.path();
+    let original = copy(&store, root, "body.bin");
+    let source = root.join("real-source");
+    let destination = root.join("body.bin");
+    let path = store.join("objects.json");
+    let before = fs::read(&path).unwrap();
+    let registry = json(&before).unwrap();
+    let digest = registry["objects"][0]["bodies"]["body.bin"]["sha256"]
+        .as_str()
+        .unwrap();
+    let replacement = if digest == "a".repeat(64) { "b" } else { "a" }.repeat(64);
+    let marker = format!(r#""sha256":"{digest}""#);
+    let text = std::str::from_utf8(&before).unwrap();
+    assert_eq!(text.matches(&marker).count(), 1);
+    let damaged = text.replacen(&marker, &format!(r#""sha256":"{replacement}""#), 1);
+    assert_eq!(damaged.len(), before.len());
+    fs::write(&path, &damaged).unwrap();
+    let error = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        &source,
+        &destination,
+        Some(root),
+        "actual Rust fixture copy",
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("copied body registration changed"),
+        "{error}"
+    );
+    assert_eq!(fs::read(&path).unwrap(), damaged.as_bytes());
+    assert_eq!(fs::read(&destination).unwrap(), [0, 255, 7, 8]);
+    assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
+    fs::write(&path, &before).unwrap();
+    let restored = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        &source,
+        &destination,
+        Some(root),
+        "actual Rust fixture copy",
+    )
+    .unwrap();
+    assert_eq!(restored, original);
+    assert_eq!(fs::read(&path).unwrap(), before);
 }
 
 #[test]

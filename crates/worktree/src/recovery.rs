@@ -383,14 +383,19 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
         "fetch_intent",
         "cache_intent",
         "main_cache_release",
+        "managed_use_receipt",
     ] {
         if let Some(path) = report[binding]["path"].as_str() {
             originals.push(path.into());
         }
     }
-    for item in report["drain"].as_array().into_iter().flatten() {
-        if let Some(path) = item["receipt"]["path"].as_str() {
-            originals.push(path.into());
+    for pass in [report, &report["post_use_cleanup"]] {
+        for field in ["drain", "producer_drains"] {
+            for item in pass[field].as_array().into_iter().flatten() {
+                if let Some(path) = item["receipt"]["path"].as_str() {
+                    originals.push(path.into());
+                }
+            }
         }
     }
     inventory.dependencies_paths(path, &originals)?;

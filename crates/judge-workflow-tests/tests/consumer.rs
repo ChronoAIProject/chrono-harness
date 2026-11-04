@@ -562,13 +562,29 @@ fn legal_joint_retirement_preserves_old_cost_without_executing_absent_test() {
     );
 }
 #[test]
-fn retirement_request_without_joint_producer_declaration_fails_at_validator() {
+fn retirement_request_without_joint_producer_declaration_fails_before_operations() {
     let mut h = host();
     retire(&mut h, false);
     let (e, r) = run(&h, "integration", None, |_| {});
-    assert_eq!(e, 1, "{}", r["findings"]);
+    // Routes rejects the invalid structure before projects can run; the
+    // runner reports the blocked dependent judges as an incomplete check.
+    assert_eq!(e, 2, "{}", report_diagnostics(&r));
     assert!(r["findings"].to_string().contains("E_RETIREMENT"));
+    let judges = r["judges"].as_array().unwrap();
+    let routes = judges.iter().find(|j| j["id"] == "routes").unwrap();
+    assert_eq!(routes["response"]["status"], "fail");
+    assert!(
+        routes["response"]["findings"]
+            .to_string()
+            .contains("E_RETIREMENT")
+    );
+    for id in ["projects", "workflow"] {
+        let judge = judges.iter().find(|j| j["id"] == id).unwrap();
+        assert_eq!(judge["state"], "blocked", "{id}: {judge}");
+        assert!(judge["process"].is_null(), "{id}: {judge}");
+    }
     assert!(workflow(&r).is_null());
+    assert!(!h.root().join(".chrono-harness/state/order").exists());
 }
 #[test]
 fn replacement_can_change_method_and_prerequisite_after_explicit_retirement() {
@@ -721,11 +737,11 @@ fn changed_base_rejects_old_integration_binding() {
 }
 fn migration_host() -> Host {
     let mut h = host();
-    let decoder = fs::read(source().join(".chrono-harness/migrations/scoped-v1.py")).unwrap();
-    let code = "import runpy,json,copy\nf=runpy.run_path('.chrono-harness/decoder.py')['convert']\nr=json.load(open('.chrono-harness/case.json'))\no=f(r)\nassert o['values']['.chrono-harness/FILEMAP.json']['schema_version']==2\nassert o['values']['.chrono-harness/FILEMAP.json']['execution_plans']['test:t']['operations']==['prepare.p','execute.t']\nbad=copy.deepcopy(r)\nbad['profile_value']['schema']='unsupported'\ntry:\n f(bad)\nexcept ValueError:\n pass\nelse:\n raise AssertionError('bad profile accepted')\n";
+    let decoder = include_bytes!("fixtures/transition_decoder.py").as_slice();
+    let checks = include_bytes!("fixtures/transition_decoder_tests.py").as_slice();
     for (path, bytes) in [
-        (".chrono-harness/decoder.py", decoder.as_slice()),
-        (".chrono-harness/decoder-tests.py", code.as_bytes()),
+        (".chrono-harness/decoder.py", decoder),
+        (".chrono-harness/decoder-tests.py", checks),
         (".chrono-harness/case.json", b"{}".as_slice()),
         (".chrono-harness/profile.json", b"{}".as_slice()),
     ] {

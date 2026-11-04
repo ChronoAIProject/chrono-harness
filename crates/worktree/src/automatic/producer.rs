@@ -1,5 +1,6 @@
 //! Explicit producer records consumed by the existing lifecycle drain. No discovery.
 use super::*;
+use std::sync::{Arc, Mutex};
 mod body;
 
 #[derive(Clone, Deserialize)]
@@ -57,14 +58,14 @@ struct Object {
     bodies: BTreeMap<String, body::Body>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Registry {
+struct Registry<T = Object> {
     schema: String,
     producer: String,
     directory_id: String,
     lease_id: String,
-    objects: Vec<Object>,
+    objects: Vec<T>,
 }
 
 // Decode typed members directly. Large copied-body maps otherwise construct
@@ -109,9 +110,22 @@ where
 
 struct Store {
     directory: PathBuf,
-    registry: Registry,
+    registry: Registry<Arc<Object>>,
+    // Validated serialized declarations paired with their decoded objects.
+    // Updating one allocation need not encode every unrelated copied body again.
+    serialized_objects: Vec<Arc<serde_json::value::RawValue>>,
     lease: Lease,
 }
+
+struct DecodedSnapshot {
+    directory: PathBuf,
+    registry: Registry<Arc<Object>>,
+    serialized_objects: Vec<Arc<serde_json::value::RawValue>>,
+}
+
+// One derived snapshot, bounded to the last store and this process lifetime.
+// Current bytes are still read under the registry lease on every admission.
+static DECODED: Mutex<Option<Arc<DecodedSnapshot>>> = Mutex::new(None);
 
 // The physical store already exists. Lock it before examining birth state, so
 // publishing the named lease cannot expose an unlocked, unexplained birth to
@@ -246,7 +260,7 @@ impl Store {
         // This one excluded read supplies the admitted identity. Existing state
         // must bind the held lease below before any publication; an absent lease
         // beside an existing registry is never created, nor an unknown one adopted.
-        let registry: Registry = match fs::read(&path) {
+        let serialized: Registry<Box<serde_json::value::RawValue>> = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| e.to_string())?,
             Err(e)
                 if absent && lease.newly_created() && e.kind() == std::io::ErrorKind::NotFound =>
@@ -267,6 +281,44 @@ impl Store {
                 ));
             }
         };
+        let previous = DECODED
+            .lock()
+            .map_err(|_| "producer decoded snapshot lock poisoned")?
+            .clone()
+            .filter(|previous| {
+                previous.directory == directory
+                    && previous.registry.schema == serialized.schema
+                    && previous.registry.producer == serialized.producer
+                    && previous.registry.directory_id == serialized.directory_id
+                    && previous.registry.lease_id == serialized.lease_id
+            });
+        let objects = serialized
+            .objects
+            .iter()
+            .enumerate()
+            .map(|(index, object)| {
+                if let Some(previous) = &previous {
+                    if let (Some(bytes), Some(decoded)) = (
+                        previous.serialized_objects.get(index),
+                        previous.registry.objects.get(index),
+                    ) {
+                        if bytes.get() == object.get() {
+                            return Ok(Arc::clone(decoded));
+                        }
+                    }
+                }
+                serde_json::from_str(object.get())
+                    .map(Arc::new)
+                    .map_err(|e| format!("producer registry object {index}: {e}"))
+            })
+            .collect::<Result<Vec<Arc<Object>>, String>>()?;
+        let registry = Registry {
+            schema: serialized.schema,
+            producer: serialized.producer,
+            directory_id: serialized.directory_id,
+            lease_id: serialized.lease_id,
+            objects,
+        };
         observer("registry-read-returned");
         if registry.schema != "chrono-retained-producer/v1"
             || registry.producer != producer
@@ -286,11 +338,30 @@ impl Store {
             }
         }
         observer("store-open-returned");
-        Ok(Self {
+        let store = Self {
             directory: directory.into(),
             registry,
+            serialized_objects: serialized.objects.into_iter().map(Arc::from).collect(),
             lease,
-        })
+        };
+        store.remember()?;
+        Ok(store)
+    }
+
+    fn remember(&self) -> Result<(), String> {
+        let snapshot = Arc::new(DecodedSnapshot {
+            directory: self.directory.clone(),
+            registry: self.registry.clone(),
+            serialized_objects: self.serialized_objects.clone(),
+        });
+        // Retire the prior snapshot outside the mutex, including when another
+        // producer replaces this one slot. No IO runs under the cache mutex.
+        let previous = DECODED
+            .lock()
+            .map_err(|_| "producer decoded snapshot lock poisoned")?
+            .replace(snapshot);
+        drop(previous);
+        Ok(())
     }
 
     fn stable(&self, object: &Object) -> Result<(), String> {
@@ -372,17 +443,44 @@ impl Store {
         Ok(())
     }
 
-    fn save(&self) -> Result<(), String> {
+    fn save(&mut self, changed: usize) -> Result<(), String> {
         self.lease.stable()?;
-        // Registry consumers use JSON values, not formatting. Preserve the same
-        // durable replacement while avoiding a pretty-printed full inventory.
-        let bytes = serde_json::to_vec(&self.registry).map_err(|e| e.to_string())?;
+        let previous = self.serialized_objects.len();
+        let append = changed == previous && self.registry.objects.len() == previous + 1;
+        if !append && !(changed < previous && self.registry.objects.len() == previous) {
+            return Err("producer save must replace or append one exact object".into());
+        }
+        let updated: Arc<serde_json::value::RawValue> =
+            serde_json::value::to_raw_value(&self.registry.objects[changed])
+                .map_err(|e| e.to_string())?
+                .into();
+        let mut objects: Vec<_> = self.serialized_objects.iter().map(Arc::as_ref).collect();
+        if append {
+            objects.push(updated.as_ref());
+        } else {
+            objects[changed] = updated.as_ref();
+        }
+        let publication = Registry {
+            schema: self.registry.schema.clone(),
+            producer: self.registry.producer.clone(),
+            directory_id: self.registry.directory_id.clone(),
+            lease_id: self.registry.lease_id.clone(),
+            objects,
+        };
+        let bytes = serde_json::to_vec(&publication).map_err(|e| e.to_string())?;
         write_bytes(
             &no_symlink_parents(&self.directory, "objects.json")?,
             &bytes,
             false,
         )?;
-        Ok(())
+        // A drain can update several objects before dropping this store. Later
+        // replacements must include the earlier successful publications.
+        if append {
+            self.serialized_objects.push(updated);
+        } else {
+            self.serialized_objects[changed] = updated;
+        }
+        self.remember()
     }
 
     fn receipt(&self, prefix: &str, value: &Value) -> Result<Receipt, String> {
@@ -586,7 +684,7 @@ impl RetainedArtifact {
                 "evidence_disposal":"not-authorized"
             }),
         )?;
-        store.registry.objects.push(Object {
+        store.registry.objects.push(Arc::new(Object {
             path: object.clone(),
             identity,
             intent,
@@ -607,8 +705,8 @@ impl RetainedArtifact {
             attempts: vec![],
             cache_lease: None,
             bodies: BTreeMap::new(),
-        });
-        store.save()?;
+        }));
+        store.save(store.registry.objects.len() - 1)?;
         Ok(Self {
             directory: directory.into(),
             producer: producer.into(),
@@ -684,11 +782,12 @@ impl RetainedArtifact {
                 "generated":generated,"evidence":evidence
             }),
         )?;
-        store.registry.objects[i].publication = Some(publication);
-        store.registry.objects[i].generated = generated;
-        store.registry.objects[i].evidence = evidence;
-        store.registry.objects[i].sealed = true;
-        store.save()
+        let object = Arc::make_mut(&mut store.registry.objects[i]);
+        object.publication = Some(publication);
+        object.generated = generated;
+        object.evidence = evidence;
+        object.sealed = true;
+        store.save(i)
     }
 
     pub fn acquire(&self, consumer: &str, reason: &str) -> Result<(), String> {
@@ -742,15 +841,17 @@ impl RetainedArtifact {
             "path":object.path,"identity":object.identity,"intent":object.intent,
             "consumer":consumer,"released":released,"reason":reason}),
         )?;
-        store.registry.objects[i].consumers.insert(
-            consumer.into(),
-            Reference {
-                released,
-                reason: reason.into(),
-                receipt: Some(receipt),
-            },
-        );
-        store.save()
+        Arc::make_mut(&mut store.registry.objects[i])
+            .consumers
+            .insert(
+                consumer.into(),
+                Reference {
+                    released,
+                    reason: reason.into(),
+                    receipt: Some(receipt),
+                },
+            );
+        store.save(i)
     }
 }
 
@@ -818,7 +919,7 @@ impl TemporaryHost {
                 "producer_outcome":"not-established","task_completion":"not-claimed"
             }),
         )?;
-        store.registry.objects.push(Object {
+        store.registry.objects.push(Arc::new(Object {
             path: object,
             identity,
             intent,
@@ -833,8 +934,8 @@ impl TemporaryHost {
             attempts: vec![],
             cache_lease: Some(binding),
             bodies: BTreeMap::new(),
-        });
-        store.save()?;
+        }));
+        store.save(store.registry.objects.len() - 1)?;
         Ok(Self { path, lease })
     }
 
@@ -1362,17 +1463,18 @@ impl ProducerPolicy {
                                     .into(),
                             );
                         }
-                        current.registry.objects[i].attempts.push(
+                        let updated = Arc::make_mut(&mut current.registry.objects[i]);
+                        updated.attempts.push(
                             serde_json::from_value(attempt["receipt"].clone())
                                 .map_err(|e| e.to_string())?,
                         );
-                        current.registry.objects[i].disposed = attempt["status"] == "cleaned";
+                        updated.disposed = attempt["status"] == "cleaned";
                         if attempt["status"] != "cleaned" {
                             failures.push(attempt["error"].to_string());
                         }
                         row["status"] = attempt["status"].clone();
                         row["cleanup"] = attempt;
-                        current.save()?;
+                        current.save(i)?;
                         if object.cache_lease.is_some() {
                             drop(store.take());
                         }

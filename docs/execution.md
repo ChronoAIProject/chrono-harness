@@ -41,13 +41,10 @@ plan DELTA impact in full and scoped checks, and collection reconstructs both th
 registered overrides and resolved operation bounds without business execution.
 
 The current coordinator startup plan contains `host.bootstrap-tests` and
-`host.bootstrap-real-consumer`, each at 900 seconds/1048576 bytes. The existing
-full-host migration consumer additionally lists `build.distribution`, explicitly bounded at 600 seconds/1048576 bytes, while
-its startup test keeps the 900-second default. The distribution and release
-integration plans keep their original 600-second defaults. A compatible candidate
-decoder supports that input without copying the older host's source or changing
-the coordinator's startup policy. Candidate checks and local migration do not
-establish compatible public release, native acceptance or full governance adoption.
+`host.bootstrap-real-consumer`, each at 900 seconds/1048576 bytes. The distribution
+and release integration plans keep their 600-second defaults. The historical
+full-host migration plan is retired. Plan execution does not establish public
+release, native acceptance or full governance adoption.
 
 FILEMAP v2 may additionally declare one `execution_scheduling` policy:
 
@@ -72,6 +69,19 @@ paths). Missing, unknown, duplicate, ambiguous and invalid declarations fail
 before business tool observation or launch. There is no language, directory,
 call-graph or test discovery. All resource claims are exclusive; equal or nested
 output namespaces conflict. The declaration remains responsible for completeness.
+
+This host declares `coordinator-fixture-producers` for the CI, projects, workflow
+and worktree test operations that publish into its retained fixture stores. The
+worktree adoption native Cargo survival regression also invokes the actual source
+coordinator's `maintain`, which drains those same stores. Their existing separate
+suite inventory claims did not exclude that shared effect. The shared claim now
+prevents overlap within one canonical invocation; callers must still serialize
+independent lifecycle/check invocations using that coordinator. This policy
+correction preserves the operation cap, internal test threads, assertions and
+lease deadlines. Its required validation is the candidate canonical DELTA and
+native check; additional elapsed/CI cost is unknown. The earlier two projects
+registry-lease refusals remain original failures, without an established exact
+historical holder attribution.
 
 `priority` optionally lists distinct registered operation IDs in launch order.
 Listed ready operations precede unlisted ready operations; unlisted operations
@@ -586,103 +596,38 @@ workflow v1→v3 decoder and its dedicated compatibility test; the historical
 selector/target remain original even when the old target is absent from the
 candidate. Direct v1/v2 decoder contracts retain their existing semantics.
 
-The registered `.chrono-harness/migrations/scoped-v1.py` receives original JSON and
-exact bytes, the fixed historical profile bytes and candidate mapping declaration.
-It copies ordered bindings into FILEMAP plans and retains the malformed pseudo-script
-as explicitly named historical definitions. It does not create a fake current
-script/pair. Registration retains original inputs, mappings, output digest, actual
-candidate script digest and tool/process observation. Failed migration version
-bindings retain the expected version and actual tool path/digest/version-process
-observation (raw stdout/stderr and exit) in their error diagnostic. Candidate ambiguity or missing,
-ambiguous or incomplete mappings fail. A finite historical ambiguity repair must
-name every old defining identity and one unique current replacement; old definitions
-remain in impact. Without a downstream migration validator, required removed or ambiguous execute
-obligations must remain in the replacement plan. With the declared workflow validator,
-explicit replacement or alias repair may change methods; the replacement must actually
-pass. Joint producer/test removal can explicitly retire a test without executing it.
-Original schema identities and historical costs remain available after decoding.
-The [workflow contract](workflow.md) defines actual migration/retirement certification.
+The current host uses current FILEMAP execution plans and project actions directly.
+The fixed historical scoped-host decoder, its host/tool fixtures, object acquisition
+helper and migration test binary are retired. Current projects verification uses
+its original unfiltered dedicated action. The explicit workflow retirement maps
+its former migration group to that current action without claiming preservation
+of the historical assertions whose supported behavior was removed.
 
-`ci.verify` belongs to `ci.actions.execute`; `ci` ↔ `ci-tests` remains
-the real dedicated pair. `chrono-ci --version` observes that producer's version.
-Its historical profile now declares the exact same-operation method replacement
-from the old provider path to `units.json`, using the
-[method replacement contract](workflow.md). The old legacy action is retained
-verbatim. The real migration consumer rejects missing or mismatched replacements,
-executes the current complete plan, detects workflow drift and verifies repair.
-The pseudo-script/owner/test `ci-verify` is retired with `ci-tests` as replacement.
-All six prior incoming verification edges already had equivalent same-source,
-same-kind ci-tests edges. Their effect survives. Adding verification to the ci-tests
-plan also runs it for pre-existing ci-tests-only triggers. Selection equivalence
-and measured costs are not claimed; costs remain unknown.
+Scoped CI uses registration's shared test-retirement structure check, also used by
+the full workflow validator. A null request requires removal of the defining test
+project/script and its paired producer, with an explicit null producer retirement.
+Grouped aliases resolve through their retained defining owner. A replacement must
+resolve to one current test; its current plan must actually pass. Neither a
+retirement declaration nor an inventory-only collection approves an unexecuted
+replacement. Unit collection verifies all globally selected current operations
+through their original receipts. Removed identities, old definitions and declared
+cost models remain visible in `removed` and `retirement_context`; null cost values
+remain unknown. A surviving current test may evolve its methods without retaining
+deleted operations as compatibility obligations.
 
-The migration test's whole historical host is an explicit input in
-`.chrono-harness/migrations/projects-history.json`: commit
-`4f08aef7ab40d7b0a3fb6ba42af2620600f18d98`, tree
-`5c8d85c1df63ad1f8d30724d78ab986a185b12a1`, and remote `origin`.
-Its Rust fixture acquisition and copied migration host use the existing
-`.chrono-harness/migrations/test-hosts.json` platform selection. Darwin/arm64
-and Linux/x86_64 now each name a fixture containing predeclared Python and Git
-evidence. Darwin admits the local developer Git and the actual native release
-Git as separate exact identities; Linux admits the actual native release Git.
-An observed Git must match exactly one declared path/version/SHA-256 tuple.
-Unknown platforms, unmatched or ambiguous identities and Python version drift
-fail with expected declarations and original observations retained. Neither
-acquisition nor fixture repair copies observed versions/digests into expectations;
-the candidate fixture installs the selected declarations without changing the
-historical snapshot or importing the developer host's remaining tool identity.
-The native expectations come from release run 38549541595, Linux job
-115804543818 and macOS job 115804699537. These finite test fixtures do not adopt
-full governance or admit every tool shipped under those OS labels.
+Product/policy change warning: this replaces scoped CI and standalone routes'
+old requirement to retain every previous operation and adopts explicit retirement of the host's obsolete
+decoder and migration group. It keeps structural rejection and actual current
+replacement execution. Verification includes the shared structure boundaries,
+real scoped success/failure cases, actual standalone replacement execution,
+existing workflow consumers and the affected
+both-endpoint canonical/native DELTA. Total validation cost is not yet measured.
 
-The original macOS failed-blob probe attempted its unavailable origin despite
-`GIT_NO_LAZY_FETCH=1`. Upstream Git 2.39.3 does not implement that control.
-Local reads now use a temporary bare Git view of the original object database,
-with no remotes, empty templates and system/global configuration disabled.
-Only explicit fetch processes use the original checkout and its declared origin.
-This uses supported Git object-store access without copying objects, scanning
-unrelated history, changing global configuration or relying on the lazy-fetch
-switch: reads deliberately omit `GIT_NO_LAZY_FETCH`, exercising the same default
-lazy-fetch behavior on current Git as on the older native Git. The helper records object-directory/format discovery and view creation
-under the same process bounds. The temporary view is dropped after acquisition.
-
-It checks the fixed commit/tree locally, probes only that tree's blobs,
-and fetches the exact missing blob OIDs in one explicit bounded request. An absent
-pinned commit first receives its own explicit `--filter=blob:none` metadata fetch,
-with no ref update or shallow-boundary change; the server may include ancestor
-metadata in that fixed commit's transfer. Failed probes, transport errors,
-remaining missing blobs and identity drift fail with original process receipts;
-there is no retry or ref discovery. Wrong/malformed commit probes and missing
-tree metadata still fail. The four historical assertions
-then consume one in-memory acquired snapshot, preserving original historical
-bytes, aliases and ambiguity, version/method binding and workflow drift checks.
-Ordinary reentry with complete local objects requires no remote access. Rust
-regressions retain cold and warm original processes, compare the same tree and
-binary/symlink bytes, export the warm snapshot with an unavailable origin, and
-reject failed cold metadata/blob origins and wrong identities. Receipts are
-retained before acquisition assertions so failed expectations keep their probes.
-
-Acquisition uses the fixed candidate's registered 120-second/1-MiB per-process bounds and caps the
-single fetch's object argv at 64 KiB. Receipts, including expected failed local
-promisor regressions, remain in `.chrono-harness/state/migration-tests/`; fixture
-directories are temporary, and compiled outputs remain in the already registered
-test target. The projects-test owner retains acquisition diagnostics for the
-candidate's debugging, review and acceptance consumers. After those consumers
-finish, the caller retires the fixture state through the existing worktree
-lifecycle; these originals are not a permanent archive. FILEMAP binds the manifest
-and Rust helper to the migration consumer;
-this is host test-input policy, not a new product history or dependency-discovery
-contract. Local fixture acceptance does not establish native acceptance or delivery.
-Remote transfer bytes, billing and full input closure remain unmeasured.
-
-Current host operation sequences live only in FILEMAP. Scoped CI consumes v2 plans
-through routes' planner and projects' executor/receipt path. Historical v1 bindings
-are a named decoder input and remain supported for existing v1 example profiles.
-The legacy adapter's additional selection and ambient-environment behavior remain
-explicitly scoped; missing legacy version contracts remain unverified. Current host
-tools use full declarations. This adapter retires when full native CI consumes the
-full contracts. Full host activation, Cargo/SDK closure,
-initial adoption, native CI/parity and delivery lifecycle are subsequent work.
+The generic candidate conversion and transition interfaces retain synthetic,
+self-contained workflow fixtures. Those fixtures validate declared mappings,
+ordered operations, actual conversion receipts and failing inputs; they do not
+fetch a historical repository or provide a production compatibility path. The
+[workflow contract](workflow.md) owns current evolution and retirement certification.
 
 The dedicated routes/projects tests include actual processes, retained inputs,
 spaced host paths, another caller cwd, literal metacharacters/empty/newline argv,

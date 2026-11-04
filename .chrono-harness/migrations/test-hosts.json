@@ -1,4 +1,0 @@
-{
-  "Darwin/arm64": ".chrono-harness/migrations/fixtures/darwin-host.json",
-  "Linux/x86_64": ".chrono-harness/migrations/fixtures/linux-host.json"
-}

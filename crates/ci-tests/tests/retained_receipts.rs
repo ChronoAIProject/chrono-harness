@@ -7,6 +7,33 @@ const GENERATED: &[&str] = &[
     "original-state/cargo/tests/target/",
 ];
 
+fn producer_objects(report: &Value) -> Value {
+    let objects: Vec<_> = report["producer_drains"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|entry| {
+            let input = &entry["input"];
+            assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
+            assert_eq!(input["format"], "receipt");
+            assert_eq!(entry["receipt"]["path"], input["path"]);
+            assert_eq!(entry["receipt"]["sha256"], input["sha256"]);
+            let bytes = fs::read(
+                Path::new(input["source_root"].as_str().unwrap())
+                    .join(input["path"].as_str().unwrap()),
+            )
+            .unwrap();
+            assert_eq!(bytes.len() as u64, input["byte_length"].as_u64().unwrap());
+            assert_eq!(chrono_harness::sha256(&bytes), input["sha256"]);
+            let child: Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(child["status"], entry["status"]);
+            assert_eq!(child["error"], entry["error"]);
+            child["producer_objects"].as_array().unwrap().clone()
+        })
+        .collect();
+    json!(objects)
+}
+
 pub(super) struct Owner {
     _dir: tempfile::TempDir,
     pub(super) root: PathBuf,
@@ -214,7 +241,7 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
         .unwrap();
     let (code, protected) = owner.reenter(&linked);
     assert_eq!(code, 0, "{protected}");
-    assert_eq!(protected["producer_objects"][0]["status"], "protected");
+    assert_eq!(producer_objects(&protected)[0]["status"], "protected");
     assert!(object.join(GENERATED[1]).exists());
     receipt
         .release("diagnostic", "real diagnostic consumer finished")
@@ -222,7 +249,7 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
     drop(receipt);
     let (code, reclaimed) = owner.reenter(&linked);
     assert_eq!(code, 0, "{reclaimed}");
-    assert_eq!(reclaimed["producer_objects"][0]["status"], "cleaned");
+    assert_eq!(producer_objects(&reclaimed)[0]["status"], "cleaned");
     for path in GENERATED {
         assert!(!object.join(path).exists());
     }
@@ -245,7 +272,7 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
     assert_eq!(fs::read(owner.root.join(".git/index")).unwrap(), index);
     assert!(owner.root.is_dir());
     assert_eq!(
-        owner.reenter(&linked).1["producer_objects"][0]["status"],
+        producer_objects(&owner.reenter(&linked).1)[0]["status"],
         "already-disposed"
     );
 }
@@ -494,7 +521,7 @@ fn real_receipt_producer_expected_failure_diagnostic_release_and_legacy_unknown(
             .unwrap();
         let (code, active) = owner.drain();
         assert_eq!(code, 0, "{active}");
-        assert_eq!(active["producer_objects"][0]["status"], "protected");
+        assert_eq!(producer_objects(&active)[0]["status"], "protected");
         assert!(object.join(GENERATED[1]).is_dir());
         receipt
             .release(
@@ -504,7 +531,7 @@ fn real_receipt_producer_expected_failure_diagnostic_release_and_legacy_unknown(
             .unwrap();
         let (code, released) = owner.drain();
         assert_eq!(code, 0, "{released}");
-        assert_eq!(released["producer_objects"][0]["status"], "cleaned");
+        assert_eq!(producer_objects(&released)[0]["status"], "cleaned");
         for path in GENERATED {
             assert!(!object.join(path).exists());
         }
@@ -529,7 +556,7 @@ fn real_receipt_producer_expected_failure_diagnostic_release_and_legacy_unknown(
             "historical evidence"
         );
         assert_eq!(
-            owner.drain().1["producer_objects"][0]["status"],
+            producer_objects(&owner.drain().1)[0]["status"],
             "already-disposed"
         );
         assert!(
@@ -564,7 +591,7 @@ fn receipt_interrupted_publication_and_unreleased_failure_remain_protected_on_re
     drop(handle);
     let (code, interrupted) = owner.drain();
     assert_eq!(code, 0, "{interrupted}");
-    assert_eq!(interrupted["producer_objects"][0]["status"], "protected");
+    assert_eq!(producer_objects(&interrupted)[0]["status"], "protected");
     assert!(partial.join(GENERATED[0]).join("partial").exists());
     let handle =
         chrono_worktree::RetainedArtifact::resume(&directory, "ci-command-result", &partial)
@@ -582,10 +609,7 @@ fn receipt_interrupted_publication_and_unreleased_failure_remain_protected_on_re
         fs::write(partial.join(name), bytes).unwrap();
     }
     handle.seal().unwrap();
-    assert_eq!(
-        owner.drain().1["producer_objects"][0]["status"],
-        "protected"
-    );
+    assert_eq!(producer_objects(&owner.drain().1)[0]["status"], "protected");
     handle
         .release("command-assertion", "explicit recovered producer release")
         .unwrap();
@@ -626,14 +650,18 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
     assert!(!object.join(GENERATED[0]).exists());
     assert!(second.exists());
     assert!(
-        failed
+        producer_objects(&failed)
             .to_string()
             .contains("failed-partial-effects-possible")
     );
     let original = fs::read(object.join("stdout.bin")).unwrap();
     let (code, retried) = owner.drain();
     assert_eq!(code, 0, "{retried}");
-    assert!(retried.to_string().contains("already-absent"));
+    assert!(
+        producer_objects(&retried)
+            .to_string()
+            .contains("already-absent")
+    );
     assert!(!second.exists());
     assert_eq!(fs::read(object.join("stdout.bin")).unwrap(), original);
     let binding: Value =
@@ -646,7 +674,7 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
             .contains("unexpected-command-exit")
     );
     assert_eq!(
-        owner.drain().1["producer_objects"][0]["status"],
+        producer_objects(&owner.drain().1)[0]["status"],
         "already-disposed"
     );
 }
@@ -1000,7 +1028,7 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
     let (code, report) = owner.drain();
     assert_eq!(code, 0, "{report}");
     assert!(
-        report["producer_objects"]
+        producer_objects(&report)
             .as_array()
             .unwrap()
             .iter()
@@ -1014,7 +1042,7 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
     let (code, report) = owner.drain();
     assert_eq!(code, 0, "{report}");
     assert!(
-        report["producer_objects"]
+        producer_objects(&report)
             .as_array()
             .unwrap()
             .iter()
@@ -1034,7 +1062,7 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
     let (code, report) = owner.drain();
     assert_eq!(code, 0, "{report}");
     assert!(
-        report["producer_objects"]
+        producer_objects(&report)
             .as_array()
             .unwrap()
             .iter()
@@ -1100,7 +1128,7 @@ fn producer_registry_birth_preserves_unknown_preexisting_lease_and_registry() {
         let (code, report) = owner.drain();
         if registry_kind == "absent" {
             assert_eq!(code, 0, "{}", report["producer_drains"]);
-            assert_eq!(report["producer_objects"][0]["status"], "protected-unknown");
+            assert_eq!(producer_objects(&report)[0]["status"], "protected-unknown");
         } else {
             assert_ne!(code, 0, "{}", report["producer_drains"]);
             assert!(!report["cleanup_failures"].as_array().unwrap().is_empty());
@@ -1150,7 +1178,7 @@ fn producer_does_not_dispose_copied_outputs_without_exact_source_declarations() 
     let (code, report) = owner.drain();
     assert_eq!(code, 0, "{report}");
     assert_eq!(
-        report["producer_objects"][0]["registered_generated_objects"],
+        producer_objects(&report)[0]["registered_generated_objects"],
         0
     );
     for path in GENERATED {

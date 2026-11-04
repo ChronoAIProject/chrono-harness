@@ -71,7 +71,6 @@
       ".chrono-harness/ci/workflow-inventory-tests.py",
       ".chrono-harness/ci/workflow-inventory.json",
       ".chrono-harness/process_fds.py",
-      ".chrono-harness/ci/projects-inventory.json",
       ".chrono-harness/ci/bootstrap_shared.py",
       ".chrono-harness/ci/bootstrap-shared.json",
       ".chrono-harness/ci/bootstrap-cache.json",
@@ -136,12 +135,6 @@
           "test:judge-projects-tests"
         ],
         "report_path": ".chrono-harness/state/units/judge-projects/check.json"
-      },
-      "scoped-v1": {
-        "tests": [
-          "test:scoped-v1-tests"
-        ],
-        "report_path": ".chrono-harness/state/units/scoped-v1/check.json"
       },
       "judge-cost": {
         "tests": [
@@ -238,19 +231,12 @@
           "test:cache-tests"
         ],
         "report_path": ".chrono-harness/state/units/cache/check.json"
-      },
-      "judge-projects-migration": {
-        "tests": [
-          "test:judge-projects-migration"
-        ],
-        "report_path": ".chrono-harness/state/units/judge-projects-migration/check.json"
       }
     },
     "shared_operations": {
       "build.ci": [
         "ci",
         "judge-projects",
-        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units",
@@ -267,8 +253,7 @@
         "ci",
         "judge-cargo",
         "judge-ci",
-        "judge-projects",
-        "judge-projects-migration"
+        "judge-projects"
       ],
       "build.judge-cost": [
         "inputs",
@@ -286,7 +271,6 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
-        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -304,7 +288,6 @@
         "judge-cargo",
         "judge-filemap",
         "judge-projects",
-        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -317,7 +300,6 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
-        "judge-projects-migration",
         "judge-registration",
         "judge-workflow",
         "judge-workflow-short",
@@ -328,7 +310,6 @@
         "judge-cargo",
         "judge-filemap",
         "judge-projects",
-        "judge-projects-migration",
         "judge-routes",
         "judge-workflow",
         "judge-workflow-short",
@@ -350,7 +331,6 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
-        "judge-projects-migration",
         "judge-registration",
         "judge-workflow",
         "judge-workflow-short",
@@ -397,18 +377,6 @@
       "worktree.inventory": [
         "worktree",
         "worktree-adoption"
-      ],
-      "fmt.judge-projects": [
-        "judge-projects",
-        "judge-projects-migration"
-      ],
-      "fmt.judge-projects-tests": [
-        "judge-projects",
-        "judge-projects-migration"
-      ],
-      "projects.inventory": [
-        "judge-projects",
-        "judge-projects-migration"
       ],
       "build.cache": [
         "cache",

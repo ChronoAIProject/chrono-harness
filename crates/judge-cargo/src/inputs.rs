@@ -718,7 +718,7 @@ pub(crate) fn prepare(
             ));
         }
         let (sysroot_binding, sysroot_evidence) =
-            directory_binding(root, &toolchain.sysroot, &sysroot_manifest)?;
+            directory_binding(root, &toolchain.sysroot, &sysroot_manifest, &directories)?;
         directories.push(sysroot_binding);
         for id in &backend {
             input(id)?;
@@ -794,7 +794,7 @@ pub(crate) fn prepare(
                     "SDK environment {environment_key} must select its explicit root"
                 )));
             }
-            let (binding, evidence) = directory_binding(root, sdk, &sdk_manifest)?;
+            let (binding, evidence) = directory_binding(root, sdk, &sdk_manifest, &directories)?;
             directories.push(binding);
             sdk_evidence.push(evidence);
         }
@@ -1020,8 +1020,9 @@ impl Check {
                 )));
             }
         }
+        let mut verified_directory_files = BTreeMap::new();
         for directory in &self.directories {
-            directory.unchanged()?;
+            directory.unchanged(&mut verified_directory_files)?;
         }
         for p in self
             .contract

@@ -86,6 +86,66 @@ class OwnerPublication(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "ownership descriptors"):
                 owner.require_capabilities(self.root)
 
+    def owner_result(self, directory, name, code=0):
+        consumer = "bootstrap-owner:" + directory.name + ":" + name
+        path = ".chrono-harness/state/worktrees/" + name + ".json"
+        declaration = {"schema": "chrono-retention-consumer/v1", "consumer": consumer,
+                       "purpose": "actual owner phase original consumption",
+                       "originals": [{"id": "output-1", "path": path, "identity": "1:2:file"}]}
+        report = {"status": "used" if code == 0 else "failed", "report_path": path,
+                  "report_consumer": declaration,
+                  "managed_process": {"stdout_bytes": [], "stderr_bytes": [],
+                                      "failure": None, "exit_code": code}}
+        return report
+
+    def test_owner_phase_requests_native_consumer_and_retains_exact_handoff(self):
+        directory = self.root / "attempt-current"
+        directory.mkdir()
+        for name in ("migration", "construction", "deployment"):
+            with self.subTest(name=name):
+                report = self.owner_result(directory, name)
+                result = subprocess.CompletedProcess([], 0, stdout=json.dumps(report).encode(), stderr=b"")
+                with mock.patch.object(owner.subprocess, "run", return_value=result) as native:
+                    self.assertEqual(owner.run_owner(self.root, self.selected, ["bootstrap"], directory, name), report)
+                argv = native.call_args.args[0]
+                self.assertIn("--report-consumer", argv)
+                self.assertEqual(argv[argv.index("--report-consumer") + 1], report["report_consumer"]["consumer"])
+                self.assertEqual(json.loads((directory / (name + "-consumer.json")).read_bytes()),
+                                 report["report_consumer"])
+
+    def test_owner_phase_refuses_missing_or_misbound_consumer_even_on_exit_zero(self):
+        for defect in ("missing", "consumer", "original"):
+            with self.subTest(defect=defect):
+                directory = self.root / ("attempt-" + defect)
+                directory.mkdir()
+                report = self.owner_result(directory, "construction")
+                if defect == "missing":
+                    report.pop("report_consumer")
+                elif defect == "consumer":
+                    report["report_consumer"]["consumer"] = "different caller"
+                else:
+                    report["report_consumer"]["originals"][0]["path"] = ".chrono-harness/state/worktrees/unrelated.json"
+                raw = json.dumps(report).encode()
+                with mock.patch.object(owner.subprocess, "run", return_value=subprocess.CompletedProcess(
+                        [], 0, stdout=raw, stderr=b"")):
+                    with self.assertRaisesRegex(ValueError, "report consumer"):
+                        owner.run_owner(self.root, self.selected, ["bootstrap"], directory, "construction")
+                self.assertEqual((directory / "construction.stdout").read_bytes(), raw)
+                self.assertFalse((directory / "construction-consumer.json").exists())
+
+    def test_failed_owner_phase_preserves_native_exit_and_consumer_for_diagnosis(self):
+        directory = self.root / "attempt-failed"
+        directory.mkdir()
+        report = self.owner_result(directory, "construction", 7)
+        with mock.patch.object(owner.subprocess, "run", return_value=subprocess.CompletedProcess(
+                [], 2, stdout=json.dumps(report).encode(), stderr=b"")):
+            with self.assertRaises(subprocess.CalledProcessError) as failed:
+                owner.run_owner(self.root, self.selected, ["bootstrap"], directory, "construction")
+        self.assertEqual(failed.exception.returncode, 7)
+        self.assertEqual((directory / "construction.exit").read_bytes(), b"2\n")
+        self.assertEqual(json.loads((directory / "construction-consumer.json").read_bytes()),
+                         report["report_consumer"])
+
     def test_ordinary_shared_install_may_only_reuse_identical_owner_bytes(self):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True, capture_output=True)
         with mock.patch.dict(os.environ, {"CHRONO_WORKTREE_BOOTSTRAP": str(self.root)}):
@@ -232,6 +292,126 @@ class ProducerSource(unittest.TestCase):
         selected = fixture.root / fixture.host.config["install"][0]["destination"]
         return fixture, selected
 
+    def upgrade_fixture(self, published=False):
+        if published:
+            fixture, selected, _ = self.published_fixture()
+        else:
+            fixture, selected = self.selected_original_fixture()
+        declaration = {"schema": "chrono-bootstrap-owner-upgrade/v1",
+                       "selected_original": ".chrono-harness/state/bootstrap.json",
+                       "stage_config": ".chrono-harness/ci/stage.json"}
+        config = dict(fixture.host.config,
+                      owner_upgrade=".chrono-harness/ci/owner-upgrade.json",
+                      participation={"program": selected.relative_to(fixture.root).as_posix(),
+                                     "config": ".chrono-harness/worktree.json"})
+        config_path = Path(".chrono-harness/ci/upgrade-core.json")
+        fixture.host.write_json(fixture.root / config["owner_upgrade"], declaration)
+        fixture.host.write_json(fixture.root / config_path, config)
+        fixture.host.git("add", ".")
+        fixture.host.git("commit", "-qm", "current upgrade consumer")
+        # Installed-owner qualification uses its actual retained producer, even
+        # when the unrelated shared-startup transfer has already been reclaimed.
+        shutil.rmtree(fixture.transfer)
+        return fixture, selected, config_path, config
+
+    def test_upgrade_constructs_with_actual_qualified_owner_without_old_supply(self):
+        for published in (False, True):
+            with self.subTest(published=published):
+                fixture, selected, config_path, config = self.upgrade_fixture(published)
+                original = selected.read_bytes()
+                current = bootstrap.observe_source(fixture.root)
+                staged = fixture.root / owner.STAGES / "current/chrono-worktree"
+                staged.parent.mkdir(parents=True)
+                staged.write_bytes(b"current built owner")
+                calls = []
+                def native(root, program, arguments, directory, name):
+                    calls.append(name)
+                    if name in ("migration", "construction"):
+                        self.assertEqual(program.read_bytes(), original)
+                        self.assertEqual(selected.read_bytes(), original)
+                        qualification = json.loads((directory / "selected-qualification.json").read_bytes())
+                        self.assertEqual(qualification["selected"], owner.file_binding(selected))
+                        self.assertEqual(owner.shared.digest((directory / "selected-producer.json").read_bytes()),
+                                         qualification["sha256"])
+                    if name == "construction":
+                        return {"managed_process": {"stdout_bytes": list(
+                            b'chrono-owner-stage-result {"path":".chrono-harness/state/bootstrap-stage.json",'
+                            b'"sha256":"stage-fixture"}\n')}}
+                    if name == "deployment":
+                        self.assertEqual(program, staged)
+                        selected.write_bytes(staged.read_bytes())
+                        (root / owner.CURRENT).write_text(json.dumps({
+                            "source_commit": current["commit"], "installed": owner.file_binding(selected)}))
+                    return {}
+                actual_stage_report = owner.stage_report
+                def stage_result(root, reference, expected_sha=None, producer_commit=None):
+                    if reference == ".chrono-harness/state/bootstrap-stage.json":
+                        self.assertEqual(expected_sha, "stage-fixture")
+                        return {"owner_stage": {"staged": {
+                            "path": staged.relative_to(fixture.root).as_posix()}}}, {}
+                    return actual_stage_report(root, reference, expected_sha, producer_commit)
+                with mock.patch.object(owner, "run_owner", side_effect=native), mock.patch.object(
+                        owner, "stage_report", side_effect=stage_result):
+                    owner.upgrade(fixture.root, config_path, config)
+                self.assertEqual(calls, ["migration", "construction", "deployment"])
+                self.assertEqual(selected.read_bytes(), b"current built owner")
+
+    def test_upgrade_rejects_missing_or_changed_producer_before_native_effects(self):
+        for change in ("missing-report", "stream", "selected"):
+            with self.subTest(change=change):
+                fixture, selected, config_path, config = self.upgrade_fixture()
+                report_path = fixture.root / ".chrono-harness/state/bootstrap.json"
+                report = json.loads(report_path.read_bytes())
+                if change == "missing-report":
+                    report_path.unlink()
+                elif change == "stream":
+                    (fixture.root / report["operations"][0]["stdout"]["path"]).write_bytes(b"changed stream")
+                else:
+                    selected.write_bytes(b"unproduced owner")
+                before = owner.file_binding(selected)
+                with mock.patch.object(owner, "run_owner") as native:
+                    with self.assertRaises((ValueError, OSError)):
+                        owner.upgrade(fixture.root, config_path, config)
+                native.assert_not_called()
+                self.assertEqual(owner.file_binding(selected), before)
+                self.assertFalse((fixture.root / ".chrono-harness/state/bootstrap-owner-upgrade").exists())
+
+    def test_upgrade_rechecks_qualified_owner_and_original_before_construction(self):
+        qualify = owner.qualified_selected_original
+        for change in ("selected", "report"):
+            with self.subTest(change=change):
+                fixture, selected, config_path, config = self.upgrade_fixture()
+                def drift(*args):
+                    result = qualify(*args)
+                    path = selected if change == "selected" else fixture.root / result["path"]
+                    path.write_bytes(path.read_bytes() + b"drift after qualification")
+                    return result
+                with mock.patch.object(owner, "qualified_selected_original", side_effect=drift), mock.patch.object(
+                        owner, "run_owner") as native:
+                    with self.assertRaisesRegex(ValueError, "qualified selected owner changed"):
+                        owner.upgrade(fixture.root, config_path, config)
+                native.assert_not_called()
+
+    def test_upgrade_construction_failure_never_publishes(self):
+        fixture, selected, config_path, config = self.upgrade_fixture()
+        before = owner.file_binding(selected)
+        calls = []
+        def native(root, program, arguments, directory, name):
+            calls.append(name)
+            self.assertEqual(program.read_bytes(), selected.read_bytes())
+            if name == "construction":
+                raise subprocess.CalledProcessError(7, [str(program), *arguments])
+            return {}
+        with mock.patch.object(owner, "run_owner", side_effect=native), mock.patch.object(
+                owner, "stage_report") as stage:
+            with self.assertRaises(subprocess.CalledProcessError) as failed:
+                owner.upgrade(fixture.root, config_path, config)
+        self.assertEqual(failed.exception.returncode, 7)
+        self.assertEqual(calls, ["migration", "construction"])
+        stage.assert_not_called()
+        self.assertFalse((fixture.root / owner.CURRENT).exists())
+        self.assertEqual(owner.file_binding(selected), before)
+
     def test_selected_installed_owner_qualifies_from_its_original_fixed_producer(self):
         fixture, selected = self.selected_original_fixture()
         original_source = bootstrap.observe_source(fixture.root)
@@ -276,32 +456,7 @@ class ProducerSource(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     bootstrap.provision_environment(root, {"host_environment": {"TMPDIR": path}})
 
-    def test_producer_validation_uses_immutable_source_and_retains_all_byte_checks(self):
-        from bootstrap_shared_tests import SharedStartup
-        fixture = SharedStartup()
-        fixture.setUp()
-        self.addCleanup(fixture.doCleanups)
-        fixture.produce()
-        source = {key: bootstrap.observe_source(fixture.root)[key] for key in ("commit", "tree")}
-        manifest = json.loads((fixture.transfer / "manifest.json").read_bytes())
-        tool = manifest["profiles"]["core"]["files"][0]
-        declaration = {"schema": "chrono-bootstrap-owner-supply/v1", "source": source,
-                       "platform": owner.shared.native_platform(), "startup_config": ".chrono-harness/ci/bootstrap-shared.json",
-                       "bundle": str(fixture.transfer), "binding": fixture.environment["CHRONO_STARTUP_BINDING"],
-                       "issuer": {key: tool[key] for key in ("destination", "sha256", "size")}}
-        # The live candidate diverges; the producer bytes stay producer bytes.
-        (fixture.root / ".chrono-harness/ci/bootstrap.json").write_text('{"candidate": "changed"}')
-        data, retained, originals = owner.qualified_supply(fixture.root, declaration)
-        self.assertEqual(owner.shared.digest(data), tool["sha256"])
-        self.assertEqual(retained["source"]["commit"], source["commit"])
-        self.assertEqual(set(originals), {"core"})
-        stream = manifest["profiles"]["core"]["report"]
-        original = fixture.transfer / stream["path"]
-        original.write_bytes(original.read_bytes() + b"corrupt")
-        with self.assertRaisesRegex(ValueError, "startup original report differs"):
-            owner.qualified_supply(fixture.root, declaration)
-
-    def test_bad_or_relabelled_immutable_source_refuses_before_supply_preparation(self):
+    def test_bad_immutable_producer_reference_refuses_before_reading(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with self.assertRaisesRegex(ValueError, "immutable producer"):

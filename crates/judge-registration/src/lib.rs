@@ -7,8 +7,9 @@ mod registrations;
 mod transition;
 pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, interpret_scheduling_with_reader,
-    interpret_with_reader, replacements, retirement_requests, reused_tools, validate_retained_view,
-    views, views_for_collection_inputs, views_for_collection_inputs_with, views_with_reader,
+    interpret_with_reader, replacements, retirement_declaration, retirement_requests, reused_tools,
+    validate_retained_view, validate_test_retirement, views, views_for_collection_inputs,
+    views_for_collection_inputs_with, views_with_reader,
 };
 pub mod initial;
 mod schema;

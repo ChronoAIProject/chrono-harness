@@ -13,12 +13,8 @@ const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 
-// Tests consume current addressed children and supported historical inline
-// children without rewriting either original representation.
+// Consume the current producer's exact addressed original.
 fn drain_report(entry: &Value) -> Value {
-    if let Some(report) = entry.get("report") {
-        return report.clone();
-    }
     let input = &entry["input"];
     assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
     assert_eq!(input["format"], "receipt");
@@ -34,6 +30,19 @@ fn drain_report(entry: &Value) -> Value {
     assert_eq!(entry["status"], report["status"]);
     assert_eq!(entry["error"], report["error"]);
     report
+}
+fn producer_objects(report: &Value) -> Value {
+    value!(
+        report["producer_drains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|entry| drain_report(entry)["producer_objects"]
+                .as_array()
+                .unwrap()
+                .clone())
+            .collect::<Vec<_>>()
+    )
 }
 fn fixture_git() -> PathBuf {
     let registry = source().join(".chrono-harness/tests/worktree-tools.json");
