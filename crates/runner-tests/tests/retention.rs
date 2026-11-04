@@ -1492,39 +1492,78 @@ fn read_scope_and_pending_publication_preserve_interrupted_originals() {
 
 #[test]
 fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabilities() {
-    if !isolated_capability_test("caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabilities") {
+    if !isolated_capability_test(
+        "caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabilities",
+    ) {
         return;
     }
     let h = host(256, 16);
     for name in ["required-input", "unrelated-old-output"] {
         let path = tree(h.path(), name);
-        let p = inventory(h.path()).begin("fixture", &path, json!(null)).unwrap();
+        let p = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
         p.complete(json!({"exit":7})).unwrap();
     }
     let caller = retained_artifacts::retention::read_scope(h.path()).unwrap();
     let nested = retained_artifacts::retention::read_scope(h.path()).unwrap();
-    drop(retained_artifacts::retention::read_guard(h.path(), ".chrono-harness/state/fixtures/required-input").unwrap());
+    drop(
+        retained_artifacts::retention::read_guard(
+            h.path(),
+            ".chrono-harness/state/fixtures/required-input",
+        )
+        .unwrap(),
+    );
     drop(nested);
     let before = ledger(h.path());
     let original = before["outputs"][0].clone();
     let unrelated = before["outputs"][1]["lease_id"].as_str().unwrap();
     let round = inventory(h.path()).maintain().unwrap();
     assert_eq!(round["remaining_outputs"], 1, "{round}");
-    assert!(!h.path().join(".chrono-harness/state/fixtures/unrelated-old-output").exists());
+    assert!(
+        !h.path()
+            .join(".chrono-harness/state/fixtures/unrelated-old-output")
+            .exists()
+    );
     let child = env!("CARGO_BIN_EXE_chrono-test-retention-child");
-    let result = chrono_harness::run_process(h.path(), &chrono_harness::CommandSpec {
-        program: child.into(),
-        args: vec![h.path().to_str().unwrap().into(), "scope-input".into(), original["lease_id"].as_str().unwrap().into(), unrelated.into()],
-        env: Default::default(),
-        timeout_seconds: 5,
-        output_limit_bytes: 4096,
-    }, b"").unwrap();
+    let result = chrono_harness::run_process(
+        h.path(),
+        &chrono_harness::CommandSpec {
+            program: child.into(),
+            args: vec![
+                h.path().to_str().unwrap().into(),
+                "scope-input".into(),
+                original["lease_id"].as_str().unwrap().into(),
+                unrelated.into(),
+            ],
+            env: Default::default(),
+            timeout_seconds: 5,
+            output_limit_bytes: 4096,
+        },
+        b"",
+    )
+    .unwrap();
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert_eq!(result.stdout.trim(), "exact input capability inherited");
-    assert!(!h.path().join(".chrono-harness/state/output-retention-v1/reports.lease").exists());
-    assert_eq!(fs::read_dir(h.path().join(".chrono-harness/state/fixtures/required-input")).unwrap().count(), 0);
+    assert!(
+        !h.path()
+            .join(".chrono-harness/state/output-retention-v1/reports.lease")
+            .exists()
+    );
+    assert_eq!(
+        fs::read_dir(
+            h.path()
+                .join(".chrono-harness/state/fixtures/required-input")
+        )
+        .unwrap()
+        .count(),
+        0
+    );
     drop(caller);
-    assert_eq!(inventory(h.path()).maintain().unwrap()["remaining_outputs"], 0);
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        0
+    );
 }
 #[test]
 fn pending_native_delivery_is_independent_of_latest_report_and_explicitly_released() {
@@ -1711,9 +1750,12 @@ fn addressed_reuse_refuses_equal_bytes_at_changed_identity_or_partial_disposal()
             // Each addressed transaction retirement consumes this fixture's
             // single metadata step. Account those declared effects before the
             // separate output-disposal step; never enlarge the round budget.
-            let transactions = fs::read_dir(h.path().join(".chrono-harness/state/output-retention-v1"))
-                .unwrap().map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-                .filter(|name| name.starts_with("transaction-") && name.ends_with(".json")).count();
+            let transactions =
+                fs::read_dir(h.path().join(".chrono-harness/state/output-retention-v1"))
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                    .filter(|name| name.starts_with("transaction-") && name.ends_with(".json"))
+                    .count();
             for _ in 0..transactions {
                 let round = inventory(h.path()).maintain().unwrap();
                 assert_eq!(round["nodes"], 1);
@@ -3130,7 +3172,10 @@ fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it(
             exit == 0,
         )
         .unwrap();
-        assert_eq!(inventory(h.path()).maintain().unwrap()["remaining_outputs"], if exit == 0 { 2 } else { 1 });
+        assert_eq!(
+            inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+            if exit == 0 { 2 } else { 1 }
+        );
         let _slot = reference_report(h.path(), "check.json", path, &[], None).unwrap();
         fs::write(h.path().join("check.json"), bytes).unwrap();
         settle_report(h.path(), "check.json", path).unwrap();
@@ -3248,18 +3293,34 @@ fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retir
     assert!(guard.is_some());
     guard.as_ref().unwrap().stable().unwrap();
     let admission = chrono_harness::ownership::Lease::acquire(
-        &h.path().join(".chrono-harness/state/output-retention-v1/admission.lease"),
+        &h.path()
+            .join(".chrono-harness/state/output-retention-v1/admission.lease"),
         None,
         true,
         true,
         None,
-    ).unwrap();
-    assert!(admission.is_some(), "an external effect must exclude only its own paths");
+    )
+    .unwrap();
+    assert!(
+        admission.is_some(),
+        "an external effect must exclude only its own paths"
+    );
     drop(admission);
     let independent = ".chrono-harness/state/preparation/independent-original";
-    publish_original(h.path(), independent, b"independent bytes", json!({"exit_code":3})).unwrap();
-    assert_eq!(fs::read(h.path().join(independent)).unwrap(), b"independent bytes");
-    assert!(publish_original(h.path(), path, b"conflicting bytes", json!({"exit_code":0})).is_err());
+    publish_original(
+        h.path(),
+        independent,
+        b"independent bytes",
+        json!({"exit_code":3}),
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(h.path().join(independent)).unwrap(),
+        b"independent bytes"
+    );
+    assert!(
+        publish_original(h.path(), path, b"conflicting bytes", json!({"exit_code":0})).is_err()
+    );
     assert!(!h.path().join(path).exists());
     guard.as_ref().unwrap().stable().unwrap();
     let mut policy: Value =

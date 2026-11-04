@@ -190,7 +190,11 @@ pub struct ReadScope(Rc<ReadInputs>);
 impl Drop for ReadScope {
     fn drop(&mut self) {
         let this = Rc::downgrade(&self.0);
-        READ_SCOPES.with(|scopes| scopes.borrow_mut().retain(|scope| !scope.ptr_eq(&this) && scope.strong_count() != 0));
+        READ_SCOPES.with(|scopes| {
+            scopes
+                .borrow_mut()
+                .retain(|scope| !scope.ptr_eq(&this) && scope.strong_count() != 0)
+        });
     }
 }
 pub fn read_scope(root: &Path) -> Result<ReadScope, String> {
@@ -258,7 +262,9 @@ fn now() -> Result<u64, String> {
 use crate::artifact_disposal::identity;
 
 fn overlaps(left: &str, right: &str) -> bool {
-    left == right || left.starts_with(&format!("{right}/")) || right.starts_with(&format!("{left}/"))
+    left == right
+        || left.starts_with(&format!("{right}/"))
+        || right.starts_with(&format!("{left}/"))
 }
 
 fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
@@ -294,16 +300,26 @@ impl Inventory {
     }
     fn remember_input(&self, lease: &Lease) -> Result<(), String> {
         READ_SCOPES.with(|scopes| {
-            for inputs in scopes.borrow().iter().filter_map(Weak::upgrade).filter(|inputs| inputs.root == self.root) {
+            for inputs in scopes
+                .borrow()
+                .iter()
+                .filter_map(Weak::upgrade)
+                .filter(|inputs| inputs.root == self.root)
+            {
                 #[cfg(unix)]
                 {
                     use std::os::fd::AsFd;
                     let mut capabilities = inputs.capabilities.borrow_mut();
                     if !capabilities.contains_key(lease.id()) {
                         if capabilities.len() >= self.policy.max_entries {
-                            return Err("caller input capability capacity; preserve originals".into());
+                            return Err(
+                                "caller input capability capacity; preserve originals".into()
+                            );
                         }
-                        capabilities.insert(lease.id().into(), crate::process_fds::Scope::new(&[lease.capability()?.as_fd()])?);
+                        capabilities.insert(
+                            lease.id().into(),
+                            crate::process_fds::Scope::new(&[lease.capability()?.as_fd()])?,
+                        );
                     }
                 }
             }
@@ -634,7 +650,12 @@ impl Inventory {
             || (record.phase == "reserving") != record.lease_id.is_empty()
             || removal == record.paths.is_empty()
             || record.paths.len() > self.policy.max_entries
-            || (removal && key != format!("removal-{}", sha256(&serde_json::to_vec(&record.paths).map_err(|e| e.to_string())?)))
+            || (removal
+                && key
+                    != format!(
+                        "removal-{}",
+                        sha256(&serde_json::to_vec(&record.paths).map_err(|e| e.to_string())?)
+                    ))
         {
             return Err("retention transaction binding changed; preserve capability".into());
         }
@@ -670,7 +691,12 @@ impl Inventory {
     fn address_gate(&self, kind: &str, address: &str) -> Result<Lease, String> {
         self.address_gate_scoped(kind, address, &[])
     }
-    fn address_gate_scoped(&self, kind: &str, address: &str, paths: &[String]) -> Result<Lease, String> {
+    fn address_gate_scoped(
+        &self,
+        kind: &str,
+        address: &str,
+        paths: &[String],
+    ) -> Result<Lease, String> {
         let key = format!("{kind}-{}", sha256(address.as_bytes()));
         let path = self.directory.join(&key);
         let began = Instant::now();
@@ -743,19 +769,31 @@ impl Inventory {
     // Only an overlapping external effect can refuse this reservation. Its
     // owner holds its addressed capability through IO, never global admission.
     fn exclude_removals(&self, path: &str, own: Option<&str>) -> Result<(), String> {
-        for key in self.transaction_keys()?.into_iter().filter(|key| key.starts_with("removal-")) {
+        for key in self
+            .transaction_keys()?
+            .into_iter()
+            .filter(|key| key.starts_with("removal-"))
+        {
             if own == Some(key.as_str()) {
                 continue;
             }
-            let record = self.transaction(&key)?.ok_or("removal declaration disappeared")?;
+            let record = self
+                .transaction(&key)?
+                .ok_or("removal declaration disappeared")?;
             if !record.paths.iter().any(|scope| overlaps(path, scope)) {
                 continue;
             }
             if record.phase != "active" {
                 return Err("overlapping external removal requires recovery".into());
             }
-            let _excluded = Lease::acquire(&self.directory.join(&key), Some(&record.lease_id), false, true, None)?
-                .ok_or("overlapping external removal has a live owner; preserve its paths")?;
+            let _excluded = Lease::acquire(
+                &self.directory.join(&key),
+                Some(&record.lease_id),
+                false,
+                true,
+                None,
+            )?
+            .ok_or("overlapping external removal has a live owner; preserve its paths")?;
         }
         Ok(())
     }
@@ -1049,7 +1087,10 @@ impl Inventory {
             }
         }
         self.stable(&gate)?;
-        Ok(l.outputs.iter().find(|o| o.path == path).map(|o| o.id.clone()))
+        Ok(l.outputs
+            .iter()
+            .find(|o| o.path == path)
+            .map(|o| o.id.clone()))
     }
     pub fn enrolled(&self, path: &str) -> Result<bool, String> {
         let gate = self.gate()?;
@@ -2852,7 +2893,14 @@ pub fn publish_final_original(
         &sha256(bytes),
         outcome,
         |file| file.write_all(bytes).map_err(|e| e.to_string()),
-        Some((if succeeded { "publication-recheck" } else { "report-recheck" }, false)),
+        Some((
+            if succeeded {
+                "publication-recheck"
+            } else {
+                "report-recheck"
+            },
+            false,
+        )),
     )
 }
 /// Inputs of an unfinished report stay rooted until the actual fixed-slot
@@ -2992,7 +3040,12 @@ pub fn external_removal_guards(
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    let paths: Vec<_> = paths.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect();
+    let paths: Vec<_> = paths
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
     if paths.is_empty() || paths.len() > inventory.policy.max_entries {
         return Err("external removal scope is empty or exceeds capacity".into());
     }
@@ -3021,5 +3074,8 @@ pub fn external_removal_guards(
     }
     inventory.stable(&gate)?;
     drop(gate);
-    Ok(Some(RemovalGuard { inventory, exclusion }))
+    Ok(Some(RemovalGuard {
+        inventory,
+        exclusion,
+    }))
 }

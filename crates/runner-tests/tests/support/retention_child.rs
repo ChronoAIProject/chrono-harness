@@ -30,16 +30,23 @@ fn main() {
         let expected = std::env::args().nth(3).unwrap();
         let unrelated = std::env::args().nth(4).unwrap();
         let inherited = std::env::var(chrono_harness::process_fds::ENV).unwrap();
-        let identities: Vec<_> = inherited.split(',').map(|fd| {
-            let fd: i32 = fd.parse().unwrap();
-            use std::os::fd::FromRawFd;
-            let file = std::mem::ManuallyDrop::new(unsafe { fs::File::from_raw_fd(fd) });
-            let metadata = file.metadata().unwrap();
-            format!("{}:{}", metadata.dev(), metadata.ino())
-        }).collect();
+        let identities: Vec<_> = inherited
+            .split(',')
+            .map(|fd| {
+                let fd: i32 = fd.parse().unwrap();
+                use std::os::fd::FromRawFd;
+                let file = std::mem::ManuallyDrop::new(unsafe { fs::File::from_raw_fd(fd) });
+                let metadata = file.metadata().unwrap();
+                format!("{}:{}", metadata.dev(), metadata.ino())
+            })
+            .collect();
         assert!(identities.contains(&expected), "{identities:?}");
         assert!(!identities.contains(&unrelated), "{identities:?}");
-        let round = Inventory::adopted(root).unwrap().unwrap().maintain().unwrap();
+        let round = Inventory::adopted(root)
+            .unwrap()
+            .unwrap()
+            .maintain()
+            .unwrap();
         assert_eq!(round["remaining_outputs"], 1, "{round}");
         println!("exact input capability inherited");
         return;
