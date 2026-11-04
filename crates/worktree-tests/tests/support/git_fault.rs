@@ -103,6 +103,35 @@ fn main() {
     let git = config["git"].as_str().unwrap();
     let arg = |index: usize, expected: &str| args.get(index).is_some_and(|value| value == expected);
     match config["mode"].as_str().unwrap() {
+        "cleanup-io" => {
+            if std::env::current_dir().unwrap() == Path::new(config["target"].as_str().unwrap())
+                && arg(1, "ls-files")
+            {
+                let ledger: Value = serde_json::from_slice(
+                    &fs::read(config["ledger"].as_str().unwrap()).unwrap(),
+                ).unwrap();
+                let intended = ledger["entries"].as_array().unwrap().iter().any(|entry| {
+                    entry["path"] == config["target"]
+                        && entry["cache_attempts"].as_array().is_some_and(|attempts| !attempts.is_empty())
+                });
+                if intended {
+                    match fs::OpenOptions::new().write(true).create_new(true)
+                        .open(config["claim"].as_str().unwrap()) {
+                        Ok(_claim) => {
+                            use std::io::Read;
+                            let mut stream = std::net::TcpStream::connect(
+                                config["synchronize"].as_str().unwrap(),
+                            ).unwrap();
+                            stream.write_all(b"ready").unwrap();
+                            // EOF releases the fixture if its assertion caller fails.
+                            let _ = stream.read_exact(&mut [0]);
+                        }
+                        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => (),
+                        Err(error) => panic!("cleanup synchronization: {error}"),
+                    }
+                }
+            }
+        }
         "temporary-source-check" => {
             if std::env::current_dir().unwrap() == Path::new(config["root"].as_str().unwrap())
                 && arg(1, "ls-tree")

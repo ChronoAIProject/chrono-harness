@@ -971,6 +971,15 @@ allocation differences do not establish filesystem savings. Failed removal
 retains the original error and observed remaining objects, and retries preserve
 the original attempt.
 
+Cache and terminal cleanup retain the exact worktree's exclusive enrollment
+capability while reading, measuring and removing its outputs. Their intent is
+durable before the shared enrollment admission is released. Independent worktrees
+can then enter and finish managed use during that physical work. The cleanup
+owner reacquires admission and reloads current enrollment before attaching its
+original result; it never writes its earlier snapshot over concurrent updates.
+Shared enrollment metadata is still centralized; this boundary removes physical
+cleanup from that exclusion and does not claim fully independent metadata storage.
+
 The optional v2 `retained_producers` lists exact producer IDs, evidence directories,
 and generated output paths relative to each explicitly registered receipt.
 The adopted `ci-command-result` family belongs to
