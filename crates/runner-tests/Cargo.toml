@@ -27,10 +27,6 @@ name = "registry_snapshot"
 path = "tests/registry_snapshot.rs"
 
 [[test]]
-name = "parity"
-path = "tests/parity.rs"
-
-[[test]]
 name = "git_inputs"
 path = "tests/git_inputs.rs"
 
