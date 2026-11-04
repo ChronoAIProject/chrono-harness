@@ -87,7 +87,7 @@ locale 拥有 root_frame 与 projection_notice；框架和正文必须使用所�
 
 ## 可选文档布局
 
-本扩展只新增 catalog 的可选 `layouts`（缺省空数组）和 output 的可选 `layout`（具名引用）；catalog schema 1、manifest schema 2 / render v3 的原有字段语义不变。未选择 layout 时保留原 DFS 与逐字节输出行为，注册但未选择的布局不自动生效。旧二进制会拒绝这些未知字段，不会静默忽略；升级生成器即可读取，已有宿主不自动采用产品新布局。raw-method init 和 v1/v2 迁移明确不带布局及选择器。
+本扩展只新增 catalog 的可选 `layouts`（缺省空数组）和 output 的可选 `layout`（具名引用）；catalog schema 1、manifest schema 2 / render v3 的原有字段语义不变。未选择 layout 时保留原 DFS 与逐字节输出行为，注册但未选择的布局不自动生效。旧二进制会拒绝这些未知字段，不会静默忽略；升级生成器即可读取，已有宿主不自动采用产品新布局。raw-method init 明确不带布局及选择器。
 
 布局由有序 `sections` 组成，每节必填相对 `depth`、`titles` 与显式内容 `atoms`。以下片段可加入上面的合成 catalog，并在输出选择 `"layout":"example"`：
 
@@ -114,17 +114,17 @@ locale 拥有 root_frame 与 projection_notice；框架和正文必须使用所�
 
 所有登记路径必须为规范的相对 `/` 路径，无空段、`.`、`..`、反斜杠、控制字符或绝对路径；catalog/context/file 源在宿主 `.chrono-harness/` 下。控制/源/输出/alias 不得相互覆盖或构成文件祖先冲突。重复引用同一个 file variant 输入允许；多个输出路径不允许。所有已有祖先必须是真实目录，保留文件/控制文件/输出拒绝链接、硬链接、特殊类型（AGENTS 固定别名是唯一例外）。检查已存在普通文件的设备/inode 别名；当前 macOS 还保守拒绝各路径段经 Unicode case folding 和文件系统表示转换后相同的不同拼写（如 `straße` / `STRASSE`，即使所在卷区分大小写）。比较键先由现有 CoreFoundation 的 `CFStringFold` 以 `kCFCompareCaseInsensitive` 和规范系统 locale 生成，再经文件系统表示 API 转换；不改登记原字节、不增加 Cargo 依赖、不写入探测文件，避免预期新文件/目录别名。先验证完整计划并渲染所有输出，再写任何内容；目录按父先子后去重创建。
 
-## 严格前向迁移
+## 当前输入合同
 
-只接受完整已知 schema=1 / producer=`chrono-instructions/0.1.0` 身份：sources 按顺序为 methodology:`.chrono-harness/instructions/methodology.md`、host-context:`.chrono-harness/instructions/host-context.md`；旧 read-both/v1 outputs 按顺序为 agents-entrypoint:AGENTS.md、claude-entrypoint:CLAUDE.md；旧 literal-core/relative-alias/v2 outputs 为 claude-guide:CLAUDE.md、agents-relative-alias:AGENTS.md。混用角色/版本/路径或未知字段拒绝。
+init/generate 只接受 schema 2 / producer=`chrono-instructions` / render=`atomic-rules/relative-alias/v3` manifest。不支持的格式、未知字段及重复字段在写入前报错，源、manifest、根文件及链接保持原样；不自动转换旧 manifest 或采用默认数据。
 
-init/generate 自动迁移为 current manifest + catalog，`legacy.method` 的 und file variant 显式引用旧方法。und 表示语言未指定，不冒称中文或英文；框架是显式未指定语言的数据。保留精确旧 method/context 字节、路径、普通权限及根块外原文，不拆旧 prose、不更新为默认、不删除旧文件；只刷新框架、组合绑定与根布局。迁移最后发布 manifest。新 raw-method init 使用同一模式；显式 --locale 则由作者声明语言。current manifest 的排版在未改绑定时保留。
+新宿主的 raw-method init 将显式方法注册为 `legacy.method` file atom，未声明语言时为 und，显式 --locale 则由作者声明语言。und 表示语言未指定；框架不冒称中文或英文。方法／上下文保留精确 UTF-8 字节；刷新时保留已有文件的普通权限及根块外原文。current manifest 的排版在未改绑定时保留。
 
 本仓明确采用本次逐条迁移的产品双语 catalog 到独立宿主 catalog，再使用实际重建二进制生成三个现有消费者。先前 001e501 的精选 17 段被细分与补充，稳定入口保留且没有第二份旧段落权威；旧 monolith 继续退休，历史由版本库保留。这不是其他宿主的自动更新：既有宿主继续保留自己采用的 catalog 或 opaque method，新默认采用须明确比较、保留定制并编辑宿主数据。可选 [逐条处置表](methodology-clause-map.md) 与 [许可说明](licenses/methodology-attribution.md) 不进入生成图。
 
 ## IO、边界与验证
 
-复用同一 publisher：同目录暂存普通新文件与原文件备份，flush/sync，新文件为 tempfile 默认私有权限，原普通权限保留；source 在 output 前，CLAUDE 在 alias 前，新建/迁移 manifest 最后。当前用户已编辑 manifest 不是程序保存的历史。全部相等时不创建临时文件，不改 inode/mtime。
+复用同一 publisher：同目录暂存普通新文件与原文件备份，flush/sync，新文件为 tempfile 默认私有权限，原普通权限保留；source 在 output 前，CLAUDE 在 alias 前，新建 manifest 最后。当前用户已编辑 manifest 不是程序保存的历史。全部相等时不创建临时文件，不改 inode/mtime。
 
 普通发布失败逆序恢复字节/普通类型/权限、删除本次新文件/链接、子先父后清理空目录。错误列 published、unrestored、recovery、cleanup；published 不等于仍改变。回滚失败保留原文件备份并报告路径；无原文件则报告未移除目标。恢复实际异常状态后重试。清理失败也非零，完成发布但清理失败明确说明。
 
@@ -142,6 +142,6 @@ cargo test --locked --manifest-path crates/instructions-tests/Cargo.toml
 
 产品默认根包含同语言测试规则及 sh／bash 可用 Python 测试的例外。[实际消费者边界](methodology-extraction.md#实际消费者边界) 列出本宿主根、上下文与 skill 的读数。内容编辑须复核完整载荷，不截尾、不借全局配置扩限。独立选择 `core.behavior` 也包含同语言测试要求；指南生成不等于语言配对判官已执法。
 
-专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、布局重排/双语复用/深度/完整覆盖/预写入拒绝、ownership/path 预检、迁移、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方；实际消费者读数及外部 skill 格式验证的适用边界见 [迁移说明](methodology-extraction.md#实际消费者边界)，不引入生产依赖，不证明语义。
+专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、布局重排/双语复用/深度/完整覆盖/预写入拒绝、ownership/path 预检、不支持格式的原件保护、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方；实际消费者读数及外部 skill 格式验证的适用边界见 [迁移说明](methodology-extraction.md#实际消费者边界)，不引入生产依赖，不证明语义。
 
 FILEMAP 的 proposed projection 元数据从单一 `source` 扩展为显式 `sources` 数组（catalog、manifest 及被引用 file 输入），producer/scope 不变；生成 root-frame 的路径引用也由 manifest 决定。产品资产是 build-input/test-execution，宿主数据和既有投影是 runtime-input。五份完整治理登记仍 proposed、成本 unmeasured；指令专用 schema 校验不冒称治理判官执行。独立 CI slice 的实际 DELTA、协议与生成范围见 [CI 合同](ci.md)。
