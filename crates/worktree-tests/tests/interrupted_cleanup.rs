@@ -2064,12 +2064,13 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     check.await_managed_file(&handshake);
     let handoff_seconds = began.elapsed().as_secs_f64();
     assert!(
-        !other.join("output λ").exists(),
-        "ordinary check must drain other interrupted enrollment"
+        other.join("output λ/cache").exists(),
+        "ordinary check has no cleanup dependency on another enrollment"
     );
     let _group =
         OwnedGroup(fs::read_to_string(target.join(".chrono-harness/state/check-holder")).unwrap());
     assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(!other.join("output λ").exists());
     assert!(target.join("output λ/cache").exists());
     fs::write(
         target.join(".chrono-harness/state/check-release"),
