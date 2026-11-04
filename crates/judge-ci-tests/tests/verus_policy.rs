@@ -118,6 +118,69 @@ fn registered_text_requires_exact_identity() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_dependency_paths_decode_only_escaped_spaces() {
+    let encoded = [97u8, 92u8, 32u8, 98u8];
+    let parsed = policy::parse_dependency_paths(&encoded);
+    reveal_with_fuel(policy::dependency_scan, 5);
+    assert(parsed.is_some());
+    let paths = parsed.unwrap();
+    assert(paths.len() == 1);
+    assert(paths[0]@ == seq![97u8, 32u8, 98u8]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_dependency_paths_preserve_order_and_duplicates() {
+    reveal_with_fuel(policy::dependency_scan, 6);
+    let encoded = [97u8, 32u8, 98u8, 32u8, 97u8];
+    let parsed = policy::parse_dependency_paths(&encoded);
+    assert(parsed.is_some());
+    let paths = parsed.unwrap();
+    assert(encoded@ =~= seq![97u8, 32u8, 98u8, 32u8, 97u8]);
+    assert(policy::dependency_scan(encoded@, Seq::empty(), Seq::empty())
+        == Some(seq![seq![97u8], seq![98u8], seq![97u8]]));
+    assert(policy::dependency_values(paths@) == seq![seq![97u8], seq![98u8], seq![97u8]]);
+    assert(paths.len() == 3);
+    assert(paths[0]@ == seq![97u8]);
+    assert(paths[1]@ == seq![98u8]);
+    assert(paths[2]@ == seq![97u8]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_dependency_paths_preserve_relative_components_and_utf8_bytes() {
+    reveal_with_fuel(policy::dependency_scan, 5);
+    let relative = [46u8, 46u8, 47u8, 99u8];
+    let parsed = policy::parse_dependency_paths(&relative);
+    assert(parsed.is_some());
+    let paths = parsed.unwrap();
+    assert(paths.len() == 1 && paths[0]@ == relative@);
+    let unicode = [206u8, 187u8];
+    let unchanged = policy::parse_dependency_paths(&unicode);
+    assert(unchanged.is_some());
+    let unchanged = unchanged.unwrap();
+    assert(unchanged.len() == 1 && unchanged[0]@ == unicode@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_dependency_paths_reject_empty_words_controls_and_unknown_escapes() {
+    reveal_with_fuel(policy::dependency_scan, 8);
+    let empty: [u8; 0] = [];
+    let missing = policy::parse_dependency_paths(&empty);
+    let leading = policy::parse_dependency_paths(&[32u8, 97u8]);
+    let trailing = policy::parse_dependency_paths(&[97u8, 32u8]);
+    let repeated = policy::parse_dependency_paths(&[97u8, 32u8, 32u8, 98u8]);
+    let slash = policy::parse_dependency_paths(&[97u8, 92u8]);
+    let escape = policy::parse_dependency_paths(&[97u8, 92u8, 98u8]);
+    let nul = policy::parse_dependency_paths(&[97u8, 0u8]);
+    let tab = policy::parse_dependency_paths(&[97u8, 9u8]);
+    let cr = policy::parse_dependency_paths(&[97u8, 13u8]);
+    let lf = policy::parse_dependency_paths(&[97u8, 10u8]);
+    let del = policy::parse_dependency_paths(&[97u8, 127u8]);
+    assert(missing.is_none() && leading.is_none() && trailing.is_none());
+    assert(repeated.is_none() && slash.is_none() && escape.is_none());
+    assert(nul.is_none() && tab.is_none() && cr.is_none() && lf.is_none() && del.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn requirements_need_selected_tool_and_explicit_nonempty_interfaces() {
     proof {
         reveal_strlit("verus");

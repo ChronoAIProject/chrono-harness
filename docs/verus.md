@@ -89,6 +89,22 @@ claim that these artifacts were produced or consumed. Their retained identities,
 source inventory parsing and correspondence checking are still migration work.
 The current coverage adapter therefore continues to report declaration scope.
 
+The same Verus owner now defines and implements dependency-list byte decoding.
+Its contract follows the pinned Rust 1.95.0
+[`escape_dep_filename` and `write_out_deps`](https://github.com/rust-lang/rust/blob/1.95.0/compiler/rustc_interface/src/passes.rs):
+ASCII spaces inside a filename are escaped with a backslash; a single unescaped
+space separates filenames. The proved scanner preserves input order, duplicate
+paths, UTF-8 bytes and relative components such as `../`. It accepts a nonempty
+list of nonempty paths, rejects ASCII controls, literal backslashes and unknown
+escapes, and proves that re-encoding accepted paths reproduces the exact input.
+Its executable result also matches the specification's complete success/error
+semantics. Verified examples cover those success, error and boundary cases.
+This is a bounded filename grammar for the current compiler observations. Target
+rule extraction, path normalization, retained artifact transport and actual
+coverage admission still require implementation and proof. The decoder alone
+does not clear any file's migration obligation or establish SPEC correspondence.
+Additional proof/build/storage costs remain unmeasured.
+
 Product/policy change: both registered proof operations now request compilation
 and dependency output, and the proved argument predicate requires those flags.
 The proved argument builder and admission bind both emitted filenames to the

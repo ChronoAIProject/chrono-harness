@@ -39,6 +39,167 @@ pub fn contains_text(values: &Vec<&str>, target: &str) -> (found: bool)
     false
 }
 
+/// Rust 1.95 dep-info escapes ASCII spaces only. This bounded grammar rejects
+/// controls and literal backslashes rather than interpreting them as Make syntax.
+pub open spec fn dependency_byte(byte: u8) -> bool {
+    byte >= 32 && byte != 92 && byte != 127
+}
+
+pub open spec fn dependency_word(word: Seq<u8>) -> bool {
+    word.len() > 0 && forall|i: int| 0 <= i < word.len() ==> dependency_byte(#[trigger] word[i])
+}
+
+pub open spec fn dependency_escape(word: Seq<u8>) -> Seq<u8>
+    decreases word.len(),
+{
+    if word.len() == 0 { Seq::empty() }
+    else {
+        dependency_escape(word.drop_last())
+            + if word.last() == 32 { seq![92u8, 32u8] } else { seq![word.last()] }
+    }
+}
+
+pub open spec fn dependency_values(paths: Seq<Vec<u8>>) -> Seq<Seq<u8>> {
+    paths.map(|i: int, path: Vec<u8>| path@)
+}
+
+pub open spec fn dependency_encoding(paths: Seq<Seq<u8>>) -> Seq<u8>
+    decreases paths.len(),
+{
+    if paths.len() == 0 { Seq::empty() }
+    else {
+        dependency_encoding(paths.drop_last())
+            + if paths.len() == 1 { Seq::empty() } else { seq![32u8] }
+            + dependency_escape(paths.last())
+    }
+}
+
+pub open spec fn dependency_prefix(paths: Seq<Seq<u8>>, word: Seq<u8>) -> Seq<u8> {
+    if paths.len() == 0 { dependency_escape(word) }
+    else { dependency_encoding(paths) + seq![32u8] + dependency_escape(word) }
+}
+
+proof fn dependency_prefix_push(paths: Seq<Seq<u8>>, word: Seq<u8>, byte: u8)
+    ensures dependency_prefix(paths, word.push(byte)) == dependency_prefix(paths, word)
+        + if byte == 32 { seq![92u8, 32u8] } else { seq![byte] },
+{
+    assert(word.push(byte).drop_last() =~= word);
+}
+
+proof fn dependency_encoding_push(paths: Seq<Seq<u8>>, word: Seq<u8>)
+    ensures dependency_encoding(paths.push(word)) == dependency_prefix(paths, word),
+{
+    assert(paths.push(word).drop_last() =~= paths);
+    assert(paths.push(word).last() == word);
+    if paths.len() == 0 {
+        assert(paths =~= Seq::<Seq<u8>>::empty());
+        assert(dependency_encoding(paths) == Seq::<u8>::empty());
+    }
+}
+
+/// Exact error and delimiter semantics, including leading/trailing/repeated
+/// separators and unknown escapes. Successful paths retain their input order.
+pub open spec fn dependency_scan(
+    input: Seq<u8>, paths: Seq<Seq<u8>>, word: Seq<u8>,
+) -> Option<Seq<Seq<u8>>>
+    decreases input.len(),
+{
+    if input.len() == 0 {
+        if word.len() == 0 { None } else { Some(paths.push(word)) }
+    } else if input[0] == 32 {
+        if word.len() == 0 { None }
+        else { dependency_scan(input.drop_first(), paths.push(word), Seq::empty()) }
+    } else if input[0] == 92 {
+        if input.len() < 2 || input[1] != 32 { None }
+        else { dependency_scan(input.skip(2), paths, word.push(32u8)) }
+    } else if !dependency_byte(input[0]) {
+        None
+    } else {
+        dependency_scan(input.drop_first(), paths, word.push(input[0]))
+    }
+}
+
+pub fn parse_dependency_paths(input: &[u8]) -> (parsed: Option<Vec<Vec<u8>>>)
+    ensures
+        match parsed {
+            None => dependency_scan(input@, Seq::empty(), Seq::empty()).is_none(),
+            Some(paths) => {
+                let values = dependency_values(paths@);
+                dependency_scan(input@, Seq::empty(), Seq::empty()) == Some(values)
+                    && values.len() > 0
+                    && (forall|i: int| 0 <= i < values.len() ==> dependency_word(#[trigger] values[i]))
+                    && dependency_encoding(values) == input@
+            },
+        },
+{
+    let mut paths: Vec<Vec<u8>> = Vec::new();
+    let mut word: Vec<u8> = Vec::new();
+    let mut i = 0;
+    assert(dependency_values(paths@) =~= Seq::<Seq<u8>>::empty());
+    assert(input@.skip(0) =~= input@);
+    while i < input.len()
+        invariant
+            0 <= i <= input.len(),
+            dependency_scan(input@, Seq::empty(), Seq::empty())
+                == dependency_scan(input@.skip(i as int), dependency_values(paths@), word@),
+            dependency_prefix(dependency_values(paths@), word@) == input@.take(i as int),
+            forall|j: int| 0 <= j < paths.len() ==> dependency_word((#[trigger] paths[j])@),
+            forall|j: int| 0 <= j < word.len() ==> dependency_byte(#[trigger] word[j]),
+        decreases input.len() - i,
+    {
+        let ghost suffix = input@.skip(i as int);
+        let ghost previous_paths = dependency_values(paths@);
+        let ghost previous_word = word@;
+        let ghost previous_prefix = dependency_prefix(previous_paths, previous_word);
+        let byte = input[i];
+        if byte == 32 {
+            if word.len() == 0 { return None; }
+            let ghost previous = dependency_values(paths@);
+            let ghost last = word@;
+            paths.push(word);
+            word = Vec::new();
+            assert(dependency_values(paths@) =~= previous.push(last));
+            proof { dependency_encoding_push(previous, last); }
+            assert(dependency_prefix(dependency_values(paths@), word@)
+                == previous_prefix + seq![32u8]);
+            assert(input@.take(i + 1) =~= input@.take(i as int).push(byte));
+            assert(input@.skip(i + 1) =~= suffix.drop_first());
+            i += 1;
+        } else if byte == 92 {
+            if input.len() - i < 2 || input[i + 1] != 32 { return None; }
+            word.push(32u8);
+            proof { dependency_prefix_push(previous_paths, previous_word, 32u8); }
+            assert(input@.take(i + 2) =~= input@.take(i as int) + seq![92u8, 32u8]);
+            assert(input@.skip(i + 2) =~= suffix.skip(2));
+            i += 2;
+        } else {
+            if byte < 32 || byte == 127 { return None; }
+            word.push(byte);
+            proof { dependency_prefix_push(previous_paths, previous_word, byte); }
+            assert(input@.take(i + 1) =~= input@.take(i as int).push(byte));
+            assert(input@.skip(i + 1) =~= suffix.drop_first());
+            i += 1;
+        }
+    }
+    if word.len() == 0 { return None; }
+    let ghost previous = dependency_values(paths@);
+    let ghost last = word@;
+    assert(input@.skip(i as int) =~= Seq::<u8>::empty());
+    assert(input@.take(i as int) =~= input@);
+    paths.push(word);
+    assert(dependency_values(paths@) =~= previous.push(last));
+    proof { dependency_encoding_push(previous, last); }
+    assert(dependency_encoding(dependency_values(paths@)) == input@);
+    assert(dependency_scan(input@, Seq::empty(), Seq::empty())
+        == Some(dependency_values(paths@)));
+    assert forall|j: int| 0 <= j < paths.len()
+        implies dependency_word((#[trigger] paths[j])@) by {
+        if j < previous.len() { assert(paths@[j]@ == previous[j]); }
+        else { assert(paths@[j]@ == last); }
+    }
+    Some(paths)
+}
+
 /// Decoded fields remain borrowed from the actual registered requirements.
 /// The adapter still owns and must prove their extraction from library values.
 pub struct RequirementFields<'a> {
