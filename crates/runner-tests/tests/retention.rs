@@ -2291,26 +2291,59 @@ fn independent_report_content_writers_progress_and_retire_their_transaction_meta
     let _activity = inventory(h.path()).report_activity().unwrap();
     let first = ".chrono-harness/state/preparation/first-writer.json";
     let second = ".chrono-harness/state/preparation/second-writer.json";
-    publish_owned_observed(h.path(), "check-original", first, b"first original", json!({"exit":7}), || {
-        publish_owned_original(h.path(), "check-original", second, b"second original", json!({"exit":3})).unwrap();
-        assert_eq!(fs::read(h.path().join(second)).unwrap(), b"second original");
-        // The first writer is still inside its original content operation.
-        assert_eq!(fs::read(h.path().join(first)).unwrap(), b"");
-    }).unwrap();
+    publish_owned_observed(
+        h.path(),
+        "check-original",
+        first,
+        b"first original",
+        json!({"exit":7}),
+        || {
+            publish_owned_original(
+                h.path(),
+                "check-original",
+                second,
+                b"second original",
+                json!({"exit":3}),
+            )
+            .unwrap();
+            assert_eq!(fs::read(h.path().join(second)).unwrap(), b"second original");
+            // The first writer is still inside its original content operation.
+            assert_eq!(fs::read(h.path().join(first)).unwrap(), b"");
+        },
+    )
+    .unwrap();
     assert_eq!(fs::read(h.path().join(first)).unwrap(), b"first original");
     let state = ledger(h.path());
     let directory = h.path().join(".chrono-harness/state/output-retention-v1");
-    let declarations = || fs::read_dir(&directory).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|n| n.starts_with("transaction-") && n.ends_with(".json")).collect::<Vec<_>>();
+    let declarations = || {
+        fs::read_dir(&directory)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with("transaction-") && n.ends_with(".json"))
+            .collect::<Vec<_>>()
+    };
     assert_eq!(declarations().len(), 2);
     assert!(state.get("transactions").is_none());
     let originals = state["outputs"].as_array().unwrap();
-    assert_eq!(originals.iter().find(|o| o["path"] == first).unwrap()["outcome"]["exit"], 7);
-    assert_eq!(originals.iter().find(|o| o["path"] == second).unwrap()["outcome"]["exit"], 3);
+    assert_eq!(
+        originals.iter().find(|o| o["path"] == first).unwrap()["outcome"]["exit"],
+        7
+    );
+    assert_eq!(
+        originals.iter().find(|o| o["path"] == second).unwrap()["outcome"]["exit"],
+        3
+    );
     inventory(h.path()).maintain().unwrap();
     assert!(declarations().is_empty());
     for path in [first, second] {
-        assert!(!directory.join(format!("writer-{}", chrono_harness::sha256(path.as_bytes()))).exists());
+        assert!(
+            !directory
+                .join(format!(
+                    "writer-{}",
+                    chrono_harness::sha256(path.as_bytes())
+                ))
+                .exists()
+        );
     }
     assert!(!directory.join("report-writer.lease").exists());
     assert!(!directory.join("report-slot.lease").exists());
@@ -2345,7 +2378,10 @@ fn independent_report_slots_publish_while_another_slot_is_held() {
     });
     entered_rx.recv().unwrap();
     let second_slot = reference_report(h.path(), "second/check.json", second, &[], None).unwrap();
-    assert_eq!(finished_rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty));
+    assert_eq!(
+        finished_rx.try_recv(),
+        Err(std::sync::mpsc::TryRecvError::Empty)
+    );
     settle_report(h.path(), "second/check.json", second).unwrap();
     settle_report(h.path(), "first/check.json", first).unwrap();
     drop(second_slot);

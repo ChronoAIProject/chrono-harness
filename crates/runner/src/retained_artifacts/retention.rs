@@ -538,7 +538,13 @@ impl Inventory {
     }
     fn transaction(&self, key: &str) -> Result<Option<Transaction>, String> {
         let path = self.transaction_path(key);
-        let file = match fs::File::open(no_symlink_parents(&self.directory, path.file_name().unwrap().to_str().ok_or("transaction path UTF8")?)?) {
+        let file = match fs::File::open(no_symlink_parents(
+            &self.directory,
+            path.file_name()
+                .unwrap()
+                .to_str()
+                .ok_or("transaction path UTF8")?,
+        )?) {
             Ok(file) => file,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.to_string()),
@@ -547,16 +553,22 @@ impl Inventory {
             return Err("retention transaction declaration must be a regular file".into());
         }
         let mut bytes = Vec::new();
-        file.take(16385).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+        file.take(16385)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
         self.charge_metadata(bytes.len() as u64)?;
         if bytes.len() > 16384 {
             return Err("retention transaction declaration byte capacity".into());
         }
         let record: Transaction = decode(&bytes)?;
-        let digest = key.strip_prefix("writer-").or_else(|| key.strip_prefix("slot-"));
-        if record.schema != "chrono-output-transaction/v1" || record.key != key
+        let digest = key
+            .strip_prefix("writer-")
+            .or_else(|| key.strip_prefix("slot-"));
+        if record.schema != "chrono-output-transaction/v1"
+            || record.key != key
             || !digest.is_some_and(crate::wire::is_digest)
-            || record.directory_identity != identity(&self.directory)? || record.lease_id.len() > 256
+            || record.directory_identity != identity(&self.directory)?
+            || record.lease_id.len() > 256
             || !matches!(record.phase.as_str(), "reserving" | "active" | "retiring")
             || (record.phase == "reserving") != record.lease_id.is_empty()
         {
@@ -572,9 +584,15 @@ impl Inventory {
             let entry = entry.map_err(|e| e.to_string())?;
             let name = entry.file_name();
             let Some(name) = name.to_str() else { continue };
-            if let Some(key) = name.strip_prefix("transaction-").and_then(|n| n.strip_suffix(".json")) {
+            if let Some(key) = name
+                .strip_prefix("transaction-")
+                .and_then(|n| n.strip_suffix(".json"))
+            {
                 if keys.len() >= self.policy.max_entries {
-                    return Err("addressed retention transaction capacity; maintain or join live owners".into());
+                    return Err(
+                        "addressed retention transaction capacity; maintain or join live owners"
+                            .into(),
+                    );
                 }
                 keys.push(key.to_owned());
             }
@@ -592,7 +610,8 @@ impl Inventory {
         loop {
             if let Some(record) = self.transaction(&key)?.filter(|r| r.phase == "active") {
                 let remaining = Duration::from_secs(5).saturating_sub(began.elapsed());
-                let acquired = Lease::acquire(&path, Some(&record.lease_id), false, true, Some(remaining));
+                let acquired =
+                    Lease::acquire(&path, Some(&record.lease_id), false, true, Some(remaining));
                 if self.transaction(&key)?.as_ref() != Some(&record) {
                     if began.elapsed() >= Duration::from_secs(5) {
                         return Err("addressed retention admission remains busy".into());
@@ -605,7 +624,12 @@ impl Inventory {
             }
             let gate = self.gate()?;
             let mut record = match self.transaction(&key)? {
-                Some(record) if record.phase == "retiring" => return Err("addressed transaction retirement incomplete; resume ordinary maintenance".into()),
+                Some(record) if record.phase == "retiring" => {
+                    return Err(
+                        "addressed transaction retirement incomplete; resume ordinary maintenance"
+                            .into(),
+                    );
+                }
                 Some(record) if !record.lease_id.is_empty() => continue,
                 Some(record) => record, // Exact interrupted birth, never an unknown lease.
                 None => {
@@ -615,12 +639,24 @@ impl Inventory {
                     match fs::symlink_metadata(&path) {
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
                         Err(e) => return Err(e.to_string()),
-                        Ok(_) => return Err("unregistered retention transaction capability; preserve it".into()),
+                        Ok(_) => {
+                            return Err(
+                                "unregistered retention transaction capability; preserve it".into(),
+                            );
+                        }
                     }
-                    let record = Transaction { schema: "chrono-output-transaction/v1".into(),
-                        key: key.clone(), directory_identity: identity(&self.directory)?, lease_id: String::new(), phase: "reserving".into() };
+                    let record = Transaction {
+                        schema: "chrono-output-transaction/v1".into(),
+                        key: key.clone(),
+                        directory_identity: identity(&self.directory)?,
+                        lease_id: String::new(),
+                        phase: "reserving".into(),
+                    };
                     self.stable(&gate)?;
-                    write(&self.transaction_path(&key), &serde_json::to_vec(&record).map_err(|e| e.to_string())?)?;
+                    write(
+                        &self.transaction_path(&key),
+                        &serde_json::to_vec(&record).map_err(|e| e.to_string())?,
+                    )?;
                     record
                 }
             };
@@ -629,7 +665,10 @@ impl Inventory {
             record.lease_id = lease.id().into();
             record.phase = "active".into();
             self.stable(&gate)?;
-            write(&self.transaction_path(&key), &serde_json::to_vec(&record).map_err(|e| e.to_string())?)?;
+            write(
+                &self.transaction_path(&key),
+                &serde_json::to_vec(&record).map_err(|e| e.to_string())?,
+            )?;
             return Ok(lease);
         }
     }
@@ -653,12 +692,22 @@ impl Inventory {
         .ok_or("live report producer/consumer prevents retention migration")?;
         let mut owners = Vec::new();
         for key in self.transaction_keys()? {
-            let record = self.transaction(&key)?.ok_or("transaction disappeared during migration")?;
+            let record = self
+                .transaction(&key)?
+                .ok_or("transaction disappeared during migration")?;
             if record.phase != "active" {
                 return Err("recover unattached retention transaction before migration".into());
             }
-            owners.push(Lease::acquire(&self.directory.join(&key), Some(&record.lease_id), false, true, None)?
-                .ok_or("live addressed publisher prevents retention migration")?);
+            owners.push(
+                Lease::acquire(
+                    &self.directory.join(&key),
+                    Some(&record.lease_id),
+                    false,
+                    true,
+                    None,
+                )?
+                .ok_or("live addressed publisher prevents retention migration")?,
+            );
         }
         for output in &l.outputs {
             if matches!(output.phase.as_str(), "reserving" | "creating") {
@@ -1325,7 +1374,13 @@ impl Inventory {
                     continue;
                 }
                 Ok(_) => {
-                    let held = Lease::acquire(&path, (!id.is_empty()).then_some(id.as_str()), false, true, None);
+                    let held = Lease::acquire(
+                        &path,
+                        (!id.is_empty()).then_some(id.as_str()),
+                        false,
+                        true,
+                        None,
+                    );
                     let owner = match held {
                         Ok(Some(owner)) => owner,
                         Ok(None) => continue,
@@ -1337,15 +1392,28 @@ impl Inventory {
                     record.lease_id = owner.id().into();
                     record.phase = "retiring".into();
                     self.stable(gate)?;
-                    write(&self.transaction_path(&key), &serde_json::to_vec(&record).map_err(|e| e.to_string())?)?;
-                    crate::artifact_disposal::dispose_entry(&self.directory, &key, &identity(&path)?, || {
-                        self.stable(gate)?;
-                        owner.stable()
-                    })?;
+                    write(
+                        &self.transaction_path(&key),
+                        &serde_json::to_vec(&record).map_err(|e| e.to_string())?,
+                    )?;
+                    crate::artifact_disposal::dispose_entry(
+                        &self.directory,
+                        &key,
+                        &identity(&path)?,
+                        || {
+                            self.stable(gate)?;
+                            owner.stable()
+                        },
+                    )?;
                 }
             }
             let declaration = self.transaction_path(&key);
-            crate::artifact_disposal::dispose_entry(&self.directory, declaration.file_name().unwrap().to_str().unwrap(), &identity(&declaration)?, || self.stable(gate))?;
+            crate::artifact_disposal::dispose_entry(
+                &self.directory,
+                declaration.file_name().unwrap().to_str().unwrap(),
+                &identity(&declaration)?,
+                || self.stable(gate),
+            )?;
         }
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {
@@ -2621,11 +2689,19 @@ pub fn publish_owned_observed(
     outcome: Value,
     observe: impl FnOnce(),
 ) -> Result<bool, String> {
-    publish_owned_with(root, producer, path, bytes.len() as u64, &sha256(bytes), outcome,
+    publish_owned_with(
+        root,
+        producer,
+        path,
+        bytes.len() as u64,
+        &sha256(bytes),
+        outcome,
         |file| {
             observe();
             file.write_all(bytes).map_err(|e| e.to_string())
-        }, None)
+        },
+        None,
+    )
 }
 
 /// Stream a known original only after its output byte reservation is admitted.
