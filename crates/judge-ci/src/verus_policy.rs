@@ -105,15 +105,51 @@ pub fn valid_requirement_fields(fields: &RequirementFields, tools: &Vec<&str>) -
 
 /// Fixed checking flags are independent of root/source and output-path binding.
 /// Those bindings remain separate obligations at their actual owners.
-pub fn compiler_outputs(output: &str) -> (argument: String)
-    ensures argument@ == "--emit=link="@ + output@ + ",dep-info="@ + output@ + ".d"@,
+pub proof fn encode_concat(first: Seq<char>, second: Seq<char>)
+    ensures vstd::utf8::encode_utf8(first + second)
+        == vstd::utf8::encode_utf8(first) + vstd::utf8::encode_utf8(second),
+    decreases first.len(),
 {
-    let mut argument = String::new();
-    argument.push_str("--emit=link=");
-    argument.push_str(output);
-    argument.push_str(",dep-info=");
-    argument.push_str(output);
-    argument.push_str(".d");
+    if first.len() > 0 {
+        assert((first + second).drop_first() =~= first.drop_first() + second);
+        encode_concat(first.drop_first(), second);
+    }
+}
+
+fn append_bytes(bytes: &mut Vec<u8>, suffix: &[u8])
+    ensures bytes@ == old(bytes)@ + suffix@,
+{
+    let ghost before = bytes@;
+    let mut i = 0;
+    while i < suffix.len()
+        invariant
+            0 <= i <= suffix.len(),
+            bytes@ == before + suffix@.take(i as int),
+        decreases suffix.len() - i,
+    {
+        bytes.push(suffix[i]);
+        assert(suffix@.take(i + 1) =~= suffix@.take(i as int).push(suffix[i as int]));
+        i += 1;
+    }
+    assert(suffix@.take(i as int) =~= suffix@);
+}
+
+pub fn compiler_outputs(output: &str) -> (argument: Vec<u8>)
+    ensures argument@ == vstd::utf8::encode_utf8(
+        "--emit=link="@ + output@ + ",dep-info="@ + output@ + ".d"@),
+{
+    let mut argument = Vec::new();
+    append_bytes(&mut argument, "--emit=link=".as_bytes());
+    append_bytes(&mut argument, output.as_bytes());
+    append_bytes(&mut argument, ",dep-info=".as_bytes());
+    append_bytes(&mut argument, output.as_bytes());
+    append_bytes(&mut argument, ".d".as_bytes());
+    proof {
+        encode_concat("--emit=link="@, output@);
+        encode_concat("--emit=link="@ + output@, ",dep-info="@);
+        encode_concat("--emit=link="@ + output@ + ",dep-info="@, output@);
+        encode_concat("--emit=link="@ + output@ + ",dep-info="@ + output@, ".d"@);
+    }
     argument
 }
 
@@ -137,6 +173,12 @@ pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
         return false;
     }
     let outputs = compiler_outputs(args[10].as_str());
+    let outputs_match = equal_bytes(args[7].as_str().as_bytes(), outputs.as_slice());
+    proof {
+        vstd::utf8::encode_utf8_decode_utf8(args[7]@);
+        vstd::utf8::encode_utf8_decode_utf8(
+            "--emit=link="@ + args[10]@ + ",dep-info="@ + args[10]@ + ".d"@);
+    }
     equal_text(args[0].as_str(), "--crate-type=lib")
         && equal_text(args[1].as_str(), "--no-cheating")
         && equal_text(args[2].as_str(), "--no-external-by-default")
@@ -144,7 +186,7 @@ pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
         && equal_text(args[4].as_str(), "2")
         && equal_text(args[5].as_str(), "--output-json")
         && equal_text(args[6].as_str(), "--compile")
-        && equal_text(args[7].as_str(), outputs.as_str())
+        && outputs_match
         && equal_text(args[9].as_str(), "-o")
 }
 
