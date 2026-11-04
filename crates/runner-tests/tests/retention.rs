@@ -2333,6 +2333,23 @@ fn independent_report_content_writers_progress_and_retire_their_transaction_meta
         originals.iter().find(|o| o["path"] == second).unwrap()["outcome"]["exit"],
         3
     );
+    let first_key = format!("writer-{}", chrono_harness::sha256(first.as_bytes()));
+    let first_record = directory.join(format!("transaction-{first_key}.json"));
+    let original_record = fs::read(&first_record).unwrap();
+    let mut changed: Value = serde_json::from_slice(&original_record).unwrap();
+    changed["phase"] = json!("unknown independent state");
+    let changed_record = serde_json::to_vec(&changed).unwrap();
+    fs::write(&first_record, &changed_record).unwrap();
+    let partial = inventory(h.path()).maintain().unwrap();
+    assert!(partial["accounting_errors"].as_array().unwrap().iter().any(|r| r["transaction"] == first_key));
+    assert_eq!(fs::read(&first_record).unwrap(), changed_record);
+    assert_eq!(declarations().len(), 1, "the unrelated declared writer must retire");
+    assert!(directory.join(&first_key).exists());
+    assert_eq!(fs::read(h.path().join(first)).unwrap(), b"first original");
+    assert_eq!(fs::read(h.path().join(second)).unwrap(), b"second original");
+    // Restore only the corruption introduced by this test, then resume the
+    // actual owner's same bounded cleanup without releasing report consumers.
+    fs::write(first_record, original_record).unwrap();
     inventory(h.path()).maintain().unwrap();
     assert!(declarations().is_empty());
     for path in [first, second] {

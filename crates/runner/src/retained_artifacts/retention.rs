@@ -1346,6 +1346,33 @@ impl Inventory {
         }
         Ok(leases)
     }
+    fn retire_transaction(&self, key: &str, gate: &Lease) -> Result<(), String> {
+        let Some(mut record) = self.transaction(key)? else { return Ok(()) };
+        let path = self.directory.join(key);
+        match fs::symlink_metadata(&path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e.to_string()),
+            Ok(_) => {
+                let Some(owner) = Lease::acquire(&path,
+                    (!record.lease_id.is_empty()).then_some(record.lease_id.as_str()),
+                    false, true, None)? else { return Ok(()) };
+                record.lease_id = owner.id().into();
+                record.phase = "retiring".into();
+                self.stable(gate)?;
+                let bytes = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
+                self.charge_metadata(bytes.len() as u64)?;
+                write(&self.transaction_path(key), &bytes)?;
+                crate::artifact_disposal::dispose_entry(&self.directory, key, &identity(&path)?, || {
+                    self.stable(gate)?;
+                    owner.stable()
+                })?;
+            }
+        }
+        let declaration = self.transaction_path(key);
+        crate::artifact_disposal::dispose_entry(&self.directory,
+            declaration.file_name().unwrap().to_str().unwrap(), &identity(&declaration)?,
+            || self.stable(gate))
+    }
     fn maintain_locked(&self, observed: u64, gate: &Lease) -> Result<Value, String> {
         let began = Instant::now();
         let mut l = self.load()?;
@@ -1359,63 +1386,9 @@ impl Inventory {
                 break;
             }
             metadata_steps += 1;
-            let mut record = match self.transaction(&key) {
-                Ok(Some(record)) => record,
-                Ok(None) => continue,
-                Err(error) => {
-                    accounting_errors.push(json!({"transaction":key,"reason":error}));
-                    continue;
-                }
-            };
-            let id = &record.lease_id;
-            let path = self.directory.join(&key);
-            match fs::symlink_metadata(&path) {
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-                Err(e) => {
-                    accounting_errors.push(json!({"transaction":key,"reason":e.to_string()}));
-                    continue;
-                }
-                Ok(_) => {
-                    let held = Lease::acquire(
-                        &path,
-                        (!id.is_empty()).then_some(id.as_str()),
-                        false,
-                        true,
-                        None,
-                    );
-                    let owner = match held {
-                        Ok(Some(owner)) => owner,
-                        Ok(None) => continue,
-                        Err(error) => {
-                            accounting_errors.push(json!({"transaction":key,"reason":error}));
-                            continue;
-                        }
-                    };
-                    record.lease_id = owner.id().into();
-                    record.phase = "retiring".into();
-                    self.stable(gate)?;
-                    write(
-                        &self.transaction_path(&key),
-                        &serde_json::to_vec(&record).map_err(|e| e.to_string())?,
-                    )?;
-                    crate::artifact_disposal::dispose_entry(
-                        &self.directory,
-                        &key,
-                        &identity(&path)?,
-                        || {
-                            self.stable(gate)?;
-                            owner.stable()
-                        },
-                    )?;
-                }
+            if let Err(error) = self.retire_transaction(&key, gate) {
+                accounting_errors.push(json!({"transaction":key,"reason":error}));
             }
-            let declaration = self.transaction_path(&key);
-            crate::artifact_disposal::dispose_entry(
-                &self.directory,
-                declaration.file_name().unwrap().to_str().unwrap(),
-                &identity(&declaration)?,
-                || self.stable(gate),
-            )?;
         }
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {
