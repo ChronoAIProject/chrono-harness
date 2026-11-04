@@ -1120,7 +1120,7 @@ fn legacy_host() -> Host {
 }
 
 #[test]
-fn exact_v1_upgrades_through_init_or_generate_without_updating_adopted_sources() {
+fn unsupported_manifest_preserves_unmanaged_sources_and_roots() {
     for init_command in [false, true] {
         let host = legacy_host();
         let method = host.read(METHOD);
@@ -1134,23 +1134,18 @@ fn exact_v1_upgrades_through_init_or_generate_without_updating_adopted_sources()
             "--host-root".into(),
             host.root.clone().into_os_string(),
         ]);
-        assert_eq!(result.exit_code, 0, "{result:?}");
-        assert!(result.stdout.contains("4 file(s) changed"));
+        assert_eq!(result.exit_code, 1, "{result:?}");
         assert_eq!(host.read(METHOD), method);
         assert_eq!(host.read(CONTEXT), context);
-        assert_alias(&host);
-        let mut expected = b"host preface\n".to_vec();
-        let block = expected_guide(&method);
-        expected.extend_from_slice(&block[..block.len() - 1]);
-        expected.extend_from_slice(b"\nhost tail");
-        assert_eq!(host.read("CLAUDE.md"), expected);
-        let manifest: serde_json::Value = serde_json::from_slice(&host.read(MANIFEST)).unwrap();
-        assert_eq!(manifest["render"], "atomic-rules/relative-alias/v3");
-        host.write(MANIFEST, serde_json::to_vec(&manifest).unwrap());
-        let before = host.snapshot();
-        assert!(host.init().unwrap().is_empty());
-        assert!(generate(&host.root).unwrap().is_empty());
-        assert_eq!(host.snapshot(), before); // retain current manifest formatting
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&host.read(MANIFEST)).unwrap(),
+            legacy_manifest()
+        );
+        assert!(!host.root.join(".chrono-harness/instructions/catalog.json").exists());
+        for path in ["AGENTS.md", "CLAUDE.md"] {
+            assert_eq!(host.read(path), format!("host preface\n{BEGIN}\nold reading route\n{END}\nhost tail").as_bytes());
+            assert!(fs::symlink_metadata(host.root.join(path)).unwrap().is_file());
+        }
     }
 }
 
