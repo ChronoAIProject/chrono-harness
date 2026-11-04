@@ -83,11 +83,20 @@ worktree restore/save needs a lease spanning the entire transport and remains
 unsupported.
 
 This host explicitly sets `CARGO_INCREMENTAL=1` for its canonical check actions.
-The core, full and cache seed bootstrap registrations and the v5 release recipe set
+The full and cache seed bootstrap registrations and the v5 release recipe set
 `rust_incremental: true`; their existing build invocations receive the matching
 environment value, including release builds and Rust verification units. The
 release recipe's explicit `rust_toolchain` selection keeps that setting scoped
 to Rust consumers. Non-Rust units retain their own environment.
+
+Core bootstrap and its owner-construction stage explicitly set
+`rust_incremental: false`. Their independently rebuilt lifecycle executable must
+match the published owner byte for byte, including after ordinary cache disposal.
+The macOS incremental debug map can embed randomized codegen object names, so
+matching source and tool versions alone cannot satisfy that byte contract. This
+choice keeps the existing build and publication paths and their identity check;
+its effect on total build time and storage is unmeasured. It does not establish
+general reproducible builds or complete input binding.
 
 Bootstrap and release receipts record the value passed to children. Release
 import and collection compare it with the registered choice and include it in

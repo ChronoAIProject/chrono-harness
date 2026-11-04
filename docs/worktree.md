@@ -1479,6 +1479,15 @@ Python owns byte validation, original-inode preservation, atomic replacement and
 interrupted-publication reentry. Rust owns physical attachment, committed
 endpoints, original admission/enrollment EX and publication/adoption checks.
 
+The adopted core and owner-stage profiles both disable Rust incremental
+compilation. Cache reclamation between these separately protected operations can
+force a second build; macOS incremental debug maps embed randomized codegen
+object names and can then change the executable's bytes. Both profiles use the
+same declared non-incremental choice, retaining the exact publication check.
+Other compiler, linker and environment inputs still require their own bindings;
+this choice alone does not prove reproducibility. Total build/storage cost is
+unmeasured.
+
 The deployment owner produces its actual exclusion set from the coordinator
 ledger and Git owner inventory. Admission prevents new enrollment/use; deployment
 acquires original EX for every unresolved enrollment of that physical coordinator,
