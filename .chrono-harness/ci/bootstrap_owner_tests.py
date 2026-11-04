@@ -86,6 +86,66 @@ class OwnerPublication(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "ownership descriptors"):
                 owner.require_capabilities(self.root)
 
+    def owner_result(self, directory, name, code=0):
+        consumer = "bootstrap-owner:" + directory.name + ":" + name
+        path = ".chrono-harness/state/worktrees/" + name + ".json"
+        declaration = {"schema": "chrono-retention-consumer/v1", "consumer": consumer,
+                       "purpose": "actual owner phase original consumption",
+                       "originals": [{"id": "output-1", "path": path, "identity": "1:2:file"}]}
+        report = {"status": "used" if code == 0 else "failed", "report_path": path,
+                  "report_consumer": declaration,
+                  "managed_process": {"stdout_bytes": [], "stderr_bytes": [],
+                                      "failure": None, "exit_code": code}}
+        return report
+
+    def test_owner_phase_requests_native_consumer_and_retains_exact_handoff(self):
+        directory = self.root / "attempt-current"
+        directory.mkdir()
+        for name in ("migration", "construction", "deployment"):
+            with self.subTest(name=name):
+                report = self.owner_result(directory, name)
+                result = subprocess.CompletedProcess([], 0, stdout=json.dumps(report).encode(), stderr=b"")
+                with mock.patch.object(owner.subprocess, "run", return_value=result) as native:
+                    self.assertEqual(owner.run_owner(self.root, self.selected, ["bootstrap"], directory, name), report)
+                argv = native.call_args.args[0]
+                self.assertIn("--report-consumer", argv)
+                self.assertEqual(argv[argv.index("--report-consumer") + 1], report["report_consumer"]["consumer"])
+                self.assertEqual(json.loads((directory / (name + "-consumer.json")).read_bytes()),
+                                 report["report_consumer"])
+
+    def test_owner_phase_refuses_missing_or_misbound_consumer_even_on_exit_zero(self):
+        for defect in ("missing", "consumer", "original"):
+            with self.subTest(defect=defect):
+                directory = self.root / ("attempt-" + defect)
+                directory.mkdir()
+                report = self.owner_result(directory, "construction")
+                if defect == "missing":
+                    report.pop("report_consumer")
+                elif defect == "consumer":
+                    report["report_consumer"]["consumer"] = "different caller"
+                else:
+                    report["report_consumer"]["originals"][0]["path"] = ".chrono-harness/state/worktrees/unrelated.json"
+                raw = json.dumps(report).encode()
+                with mock.patch.object(owner.subprocess, "run", return_value=subprocess.CompletedProcess(
+                        [], 0, stdout=raw, stderr=b"")):
+                    with self.assertRaisesRegex(ValueError, "report consumer"):
+                        owner.run_owner(self.root, self.selected, ["bootstrap"], directory, "construction")
+                self.assertEqual((directory / "construction.stdout").read_bytes(), raw)
+                self.assertFalse((directory / "construction-consumer.json").exists())
+
+    def test_failed_owner_phase_preserves_native_exit_and_consumer_for_diagnosis(self):
+        directory = self.root / "attempt-failed"
+        directory.mkdir()
+        report = self.owner_result(directory, "construction", 7)
+        with mock.patch.object(owner.subprocess, "run", return_value=subprocess.CompletedProcess(
+                [], 2, stdout=json.dumps(report).encode(), stderr=b"")):
+            with self.assertRaises(subprocess.CalledProcessError) as failed:
+                owner.run_owner(self.root, self.selected, ["bootstrap"], directory, "construction")
+        self.assertEqual(failed.exception.returncode, 7)
+        self.assertEqual((directory / "construction.exit").read_bytes(), b"2\n")
+        self.assertEqual(json.loads((directory / "construction-consumer.json").read_bytes()),
+                         report["report_consumer"])
+
     def test_ordinary_shared_install_may_only_reuse_identical_owner_bytes(self):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True, capture_output=True)
         with mock.patch.dict(os.environ, {"CHRONO_WORKTREE_BOOTSTRAP": str(self.root)}):
