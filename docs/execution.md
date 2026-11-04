@@ -70,18 +70,19 @@ before business tool observation or launch. There is no language, directory,
 call-graph or test discovery. All resource claims are exclusive; equal or nested
 output namespaces conflict. The declaration remains responsible for completeness.
 
-This host declares `coordinator-fixture-producers` for the CI, projects, workflow
-and worktree test operations that publish into its retained fixture stores. The
-worktree adoption native Cargo survival regression also invokes the actual source
-coordinator's `maintain`, which drains those same stores. Their existing separate
-suite inventory claims did not exclude that shared effect. The shared claim now
-prevents overlap within one canonical invocation; callers must still serialize
-independent lifecycle/check invocations using that coordinator. This policy
-correction preserves the operation cap, internal test threads, assertions and
-lease deadlines. Its required validation is the candidate canonical DELTA and
-native check; additional elapsed/CI cost is unknown. The earlier two projects
-registry-lease refusals remain original failures, without an established exact
-historical holder attribution.
+This host no longer declares the suite-wide `coordinator-fixture-producers`
+claim. Retained fixture registrations and mutation exclusion belong to their
+individual allocations; independent producer/report drains release coordinator
+enrollment admission. A single test suite therefore does not reserve every
+fixture store for its entire lifetime. The narrower workflow/worktree inventory
+claims and exact output claims remain for their actual conflicting effects.
+The operation cap remains two, with unchanged internal test threads, assertions,
+lease deadlines and operation limits. Product ownership and host scheduling
+policy change together; canonical DELTA and native checks must validate the
+new overlap. This removal is not evidence that the remaining aggregate report
+inventory or coordinator enrollment has been partitioned. Total elapsed, storage
+and CI cost remains unknown. Original registry-lease failures stay retained
+without an established historical holder attribution.
 
 `priority` optionally lists distinct registered operation IDs in launch order.
 Listed ready operations precede unlisted ready operations; unlisted operations
