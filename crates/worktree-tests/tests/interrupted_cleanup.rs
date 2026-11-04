@@ -181,12 +181,12 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
             serde_json::from_value(report["report_consumer"]["originals"].clone()).unwrap();
         i.release_consumer(consumer, &originals, &"1".repeat(64), &"2".repeat(64))
             .unwrap();
-        i.maintain().unwrap();
-        assert!(!path.exists());
+        let retirement = i.maintain().unwrap();
+        assert!(!path.exists(), "{retirement}");
         for (path, _) in dependencies {
             assert!(
                 !path.exists(),
-                "released referenced original was not reclaimed"
+                "released referenced original was not reclaimed: {retirement}"
             );
         }
         if let Some((path, bytes)) = managed_receipt {
