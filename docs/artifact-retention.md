@@ -59,6 +59,20 @@ boundary. This removes a duplicate full inventory load and reacquisition between
 the two adjacent creation phases; it does not merge producer completion or expire
 an active capability. The five-second output-admission bound is unchanged.
 
+**Product and host declaration change together:** the runner enables serde_json's
+existing `raw_value` feature and its registered Cargo package declaration names
+that feature. One admitted ledger retains each output's validated JSON alongside
+its typed record. Durable writes reuse unchanged rows; mutable access invalidates
+only that row's encoding. Every new admission still reads and decodes the complete
+current inventory under the existing exclusion lease, including duplicate,
+unknown-field and opaque-evidence rejection. The reuse ends with that ledger;
+physical observations and admission results are not cached. This removes repeated
+encoding within one transaction without dropping intent writes, identity checks
+or the five-second admission bound. Its extra memory is the retained row JSON;
+total memory, runtime, build and validation costs remain unmeasured. The unchanged
+420-output / 28-publisher regression and real-bootstrap consumer remain required
+acceptance, alongside canonical DELTA and native checks.
+
 Retention rounds report the actual retention, report-activity, live-capability or
 identity-error reason for a protected root. A parent closing a capability is not
 proof of its final kernel close: an unrelated concurrent fork temporarily inherits
@@ -78,6 +92,15 @@ must remain physically present; after its release, ordinary bounded rounds must
 retire both and preserve their distinct original outcomes. One round is allowed
 to leave work for the next entry. Failure retains the rounds, inventory and
 fixture, rather than assuming that two outputs must fit one wall-clock window.
+
+Controlled-write retirement also uses three-node rounds and requires the full
+128 bytes and original failure outcome to retire through at most eight ordinary
+entries. The 512-output capacity regression keeps its 25 ms / 256-node / 64 MiB
+limits and allows at most eight rounds before requiring room for the next actual
+publication. Each round preserves both protected originals. These checks exercise
+resumption after a bounded partial disposal; failures retain every observed round
+and the original inventory and fixture. Concurrent publisher count, its five-second
+admission bound and all final-output assertions are unchanged.
 
 Retirement checks physical liveness for the selected output and its declared
 transitive consumers, holding their identity-bound exclusive capabilities through

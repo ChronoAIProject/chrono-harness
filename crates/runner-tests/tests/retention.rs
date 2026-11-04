@@ -132,7 +132,7 @@ fn controlled_fixture_writes_refuse_before_copy_and_keep_original_outcomes() {
     ) {
         return;
     }
-    let h = host(256, 16);
+    let h = host(3, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
     policy["max_output_bytes"] = json!(128);
@@ -171,12 +171,38 @@ fn controlled_fixture_writes_refuse_before_copy_and_keep_original_outcomes() {
     publication
         .complete(json!({"exit":101,"error":"original failure"}))
         .unwrap();
-    let round = inventory(h.path()).maintain().unwrap();
-    assert_eq!(round["removed_logical_bytes"], 128);
-    assert_eq!(
-        ledger(h.path())["summaries"][0]["original_outcome"]["exit"],
-        101
-    );
+    let mut rounds = Vec::new();
+    let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut removed = 0;
+        for _ in 0..8 {
+            let round = retained_artifacts::retention::maintain_adopted(h.path())
+                .unwrap()
+                .unwrap();
+            assert!(round["nodes"].as_u64().unwrap() <= 3, "{round}");
+            removed += round["removed_logical_bytes"].as_u64().unwrap();
+            let completed = round["remaining_outputs"] == 0;
+            rounds.push(round);
+            if completed {
+                break;
+            }
+        }
+        assert_eq!(removed, 128, "{rounds:?}");
+        assert_eq!(rounds.last().unwrap()["remaining_outputs"], 0);
+        assert!(!path.exists());
+        let state = ledger(h.path());
+        let summaries = state["summaries"].as_array().unwrap();
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0]["original_outcome"]["exit"], 101);
+    }));
+    if let Err(failure) = verification {
+        let original = ledger(h.path());
+        let path = h.keep();
+        eprintln!(
+            "controlled fixture retirement failed; rounds: {rounds:?}; inventory: {original}; retained fixture: {}",
+            path.display()
+        );
+        std::panic::resume_unwind(failure);
+    }
 }
 
 #[test]
@@ -869,28 +895,53 @@ fn retained_capacity_round_retires_unrelated_outputs_without_probing_all_leases(
     let reader = i.consume(&ids[0]).unwrap();
     assert_eq!(ledger(h.path())["outputs"].as_array().unwrap().len(), 512);
     let began = std::time::Instant::now();
-    let round = i.maintain().unwrap();
-    let elapsed = began.elapsed();
-    assert!(
-        round["remaining_outputs"].as_u64().unwrap() < 512,
-        "{round}"
-    );
-    assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
-    assert!(
-        round["verified_bytes"].as_u64().unwrap() <= 67108864,
-        "{round}"
-    );
-    assert_eq!(round["inventory_capacity"], 512);
-    for n in 0..2 {
-        assert_eq!(
-            fs::read(
-                h.path()
-                    .join(format!(".chrono-harness/state/fixtures/retained-{n}"))
-            )
-            .unwrap(),
-            b"original"
+    let mut rounds = Vec::new();
+    let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // A round may durably stop inside one disposal. Continue actual bounded
+        // work through ordinary entries; no clock or capacity is enlarged.
+        for _ in 0..8 {
+            let round = i.maintain().unwrap();
+            assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+            assert!(
+                round["verified_bytes"].as_u64().unwrap() <= 67108864,
+                "{round}"
+            );
+            assert_eq!(round["inventory_capacity"], 512);
+            for n in 0..2 {
+                assert_eq!(
+                    fs::read(
+                        h.path()
+                            .join(format!(".chrono-harness/state/fixtures/retained-{n}"))
+                    )
+                    .unwrap(),
+                    b"original"
+                );
+            }
+            let admitted_room = round["remaining_outputs"].as_u64().unwrap() < 512;
+            rounds.push(round);
+            if admitted_room {
+                break;
+            }
+        }
+        assert!(
+            rounds.last().unwrap()["remaining_outputs"]
+                .as_u64()
+                .unwrap()
+                < 512,
+            "{rounds:?}"
         );
+    }));
+    if let Err(failure) = verification {
+        let original = ledger(h.path());
+        let path = h.keep();
+        eprintln!(
+            "capacity retirement failed; rounds: {rounds:?}; inventory: {original}; retained fixture: {}",
+            path.display()
+        );
+        std::panic::resume_unwind(failure);
     }
+    let elapsed = began.elapsed();
+    let round = rounds.last().unwrap();
     let path = ".chrono-harness/state/fixtures/next";
     fs::write(h.path().join(path), b"next").unwrap();
     inventory(h.path())
@@ -899,7 +950,8 @@ fn retained_capacity_round_retires_unrelated_outputs_without_probing_all_leases(
         .complete(json!({"exit": 0}))
         .unwrap();
     println!(
-        "MEASURE retained-capacity outputs=512 policy_millis=25 elapsed_micros={} remaining={} nodes={} removed_bytes={}",
+        "MEASURE retained-capacity outputs=512 policy_millis=25 rounds={} elapsed_micros={} remaining={} nodes={} removed_bytes={}",
+        rounds.len(),
         elapsed.as_micros(),
         round["remaining_outputs"],
         round["nodes"],
