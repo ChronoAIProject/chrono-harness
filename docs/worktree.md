@@ -905,7 +905,7 @@ and are not rescanned on every later start. A subsequent explicit finish may set
 evidence using `--dispose-evidence` only when policy allows it; the prior terminal
 receipt stays in history. New managed use is refused after terminal handoff.
 When finish runs from the enrolled checkout itself, the drain excludes that source;
-a later coordinator `maintain` or start performs disposal.
+a later explicit coordinator `maintain` performs disposal.
 
 Whole-checkout removal delegates to existing `Cleanup`, including literal
 cleanliness, two-endpoint artifact whitelist, exact retention, physical identity,
@@ -981,6 +981,14 @@ its physical effect and original-result publication. There is no aggregate
 IO. An unrelated owner's busy or damaged record is preserved and reported;
 it does not refuse a valid target's admission. Explicit maintenance still reports
 these failures and continues available independent owners.
+
+Ordinary start/reconstruct/use/check/bootstrap/finish entries maintain only the
+addressed worktree. They do not sweep independent worktrees or fixture producers
+as an admission prerequisite, and diagnostic inventory is limited to their actual
+source/destination addresses. The registered explicit `maintain` command visits
+the declared enrollment and producer owners independently; it is not a prerequisite
+for unrelated work. This removes an ever-growing cross-worktree sweep from normal
+entry and leaves failed/missing results in their responsible owner's record.
 
 The immutable `namespace.json` binds the physical Git owner and the executable's
 `deployment.lease`; it has no mutable membership list. Ordinary owners share that
@@ -1153,8 +1161,8 @@ only the binary or only a linked policy intentionally refuses before build or
 cleanup. Never convert v1 tokens to leases. The real coordinator transition and
 its retained evidence remain caller-owned acceptance.
 
-Admission is a stable identity-bound flock inode. Each physical attachment
-generation has one stable SH/EX lease. Normal use acquires SH before intent/spawn
+Each addressed enrollment has its own stable identity-bound metadata flock inode.
+Each physical attachment generation has one stable SH/EX use/disposal lease. Normal use acquires SH before intent/spawn
 and holds it across result publication; admission is released before business
 execution. Git mutation children inherit admission. Cleanup holds admission and
 nonblocking EX, preserving live holders. Last close releases ownership; no
@@ -1167,11 +1175,12 @@ reuses its original bytes before attaching the pointer to the ledger. Recovery
 retains the original report and any unreferenced sealed receipt as input evidence;
 it leaves `sealed_receipt` absent and records `original_outcome: not-established`.
 
-Cleanup refusals are scoped to their enrollment. Normal start/reconstruct/use/check
-and bootstrap retain unrelated failures in `drain`, immutable failed receipts and
-`cleanup_failures`, then admit a valid target. Target admission/ownership failures
-and coordinator/state publication errors still block. Explicit `maintain` returns
-failure while any attempted cleanup fails; it never discards an earlier receipt.
+Cleanup refusals are scoped to their enrollment. Ordinary start/reconstruct/use/check
+and bootstrap do not attempt unrelated enrollment or fixture-producer cleanup.
+Target admission/ownership failures and target state publication errors still block.
+Explicit `maintain` retains unrelated failures in `drain`, immutable failed receipts
+and `cleanup_failures`, continues independent enrollments, and returns failure while
+any attempted cleanup fails; it never discards an earlier receipt.
 
 Automatic lifecycle reports preserve prior inputs through
 `chrono-worktree-retained-input/v1` references. Each reference carries the physical
@@ -1202,8 +1211,9 @@ Historical `drain[].report` remains supported by the current reference verifier.
 The stdout protocol bound is unchanged. Parent publication still fails on its own
 IO or transport errors, and a retained child failure remains a cleanup failure.
 
-Later start/reconstruct/maintain and managed admission can dispose unfinished
-quiescent caches, including a successful use with no orphan token. EX permits
+Later addressed start/reconstruct and managed admission, or explicit cross-target
+`maintain`, can dispose unfinished quiescent caches, including a successful use
+with no orphan token. EX permits
 orphan-use reconciliation as result-unavailable while retaining original result
 bytes. Cache disposal keeps `status: active`, `terminal: null`, checkout, refs,
 dirty/staged source, unretained commits, bin and evidence. It selects only
@@ -1392,13 +1402,11 @@ An ordinary drain attempts allocation metadata exclusion without waiting. An
 allocation being updated remains protected with its original state, while
 independent registrations continue. The thirty-second producer admission bound
 still applies to actual publication and reference updates for that allocation.
-Report maintenance and retained-producer drains run outside enrollment admission;
-only enrollment transitions retain that shared exclusion. Before continuing the
-caller reacquires it and reloads the latest enrollment, revalidates the fixed
-source/policy, and never writes its stale snapshot over another caller's changes.
-An independent owner's error and a subsequent admission-refresh failure remain
-visible together. Actual regression and coordinator/native acceptance are required;
-the report publication owner still has its own separate concurrency limitations.
+Explicit retained-producer maintenance keeps only the invoking enrollment's
+metadata exclusion. Independent enrollments have separate records and locks; no
+release/reload merge is needed around physical IO. Actual regression and
+coordinator/native acceptance are required; the report publication owner still
+has its own separate concurrency limitations.
 
 `migrate --path COORDINATOR --partition-producer ID` is the sole explicit data
 cutover for an adopted retained producer. It consumes the exact v1 bytes under
@@ -1425,8 +1433,8 @@ body-custody tests pass, including content drift of unchanged length. This does
 not establish native end-to-end timing or complete SPEC acceptance.
 
 After a joined managed `use`, `check` or `bootstrap` command succeeds, the owner
-runs the same guarded drain before returning. This recovers eligible fixture
-bodies created during that command before a following artifact upload. The
+runs its addressed worktree drain before returning. Fixture-producer maintenance
+is an explicit `maintain` activity and does not precede unrelated operations. The
 separate `post_use_cleanup` report retains this pass without replacing admission's
 drain or the original managed process and use receipt. The invoking source and
 target keep their existing exclusion and live leases; producer recovery still

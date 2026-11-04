@@ -686,7 +686,7 @@ impl Manager {
         .ok_or("owner deployment is using the enrollment namespace")?;
         let declaration = value!({"schema":"chrono-worktree-enrollments/v1",
             "coordinator_root":anchor,"common":common,"deployment_id":namespace.id()});
-        let namespace_path = directory.join("namespace.json");
+        let namespace_path = no_symlink_parents(&directory, "namespace.json")?;
         if !namespace_path.exists() {
             if let Err(error) = write_json(&namespace_path, &declaration, true) {
                 if fs::read(&namespace_path)
@@ -708,8 +708,8 @@ impl Manager {
         let record_directory = record_directory(&directory, &scope)?;
         fs::create_dir_all(&record_directory).map_err(|e| e.to_string())?;
         let kernel = policy.schema == "chrono-worktree-automatic-cleanup/v2";
-        let ledger_path = record_directory.join("ledger.json");
-        let marker = record_directory.join("owner.json");
+        let ledger_path = no_symlink_parents(&record_directory, "ledger.json")?;
+        let marker = no_symlink_parents(&record_directory, "owner.json")?;
         let gate_path = record_directory.join("gate.lock");
         let gate = if kernel {
             if gate_path.exists() {
@@ -865,8 +865,12 @@ impl Manager {
         {
             return Err("enrollment update cannot write another worktree".into());
         }
+        self._namespace.stable()?;
+        if let Some(lease) = &self._gate.lease {
+            lease.stable()?;
+        }
         write_json(
-            &self.record_directory.join("ledger.json"),
+            &no_symlink_parents(&self.record_directory, "ledger.json")?,
             &self.ledger,
             false,
         )?;
@@ -1831,10 +1835,14 @@ impl Manager {
         r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
+        all: bool,
     ) -> Result<(), String> {
         report["worktree_inventory"] = value!([]);
         for git in r.inventory(&self.inputs.policy.coordinator_root)? {
             let path = PathBuf::from(&git["worktree"]);
+            if !all && path != self.scope && !exclude.contains(&path) {
+                continue;
+            }
             let snapshot = self.enrollment_snapshot(&path);
             let entry = snapshot
                 .as_ref()
@@ -1925,6 +1933,7 @@ impl Manager {
         r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
+        all: bool,
     ) -> Result<(), String> {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
@@ -1934,8 +1943,24 @@ impl Manager {
                 &inputs.policy.coordinator_root,
             )
         })?);
-        self.observe_inventory(r, exclude, report)?;
+        report["maintenance_scope"] = if all {
+            value!({"kind":"declared-enrollments"})
+        } else {
+            value!({"kind":"worktree","path":self.scope})
+        };
+        self.observe_inventory(r, exclude, report, all)?;
         let mut failures = self.drain_entries(r, exclude, report)?;
+        if !all {
+            report["cleanup_failures"] = value!(failures);
+            return if failures.is_empty() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "automatic cleanup pending failures: {}",
+                    failures.join("; ")
+                ))
+            };
+        }
         let independent = self.outside_enrollment_readonly(r, |manager, r| {
             let mut failures = Vec::new();
             for path in manager.enrollment_paths()? {
@@ -2023,7 +2048,7 @@ impl Manager {
     }
     fn drain_entries(
         &mut self,
-        r: &mut Runner,
+        _r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
     ) -> Result<Vec<String>, String> {
@@ -2241,7 +2266,7 @@ impl Manager {
         exclude: &[PathBuf],
         report: &mut Value,
     ) -> Result<(), String> {
-        match self.drain(r, exclude, report) {
+        match self.drain(r, exclude, report, false) {
             Err(_)
                 if report["cleanup_failures"]
                     .as_array()
@@ -2666,7 +2691,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     values["--stage-sha256"],
                     report,
                 ),
-                "maintain" => manager.drain(r, &[invoking.clone()], report),
+                "maintain" => manager.drain(r, &[invoking.clone()], report, true),
                 "import" => manager.enroll(
                     r,
                     target.as_ref().unwrap(),
@@ -2703,7 +2728,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         token,
                         report,
                     )?;
-                    manager.drain(r, &[invoking.clone()], report)
+                    manager.drain(r, &[invoking.clone()], report, false)
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();

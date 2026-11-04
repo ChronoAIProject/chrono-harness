@@ -1034,7 +1034,7 @@ fn blocked_remove(h: &Host, after_effect: bool) {
 }
 
 #[test]
-fn automatic_partial_failure_original_reporting_and_later_start_retry() {
+fn automatic_partial_failure_preserves_independent_start_and_explicit_retry() {
     for after_effect in [false, true] {
         let h = Host::new("payload");
         blocked_remove(&h, after_effect);
@@ -1072,17 +1072,18 @@ fn automatic_partial_failure_original_reporting_and_later_start_retry() {
             let (code, admitted, error) = h.invoke("feature", "independent", &independent);
             assert_eq!(code, 0, "{} {error}", admitted["error"]);
             assert!(independent.exists());
-            assert!(!admitted["cleanup_failures"].as_array().unwrap().is_empty());
-            assert_eq!(drain_report(&admitted["drain"][0])["status"], "failed");
+            assert!(admitted["cleanup_failures"].as_array().unwrap().is_empty());
+            assert!(admitted["drain"].as_array().unwrap().is_empty());
             assert_eq!(fs::read(&receipt).unwrap(), bytes);
         }
         fs::remove_file(h.parent.join("fail-remove")).unwrap();
         let (code, r, e) = h.invoke("feature", "next", &next);
         assert_eq!(code, 0, "{r} {e}");
-        assert!(!target.exists());
+        assert_eq!(target.exists(), !after_effect);
         assert!(next.exists());
         assert_eq!(fs::read(receipt).unwrap(), bytes);
         assert_eq!(h.auto("maintain", &[]).0, 0);
+        assert!(!target.exists());
     }
 }
 
@@ -1676,7 +1677,10 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
     let next = h.parent.join("fresh");
     let (code, r, e) = h.invoke("feature", "fresh", &next);
     assert_eq!(code, 0, "{r} {e}");
-    assert!(!target.exists());
+    assert!(
+        target.exists(),
+        "another birth has no cleanup dependency on this target"
+    );
     let (code, r, e) = h.received(
         Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir(&h.root)
@@ -1687,6 +1691,7 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
             .unwrap(),
     );
     assert_eq!(code, 0, "{r} {e}");
+    assert!(!target.exists());
     assert!(next.exists());
 }
 

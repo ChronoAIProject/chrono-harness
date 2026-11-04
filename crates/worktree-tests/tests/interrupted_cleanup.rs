@@ -82,6 +82,37 @@ fn busy_or_damaged_enrollment_metadata_does_not_block_an_independent_worktree() 
 }
 
 #[test]
+fn ordinary_use_does_not_sweep_an_independent_worktrees_outputs() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    let a = h.parent.join("local-cleanup-a");
+    let b = h.parent.join("local-cleanup-b");
+    assert_eq!(h.invoke("feature", "local-cleanup-a", &a).0, 0);
+    assert_eq!(h.invoke("feature", "local-cleanup-b", &b).0, 0);
+    output(&a);
+    let original = fs::read(h.ledger_path(&a)).unwrap();
+    let (code, used, error) = h.auto(
+        "use",
+        &["--path", b.to_str().unwrap(), "--operation", "use.consumer"],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    assert!(a.join("output λ/cache").is_file());
+    assert_eq!(fs::read(h.ledger_path(&a)).unwrap(), original);
+    assert!(
+        used["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row["path"] != value!(a))
+    );
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!a.join("output λ").exists());
+    assert!(a.join("payload").is_file());
+}
+
+#[test]
 fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment() {
     use std::{
         io::{Read, Write},
@@ -296,7 +327,7 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
                 (path, bytes)
             })
             .collect();
-        assert_eq!(dependencies.len(), if operation == "use" { 2 } else { 1 });
+        assert_eq!(dependencies.len(), if operation == "use" { 0 } else { 1 });
         assert_eq!(
             dependencies
                 .iter()
@@ -478,11 +509,10 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
     }
     previous.clear();
     let drains = report["producer_drains"].as_array().unwrap();
-    assert_eq!(drains.len(), 2);
-    for entry in drains {
-        assert_eq!(drain_report(entry)["status"], "cleaned");
-        previous.push(entry["receipt"]["path"].as_str().unwrap().to_owned());
-    }
+    assert!(
+        drains.is_empty(),
+        "creation must not sweep unrelated producers"
+    );
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
         .unwrap()
         .unwrap();
@@ -847,7 +877,7 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
         assert_eq!(out.status.code(), Some(exit), "{out:?}");
         assert_eq!(out.stdout, b"original collection stdout\n");
         assert_eq!(out.stderr, b"original warning\n");
-        assert!(!target.join("output λ").exists());
+        assert!(target.join("output λ/cache").exists());
         assert_eq!(git(&target, &["rev-parse", "HEAD"]), target_head);
         assert_eq!(fs::read(target.join(CONFIG)).unwrap(), bytes);
         let report_path = fs::read_dir(h.root.join(".chrono-harness/state/worktrees"))
@@ -877,26 +907,19 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
             report["managed_command_failed"].as_bool().unwrap_or(false),
             exit != 0
         );
-        let row = &report["drain"][0];
+        assert!(report["drain"].as_array().unwrap().is_empty());
+        let (code, maintenance, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintenance} {error}");
+        assert!(!target.join("output λ").exists());
+        let row = &maintenance["drain"][0];
         assert!(row.get("report").is_none());
         assert_eq!(row["status"], "cleaned");
         let child = drain_report(row);
         assert_eq!(child["worktree_removal"], "preserved");
         assert_eq!(child["artifact_disposals"][0]["bytes_before"], 12);
         assert_eq!(child["artifact_disposals"][0]["bytes_after"], 0);
-        let mut historical_inline = report.clone();
-        historical_inline["drain"][0]["report"] = child;
-        historical_inline["drain"][0]
-            .as_object_mut()
-            .unwrap()
-            .remove("input");
-        let inline_bytes = serde_json::to_vec_pretty(&historical_inline).unwrap().len();
-        assert!(
-            inline_bytes > 67_108_864,
-            "fixture must reproduce the original parent transport overflow: {inline_bytes}"
-        );
         println!(
-            "LIFECYCLE_TRANSPORT managed_exit={exit} parent_bytes={} child_bytes={} historical_inline_bytes={inline_bytes} stdout_bound=67108864",
+            "LIFECYCLE_TRANSPORT managed_exit={exit} parent_bytes={} child_bytes={} stdout_bound=67108864",
             parent.len(),
             row["input"]["byte_length"]
         );
@@ -916,8 +939,11 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     fs::write(a.join(AUTO_POLICY), "ordinary uncommitted policy edit").unwrap();
     let (code, start, error) = h.invoke("feature", "valid-b", &b);
     assert_eq!(code, 0, "{start} {error}");
-    assert!(!start["cleanup_failures"].as_array().unwrap().is_empty());
-    let receipt = start["drain"][0]["receipt"].clone();
+    assert!(start["cleanup_failures"].as_array().unwrap().is_empty());
+    assert!(start["drain"].as_array().unwrap().is_empty());
+    let (code, maintenance, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{maintenance} {error}");
+    let receipt = maintenance["drain"][0]["receipt"].clone();
     let receipt_path = h.root.join(receipt["path"].as_str().unwrap());
     let original = fs::read(&receipt_path).unwrap();
     assert_eq!(sha256(&original), receipt["sha256"]);
@@ -942,7 +968,7 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
         "independent-reconstruct",
     );
     assert_eq!(code, 0, "{} {error}", rebuilt["error"]);
-    assert!(!rebuilt["cleanup_failures"].as_array().unwrap().is_empty());
+    assert!(rebuilt["cleanup_failures"].as_array().unwrap().is_empty());
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{maintained} {error}");
     assert!(a.join("output λ/cache").exists());
