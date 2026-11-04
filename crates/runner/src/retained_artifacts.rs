@@ -47,7 +47,7 @@ fn target(root: &Path, b: &Blob, transport: Option<&ArtifactTransport>) -> Resul
 }
 /// Stream into the declared upload root, retaining content identity and deduplicating original bytes.
 pub fn stage(root: &Path, input: &Path, directory: &str) -> Result<Value, String> {
-    let _activity = retention::report_activity(root)?;
+    let _activity = retention::read_scope(root)?;
     units::artifact_path(directory)?;
     if !directory.ends_with('/') {
         return Err("retained artifact directory must end /".into());

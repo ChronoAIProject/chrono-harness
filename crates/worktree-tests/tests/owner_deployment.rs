@@ -2,7 +2,6 @@ use super::*;
 use std::io::{BufRead, BufReader, Write};
 use std::process::Stdio;
 const PROFILE: &str = ".chrono-harness/ci/owner-stage.json";
-const LEDGER: &str = ".chrono-harness/state/automatic-cleanup/ledger.json";
 
 fn fixture() -> (Host, PathBuf, String, String) {
     let h = Host::new("payload");
@@ -216,7 +215,7 @@ fn owner_deployment_excludes_main_and_linked_inherited_descendants_until_join() 
                 && x["enrollment"]["id"] == e["ownership"]["id"]));
         }
         assert_eq!(h.ledger()["entries"], value!(entries));
-        assert!(h.root.join(LEDGER).exists());
+        assert!(h.ledger_path(&h.root).exists());
     }
 }
 #[test]
@@ -270,17 +269,13 @@ fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
                 "attachment changed"
             }
         };
-        fs::write(
-            h.root.join(LEDGER),
-            serde_json::to_vec_pretty(&ledger).unwrap(),
-        )
-        .unwrap();
-        let old_ledger = fs::read(h.root.join(LEDGER)).unwrap();
+        h.set_ledger(&ledger);
+        let old_ledger = h.ledger();
         let before = fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap();
         let (code, report, error) = deploy(&h, &exe, &path, &sha);
         assert_ne!(code, 0, "{fault}: {report} {error}");
         assert!(report.to_string().contains(expected), "{fault}: {report}");
-        assert_eq!(fs::read(h.root.join(LEDGER)).unwrap(), old_ledger);
+        assert_eq!(h.ledger(), old_ledger);
         assert_eq!(
             fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap(),
             before

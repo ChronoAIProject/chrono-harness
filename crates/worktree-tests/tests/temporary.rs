@@ -40,17 +40,76 @@ fn command_carrier_count(command: &Command) -> usize {
 }
 
 #[test]
+fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
+    use std::{
+        os::fd::AsRawFd,
+        time::{Duration, Instant},
+    };
+    unsafe extern "C" {
+        fn flock(fd: i32, operation: i32) -> i32;
+    }
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut paths = vec![];
+    for prefix in ["busy metadata ", "independent cleanup "] {
+        let allocation =
+            chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, prefix)
+                .unwrap();
+        fs::create_dir(allocation.path().join("cache 空白")).unwrap();
+        fs::write(
+            allocation.path().join("cache 空白/generated"),
+            b"rebuildable",
+        )
+        .unwrap();
+        paths.push(allocation.path().to_owned());
+        drop(allocation);
+    }
+    // Hold the real allocation metadata exclusion through the complete drain.
+    let held = fs::File::open(&paths[0]).unwrap();
+    assert_eq!(unsafe { flock(held.as_raw_fd(), 2 | 4) }, 0);
+    let began = Instant::now();
+    let (code, report, error) = h.auto("maintain", &[]);
+    let elapsed = began.elapsed();
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(
+        elapsed < Duration::from_secs(10),
+        "busy metadata spent the producer admission deadline: {elapsed:?}"
+    );
+    assert!(paths[0].join("cache 空白").is_dir());
+    assert!(
+        !paths[1].join("cache 空白").exists(),
+        "independent allocation must be reclaimed while the first remains locked: {report}"
+    );
+    assert!(
+        producer_objects(&report)
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["path"].as_str().is_some_and(
+                |path| path.ends_with(paths[0].file_name().unwrap().to_str().unwrap())
+            ) && row["status"] == "protected"
+                && row["reason"] == "live allocation metadata transaction")
+    );
+    drop(held);
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(!paths[0].join("cache 空白").exists());
+}
+
+#[test]
 fn producer_store_resolution_does_not_acquire_maintenance_admission() {
     let h = host();
     h.policy(|p| p["timeout_seconds"] = value!(1));
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
-    let state = h.root.join(".chrono-harness/state/automatic-cleanup");
+    let state = h.record_directory(&h.root);
     let owner = fs::read(state.join("owner.json")).unwrap();
     let ledger = fs::read(state.join("ledger.json")).unwrap();
     let identity = json(&owner).unwrap();
     let admission = chrono_harness::ownership::Lease::acquire(
-        &state.join("admission.lease"),
+        &state.join("metadata.lease"),
         Some(identity["admission_id"].as_str().unwrap()),
         false,
         true,
@@ -81,7 +140,7 @@ fn producer_store_resolution_does_not_acquire_maintenance_admission() {
 fn producer_store_resolution_checks_committed_inputs_without_creating_cleanup_state() {
     for changed in [POLICY, ".chrono-harness/cleanup.json"] {
         let h = host();
-        let state = h.root.join(".chrono-harness/state/automatic-cleanup");
+        let state = h.record_directory(&h.root);
         assert!(!state.exists());
         assert!(
             chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "unknown")
@@ -221,9 +280,15 @@ fn one_drain_keeps_every_released_artifact_disposal_and_original() {
     }
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
-    let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let registry = producer_state(&store);
     assert_eq!(registry["objects"].as_array().unwrap().len(), 3);
-    for (object, path) in registry["objects"].as_array().unwrap().iter().zip(paths) {
+    for path in paths {
+        let object = registry["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|object| object["path"] == path.file_name().unwrap().to_str().unwrap())
+            .expect("every exact released allocation remains registered");
         assert_eq!(object["disposed"], true);
         assert_eq!(object["attempts"].as_array().unwrap().len(), 1);
         assert!(!path.join("cache 空白").exists());
@@ -267,7 +332,7 @@ fn unavailable_allocation_preserves_originals_and_does_not_block_eligible_siblin
     fs::create_dir(&target).unwrap();
     fs::write(target.join("generated"), "rebuildable").unwrap();
     drop(sibling);
-    let read = || json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let read = || producer_state(&store);
     let find = |registry: &Value| {
         registry["objects"]
             .as_array()
@@ -513,7 +578,7 @@ fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnosti
         fs::read(root.join("source.rs")).unwrap(),
         b"retained source"
     );
-    let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let registry = producer_state(&store);
     assert!(
         registry["objects"][0]["consumers"]
             .get("late-diagnostic")
@@ -683,7 +748,7 @@ fn interrupted_native_capture_keeps_partial_raw_streams_without_a_join_or_dispos
     assert!(!capture.join("result.json").exists());
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(root.join("cache 空白/output").exists());
-    let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let registry = producer_state(&store);
     assert!(
         !registry["objects"][0]["consumers"]["interruption-diagnostic"]["released"]
             .as_bool()
@@ -830,8 +895,7 @@ fn unavailable_lease_preserves_its_registration_and_allows_an_eligible_allocatio
     fs::create_dir(root.join("cache 空白")).unwrap();
     fs::write(root.join("cache 空白/original"), "preserve").unwrap();
     drop(allocation);
-    let before =
-        json(&fs::read(store.join("objects.json")).unwrap()).unwrap()["objects"][0].clone();
+    let before = producer_state(&store)["objects"][0].clone();
     let lease = before["cache_lease"]["path"].as_str().unwrap();
     fs::rename(store.join(lease), store.join("retained-unavailable-lease")).unwrap();
     let sibling = chrono_worktree::TemporaryHost::allocate(
@@ -847,10 +911,7 @@ fn unavailable_lease_preserves_its_registration_and_allows_an_eligible_allocatio
     drop(sibling);
     let (exit, report, _) = h.auto("maintain", &[]);
     assert_eq!(exit, 2, "{report}");
-    assert_eq!(
-        json(&fs::read(store.join("objects.json")).unwrap()).unwrap()["objects"][0],
-        before
-    );
+    assert_eq!(producer_state(&store)["objects"][0], before);
     assert_eq!(
         fs::read(root.join("cache 空白/original")).unwrap(),
         b"preserve"
@@ -990,7 +1051,7 @@ fn retained_lifecycle_command_preserves_real_allocation_exclusion_after_host_dro
     let h = super::bounded_cleanup::configure_main(Host::retained("payload"), "allocation-lease");
     let allocation = h._dir.path().to_owned();
     let directory = allocation.parent().unwrap();
-    let registry = json(&fs::read(directory.join("objects.json")).unwrap()).unwrap();
+    let registry = producer_state(&directory);
     let record = registry["objects"]
         .as_array()
         .unwrap()

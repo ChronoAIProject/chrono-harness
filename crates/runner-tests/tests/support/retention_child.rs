@@ -25,16 +25,35 @@ fn main() {
     }
     let root = std::env::args().nth(1).unwrap();
     let root = Path::new(&root);
+    if std::env::args().nth(2).as_deref() == Some("scope-input") {
+        use std::os::unix::fs::MetadataExt;
+        let expected = std::env::args().nth(3).unwrap();
+        let unrelated = std::env::args().nth(4).unwrap();
+        let inherited = std::env::var(chrono_harness::process_fds::ENV).unwrap();
+        let identities: Vec<_> = inherited
+            .split(',')
+            .map(|fd| {
+                let fd: i32 = fd.parse().unwrap();
+                use std::os::fd::FromRawFd;
+                let file = std::mem::ManuallyDrop::new(unsafe { fs::File::from_raw_fd(fd) });
+                let metadata = file.metadata().unwrap();
+                format!("{}:{}", metadata.dev(), metadata.ino())
+            })
+            .collect();
+        assert!(identities.contains(&expected), "{identities:?}");
+        assert!(!identities.contains(&unrelated), "{identities:?}");
+        let round = Inventory::adopted(root)
+            .unwrap()
+            .unwrap()
+            .maintain()
+            .unwrap();
+        assert_eq!(round["remaining_outputs"], 1, "{round}");
+        println!("exact input capability inherited");
+        return;
+    }
     if std::env::args().nth(2).as_deref() == Some("lifecycle-recovery") {
         fn inventory(root: &Path) -> Inventory {
             Inventory::adopted(root).unwrap().unwrap()
-        }
-        fn ledger(root: &Path) -> serde_json::Value {
-            chrono_harness::json(
-                &fs::read(root.join(".chrono-harness/state/output-retention-v1/inventory.json"))
-                    .unwrap(),
-            )
-            .unwrap()
         }
         let path = ".chrono-harness/state/fixtures/result.json";
         fs::write(root.join(path), b"partial original").unwrap();
@@ -63,7 +82,7 @@ fn main() {
         let final_round = inventory(root).maintain_at(u64::MAX).unwrap();
         assert_eq!(final_round["remaining_outputs"], 0, "{final_round}");
         assert_eq!(
-            ledger(root)["summaries"][0]["original_outcome"]["completion"],
+            final_round["disposed"][0]["original_outcome"]["completion"],
             "not-established"
         );
         return;

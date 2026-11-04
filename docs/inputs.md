@@ -52,6 +52,20 @@ and selected obligations pass: that DELTA satisfies the active registered
 contract. Ordinary acceptance requires neither a universal proof of hidden-input
 absence nor a VM. This host's declarations remain proposed/incomplete.
 
+The selected macOS 27 policy declares the current canonical input selector,
+CI event/Git/transport environment, acquisition credential, test-original
+destinations and installed tool consumers. Its bindings now cover every
+configured environment and tool node. The common FILEMAP names the actual
+consumers, including the 34 registered Cargo build/test owners of
+`CARGO_INCREMENTAL`; those owners also bind `CARGO_TERM_COLOR`. Executors use
+these literal declarations. `GH_TOKEN` retains its credential boundary and
+omission from judge business inputs. File-input bindings, original snapshots,
+compiler/SDK closure and native adoption remain incomplete, so the policy keeps
+`status: proposed`, `enforcement: not-implemented` and
+`input_closure.status: incomplete`. Validation uses the registered candidate
+bootstrap, canonical DELTA check and native PR/landing checks; total validation
+and storage costs remain unmeasured.
+
 Local and CI must use the same registered check command. Equal verdicts across
 environments additionally require equal complete effective inputs and deterministic
 evaluation. The separate runner parity comparator requires

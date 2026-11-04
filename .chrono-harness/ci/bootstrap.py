@@ -528,7 +528,14 @@ def main():
         if "host_environment" in config:
             result["host_environment"] = config["host_environment"]
             result["environment"].update({key: env[key] for key in config["host_environment"]})
+        reused, owner_source = {}, None
+        if "reuse_owner_operations" in config:
+            import bootstrap_owner
+            reused, owner_source = bootstrap_owner.reuse_construction(root, config, result, source_before)
         for index, operation in enumerate(config["operations"], start=len(prerequisites)):
+            if operation in reused:
+                result["operations"].append(reused[operation])
+                continue
             action = operations[operation]
             executable = (bindings[action["tool"]]["path"] if bindings and action["tool"] in bindings
                           else config["tools"][action["tool"]])
@@ -543,6 +550,8 @@ def main():
             raise ValueError("bound executable changed during bootstrap")
         for item in config["install"]:
             source, target = root / item["source"], root / item["destination"]
+            if owner_source is not None and item["destination"] == config["participation"]["program"]:
+                source = owner_source
             if not source.is_file():
                 raise ValueError("missing built tool: " + str(source))
             if item["destination"] == config.get("participation", {}).get("program"):

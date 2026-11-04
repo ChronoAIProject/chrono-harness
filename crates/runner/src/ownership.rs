@@ -13,6 +13,101 @@ pub struct Lease {
     #[cfg(unix)]
     _scope: crate::process_fds::Scope,
 }
+
+/// Metadata exclusion on the addressed directory itself. Removing an empty
+/// registration does not leave a separate lock file or authorize a detached
+/// waiter to publish into a replacement directory.
+pub struct DirectoryLease {
+    file: File,
+    path: PathBuf,
+    id: String,
+    #[cfg(unix)]
+    _scope: crate::process_fds::Scope,
+}
+impl DirectoryLease {
+    pub fn acquire(
+        path: &Path,
+        exclusive: bool,
+        wait: Option<Duration>,
+    ) -> Result<Option<Self>, String> {
+        #[cfg(not(unix))]
+        {
+            let _ = (path, exclusive, wait);
+            Err("kernel ownership is unsupported on this platform".into())
+        }
+        #[cfg(unix)]
+        {
+            use std::os::{
+                fd::{AsFd, AsRawFd},
+                unix::fs::{MetadataExt, OpenOptionsExt},
+            };
+            let file = OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+                .open(path)
+                .map_err(|e| format!("directory ownership {}: {e}", path.display()))?;
+            let m = file.metadata().map_err(|e| e.to_string())?;
+            let id = format!("{}:{}", m.dev(), m.ino());
+            let began = Instant::now();
+            loop {
+                if unsafe {
+                    libc::flock(
+                        file.as_raw_fd(),
+                        (if exclusive {
+                            libc::LOCK_EX
+                        } else {
+                            libc::LOCK_SH
+                        }) | libc::LOCK_NB,
+                    )
+                } == 0
+                {
+                    break;
+                }
+                let error = std::io::Error::last_os_error();
+                if error.kind() == std::io::ErrorKind::Interrupted {
+                    continue;
+                }
+                if error.kind() != std::io::ErrorKind::WouldBlock {
+                    return Err(error.to_string());
+                }
+                match wait {
+                    None => return Ok(None),
+                    Some(bound) if began.elapsed() >= bound => {
+                        return Err(format!(
+                            "addressed directory remains busy at {}; ownership was not expired",
+                            path.display()
+                        ));
+                    }
+                    Some(_) => std::thread::sleep(Duration::from_millis(10)),
+                }
+            }
+            let scope = crate::process_fds::Scope::new(&[file.as_fd()])?;
+            let result = Self {
+                file,
+                path: path.into(),
+                id,
+                _scope: scope,
+            };
+            result.stable()?;
+            Ok(Some(result))
+        }
+    }
+    pub fn stable(&self) -> Result<(), String> {
+        let m = fs::symlink_metadata(&self.path).map_err(|e| e.to_string())?;
+        if !m.is_dir() || m.file_type().is_symlink() {
+            return Err("held metadata directory changed".into());
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if format!("{}:{}", m.dev(), m.ino()) != self.id {
+                return Err("held metadata directory identity changed".into());
+            }
+        }
+        self.file.metadata().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
 pub fn identity(path: &Path) -> Result<String, String> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|e| format!("ownership identity {}: {e}", path.display()))?;

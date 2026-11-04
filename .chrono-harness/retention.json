@@ -1,5 +1,5 @@
 {
-  "schema": "chrono-output-retention/v1",
+  "schema": "chrono-output-retention/v2",
   "producers": {
     "worktree-fixture": [
       ".chrono-harness/state/worktree-test-failures/",
@@ -25,13 +25,13 @@
     ]
   },
   "keep_seconds": 0,
-  "max_entries": 512,
+  "max_related_outputs": 512,
   "max_summaries": 128,
   "max_nodes_per_round": 256,
   "max_bytes_per_round": 67108864,
   "max_millis_per_round": 25,
   "max_output_bytes": 1073741824,
-  "max_total_bytes": 8589934592,
+  "metadata_keep_seconds": 86400,
   "max_manifest_nodes": 16384,
   "max_metadata_bytes_per_round": 67108864
 }

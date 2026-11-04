@@ -497,9 +497,7 @@ fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
 fn missing_main_artifact_ownership_fails_closed_instead_of_reporting_empty_cleanup() {
     let h = main_host();
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
-    let ledger_path = h
-        .root
-        .join(".chrono-harness/state/automatic-cleanup/ledger.json");
+    let ledger_path = h.ledger_path(&h.root);
     let original = fs::read(&ledger_path).unwrap();
     let mut ledger = json(&original).unwrap();
     ledger["entries"][0]["enrollment"]
@@ -640,9 +638,7 @@ fn main_historical_custody_publication_retry_and_partial_disposal_preserve_origi
     use std::os::unix::fs::PermissionsExt;
     let h = historical_host();
     let plan = custody_plan(&h, &["output λ/", "nested/cache/"]);
-    let ledger = h
-        .root
-        .join(".chrono-harness/state/automatic-cleanup/ledger.json");
+    let ledger = h.ledger_path(&h.root);
     let prior = fs::read(&ledger).unwrap();
     let (code, first, error) = custody(&h, &plan);
     assert_eq!(code, 0, "{first} {error}");

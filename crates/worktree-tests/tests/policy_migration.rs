@@ -1,6 +1,5 @@
 use super::*;
 const CLEANUP: &str = ".chrono-harness/cleanup.json";
-const LEDGER: &str = ".chrono-harness/state/automatic-cleanup/ledger.json";
 
 fn edit(root: &Path, path: &str, change: impl FnOnce(&mut Value)) {
     let file = root.join(path);
@@ -107,11 +106,11 @@ fn policy_migration_requires_committed_matching_target_and_coordinator() {
     let (h, target) = fixture();
     advance(&h);
     cache(&target);
-    let ledger = fs::read(h.root.join(LEDGER)).unwrap();
+    let ledger = fs::read(h.ledger_path(&target)).unwrap();
     let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
     assert_ne!(code, 0, "{report} {error}");
     assert!(report.to_string().contains("must adopt the coordinator"));
-    assert_eq!(fs::read(h.root.join(LEDGER)).unwrap(), ledger);
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
     adopt(&h, &target);
     let adopted = fs::read(target.join(CLEANUP)).unwrap();
     fs::write(target.join(CLEANUP), [adopted.as_slice(), b"\n"].concat()).unwrap();
@@ -119,14 +118,14 @@ fn policy_migration_requires_committed_matching_target_and_coordinator() {
         h.auto("migrate", &["--path", target.to_str().unwrap()]).0,
         0
     );
-    assert_eq!(fs::read(h.root.join(LEDGER)).unwrap(), ledger);
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
     fs::write(target.join(CLEANUP), &adopted).unwrap();
     fs::write(h.root.join(CLEANUP), [adopted.as_slice(), b"\n"].concat()).unwrap();
     assert_ne!(
         h.auto("migrate", &["--path", target.to_str().unwrap()]).0,
         0
     );
-    assert_eq!(fs::read(h.root.join(LEDGER)).unwrap(), ledger);
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
     fs::write(h.root.join(CLEANUP), adopted).unwrap();
     migrate(&h, &target);
     assert!(target.join("output λ/cache").exists());
@@ -155,13 +154,13 @@ fn policy_migration_retries_published_transition_without_growing_or_rewriting_hi
     let (h, target) = fixture();
     advance(&h);
     adopt(&h, &target);
-    let prior = fs::read(h.root.join(LEDGER)).unwrap();
+    let prior = fs::read(h.ledger_path(&target)).unwrap();
     let first = migrate(&h, &target);
     let receipt = &first["policy_migration"]["receipt"];
     let path = h.root.join(receipt["path"].as_str().unwrap());
     let bytes = fs::read(&path).unwrap();
     // Reproduce the durable state between receipt publication and ledger save.
-    fs::write(h.root.join(LEDGER), prior).unwrap();
+    fs::write(h.ledger_path(&target), prior).unwrap();
     let retry = migrate(&h, &target);
     assert_eq!(retry["policy_migration"]["receipt"], *receipt);
     assert_eq!(fs::read(path).unwrap(), bytes);
@@ -299,18 +298,26 @@ fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
     assert_eq!(entry["ownership"]["generation"], 3);
     assert_eq!(fs::read(receipt).unwrap(), first_bytes);
     cache(&target);
-    let complete = fs::read(h.root.join(LEDGER)).unwrap();
-    edit(&h.root, LEDGER, |v| {
-        v["entries"][0]["policy_migrations"]
-            .as_array_mut()
+    let complete = fs::read(h.ledger_path(&target)).unwrap();
+    edit(
+        &h.root,
+        h.ledger_path(&target)
+            .strip_prefix(&h.root)
             .unwrap()
-            .remove(0);
-    });
+            .to_str()
+            .unwrap(),
+        |v| {
+            v["entries"][0]["policy_migrations"]
+                .as_array_mut()
+                .unwrap()
+                .remove(0);
+        },
+    );
     let (code, report, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{report} {error}");
     assert!(report.to_string().contains("migration chain"));
     assert!(target.join("output λ/cache").exists());
-    fs::write(h.root.join(LEDGER), complete).unwrap();
+    fs::write(h.ledger_path(&target), complete).unwrap();
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!target.join("output λ").exists());
 }

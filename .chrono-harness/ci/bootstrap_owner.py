@@ -140,6 +140,45 @@ def check_shared_install(root, source, target, adoption):
             raise ValueError("changed lifecycle executable requires exclusive owner deployment")
 
 
+def reuse_construction(root, config, result, observed):
+    """Consume the current owner's actual construction instead of building it twice."""
+    names = config.get("reuse_owner_operations", [])
+    if (not isinstance(names, list) or any(not isinstance(name, str) for name in names)
+            or len(set(names)) != len(names) or not set(names) <= set(config["operations"])
+            or (names and "owner_upgrade" not in config)):
+        raise ValueError("invalid owner construction reuse declaration")
+    if not names:
+        return {}, None
+    adoption = config["participation"]
+    if bootstrap.coordinator_root(root, adoption) != root:
+        return {}, None
+    current_path = shared.safe(root, CURRENT)
+    if not current_path.exists():
+        return {}, None  # A physical main's first source build still seeds its owner.
+    current = json.loads(current_path.read_bytes())
+    selected = shared.safe(root, adoption["program"], ".chrono-harness/bin/")
+    if current.get("source_commit") != observed["commit"]:
+        raise ValueError("owner construction must belong to the current candidate")
+    qualified_publication(root, current, selected)
+    report, profile = stage_report(root, current["stage_result"], current["stage_sha256"])
+    for field in ("projects", "rust_toolchain", "rust_incremental", "require_tool_bindings",
+                  "tool_bindings_registry", "tool_bindings", "native_platform", "tools",
+                  "host_environment", "environment", "toolchain_provision"):
+        if profile.get(field) != config.get(field):
+            raise ValueError("owner construction selection differs: " + field)
+    for field in ("environment", "executables", "selection", "versions", "host_environment"):
+        if report.get(field) != result.get(field):
+            raise ValueError("owner construction observation differs: " + field)
+    rows = {row["operation"]: row for row in report["operations"]}
+    if not set(names) <= set(rows):
+        raise ValueError("owner construction is missing a declared operation")
+    source = shared.safe(root, report["owner_stage"]["staged"]["path"], STAGES)
+    reused = {name: dict(rows[name], reused_from={"path": current["stage_result"],
+                                                "sha256": current["stage_sha256"]})
+              for name in names}
+    return reused, source
+
+
 def stage(root, config, result, previous):
     require_capabilities(root)
     declaration = config["owner_stage"]

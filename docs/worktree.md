@@ -905,7 +905,7 @@ and are not rescanned on every later start. A subsequent explicit finish may set
 evidence using `--dispose-evidence` only when policy allows it; the prior terminal
 receipt stays in history. New managed use is refused after terminal handoff.
 When finish runs from the enrolled checkout itself, the drain excludes that source;
-a later coordinator `maintain` or start performs disposal.
+a later explicit coordinator `maintain` performs disposal.
 
 Whole-checkout removal delegates to existing `Cleanup`, including literal
 cleanliness, two-endpoint artifact whitelist, exact retention, physical identity,
@@ -971,6 +971,43 @@ allocation differences do not establish filesystem savings. Failed removal
 retains the original error and observed remaining objects, and retries preserve
 the original attempt.
 
+Each worktree owns `enrollments/SHA256(absolute-path)/ledger.json` and its
+identity-bound `metadata.lease` under the declared cleanup state directory.
+The record contains only successive physical attachments of that exact address.
+Ordinary updates never rewrite another worktree's record. Cleanup keeps this
+local metadata exclusion and the target's exclusive enrollment capability through
+its physical effect and original-result publication. There is no aggregate
+`ledger.json`, global admission lease, or release/reload merge around independent
+IO. An unrelated owner's busy or damaged record is preserved and reported;
+it does not refuse a valid target's admission. Explicit maintenance still reports
+these failures and continues available independent owners.
+
+Ordinary start/reconstruct/use/check/bootstrap/finish entries maintain only the
+addressed worktree. They do not sweep independent worktrees or fixture producers
+as an admission prerequisite, and diagnostic inventory is limited to their actual
+source/destination addresses. The registered explicit `maintain` command visits
+the declared enrollment and producer owners independently; it is not a prerequisite
+for unrelated work. This removes an ever-growing cross-worktree sweep from normal
+entry and leaves failed/missing results in their responsible owner's record.
+
+The immutable `namespace.json` binds the physical Git owner and the executable's
+`deployment.lease`; it has no mutable membership list. Ordinary owners share that
+lease. Only replacement of the executable common to these enrollments takes it
+exclusively and excludes every actual affected enrollment before publishing.
+This protects the real shared executable without serializing ordinary updates.
+Maintenance enumerates only the declared enrollment namespace and validates each
+record's explicit address. Unknown data never authorizes disposal. Aggregate
+state is refused on ordinary entry; this implementation has no compatibility
+reader or fallback. A current custodian must preserve and partition active state
+under the original exclusions before switching executable generations.
+
+**Product and host adoption change together:** enrollment storage and its current
+consumer/test bindings change in this candidate; the host's registered lifecycle
+and bootstrap commands, retention windows and disposal authority remain the same.
+The affected core, evidence-custody, policy-migration and owner-deployment behavior
+must pass their registered checks. Build, migration and total runtime costs are
+unmeasured until those actual results are available.
+
 The optional v2 `retained_producers` lists exact producer IDs, evidence directories,
 and generated output paths relative to each explicitly registered receipt.
 The adopted `ci-command-result` family belongs to
@@ -982,8 +1019,9 @@ digests. Interruption or admission failure before `begin` leaves an unregistered
 copy protected as unknown evidence; an admitted but unsealed receipt also remains
 protected. The interface records consumers
 with independent explicit acquire/release receipts. Dropping a handle or losing
-a process never releases a receipt. The existing drain reads only that family's
-`objects.json`; it does not discover directories or infer references.
+a process never releases a receipt. The existing drain reads only producer-written registrations in that family's
+explicit `producer-records/` namespace. Each entry declares its exact artifact,
+owner and references; artifact directories are never searched for membership.
 
 Publication resolves the selected producer through `RetainedArtifact::registered_store`,
 using the same committed worktree configuration, cleanup policy, registration,
@@ -1123,8 +1161,8 @@ only the binary or only a linked policy intentionally refuses before build or
 cleanup. Never convert v1 tokens to leases. The real coordinator transition and
 its retained evidence remain caller-owned acceptance.
 
-Admission is a stable identity-bound flock inode. Each physical attachment
-generation has one stable SH/EX lease. Normal use acquires SH before intent/spawn
+Each addressed enrollment has its own stable identity-bound metadata flock inode.
+Each physical attachment generation has one stable SH/EX use/disposal lease. Normal use acquires SH before intent/spawn
 and holds it across result publication; admission is released before business
 execution. Git mutation children inherit admission. Cleanup holds admission and
 nonblocking EX, preserving live holders. Last close releases ownership; no
@@ -1137,11 +1175,12 @@ reuses its original bytes before attaching the pointer to the ledger. Recovery
 retains the original report and any unreferenced sealed receipt as input evidence;
 it leaves `sealed_receipt` absent and records `original_outcome: not-established`.
 
-Cleanup refusals are scoped to their enrollment. Normal start/reconstruct/use/check
-and bootstrap retain unrelated failures in `drain`, immutable failed receipts and
-`cleanup_failures`, then admit a valid target. Target admission/ownership failures
-and coordinator/state publication errors still block. Explicit `maintain` returns
-failure while any attempted cleanup fails; it never discards an earlier receipt.
+Cleanup refusals are scoped to their enrollment. Ordinary start/reconstruct/use/check
+and bootstrap do not attempt unrelated enrollment or fixture-producer cleanup.
+Target admission/ownership failures and target state publication errors still block.
+Explicit `maintain` retains unrelated failures in `drain`, immutable failed receipts
+and `cleanup_failures`, continues independent enrollments, and returns failure while
+any attempted cleanup fails; it never discards an earlier receipt.
 
 Automatic lifecycle reports preserve prior inputs through
 `chrono-worktree-retained-input/v1` references. Each reference carries the physical
@@ -1164,16 +1203,17 @@ continue to consume the unchanged parent `managed_process` streams and status.
 Receipt consumption checks these explicit references transitively,
 deduplicating reads within the check. Missing, changed, incorrectly bound or
 symlinked inputs refuse cleanup; an opaque partial result is preserved without
-requiring valid JSON. Historical inline evidence remains readable. Explicit
+requiring valid JSON. Historical inline drain reports are rejected. Explicit
 maintenance outside automatic lifecycle retains its existing report shape.
 This bounds historical embedding, not the number or total size of necessary
 original observations; retention and disposal remain governed by host policy.
-Historical `drain[].report` remains supported by the current reference verifier.
+Only current `drain[].input` descriptors participate in reference verification.
 The stdout protocol bound is unchanged. Parent publication still fails on its own
 IO or transport errors, and a retained child failure remains a cleanup failure.
 
-Later start/reconstruct/maintain and managed admission can dispose unfinished
-quiescent caches, including a successful use with no orphan token. EX permits
+Later addressed start/reconstruct and managed admission, or explicit cross-target
+`maintain`, can dispose unfinished quiescent caches, including a successful use
+with no orphan token. EX permits
 orphan-use reconciliation as result-unavailable while retaining original result
 bytes. Cache disposal keeps `status: active`, `terminal: null`, checkout, refs,
 dirty/staged source, unretained commits, bin and evidence. It selects only
@@ -1322,9 +1362,9 @@ without a fabricated result. These captures never enter generated membership.
 `register_copy` retains a verified source original and records the exact future
 destination before the real copy. `relocate_copies` carries only enrolled members
 before the actual within-allocation rename. Copy preparation holds the allocation
-lease while hashing, copying and syncing outside the shared producer registry
-lease. Publication reopens the current registry, checks its original directory,
-lease, allocation and intent bindings, and preserves intervening allocations,
+lease while hashing, copying and syncing outside its allocation metadata transaction.
+Publication reopens only its current registration, checks the immutable namespace,
+allocation and intent bindings, and preserves intervening allocations,
 body registrations and diagnostic references. Concurrent copies may retain one
 content-addressed original only after verifying the published winner's bytes;
 its physical fingerprint must remain unchanged through registration. Current
@@ -1339,22 +1379,45 @@ are rechecked before each effect. Copied members and their retained originals
 have distinct lifetimes. Final-original retention/publication and the compatible
 shared-effect composition are separate work; this API does not release originals.
 
-Each producer admission reads the current complete registry under its existing
-lease. One process-local derived snapshot retains the last store's decoded and
-serialized declarations. Reuse requires matching directory and header identities
-and exact current serialized bytes for that record; new or changed records fully
-decode with the existing strict schema. Malformed unrelated records still refuse
-admission. Directory, lease, allocation, reference, source and original checks
-still use their current inputs; this snapshot does not establish physical state.
-A publication encodes its one changed or appended record and forwards the other
-validated records through the existing JSON library. After a successful atomic
-replacement it refreshes the declaration snapshot, so subsequent updates in the
-same drain preserve earlier results. Mutation clones only the changed object.
-The one snapshot slot is replaced on store admission/publication and released at
-process exit; it has no persisted cache or separate cleanup entry. Retained bytes
-and decoded declarations are proportional to the last store's registry. The raw
-parsing layer still reads and writes the complete registry file; memory and total
-performance costs require consumer measurement, rather than an assumed IO saving.
+Each allocation owns one current `producer-records/` registration. Its immutable
+`objects.json` namespace identity contains no object list or mutable outcomes.
+Ordinary admission reads that small identity and only the addressed allocation's
+registration. Allocation, copied-body and diagnostic-reference updates hold an
+identity-bound directory lock for that allocation; unrelated allocations do not
+share a mutation lock, decoded cache or catalogue rewrite. Initial namespace
+creation alone excludes competing births. Current stores create no
+`registry.lease`.
+
+Cleanup enumerates the explicitly declared registration namespace, validates each
+entry's strict schema, owner digest and canonical address, then checks its actual
+allocation and use leases. This reads producer declarations rather than scanning
+artifact trees or deriving ownership from file names. A malformed registration
+retains its error and originals while independent registrations remain eligible.
+Publication stages outside the registration namespace and atomically replaces
+only its owned record. There is no global decoded snapshot or mutable membership
+index. Original source, consumer, nested-custody and disposal checks still apply;
+performance and complete finite metadata retention require actual acceptance.
+
+An ordinary drain attempts allocation metadata exclusion without waiting. An
+allocation being updated remains protected with its original state, while
+independent registrations continue. The thirty-second producer admission bound
+still applies to actual publication and reference updates for that allocation.
+Explicit retained-producer maintenance keeps only the invoking enrollment's
+metadata exclusion. Independent enrollments have separate records and locks; no
+release/reload merge is needed around physical IO. Actual regression and
+coordinator/native acceptance are required; the report publication owner still
+has its own separate concurrency limitations.
+
+`migrate --path COORDINATOR --partition-producer ID` is the sole explicit data
+cutover for an adopted retained producer. It consumes the exact v1 bytes under
+that producer's original exclusive lease, retains those original bytes and an
+independent migration receipt, writes the per-object registrations and atomically
+activates the immutable current owner. Outcomes and consumers are copied without
+release or disposal. Interrupted staging can reuse an identity-bound namespace;
+unknown metadata births remain protected. Old writers reject the activated strict
+shape. Ordinary runtime has no historical decoder or format fallback. Deployment,
+joining or excluding old writers, real-host migration and full SPEC acceptance
+remain caller obligations; changing source alone does not establish cutover.
 
 Copied-body admission runs once in the shared effect owner's immediate
 pre-unlink callback. It verifies current member content and identity, retained
@@ -1370,8 +1433,8 @@ body-custody tests pass, including content drift of unchanged length. This does
 not establish native end-to-end timing or complete SPEC acceptance.
 
 After a joined managed `use`, `check` or `bootstrap` command succeeds, the owner
-runs the same guarded drain before returning. This recovers eligible fixture
-bodies created during that command before a following artifact upload. The
+runs its addressed worktree drain before returning. Fixture-producer maintenance
+is an explicit `maintain` activity and does not precede unrelated operations. The
 separate `post_use_cleanup` report retains this pass without replacing admission's
 drain or the original managed process and use receipt. The invoking source and
 target keep their existing exclusion and live leases; producer recovery still
@@ -1467,6 +1530,21 @@ admission/enrollment protection. The internal stage profile builds `build.worktr
 and retains its distinct executable under `.chrono-harness/bin/owner-stages/`.
 A construction failure never requests deployment. The original construction
 command and children join before the staged executable requests EX.
+
+The core profile explicitly lists `reuse_owner_operations` for the owner's fetch
+and build. After current-candidate deployment, core consumes those original
+operation records and streams and uses the retained staged executable as its
+installation input. It validates the current adoption, source, declarations,
+toolchain and observed environment before reuse. The original PID, exit and
+stream descriptors remain intact, with `reused_from` naming the stage report;
+core does not claim a second execution. A first seed or separately owned linked
+tool still runs its declared construction.
+
+Product and host policy change together: this removes the duplicate owner build
+from an adopted main's core execution and prevents a scratch rebuild from
+replacing its deployed bytes. The registered bootstrap tests exercise reuse,
+selection and original-binding rejection, followed by source bootstrap and
+affected canonical/native checks. Total time saved remains unmeasured.
 
 Ordinary shared bootstrap reuses identical coordinator-owner bytes; changing them
 requires the owner deployment callback. A linked checkout installs its separately
