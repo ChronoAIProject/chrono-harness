@@ -160,8 +160,11 @@ The current isolated-host cutover stages the new worktree owner from a clean
 program candidate while the existing host selection remains usable by the old
 producer. The custodian then excludes the old admission, actual output and
 transaction capabilities, preserves the exact inventory/policy originals,
-materializes addressed declarations with unchanged domain state, selects policy
-v2 and deploys the retained candidate through `deploy-owner`. The final policy
-commit, clean bootstrap and canonical checks follow that switch. The intermediate
-program candidate is staging evidence and does not establish final acceptance.
+materializes addressed declarations with unchanged domain state and selects policy
+v2. Commit that selection before deployment, whose publication callback requires
+the exact current clean source. The retained candidate then owns the registered
+stage bootstrap; the selected old owner cannot read the newly selected policy.
+Deploy that stage through `deploy-owner`, then run the normal clean bootstrap and
+canonical checks. The intermediate program candidate is staging evidence and
+does not establish final acceptance.
 No ordinary operation decodes the old aggregate layout.
