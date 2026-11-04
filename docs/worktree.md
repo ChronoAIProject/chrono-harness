@@ -1503,6 +1503,21 @@ and retains its distinct executable under `.chrono-harness/bin/owner-stages/`.
 A construction failure never requests deployment. The original construction
 command and children join before the staged executable requests EX.
 
+The core profile explicitly lists `reuse_owner_operations` for the owner's fetch
+and build. After current-candidate deployment, core consumes those original
+operation records and streams and uses the retained staged executable as its
+installation input. It validates the current adoption, source, declarations,
+toolchain and observed environment before reuse. The original PID, exit and
+stream descriptors remain intact, with `reused_from` naming the stage report;
+core does not claim a second execution. A first seed or separately owned linked
+tool still runs its declared construction.
+
+Product and host policy change together: this removes the duplicate owner build
+from an adopted main's core execution and prevents a scratch rebuild from
+replacing its deployed bytes. The registered bootstrap tests exercise reuse,
+selection and original-binding rejection, followed by source bootstrap and
+affected canonical/native checks. Total time saved remains unmeasured.
+
 Ordinary shared bootstrap reuses identical coordinator-owner bytes; changing them
 requires the owner deployment callback. A linked checkout installs its separately
 owned local tool under existing enrollment protection. Bootstrap resolves the
