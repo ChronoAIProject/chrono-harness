@@ -334,8 +334,9 @@ committing this workflow.
 The root `chrono-git-configs/v2` exact executable identity semantics, worktree v3,
 known identity tuples and unknown-byte rejection are unchanged. No source-selector
 schema, input-set extension, historical full policy, beta.21 installation or new
-installer is adopted. Historical native config/runner files under `native/macos/`
-are fixed decoder/test data only; no registered action selects that pair. See
+installer is adopted. The historical native config/runner fixtures are retired
+with their obsolete test comparison and FILEMAP entries. Their fixed source remains in Git; current
+acquisition tests consume the current observation declarations directly. See
 [input source custody](input-source-custody.md) for the preserved omissions and
 unequal-original correction. Full activation, complete input closure, fixed
 retained endpoint pairs, native acceptance and parity remain incomplete.
