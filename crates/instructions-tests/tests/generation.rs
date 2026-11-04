@@ -1141,10 +1141,22 @@ fn unsupported_manifest_preserves_unmanaged_sources_and_roots() {
             serde_json::from_slice::<serde_json::Value>(&host.read(MANIFEST)).unwrap(),
             legacy_manifest()
         );
-        assert!(!host.root.join(".chrono-harness/instructions/catalog.json").exists());
+        assert!(
+            !host
+                .root
+                .join(".chrono-harness/instructions/catalog.json")
+                .exists()
+        );
         for path in ["AGENTS.md", "CLAUDE.md"] {
-            assert_eq!(host.read(path), format!("host preface\n{BEGIN}\nold reading route\n{END}\nhost tail").as_bytes());
-            assert!(fs::symlink_metadata(host.root.join(path)).unwrap().is_file());
+            assert_eq!(
+                host.read(path),
+                format!("host preface\n{BEGIN}\nold reading route\n{END}\nhost tail").as_bytes()
+            );
+            assert!(
+                fs::symlink_metadata(host.root.join(path))
+                    .unwrap()
+                    .is_file()
+            );
         }
     }
 }
