@@ -315,7 +315,7 @@ pub fn compiler_outputs(output: &str) -> (argument: Vec<u8>)
 }
 
 pub open spec fn verifier_arguments(args: Seq<String>) -> bool {
-    args.len() == 11
+    args.len() == 12
         && args[0]@ == "--crate-type=lib"@
         && args[1]@ == "--no-cheating"@
         && args[2]@ == "--no-external-by-default"@
@@ -325,12 +325,13 @@ pub open spec fn verifier_arguments(args: Seq<String>) -> bool {
         && args[6]@ == "--compile"@
         && args[7]@ == "--emit=link="@ + args[10]@ + ",dep-info="@ + args[10]@ + ".d"@
         && args[9]@ == "-o"@
+        && args[11]@ == "-Zchecksum-hash-algorithm=sha256"@
 }
 
 pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
     ensures valid <==> verifier_arguments(args@),
 {
-    if args.len() != 11 {
+    if args.len() != 12 {
         return false;
     }
     let outputs = compiler_outputs(args[10].as_str());
@@ -349,6 +350,7 @@ pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
         && equal_text(args[6].as_str(), "--compile")
         && outputs_match
         && equal_text(args[9].as_str(), "-o")
+        && equal_text(args[11].as_str(), "-Zchecksum-hash-algorithm=sha256")
 }
 
 /// One record binds the finding identity to the decision which produced it.

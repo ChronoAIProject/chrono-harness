@@ -254,6 +254,7 @@ fn canonical_arguments() -> (args: Vec<String>)
         "2".to_owned(), "--output-json".to_owned(),
         "--compile".to_owned(), "--emit=link=proof.rlib,dep-info=proof.rlib.d".to_owned(), "root.rs".to_owned(),
         "-o".to_owned(), "proof.rlib".to_owned(),
+        "-Zchecksum-hash-algorithm=sha256".to_owned(),
     ]
 }
 
@@ -291,6 +292,24 @@ fn verifier_arguments_cannot_disable_checks_or_select_partial_functions() {
     let empty: Vec<String> = Vec::new();
     let absent = policy::canonical_verifier_arguments(&empty);
     assert(!absent);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn verifier_arguments_require_source_checksums() {
+    proof {
+        reveal_strlit("-Zchecksum-hash-algorithm=sha256");
+        reveal_strlit("-Zchecksum-hash-algorithm=sha1");
+    }
+    let mut args = canonical_arguments();
+    let accepted = policy::canonical_verifier_arguments(&args);
+    assert(accepted);
+    args[11] = "-Zchecksum-hash-algorithm=sha1".to_owned();
+    let weaker = policy::canonical_verifier_arguments(&args);
+    assert("-Zchecksum-hash-algorithm=sha256"@.len() != "-Zchecksum-hash-algorithm=sha1"@.len());
+    assert(!weaker);
+    args.pop();
+    let missing = policy::canonical_verifier_arguments(&args);
+    assert(!missing);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
