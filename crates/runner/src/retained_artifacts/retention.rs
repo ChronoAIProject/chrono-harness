@@ -184,8 +184,9 @@ struct ReadInputs {
     #[cfg(unix)]
     capabilities: RefCell<BTreeMap<String, crate::process_fds::Scope>>,
 }
-/// A caller keeps only the originals it explicitly reads until its output
-/// handoff. The existing process engine forwards these exact capabilities.
+/// A caller keeps the originals it explicitly reads or produces until its
+/// output handoff. Enclosing callers receive the exact child output capability;
+/// the existing process engine forwards these capabilities to subprocesses.
 pub struct ReadScope(Rc<ReadInputs>);
 impl Drop for ReadScope {
     fn drop(&mut self) {
@@ -2404,6 +2405,10 @@ impl Publication {
         consumer: Option<&str>,
         observe: impl FnOnce(),
     ) -> Result<(), String> {
+        // Returning a completed original hands its capability to any enclosing
+        // caller before the producer closes. A nested caller may have no durable
+        // root left after success, while its parent still needs its exact result.
+        self.inventory.remember_input(&self.lease)?;
         if serde_json::to_vec(&outcome)
             .map_err(|e| e.to_string())?
             .len()
@@ -2865,9 +2870,6 @@ fn publish_owned_with(
         .map_err(|e| e.to_string())?;
     write_content(&mut file)?;
     file.sync_all().map_err(|e| e.to_string())?;
-    if consumer.is_some() {
-        publication.inventory.remember_input(&publication.lease)?;
-    }
     match role {
         Some((role, true)) => publication.complete_releasing_consumer(outcome, &role)?,
         _ => publication.complete(outcome)?,

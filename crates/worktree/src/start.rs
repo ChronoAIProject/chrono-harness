@@ -726,10 +726,9 @@ pub(crate) fn with_report_for_consumer(
         false,
         value!({"operation":operation,"outcome":"not-established"}),
     )?;
-    // The publication capability and durable recovery root already protect this
-    // output. Start family protection only after admission's maintenance, so it
-    // can resume a partial retirement without this invocation rooting all history.
-    // Other active collectors and exact roots still exclude both earlier rounds.
+    // The publication capability and durable recovery root protect this output.
+    // This caller retains only its actual inputs and child-produced originals
+    // through their handoff to the completed report.
     let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(root)?;
     let mut output = fs::OpenOptions::new()
         .write(true)

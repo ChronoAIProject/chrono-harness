@@ -180,9 +180,13 @@ whole local/native validation costs remain unmeasured until actual execution.
 
 Lifecycle entry and output admission perform their bounded retention rounds.
 There is no report-family lease. Each caller's `ReadScope` retains only the exact
-originals acquired through explicit read guards or consume calls, including nested
-reader calls. It keeps owned descriptor copies registered with the existing process
-engine, so subprocesses inherit those same original capabilities. An idle scope
+originals acquired through explicit read guards, consume calls or its own completed
+publications, including nested calls. Completing a child publication transfers its
+exact capability to enclosing callers before the producer closes, so a parent can
+read the result and publish its dependency after the child releases its success
+root. Lifecycle state readers acquire the same explicit read protection. The scope
+keeps owned descriptor copies registered with the existing process engine, so
+subprocesses inherit those same original capabilities. An idle scope
 protects nothing; another collector does not retain unrelated historical reports.
 Pending publication and failure roots remain durable across interruption. Successful
 final originals retain their publication root until actual fixed-pointer settlement;
