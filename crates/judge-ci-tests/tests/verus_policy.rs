@@ -12,6 +12,101 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn source_sha256_text_requires_exact_lowercase_hex_length() {
+    let mut hash: Vec<u8> = Vec::new();
+    let mut i = 0;
+    while i < 64
+        invariant 0 <= i <= 64, hash.len() == i,
+            forall|j: int| 0 <= j < hash.len() ==> (#[trigger] hash[j]) == 48u8,
+        decreases 64 - i,
+    {
+        hash.push(48u8);
+        i += 1;
+    }
+    let zero = policy::sources::valid_sha256_text(hash.as_slice());
+    assert(zero);
+    let _ = hash.pop();
+    let short = policy::sources::valid_sha256_text(hash.as_slice());
+    assert(!short);
+    hash.push(65u8);
+    let uppercase = policy::sources::valid_sha256_text(hash.as_slice());
+    assert(hash@[63] == 65u8);
+    assert(!uppercase);
+    hash[63] = 102u8;
+    let hex_end = policy::sources::valid_sha256_text(hash.as_slice());
+    assert(hex_end);
+    hash[63] = 103u8;
+    let beyond_hex = policy::sources::valid_sha256_text(hash.as_slice());
+    assert(hash@[63] == 103u8);
+    assert(!beyond_hex);
+    hash.push(48u8);
+    let long = policy::sources::valid_sha256_text(hash.as_slice());
+    assert(!long);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn relative_source_paths_normalize_components_without_escaping_root() {
+    let path = [97u8, 47, 98, 47, 46, 46, 47, 46, 46, 47, 99];
+    assert(path@ =~= seq![97u8, 47u8, 98u8, 47u8, 46u8, 46u8, 47u8, 46u8, 46u8, 47u8, 99u8]);
+    assert(policy::sources::relative_components(seq![97u8, 47u8, 98u8, 47u8, 46u8, 46u8, 47u8, 46u8, 46u8, 47u8, 99u8])
+        == Some(seq![seq![99u8]])) by (compute);
+    assert(policy::sources::joined_components(seq![seq![99u8]]) == seq![99u8]) by (compute);
+    let normalized = policy::sources::normalize_relative_path(&path).unwrap();
+    assert(normalized@ == seq![99u8]);
+    let dotted = [46u8, 47, 97, 47, 47, 46, 47, 98, 47];
+    assert(dotted@ =~= seq![46u8, 47u8, 97u8, 47u8, 47u8, 46u8, 47u8, 98u8, 47u8]);
+    assert(policy::sources::relative_components(seq![46u8, 47u8, 97u8, 47u8, 47u8, 46u8, 47u8, 98u8, 47u8])
+        == Some(seq![seq![97u8], seq![98u8]])) by (compute);
+    assert(policy::sources::joined_components(seq![seq![97u8], seq![98u8]]) == seq![97u8, 47u8, 98u8]) by (compute);
+    let normalized = policy::sources::normalize_relative_path(&dotted).unwrap();
+    assert(normalized@ == seq![97u8, 47u8, 98u8]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn relative_source_paths_reject_absolute_empty_and_parent_escape() {
+    assert(policy::sources::relative_components(seq![46u8]).is_none()) by (compute);
+    assert(policy::sources::relative_components(seq![46u8, 46u8, 47u8, 97u8]).is_none()) by (compute);
+    assert(policy::sources::relative_components(seq![97u8, 47u8, 46u8, 46u8]).is_none()) by (compute);
+    assert(policy::sources::relative_components(seq![97u8, 47u8, 46u8, 46u8, 47u8, 46u8, 46u8, 47u8, 98u8]).is_none()) by (compute);
+    let absolute_input = [47u8, 97];
+    let empty_input: [u8; 0] = [];
+    let dot_input = [46u8];
+    let parent_input = [46u8, 46, 47, 97];
+    let cancelled_input = [97u8, 47, 46, 46];
+    let escape_input = [97u8, 47, 46, 46, 47, 46, 46, 47, 98];
+    assert(absolute_input@ =~= seq![47u8, 97u8]);
+    assert(empty_input@ =~= Seq::<u8>::empty());
+    assert(dot_input@ =~= seq![46u8]);
+    assert(parent_input@ =~= seq![46u8, 46u8, 47u8, 97u8]);
+    assert(cancelled_input@ =~= seq![97u8, 47u8, 46u8, 46u8]);
+    assert(escape_input@ =~= seq![97u8, 47u8, 46u8, 46u8, 47u8, 46u8, 46u8, 47u8, 98u8]);
+    let absolute = policy::sources::normalize_relative_path(&absolute_input);
+    let empty = policy::sources::normalize_relative_path(&empty_input);
+    let dot = policy::sources::normalize_relative_path(&dot_input);
+    let parent = policy::sources::normalize_relative_path(&parent_input);
+    let cancelled = policy::sources::normalize_relative_path(&cancelled_input);
+    let escape = policy::sources::normalize_relative_path(&escape_input);
+    assert(absolute.is_none() && empty.is_none() && dot.is_none());
+    assert(parent.is_none() && cancelled.is_none() && escape.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn relative_source_paths_preserve_spaces_unicode_and_reject_control_bytes() {
+    reveal_with_fuel(policy::sources::path_scan, 10);
+    reveal(policy::sources::component_step);
+    reveal_with_fuel(policy::sources::joined_components, 4);
+    let path = [97u8, 32, 47, 206, 187];
+    assert(path@ =~= seq![97u8, 32u8, 47u8, 206u8, 187u8]);
+    let normalized = policy::sources::normalize_relative_path(&path).unwrap();
+    assert(normalized@ == path@);
+    let nul = policy::sources::normalize_relative_path(&[97u8, 0]);
+    let lf = policy::sources::normalize_relative_path(&[97u8, 10]);
+    let del = policy::sources::normalize_relative_path(&[97u8, 127]);
+    let backslash = policy::sources::normalize_relative_path(&[97u8, 92, 98]);
+    assert(nul.is_none() && lf.is_none() && del.is_none() && backslash.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn dependency_content_requires_every_checksum_and_final_newline() {
     proof {
         reveal_strlit("# checksum:sha256="); reveal_strlit(" file_len:");

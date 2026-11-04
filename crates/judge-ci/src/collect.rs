@@ -44,9 +44,7 @@ fn read(
 }
 
 fn digest(s: &str) -> bool {
-    s.len() == 64
-        && s.bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    verus_policy::sources::valid_sha256_text(s.as_bytes())
 }
 
 fn process(p: &ProcessResult) -> Result<(), String> {

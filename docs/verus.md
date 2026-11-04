@@ -121,11 +121,25 @@ length, including escaped filename spaces. Canonical decimal serialization of
 the expected `u64` avoids parsing arbitrary integer text; proved examples include
 zero, leading-zero rejection and the maximum `u64` boundary.
 
+The same owner proves lexical POSIX relative-path normalization. Its byte scanner
+maintains a component stack, removes `.` and repeated separators, and cancels `..`
+only when a preceding component exists. Absolute paths, root escapes, an empty
+normalized result, controls and backslashes fail. Spaces and UTF-8 bytes are
+preserved. This does not resolve filesystem aliases or authorize symlinks.
+Independent examples include nested cancellation, repeated/trailing separators,
+Unicode, root escapes and empty results.
+
+It also proves exact 64-byte lowercase hexadecimal SHA-256 text validation,
+including valid all-zero text. The actual collection digest predicate now calls
+this same executable source. Verified examples include short/long text, uppercase
+and the hexadecimal range boundary. Hash computation and source-byte binding
+remain separate obligations.
+
 These are content predicates against caller-supplied metadata, not a complete
 source-identity admission adapter. Binding and validating that metadata against
-explicit FILEMAP entries and immutable candidate bytes, path normalization,
-retained artifact capture/transport and actual coverage integration still require
-implementation and proof. The complete-content examples exercise an independent
+explicit FILEMAP entries and immutable candidate bytes, applying normalization
+at that boundary, retained artifact capture/transport and actual coverage
+integration still require implementation and proof. The complete-content examples exercise an independent
 byte fixture, missing checksum content and a missing final newline. The source
 adapter's existing empty-root migration obligation remains intact.
 

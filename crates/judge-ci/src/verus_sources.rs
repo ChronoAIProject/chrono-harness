@@ -2,7 +2,8 @@
 use super::{append_bytes, equal_bytes, parse_dependency_paths};
 #[cfg(verus_keep_ghost)]
 use super::{
-    dependency_encoding, dependency_escape, dependency_scan, dependency_values, dependency_word,
+    dependency_byte, dependency_encoding, dependency_escape, dependency_scan, dependency_values,
+    dependency_word,
 };
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
@@ -10,6 +11,173 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 
 verus! {
+
+pub open spec fn component_step(parts: Seq<Seq<u8>>, word: Seq<u8>) -> Option<Seq<Seq<u8>>> {
+    if word.len() == 0 || word == seq![46u8] { Some(parts) }
+    else if word == seq![46u8, 46u8] {
+        if parts.len() == 0 { None } else { Some(parts.drop_last()) }
+    } else { Some(parts.push(word)) }
+}
+
+pub open spec fn path_scan(
+    input: Seq<u8>, parts: Seq<Seq<u8>>, word: Seq<u8>,
+) -> Option<Seq<Seq<u8>>>
+    decreases input.len(),
+{
+    if input.len() == 0 { component_step(parts, word) }
+    else if !dependency_byte(input[0]) { None }
+    else if input[0] == 47 {
+        match component_step(parts, word) {
+            None => None,
+            Some(next) => path_scan(input.drop_first(), next, Seq::empty()),
+        }
+    } else { path_scan(input.drop_first(), parts, word.push(input[0])) }
+}
+
+pub open spec fn relative_components(input: Seq<u8>) -> Option<Seq<Seq<u8>>> {
+    if input.len() == 0 || input[0] == 47 { None }
+    else {
+        match path_scan(input, Seq::empty(), Seq::empty()) {
+            Some(parts) => if parts.len() == 0 { None } else { Some(parts) },
+            None => None,
+        }
+    }
+}
+
+pub open spec fn joined_components(parts: Seq<Seq<u8>>) -> Seq<u8>
+    decreases parts.len(),
+{
+    if parts.len() == 0 { Seq::empty() }
+    else {
+        joined_components(parts.drop_last())
+            + if parts.len() == 1 { Seq::empty() } else { seq![47u8] }
+            + parts.last()
+    }
+}
+
+pub open spec fn normal_component(word: Seq<u8>) -> bool {
+    dependency_word(word) && word != seq![46u8] && word != seq![46u8, 46u8]
+        && forall|i: int| 0 <= i < word.len() ==> (#[trigger] word[i]) != 47
+}
+
+pub fn finish_component(parts: &mut Vec<Vec<u8>>, word: Vec<u8>) -> (accepted: bool)
+    requires
+        forall|i: int| 0 <= i < old(parts).len() ==> normal_component((#[trigger] old(parts)[i])@),
+        forall|i: int| 0 <= i < word.len() ==> dependency_byte(#[trigger] word[i]) && word[i] != 47,
+    ensures
+        accepted <==> component_step(dependency_values(old(parts)@), word@).is_some(),
+        accepted ==> component_step(dependency_values(old(parts)@), word@)
+            == Some(dependency_values(parts@)),
+        !accepted ==> parts@ == old(parts)@,
+        forall|i: int| 0 <= i < parts.len() ==> normal_component((#[trigger] parts[i])@),
+{
+    if word.len() == 0 {
+        assert(word@ =~= Seq::<u8>::empty());
+        return true;
+    }
+    if word.len() == 1 && word[0] == 46 {
+        assert(word@ =~= seq![46u8]);
+        return true;
+    }
+    if word.len() == 2 && word[0] == 46 && word[1] == 46 {
+        assert(word@ =~= seq![46u8, 46u8]);
+        if parts.len() == 0 { return false; }
+        let ghost before = dependency_values(parts@);
+        let _ = parts.pop();
+        assert(dependency_values(parts@) =~= before.drop_last());
+    } else {
+        assert(word@ != seq![46u8] && word@ != seq![46u8, 46u8]);
+        let ghost before = dependency_values(parts@);
+        let ghost last = word@;
+        parts.push(word);
+        assert(dependency_values(parts@) =~= before.push(last));
+    }
+    true
+}
+
+/// Lexical POSIX normalization only. This does not resolve filesystem aliases
+/// or authorize symlinks; source-byte and path admission remain the caller's duty.
+pub fn normalize_relative_path(input: &[u8]) -> (normalized: Option<Vec<u8>>)
+    ensures
+        match normalized {
+            None => relative_components(input@).is_none(),
+            Some(path) => relative_components(input@).is_some()
+                && path@ == joined_components(relative_components(input@).unwrap())
+                && path.len() > 0,
+        },
+{
+    if input.len() == 0 || input[0] == 47 { return None; }
+    let mut parts: Vec<Vec<u8>> = Vec::new();
+    let mut word: Vec<u8> = Vec::new();
+    let mut i = 0;
+    assert(dependency_values(parts@) =~= Seq::<Seq<u8>>::empty());
+    assert(input@.skip(0) =~= input@);
+    while i < input.len()
+        invariant
+            0 <= i <= input.len(), input.len() > 0, input@[0] != 47,
+            path_scan(input@, Seq::empty(), Seq::empty())
+                == path_scan(input@.skip(i as int), dependency_values(parts@), word@),
+            forall|j: int| 0 <= j < parts.len() ==> normal_component((#[trigger] parts[j])@),
+            forall|j: int| 0 <= j < word.len() ==> dependency_byte(#[trigger] word[j]) && word[j] != 47,
+        decreases input.len() - i,
+    {
+        let byte = input[i];
+        if byte < 32 || byte == 92 || byte == 127 { return None; }
+        if byte == 47 {
+            if !finish_component(&mut parts, word) { return None; }
+            word = Vec::new();
+        } else { word.push(byte); }
+        assert(input@.skip(i as int).drop_first() =~= input@.skip(i + 1));
+        i += 1;
+    }
+    assert(input@.skip(i as int) =~= Seq::<u8>::empty());
+    if !finish_component(&mut parts, word) || parts.len() == 0 { return None; }
+    assert(relative_components(input@) == Some(dependency_values(parts@)));
+    let mut path = Vec::new();
+    let mut j = 0;
+    assert(dependency_values(parts@.take(0)) =~= Seq::<Seq<u8>>::empty());
+    while j < parts.len()
+        invariant 0 <= j <= parts.len(), parts.len() > 0,
+            forall|k: int| 0 <= k < parts.len() ==> normal_component((#[trigger] parts[k])@),
+            path@ == joined_components(dependency_values(parts@.take(j as int))),
+        decreases parts.len() - j,
+    {
+        if j > 0 { path.push(47u8); }
+        append_bytes(&mut path, parts[j].as_slice());
+        proof {
+            let prefix = dependency_values(parts@.take(j + 1));
+            assert(prefix.drop_last() =~= dependency_values(parts@.take(j as int)));
+            assert(prefix.last() == parts@[j as int]@);
+        }
+        j += 1;
+    }
+    assert(parts@.take(j as int) =~= parts@);
+    assert(normal_component(parts@[parts.len() - 1]@));
+    assert(dependency_values(parts@).last() == parts@[parts.len() - 1]@);
+    Some(path)
+}
+
+pub open spec fn sha256_text(bytes: Seq<u8>) -> bool {
+    bytes.len() == 64 && forall|i: int| 0 <= i < bytes.len() ==> super::oid_byte(#[trigger] bytes[i])
+}
+
+/// SHA-256 text may be all zeroes; unlike an object ID it has no nonzero rule.
+pub fn valid_sha256_text(bytes: &[u8]) -> (valid: bool)
+    ensures valid <==> sha256_text(bytes@),
+{
+    if bytes.len() != 64 { return false; }
+    let mut i = 0;
+    while i < bytes.len()
+        invariant 0 <= i <= bytes.len(), bytes.len() == 64,
+            forall|j: int| 0 <= j < i ==> super::oid_byte(#[trigger] bytes[j]),
+        decreases bytes.len() - i,
+    {
+        let byte = bytes[i];
+        if !(48 <= byte && byte <= 57 || 97 <= byte && byte <= 102) { return false; }
+        i += 1;
+    }
+    true
+}
 
 pub open spec fn prefix_at(input: Seq<u8>, start: int, prefix: Seq<u8>) -> bool {
     0 <= start <= input.len() && prefix.len() <= input.len() - start
@@ -158,9 +326,11 @@ pub fn compiler_dependency_paths(input: &[u8], output: &[u8]) -> (parsed: Option
     let list = copy_range(input, prefix.len(), end);
     assert(compiler_paths(input@, output@) == dependency_scan(list@, Seq::empty(), Seq::empty()));
     let parsed = parse_dependency_paths(list.as_slice());
-    if let Some(paths) = &parsed {
-        assert forall|i: int| 0 <= i < paths.len() implies dependency_word((#[trigger] paths[i])@) by {
-            assert(paths@[i]@ == dependency_values(paths@)[i]);
+    proof {
+        if let Some(paths) = &parsed {
+            assert forall|i: int| 0 <= i < paths.len() implies dependency_word((#[trigger] paths[i])@) by {
+                assert(paths@[i]@ == dependency_values(paths@)[i]);
+            }
         }
     }
     parsed
