@@ -223,7 +223,13 @@ fn one_drain_keeps_every_released_artifact_disposal_and_original() {
     assert_eq!(code, 0, "{report} {error}");
     let registry = producer_state(&store);
     assert_eq!(registry["objects"].as_array().unwrap().len(), 3);
-    for (object, path) in registry["objects"].as_array().unwrap().iter().zip(paths) {
+    for path in paths {
+        let object = registry["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|object| object["path"] == path.file_name().unwrap().to_str().unwrap())
+            .expect("every exact released allocation remains registered");
         assert_eq!(object["disposed"], true);
         assert_eq!(object["attempts"].as_array().unwrap().len(), 1);
         assert!(!path.join("cache 空白").exists());

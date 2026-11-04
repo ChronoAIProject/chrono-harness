@@ -885,7 +885,7 @@ pub(super) fn drain(
     Ok(row)
 }
 
-fn fingerprint(path: &Path) -> Result<String, String> {
+pub(super) fn fingerprint(path: &Path) -> Result<String, String> {
     let m = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {

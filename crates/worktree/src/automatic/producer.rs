@@ -2,6 +2,7 @@
 use super::*;
 use std::sync::Arc;
 mod body;
+use body::fingerprint;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
