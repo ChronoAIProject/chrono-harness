@@ -562,13 +562,29 @@ fn legal_joint_retirement_preserves_old_cost_without_executing_absent_test() {
     );
 }
 #[test]
-fn retirement_request_without_joint_producer_declaration_fails_at_validator() {
+fn retirement_request_without_joint_producer_declaration_fails_before_operations() {
     let mut h = host();
     retire(&mut h, false);
     let (e, r) = run(&h, "integration", None, |_| {});
-    assert_eq!(e, 1, "{}", r["findings"]);
+    // Routes rejects the invalid structure before projects can run; the
+    // runner reports the blocked dependent judges as an incomplete check.
+    assert_eq!(e, 2, "{}", report_diagnostics(&r));
     assert!(r["findings"].to_string().contains("E_RETIREMENT"));
+    let judges = r["judges"].as_array().unwrap();
+    let routes = judges.iter().find(|j| j["id"] == "routes").unwrap();
+    assert_eq!(routes["response"]["status"], "fail");
+    assert!(
+        routes["response"]["findings"]
+            .to_string()
+            .contains("E_RETIREMENT")
+    );
+    for id in ["projects", "workflow"] {
+        let judge = judges.iter().find(|j| j["id"] == id).unwrap();
+        assert_eq!(judge["state"], "blocked", "{id}: {judge}");
+        assert!(judge["process"].is_null(), "{id}: {judge}");
+    }
     assert!(workflow(&r).is_null());
+    assert!(!h.root().join(".chrono-harness/state/order").exists());
 }
 #[test]
 fn replacement_can_change_method_and_prerequisite_after_explicit_retirement() {

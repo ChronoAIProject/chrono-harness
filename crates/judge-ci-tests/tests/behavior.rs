@@ -71,10 +71,10 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
 mod checkout;
 #[path = "git_facts.rs"]
 mod git_facts;
-#[path = "units.rs"]
-mod units;
 #[path = "retirement.rs"]
 mod retirement;
+#[path = "units.rs"]
+mod units;
 struct Host {
     dir: TempDir,
 }

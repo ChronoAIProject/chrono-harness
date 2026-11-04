@@ -100,8 +100,11 @@ fn retirement_structure_accepts_joint_pair_removal_and_rejects_a_surviving_produ
 #[test]
 fn retirement_structure_resolves_grouped_alias_owner_and_requires_producer_declaration() {
     let mut old = support::values();
+    let mut grouped = old[support::PROJECTS]["projects"][1]["actions"]["execute"].clone();
+    grouped["operation"] = json!("execute.grouped");
+    old.get_mut(support::PROJECTS).unwrap()["projects"][1]["actions"]["grouped"] = grouped;
     old.get_mut(support::PROJECTS).unwrap()["projects"][1]["test_groups"] =
-        json!({"t":"execute","opaque/suffix":"execute"});
+        json!({"t":"execute","opaque/suffix":"grouped"});
     let a = support::load(&old);
     let mut candidate = old.clone();
     candidate.get_mut(support::PROJECTS).unwrap()["projects"] = json!([]);

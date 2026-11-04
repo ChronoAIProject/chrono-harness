@@ -60,7 +60,7 @@ fn host() -> Host {
     }));
     h.change_registry(CONFIG, |v| {
         v["policy"]["registration_config"] = json!(REGISTRATION);
-        v["policy"]["bindings"]["test:suite"] = json!(["build.lib","test.suite"]);
+        v["policy"]["bindings"]["test:suite"] = json!(["build.lib", "test.suite"]);
     });
     h.commit();
     h
@@ -109,8 +109,14 @@ fn joint_pair_removal_keeps_old_costs_without_executing_old_commands() {
     pass(&result);
     assert_eq!(h.calls(), 0);
     assert_eq!(result.evidence["removed"], json!({"test:suite":null}));
-    assert_eq!(result.evidence["retirement_context"]["test:suite"]["cost"]["reference"], "unmeasured");
-    assert_eq!(result.evidence["retirement_context"]["test:suite"]["definitions"][0]["identity"], "project:suite");
+    assert_eq!(
+        result.evidence["retirement_context"]["test:suite"]["cost"]["reference"],
+        "unmeasured"
+    );
+    assert_eq!(
+        result.evidence["retirement_context"]["test:suite"]["definitions"][0]["identity"],
+        "project:suite"
+    );
     assert_eq!(result.evidence["operations"], json!([]));
 }
 
@@ -120,7 +126,10 @@ fn null_retirement_with_surviving_producer_fails_before_business_effects() {
     let base = h.head();
     remove_pair(&h, false);
     let candidate = h.commit();
-    fail(&check(&h, &base, &candidate), "joint producer/test removal required");
+    fail(
+        &check(&h, &base, &candidate),
+        "joint producer/test removal required",
+    );
     assert_eq!(h.calls(), 0);
 }
 
@@ -163,8 +172,14 @@ fn replacement_executes_current_method_and_retains_removed_identity() {
     let result = check(&h, &base, &candidate);
     pass(&result);
     assert_eq!(h.calls(), 1);
-    assert_eq!(result.evidence["removed"], json!({"test:suite":"test:current"}));
-    assert_eq!(result.evidence["operations"], json!(["build.lib","test.current"]));
+    assert_eq!(
+        result.evidence["removed"],
+        json!({"test:suite":"test:current"})
+    );
+    assert_eq!(
+        result.evidence["operations"],
+        json!(["build.lib", "test.current"])
+    );
 }
 
 #[test]
@@ -173,10 +188,15 @@ fn a_declared_replacement_that_fails_cannot_approve_retirement() {
     let base = h.head();
     replace(&h);
     h.change_registry(PROJECTS, |v| {
-        v["projects"][1]["actions"]["execute"]["argv"] = json!(["-c","exit 7"]);
+        v["projects"][1]["actions"]["execute"]["argv"] = json!(["-c", "exit 7"]);
     });
     let candidate = h.commit();
     let result = check(&h, &base, &candidate);
     fail(&result, "required replacement did not execute successfully");
-    assert!(result.results.iter().any(|r| r.id == "replacement:test:suite" && r.status == Status::Failed));
+    assert!(
+        result
+            .results
+            .iter()
+            .any(|r| r.id == "replacement:test:suite" && r.status == Status::Failed)
+    );
 }
