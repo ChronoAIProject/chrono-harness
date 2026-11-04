@@ -63,15 +63,30 @@ an active capability. The five-second output-admission bound is unchanged.
 existing `raw_value` feature and its registered Cargo package declaration names
 that feature. One admitted ledger retains each output's validated JSON alongside
 its typed record. Durable writes reuse unchanged rows; mutable access invalidates
-only that row's encoding. Every new admission still reads and decodes the complete
-current inventory under the existing exclusion lease, including duplicate,
-unknown-field and opaque-evidence rejection. The reuse ends with that ledger;
-physical observations and admission results are not cached. This removes repeated
-encoding within one transaction without dropping intent writes, identity checks
-or the five-second admission bound. Its extra memory is the retained row JSON;
-total memory, runtime, build and validation costs remain unmeasured. The unchanged
-420-output / 28-publisher regression and real-bootstrap consumer remain required
-acceptance, alongside canonical DELTA and native checks.
+only that row's encoding. Each admission reads the complete current inventory
+under the existing exclusion lease and decodes its envelope. One process-local
+snapshot retains the last inventory's serialized rows and decoded declarations;
+an exact byte match at the same row can reuse the typed declaration. New or
+changed rows retain strict duplicate, unknown-field and opaque-evidence rejection.
+All policy, path, manifest, dependency and root validation still runs on admission;
+physical observations and admission results are not cached. Mutations copy only
+their shared row, invalidate its encoding and refresh the snapshot after the
+existing durable replacement. The single derived snapshot is replaced at the
+next admission/publication and ends at process exit, with no persisted cache or
+separate cleanup entry. Its raw and decoded memory is proportional to the last
+bounded inventory. Full inventory IO, intent writes, identity checks, capacities
+and the five-second admission bound remain. Total memory, runtime, build and
+validation costs require actual consumer measurements. The unchanged 420-output /
+28-publisher regression and real-bootstrap consumer remain required acceptance,
+alongside canonical DELTA and native checks.
+
+The warm-inventory regression changes an existing row's outcome and dependency,
+rejects a missing dependency without rewriting the original, and changes the
+current root before retirement. It requires the changed original outcome and the
+untouched neighbor's distinct outcome to survive retirement. Existing malformed
+envelope, duplicate row field, duplicate opaque field and duplicate root cases
+exercise strict decoding after publication. These local behaviors do not
+establish native or full acceptance.
 
 Retention rounds report the actual retention, report-activity, live-capability or
 identity-error reason for a protected root. A parent closing a capability is not

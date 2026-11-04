@@ -2728,6 +2728,65 @@ fn producer_consumer_retains_interrupted_capture_and_releases_only_accounted_suc
 }
 
 #[test]
+fn warm_inventory_observes_changed_rows_roots_and_dependency_refusals() {
+    if !isolated_capability_test(
+        "warm_inventory_observes_changed_rows_roots_and_dependency_refusals",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let first = tree(h.path(), "changed");
+    let second = tree(h.path(), "unchanged");
+    for (path, exit) in [(&first, 101), (&second, 7)] {
+        inventory(h.path())
+            .begin("fixture", path, json!(null))
+            .unwrap()
+            .complete(json!({"exit":exit}))
+            .unwrap();
+    }
+    let original = ledger(h.path());
+    let first_id = original["outputs"][0]["id"].as_str().unwrap().to_string();
+    let second_id = original["outputs"][1]["id"].as_str().unwrap().to_string();
+    inventory(h.path()).reference("current", &[first_id]).unwrap();
+    let file = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/inventory.json");
+    let mut changed = ledger(h.path());
+    changed["outputs"][0]["references"] = json!([second_id]);
+    changed["outputs"][0]["outcome"] = json!({"exit":202});
+    let valid = serde_json::to_vec(&changed).unwrap();
+    fs::write(&file, &valid).unwrap();
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        2
+    );
+    assert!(h.path().join(&first).exists());
+    assert!(h.path().join(&second).exists());
+
+    changed["outputs"][0]["references"] = json!(["missing-output"]);
+    let invalid = serde_json::to_vec(&changed).unwrap();
+    fs::write(&file, &invalid).unwrap();
+    assert!(
+        inventory(h.path())
+            .maintain()
+            .unwrap_err()
+            .contains("missing retained output dependency")
+    );
+    assert_eq!(fs::read(&file).unwrap(), invalid);
+    fs::write(&file, valid).unwrap();
+
+    inventory(h.path()).reference("current", &[second_id]).unwrap();
+    inventory(h.path()).maintain().unwrap();
+    assert!(!h.path().join(&first).exists());
+    assert!(h.path().join(&second).exists());
+    assert_eq!(ledger(h.path())["summaries"][0]["original_outcome"]["exit"], 202);
+    inventory(h.path()).reference("current", &[]).unwrap();
+    inventory(h.path()).maintain().unwrap();
+    assert!(!h.path().join(&second).exists());
+    assert_eq!(ledger(h.path())["summaries"][1]["original_outcome"]["exit"], 7);
+}
+
+#[test]
 fn typed_inventory_decoder_keeps_duplicate_unknown_and_opaque_json_refusals() {
     if !isolated_capability_test(
         "typed_inventory_decoder_keeps_duplicate_unknown_and_opaque_json_refusals",

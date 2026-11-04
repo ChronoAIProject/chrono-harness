@@ -9,7 +9,7 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -101,17 +101,17 @@ struct Output {
 
 // One admitted ledger owns both representations of each output. Unchanged rows
 // can retain their exact validated JSON through its durable writes; requesting
-// mutable access invalidates only that row. Every new admission still reads and
-// decodes the complete current inventory under the existing exclusion lease.
+// mutable access invalidates only that row. Every new admission still reads the
+// complete current inventory under the existing exclusion lease.
 #[derive(Clone)]
 struct OutputRecord {
-    value: Output,
+    value: Arc<Output>,
     encoded: RefCell<Option<Arc<serde_json::value::RawValue>>>,
 }
 impl From<Output> for OutputRecord {
     fn from(value: Output) -> Self {
         Self {
-            value,
+            value: Arc::new(value),
             encoded: RefCell::new(None),
         }
     }
@@ -125,7 +125,7 @@ impl std::ops::Deref for OutputRecord {
 impl std::ops::DerefMut for OutputRecord {
     fn deref_mut(&mut self) -> &mut Output {
         *self.encoded.get_mut() = None;
-        &mut self.value
+        Arc::make_mut(&mut self.value)
     }
 }
 impl Serialize for OutputRecord {
@@ -133,27 +133,18 @@ impl Serialize for OutputRecord {
         let mut encoded = self.encoded.borrow_mut();
         if encoded.is_none() {
             *encoded = Some(Arc::from(
-                serde_json::value::to_raw_value(&self.value).map_err(serde::ser::Error::custom)?,
+                serde_json::value::to_raw_value(self.value.as_ref())
+                    .map_err(serde::ser::Error::custom)?,
             ));
         }
         encoded.as_deref().unwrap().serialize(serializer)
     }
 }
-impl<'de> Deserialize<'de> for OutputRecord {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let encoded = Box::<serde_json::value::RawValue>::deserialize(deserializer)?;
-        let value = serde_json::from_str(encoded.get()).map_err(serde::de::Error::custom)?;
-        Ok(Self {
-            value,
-            encoded: RefCell::new(Some(Arc::from(encoded))),
-        })
-    }
-}
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Ledger {
+struct Ledger<O = OutputRecord> {
     policy_sha256: String,
-    outputs: Vec<OutputRecord>,
+    outputs: Vec<O>,
     #[serde(deserialize_with = "strict_roots")]
     roots: BTreeMap<String, Vec<String>>,
     #[serde(deserialize_with = "strict_summaries")]
@@ -164,6 +155,26 @@ struct Ledger {
     #[serde(default)]
     retired_leases: Vec<Node>,
 }
+impl<O> Default for Ledger<O> {
+    fn default() -> Self {
+        Self {
+            policy_sha256: String::new(),
+            outputs: Vec::new(),
+            roots: BTreeMap::new(),
+            summaries: Vec::new(),
+            cursor: 0,
+            next_id: 0,
+            retired_leases: Vec::new(),
+        }
+    }
+}
+struct DecodedSnapshot {
+    directory: PathBuf,
+    outputs: Vec<(Arc<serde_json::value::RawValue>, Arc<Output>)>,
+}
+// One derived snapshot for this process's last inventory. Only exact current row
+// bytes can reuse a decoded value; validation and physical observations stay live.
+static DECODED: Mutex<Option<Arc<DecodedSnapshot>>> = Mutex::new(None);
 fn strict_roots<'de, D: serde::Deserializer<'de>>(
     d: D,
 ) -> Result<BTreeMap<String, Vec<String>>, D::Error> {
@@ -362,9 +373,47 @@ impl Inventory {
             return Err("retention metadata bound".into());
         }
         self.charge_metadata(raw.len() as u64)?;
-        // Typed fields reject duplicate/unknown members directly. Opaque JSON
-        // retains the same strict visitor, without materializing a second whole ledger.
-        let l: Ledger = serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
+        // Decode the envelope every time. An unchanged row can share its strict
+        // typed decode; altered rows, including malformed unrelated rows, cannot.
+        let serialized: Ledger<Box<serde_json::value::RawValue>> =
+            serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
+        let previous = DECODED
+            .lock()
+            .map_err(|_| "retention decoded snapshot lock poisoned")?
+            .clone()
+            .filter(|previous| previous.directory == self.directory);
+        let outputs = serialized
+            .outputs
+            .into_iter()
+            .enumerate()
+            .map(|(index, encoded)| {
+                if let Some((bytes, value)) = previous
+                    .as_ref()
+                    .and_then(|previous| previous.outputs.get(index))
+                {
+                    if bytes.get() == encoded.get() {
+                        return Ok(OutputRecord {
+                            value: Arc::clone(value),
+                            encoded: RefCell::new(Some(Arc::clone(bytes))),
+                        });
+                    }
+                }
+                let value = serde_json::from_str(encoded.get()).map_err(|e| e.to_string())?;
+                Ok(OutputRecord {
+                    value: Arc::new(value),
+                    encoded: RefCell::new(Some(Arc::from(encoded))),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let l = Ledger {
+            policy_sha256: serialized.policy_sha256,
+            outputs,
+            roots: serialized.roots,
+            summaries: serialized.summaries,
+            cursor: serialized.cursor,
+            next_id: serialized.next_id,
+            retired_leases: serialized.retired_leases,
+        };
         if l.policy_sha256 != policy_digest
             || l.outputs.len() > self.policy.max_entries
             || l.summaries.len() > self.policy.max_summaries
@@ -439,13 +488,43 @@ impl Inventory {
                 return Err("missing current consumer output reference".into());
             }
         }
+        self.remember(&l)?;
         Ok(l)
+    }
+    fn remember(&self, l: &Ledger) -> Result<(), String> {
+        let outputs = l
+            .outputs
+            .iter()
+            .map(|o| {
+                Ok((
+                    Arc::clone(
+                        o.encoded
+                            .borrow()
+                            .as_ref()
+                            .ok_or("retention snapshot row has no encoding")?,
+                    ),
+                    Arc::clone(&o.value),
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let snapshot = Arc::new(DecodedSnapshot {
+            directory: self.directory.clone(),
+            outputs,
+        });
+        // No IO or potentially large snapshot destruction under the cache mutex.
+        let previous = DECODED
+            .lock()
+            .map_err(|_| "retention decoded snapshot lock poisoned")?
+            .replace(snapshot);
+        drop(previous);
+        Ok(())
     }
     fn save(&self, l: &Ledger, gate: &Lease) -> Result<(), String> {
         self.stable(gate)?;
         let raw = serde_json::to_vec(l).map_err(|e| e.to_string())?;
         self.charge_metadata(raw.len() as u64)?;
-        write(&self.directory.join("inventory.json"), &raw)
+        write(&self.directory.join("inventory.json"), &raw)?;
+        self.remember(l)
     }
     /// Explicit owner migration. The caller supplies the exact prior policy bytes;
     /// every existing output must still be declared, and all old producers/readers must be excluded.
@@ -1608,7 +1687,7 @@ impl Inventory {
             })();
             match effect {
                 Ok(true) => {
-                    let o = l.outputs.remove(i).value;
+                    let o = Arc::unwrap_or_clone(l.outputs.remove(i).value);
                     let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null,"large_original_recheck":if o.length.is_some_and(|n|n>self.policy.max_bytes_per_round) {"sealed-identity-and-content-stamp; digest-not-reread"} else {"not-applicable"}});
                     disposed.push(summary.clone());
                     l.summaries.push(summary);
