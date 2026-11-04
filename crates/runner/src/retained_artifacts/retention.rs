@@ -241,6 +241,15 @@ pub struct OriginalIdentity {
     pub path: String,
     pub identity: String,
 }
+/// Exact originals held for one actual caller until its durable output accepts them.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Consumer {
+    pub schema: String,
+    pub consumer: String,
+    pub purpose: String,
+    pub originals: Vec<OriginalIdentity>,
+}
 /// Holding this capability protects producer descendants too. Closing it never fabricates completion.
 pub struct Publication {
     inventory: Inventory,
@@ -1316,6 +1325,39 @@ impl Inventory {
         let _leases = self.original_leases(&l, originals, false)?;
         self.reference_locked(&mut l, &role, &ids)?;
         self.save(&l, &gate)
+    }
+    /// Transfer an actual caller's root to its already protected output before
+    /// releasing the producer handoff. No historical consumer is inferred.
+    pub fn transfer_consumer(&self, consumer: &Consumer, destination: &str) -> Result<(), String> {
+        if consumer.schema != "chrono-retention-consumer/v1" || consumer.purpose.trim().is_empty() {
+            return Err("invalid caller original handoff".into());
+        }
+        let role = self.consumer_role(&consumer.consumer)?;
+        let ids = self.consumer_ids(&consumer.originals)?;
+        let gate = self.gate()?;
+        let mut l = self.load()?;
+        if l.roots.get(&role) != Some(&ids) {
+            return Err("caller original handoff root differs".into());
+        }
+        let leases = self.original_leases(&l, &consumer.originals, false)?;
+        let target = l.outputs.iter().position(|o| o.path == destination && o.phase != "disposing")
+            .ok_or("caller handoff destination unavailable")?;
+        if ids.contains(&l.outputs[target].id)
+            || !l.roots.values().any(|roots| roots.contains(&l.outputs[target].id))
+        {
+            return Err("caller handoff requires a distinct protected destination".into());
+        }
+        let references: BTreeSet<_> = l.outputs[target].references.iter().chain(&ids).cloned().collect();
+        if references.len() > self.policy.max_entries {
+            return Err("caller handoff dependency capacity".into());
+        }
+        l.outputs[target].references = references.into_iter().collect();
+        l.roots.remove(&role);
+        self.save(&l, &gate)?;
+        for lease in &leases {
+            self.remember_input(lease)?;
+        }
+        Ok(())
     }
     /// Called after the responsible consumer's exact, external domain receipt is verified.
     /// Never changes expiry or original outcomes and never declares work complete.

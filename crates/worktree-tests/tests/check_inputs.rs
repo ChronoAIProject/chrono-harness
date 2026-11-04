@@ -208,6 +208,52 @@ fn inputs_owned(
     (out, p)
 }
 #[test]
+fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
+    use chrono_harness::retained_artifacts::retention::{Consumer, Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    bind(&h);
+    let dest = h.parent.join("input handoff checkout");
+    let (exit, birth, error) = h.invoke("integration", "input-handoff", &dest);
+    assert_eq!(exit, 0, "{error} {}", birth["error"]);
+    install(&dest);
+    fs::write(dest.join(POLICY_PATH), serde_json::to_vec(&value!({
+        "schema":"chrono-output-retention/v1",
+        "producers":{"check-original":[".chrono-harness/state/"],
+            "lifecycle-original":[".chrono-harness/state/worktrees/"]},
+        "keep_seconds":0,"max_entries":64,"max_summaries":64,
+        "max_nodes_per_round":256,"max_bytes_per_round":67108864,
+        "max_millis_per_round":25
+    })).unwrap()).unwrap();
+    let mut fm = json(&fs::read(dest.join(FM)).unwrap()).unwrap();
+    fm["files"].as_array_mut().unwrap().push(file(POLICY_PATH, value!([])));
+    fs::write(dest.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+    commit(&dest);
+    let (output, prepared) = inputs(&dest);
+    assert!(output.status.success(), "{output:?}");
+    let prepared = prepared.unwrap();
+    let consumer: Consumer = serde_json::from_value(prepared.evidence["report_consumer"].clone()).unwrap();
+    let original = &consumer.originals[0];
+    let inventory = Inventory::adopted(&dest).unwrap().unwrap();
+    let raw = fs::read(dest.join(&original.path)).unwrap();
+    let unrelated = ".chrono-harness/state/worktrees/unrelated-ended.json";
+    fs::write(dest.join(unrelated), b"unrelated ended original").unwrap();
+    inventory.begin("lifecycle-original", unrelated, value!(null)).unwrap()
+        .complete(value!({"exit":7})).unwrap();
+    let between = inventory.maintain().unwrap();
+    assert_eq!(fs::read(dest.join(&original.path)).unwrap(), raw, "{between}");
+    assert!(!dest.join(unrelated).exists(), "{between}");
+    let parent = prepared::retain_original(&dest, ".chrono-harness/state/preparation/", "acquisition", &output.stdout).unwrap();
+    inventory.transfer_consumer(&consumer, &parent.path).unwrap();
+    assert!(inventory.transfer_consumer(&consumer, &parent.path).is_err());
+    let state = json(&fs::read(dest.join(".chrono-harness/state/output-retention-v1/inventory.json")).unwrap()).unwrap();
+    assert!(state["roots"].get(format!("consumer:{}", consumer.consumer)).is_none());
+    let parent_row = state["outputs"].as_array().unwrap().iter().find(|row| row["path"] == parent.path).unwrap();
+    assert!(parent_row["references"].as_array().unwrap().iter().any(|id| *id == original.id));
+    inventory.maintain().unwrap();
+    assert_eq!(fs::read(dest.join(&original.path)).unwrap(), raw);
+    assert_eq!(fs::read(dest.join(&parent.path)).unwrap(), output.stdout);
+}
+#[test]
 fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     // Native workflows inherit the CI selector, while this fixture exercises
     // the local producer and validator contract. Run the whole fixture in a

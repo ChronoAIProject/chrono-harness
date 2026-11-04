@@ -188,6 +188,12 @@ root. Lifecycle state readers acquire the same explicit read protection. The sco
 keeps owned descriptor copies registered with the existing process engine, so
 subprocesses inherit those same original capabilities. An idle scope
 protects nothing; another collector does not retain unrelated historical reports.
+The local input producer gives each subprocess result its own declared caller
+consumer. That root retains the report and its explicit originals after child
+exit. The runner validates the returned originals, then transfers that exact root
+to its already protected acquisition original in one inventory transition.
+Unrelated results remain reclaimable; a failed validation leaves the producer's
+handoff and original outcome intact for recovery.
 Pending publication and failure roots remain durable across interruption. Successful
 final originals retain their publication root until actual fixed-pointer settlement;
 failed final originals keep their separate recheck root. Exact roots, dependency
