@@ -545,8 +545,19 @@ pub fn filemap(v: &Value) -> Result {
         object(
             f,
             &["path", "owner", "surface", "cost", "edges"],
-            &["symlink", "projection"],
+            &["symlink", "projection", "verification"],
         )?;
+        if let Some(verification) = f.get("verification") {
+            object(verification, &["kind", "roots"], &[])?;
+            choice(&verification["kind"], &["program", "specification", "data"])?;
+            unique(&verification["roots"], None)?;
+            for root in array(&verification["roots"])? {
+                path(root)?;
+            }
+            if verification["kind"] == "data" && !array(&verification["roots"])?.is_empty() {
+                return Err("data verification cannot declare proof roots".into());
+            }
+        }
         path(&f["path"])?;
         string(&f["owner"])?;
         string(&f["cost"])?;

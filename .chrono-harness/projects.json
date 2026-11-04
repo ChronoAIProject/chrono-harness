@@ -572,6 +572,21 @@
             "--manifest-path",
             "crates/judge-ci/Cargo.toml"
           ]
+        },
+        "verify_policy": {
+          "operation": "verify.judge-ci-policy",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "crates/judge-ci/src/verus_policy.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-ci-policy.rlib"
+          ]
         }
       },
       "language": "rust"
@@ -699,6 +714,21 @@
             "--test",
             "behavior",
             "retirement"
+          ]
+        },
+        "verify_policy_tests": {
+          "operation": "verify.judge-ci-policy-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "crates/judge-ci-tests/tests/verus_policy.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-ci-policy-tests.rlib"
           ]
         }
       },
