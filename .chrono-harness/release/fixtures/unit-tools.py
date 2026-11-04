@@ -4,6 +4,8 @@ from pathlib import Path
 name=Path(sys.argv[0]).name
 with open(os.environ['CALLS'],'a') as f:f.write(json.dumps({'tool':name,'argv':sys.argv[1:],'cwd':str(Path.cwd())})+'\n')
 fault=os.environ.get('FAULT','')
+if (name=='git' and fault=='source' and 'rev-parse' in sys.argv) or (name=='rustup' and fault=='install' and 'install' in sys.argv):
+ sys.stdout.buffer.write(b'failed phase\xff\n');sys.stderr.buffer.write(b'original diagnostic\xfe\n');sys.exit(41)
 if name=='git':
  if 'clone' in sys.argv:
   shutil.copytree(sys.argv[-2],sys.argv[-1],ignore=shutil.ignore_patterns('handoffs','products','consumer','__pycache__'))
@@ -14,7 +16,7 @@ if name=='git':
   if fault=='tracked':sys.stdout.buffer.write(b'consumer/a\0')
  else:print(('b' if 'HEAD^{tree}' in sys.argv else 'a')*40)
 elif name=='rustup' and sys.argv[1:2]==['which']:print(Path.cwd()/'tools'/sys.argv[-1])
-elif name=='rustc':print('rustc 1.95.0 fixture')
+elif name=='rustc':print('rustc different-version' if fault=='version' else 'rustc 1.95.0 fixture')
 elif name=='cargo':
  if '--version' in sys.argv:print('cargo fixture')
  elif sys.argv[1]=='build':
@@ -27,9 +29,9 @@ elif name=='cargo':
 elif name=='probe':
  for p in ['consumer/a','consumer/distribution']:assert Path(p).stat().st_mode&0o111
  subprocess.run(['consumer/a'],check=True)
- if fault=='destination-change':Path('consumer/a').write_bytes(b'changed')
+ if fault in ('destination-change','destination-change-verify'):Path('consumer/a').write_bytes(b'changed')
  if fault=='destination-mode':Path('consumer/a').chmod(0o644)
  if fault=='destination-missing':Path('consumer/a').unlink()
  if fault=='source-change':Path('products/a').write_bytes(b'changed')
  sys.stdout.buffer.write(b'original verification\xff\n');sys.stderr.buffer.write(b'original diagnostic\xfe\n')
- if fault=='verify':sys.exit(73)
+ if fault in ('verify','destination-change-verify'):sys.exit(73)
