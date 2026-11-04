@@ -2007,7 +2007,7 @@ impl Manager {
                 }
             }
         }
-        let producer_failures = self.outside_enrollment(r, |inputs, r| {
+        let producer_failures = self.outside_enrollment(r, |inputs, _| {
         let mut failures = vec![];
         for producer in inputs.policy.retained_producers.clone() {
             let (config, bytes) = crate::configuration(

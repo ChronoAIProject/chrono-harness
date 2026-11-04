@@ -235,6 +235,15 @@ impl DirectoryGate {
 
 impl Store {
     fn partition(directory: &Path, producer: &str, candidate: &str) -> Result<Value, String> {
+        Self::partition_observed(directory, producer, candidate, |_| Ok(()))
+    }
+
+    fn partition_observed(
+        directory: &Path,
+        producer: &str,
+        candidate: &str,
+        mut observer: impl FnMut(&str) -> Result<(), String>,
+    ) -> Result<Value, String> {
         let path = no_symlink_parents(directory, "objects.json")?;
         let bytes = fs::read(&path).map_err(|e| e.to_string())?;
         if serde_json::from_slice::<Owner>(&bytes).is_ok() {
@@ -290,7 +299,8 @@ impl Store {
             records_id: directory_id(&records)?,
         };
         let namespace = value!({"schema":"chrono-producer-partition-namespace/v1",
-            "owner":owner,"task_completion":"not-claimed"});
+            "owner":owner,"source_sha256":sha256(&bytes),"source_length":bytes.len(),
+            "original_identity":original_identity,"task_completion":"not-claimed"});
         let namespace_name = format!(
             "producer-partition-namespace-{}.json",
             sha256(&serde_json::to_vec(&namespace).map_err(|e| e.to_string())?)
@@ -327,12 +337,7 @@ impl Store {
             let next_bytes = serde_json::to_vec(&next).map_err(|e| e.to_string())?;
             match fs::read(&destination) {
                 Ok(retained) => {
-                    let retained: ObjectRecord =
-                        serde_json::from_slice(&retained).map_err(|e| e.to_string())?;
-                    if retained.schema != next.schema
-                        || retained.owner_sha256 != next.owner_sha256
-                        || retained.object.path != object.path
-                    {
+                    if retained != next_bytes {
                         return Err(
                             "producer partition cannot replace an unknown registration".into()
                         );
@@ -344,6 +349,7 @@ impl Store {
             write_bytes_staged(&destination, &next_bytes, false, directory)?;
             declarations.push(value!({"path":name,"sha256":sha256(&next_bytes)}));
         }
+        observer("partition-records-published")?;
         let record = value!({"schema":"chrono-producer-partition/v1","producer":producer,
             "candidate":candidate,"source":{"path":source_name,"sha256":sha256(&bytes),
             "length":bytes.len(),"original_identity":original_identity},"namespace":namespace,
@@ -774,6 +780,19 @@ fn generated_paths(paths: &[String]) -> Result<(), String> {
 }
 
 impl RetainedArtifact {
+    /// Test-only interruption seam for the exact conversion producer. The
+    /// public lifecycle entry separately verifies coordinator enrollment/policy.
+    #[cfg(feature = "producer-birth-test")]
+    #[doc(hidden)]
+    pub fn partition_with_observer(
+        directory: &Path,
+        producer: &str,
+        candidate: &str,
+        observer: impl FnMut(&str) -> Result<(), String>,
+    ) -> Result<Value, String> {
+        Store::partition_observed(directory, producer, candidate, observer)
+    }
+
     /// Resolve publication through the same committed policy and coordinator as drain.
     /// This does not release consumers, drain stores, or authorize checkout disposal.
     pub fn registered_store(
@@ -1528,7 +1547,7 @@ impl ProducerPolicy {
                     drop(store.take());
                     let bodies = body::drain(
                         self,
-                        manager,
+                        inputs,
                         r,
                         &directory,
                         object,

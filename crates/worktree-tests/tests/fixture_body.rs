@@ -383,6 +383,21 @@ fn explicit_partition_preserves_original_data_and_current_consumers() {
         fs::read(store.join("objects.json")).unwrap(),
         previous_bytes
     );
+    let candidate = git(&h.root, &["rev-parse", "HEAD"]);
+    let interrupted = chrono_worktree::RetainedArtifact::partition_with_observer(
+        &store, "test-allocation", candidate.trim(), |stage| {
+            assert_eq!(stage, "partition-records-published");
+            Err("controlled interruption before namespace activation".into())
+        },
+    ).unwrap_err();
+    assert!(interrupted.contains("controlled interruption"));
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), previous_bytes);
+    let staged_path = producer_record_path(&store, &root);
+    let staged_bytes = fs::read(&staged_path).unwrap();
+    let mut changed = json(&staged_bytes).unwrap();
+    changed["object"]["retention_reason"] = value!("unknown independent retained state");
+    let changed_bytes = serde_json::to_vec(&changed).unwrap();
+    fs::write(&staged_path, &changed_bytes).unwrap();
     let migrate = || {
         h.auto(
             "migrate",
@@ -394,6 +409,14 @@ fn explicit_partition_preserves_original_data_and_current_consumers() {
             ],
         )
     };
+    let (code, report, error) = migrate();
+    assert_eq!(code, 2, "{report} {error}");
+    assert!(report["error"].as_str().unwrap().contains("unknown registration"), "{report}");
+    assert_eq!(fs::read(&staged_path).unwrap(), changed_bytes);
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), previous_bytes);
+    // Repair this test's deliberately corrupted staging bytes; the real owner
+    // must then resume the same bound interruption without releasing readers.
+    fs::write(&staged_path, &staged_bytes).unwrap();
     let (code, report, error) = migrate();
     assert_eq!(code, 0, "{report} {error}");
     assert_eq!(report["producer_partition"]["status"], "partitioned");

@@ -691,7 +691,7 @@ fn protect_source(
 
 pub(super) fn drain(
     policy: &ProducerPolicy,
-    manager: &Manager,
+    inputs: &PolicyInputs,
     r: &mut Runner,
     directory: &Path,
     object: &Object,
@@ -832,7 +832,7 @@ pub(super) fn drain(
                         return Err("copied input original changed before removal".into());
                     }
                     protect_source(r, &allocation, member, body.git_root.as_deref())?;
-                    manager.stable(r)?;
+                    inputs.stable(r)?;
                     lease.stable()?;
                     Store::stable_in(directory, &policy.id, registry_id, object)?;
                     for dependency in &dependencies {
