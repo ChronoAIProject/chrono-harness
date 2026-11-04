@@ -1,6 +1,6 @@
-//! Explicit producer records consumed by the existing lifecycle drain. No discovery.
+//! Explicit per-object producer registrations; no shared mutable catalogue.
 use super::*;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 mod body;
 
 #[derive(Clone, Deserialize)]
@@ -60,16 +60,15 @@ struct Object {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Registry<T = Object> {
+struct LegacyRegistry {
     schema: String,
     producer: String,
     directory_id: String,
     lease_id: String,
-    objects: Vec<T>,
+    objects: Vec<Object>,
 }
 
-// Decode typed members directly. Large copied-body maps otherwise construct
-// and deserialize a second JSON tree while the shared registry lease is held.
+// Decode typed members directly while rejecting duplicate declarations.
 fn strict_map<'de, D, T>(d: D) -> Result<BTreeMap<String, T>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -108,35 +107,53 @@ where
     serde_json::from_value(chrono_harness::strict_json_value(d)?).map_err(serde::de::Error::custom)
 }
 
+// Immutable namespace identity. Membership and mutable state live only in the
+// producer-written object registrations, never in a shared mutable catalogue.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Owner {
+    schema: String,
+    producer: String,
+    directory_id: String,
+    records_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ObjectRecord<T = Object> {
+    schema: String,
+    owner_sha256: String,
+    object: T,
+}
+
+struct Loaded {
+    producer: String,
+    directory_id: String,
+    owner_id: String,
+    objects: Vec<Arc<Object>>,
+}
+
 struct Store {
     directory: PathBuf,
-    registry: Registry<Arc<Object>>,
-    // Validated serialized declarations paired with their decoded objects.
-    // Updating one allocation need not encode every unrelated copied body again.
-    serialized_objects: Vec<Arc<serde_json::value::RawValue>>,
-    lease: Lease,
+    owner: Owner,
+    owner_bytes: Vec<u8>,
+    state: Loaded,
+    object_guard: Option<DirectoryGate>,
+    began: std::time::Instant,
 }
-
-struct DecodedSnapshot {
-    directory: PathBuf,
-    registry: Registry<Arc<Object>>,
-    serialized_objects: Vec<Arc<serde_json::value::RawValue>>,
-}
-
-// One derived snapshot, bounded to the last store and this process lifetime.
-// Current bytes are still read under the registry lease on every admission.
-static DECODED: Mutex<Option<Arc<DecodedSnapshot>>> = Mutex::new(None);
 
 // The physical store already exists. Lock it before examining birth state, so
 // publishing the named lease cannot expose an unlocked, unexplained birth to
 // another ordinary publisher. This gate never creates or adopts an owner file.
-struct BirthGate {
+struct DirectoryGate {
     _file: fs::File,
+    directory: PathBuf,
+    id: String,
     #[cfg(unix)]
     _scope: chrono_harness::process_fds::Scope,
 }
 
-impl BirthGate {
+impl DirectoryGate {
     fn acquire(
         directory: &Path,
         began: std::time::Instant,
@@ -158,7 +175,7 @@ impl BirthGate {
                 .read(true)
                 .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
                 .open(directory)
-                .map_err(|e| format!("producer birth gate unavailable; preserve objects: {e}"))?;
+                .map_err(|e| format!("producer directory ownership unavailable; preserve objects: {e}"))?;
             let metadata = file.metadata().map_err(|e| e.to_string())?;
             let id = format!("{}:{}", metadata.dev(), metadata.ino());
             loop {
@@ -175,7 +192,7 @@ impl BirthGate {
                 observer("birth-gate-busy");
                 if began.elapsed() >= bound {
                     return Err(format!(
-                        "producer registry birth remains busy; preserve objects: directory={} elapsed_millis={} bound_millis={}",
+                        "producer directory admission remains busy; preserve objects: directory={} elapsed_millis={} bound_millis={}",
                         directory.display(),
                         began.elapsed().as_millis(),
                         bound.as_millis()
@@ -184,18 +201,147 @@ impl BirthGate {
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
             if directory_id(directory)? != id {
-                return Err("producer store replaced during birth admission".into());
+                return Err("producer directory replaced during admission".into());
             }
             let scope = chrono_harness::process_fds::Scope::new(&[file.as_fd()])?;
             Ok(Self {
                 _file: file,
+                directory: directory.to_owned(),
+                id,
                 _scope: scope,
             })
         }
     }
+
+    fn stable(&self) -> Result<(), String> {
+        if directory_id(&self.directory)? != self.id {
+            return Err("producer directory ownership changed; preserve records".into());
+        }
+        Ok(())
+    }
+
 }
 
 impl Store {
+    fn partition(directory: &Path, producer: &str, candidate: &str) -> Result<Value, String> {
+        let path = no_symlink_parents(directory, "objects.json")?;
+        let bytes = fs::read(&path).map_err(|e| e.to_string())?;
+        if serde_json::from_slice::<Owner>(&bytes).is_ok() {
+            Self::open(directory, producer, false)?;
+            return Ok(value!({"status":"already-current","producer":producer,
+                "disposal":"not-performed","historical_outcomes":"unchanged"}));
+        }
+        // Only this explicit current-owner operation reads the superseded data.
+        // Ordinary publication has no v1 decoder or fallback.
+        let previous: LegacyRegistry = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        let original_identity = fingerprint(&path)?;
+        let began = std::time::Instant::now();
+        let bound = std::time::Duration::from_secs(30);
+        if previous.schema != "chrono-retained-producer/v1"
+            || previous.producer != producer
+            || previous.directory_id != directory_id(directory)?
+        {
+            return Err("producer partition input identity differs; preserve originals".into());
+        }
+        let lease = Lease::acquire(
+            &no_symlink_parents(directory, "registry.lease")?,
+            Some(&previous.lease_id), false, true, Some(bound),
+        )?.ok_or("producer partition has live v1 writers")?;
+        let birth = DirectoryGate::acquire(directory, began, bound, &mut |_| {})?;
+        if fs::read(&path).map_err(|e| e.to_string())? != bytes
+            || fingerprint(&path)? != original_identity
+        {
+            return Err("producer partition input changed during exclusion".into());
+        }
+        let mut seen = BTreeSet::new();
+        for object in &previous.objects {
+            Self::record_name(&object.path)?;
+            if !seen.insert(&object.path)
+                || (object.consumers.is_empty() && object.cache_lease.is_none())
+            {
+                return Err("invalid exact producer object registration".into());
+            }
+        }
+        let records = no_symlink_parents(directory, "producer-records")?;
+        let created = match fs::create_dir(&records) {
+            Ok(()) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
+            Err(error) => return Err(error.to_string()),
+        };
+        let owner = Owner {
+            schema: "chrono-retained-producer/v2".into(),
+            producer: producer.into(),
+            directory_id: previous.directory_id.clone(),
+            records_id: directory_id(&records)?,
+        };
+        let namespace = value!({"schema":"chrono-producer-partition-namespace/v1",
+            "owner":owner,"task_completion":"not-claimed"});
+        let namespace_name = format!("producer-partition-namespace-{}.json",
+            sha256(&serde_json::to_vec(&namespace).map_err(|e| e.to_string())?));
+        if !created {
+            let retained = fs::read(no_symlink_parents(directory, &namespace_name)?)
+                .map_err(|e| format!("unknown producer metadata namespace; preserve it: {e}"))?;
+            if json(&retained)? != namespace {
+                return Err("producer metadata birth binding changed".into());
+            }
+        }
+        let namespace = Self::receipt_in(directory, "producer-partition-namespace", &namespace)?;
+        let source_name = format!("producer-partition-source-{}.json", sha256(&bytes));
+        let source_path = no_symlink_parents(directory, &source_name)?;
+        match fs::read(&source_path) {
+            Ok(retained) if retained == bytes => (),
+            Ok(_) => return Err("producer partition original collision".into()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                write_bytes(&source_path, &bytes, true)?;
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+        let mut owner_bytes = serde_json::to_vec_pretty(&owner).map_err(|e| e.to_string())?;
+        owner_bytes.push(b'\n');
+        let mut declarations = vec![];
+        for object in &previous.objects {
+            let name = Self::record_name(&object.path)?;
+            let destination = no_symlink_parents(directory, &name)?;
+            let next = ObjectRecord { schema:"chrono-retained-producer-object/v1".into(),
+                owner_sha256:sha256(&owner_bytes), object };
+            let next_bytes = serde_json::to_vec(&next).map_err(|e| e.to_string())?;
+            match fs::read(&destination) {
+                Ok(retained) => {
+                    let retained: ObjectRecord = serde_json::from_slice(&retained).map_err(|e| e.to_string())?;
+                    if retained.schema != next.schema || retained.owner_sha256 != next.owner_sha256
+                        || retained.object.path != object.path
+                    {
+                        return Err("producer partition cannot replace an unknown registration".into());
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+                Err(error) => return Err(error.to_string()),
+            }
+            write_bytes_staged(&destination, &next_bytes, false, directory)?;
+            declarations.push(value!({"path":name,"sha256":sha256(&next_bytes)}));
+        }
+        let record = value!({"schema":"chrono-producer-partition/v1","producer":producer,
+            "candidate":candidate,"source":{"path":source_name,"sha256":sha256(&bytes),
+            "length":bytes.len(),"original_identity":original_identity},"namespace":namespace,
+            "registrations":declarations,"owner_sha256":sha256(&owner_bytes),
+            "historical_outcomes":"unchanged","disposal":"not-performed",
+            "task_completion":"not-claimed"});
+        let receipt = Self::receipt_in(directory, "producer-partition", &record)?;
+        lease.stable()?;
+        birth.stable()?;
+        if fs::read(&path).map_err(|e| e.to_string())? != bytes
+            || fingerprint(&path)? != original_identity
+        {
+            return Err("producer partition source changed before activation".into());
+        }
+        // One atomic activation. Excluded old writers subsequently reject this
+        // current strict owner shape; current writers never take their old lock.
+        write_bytes(&path, &owner_bytes, false)?;
+        Ok(value!({"status":"partitioned","producer":producer,"receipt":receipt,
+            "objects":previous.objects.len(),"disposal":"not-performed",
+            "historical_outcomes":"unchanged"}))
+    }
+
     fn open(directory: &Path, producer: &str, create: bool) -> Result<Self, String> {
         Self::open_observed(directory, producer, create, |_| {})
     }
@@ -212,164 +358,162 @@ impl Store {
             return Err("producer identity is required".into());
         }
         let began = std::time::Instant::now();
-        let bound = std::time::Duration::from_secs(30);
         let path = no_symlink_parents(directory, "objects.json")?;
-        let mut absent = match fs::symlink_metadata(&path) {
-            Ok(_) => false,
-            Err(e) if create && e.kind() == std::io::ErrorKind::NotFound => true,
-            Err(e) => {
-                return Err(format!(
-                    "producer registry unavailable; preserve objects: {e}"
-                ));
-            }
-        };
-        // An established registry already binds its one named exclusion lease.
-        // Reentering directory birth would serialize ordinary publications with
-        // unrelated live birth descendants, although no lease is being created.
-        let birth = if absent {
+        if !path.exists() && create {
             observer("birth-gate-entered");
-            let birth = BirthGate::acquire(directory, began, bound, &mut observer)?;
+            let birth = DirectoryGate::acquire(
+                directory, began, std::time::Duration::from_secs(30), &mut observer,
+            )?;
             observer("birth-gate-acquired");
-            absent = match fs::symlink_metadata(&path) {
-                Ok(_) => false,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
-                Err(e) => {
-                    return Err(format!(
-                        "producer registry unavailable; preserve objects: {e}"
-                    ));
+            if !path.exists() {
+                // A missing v1 registry beside its old exclusion capability is
+                // an unfinished/unknown birth, never a fresh namespace.
+                if no_symlink_parents(directory, "registry.lease")?.exists() {
+                    return Err("producer registry birth is unknown; preserve original lease".into());
                 }
-            };
-            Some(birth)
-        } else {
-            None
-        };
-        let lease_path = no_symlink_parents(directory, "registry.lease")?;
-        observer("registry-lease-entered");
-        let lease = Lease::acquire_observed(
-            &lease_path,
-            None,
-            absent,
-            true,
-            Some(bound.saturating_sub(began.elapsed())),
-            || observer("lease-created-before-lock"),
-        )?
-        .ok_or("producer registry busy")?;
-        observer("registry-lease-acquired");
-        drop(birth);
-        observer("registry-read-entered");
-        // This one excluded read supplies the admitted identity. Existing state
-        // must bind the held lease below before any publication; an absent lease
-        // beside an existing registry is never created, nor an unknown one adopted.
-        let serialized: Registry<Box<serde_json::value::RawValue>> = match fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| e.to_string())?,
-            Err(e)
-                if absent && lease.newly_created() && e.kind() == std::io::ErrorKind::NotFound =>
-            {
-                let registry = Registry {
-                    schema: "chrono-retained-producer/v1".into(),
+                let records = no_symlink_parents(directory, "producer-records")?;
+                fs::create_dir(&records).map_err(|e| format!("producer record birth unavailable; preserve originals: {e}"))?;
+                let owner = Owner {
+                    schema: "chrono-retained-producer/v2".into(),
                     producer: producer.into(),
                     directory_id: directory_id(directory)?,
-                    lease_id: lease.id().into(),
-                    objects: vec![],
+                    records_id: directory_id(&records)?,
                 };
-                write_json(&path, &registry, true)?;
-                registry
+                birth.stable()?;
+                write_json(&path, &owner, true)?;
             }
-            Err(e) => {
-                return Err(format!(
-                    "producer registry birth is unknown; preserve original lease: {e}"
-                ));
-            }
-        };
-        let previous = DECODED
-            .lock()
-            .map_err(|_| "producer decoded snapshot lock poisoned")?
-            .clone()
-            .filter(|previous| {
-                previous.directory == directory
-                    && previous.registry.schema == serialized.schema
-                    && previous.registry.producer == serialized.producer
-                    && previous.registry.directory_id == serialized.directory_id
-                    && previous.registry.lease_id == serialized.lease_id
-            });
-        let objects = serialized
-            .objects
-            .iter()
-            .enumerate()
-            .map(|(index, object)| {
-                if let Some(previous) = &previous {
-                    if let (Some(bytes), Some(decoded)) = (
-                        previous.serialized_objects.get(index),
-                        previous.registry.objects.get(index),
-                    ) {
-                        if bytes.get() == object.get() {
-                            return Ok(Arc::clone(decoded));
-                        }
-                    }
-                }
-                serde_json::from_str(object.get())
-                    .map(Arc::new)
-                    .map_err(|e| format!("producer registry object {index}: {e}"))
-            })
-            .collect::<Result<Vec<Arc<Object>>, String>>()?;
-        let registry = Registry {
-            schema: serialized.schema,
-            producer: serialized.producer,
-            directory_id: serialized.directory_id,
-            lease_id: serialized.lease_id,
-            objects,
-        };
-        observer("registry-read-returned");
-        if registry.schema != "chrono-retained-producer/v1"
-            || registry.producer != producer
-            || registry.directory_id != directory_id(directory)?
-            || registry.lease_id != lease.id()
+        }
+        observer("registry-read-entered");
+        let owner_bytes = fs::read(&path)
+            .map_err(|e| format!("producer owner unavailable; preserve objects: {e}"))?;
+        let owner: Owner = serde_json::from_slice(&owner_bytes)
+            .map_err(|e| format!("producer owner requires current v2 format; use explicit producer partition migration for retained v1 data: {e}"))?;
+        let owner_id = fingerprint(&path)?;
+        if owner.schema != "chrono-retained-producer/v2"
+            || owner.producer != producer
+            || owner.directory_id != directory_id(directory)?
+            || owner.records_id != directory_id(&no_symlink_parents(directory, "producer-records")?)?
         {
-            return Err("producer registry identity differs; preserve objects".into());
+            return Err("producer owner identity differs; preserve objects".into());
         }
-        let mut seen = BTreeSet::new();
-        for object in &registry.objects {
-            relative_path(&object.path)?;
-            if Path::new(&object.path).components().count() != 1
-                || !seen.insert(&object.path)
-                || (object.consumers.is_empty() && object.cache_lease.is_none())
-            {
-                return Err("invalid exact producer object registration".into());
-            }
-        }
-        observer("store-open-returned");
+        observer("registry-read-returned");
         let store = Self {
             directory: directory.into(),
-            registry,
-            serialized_objects: serialized.objects.into_iter().map(Arc::from).collect(),
-            lease,
+            state: Loaded {
+                producer: owner.producer.clone(),
+                directory_id: owner.directory_id.clone(),
+                owner_id,
+                objects: vec![],
+            },
+            owner,
+            owner_bytes,
+            object_guard: None,
+            began,
         };
-        store.remember()?;
+        store.owner_stable()?;
+        observer("store-open-returned");
         Ok(store)
     }
 
-    fn remember(&self) -> Result<(), String> {
-        let snapshot = Arc::new(DecodedSnapshot {
-            directory: self.directory.clone(),
-            registry: self.registry.clone(),
-            serialized_objects: self.serialized_objects.clone(),
-        });
-        // Retire the prior snapshot outside the mutex, including when another
-        // producer replaces this one slot. No IO runs under the cache mutex.
-        let previous = DECODED
-            .lock()
-            .map_err(|_| "producer decoded snapshot lock poisoned")?
-            .replace(snapshot);
-        drop(previous);
+    fn owner_stable(&self) -> Result<(), String> {
+        let path = no_symlink_parents(&self.directory, "objects.json")?;
+        if directory_id(&self.directory)? != self.owner.directory_id
+            || directory_id(&no_symlink_parents(&self.directory, "producer-records")?)? != self.owner.records_id
+            || fingerprint(&path)? != self.state.owner_id
+            || fs::read(path).map_err(|e| e.to_string())? != self.owner_bytes
+        {
+            return Err("producer owner changed; preserve objects".into());
+        }
         Ok(())
     }
 
+    fn record_name(object: &str) -> Result<String, String> {
+        relative_path(object)?;
+        if Path::new(object).components().count() != 1 || object == "producer-records" {
+            return Err("producer artifact must be one exact child outside owner metadata".into());
+        }
+        Ok(format!("producer-records/{}.json", sha256(object.as_bytes())))
+    }
+
+    fn contains(&self, object: &str) -> Result<bool, String> {
+        Ok(no_symlink_parents(&self.directory, &Self::record_name(object)?)?.exists())
+    }
+
+    fn bind(&mut self, object: &str) -> Result<(), String> {
+        self.owner_stable()?;
+        self.state.objects.clear();
+        drop(self.object_guard.take());
+        self.object_guard = Some(DirectoryGate::acquire(
+            &no_symlink_parents(&self.directory, object)?,
+            self.began,
+            std::time::Duration::from_secs(30),
+            &mut |_| {},
+        )?);
+        self.owner_stable()
+    }
+
+    fn decode_record(&self, path: &Path) -> Result<Arc<Object>, String> {
+        if !fs::symlink_metadata(path).map_err(|e| e.to_string())?.is_file()
+            || fs::symlink_metadata(path).map_err(|e| e.to_string())?.file_type().is_symlink()
+        {
+            return Err("producer registration must be a physical regular file".into());
+        }
+        let bytes = fs::read(path).map_err(|e| e.to_string())?;
+        let record: ObjectRecord = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        if record.schema != "chrono-retained-producer-object/v1"
+            || record.owner_sha256 != sha256(&self.owner_bytes)
+            || path != no_symlink_parents(&self.directory, &Self::record_name(&record.object.path)?)?
+            || (record.object.consumers.is_empty() && record.object.cache_lease.is_none())
+        {
+            return Err("invalid exact producer object registration".into());
+        }
+        Ok(Arc::new(record.object))
+    }
+
+    fn load(&mut self, object: &str) -> Result<usize, String> {
+        if self.state.objects.first().is_some_and(|o| o.path == object) {
+            return Ok(0);
+        }
+        self.bind(object)?;
+        let path = no_symlink_parents(&self.directory, &Self::record_name(object)?)?;
+        let record = self.decode_record(&path)?;
+        if record.path != object {
+            return Err("producer record addresses a different allocation".into());
+        }
+        self.object_guard.as_ref().unwrap().stable()?;
+        self.owner_stable()?;
+        self.state.objects.push(record);
+        Ok(0)
+    }
+
+    // This directory contains only explicit producer-written registrations. The
+    // consumer reads their declared ownership; it never scans artifact trees or
+    // infers membership, references or deletion eligibility from a filename.
+    fn records(&self) -> Result<(Vec<Arc<Object>>, Vec<Value>), String> {
+        self.owner_stable()?;
+        let directory = no_symlink_parents(&self.directory, "producer-records")?;
+        let mut records = vec![];
+        let mut errors = vec![];
+        for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            match self.decode_record(&entry.path()) {
+                Ok(object) => records.push(object),
+                Err(error) => errors.push(value!({"producer":self.owner.producer,
+                    "registration":entry.path(),"status":"failed","error":error,"evidence":"retained"})),
+            }
+        }
+        records.sort_by(|a, b| a.path.cmp(&b.path));
+        self.owner_stable()?;
+        Ok((records, errors))
+    }
+
     fn stable(&self, object: &Object) -> Result<(), String> {
-        self.lease.stable()?;
+        self.owner_stable()?;
+        self.object_guard.as_ref().ok_or("producer object has no metadata exclusion")?.stable()?;
         Self::stable_in(
             &self.directory,
-            &self.registry.producer,
-            &self.registry.directory_id,
+            &self.state.producer,
+            &self.state.directory_id,
             object,
         )
     }
@@ -444,43 +588,20 @@ impl Store {
     }
 
     fn save(&mut self, changed: usize) -> Result<(), String> {
-        self.lease.stable()?;
-        let previous = self.serialized_objects.len();
-        let append = changed == previous && self.registry.objects.len() == previous + 1;
-        if !append && !(changed < previous && self.registry.objects.len() == previous) {
-            return Err("producer save must replace or append one exact object".into());
+        self.owner_stable()?;
+        self.object_guard.as_ref().ok_or("producer object has no metadata exclusion")?.stable()?;
+        if changed != 0 || self.state.objects.len() != 1 {
+            return Err("producer save requires one exact owned object".into());
         }
-        let updated: Arc<serde_json::value::RawValue> =
-            serde_json::value::to_raw_value(&self.registry.objects[changed])
-                .map_err(|e| e.to_string())?
-                .into();
-        let mut objects: Vec<_> = self.serialized_objects.iter().map(Arc::as_ref).collect();
-        if append {
-            objects.push(updated.as_ref());
-        } else {
-            objects[changed] = updated.as_ref();
-        }
-        let publication = Registry {
-            schema: self.registry.schema.clone(),
-            producer: self.registry.producer.clone(),
-            directory_id: self.registry.directory_id.clone(),
-            lease_id: self.registry.lease_id.clone(),
-            objects,
+        let object = &self.state.objects[changed];
+        let path = no_symlink_parents(&self.directory, &Self::record_name(&object.path)?)?;
+        let publication = ObjectRecord {
+            schema: "chrono-retained-producer-object/v1".into(),
+            owner_sha256: sha256(&self.owner_bytes),
+            object: object.as_ref(),
         };
         let bytes = serde_json::to_vec(&publication).map_err(|e| e.to_string())?;
-        write_bytes(
-            &no_symlink_parents(&self.directory, "objects.json")?,
-            &bytes,
-            false,
-        )?;
-        // A drain can update several objects before dropping this store. Later
-        // replacements must include the earlier successful publications.
-        if append {
-            self.serialized_objects.push(updated);
-        } else {
-            self.serialized_objects[changed] = updated;
-        }
-        self.remember()
+        write_bytes_staged(&path, &bytes, false, &self.directory)
     }
 
     fn receipt(&self, prefix: &str, value: &Value) -> Result<Receipt, String> {
@@ -505,6 +626,32 @@ impl Store {
             path: name,
             sha256: sha256(&bytes),
         })
+    }
+}
+
+impl Manager {
+    pub(in crate::automatic) fn partition_producer(
+        &self,
+        r: &mut Runner,
+        target: &Path,
+        producer: &str,
+        report: &mut Value,
+    ) -> Result<(), String> {
+        if target != self.inputs.policy.coordinator_root {
+            return Err("producer partition requires the surviving coordinator".into());
+        }
+        let i = self.current_entry(target).ok_or("producer partition requires current enrollment")?;
+        let entry = &self.ledger.entries[i];
+        let lease = self.lease(entry, true)?.ok_or("producer partition has live coordinator consumers")?;
+        self.check_entry(r, entry, &self.inputs.anchor_head, None)?;
+        let policy = self.inputs.policy.retained_producers.iter()
+            .find(|p| p.id == producer).ok_or("producer partition is not explicitly adopted")?;
+        self.stable(r)?;
+        report["producer_partition"] = Store::partition(
+            &policy.directory(target)?, producer, &self.inputs.anchor_head,
+        )?;
+        lease.stable()?;
+        self.stable(r)
     }
 }
 
@@ -655,13 +802,13 @@ impl RetainedArtifact {
         generated_outputs: &[String],
         consumer: &str,
         retention_reason: &str,
-        observer: impl FnMut(&str),
+        mut observer: impl FnMut(&str),
     ) -> Result<Self, String> {
         generated_paths(generated_outputs)?;
         if consumer.is_empty() || retention_reason.is_empty() {
             return Err("producer requires a consumer and retention reason".into());
         }
-        let mut store = Store::open_observed(directory, producer, true, observer)?;
+        let mut store = Store::open_observed(directory, producer, true, &mut observer)?;
         let object = artifact
             .strip_prefix(directory)
             .map_err(|e| e.to_string())?
@@ -670,11 +817,16 @@ impl RetainedArtifact {
             .to_owned();
         relative_path(&object)?;
         if Path::new(&object).components().count() != 1
-            || store.registry.objects.iter().any(|o| o.path == object)
+            || store.contains(&object)?
         {
             return Err("producer artifact must be one new exact child directory".into());
         }
         let identity = directory_id(&no_symlink_parents(directory, &object)?)?;
+        store.bind(&object)?;
+        if store.contains(&object)? {
+            return Err("producer artifact is already registered".into());
+        }
+        observer("object-record-admitted");
         let intent = store.receipt(
             "producer-intent",
             &value!({
@@ -684,7 +836,7 @@ impl RetainedArtifact {
                 "evidence_disposal":"not-authorized"
             }),
         )?;
-        store.registry.objects.push(Arc::new(Object {
+        store.state.objects.push(Arc::new(Object {
             path: object.clone(),
             identity,
             intent,
@@ -706,7 +858,7 @@ impl RetainedArtifact {
             cache_lease: None,
             bodies: BTreeMap::new(),
         }));
-        store.save(store.registry.objects.len() - 1)?;
+        store.save(store.state.objects.len() - 1)?;
         Ok(Self {
             directory: directory.into(),
             producer: producer.into(),
@@ -715,15 +867,16 @@ impl RetainedArtifact {
     }
 
     pub fn resume(directory: &Path, producer: &str, artifact: &Path) -> Result<Self, String> {
-        let store = Store::open(directory, producer, false)?;
+        let mut store = Store::open(directory, producer, false)?;
         let object = artifact
             .strip_prefix(directory)
             .map_err(|e| e.to_string())?
             .to_str()
             .ok_or("producer path UTF-8")?
             .to_owned();
+        store.load(&object)?;
         let record = store
-            .registry
+            .state
             .objects
             .iter()
             .find(|o| o.path == object)
@@ -739,13 +892,14 @@ impl RetainedArtifact {
     /// Publish identities only after the producer has retained its original bytes.
     pub fn seal(&self) -> Result<(), String> {
         let mut store = Store::open(&self.directory, &self.producer, false)?;
+        store.load(&self.object)?;
         let i = store
-            .registry
+            .state
             .objects
             .iter()
             .position(|o| o.path == self.object)
             .ok_or("producer object missing")?;
-        let object = &store.registry.objects[i];
+        let object = &store.state.objects[i];
         store.stable(object)?;
         if object.sealed || object.disposed || object.cache_lease.is_some() {
             return Err("producer artifact is already sealed/disposed".into());
@@ -782,7 +936,7 @@ impl RetainedArtifact {
                 "generated":generated,"evidence":evidence
             }),
         )?;
-        let object = Arc::make_mut(&mut store.registry.objects[i]);
+        let object = Arc::make_mut(&mut store.state.objects[i]);
         object.publication = Some(publication);
         object.generated = generated;
         object.evidence = evidence;
@@ -803,13 +957,14 @@ impl RetainedArtifact {
             return Err("consumer/release reason required".into());
         }
         let mut store = Store::open(&self.directory, &self.producer, false)?;
+        store.load(&self.object)?;
         let i = store
-            .registry
+            .state
             .objects
             .iter()
             .position(|o| o.path == self.object)
             .ok_or("producer object missing")?;
-        let object = &store.registry.objects[i];
+        let object = &store.state.objects[i];
         store.stable(object)?;
         let _cache = object
             .cache_lease
@@ -841,7 +996,7 @@ impl RetainedArtifact {
             "path":object.path,"identity":object.identity,"intent":object.intent,
             "consumer":consumer,"released":released,"reason":reason}),
         )?;
-        Arc::make_mut(&mut store.registry.objects[i])
+        Arc::make_mut(&mut store.state.objects[i])
             .consumers
             .insert(
                 consumer.into(),
@@ -910,6 +1065,7 @@ impl TemporaryHost {
             id: lease.id().into(),
         };
         let identity = directory_id(&path)?;
+        store.bind(&object)?;
         let intent = store.receipt(
             "producer-intent",
             &value!({
@@ -919,7 +1075,7 @@ impl TemporaryHost {
                 "producer_outcome":"not-established","task_completion":"not-claimed"
             }),
         )?;
-        store.registry.objects.push(Arc::new(Object {
+        store.state.objects.push(Arc::new(Object {
             path: object,
             identity,
             intent,
@@ -935,7 +1091,7 @@ impl TemporaryHost {
             cache_lease: Some(binding),
             bodies: BTreeMap::new(),
         }));
-        store.save(store.registry.objects.len() - 1)?;
+        store.save(store.state.objects.len() - 1)?;
         Ok(Self { path, lease })
     }
 
@@ -1184,10 +1340,14 @@ impl ProducerPolicy {
             return Ok(());
         }
         let opened = Store::open(&directory, &self.id, false)?;
-        let objects = opened.registry.objects.clone();
-        let registry_id = opened.registry.directory_id.clone();
+        let (objects, registration_errors) = opened.records()?;
+        let registry_id = opened.state.directory_id.clone();
         let mut store = Some(opened);
         let mut failures = vec![];
+        for error in registration_errors {
+            failures.push(error["error"].to_string());
+            report["producer_objects"].as_array_mut().unwrap().push(error);
+        }
         let mut originals = BTreeMap::new();
         for snapshot in &objects {
             let excluded = (|| -> Result<Option<Lease>, String> {
@@ -1220,9 +1380,18 @@ impl ProducerPolicy {
                 if store.is_none() {
                     store = Some(Store::open(&directory, &self.id, false)?);
                 }
-                let current = store.as_ref().unwrap();
+                let current = store.as_mut().unwrap();
+                if let Err(error) = current.load(&snapshot.path) {
+                    failures.push(format!("{}: {error}", snapshot.path));
+                    report["producer_objects"].as_array_mut().unwrap().push(value!({
+                        "producer":self.id,"path":format!("{}{}",self.directory,snapshot.path),
+                        "status":"failed","error":error,"evidence":"retained"
+                    }));
+                    drop(store.take());
+                    continue;
+                }
                 let object = current
-                    .registry
+                    .state
                     .objects
                     .iter()
                     .find(|o| o.path == snapshot.path)
@@ -1451,19 +1620,20 @@ impl ProducerPolicy {
                             store = Some(Store::open(&directory, &self.id, false)?);
                         }
                         let current = store.as_mut().unwrap();
+                        current.load(&object.path)?;
                         let i = current
-                            .registry
+                            .state
                             .objects
                             .iter()
                             .position(|o| o.path == object.path)
                             .ok_or("producer object missing during recovery")?;
-                        if value!(current.registry.objects[i]) != value!(object) {
+                        if value!(current.state.objects[i]) != value!(object) {
                             return Err(
                                 "producer registration changed during recovery; preserve originals"
                                     .into(),
                             );
                         }
-                        let updated = Arc::make_mut(&mut current.registry.objects[i]);
+                        let updated = Arc::make_mut(&mut current.state.objects[i]);
                         updated.attempts.push(
                             serde_json::from_value(attempt["receipt"].clone())
                                 .map_err(|e| e.to_string())?,
@@ -1492,6 +1662,7 @@ impl ProducerPolicy {
             {
                 drop(store.take());
             }
+            drop(store.take());
             report["producer_objects"].as_array_mut().unwrap().push(row);
         }
         if failures.is_empty() {

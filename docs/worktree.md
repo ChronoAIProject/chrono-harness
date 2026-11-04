@@ -982,8 +982,9 @@ digests. Interruption or admission failure before `begin` leaves an unregistered
 copy protected as unknown evidence; an admitted but unsealed receipt also remains
 protected. The interface records consumers
 with independent explicit acquire/release receipts. Dropping a handle or losing
-a process never releases a receipt. The existing drain reads only that family's
-`objects.json`; it does not discover directories or infer references.
+a process never releases a receipt. The existing drain reads only producer-written registrations in that family's
+explicit `producer-records/` namespace. Each entry declares its exact artifact,
+owner and references; artifact directories are never searched for membership.
 
 Publication resolves the selected producer through `RetainedArtifact::registered_store`,
 using the same committed worktree configuration, cleanup policy, registration,
@@ -1322,9 +1323,9 @@ without a fabricated result. These captures never enter generated membership.
 `register_copy` retains a verified source original and records the exact future
 destination before the real copy. `relocate_copies` carries only enrolled members
 before the actual within-allocation rename. Copy preparation holds the allocation
-lease while hashing, copying and syncing outside the shared producer registry
-lease. Publication reopens the current registry, checks its original directory,
-lease, allocation and intent bindings, and preserves intervening allocations,
+lease while hashing, copying and syncing outside its allocation metadata transaction.
+Publication reopens only its current registration, checks the immutable namespace,
+allocation and intent bindings, and preserves intervening allocations,
 body registrations and diagnostic references. Concurrent copies may retain one
 content-addressed original only after verifying the published winner's bytes;
 its physical fingerprint must remain unchanged through registration. Current
@@ -1339,22 +1340,35 @@ are rechecked before each effect. Copied members and their retained originals
 have distinct lifetimes. Final-original retention/publication and the compatible
 shared-effect composition are separate work; this API does not release originals.
 
-Each producer admission reads the current complete registry under its existing
-lease. One process-local derived snapshot retains the last store's decoded and
-serialized declarations. Reuse requires matching directory and header identities
-and exact current serialized bytes for that record; new or changed records fully
-decode with the existing strict schema. Malformed unrelated records still refuse
-admission. Directory, lease, allocation, reference, source and original checks
-still use their current inputs; this snapshot does not establish physical state.
-A publication encodes its one changed or appended record and forwards the other
-validated records through the existing JSON library. After a successful atomic
-replacement it refreshes the declaration snapshot, so subsequent updates in the
-same drain preserve earlier results. Mutation clones only the changed object.
-The one snapshot slot is replaced on store admission/publication and released at
-process exit; it has no persisted cache or separate cleanup entry. Retained bytes
-and decoded declarations are proportional to the last store's registry. The raw
-parsing layer still reads and writes the complete registry file; memory and total
-performance costs require consumer measurement, rather than an assumed IO saving.
+Each allocation owns one current `producer-records/` registration. Its immutable
+`objects.json` namespace identity contains no object list or mutable outcomes.
+Ordinary admission reads that small identity and only the addressed allocation's
+registration. Allocation, copied-body and diagnostic-reference updates hold an
+identity-bound directory lock for that allocation; unrelated allocations do not
+share a mutation lock, decoded cache or catalogue rewrite. Initial namespace
+creation alone excludes competing births. Current stores create no
+`registry.lease`.
+
+Cleanup enumerates the explicitly declared registration namespace, validates each
+entry's strict schema, owner digest and canonical address, then checks its actual
+allocation and use leases. This reads producer declarations rather than scanning
+artifact trees or deriving ownership from file names. A malformed registration
+retains its error and originals while independent registrations remain eligible.
+Publication stages outside the registration namespace and atomically replaces
+only its owned record. There is no global decoded snapshot or mutable membership
+index. Original source, consumer, nested-custody and disposal checks still apply;
+performance and complete finite metadata retention require actual acceptance.
+
+`migrate --path COORDINATOR --partition-producer ID` is the sole explicit data
+cutover for an adopted retained producer. It consumes the exact v1 bytes under
+that producer's original exclusive lease, retains those original bytes and an
+independent migration receipt, writes the per-object registrations and atomically
+activates the immutable current owner. Outcomes and consumers are copied without
+release or disposal. Interrupted staging can reuse an identity-bound namespace;
+unknown metadata births remain protected. Old writers reject the activated strict
+shape. Ordinary runtime has no historical decoder or format fallback. Deployment,
+joining or excluding old writers, real-host migration and full SPEC acceptance
+remain caller obligations; changing source alone does not establish cutover.
 
 Copied-body admission runs once in the shared effect owner's immediate
 pre-unlink callback. It verifies current member content and identity, retained

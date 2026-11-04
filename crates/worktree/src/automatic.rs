@@ -422,9 +422,17 @@ fn write_json(path: &Path, v: &impl Serialize, immutable: bool) -> Result<Vec<u8
     Ok(bytes)
 }
 fn write_bytes(path: &Path, bytes: &[u8], immutable: bool) -> Result<(), String> {
+    write_bytes_staged(path, bytes, immutable, path.parent().ok_or("publication parent")?)
+}
+fn write_bytes_staged(
+    path: &Path,
+    bytes: &[u8],
+    immutable: bool,
+    staging_directory: &Path,
+) -> Result<(), String> {
     let mut out = tempfile::Builder::new()
         .prefix(".publish-")
-        .tempfile_in(path.parent().ok_or("publication parent")?)
+        .tempfile_in(staging_directory)
         .map_err(|e| e.to_string())?;
     out.write_all(bytes).map_err(|e| e.to_string())?;
     out.as_file().sync_all().map_err(|e| e.to_string())?;
@@ -2304,6 +2312,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--bootstrap-config",
             "--adopt-cache",
             "--adopt-fixtures",
+            "--partition-producer",
             "--stage-result",
             "--stage-sha256",
             "--report-consumer",
@@ -2331,6 +2340,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (operation == "migrate" && !values.contains_key("--path"))
         || (values.contains_key("--adopt-cache") && operation != "migrate")
         || (values.contains_key("--adopt-fixtures") && operation != "migrate")
+        || (values.contains_key("--partition-producer") && operation != "migrate")
         || (values.contains_key("--stage-result") && operation != "deploy-owner")
         || (values.contains_key("--stage-sha256") && operation != "deploy-owner")
         || (operation == "deploy-owner"
@@ -2417,6 +2427,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 "migrate" => {
                     let target = target.as_ref().unwrap();
                     manager.migrate(r, target, report)?;
+                    if let Some(producer) = values.get("--partition-producer") {
+                        manager.partition_producer(r, target, producer, report)?;
+                    }
                     if let Some(plan) = values.get("--adopt-cache") {
                         manager.adopt_main_cache(r, target, plan, report)?;
                     }

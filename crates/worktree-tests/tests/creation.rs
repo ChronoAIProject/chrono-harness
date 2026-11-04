@@ -44,6 +44,27 @@ fn producer_objects(report: &Value) -> Value {
             .collect::<Vec<_>>()
     )
 }
+// Assertion view over current producer-written registrations. There is no
+// mutable aggregate in the implementation and no historical-format fallback.
+fn producer_state(directory: &Path) -> Value {
+    let owner_bytes = fs::read(directory.join("objects.json")).unwrap();
+    let mut owner = json(&owner_bytes).unwrap();
+    assert_eq!(owner["schema"], "chrono-retained-producer/v2");
+    let mut objects = vec![];
+    for entry in fs::read_dir(directory.join("producer-records")).unwrap() {
+        let record = json(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
+        assert_eq!(record["schema"], "chrono-retained-producer-object/v1");
+        assert_eq!(record["owner_sha256"], sha256(&owner_bytes));
+        objects.push(record["object"].clone());
+    }
+    objects.sort_by(|a, b| a["path"].as_str().unwrap().cmp(b["path"].as_str().unwrap()));
+    owner["objects"] = value!(objects);
+    owner
+}
+fn producer_record_path(directory: &Path, allocation: &Path) -> PathBuf {
+    directory.join("producer-records").join(format!("{}.json",
+        sha256(allocation.file_name().unwrap().to_str().unwrap().as_bytes())))
+}
 fn fixture_git() -> PathBuf {
     let registry = source().join(".chrono-harness/tests/worktree-tools.json");
     let tools = json(&fs::read(&registry).expect("registered worktree test tools")).unwrap();

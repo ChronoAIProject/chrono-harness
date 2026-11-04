@@ -105,7 +105,7 @@ fn preparing_a_copy_original_does_not_block_an_independent_allocation() {
             .unwrap();
         assert!(admitted.is_dir());
         assert_eq!(fs::read(original).unwrap(), [0, 255, 7, 8]);
-        let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+        let registry = producer_state(&store);
         assert_eq!(registry["objects"].as_array().unwrap().len(), 2);
         let object = registry["objects"]
             .as_array()
@@ -178,7 +178,7 @@ fn concurrent_original_publications_keep_both_body_registrations() {
         assert_eq!(originals[0], originals[1]);
         assert_eq!(fs::read(&originals[0]).unwrap(), [0, 255, 7, 8]);
     });
-    let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let registry = producer_state(&store);
     let bodies = registry["objects"][0]["bodies"].as_object().unwrap();
     assert_eq!(bodies.len(), 2);
     assert_eq!(
@@ -205,13 +205,34 @@ fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
             )
             .unwrap();
     }
-    let before = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let membership = fs::read(store.join("objects.json")).unwrap();
+    let first_record = producer_record_path(&store, first.path());
+    let last_record = producer_record_path(&store, last.path());
+    let unrelated_bytes = [fs::read(&first_record).unwrap(), fs::read(&last_record).unwrap()];
+    let unrelated_identities = [
+        chrono_harness::ownership::identity(&first_record),
+        chrono_harness::ownership::identity(&last_record),
+    ];
+    let before = producer_state(&store);
     let original = copy(&store, middle.path(), "second.bin");
-    let after = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let after_membership = fs::read(store.join("objects.json")).unwrap();
+    assert_eq!(
+        after_membership, membership,
+        "copying into one existing allocation must not republish shared membership"
+    );
+    let after = producer_state(&store);
     assert_eq!(after["objects"].as_array().unwrap().len(), 3);
-    assert_eq!(after["objects"][0], before["objects"][0]);
-    assert_eq!(after["objects"][2], before["objects"][2]);
-    assert_eq!(after["objects"][1]["bodies"].as_object().unwrap().len(), 2);
+    assert!(json(&membership).unwrap().get("objects").is_none(),
+        "the immutable namespace identity must contain no dynamic membership");
+    let find = |state: &Value, allocation: &Path| state["objects"].as_array().unwrap()
+        .iter().find(|object| object["path"] == allocation.file_name().unwrap().to_str().unwrap()).unwrap().clone();
+    assert_eq!(find(&after, first.path()), find(&before, first.path()));
+    assert_eq!(find(&after, last.path()), find(&before, last.path()));
+    assert_eq!(find(&after, middle.path())["bodies"].as_object().unwrap().len(), 2);
+    assert_eq!(fs::read(&first_record).unwrap(), unrelated_bytes[0]);
+    assert_eq!(fs::read(&last_record).unwrap(), unrelated_bytes[1]);
+    assert_eq!(chrono_harness::ownership::identity(&first_record), unrelated_identities[0]);
+    assert_eq!(chrono_harness::ownership::identity(&last_record), unrelated_identities[1]);
     assert_eq!(fs::read(original).unwrap(), [0, 255, 7, 8]);
     for allocation in [&first, &middle, &last] {
         assert_eq!(
@@ -228,12 +249,109 @@ fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
 }
 
 #[test]
+fn metadata_publication_for_one_allocation_does_not_lock_another() {
+    use std::{sync::mpsc, thread, time::Duration};
+    let h = host();
+    let (store, existing) = allocation(&h);
+    let pending = store.join("publication in progress");
+    fs::create_dir(&pending).unwrap();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    thread::scope(|scope| {
+        let pending_store = store.clone();
+        let pending = scope.spawn(move || {
+            chrono_worktree::RetainedArtifact::begin_with_birth_observer(
+                &pending_store, "test-allocation", &pending, &[],
+                "actual pending publication", "controlled real metadata publication",
+                |stage| if stage == "object-record-admitted" {
+                    entered_tx.send(()).unwrap();
+                    release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                },
+            )
+        });
+        entered_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        let independent_store = store.clone();
+        let existing = existing.path().to_owned();
+        let (done_tx, done_rx) = mpsc::channel();
+        let independent = scope.spawn(move || {
+            let outcome = (|| -> Result<(), String> {
+                let reference = chrono_worktree::RetainedArtifact::resume(
+                    &independent_store, "test-allocation", &existing,
+                )?;
+                reference.acquire("independent diagnostic", "actual concurrent reader")?;
+                reference.release("independent diagnostic", "reader joined")?;
+                let allocation = chrono_worktree::TemporaryHost::allocate(
+                    &independent_store, "test-allocation", &[], "independent metadata ",
+                )?;
+                assert!(allocation.path().is_dir());
+                Ok(())
+            })();
+            done_tx.send(outcome).unwrap();
+        });
+        let completed_before_release = done_rx.recv_timeout(Duration::from_secs(2));
+        release_tx.send(()).unwrap();
+        pending.join().unwrap().unwrap();
+        independent.join().unwrap();
+        completed_before_release.expect("unrelated metadata must progress while publication is held").unwrap();
+    });
+    assert!(!store.join("registry.lease").exists());
+}
+
+#[test]
+fn explicit_partition_preserves_original_data_and_current_consumers() {
+    let h = host();
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    let (store, allocation) = allocation(&h);
+    let root = allocation.path().to_owned();
+    let original = copy(&store, &root, "retained body");
+    let reference = chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    reference.acquire("actual diagnostic", "must survive explicit format conversion").unwrap();
+    let before = producer_state(&store);
+    let lease = chrono_harness::ownership::Lease::acquire(
+        &store.join("registry.lease"), None, true, true, None,
+    ).unwrap().unwrap();
+    let previous = value!({"schema":"chrono-retained-producer/v1",
+        "producer":"test-allocation","directory_id":before["directory_id"],
+        "lease_id":lease.id(),"objects":before["objects"]});
+    drop(lease);
+    let previous_bytes = serde_json::to_vec(&previous).unwrap();
+    fs::rename(store.join("producer-records"), store.join("retained fixture input")).unwrap();
+    fs::write(store.join("objects.json"), &previous_bytes).unwrap();
+    assert!(chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &[], "refused before migration ").is_err());
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), previous_bytes);
+    let migrate = || h.auto("migrate", &["--path", h.root.to_str().unwrap(),
+        "--partition-producer", "test-allocation"]);
+    let (code, report, error) = migrate();
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(report["producer_partition"]["status"], "partitioned");
+    assert_eq!(report["producer_partition"]["disposal"], "not-performed");
+    let receipt = &report["producer_partition"]["receipt"];
+    let bytes = fs::read(store.join(receipt["path"].as_str().unwrap())).unwrap();
+    assert_eq!(sha256(&bytes), receipt["sha256"]);
+    let migration = json(&bytes).unwrap();
+    let retained = fs::read(store.join(migration["source"]["path"].as_str().unwrap())).unwrap();
+    assert_eq!(retained, previous_bytes);
+    assert_eq!(sha256(&retained), migration["source"]["sha256"]);
+    let after = producer_state(&store);
+    assert_eq!(after["objects"], before["objects"]);
+    assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
+    assert_eq!(fs::read(root.join("retained body")).unwrap(), [0, 255, 7, 8]);
+    let owner_bytes = fs::read(store.join("objects.json")).unwrap();
+    let (code, report, error) = migrate();
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(report["producer_partition"]["status"], "already-current");
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), owner_bytes);
+    chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap()
+        .release("actual diagnostic", "current reader consumed migrated original").unwrap();
+}
+
+#[test]
 fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() {
     for drift in [
         "allocation",
         "intent",
         "cache-lease",
-        "registry-lease",
+        "owner",
         "original",
     ] {
         let h = host();
@@ -242,7 +360,11 @@ fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() 
         let bytes = [0, 255, 7, 8];
         fs::write(&source, bytes).unwrap();
         let destination = allocation.path().join("copied.bin");
-        let registry_path = store.join("objects.json");
+        let registry_path = if drift == "owner" {
+            store.join("objects.json")
+        } else {
+            producer_record_path(&store, allocation.path())
+        };
         let before = fs::read(&registry_path).unwrap();
         let original = store.join(format!("body-inputs/{}.bin", sha256(&bytes)));
         let mut changed_registry = None;
@@ -264,12 +386,12 @@ fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() 
                 } else {
                     let mut registry = json(&before).unwrap();
                     match drift {
-                        "allocation" => registry["objects"][0]["identity"] = value!("changed"),
-                        "intent" => registry["objects"][0]["intent"]["sha256"] = value!("changed"),
+                        "allocation" => registry["object"]["identity"] = value!("changed"),
+                        "intent" => registry["object"]["intent"]["sha256"] = value!("changed"),
                         "cache-lease" => {
-                            registry["objects"][0]["cache_lease"]["id"] = value!("changed")
+                            registry["object"]["cache_lease"]["id"] = value!("changed")
                         }
-                        "registry-lease" => registry["lease_id"] = value!("changed"),
+                        "owner" => registry["records_id"] = value!("changed"),
                         _ => unreachable!(),
                     }
                     let changed = serde_json::to_vec(&registry).unwrap();
@@ -313,10 +435,10 @@ fn same_length_body_declaration_change_refuses_cached_registration() {
     let original = copy(&store, root, "body.bin");
     let source = root.join("real-source");
     let destination = root.join("body.bin");
-    let path = store.join("objects.json");
+    let path = producer_record_path(&store, root);
     let before = fs::read(&path).unwrap();
     let registry = json(&before).unwrap();
-    let digest = registry["objects"][0]["bodies"]["body.bin"]["sha256"]
+    let digest = registry["object"]["bodies"]["body.bin"]["sha256"]
         .as_str()
         .unwrap();
     let replacement = if digest == "a".repeat(64) { "b" } else { "a" }.repeat(64);
@@ -362,11 +484,11 @@ fn duplicate_producer_map_members_and_nested_fields_refuse_publication() {
     let (store, allocation) = allocation(&h);
     let root = allocation.path();
     let original = copy(&store, root, "body.bin");
-    let path = store.join("objects.json");
+    let path = producer_record_path(&store, root);
     let before = fs::read(&path).unwrap();
     let registry = json(&before).unwrap();
     let text = registry.to_string();
-    let body = registry["objects"][0]["bodies"]["body.bin"].to_string();
+    let body = registry["object"]["bodies"]["body.bin"].to_string();
     let reference = r#"{"released":false,"reason":"actual diagnostic","receipt":null}"#;
     let bodies = format!(r#""bodies":{{"body.bin":{body}}}"#);
     let duplicate_receipt = body.replacen(r#""sha256":"#, r#""sha256":"duplicate","sha256":"#, 1);
@@ -383,19 +505,18 @@ fn duplicate_producer_map_members_and_nested_fields_refuse_publication() {
         assert_eq!(text.matches(&old).count(), 1, "fixture marker {old}");
         let damaged = text.replacen(&old, &replacement, 1);
         fs::write(&path, &damaged).unwrap();
-        let error = chrono_worktree::TemporaryHost::allocate(
-            &store,
-            "test-allocation",
-            &[],
-            "must refuse duplicate ",
-        )
-        .err()
-        .expect("duplicate registry must refuse allocation");
+        let error = chrono_worktree::RetainedArtifact::resume(
+            &store, "test-allocation", root,
+        ).err().expect("the addressed duplicate declaration must refuse admission");
         assert!(error.contains("duplicate"), "{error}");
         assert_eq!(fs::read(&path).unwrap(), damaged.as_bytes());
         assert_eq!(fs::read(root.join("body.bin")).unwrap(), [0, 255, 7, 8]);
         assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
     }
+    let independent = chrono_worktree::TemporaryHost::allocate(
+        &store, "test-allocation", &[], "independent of damaged registration ",
+    ).unwrap();
+    assert!(independent.path().is_dir());
     fs::write(&path, &before).unwrap();
     let next = chrono_worktree::TemporaryHost::allocate(
         &store,
@@ -582,7 +703,7 @@ fn body_recovers_without_finish_after_overlapping_holders_and_diagnostic_release
             "assertion read completed; original remains in evidence custody",
         )
         .unwrap();
-    let before_registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let before_registry = producer_state(&store);
     let intent_path = store.join(
         before_registry["objects"][0]["intent"]["path"]
             .as_str()
@@ -782,7 +903,7 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     let nested_root = nested.path().to_owned();
     fs::write(nested_root.join("copy"), b"real copied input").unwrap();
     drop(nested);
-    let nested_registry = json(&fs::read(nested_store.join("objects.json")).unwrap()).unwrap();
+    let nested_registry = producer_state(&nested_store);
     let nested_object = &nested_registry["objects"][0];
     let nested_binding = &nested_object["cache_lease"];
     let nested_path = format!(
@@ -795,7 +916,7 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     );
     let nested_id = nested_binding["id"].as_str().unwrap();
     drop(allocation);
-    let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let registry = producer_state(&store);
     let object = &registry["objects"][0];
     let old_intent = fs::read(store.join(object["intent"]["path"].as_str().unwrap())).unwrap();
     let plan = value!({"schema":"chrono-fixture-body-custody/v1", "head":git(&h.root,&["rev-parse","HEAD"]),
@@ -859,7 +980,7 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
         fs::read(store.join(object["intent"]["path"].as_str().unwrap())).unwrap(),
         old_intent
     );
-    let after = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let after = producer_state(&store);
     let body = &after["objects"][0]["bodies"]["legacy-copy"];
     assert_eq!(
         fs::read(store.join(body["original"].as_str().unwrap())).unwrap(),
