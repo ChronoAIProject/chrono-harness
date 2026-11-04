@@ -403,6 +403,13 @@ ordinary evidence archive. Unlisted consumers and configurations without startup
 keep their existing behavior. Hosts own compatibility and install checks; the
 provider infers no language, layout or platform compatibility.
 
+This host also keeps the bootstrap's writable toolchain homes in its existing
+`.chrono-harness/cache/` artifact root. They are reconstructable execution inputs,
+not members of the uploaded `.chrono-harness/state/` evidence root. Their original
+identity and producer receipts remain in state. Shared-startup provenance validates
+the same declared cache locations; it does not require transporting compiler files
+to collect the original report. See the [host bootstrap boundary](ci.md#this-repository).
+
 The host Python implementation binds a clean primary source commit/tree, platform,
 configuration/profile bytes, original bootstrap reports, and file digests, sizes
 and executable modes. It validates the complete transfer before replacing tools,

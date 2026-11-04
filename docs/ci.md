@@ -46,6 +46,18 @@ incomplete and returns nonzero when evaluated; workflow has [bounded certificati
 
 ## This repository
 
+The core bootstrap and its owner stage/verification profiles place writable
+HOME, CARGO_HOME and TMPDIR under `.chrono-harness/cache/bootstrap-owner-tooling/`.
+These reconstructable tools use the already registered cache lifecycle; original
+reports, streams and installation provenance remain under `.chrono-harness/state/`.
+`host_environment` accepts cache paths only, preserving its literal-path and
+symlink checks. This changes the bootstrap contract and this host's registrations
+together. An original release-unit artifact contained 556,290,234 logical bytes
+of tooling (179,203,963 compressed bytes), compared with 5,382,827 logical bytes
+for its other members (636,057 compressed bytes). Moving tools out of uploaded
+evidence removes that repeated payload. Native totals and elapsed savings remain
+unverified; the existing bootstrap and canonical checks still apply.
+
 CI fixtures select their Git executable from the explicit OS/architecture entries
 in `.chrono-harness/tests/ci-tools.json`. Setup commands and bound Git consumers
 use that same native executable; fault adapters retain its selected path in their
