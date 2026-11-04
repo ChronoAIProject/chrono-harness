@@ -2747,7 +2747,9 @@ fn warm_inventory_observes_changed_rows_roots_and_dependency_refusals() {
     let original = ledger(h.path());
     let first_id = original["outputs"][0]["id"].as_str().unwrap().to_string();
     let second_id = original["outputs"][1]["id"].as_str().unwrap().to_string();
-    inventory(h.path()).reference("current", &[first_id]).unwrap();
+    inventory(h.path())
+        .reference("current", &[first_id])
+        .unwrap();
     let file = h
         .path()
         .join(".chrono-harness/state/output-retention-v1/inventory.json");
@@ -2775,15 +2777,23 @@ fn warm_inventory_observes_changed_rows_roots_and_dependency_refusals() {
     assert_eq!(fs::read(&file).unwrap(), invalid);
     fs::write(&file, valid).unwrap();
 
-    inventory(h.path()).reference("current", &[second_id]).unwrap();
+    inventory(h.path())
+        .reference("current", &[second_id])
+        .unwrap();
     inventory(h.path()).maintain().unwrap();
     assert!(!h.path().join(&first).exists());
     assert!(h.path().join(&second).exists());
-    assert_eq!(ledger(h.path())["summaries"][0]["original_outcome"]["exit"], 202);
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["exit"],
+        202
+    );
     inventory(h.path()).reference("current", &[]).unwrap();
     inventory(h.path()).maintain().unwrap();
     assert!(!h.path().join(&second).exists());
-    assert_eq!(ledger(h.path())["summaries"][1]["original_outcome"]["exit"], 7);
+    assert_eq!(
+        ledger(h.path())["summaries"][1]["original_outcome"]["exit"],
+        7
+    );
 }
 
 #[test]
