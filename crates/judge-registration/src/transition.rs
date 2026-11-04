@@ -876,6 +876,90 @@ pub fn retirement_requests(r: &Registrations) -> Result<BTreeMap<String, Option<
     }
     Ok(out)
 }
+pub fn retirement_declaration<'a>(
+    r: &'a Registrations,
+    kind: &str,
+    id: &str,
+) -> Result<&'a Value, String> {
+    let rows: Vec<_> = r.workflow()["retirements"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["kind"] == kind && row["id"] == id)
+        .collect();
+    if rows.len() != 1 {
+        return Err(format!("E_RETIREMENT: missing/ambiguous {kind}:{id}"));
+    }
+    Ok(rows[0])
+}
+
+/// Validate the registration structure of a removed test, never its execution.
+/// Callers must retain its old costs and require a replacement's actual success.
+pub fn validate_test_retirement(
+    a: &Registrations,
+    b: &Registrations,
+    node: &str,
+) -> Result<Option<String>, String> {
+    let old = a.node_data();
+    let new = b.node_data();
+    let defs = old
+        .get(node)
+        .filter(|_| node.starts_with("test:") && !new.contains_key(node))
+        .ok_or_else(|| format!("E_RETIREMENT: test is not a removed baseline identity: {node}"))?;
+    let requests = retirement_requests(b)?;
+    let request = requests
+        .get(node)
+        .ok_or_else(|| format!("E_REQUIRED_TEST_REMOVED: {node}"))?;
+    if let Some(to) = request {
+        if !new.get(to).is_some_and(|n| n.unique().is_some()) {
+            return Err(format!(
+                "E_REQUIRED_TEST_REMOVED: replacement missing/ambiguous: {node} -> {to}"
+            ));
+        }
+    } else {
+        for definition in &defs.definitions {
+            let d = &definition.value;
+            // Group aliases are opaque; the retained definition identifies the owner.
+            let (collection, kind, pair, defining_id) =
+                if let Some(id) = definition.identity.strip_prefix("project:") {
+                    ("projects", "project", "test_project", id)
+                } else if let Some(id) = definition.identity.strip_prefix("script:") {
+                    ("scripts", "script", "test_script", id)
+                } else {
+                    return Err(format!(
+                        "E_RETIREMENT: retired test has invalid defining owner: {node}"
+                    ));
+                };
+            let owner = d["tests_for"]
+                .as_str()
+                .ok_or("E_RETIREMENT: retired test has no producer")?;
+            if d["id"].as_str() != Some(defining_id) {
+                return Err(format!(
+                    "E_RETIREMENT: defining owner identity/value mismatch: {node}"
+                ));
+            }
+            let originals: Vec<_> = a.projects()[collection]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|p| p["id"] == owner && p[pair] == defining_id)
+                .collect();
+            if originals.len() != 1
+                || b.projects()[collection]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|p| p["id"] == owner || p["id"] == defining_id)
+                || !retirement_declaration(b, kind, owner)?["replacement"].is_null()
+            {
+                return Err(format!(
+                    "E_RETIREMENT: joint producer/test removal required: {node}"
+                ));
+            }
+        }
+    }
+    Ok(request.clone())
+}
 /// A declared later validator must consume this judge before a pending obligation
 /// can leave planning/execution. The validator, not this graph query, approves it.
 pub fn downstream_validator(r: &Registrations, id: &str) -> bool {

@@ -44,9 +44,6 @@
       "cache",
       "core"
     ],
-    "unit_scoped-v1": [
-      "core"
-    ],
     "unit_judge-cost": [
       "cache",
       "core"
@@ -105,10 +102,6 @@
       "core"
     ],
     "unit_cache": [
-      "cache",
-      "core"
-    ],
-    "unit_judge-projects-migration": [
       "cache",
       "core"
     ],

@@ -161,22 +161,6 @@
       "context_path": ".chrono-harness/state/units/judge-projects/context.json",
       "artifact_directory": ".chrono-harness/state/"
     },
-    "scoped-v1": {
-      "workflow_path": ".github/workflows/chrono-ci-scoped-v1.yml",
-      "name": "chrono / scoped-v1",
-      "runs_on": "macos-26",
-      "timeout_minutes": 45,
-      "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
-        ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
-      ],
-      "context_path": ".chrono-harness/state/units/scoped-v1/context.json",
-      "artifact_directory": ".chrono-harness/state/"
-    },
     "judge-cost": {
       "workflow_path": ".github/workflows/chrono-ci-judge-cost.yml",
       "name": "chrono / judge-cost",
@@ -430,22 +414,6 @@
       ],
       "context_path": ".chrono-harness/state/units/cache/context.json",
       "artifact_directory": ".chrono-harness/state/"
-    },
-    "judge-projects-migration": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-projects-migration.yml",
-      "name": "chrono / judge-projects-migration",
-      "runs_on": "macos-26",
-      "timeout_minutes": 45,
-      "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
-        ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
-      ],
-      "context_path": ".chrono-harness/state/units/judge-projects-migration/context.json",
-      "artifact_directory": ".chrono-harness/state/"
     }
   },
   "gather": {
@@ -570,8 +538,6 @@
         "Restore registered cache check.cache-tests": "cache-restore",
         "Save registered cache check.cache-tests": "cache-save",
         "Preserve detector evidence": "evidence-upload",
-        "Restore registered cache check.judge-projects-tests.migration": "cache-restore",
-        "Save registered cache check.judge-projects-tests.migration": "cache-save",
         "Recover failed cache restores": "cache-recovery",
         "Publish registered startup artifact": "startup-upload",
         "Download registered startup artifact": "startup-download",
@@ -770,18 +736,6 @@
             "unit_judge-projects"
           ]
         },
-        "unit_scoped-v1": {
-          "need": "Run the current candidate canonical check and its registered preparation.",
-          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
-          "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_scoped-v1"
-          ]
-        },
         "unit_judge-cost": {
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
@@ -972,18 +926,6 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "unit_cache"
-          ]
-        },
-        "unit_judge-projects-migration": {
-          "need": "Run the current candidate canonical check and its registered preparation.",
-          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
-          "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_judge-projects-migration"
           ]
         },
         "aggregate": {
@@ -1543,32 +1485,6 @@
         "save_caches": [
           "check.cache",
           "check.cache-tests"
-        ]
-      },
-      "unit_judge-projects-migration": {
-        "need": "This job executes the explicitly referenced build and test operations.",
-        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
-        "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
-          ".",
-          ".chrono-harness/ci/bootstrap-shared.json",
-          "verify",
-          "cache"
-        ],
-        "consumer": "check.unit_judge-projects-migration",
-        "caches": [
-          "check.ci",
-          "check.judge-ci",
-          "check.judge-filemap",
-          "check.judge-projects",
-          "check.judge-projects-tests.migration",
-          "check.judge-registration",
-          "check.judge-routes",
-          "check.runner"
-        ],
-        "save_caches": [
-          "check.judge-projects-tests.migration"
         ]
       }
     }

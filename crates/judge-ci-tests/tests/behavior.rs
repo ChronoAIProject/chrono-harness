@@ -73,6 +73,8 @@ mod checkout;
 mod git_facts;
 #[path = "units.rs"]
 mod units;
+#[path = "retirement.rs"]
+mod retirement;
 struct Host {
     dir: TempDir,
 }
@@ -357,6 +359,24 @@ fn removed_affected_binding_fails_closed() {
     let c = h.commit();
     fail(&h.check(&b, &c), "affected binding removed");
     assert_eq!(h.calls(), 0);
+}
+#[test]
+fn retirement_current_test_methods_can_evolve_without_replaying_removed_operations() {
+    let h = Host::new();
+    let b = h.head();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        v["projects"][1]["actions"]["execute"]["operation"] = json!("test.current-suite");
+    });
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["bindings"]["test:suite"] = json!(["test.current-suite"]);
+    });
+    let c = h.commit();
+    let r = h.check(&b, &c);
+    pass(&r);
+    assert_eq!(h.calls(), 1);
+    assert_eq!(r.evidence["selected"], json!(["test:suite"]));
+    assert_eq!(r.evidence["operations"], json!(["test.current-suite"]));
+    assert_eq!(r.evidence["executed"][0]["operation"], "test.current-suite");
 }
 #[test]
 fn unknown_changed_path_never_green() {

@@ -10,13 +10,11 @@ use std::{
 const PRODUCER: &str = "projects-test-host";
 static HOSTS: OnceLock<Result<(PathBuf, Vec<String>), String>> = OnceLock::new();
 static TOOLS: OnceLock<Result<(PathBuf, Vec<String>), String>> = OnceLock::new();
-static MIGRATIONS: OnceLock<Result<(PathBuf, Vec<String>), String>> = OnceLock::new();
 
 fn store(producer: &str) -> &'static (PathBuf, Vec<String>) {
     let selected = match producer {
         PRODUCER => &HOSTS,
         "workflow-test-tools" => &TOOLS,
-        "projects-migration-host" => &MIGRATIONS,
         _ => panic!("undeclared fixture producer: {producer}"),
     };
     selected
@@ -97,9 +95,6 @@ pub fn fixture_directory(prefix: &str) -> FixtureDirectory {
 pub fn tool_directory(prefix: &str) -> FixtureDirectory {
     allocate("workflow-test-tools", prefix)
 }
-pub fn migration_directory(prefix: &str) -> FixtureDirectory {
-    allocate("projects-migration-host", prefix)
-}
 fn allocate(producer: &'static str, prefix: &str) -> FixtureDirectory {
     let (directory, outputs) = store(producer);
     let host = TemporaryHost::allocate(directory, producer, outputs, prefix).unwrap();
@@ -164,7 +159,6 @@ fn binding(path: &Path) -> Result<(&'static str, &'static Path), String> {
     for (producer, selected) in [
         (PRODUCER, &HOSTS),
         ("workflow-test-tools", &TOOLS),
-        ("projects-migration-host", &MIGRATIONS),
     ] {
         if let Some(Ok((directory, _))) = selected.get() {
             if path.starts_with(directory) {

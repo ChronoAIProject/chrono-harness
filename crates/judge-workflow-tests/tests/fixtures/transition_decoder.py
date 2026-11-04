@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Candidate decoder for explicitly registered chrono-ci-check/v1 / FILEMAP v1 data.
-No discovery: ordered bindings and exact legacy definitions are conversion inputs.
+"""Synthetic decoder fixture for the current workflow transition interface.
+All definitions and ordered bindings come from its self-contained test input.
 """
 import copy
 import json

@@ -1714,10 +1714,8 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
         ".chrono-harness/ci/bootstrap.py",
         ".chrono-harness/ci/workflow-inventory.py",
         ".chrono-harness/ci/workflow-inventory-tests.py",
-        ".chrono-harness/migrations/scoped-v1.py",
-        ".chrono-harness/migrations/scoped-v1-tests.py",
     ];
-    for script in [sources[1], sources[2], sources[3], sources[5]] {
+    for script in [sources[1], sources[2], sources[3]] {
         let root = tempfile::tempdir().unwrap();
         for path in sources {
             let destination = root.path().join(path);
@@ -1737,11 +1735,7 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
             .output()
             .unwrap();
         assert!(loaded.status.success(), "{script}: {loaded:?}");
-        for parent in [
-            ".chrono-harness",
-            ".chrono-harness/ci",
-            ".chrono-harness/migrations",
-        ] {
+        for parent in [".chrono-harness", ".chrono-harness/ci"] {
             assert!(
                 !root.path().join(parent).join("__pycache__").exists(),
                 "{script} wrote unregistered bytecode in {parent}"
@@ -1759,22 +1753,15 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
 #[test]
 fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
     use std::os::unix::fs::symlink;
-    for route in ["bootstrap", "workflow-inventory", "scoped-v1-tests"] {
+    for route in ["bootstrap", "workflow-inventory"] {
         let h = Host::new("payload");
         h.kernel_cleanup();
-        let script = if route == "scoped-v1-tests" {
-            source().join(".chrono-harness/migrations/scoped-v1-tests.py")
-        } else {
-            source().join(format!(".chrono-harness/ci/{route}.py"))
-        };
+        let script = source().join(format!(".chrono-harness/ci/{route}.py"));
         let consumer = env!("CARGO_BIN_EXE_chrono-worktree-test-consumer");
         let tools = h.parent.join("python-tools");
         fs::create_dir(&tools).unwrap();
         for name in ["rustup", "cargo", "rustc"] {
             symlink(consumer, tools.join(name)).unwrap();
-        }
-        if route == "scoped-v1-tests" {
-            symlink(consumer, tools.join("git")).unwrap();
         }
         super::automatic::native_consumer_actions(&h, "python-consumer", "python-holder");
         let target = h.parent.join(format!("python-{route}"));
@@ -1844,7 +1831,6 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
                 )
                 .unwrap();
             }
-            "scoped-v1-tests" => (),
             _ => unreachable!(),
         }
         let mut owner = wrapper(&h, &target);

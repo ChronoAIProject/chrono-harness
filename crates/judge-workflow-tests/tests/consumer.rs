@@ -721,11 +721,11 @@ fn changed_base_rejects_old_integration_binding() {
 }
 fn migration_host() -> Host {
     let mut h = host();
-    let decoder = fs::read(source().join(".chrono-harness/migrations/scoped-v1.py")).unwrap();
-    let code = "import runpy,json,copy\nf=runpy.run_path('.chrono-harness/decoder.py')['convert']\nr=json.load(open('.chrono-harness/case.json'))\no=f(r)\nassert o['values']['.chrono-harness/FILEMAP.json']['schema_version']==2\nassert o['values']['.chrono-harness/FILEMAP.json']['execution_plans']['test:t']['operations']==['prepare.p','execute.t']\nbad=copy.deepcopy(r)\nbad['profile_value']['schema']='unsupported'\ntry:\n f(bad)\nexcept ValueError:\n pass\nelse:\n raise AssertionError('bad profile accepted')\n";
+    let decoder = include_bytes!("fixtures/transition_decoder.py").as_slice();
+    let checks = include_bytes!("fixtures/transition_decoder_tests.py").as_slice();
     for (path, bytes) in [
-        (".chrono-harness/decoder.py", decoder.as_slice()),
-        (".chrono-harness/decoder-tests.py", code.as_bytes()),
+        (".chrono-harness/decoder.py", decoder),
+        (".chrono-harness/decoder-tests.py", checks),
         (".chrono-harness/case.json", b"{}".as_slice()),
         (".chrono-harness/profile.json", b"{}".as_slice()),
     ] {

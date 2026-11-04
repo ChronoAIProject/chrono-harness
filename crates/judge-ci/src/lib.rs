@@ -862,7 +862,8 @@ struct Inventory {
     global_selected: BTreeSet<String>,
     selection_explanation: Value,
     blocked: Vec<String>,
-    removed: BTreeMap<String, String>,
+    removed: BTreeMap<String, Option<String>>,
+    retirement_context: Value,
     conversion: Value,
     reused: BTreeMap<String, chrono_harness::observation::Tool>,
     environment: BTreeMap<String, String>,
@@ -1249,6 +1250,7 @@ fn inventory_profile(
     }
     let mut blocked = vec![];
     let mut removed = BTreeMap::new();
+    let mut retirement_context = object!({});
     let mut conversion = Value::Null;
     let mut reused = BTreeMap::new();
     let mut environment: BTreeMap<String, String> = std::env::vars().collect();
@@ -1395,7 +1397,7 @@ fn inventory_profile(
         for (key, value) in &p.environment {
             environment_policy["values"][key] = object!(value);
         }
-        let (_, r, view) = if !verify_checkout {
+        let (old_registration, r, view) = if !verify_checkout {
             chrono_judge_registration::interpret_scheduling_with_reader(
                 reader,
                 root,
@@ -1430,45 +1432,40 @@ fn inventory_profile(
         declarations = r.config()["tools"].clone();
         reused = chrono_judge_registration::reused_tools(&view)?;
         conversion = view["conversion"].clone();
-        let replacements = chrono_judge_registration::replacements(&r)?;
         for test in selected.clone() {
-            if !new.plans.contains_key(&test) {
-                if let Some(replacement) = replacements.get(&test) {
-                    removed.insert(test.clone(), replacement.clone());
-                    selected.remove(&test);
-                    selected.insert(replacement.clone());
-                }
+            if new.plans.contains_key(&test) {
+                continue;
+            }
+            let replacement =
+                chrono_judge_registration::validate_test_retirement(&old_registration, &r, &test)?;
+            let cost_rows: Vec<_> = old_registration.filemap()["test_costs"]
+                .as_array()
+                .ok_or("E_RETIREMENT: old test costs missing")?
+                .iter()
+                .filter(|row| row["test"].as_str() == test.strip_prefix("test:"))
+                .collect();
+            if cost_rows.len() != 1 {
+                return Err(format!("E_RETIREMENT: old test cost missing/ambiguous: {test}"));
+            }
+            let cost = cost_rows[0]["cost"].as_str().ok_or("old cost reference missing")?;
+            let model = old_registration.filemap()["cost_models"]
+                .get(cost)
+                .ok_or("E_RETIREMENT: old cost model missing")?;
+            retirement_context[&test] = object!({
+                "definitions":old_registration.node_data()[&test].definitions.iter()
+                    .map(|d| object!({"identity":d.identity,"value":d.value})).collect::<Vec<_>>(),
+                "cost":{"reference":cost,"value":model}
+            });
+            removed.insert(test.clone(), replacement.clone());
+            selected.remove(&test);
+            if let Some(replacement) = replacement {
+                selected.insert(replacement);
             }
         }
     }
     for test in &selected {
         if !new.plans.contains_key(test) {
             blocked.push(format!("affected binding removed: {test}"));
-        }
-        if let Some(old) = &old {
-            if let Some(ops) = old.policy.bindings.get(test) {
-                for op in ops {
-                    if !new.operations.contains_key(op) {
-                        blocked.push(format!("affected bound operation removed: {op}"));
-                    }
-                }
-            }
-        }
-    }
-    // Replaced obligations must preserve every formerly bound method in the replacement plan.
-    for (test, replacement) in &removed {
-        for op in old
-            .as_ref()
-            .and_then(|s| s.policy.bindings.get(test))
-            .ok_or("historical obligation missing")?
-        {
-            if !new
-                .plans
-                .get(replacement)
-                .is_some_and(|p| p.operations.contains(op))
-            {
-                blocked.push(format!("replacement omits old obligation {op}"));
-            }
         }
     }
     let methods: BTreeMap<_, _> = new
@@ -1502,6 +1499,7 @@ fn inventory_profile(
         selection_explanation,
         blocked,
         removed,
+        retirement_context,
         conversion,
         reused,
         environment,
@@ -1628,6 +1626,7 @@ fn evaluate(
         selection_explanation,
         blocked,
         removed,
+        retirement_context,
         conversion,
         reused,
         environment,
@@ -1660,6 +1659,7 @@ fn evaluate(
         response.evidence["changed_paths"] = object!(paths);
         response.evidence["selection_explanation"] = selection_explanation;
         response.evidence["removed"] = object!(removed);
+        response.evidence["retirement_context"] = retirement_context;
         return Ok(response);
     }
     if let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope {
@@ -1730,7 +1730,10 @@ fn evaluate(
                 executed.push(object!({"operation":result.operation,"receipt":original}));
             }
         }
-        for (old, replacement) in &removed {
+        for (old, replacement) in removed
+            .iter()
+            .filter_map(|(old, to)| to.as_ref().map(|to| (old, to)))
+        {
             if selected.contains(replacement)
                 && outcome.tests.get(replacement).map(String::as_str) != Some("passed")
             {
@@ -1784,7 +1787,7 @@ fn evaluate(
             Status::Passed
         },
         results,
-        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
+        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"retirement_context":retirement_context,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
     Ok(response)

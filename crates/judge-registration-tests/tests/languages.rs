@@ -71,3 +71,100 @@ fn v1_keeps_its_original_contract_and_rejects_v2_fields() {
             .contains("unsupported schema_version")
     );
 }
+
+#[test]
+fn retirement_structure_accepts_joint_pair_removal_and_rejects_a_surviving_producer() {
+    let old = support::values();
+    let a = support::load(&old);
+    let mut candidate = old.clone();
+    candidate.get_mut(support::PROJECTS).unwrap()["projects"] = json!([]);
+    candidate.get_mut(support::WORKFLOW).unwrap()["retirements"] = json!([
+        {"kind":"test","id":"t","replacement":null,"reason":"pair retired"},
+        {"kind":"project","id":"p","replacement":null,"reason":"product retired"}
+    ]);
+    let b = support::load(&candidate);
+    assert_eq!(
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:t").unwrap(),
+        None
+    );
+    candidate.get_mut(support::PROJECTS).unwrap()["projects"] =
+        json!([old[support::PROJECTS]["projects"][0]]);
+    let b = support::load(&candidate);
+    assert!(
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:t")
+            .unwrap_err()
+            .contains("joint producer/test removal required")
+    );
+}
+
+#[test]
+fn retirement_structure_resolves_grouped_alias_owner_and_requires_producer_declaration() {
+    let mut old = support::values();
+    old.get_mut(support::PROJECTS).unwrap()["projects"][1]["test_groups"] =
+        json!({"t":"execute","opaque/suffix":"execute"});
+    let a = support::load(&old);
+    let mut candidate = old.clone();
+    candidate.get_mut(support::PROJECTS).unwrap()["projects"] = json!([]);
+    candidate.get_mut(support::WORKFLOW).unwrap()["retirements"] = json!([
+        {"kind":"test","id":"opaque/suffix","replacement":null,"reason":"pair retired"}
+    ]);
+    let b = support::load(&candidate);
+    assert!(
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:opaque/suffix")
+            .unwrap_err()
+            .contains("missing/ambiguous project:p")
+    );
+    candidate.get_mut(support::WORKFLOW).unwrap()["retirements"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"kind":"project","id":"p","replacement":null,"reason":"product retired"}));
+    let b = support::load(&candidate);
+    assert_eq!(
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:opaque/suffix")
+            .unwrap(),
+        None
+    );
+}
+
+#[test]
+fn retirement_structure_requires_a_declared_unique_current_replacement() {
+    let old = support::values();
+    let a = support::load(&old);
+    let mut candidate = old.clone();
+    candidate.get_mut(support::PROJECTS).unwrap()["owners"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("current"));
+    candidate.get_mut(support::PROJECTS).unwrap()["projects"][1]["id"] = json!("current");
+    candidate.get_mut(support::PROJECTS).unwrap()["projects"][0]["test_project"] =
+        json!("current");
+    let b = support::load(&candidate);
+    assert!(
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:t")
+            .unwrap_err()
+            .contains("E_REQUIRED_TEST_REMOVED")
+    );
+    candidate.get_mut(support::WORKFLOW).unwrap()["retirements"] = json!([
+        {"kind":"test","id":"t","replacement":"current","reason":"current consumer migrated"}
+    ]);
+    let b = support::load(&candidate);
+    assert_eq!(
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:t").unwrap(),
+        Some("test:current".into())
+    );
+    let mut ambiguous = candidate.clone();
+    support::script_pair(&mut ambiguous, "current");
+    let b = support::load(&ambiguous);
+    assert!(
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:t")
+            .unwrap_err()
+            .contains("replacement missing/ambiguous")
+    );
+    candidate.get_mut(support::PROJECTS).unwrap()["projects"] = json!([]);
+    let b = support::load(&candidate);
+    assert!(
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:t")
+            .unwrap_err()
+            .contains("replacement missing/ambiguous")
+    );
+}
