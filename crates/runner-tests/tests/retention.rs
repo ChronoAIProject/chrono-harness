@@ -1566,6 +1566,83 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
     );
 }
 #[test]
+fn completed_child_original_transfers_to_parent_before_its_success_root_is_released() {
+    if !isolated_capability_test(
+        "completed_child_original_transfers_to_parent_before_its_success_root_is_released",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let unrelated = tree(h.path(), "unrelated-old");
+    inventory(h.path())
+        .begin("fixture", &unrelated, json!(null))
+        .unwrap()
+        .complete(json!({"exit":7}))
+        .unwrap();
+    let parent_scope = retained_artifacts::retention::read_scope(h.path()).unwrap();
+    let child_path = tree(h.path(), "child-original");
+    let child_id = {
+        let _child_scope = retained_artifacts::retention::read_scope(h.path()).unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &child_path, json!(null))
+            .unwrap();
+        publication
+            .write_file(
+                &h.path().join(&child_path).join("stdout"),
+                b"exact child result",
+            )
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication
+            .protect_consumer("child-success-handoff")
+            .unwrap();
+        publication
+            .complete_releasing_consumer(json!({"exit":0}), "child-success-handoff")
+            .unwrap();
+        id
+    };
+    assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
+    let between = inventory(h.path()).maintain().unwrap();
+    assert_eq!(between["remaining_outputs"], 1, "{between}");
+    assert!(!h.path().join(unrelated).exists());
+    assert_eq!(
+        fs::read(h.path().join(&child_path).join("stdout")).unwrap(),
+        b"exact child result"
+    );
+    let parent_path = tree(h.path(), "parent-original");
+    let publication = inventory(h.path())
+        .begin("fixture", &parent_path, json!(null))
+        .unwrap();
+    let parent_id = publication.id().to_owned();
+    inventory(h.path())
+        .dependencies(&parent_id, &[child_id])
+        .unwrap();
+    inventory(h.path())
+        .reference("current-parent", &[parent_id])
+        .unwrap();
+    publication.complete(json!({"exit":3})).unwrap();
+    drop(parent_scope);
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        2
+    );
+    inventory(h.path()).reference("current-parent", &[]).unwrap();
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        0
+    );
+    let summaries = ledger(h.path())["summaries"].as_array().unwrap().clone();
+    assert_eq!(
+        summaries.iter().find(|row| row["path"] == child_path).unwrap()["original_outcome"]["exit"],
+        0
+    );
+    assert_eq!(
+        summaries.iter().find(|row| row["path"] == parent_path).unwrap()["original_outcome"]["exit"],
+        3
+    );
+}
+
+#[test]
 fn pending_native_delivery_is_independent_of_latest_report_and_explicitly_released() {
     if !isolated_capability_test(
         "pending_native_delivery_is_independent_of_latest_report_and_explicitly_released",
