@@ -214,6 +214,7 @@ pub struct Publication {
     inventory: Inventory,
     id: String,
     lease: Lease,
+    initial: Arc<Output>,
     byte_limit: u64,
     path: String,
     identity: RefCell<String>,
@@ -940,6 +941,7 @@ impl Inventory {
                 inventory: self,
                 id,
                 lease,
+                initial: Arc::clone(&l.outputs.last().ok_or("publication missing")?.value),
                 byte_limit,
                 path: path.into(),
                 identity: RefCell::new(
@@ -2330,18 +2332,11 @@ impl Publication {
             return Err("output outcome metadata bound".into());
         }
         self.lease.stable()?;
-        let mut owned = {
-            let gate = self.inventory.gate()?;
-            let l = self.inventory.load()?;
-            self.inventory.stable(&gate)?;
-            l.outputs
-                .iter()
-                .find(|o| o.id == self.id)
-                .ok_or("publication identity missing")?
-                .value
-                .as_ref()
-                .clone()
-        };
+        // Reservation already returned this producer's exact declaration. Its
+        // live capability excludes recovery/accounting of these owned fields;
+        // only graph owners may change references before the final merge.
+        let mut owned = self.initial.as_ref().clone();
+        owned.identity = self.identity.borrow().clone();
         // The producer's exact capability excludes accounting/disposal of this
         // output. Hashing and tree sealing need no enrollment-wide exclusion.
         // Reference owners may update their own edges while these IOs proceed.
