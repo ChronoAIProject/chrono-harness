@@ -108,7 +108,10 @@ pub fn consume(
     let path = location(req, r)?;
     let _certificate = chrono_harness::retained_artifacts::retention::read_guard(
         &req.candidate.root,
-        path.strip_prefix(&req.candidate.root).map_err(|e| e.to_string())?.to_str().ok_or("certificate path UTF8")?,
+        path.strip_prefix(&req.candidate.root)
+            .map_err(|e| e.to_string())?
+            .to_str()
+            .ok_or("certificate path UTF8")?,
     )?;
     let bytes = fs::read(path).map_err(|e| format!("E_INTEGRATION_REQUIRED: {e}"))?;
     let check = || -> Result<Value, String> {

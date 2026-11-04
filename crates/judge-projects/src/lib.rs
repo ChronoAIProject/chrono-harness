@@ -1439,7 +1439,10 @@ pub fn verify_completion(
             None,
         )?
     } else {
-        let _manifest = chrono_harness::retained_artifacts::retention::read_guard(&req.candidate.root, &completion.source)?;
+        let _manifest = chrono_harness::retained_artifacts::retention::read_guard(
+            &req.candidate.root,
+            &completion.source,
+        )?;
         let path = chrono_harness::no_symlink_parents(&req.candidate.root, &completion.source)?;
         let bound = r.config()["execution_units"]["collection_limits"]["manifest_bytes"]
             .as_u64()

@@ -620,8 +620,9 @@ impl Manager {
             // Maintain a distinct coordinator once and retain only this
             // invocation's explicitly read originals until publication.
             chrono_harness::retained_artifacts::retention::maintain_adopted(coordinator)?;
-            r.coordinator_inputs =
-                Some(chrono_harness::retained_artifacts::retention::read_scope(coordinator)?);
+            r.coordinator_inputs = Some(chrono_harness::retained_artifacts::retention::read_scope(
+                coordinator,
+            )?);
         }
         Ok(())
     }

@@ -280,7 +280,10 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
         };
         // This collector explicitly consumes all originals. Its own exact
         // inputs prevent reclamation; an unrelated activity has no such effect.
-        let activity: Vec<_> = ids.iter().map(|id| inventory().consume(id).unwrap()).collect();
+        let activity: Vec<_> = ids
+            .iter()
+            .map(|id| inventory().consume(id).unwrap())
+            .collect();
         let (code, _, error) = invoke("active");
         assert_eq!(code, 2, "{error}");
         assert!(
