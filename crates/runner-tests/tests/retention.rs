@@ -1099,10 +1099,20 @@ fn immutable_file_content_drift_is_refused_without_changing_original_outcome() {
         .complete(json!({"exit":17}))
         .unwrap();
     fs::write(h.path().join(p), b"changed failure").unwrap();
-    let r = inventory(h.path()).maintain().unwrap();
-    assert!(r["protected"].to_string().contains("content changed"));
-    assert!(h.path().join(p).exists());
-    assert_eq!(ledger(h.path())["outputs"][0]["outcome"]["exit"], 17);
+    let mut rounds = Vec::new();
+    let mut detected = false;
+    for _ in 0..8 {
+        let r = inventory(h.path()).maintain().unwrap();
+        detected = r["protected"].to_string().contains("content changed");
+        assert_eq!(r["remaining_outputs"], 1, "{r}");
+        assert_eq!(fs::read(h.path().join(p)).unwrap(), b"changed failure");
+        assert_eq!(ledger(h.path())["outputs"][0]["outcome"]["exit"], 17);
+        rounds.push(r);
+        if detected {
+            break;
+        }
+    }
+    assert!(detected, "content drift was not detected: {rounds:?}");
 }
 #[test]
 fn legacy_without_policy_and_unenrolled_outputs_remain_untouched() {
@@ -1166,12 +1176,28 @@ fn killed_producer_is_joined_and_ordinary_entry_recovers_without_any_drop_callba
     child.kill().unwrap();
     let joined = child.wait().unwrap();
     assert!(!joined.success());
-    assert_eq!(
-        retained_artifacts::retention::maintain_adopted(h.path())
+    let original_path = ledger(h.path())["outputs"][0]["path"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        let r = retained_artifacts::retention::maintain_adopted(h.path())
             .unwrap()
-            .unwrap()["remaining_outputs"],
-        0
+            .unwrap();
+        let completed = r["remaining_outputs"] == 0;
+        rounds.push(r);
+        if completed {
+            break;
+        }
+    }
+    assert_eq!(
+        rounds.last().unwrap()["remaining_outputs"],
+        0,
+        "joined producer was not reclaimed: {rounds:?}"
     );
+    assert!(!h.path().join(original_path).exists());
+    assert_eq!(ledger(h.path())["summaries"].as_array().unwrap().len(), 1);
     assert_eq!(
         ledger(h.path())["summaries"][0]["original_outcome"]["original"]["original_exit"],
         Value::Null
