@@ -83,7 +83,7 @@ obligations. These predicates do not certify the adequacy of an external
 interface assumption.
 
 The registered verification operations additionally require `--compile` and
-`--emit=link,dep-info`, so successful verification is followed by Rust compilation
+explicit `--emit=link=OUTPUT,dep-info=OUTPUT.d`, so successful verification is followed by Rust compilation
 and compiler-produced dependency output. Verification success alone is not a
 claim that these artifacts were produced or consumed. Their retained identities,
 source inventory parsing and correspondence checking are still migration work.
@@ -91,7 +91,9 @@ The current coverage adapter therefore continues to report declaration scope.
 
 Product/policy change: both registered proof operations now request compilation
 and dependency output, and the proved argument predicate requires those flags.
-This preserves whole-crate checking and rejects extra or weakened arguments.
+The proved argument builder and admission bind both emitted filenames to the
+registered output. This avoids Rust's filename adaptation for implicit multiple
+outputs. This preserves whole-crate checking and rejects extra or weakened arguments.
 Additional compilation/storage cost has not yet been measured. Original process
 exit and artifact evidence must be checked before accepting this stronger route.
 

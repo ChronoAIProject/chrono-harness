@@ -105,6 +105,18 @@ pub fn valid_requirement_fields(fields: &RequirementFields, tools: &Vec<&str>) -
 
 /// Fixed checking flags are independent of root/source and output-path binding.
 /// Those bindings remain separate obligations at their actual owners.
+pub fn compiler_outputs(output: &str) -> (argument: String)
+    ensures argument@ == "--emit=link="@ + output@ + ",dep-info="@ + output@ + ".d"@,
+{
+    let mut argument = String::new();
+    argument.push_str("--emit=link=");
+    argument.push_str(output);
+    argument.push_str(",dep-info=");
+    argument.push_str(output);
+    argument.push_str(".d");
+    argument
+}
+
 pub open spec fn verifier_arguments(args: Seq<String>) -> bool {
     args.len() == 11
         && args[0]@ == "--crate-type=lib"@
@@ -114,7 +126,7 @@ pub open spec fn verifier_arguments(args: Seq<String>) -> bool {
         && args[4]@ == "2"@
         && args[5]@ == "--output-json"@
         && args[6]@ == "--compile"@
-        && args[7]@ == "--emit=link,dep-info"@
+        && args[7]@ == "--emit=link="@ + args[10]@ + ",dep-info="@ + args[10]@ + ".d"@
         && args[9]@ == "-o"@
 }
 
@@ -124,6 +136,7 @@ pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
     if args.len() != 11 {
         return false;
     }
+    let outputs = compiler_outputs(args[10].as_str());
     equal_text(args[0].as_str(), "--crate-type=lib")
         && equal_text(args[1].as_str(), "--no-cheating")
         && equal_text(args[2].as_str(), "--no-external-by-default")
@@ -131,7 +144,7 @@ pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
         && equal_text(args[4].as_str(), "2")
         && equal_text(args[5].as_str(), "--output-json")
         && equal_text(args[6].as_str(), "--compile")
-        && equal_text(args[7].as_str(), "--emit=link,dep-info")
+        && equal_text(args[7].as_str(), outputs.as_str())
         && equal_text(args[9].as_str(), "-o")
 }
 

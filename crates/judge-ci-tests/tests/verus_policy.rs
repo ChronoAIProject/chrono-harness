@@ -176,11 +176,12 @@ fn requirements_need_selected_tool_and_explicit_nonempty_interfaces() {
 fn canonical_arguments() -> (args: Vec<String>)
     ensures policy::verifier_arguments(args@),
 {
+    let outputs = policy::compiler_outputs("proof.rlib");
     vec![
         "--crate-type=lib".to_owned(), "--no-cheating".to_owned(),
         "--no-external-by-default".to_owned(), "--num-threads".to_owned(),
         "2".to_owned(), "--output-json".to_owned(),
-        "--compile".to_owned(), "--emit=link,dep-info".to_owned(), "root.rs".to_owned(),
+        "--compile".to_owned(), outputs, "root.rs".to_owned(),
         "-o".to_owned(), "proof.rlib".to_owned(),
     ]
 }

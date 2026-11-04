@@ -584,7 +584,7 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link,dep-info",
+            "--emit=link=.chrono-harness/state/verify.judge-ci-policy.rlib,dep-info=.chrono-harness/state/verify.judge-ci-policy.rlib.d",
             "crates/judge-ci/src/verus_policy.rs",
             "-o",
             ".chrono-harness/state/verify.judge-ci-policy.rlib"
@@ -729,7 +729,7 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link,dep-info",
+            "--emit=link=.chrono-harness/state/verify.judge-ci-policy-tests.rlib,dep-info=.chrono-harness/state/verify.judge-ci-policy-tests.rlib.d",
             "crates/judge-ci-tests/tests/verus_policy.rs",
             "-o",
             ".chrono-harness/state/verify.judge-ci-policy-tests.rlib"
