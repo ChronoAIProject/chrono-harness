@@ -3195,6 +3195,21 @@ fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retir
     .unwrap();
     assert!(guard.is_some());
     guard.as_ref().unwrap().stable().unwrap();
+    let admission = chrono_harness::ownership::Lease::acquire(
+        &h.path().join(".chrono-harness/state/output-retention-v1/admission.lease"),
+        None,
+        true,
+        true,
+        None,
+    ).unwrap();
+    assert!(admission.is_some(), "an external effect must exclude only its own paths");
+    drop(admission);
+    let independent = ".chrono-harness/state/preparation/independent-original";
+    publish_original(h.path(), independent, b"independent bytes", json!({"exit_code":3})).unwrap();
+    assert_eq!(fs::read(h.path().join(independent)).unwrap(), b"independent bytes");
+    assert!(publish_original(h.path(), path, b"conflicting bytes", json!({"exit_code":0})).is_err());
+    assert!(!h.path().join(path).exists());
+    guard.as_ref().unwrap().stable().unwrap();
     let mut policy: Value =
         chrono_harness::json(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
     policy["keep_seconds"] = json!(1);
