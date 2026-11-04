@@ -8,7 +8,9 @@ import json
 import os
 import platform
 from pathlib import Path
+import selectors
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -1686,31 +1688,66 @@ class ManagedAttemptCustody(unittest.TestCase):
         attempt.result["commands"].append(row)
         attempt.publish()
         started = time.monotonic()
-        ready = root / ".chrono-harness/state/custody-ready"
-        with stdout.open("xb") as out, stderr.open("xb") as err:
+        listener = socket.socket()
+        completed, completion = socket.socketpair()
+        with listener, completed, completion, ThreadPoolExecutor(max_workers=1) as workers, \
+                stdout.open("xb") as out, stderr.open("xb") as err:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            host, port = listener.getsockname()
+            channel_path = root / ".chrono-harness/state/custody-channel.json"
+            channel_path.parent.mkdir(parents=True, exist_ok=True)
+            with channel_path.open("x") as address:
+                json.dump({"host": host, "port": port}, address)
             child = subprocess.Popen(command, cwd=root, env=attempt.environment,
                                      pass_fds=fixture.PASS_FDS, stdout=out, stderr=err)
+            def join_child():
+                try:
+                    return child.wait()
+                finally:
+                    completion.sendall(b"E")
+
+            terminal = workers.submit(join_child)
+            channel = None
             try:
-                until = time.monotonic() + 10
-                while not ready.exists() and child.poll() is None and time.monotonic() < until:
-                    time.sleep(0.02)
-                self.assertTrue(ready.exists(), "live consumer readiness: " + stderr.read_text(errors="replace")[-3000:])
+                # Admission belongs to the managed owner. Wait for its actual
+                # consumer or its joined original exit under this attempt's
+                # existing deadline, rather than a separate pre-admission timer.
+                with selectors.DefaultSelector() as notification:
+                    notification.register(listener, selectors.EVENT_READ)
+                    notification.register(completed, selectors.EVENT_READ)
+                    events = notification.select(max(0, attempt.deadline - time.monotonic()))
+                if not events or any(key.fileobj is completed for key, _ in events):
+                    self.fail("live consumer readiness: " + stderr.read_text(errors="replace")[-3000:])
+                channel, _ = listener.accept()
+                channel.settimeout(max(0.001, min(15, attempt.deadline - time.monotonic())))
+                self.assertEqual(channel.recv(1), b"R", "live consumer readiness channel")
+                self.assertFalse(terminal.done(), "live consumer exited before protected assertions")
                 yield
             finally:
                 primary_error = sys.exc_info()[1]
+                finalize_error = None
                 try:
-                    if ready.exists() and child.poll() is None:
-                        (root / ".chrono-harness/state/custody-release").touch()
-                    child.wait(timeout=25)
+                    if channel is not None:
+                        channel.sendall(b"X")
                 except Exception as error:
                     attempt.result["custody"]["live_finalize_error"] = repr(error)
-                    if primary_error is None:
-                        raise
+                    finalize_error = error
                 finally:
-                    row.update(exit_code=child.poll(), duration_seconds=time.monotonic() - started,
-                               status="unresolved" if child.poll() is None else "passed" if child.returncode == 0 else "failed")
+                    if channel is not None:
+                        channel.close()
+                try:
+                    terminal.result(timeout=25)
+                except Exception as error:
+                    attempt.result["custody"]["live_join_error"] = repr(error)
+                    finalize_error = finalize_error or error
+                finally:
+                    row.update(exit_code=child.returncode, duration_seconds=time.monotonic() - started,
+                               status="unresolved" if child.returncode is None else "passed" if child.returncode == 0 else "failed")
                     attempt.retain_streams(row, stdout, stderr)
                     attempt.retain_owner_report("managed-use", "managed_report")
+                if primary_error is None and finalize_error is not None:
+                    raise finalize_error
             self.assertEqual(child.returncode, 0)
 
     def test_live_consumer_and_preexisting_output_remain_protected(self):
@@ -1722,6 +1759,7 @@ class ManagedAttemptCustody(unittest.TestCase):
                 assertions = json.loads((root / ".chrono-harness/state/custody-assertions.json").read_bytes())
                 self.assertEqual(len(assertions["verified_payloads"]), 2)
                 self.assertEqual(attempt.result["custody"]["status"], "protected-pending")
+            self.assertTrue((root / ".chrono-harness/state/custody-release").is_file())
         report = json.loads(RealAttempt.original(attempt.result["custody"]["managed_report"]))
         self.assertEqual(report["managed_process"]["exit_code"], 0)
         self.assertIsNone(report["managed_process"]["failure"])

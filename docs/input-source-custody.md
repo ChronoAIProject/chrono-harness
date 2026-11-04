@@ -71,9 +71,12 @@ The fixed PR163 config blob is `4690d372cc8ecf89bf1256eeee8b119024449dd3` and
 runner policy blob is `7fced91018b447989ccec39eff25f727c9a16b62`. The retained
 PR205 native/macos fixtures are respectively
 `14a5b9f51c216861055e6b4067c2b3e36cc7d6c4` and
-`38c73f003b417c6291c02d935fe2449a606a0245`. These unequal originals retain their
-separate decoder/test roles. The current actions select neither historical
-native fixture. The four local inventory blobs are identical between PR163 and
+`38c73f003b417c6291c02d935fe2449a606a0245`. These unequal originals remain fixed Git
+data. The repository no longer keeps
+the historical native fixtures or their source-shape comparison as current test
+inputs; current acquisition tests consume the observation declarations. No
+historical native fixture is an adopted full policy. The four local inventory blobs
+are identical between PR163 and
 PR205; equality of those four does not establish equality of the removed policy
 or effective input closure.
 

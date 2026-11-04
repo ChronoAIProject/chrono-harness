@@ -1082,43 +1082,28 @@ fn main_host_observation_reuses_all_declared_cargo_acquisition_operations() {
             assert_eq!(dir["max_entries"], 200000);
         }
     }
-    let guard: Value = serde_json::from_slice(
-        &fs::read(root.join(".chrono-harness/native/macos/cargo-runner.json")).unwrap(),
-    )
-    .unwrap();
-    let config: Value = serde_json::from_slice(
-        &fs::read(root.join(".chrono-harness/native/macos/config.json")).unwrap(),
-    )
-    .unwrap();
-    for (index, id) in [(0, "sdk"), (1, "developer")] {
+    for (id, destination) in [
+        (
+            "sdk",
+            ".chrono-harness/state/native/macos/guard-inputs/sdk.json",
+        ),
+        (
+            "developer",
+            ".chrono-harness/state/native/macos/guard-inputs/xcode-contents.json",
+        ),
+    ] {
         let declaration = manifest["directories"]
             .as_array()
             .unwrap()
             .iter()
             .find(|r| r["id"] == id)
             .unwrap();
-        let scope = &guard["toolchain"]["sdks"][index];
-        let input = config["environment"]["inputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|r| r["id"] == scope["manifest"])
-            .unwrap();
-        if id == "sdk" {
-            assert_eq!(declaration["manifest"]["root"], scope["root"]);
-            assert_eq!(declaration["manifest"]["path"], input["location"]);
-        } else {
-            // The historical Developer-only guard is preserved, unadopted data.
-            // Current acquisition owns enclosing Contents so sibling framework
-            // aliases stay inside the independently retained v3 inventory.
-            let enclosing = Path::new(scope["root"].as_str().unwrap()).parent().unwrap();
-            assert_eq!(declaration["manifest"]["root"], json!(enclosing));
-            assert_eq!(declaration["location"], json!({"path":enclosing}));
+        assert_eq!(declaration["manifest"]["path"], destination);
+        if id == "developer" {
             assert_eq!(
-                declaration["manifest"]["path"],
-                ".chrono-harness/state/native/macos/guard-inputs/xcode-contents.json"
+                declaration["manifest"]["root"],
+                declaration["location"]["path"]
             );
-            assert_ne!(declaration["manifest"]["path"], input["location"]);
         }
         assert_eq!(declaration["max_entries"], 200000);
     }
