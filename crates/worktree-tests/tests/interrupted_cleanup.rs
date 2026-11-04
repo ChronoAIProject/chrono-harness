@@ -55,7 +55,7 @@ fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment
         .find(|entry| entry["path"] == value!(target))
         .unwrap()
         .clone();
-    let mut cleanup = CapturedChild::spawn(&mut h.auto_command("maintain", &[]), &h.root);
+    let cleanup = CapturedChild::spawn(&mut h.auto_command("maintain", &[]), &h.root);
     let mut ready = libc::pollfd {
         fd: listener.as_raw_fd(),
         events: libc::POLLIN,

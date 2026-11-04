@@ -246,7 +246,9 @@ fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
     let raw = fs::read(dest.join(&original.path)).unwrap();
     let unrelated = ".chrono-harness/state/worktrees/unrelated-ended.json";
     fs::write(dest.join(unrelated), b"unrelated ended original").unwrap();
-    inventory
+    Inventory::adopted(&dest)
+        .unwrap()
+        .unwrap()
         .begin("lifecycle-original", unrelated, value!(null))
         .unwrap()
         .complete(value!({"exit":7}))
