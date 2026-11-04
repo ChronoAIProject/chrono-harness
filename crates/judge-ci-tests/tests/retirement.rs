@@ -12,6 +12,9 @@ fn host() -> Host {
         v["status"] = json!("active");
         v["projects"][0]["kind"] = json!("production");
         v["projects"][0]["test_project"] = json!("suite");
+        v["projects"][0]["actions"] = json!({"build":{
+            "operation":"build.lib","tool":"sh","argv":["-c","printf fixture-production"]
+        }});
         v["projects"][1]["kind"] = json!("test");
         v["projects"][1]["tests_for"] = json!("lib");
     });
@@ -57,6 +60,7 @@ fn host() -> Host {
     }));
     h.change_registry(CONFIG, |v| {
         v["policy"]["registration_config"] = json!(REGISTRATION);
+        v["policy"]["bindings"]["test:suite"] = json!(["build.lib","test.suite"]);
     });
     h.commit();
     h
@@ -141,7 +145,7 @@ fn replace(h: &Host) {
         }
     });
     h.change_registry(CONFIG, |v| {
-        v["policy"]["bindings"] = json!({"test:current":["test.current"]});
+        v["policy"]["bindings"] = json!({"test:current":["build.lib","test.current"]});
     });
     h.change_registry(WORKFLOW, |v| {
         v["retirements"] = json!([
@@ -160,7 +164,7 @@ fn replacement_executes_current_method_and_retains_removed_identity() {
     pass(&result);
     assert_eq!(h.calls(), 1);
     assert_eq!(result.evidence["removed"], json!({"test:suite":"test:current"}));
-    assert_eq!(result.evidence["operations"], json!(["test.current"]));
+    assert_eq!(result.evidence["operations"], json!(["build.lib","test.current"]));
 }
 
 #[test]
