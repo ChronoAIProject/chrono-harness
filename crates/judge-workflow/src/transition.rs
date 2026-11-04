@@ -54,9 +54,10 @@ pub fn evaluate(
         }
         let id = &node[5..];
         let request = chrono_judge_registration::validate_test_retirement(a, b, node)?;
-        if request.as_ref().is_some_and(|to| {
-            results.tests.get(to).map(String::as_str) != Some("passed")
-        }) {
+        if request
+            .as_ref()
+            .is_some_and(|to| results.tests.get(to).map(String::as_str) != Some("passed"))
+        {
             return Err(format!(
                 "E_REQUIRED_TEST_REMOVED: replacement not executed: {node}"
             ));

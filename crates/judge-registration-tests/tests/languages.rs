@@ -120,8 +120,7 @@ fn retirement_structure_resolves_grouped_alias_owner_and_requires_producer_decla
         .push(json!({"kind":"project","id":"p","replacement":null,"reason":"product retired"}));
     let b = support::load(&candidate);
     assert_eq!(
-        chrono_judge_registration::validate_test_retirement(&a, &b, "test:opaque/suffix")
-            .unwrap(),
+        chrono_judge_registration::validate_test_retirement(&a, &b, "test:opaque/suffix").unwrap(),
         None
     );
 }
@@ -136,8 +135,7 @@ fn retirement_structure_requires_a_declared_unique_current_replacement() {
         .unwrap()
         .push(json!("current"));
     candidate.get_mut(support::PROJECTS).unwrap()["projects"][1]["id"] = json!("current");
-    candidate.get_mut(support::PROJECTS).unwrap()["projects"][0]["test_project"] =
-        json!("current");
+    candidate.get_mut(support::PROJECTS).unwrap()["projects"][0]["test_project"] = json!("current");
     let b = support::load(&candidate);
     assert!(
         chrono_judge_registration::validate_test_retirement(&a, &b, "test:t")

@@ -1445,9 +1445,13 @@ fn inventory_profile(
                 .filter(|row| row["test"].as_str() == test.strip_prefix("test:"))
                 .collect();
             if cost_rows.len() != 1 {
-                return Err(format!("E_RETIREMENT: old test cost missing/ambiguous: {test}"));
+                return Err(format!(
+                    "E_RETIREMENT: old test cost missing/ambiguous: {test}"
+                ));
             }
-            let cost = cost_rows[0]["cost"].as_str().ok_or("old cost reference missing")?;
+            let cost = cost_rows[0]["cost"]
+                .as_str()
+                .ok_or("old cost reference missing")?;
             let model = old_registration.filemap()["cost_models"]
                 .get(cost)
                 .ok_or("E_RETIREMENT: old cost model missing")?;
