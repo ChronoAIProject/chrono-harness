@@ -44,7 +44,7 @@ def committed_reader(root, source):
     if (set(source) != {"commit", "tree"} or any(
             not isinstance(source[k], str) or not re.fullmatch(r"[0-9a-f]{40}", source[k])
             for k in source)):
-        raise ValueError("owner supply requires an immutable producer commit and tree")
+        raise ValueError("owner qualification requires an immutable producer commit and tree")
     def git(*args):
         return subprocess.check_output(["git", "--no-optional-locks", "--no-replace-objects",
                                         "-C", str(root), *args], stderr=subprocess.PIPE,
@@ -55,26 +55,6 @@ def committed_reader(root, source):
         shared.safe(root, path, prefix)
         return git("show", source["commit"] + ":" + path)
     return read_input
-
-
-def qualified_supply(root, declaration):
-    if (declaration.get("schema") != "chrono-bootstrap-owner-supply/v1"
-            or declaration.get("platform") != shared.native_platform()):
-        raise ValueError("unsupported owner supply platform or declaration")
-    read_input = committed_reader(root, declaration["source"])
-    config, profiles, digest = shared.registration(root, declaration["startup_config"], read_input)
-    bundle = Path(declaration["bundle"])
-    if not bundle.is_absolute() or bundle.resolve() != bundle or not bundle.is_dir():
-        raise ValueError("owner supply must be a physical retained bundle")
-    observed = dict(declaration["source"], dirty=False, error=None)
-    manifest, payloads, originals = shared.validate_artifact(
-        root, declaration["startup_config"], config, profiles, digest, declaration["binding"],
-        observed=observed, transfer=bundle, read_input=read_input)
-    selected = declaration["issuer"]
-    data = payloads[selected["destination"]]
-    if shared.digest(data) != selected["sha256"] or len(data) != selected["size"]:
-        raise ValueError("qualified construction issuer differs")
-    return data, manifest, originals
 
 
 def qualified_selected_original(root, reference, selected):
@@ -316,6 +296,11 @@ def run_owner(root, program, arguments, directory, name):
 
 def upgrade(root, config_path, config):
     declaration = json.loads(shared.read(root, config["owner_upgrade"], ".chrono-harness/ci/"))
+    if (set(declaration) != {"schema", "selected_original", "stage_config"}
+            or declaration["schema"] != "chrono-bootstrap-owner-upgrade/v1"):
+        raise ValueError("unsupported owner upgrade declaration")
+    shared.safe(root, declaration["selected_original"], ".chrono-harness/state/")
+    shared.safe(root, declaration["stage_config"], ".chrono-harness/ci/")
     observed = bootstrap.observe_source(root)
     if observed["error"] or observed["dirty"] is not False:
         raise ValueError("owner upgrade requires clean committed candidate source")
@@ -336,28 +321,27 @@ def upgrade(root, config_path, config):
             # A real current-source seed/ordinary producer already installed the
             # exact declared set. Its original execution, not a marker, binds it.
             return
-    qualification = None
-    if file_binding(selected)["sha256"] not in declaration["selected_sha256"]:
-        reference = declaration.get("selected_original")
-        if reference is None:
-            raise ValueError("selected ordinary owner has no qualified upgrade input")
-        qualification = qualified_selected_original(root, reference, selected)
-    data, _, _ = qualified_supply(root, declaration)
-    parent = shared.safe(root, ".chrono-harness/state/bootstrap-owner-supply")
+    qualification = qualified_selected_original(root, declaration["selected_original"], selected)
+    original = shared.safe(root, qualification["path"], ".chrono-harness/state/").read_bytes()
+    data = selected.read_bytes()
+    if (shared.digest(original) != qualification["sha256"]
+            or file_binding(selected) != qualification["selected"]
+            or shared.digest(data) != qualification["selected"]["sha256"]
+            or len(data) != qualification["selected"]["size"]):
+        raise ValueError("qualified selected owner changed before construction")
+    parent = shared.safe(root, ".chrono-harness/state/bootstrap-owner-upgrade")
     parent.mkdir(parents=True, exist_ok=True)
     directory = Path(tempfile.mkdtemp(prefix="attempt-", dir=parent))
-    if qualification is not None:
-        original = shared.safe(root, qualification["path"], ".chrono-harness/state/").read_bytes()
-        if (shared.digest(original) != qualification["sha256"]
-                or file_binding(selected) != qualification["selected"]):
-            raise ValueError("qualified selected owner changed before construction")
-        shared.write_new(directory / "selected-producer.json", original)
-        shared.write_new(directory / "selected-qualification.json", shared.encode(qualification))
+    shared.write_new(directory / "selected-producer.json", original)
+    shared.write_new(directory / "selected-qualification.json", shared.encode(qualification))
     carrier = directory / "construction-owner"
     with carrier.open("xb") as output:
         output.write(data)
         os.fchmod(output.fileno(), 0o755)
-    shared.write_new(directory / "supply.json", shared.encode(declaration))
+    if (file_binding(selected) != qualification["selected"]
+            or file_binding(carrier)["sha256"] != qualification["selected"]["sha256"]):
+        raise ValueError("qualified selected owner changed before construction")
+    shared.write_new(directory / "upgrade.json", shared.encode(declaration))
     common = ["--host-root", str(root), "--config", config["participation"]["config"]]
     run_owner(root, carrier, ["migrate", *common, "--path", str(root)], directory, "migration")
     built = run_owner(root, carrier, ["bootstrap", *common, "--bootstrap-config", declaration["stage_config"]],

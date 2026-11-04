@@ -1,0 +1,5 @@
+{
+  "schema": "chrono-bootstrap-owner-upgrade/v1",
+  "selected_original": ".chrono-harness/state/bootstrap.json",
+  "stage_config": ".chrono-harness/ci/bootstrap-owner-stage.json"
+}

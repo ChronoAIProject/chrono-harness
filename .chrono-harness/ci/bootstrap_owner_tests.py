@@ -390,32 +390,7 @@ class ProducerSource(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     bootstrap.provision_environment(root, {"host_environment": {"TMPDIR": path}})
 
-    def test_producer_validation_uses_immutable_source_and_retains_all_byte_checks(self):
-        from bootstrap_shared_tests import SharedStartup
-        fixture = SharedStartup()
-        fixture.setUp()
-        self.addCleanup(fixture.doCleanups)
-        fixture.produce()
-        source = {key: bootstrap.observe_source(fixture.root)[key] for key in ("commit", "tree")}
-        manifest = json.loads((fixture.transfer / "manifest.json").read_bytes())
-        tool = manifest["profiles"]["core"]["files"][0]
-        declaration = {"schema": "chrono-bootstrap-owner-supply/v1", "source": source,
-                       "platform": owner.shared.native_platform(), "startup_config": ".chrono-harness/ci/bootstrap-shared.json",
-                       "bundle": str(fixture.transfer), "binding": fixture.environment["CHRONO_STARTUP_BINDING"],
-                       "issuer": {key: tool[key] for key in ("destination", "sha256", "size")}}
-        # The live candidate diverges; the producer bytes stay producer bytes.
-        (fixture.root / ".chrono-harness/ci/bootstrap.json").write_text('{"candidate": "changed"}')
-        data, retained, originals = owner.qualified_supply(fixture.root, declaration)
-        self.assertEqual(owner.shared.digest(data), tool["sha256"])
-        self.assertEqual(retained["source"]["commit"], source["commit"])
-        self.assertEqual(set(originals), {"core"})
-        stream = manifest["profiles"]["core"]["report"]
-        original = fixture.transfer / stream["path"]
-        original.write_bytes(original.read_bytes() + b"corrupt")
-        with self.assertRaisesRegex(ValueError, "startup original report differs"):
-            owner.qualified_supply(fixture.root, declaration)
-
-    def test_bad_or_relabelled_immutable_source_refuses_before_supply_preparation(self):
+    def test_bad_immutable_producer_reference_refuses_before_reading(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with self.assertRaisesRegex(ValueError, "immutable producer"):
