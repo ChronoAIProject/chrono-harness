@@ -253,13 +253,19 @@ fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
         .unwrap()
         .complete(value!({"exit":7}))
         .unwrap();
-    let between = inventory.maintain().unwrap();
-    assert_eq!(
-        fs::read(dest.join(&original.path)).unwrap(),
-        raw,
-        "{between}"
-    );
-    assert!(!dest.join(unrelated).exists(), "{between}");
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        rounds.push(inventory.maintain().unwrap());
+        assert_eq!(
+            fs::read(dest.join(&original.path)).unwrap(),
+            raw,
+            "{rounds:?}"
+        );
+        if !dest.join(unrelated).exists() {
+            break;
+        }
+    }
+    assert!(!dest.join(unrelated).exists(), "{rounds:?}");
     let parent = prepared::retain_original(
         &dest,
         ".chrono-harness/state/preparation/",

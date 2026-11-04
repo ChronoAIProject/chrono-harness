@@ -23,6 +23,65 @@ fn output(target: &Path) {
 }
 
 #[test]
+fn busy_or_damaged_enrollment_metadata_does_not_block_an_independent_worktree() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    let a = h.parent.join("metadata-a");
+    let b = h.parent.join("metadata-b");
+    assert_eq!(h.invoke("feature", "metadata-a", &a).0, 0);
+    assert_eq!(h.invoke("feature", "metadata-b", &b).0, 0);
+    let original = fs::read(h.ledger_path(&a)).unwrap();
+    let gate = chrono_harness::ownership::Lease::acquire(
+        &h.record_directory(&a).join("metadata.lease"),
+        None,
+        false,
+        true,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    fs::write(h.ledger_path(&a), b"original damaged enrollment").unwrap();
+    let (code, used, error) = h.auto(
+        "use",
+        &["--path", b.to_str().unwrap(), "--operation", "use.consumer"],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
+    assert_eq!(
+        fs::read(h.ledger_path(&a)).unwrap(),
+        b"original damaged enrollment"
+    );
+    assert!(
+        !h.root
+            .join(".chrono-harness/state/automatic-cleanup/ledger.json")
+            .exists()
+    );
+    assert!(
+        !h.root
+            .join(".chrono-harness/state/automatic-cleanup/admission.lease")
+            .exists()
+    );
+    gate.stable().unwrap();
+    drop(gate);
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_ne!(
+        code, 0,
+        "damaged owner must remain failed: {maintained} {error}"
+    );
+    let (code, used, error) = h.auto(
+        "use",
+        &["--path", b.to_str().unwrap(), "--operation", "use.consumer"],
+    );
+    assert_eq!(
+        code, 0,
+        "independent use after owner failure: {used} {error}"
+    );
+    fs::write(h.ledger_path(&a), original).unwrap();
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+}
+
+#[test]
 fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment() {
     use std::{
         io::{Read, Write},
@@ -39,7 +98,7 @@ fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment
         "cleanup-io",
         value!({
             "target":target,
-            "ledger":h.root.join(".chrono-harness/state/automatic-cleanup/ledger.json"),
+            "ledger":h.ledger_path(&target),
             "claim":h.parent.join("cleanup-io-claimed"),
             "synchronize":listener.local_addr().unwrap().to_string()
         }),
@@ -74,8 +133,7 @@ fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment
     release.read_exact(&mut message).unwrap();
     assert_eq!(&message, b"ready");
     let gate = chrono_harness::ownership::Lease::acquire(
-        &h.root
-            .join(".chrono-harness/state/automatic-cleanup/admission.lease"),
+        &h.record_directory(&sibling).join("metadata.lease"),
         None,
         false,
         true,
@@ -1505,12 +1563,7 @@ fn cache_retries_reference_failed_and_partial_originals_without_growth() {
     let path = originals.last().unwrap().0.clone();
     let partial = b"{\"status\":\"failed\",\"processes\":";
     fs::write(&path, partial).unwrap();
-    fs::write(
-        h.root
-            .join(".chrono-harness/state/automatic-cleanup/ledger.json"),
-        serde_json::to_vec_pretty(&ledger).unwrap(),
-    )
-    .unwrap();
+    h.set_ledger(&ledger);
     output(&target);
     let (code, failed, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{failed} {error}");
@@ -1603,12 +1656,10 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "rebuild");
-    let ledger = h
-        .root
-        .join(".chrono-harness/state/automatic-cleanup/ledger.json");
+    let target = h.parent.join("unsealed");
+    let ledger = h.ledger_path(&target);
     let fixture = native_git(&h, "birth-interrupt", value!({"ledger":ledger}));
     fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
-    let target = h.parent.join("unsealed");
     let interrupted = CapturedChild::spawn(
         Command::new(source().join("crates/worktree/target/debug/chrono-worktree")).args([
             "start",

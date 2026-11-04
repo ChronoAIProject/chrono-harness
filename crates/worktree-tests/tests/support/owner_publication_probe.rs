@@ -7,18 +7,28 @@ use std::{
 };
 fn excluded(root: &Path) {
     let dir = root.join(".chrono-harness/state/automatic-cleanup");
-    let ledger: serde_json::Value =
-        serde_json::from_slice(&fs::read(dir.join("ledger.json")).unwrap()).unwrap();
-    for e in ledger["entries"]
-        .as_array()
+    assert!(
+        chrono_harness::ownership::Lease::acquire(
+            &dir.join("deployment.lease"),
+            None,
+            false,
+            true,
+            None,
+        )
         .unwrap()
-        .iter()
-        .filter(|e| e["status"] != "disposed")
-    {
-        for path in [
-            dir.join("admission.lease"),
-            root.join(e["ownership"]["path"].as_str().unwrap()),
-        ] {
+        .is_none(),
+        "original executable deployment must remain exclusive"
+    );
+    for item in fs::read_dir(dir.join("enrollments")).unwrap() {
+        let file = item.unwrap().path().join("ledger.json");
+        let ledger: serde_json::Value = serde_json::from_slice(&fs::read(file).unwrap()).unwrap();
+        for e in ledger["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["status"] != "disposed")
+        {
+            let path = root.join(e["ownership"]["path"].as_str().unwrap());
             assert!(
                 chrono_harness::ownership::Lease::acquire(&path, None, false, true, None)
                     .unwrap()
@@ -68,7 +78,7 @@ fn main() -> ExitCode {
             .join(".chrono-harness/state/owner-probe-drift")
             .exists()
         {
-            let lease = root.join(".chrono-harness/state/automatic-cleanup/admission.lease");
+            let lease = root.join(".chrono-harness/state/automatic-cleanup/deployment.lease");
             fs::rename(&lease, lease.with_extension("original-lease")).unwrap();
             fs::write(lease, "different physical input").unwrap();
         }

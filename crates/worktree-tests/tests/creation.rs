@@ -190,24 +190,19 @@ impl Host {
                 }
             }
             // Only explicitly enrolled fixtures, never live worker artifacts.
-            if let Ok(bytes) = fs::read(
-                self.root
-                    .join(".chrono-harness/state/automatic-cleanup/ledger.json"),
-            ) {
-                if let Ok(ledger) = json(&bytes) {
-                    for entry in ledger["entries"].as_array().into_iter().flatten() {
-                        let Some(path) = entry["path"].as_str() else {
-                            continue;
-                        };
-                        let target = Path::new(path);
-                        retain_fixture_state(
-                            &target.join(".chrono-harness/state"),
-                            &destination.join(format!(
-                                "enrollment-{}",
-                                sha256(target.as_os_str().as_encoded_bytes())
-                            )),
-                        )?;
-                    }
+            if let Ok(ledger) = automatic::snapshot(&self.root) {
+                for entry in ledger["entries"].as_array().into_iter().flatten() {
+                    let Some(path) = entry["path"].as_str() else {
+                        continue;
+                    };
+                    let target = Path::new(path);
+                    retain_fixture_state(
+                        &target.join(".chrono-harness/state"),
+                        &destination.join(format!(
+                            "enrollment-{}",
+                            sha256(target.as_os_str().as_encoded_bytes())
+                        )),
+                    )?;
                 }
             }
             Ok(())

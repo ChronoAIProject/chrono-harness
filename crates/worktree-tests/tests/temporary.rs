@@ -104,12 +104,12 @@ fn producer_store_resolution_does_not_acquire_maintenance_admission() {
     h.policy(|p| p["timeout_seconds"] = value!(1));
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
-    let state = h.root.join(".chrono-harness/state/automatic-cleanup");
+    let state = h.record_directory(&h.root);
     let owner = fs::read(state.join("owner.json")).unwrap();
     let ledger = fs::read(state.join("ledger.json")).unwrap();
     let identity = json(&owner).unwrap();
     let admission = chrono_harness::ownership::Lease::acquire(
-        &state.join("admission.lease"),
+        &state.join("metadata.lease"),
         Some(identity["admission_id"].as_str().unwrap()),
         false,
         true,
@@ -140,7 +140,7 @@ fn producer_store_resolution_does_not_acquire_maintenance_admission() {
 fn producer_store_resolution_checks_committed_inputs_without_creating_cleanup_state() {
     for changed in [POLICY, ".chrono-harness/cleanup.json"] {
         let h = host();
-        let state = h.root.join(".chrono-harness/state/automatic-cleanup");
+        let state = h.record_directory(&h.root);
         assert!(!state.exists());
         assert!(
             chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "unknown")

@@ -971,14 +971,34 @@ allocation differences do not establish filesystem savings. Failed removal
 retains the original error and observed remaining objects, and retries preserve
 the original attempt.
 
-Cache and terminal cleanup retain the exact worktree's exclusive enrollment
-capability while reading, measuring and removing its outputs. Their intent is
-durable before the shared enrollment admission is released. Independent worktrees
-can then enter and finish managed use during that physical work. The cleanup
-owner reacquires admission and reloads current enrollment before attaching its
-original result; it never writes its earlier snapshot over concurrent updates.
-Shared enrollment metadata is still centralized; this boundary removes physical
-cleanup from that exclusion and does not claim fully independent metadata storage.
+Each worktree owns `enrollments/SHA256(absolute-path)/ledger.json` and its
+identity-bound `metadata.lease` under the declared cleanup state directory.
+The record contains only successive physical attachments of that exact address.
+Ordinary updates never rewrite another worktree's record. Cleanup keeps this
+local metadata exclusion and the target's exclusive enrollment capability through
+its physical effect and original-result publication. There is no aggregate
+`ledger.json`, global admission lease, or release/reload merge around independent
+IO. An unrelated owner's busy or damaged record is preserved and reported;
+it does not refuse a valid target's admission. Explicit maintenance still reports
+these failures and continues available independent owners.
+
+The immutable `namespace.json` binds the physical Git owner and the executable's
+`deployment.lease`; it has no mutable membership list. Ordinary owners share that
+lease. Only replacement of the executable common to these enrollments takes it
+exclusively and excludes every actual affected enrollment before publishing.
+This protects the real shared executable without serializing ordinary updates.
+Maintenance enumerates only the declared enrollment namespace and validates each
+record's explicit address. Unknown data never authorizes disposal. Aggregate
+state is refused on ordinary entry; this implementation has no compatibility
+reader or fallback. A current custodian must preserve and partition active state
+under the original exclusions before switching executable generations.
+
+**Product and host adoption change together:** enrollment storage and its current
+consumer/test bindings change in this candidate; the host's registered lifecycle
+and bootstrap commands, retention windows and disposal authority remain the same.
+The affected core, evidence-custody, policy-migration and owner-deployment behavior
+must pass their registered checks. Build, migration and total runtime costs are
+unmeasured until those actual results are available.
 
 The optional v2 `retained_producers` lists exact producer IDs, evidence directories,
 and generated output paths relative to each explicitly registered receipt.

@@ -1,6 +1,5 @@
 use super::*;
 const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
-const STATE: &str = ".chrono-harness/state/automatic-cleanup/ledger.json";
 
 impl Host {
     pub(super) fn automatic(&self, disposition: &str) {
@@ -75,9 +74,66 @@ impl Host {
         self.received(self._dir.capture_bound(&mut command))
     }
     pub(super) fn ledger(&self) -> Value {
-        json(&fs::read(self.root.join(STATE)).unwrap()).unwrap()
+        snapshot(&self.root).unwrap()
+    }
+    pub(super) fn ledger_path(&self, target: &Path) -> PathBuf {
+        self.record_directory(target).join("ledger.json")
+    }
+    pub(super) fn record_directory(&self, target: &Path) -> PathBuf {
+        self.root
+            .join(".chrono-harness/state/automatic-cleanup/enrollments")
+            .join(sha256(target.to_str().unwrap().as_bytes()))
+    }
+    pub(super) fn set_ledger(&self, ledger: &Value) {
+        let directory = self
+            .root
+            .join(".chrono-harness/state/automatic-cleanup/enrollments");
+        for item in fs::read_dir(directory).unwrap() {
+            let path = item.unwrap().path().join("ledger.json");
+            let mut current = json(&fs::read(&path).unwrap()).unwrap();
+            let marker =
+                json(&fs::read(path.parent().unwrap().join("owner.json")).unwrap()).unwrap();
+            current["entries"] = value!(
+                ledger["entries"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|entry| entry["path"] == marker["path"])
+                    .cloned()
+                    .collect::<Vec<_>>()
+            );
+            fs::write(path, serde_json::to_vec_pretty(&current).unwrap()).unwrap();
+        }
     }
 }
+pub(super) fn snapshot(root: &Path) -> Result<Value, String> {
+    let mut ledger = value!({"entries":[]});
+    let namespace = root.join(".chrono-harness/state/automatic-cleanup/enrollments");
+    for item in fs::read_dir(namespace).map_err(|e| e.to_string())? {
+        let bytes = fs::read(item.map_err(|e| e.to_string())?.path().join("ledger.json"))
+            .map_err(|e| e.to_string())?;
+        let current = json(&bytes)?;
+        ledger["entries"]
+            .as_array_mut()
+            .unwrap()
+            .extend(current["entries"].as_array().unwrap().iter().cloned());
+    }
+    ledger["entries"]
+        .as_array_mut()
+        .unwrap()
+        .sort_by_key(|entry| {
+            entry["enrollment"]["receipt"]["report_path"]
+                .as_str()
+                .unwrap_or("")
+                .split('-')
+                .rev()
+                .nth(1)
+                .unwrap_or("")
+                .to_owned()
+        });
+    Ok(ledger)
+}
+
 fn output(target: &Path) {
     fs::create_dir_all(target.join("output λ")).unwrap();
     fs::write(target.join("output λ/data"), vec![42u8; 8192]).unwrap();
@@ -650,7 +706,7 @@ fn addressed_drain_originals_remain_required_for_birth_consumption() {
         .unwrap();
     enrollment["enrollment"]["sealed_receipt"] =
         value!({"path":historical_path,"sha256":sha256(&historical_bytes)});
-    fs::write(h.root.join(STATE), serde_json::to_vec(&ledger).unwrap()).unwrap();
+    h.set_ledger(&ledger);
     let (code, used, error) = h.auto("use", &args);
     assert_eq!(code, 0, "{used} {error}");
     assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
@@ -720,7 +776,7 @@ fn entry_receipts(h: &Host, entry: &Value) -> Vec<(PathBuf, Vec<u8>)> {
         .map(|p| PathBuf::from(p).join("original-lifecycle-state"));
     if let Some(directory) = &evidence {
         fs::create_dir_all(directory).unwrap();
-        let ledger = fs::read(h.root.join(STATE)).unwrap();
+        let ledger = serde_json::to_vec_pretty(&h.ledger()).unwrap();
         fs::write(
             directory.join(format!("ledger-{}.json", sha256(&ledger))),
             ledger,
@@ -1580,10 +1636,10 @@ fn automatic_failed_birth_and_missing_state_are_protected() {
     let active = h.parent.join("active");
     assert_eq!(h.invoke("feature", "active", &active).0, 0);
     output(&active);
-    fs::remove_file(h.root.join(STATE)).unwrap();
+    fs::remove_file(h.ledger_path(&active)).unwrap();
     let next = h.parent.join("next");
-    assert_ne!(h.invoke("feature", "next", &next).0, 0);
-    assert!(!next.exists());
+    assert_eq!(h.invoke("feature", "next", &next).0, 0);
+    assert!(next.exists());
     assert!(active.join("output λ/data").exists());
 }
 
@@ -1653,11 +1709,7 @@ fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
             git(&target, &["add", "-f", "output λ/data"]);
         }
         if fault == "gate" {
-            fs::create_dir(
-                h.root
-                    .join(".chrono-harness/state/automatic-cleanup/gate.lock"),
-            )
-            .unwrap();
+            fs::create_dir(h.record_directory(&target).join("gate.lock")).unwrap();
         }
         let (code, r, e) = h.auto(
             "finish",

@@ -1125,3 +1125,13 @@ a final aggregate. Focused Rust v3-unit/retained-engine tests cover this bounded
 consumer; see [the adoption and limits](diagnostics.md#scoped-ci-execution-progress-adoption).
 The fixed native timeout root cause, committed canonical/native acceptance, broader
 SPEC 7.1/7.2 adoption and full SPEC delivery remain unresolved.
+
+
+The current worktree candidate replaces the aggregate lifecycle ledger and global
+admission with addressed enrollment records and independent metadata capabilities.
+A new real-process regression holds and damages one enrollment while another
+worktree completes managed use; explicit maintenance preserves the damaged record
+and reports its original failure. Existing custody, migration, interruption and
+owner-deployment consumers are migrated to the same storage. Candidate validation
+and actual owner adoption are pending. Runner final-original inventory remains
+aggregate and is a separate unfinished part of the decentralization task.
