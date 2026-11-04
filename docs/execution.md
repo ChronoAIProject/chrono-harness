@@ -41,13 +41,10 @@ plan DELTA impact in full and scoped checks, and collection reconstructs both th
 registered overrides and resolved operation bounds without business execution.
 
 The current coordinator startup plan contains `host.bootstrap-tests` and
-`host.bootstrap-real-consumer`, each at 900 seconds/1048576 bytes. The existing
-full-host migration consumer additionally lists `build.distribution`, explicitly bounded at 600 seconds/1048576 bytes, while
-its startup test keeps the 900-second default. The distribution and release
-integration plans keep their original 600-second defaults. A compatible candidate
-decoder supports that input without copying the older host's source or changing
-the coordinator's startup policy. Candidate checks and local migration do not
-establish compatible public release, native acceptance or full governance adoption.
+`host.bootstrap-real-consumer`, each at 900 seconds/1048576 bytes. The distribution
+and release integration plans keep their 600-second defaults. The historical
+full-host migration plan is retired. Plan execution does not establish public
+release, native acceptance or full governance adoption.
 
 FILEMAP v2 may additionally declare one `execution_scheduling` policy:
 
@@ -72,6 +69,19 @@ paths). Missing, unknown, duplicate, ambiguous and invalid declarations fail
 before business tool observation or launch. There is no language, directory,
 call-graph or test discovery. All resource claims are exclusive; equal or nested
 output namespaces conflict. The declaration remains responsible for completeness.
+
+This host declares `coordinator-fixture-producers` for the CI, projects, workflow
+and worktree test operations that publish into its retained fixture stores. The
+worktree adoption native Cargo survival regression also invokes the actual source
+coordinator's `maintain`, which drains those same stores. Their existing separate
+suite inventory claims did not exclude that shared effect. The shared claim now
+prevents overlap within one canonical invocation; callers must still serialize
+independent lifecycle/check invocations using that coordinator. This policy
+correction preserves the operation cap, internal test threads, assertions and
+lease deadlines. Its required validation is the candidate canonical DELTA and
+native check; additional elapsed/CI cost is unknown. The earlier two projects
+registry-lease refusals remain original failures, without an established exact
+historical holder attribution.
 
 `priority` optionally lists distinct registered operation IDs in launch order.
 Listed ready operations precede unlisted ready operations; unlisted operations

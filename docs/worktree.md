@@ -1339,6 +1339,23 @@ are rechecked before each effect. Copied members and their retained originals
 have distinct lifetimes. Final-original retention/publication and the compatible
 shared-effect composition are separate work; this API does not release originals.
 
+Each producer admission reads the current complete registry under its existing
+lease. One process-local derived snapshot retains the last store's decoded and
+serialized declarations. Reuse requires matching directory and header identities
+and exact current serialized bytes for that record; new or changed records fully
+decode with the existing strict schema. Malformed unrelated records still refuse
+admission. Directory, lease, allocation, reference, source and original checks
+still use their current inputs; this snapshot does not establish physical state.
+A publication encodes its one changed or appended record and forwards the other
+validated records through the existing JSON library. After a successful atomic
+replacement it refreshes the declaration snapshot, so subsequent updates in the
+same drain preserve earlier results. Mutation clones only the changed object.
+The one snapshot slot is replaced on store admission/publication and released at
+process exit; it has no persisted cache or separate cleanup entry. Retained bytes
+and decoded declarations are proportional to the last store's registry. The raw
+parsing layer still reads and writes the complete registry file; memory and total
+performance costs require consumer measurement, rather than an assumed IO saving.
+
 Copied-body admission runs once in the shared effect owner's immediate
 pre-unlink callback. It verifies current member content and identity, retained
 original identity, live Git source/index, coordinator policy/HEAD, allocation,
@@ -1363,6 +1380,24 @@ Failed commands retain their original failure and skip this post-success pass,
 preserving partial diagnostics. Cleanup does not release original evidence or
 declare lifecycle completion. Native artifact size and collection-time savings
 require observation of the resulting candidate.
+
+Each pass lists producer cleanup originals in `producer_drains`, with exact
+`receipt` and `chrono-worktree-retained-input/v1` identity references. Consumers
+verify the referenced bytes and read `producer_objects` from that producer's
+original; parent reports do not copy those rows. Lifecycle publication registers
+the admission and post-use receipt dependencies with the adopted retention owner,
+so a current parent consumer retains its producer originals. Releasing that
+consumer allows the ordinary bounded policy to reclaim the unrooted closure;
+historical references alone do not keep it alive. Original status, error and
+process evidence remain in each producer report. Other duplicated report content,
+physical savings and complete SPEC §10.1 acceptance remain unverified.
+
+Ordinary linked lifecycle, creation and reconstruction calls also protect the
+coordinator's report family until their parent report is published, including
+calls without `--report-consumer`. Before acquiring that protection they run the
+existing bounded maintenance on the distinct coordinator; the invoking root
+keeps its existing admission maintenance and protection. Publication creates no
+persistent consumer root, so later ordinary reentry can reclaim unrooted reports.
 
 `migrate --path WORKTREE --adopt-fixtures STATE_PATH` consumes a finite
 `chrono-fixture-body-custody/v1` declaration through the existing migration owner.
