@@ -630,7 +630,6 @@ pub(crate) fn with_report_for_consumer(
     }
     // Reclaim before this invocation starts protecting its report family.
     // Admission below also resumes bounded work before reserving the result.
-    chrono_harness::retained_artifacts::retention::maintain_adopted(root)?;
     let dir = no_symlink_parents(&root, config.report_directory.trim_end_matches('/'))?;
     let mut inherited = serde_json::Map::new();
     let mut environment = BTreeMap::new();

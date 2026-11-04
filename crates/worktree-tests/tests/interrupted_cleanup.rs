@@ -231,8 +231,8 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
     fs::write(cleanup, serde_json::to_vec(&policy).unwrap()).unwrap();
     let retention = chrono_harness::retained_artifacts::retention::POLICY_PATH;
     fs::write(h.root.join(retention), serde_json::to_vec(&value!({
-        "schema":"chrono-output-retention/v1","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},
-        "keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,
+        "schema":"chrono-output-retention/v2","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},
+        "keep_seconds":0,"max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,
         "max_bytes_per_round":1048576,"max_millis_per_round":1000
     })).unwrap()).unwrap();
     let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
@@ -414,9 +414,9 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
     fs::write(
         h.root.join(retention),
         serde_json::to_vec(&value!({
-            "schema":"chrono-output-retention/v1",
+            "schema":"chrono-output-retention/v2",
             "producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},
-            "keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,
+            "keep_seconds":0,"max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,
             "max_bytes_per_round":1048576,"max_millis_per_round":1000
         }))
         .unwrap(),

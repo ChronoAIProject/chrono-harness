@@ -647,7 +647,6 @@ impl Manager {
         if coordinator != invoking && r.coordinator_inputs.is_none() {
             // Maintain a distinct coordinator once and retain only this
             // invocation's explicitly read originals until publication.
-            chrono_harness::retained_artifacts::retention::maintain_adopted(coordinator)?;
             r.coordinator_inputs = Some(chrono_harness::retained_artifacts::retention::read_scope(
                 coordinator,
             )?);
@@ -1939,11 +1938,15 @@ impl Manager {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
         report["producer_drains"] = value!([]);
-        report["output_retention"] = value!(self.outside_enrollment(r, |inputs, _| {
-            chrono_harness::retained_artifacts::retention::maintain_adopted(
-                &inputs.policy.coordinator_root,
-            )
-        })?);
+        report["output_retention"] = if all {
+            value!(self.outside_enrollment(r, |inputs, _| {
+                chrono_harness::retained_artifacts::retention::maintain_adopted(
+                    &inputs.policy.coordinator_root,
+                )
+            })?)
+        } else {
+            Value::Null
+        };
         report["maintenance_scope"] = if all {
             value!({"kind":"declared-enrollments"})
         } else {

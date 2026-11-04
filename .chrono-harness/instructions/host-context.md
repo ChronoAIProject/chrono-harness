@@ -57,11 +57,13 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 消费登记操作须持有 use 保护。调用方加入全部自有／后台任务、核实际完成／落地后，**从存活协调宿主** finish；maintain 是独立重试。创建、重建、旧 checkout import 和显式政策 migrate 按[worktree 所有者](../../docs/worktree.md)执行，不能从本文推断 Git／GitHub 生命周期授权。
 
-本宿主在 worktree.json／cleanup.json 采用 automatic_cleanup/v2，协调锚是 Git owner inventory 的 main worktree，状态在 `.chrono-harness/state/automatic-cleanup-v2/`。start/reconstruct 自动登记并 drain；采用的 bootstrap/check 委托同一 owner。最后内核租约释放后普通入口可回收未 finish 的可重建缓存，保留活子孙、源码、分支、未保留提交、bin 与证据，不设完成。只采用已验证的描述符转交链；不按年龄、目录名或空闲删除。
+本宿主在 worktree.json／cleanup.json 采用 automatic_cleanup/v2，协调锚是 Git owner inventory 的 main worktree，状态在 `.chrono-harness/state/automatic-cleanup-v2/`。start/reconstruct 自动登记并只维护目标记录；采用的 bootstrap/check 委托同一 owner，不扫描无关工作树或输出。跨对象清理走显式 maintain。每个工作树有独立地址和 metadata 租约；最后内核租约释放后该对象的普通入口可回收未 finish 的可重建缓存，保留活子孙、源码、分支、未保留提交、bin 与证据，不设完成。只采用已验证的描述符转交链；不按年龄、目录名或空闲删除。
 
-无关登记项清理失败保留原回执／`cleanup_failures`，合法目标仍执行；目标身份、政策、所有权及协调状态写入失败继续阻断，显式 maintain 仍报失败。未封口 birth 只在实际排除和原附件／政策验证后恢复，保留原缺失／部分结果；新消费在已发布缓存尝试后开新代际，旧 intent/result 不覆盖。命令原 stdout／stderr／退出码保留，非空 stderr 不等于生命周期失败。
+显式维护对无关登记项的清理失败保留原回执／`cleanup_failures`，合法目标仍执行；目标身份、政策、所有权及协调状态写入失败继续阻断，显式 maintain 仍报失败。未封口 birth 只在实际排除和原附件／政策验证后恢复，保留原缺失／部分结果；新消费在已发布缓存尝试后开新代际，旧 intent/result 不覆盖。命令原 stdout／stderr／退出码保留，非空 stderr 不等于生命周期失败。
 
 兼容 binary 与两端已提交 policy/config/participation 必须配套；调用方负责加入／排除旧生产者、保留 v1 状态、有序部署与实际切换。只升级 binary 或 linked policy 应拒绝，旧版／未知所有权保留；migrate 不清理或宣称完成。[v2 切换及租约限制](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)仍需提交候选、支持平台和真实协调宿主验收。宿主 Git 身份阻断时，唯一 bootstrap 适配是该节登记的独立干净 Git main clone／最新 dev integration 候选路径；main-only seed 不替代真实协调者部署与随后 canonical start。
+
+输出保留候选采用 retention/v2：每个输出和真实消费者各有独立声明，普通发布、读取、完成不取得全库准入锁或扫描总清单。512 上限归实际关系集，删除全库数量／总字节准入；单输出和每轮节点／字节／25 ms 上限继续生效。显式维护非阻塞处理实际关联对象，局部繁忙或损坏保留错误并继续兄弟；未遍历或无法计数时报告 unknown。源与宿主政策同改，现役总清单须先由隔离宿主保管者排除旧消费者、保留原字节并按精确声明切换；普通程序不兼容旧总清单。候选、切换及原生验收尚未全部完成，不能据源码声明交付。
 
 ## 按任务读取现有文档
 

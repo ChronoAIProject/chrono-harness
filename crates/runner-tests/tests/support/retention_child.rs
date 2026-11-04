@@ -55,13 +55,6 @@ fn main() {
         fn inventory(root: &Path) -> Inventory {
             Inventory::adopted(root).unwrap().unwrap()
         }
-        fn ledger(root: &Path) -> serde_json::Value {
-            chrono_harness::json(
-                &fs::read(root.join(".chrono-harness/state/output-retention-v1/inventory.json"))
-                    .unwrap(),
-            )
-            .unwrap()
-        }
         let path = ".chrono-harness/state/fixtures/result.json";
         fs::write(root.join(path), b"partial original").unwrap();
         let publication = retained_artifacts::retention::begin_adopted(
@@ -89,7 +82,7 @@ fn main() {
         let final_round = inventory(root).maintain_at(u64::MAX).unwrap();
         assert_eq!(final_round["remaining_outputs"], 0, "{final_round}");
         assert_eq!(
-            ledger(root)["summaries"][0]["original_outcome"]["completion"],
+            final_round["disposed"][0]["original_outcome"]["completion"],
             "not-established"
         );
         return;

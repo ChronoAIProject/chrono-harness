@@ -146,13 +146,7 @@ struct Store {
 // The physical store already exists. Lock it before examining birth state, so
 // publishing the named lease cannot expose an unlocked, unexplained birth to
 // another ordinary publisher. This gate never creates or adopts an owner file.
-struct DirectoryGate {
-    _file: fs::File,
-    directory: PathBuf,
-    id: String,
-    #[cfg(unix)]
-    _scope: chrono_harness::process_fds::Scope,
-}
+struct DirectoryGate(chrono_harness::ownership::DirectoryLease);
 
 impl DirectoryGate {
     fn acquire(
@@ -179,57 +173,11 @@ impl DirectoryGate {
     }
 
     fn available(directory: &Path) -> Result<Option<Self>, String> {
-        #[cfg(not(unix))]
-        {
-            let _ = directory;
-            Err("kernel ownership is unsupported on this platform".into())
-        }
-        #[cfg(unix)]
-        {
-            use std::os::{
-                fd::{AsFd, AsRawFd},
-                unix::fs::{MetadataExt, OpenOptionsExt},
-            };
-            let file = fs::OpenOptions::new()
-                .read(true)
-                .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
-                .open(directory)
-                .map_err(|e| {
-                    format!("producer directory ownership unavailable; preserve objects: {e}")
-                })?;
-            let metadata = file.metadata().map_err(|e| e.to_string())?;
-            let id = format!("{}:{}", metadata.dev(), metadata.ino());
-            loop {
-                if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
-                    break;
-                }
-                let error = std::io::Error::last_os_error();
-                if error.kind() == std::io::ErrorKind::Interrupted {
-                    continue;
-                }
-                if error.kind() != std::io::ErrorKind::WouldBlock {
-                    return Err(error.to_string());
-                }
-                return Ok(None);
-            }
-            if directory_id(directory)? != id {
-                return Err("producer directory replaced during admission".into());
-            }
-            let scope = chrono_harness::process_fds::Scope::new(&[file.as_fd()])?;
-            Ok(Some(Self {
-                _file: file,
-                directory: directory.to_owned(),
-                id,
-                _scope: scope,
-            }))
-        }
+        chrono_harness::ownership::DirectoryLease::acquire(directory, true, None)
+            .map(|lease| lease.map(Self))
     }
-
     fn stable(&self) -> Result<(), String> {
-        if directory_id(&self.directory)? != self.id {
-            return Err("producer directory ownership changed; preserve records".into());
-        }
-        Ok(())
+        self.0.stable()
     }
 }
 

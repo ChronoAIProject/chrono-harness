@@ -17,6 +17,9 @@ use std::{
 #[path = "manifest.rs"]
 mod manifest;
 use manifest::Manifest;
+#[path = "partition.rs"]
+mod partition;
+use partition::Gate;
 
 pub const POLICY_PATH: &str = ".chrono-harness/retention.json";
 const STATE: &str = ".chrono-harness/state/output-retention-v1";
@@ -27,15 +30,15 @@ pub struct Policy {
     pub schema: String,
     pub producers: BTreeMap<String, Vec<String>>,
     pub keep_seconds: u64,
-    pub max_entries: usize,
+    pub max_related_outputs: usize,
     pub max_summaries: usize,
     pub max_nodes_per_round: usize,
     pub max_bytes_per_round: u64,
     pub max_millis_per_round: u64,
     #[serde(default = "default_output_bytes")]
     pub max_output_bytes: u64,
-    #[serde(default = "default_total_bytes")]
-    pub max_total_bytes: u64,
+    #[serde(default = "default_metadata_seconds")]
+    pub metadata_keep_seconds: u64,
     #[serde(default = "default_manifest_nodes")]
     pub max_manifest_nodes: usize,
     #[serde(default = "default_metadata_bytes")]
@@ -49,8 +52,8 @@ fn default_metadata_bytes() -> u64 {
 fn default_output_bytes() -> u64 {
     1024 * 1024 * 1024
 }
-fn default_total_bytes() -> u64 {
-    8 * 1024 * 1024 * 1024
+fn default_metadata_seconds() -> u64 {
+    86400
 }
 fn default_manifest_nodes() -> usize {
     16384
@@ -100,20 +103,15 @@ struct Output {
     overflow_disposal: bool,
 }
 
-// One admitted ledger owns both representations of each output. Unchanged rows
-// can retain their exact validated JSON through its durable writes; requesting
-// mutable access invalidates only that row. Every new admission still reads the
-// complete current inventory under the existing exclusion lease.
+// A round owns typed records for only the explicitly addressed graph.
 #[derive(Clone)]
 struct OutputRecord {
     value: Arc<Output>,
-    encoded: RefCell<Option<Arc<serde_json::value::RawValue>>>,
 }
 impl From<Output> for OutputRecord {
     fn from(value: Output) -> Self {
         Self {
             value: Arc::new(value),
-            encoded: RefCell::new(None),
         }
     }
 }
@@ -125,38 +123,25 @@ impl std::ops::Deref for OutputRecord {
 }
 impl std::ops::DerefMut for OutputRecord {
     fn deref_mut(&mut self) -> &mut Output {
-        *self.encoded.get_mut() = None;
         Arc::make_mut(&mut self.value)
     }
 }
 impl Serialize for OutputRecord {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut encoded = self.encoded.borrow_mut();
-        if encoded.is_none() {
-            *encoded = Some(Arc::from(
-                serde_json::value::to_raw_value(self.value.as_ref())
-                    .map_err(serde::ser::Error::custom)?,
-            ));
-        }
-        encoded.as_deref().unwrap().serialize(serializer)
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.value.serialize(s)
     }
 }
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Ledger<O = OutputRecord> {
+#[derive(Clone, Serialize)]
+struct Ledger {
     policy_sha256: String,
-    outputs: Vec<O>,
-    #[serde(deserialize_with = "strict_roots")]
+    outputs: Vec<OutputRecord>,
     roots: BTreeMap<String, Vec<String>>,
-    #[serde(deserialize_with = "strict_summaries")]
     summaries: Vec<Value>,
     cursor: usize,
     #[serde(default)]
-    next_id: u64,
-    #[serde(default)]
     retired_leases: Vec<Node>,
 }
-impl<O> Default for Ledger<O> {
+impl Default for Ledger {
     fn default() -> Self {
         Self {
             policy_sha256: String::new(),
@@ -164,20 +149,30 @@ impl<O> Default for Ledger<O> {
             roots: BTreeMap::new(),
             summaries: Vec::new(),
             cursor: 0,
-            next_id: 0,
             retired_leases: Vec::new(),
         }
     }
 }
-struct DecodedSnapshot {
-    directory: PathBuf,
-    outputs: Vec<(Arc<serde_json::value::RawValue>, Arc<Output>)>,
-}
-// A caller may reuse its own exact decodes. Independent callers never contend
-// for, evict, or destroy another caller's derived snapshot.
 thread_local! {
-    static DECODED: RefCell<Option<DecodedSnapshot>> = const { RefCell::new(None) };
     static READ_SCOPES: RefCell<Vec<Weak<ReadInputs>>> = const { RefCell::new(Vec::new()) };
+}
+trait Exclusion {
+    fn verify(&self) -> Result<(), String>;
+}
+impl Exclusion for Lease {
+    fn verify(&self) -> Result<(), String> {
+        self.stable()
+    }
+}
+impl Exclusion for Gate {
+    fn verify(&self) -> Result<(), String> {
+        self.stable()
+    }
+}
+impl Exclusion for crate::ownership::DirectoryLease {
+    fn verify(&self) -> Result<(), String> {
+        self.stable()
+    }
 }
 struct ReadInputs {
     root: PathBuf,
@@ -207,11 +202,6 @@ pub fn read_scope(root: &Path) -> Result<ReadScope, String> {
     READ_SCOPES.with(|scopes| scopes.borrow_mut().push(Rc::downgrade(&inputs)));
     Ok(ReadScope(inputs))
 }
-fn strict_roots<'de, D: serde::Deserializer<'de>>(
-    d: D,
-) -> Result<BTreeMap<String, Vec<String>>, D::Error> {
-    serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
-}
 fn strict_summaries<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Value>, D::Error> {
     serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
 }
@@ -232,6 +222,9 @@ pub struct Inventory {
     policy_bytes: Vec<u8>,
     directory: PathBuf,
     round_metadata: Cell<Option<u64>>,
+    round_began: Cell<Option<Instant>>,
+    round_node_limit: Cell<Option<usize>>,
+    round_verified_left: Cell<Option<u64>>,
 }
 /// Exact existing owner identity supplied by a declared original consumer.
 #[derive(Clone, Serialize, Deserialize)]
@@ -270,12 +263,6 @@ fn now() -> Result<u64, String> {
         .as_secs())
 }
 use crate::artifact_disposal::identity;
-
-fn overlaps(left: &str, right: &str) -> bool {
-    left == right
-        || left.starts_with(&format!("{right}/"))
-        || right.starts_with(&format!("{left}/"))
-}
 
 fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
     if raw.len() as u64 > MAX_STATE {
@@ -321,7 +308,7 @@ impl Inventory {
                     use std::os::fd::AsFd;
                     let mut capabilities = inputs.capabilities.borrow_mut();
                     if !capabilities.contains_key(lease.id()) {
-                        if capabilities.len() >= self.policy.max_entries {
+                        if capabilities.len() >= self.policy.max_related_outputs {
                             return Err(
                                 "caller input capability capacity; preserve originals".into()
                             );
@@ -356,9 +343,9 @@ impl Inventory {
             Err(e) => return Err(e.to_string()),
         };
         let policy: Policy = decode(&bytes)?;
-        if policy.schema != "chrono-output-retention/v1"
-            || policy.max_entries == 0
-            || policy.max_entries > 4096
+        if policy.schema != "chrono-output-retention/v2"
+            || policy.max_related_outputs == 0
+            || policy.max_related_outputs > 4096
             || policy.max_summaries == 0
             || policy.max_summaries > 4096
             || policy.max_nodes_per_round == 0
@@ -367,7 +354,6 @@ impl Inventory {
             || policy.max_millis_per_round == 0
             || policy.max_millis_per_round > 60000
             || policy.max_output_bytes == 0
-            || policy.max_total_bytes < policy.max_output_bytes
             || policy.max_manifest_nodes == 0
             || policy.max_manifest_nodes > 65536
             || policy.max_metadata_bytes_per_round < 3 * MAX_STATE
@@ -393,23 +379,26 @@ impl Inventory {
         }
         let directory = no_symlink_parents(root, STATE)?;
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+        if directory.join("inventory.json").exists() {
+            return Err(
+                "aggregate output retention requires explicit owner cutover; originals preserved"
+                    .into(),
+            );
+        }
+        for namespace in ["objects", "roles", "paths", "transaction-gates"] {
+            fs::create_dir_all(no_symlink_parents(&directory, namespace)?)
+                .map_err(|e| e.to_string())?;
+        }
         Ok(Some(Self {
             root: root.into(),
             policy,
             policy_bytes: bytes,
             directory,
             round_metadata: Cell::new(None),
+            round_began: Cell::new(None),
+            round_node_limit: Cell::new(None),
+            round_verified_left: Cell::new(None),
         }))
-    }
-    pub(super) fn gate(&self) -> Result<Lease, String> {
-        Lease::acquire(
-            &self.directory.join("admission.lease"),
-            None,
-            true,
-            true,
-            Some(Duration::from_secs(5)),
-        )?
-        .ok_or("retention admission busy".into())
     }
     fn charge_metadata(&self, bytes: u64) -> Result<(), String> {
         if let Some(remaining) = self.round_metadata.get() {
@@ -424,9 +413,9 @@ impl Inventory {
     fn metadata_room(&self) -> bool {
         self.round_metadata.get().is_none_or(|n| n >= 2 * MAX_STATE)
     }
-    pub(super) fn stable(&self, gate: &Lease) -> Result<(), String> {
+    fn stable(&self, gate: &impl Exclusion) -> Result<(), String> {
         self.charge_metadata(self.policy_bytes.len() as u64)?;
-        gate.stable()?;
+        gate.verify()?;
         if fs::read(no_symlink_parents(&self.root, POLICY_PATH)?).map_err(|e| e.to_string())?
             != self.policy_bytes
         {
@@ -434,85 +423,11 @@ impl Inventory {
         }
         Ok(())
     }
-    fn load(&self) -> Result<Ledger, String> {
-        self.load_bound(&sha256(&self.policy_bytes))
+    fn load(&self, gate: &Gate) -> Result<Ledger, String> {
+        self.load_bound(gate, &sha256(&self.policy_bytes))
     }
-    fn load_bound(&self, policy_digest: &str) -> Result<Ledger, String> {
-        let path = self.directory.join("inventory.json");
-        let mut raw = Vec::new();
-        if let Ok(metadata) = fs::symlink_metadata(&path) {
-            if !metadata.is_file() || metadata.file_type().is_symlink() {
-                return Err("retention inventory must be a physical regular file".into());
-            }
-        }
-        match fs::File::open(path) {
-            Ok(f) => {
-                f.take(MAX_STATE + 1)
-                    .read_to_end(&mut raw)
-                    .map_err(|e| e.to_string())?;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Ledger {
-                    policy_sha256: sha256(&self.policy_bytes),
-                    ..Ledger::default()
-                });
-            }
-            Err(e) => return Err(e.to_string()),
-        };
-        if raw.len() as u64 > MAX_STATE {
-            return Err("retention metadata bound".into());
-        }
-        self.charge_metadata(raw.len() as u64)?;
-        // Decode the envelope every time. An unchanged row can share its strict
-        // typed decode; altered rows, including malformed unrelated rows, cannot.
-        let serialized: Ledger<Box<serde_json::value::RawValue>> =
-            serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
-        let outputs = DECODED.with(|cache| {
-            let previous = cache.borrow();
-            let previous = previous
-                .as_ref()
-                .filter(|previous| previous.directory == self.directory);
-            serialized
-                .outputs
-                .into_iter()
-                .enumerate()
-                .map(|(index, encoded)| {
-                    if let Some((bytes, value)) = previous
-                        .as_ref()
-                        .and_then(|previous| previous.outputs.get(index))
-                    {
-                        if bytes.get() == encoded.get() {
-                            return Ok(OutputRecord {
-                                value: Arc::clone(value),
-                                encoded: RefCell::new(Some(Arc::clone(bytes))),
-                            });
-                        }
-                    }
-                    let value = serde_json::from_str(encoded.get()).map_err(|e| e.to_string())?;
-                    Ok(OutputRecord {
-                        value: Arc::new(value),
-                        encoded: RefCell::new(Some(Arc::from(encoded))),
-                    })
-                })
-                .collect::<Result<Vec<_>, String>>()
-        })?;
-        let l = Ledger {
-            policy_sha256: serialized.policy_sha256,
-            outputs,
-            roots: serialized.roots,
-            summaries: serialized.summaries,
-            cursor: serialized.cursor,
-            next_id: serialized.next_id,
-            retired_leases: serialized.retired_leases,
-        };
-        if l.policy_sha256 != policy_digest
-            || l.outputs.len() > self.policy.max_entries
-            || l.summaries.len() > self.policy.max_summaries
-            || l.retired_leases.len() > self.policy.max_entries
-            || l.roots.len() > self.policy.max_entries
-        {
-            return Err("retention policy migration required; original inventory preserved".into());
-        }
+    fn load_bound(&self, gate: &Gate, policy_digest: &str) -> Result<Ledger, String> {
+        let l = self.partition_load(gate, policy_digest)?;
         let mut ids = BTreeSet::new();
         for o in &l.outputs {
             crate::relative_path(&o.path)?;
@@ -522,7 +437,7 @@ impl Inventory {
                 || o.byte_limit
                     .is_some_and(|n| n == 0 || n > self.policy.max_output_bytes)
                 || o.stack.len() > 129
-                || o.references.len() > self.policy.max_entries
+                || o.references.len() > self.policy.max_related_outputs
                 || o.manifest.entries.len() > self.policy.max_manifest_nodes
                 || !self
                     .policy
@@ -575,42 +490,17 @@ impl Inventory {
             }
         }
         for refs in l.roots.values() {
-            if refs.len() > self.policy.max_entries || refs.iter().any(|id| !ids.contains(id)) {
+            if refs.len() > self.policy.max_related_outputs
+                || refs.iter().any(|id| !ids.contains(id))
+            {
                 return Err("missing current consumer output reference".into());
             }
         }
-        self.remember(&l)?;
         Ok(l)
     }
-    fn remember(&self, l: &Ledger) -> Result<(), String> {
-        let outputs = l
-            .outputs
-            .iter()
-            .map(|o| {
-                Ok((
-                    Arc::clone(
-                        o.encoded
-                            .borrow()
-                            .as_ref()
-                            .ok_or("retention snapshot row has no encoding")?,
-                    ),
-                    Arc::clone(&o.value),
-                ))
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-        let snapshot = DecodedSnapshot {
-            directory: self.directory.clone(),
-            outputs,
-        };
-        DECODED.with(|cache| *cache.borrow_mut() = Some(snapshot));
-        Ok(())
-    }
-    fn save(&self, l: &Ledger, gate: &Lease) -> Result<(), String> {
+    fn save(&self, l: &Ledger, gate: &Gate) -> Result<(), String> {
         self.stable(gate)?;
-        let raw = serde_json::to_vec(l).map_err(|e| e.to_string())?;
-        self.charge_metadata(raw.len() as u64)?;
-        write(&self.directory.join("inventory.json"), &raw)?;
-        self.remember(l)
+        self.partition_save(l, gate)
     }
     fn transaction_path(&self, key: &str) -> PathBuf {
         self.directory.join(format!("transaction-{key}.json"))
@@ -659,7 +549,7 @@ impl Inventory {
             || !matches!(record.phase.as_str(), "reserving" | "active" | "retiring")
             || (record.phase == "reserving") != record.lease_id.is_empty()
             || removal == record.paths.is_empty()
-            || record.paths.len() > self.policy.max_entries
+            || record.paths.len() > self.policy.max_related_outputs
             || (removal
                 && key
                     != format!(
@@ -683,21 +573,13 @@ impl Inventory {
                 .strip_prefix("transaction-")
                 .and_then(|n| n.strip_suffix(".json"))
             {
-                if keys.len() >= self.policy.max_entries {
-                    return Err(
-                        "addressed retention transaction capacity; maintain or join live owners"
-                            .into(),
-                    );
-                }
                 keys.push(key.to_owned());
             }
         }
         keys.sort();
         Ok(keys)
     }
-    // Established addresses touch only their own declaration and capability.
-    // The shared count limit needs exclusion only while a new declaration is
-    // born or an unused declaration is reclaimed, never through content IO.
+    // Birth, capability attachment and retirement exclude only this address.
     fn address_gate(&self, kind: &str, address: &str) -> Result<Lease, String> {
         self.address_gate_scoped(kind, address, &[])
     }
@@ -708,104 +590,58 @@ impl Inventory {
         paths: &[String],
     ) -> Result<Lease, String> {
         let key = format!("{kind}-{}", sha256(address.as_bytes()));
+        let directory = no_symlink_parents(&self.directory, &format!("transaction-gates/{key}"))?;
+        fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+        let gate = crate::ownership::DirectoryLease::acquire(
+            &directory,
+            true,
+            Some(Duration::from_secs(5)),
+        )?
+        .ok_or("addressed retention transaction busy")?;
         let path = self.directory.join(&key);
-        let began = Instant::now();
-        loop {
-            if let Some(record) = self.transaction(&key)?.filter(|r| r.phase == "active") {
-                let remaining = Duration::from_secs(5).saturating_sub(began.elapsed());
-                let acquired =
-                    Lease::acquire(&path, Some(&record.lease_id), false, true, Some(remaining));
-                if self.transaction(&key)?.as_ref() != Some(&record) {
-                    if began.elapsed() >= Duration::from_secs(5) {
-                        return Err("addressed retention admission remains busy".into());
-                    }
-                    continue; // Its unused capability retired during this open.
+        let mut record = match self.transaction(&key)? {
+            Some(record) if record.phase == "retiring" => {
+                return Err(
+                    "addressed transaction retirement incomplete; resume maintenance".into(),
+                );
+            }
+            Some(record) => record,
+            None => {
+                if path.exists() {
+                    return Err("unregistered retention transaction capability; preserve it".into());
                 }
-                let lease = acquired?.ok_or("addressed retention transaction busy")?;
-                self.stable(&lease)?;
-                return Ok(lease);
+                let record = Transaction {
+                    schema: "chrono-output-transaction/v1".into(),
+                    key: key.clone(),
+                    directory_identity: identity(&self.directory)?,
+                    lease_id: String::new(),
+                    phase: "reserving".into(),
+                    paths: paths.into(),
+                };
+                self.stable(&gate)?;
+                write(
+                    &self.transaction_path(&key),
+                    &serde_json::to_vec(&record).map_err(|e| e.to_string())?,
+                )?;
+                record
             }
-            let gate = self.gate()?;
-            let mut record = match self.transaction(&key)? {
-                Some(record) if record.phase == "retiring" => {
-                    return Err(
-                        "addressed transaction retirement incomplete; resume ordinary maintenance"
-                            .into(),
-                    );
-                }
-                Some(record) if !record.lease_id.is_empty() => continue,
-                Some(record) => record, // Exact interrupted birth, never an unknown lease.
-                None => {
-                    if self.transaction_keys()?.len() >= self.policy.max_entries {
-                        return Err("addressed retention transaction capacity; maintain or join live owners".into());
-                    }
-                    match fs::symlink_metadata(&path) {
-                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-                        Err(e) => return Err(e.to_string()),
-                        Ok(_) => {
-                            return Err(
-                                "unregistered retention transaction capability; preserve it".into(),
-                            );
-                        }
-                    }
-                    let record = Transaction {
-                        schema: "chrono-output-transaction/v1".into(),
-                        key: key.clone(),
-                        directory_identity: identity(&self.directory)?,
-                        lease_id: String::new(),
-                        phase: "reserving".into(),
-                        paths: paths.into(),
-                    };
-                    self.stable(&gate)?;
-                    write(
-                        &self.transaction_path(&key),
-                        &serde_json::to_vec(&record).map_err(|e| e.to_string())?,
-                    )?;
-                    record
-                }
-            };
-            let lease = Lease::acquire(&path, None, true, true, None)?
-                .ok_or("unattached retention transaction has a live owner; preserve it")?;
-            record.lease_id = lease.id().into();
-            record.phase = "active".into();
-            self.stable(&gate)?;
-            write(
-                &self.transaction_path(&key),
-                &serde_json::to_vec(&record).map_err(|e| e.to_string())?,
-            )?;
-            return Ok(lease);
-        }
-    }
-    // Only an overlapping external effect can refuse this reservation. Its
-    // owner holds its addressed capability through IO, never global admission.
-    fn exclude_removals(&self, path: &str, own: Option<&str>) -> Result<(), String> {
-        for key in self
-            .transaction_keys()?
-            .into_iter()
-            .filter(|key| key.starts_with("removal-"))
-        {
-            if own == Some(key.as_str()) {
-                continue;
-            }
-            let record = self
-                .transaction(&key)?
-                .ok_or("removal declaration disappeared")?;
-            if !record.paths.iter().any(|scope| overlaps(path, scope)) {
-                continue;
-            }
-            if record.phase != "active" {
-                return Err("overlapping external removal requires recovery".into());
-            }
-            let _excluded = Lease::acquire(
-                &self.directory.join(&key),
-                Some(&record.lease_id),
-                false,
-                true,
-                None,
-            )?
-            .ok_or("overlapping external removal has a live owner; preserve its paths")?;
-        }
-        Ok(())
+        };
+        let lease = Lease::acquire(
+            &path,
+            (!record.lease_id.is_empty()).then_some(record.lease_id.as_str()),
+            record.lease_id.is_empty(),
+            true,
+            Some(Duration::from_secs(5)),
+        )?
+        .ok_or("addressed retention transaction busy")?;
+        record.lease_id = lease.id().into();
+        record.phase = "active".into();
+        self.stable(&gate)?;
+        write(
+            &self.transaction_path(&key),
+            &serde_json::to_vec(&record).map_err(|e| e.to_string())?,
+        )?;
+        Ok(lease)
     }
     /// Explicit owner migration. The caller supplies the exact prior policy bytes;
     /// every existing output must still be declared, and all old producers/readers must be excluded.
@@ -815,8 +651,8 @@ impl Inventory {
         if previous.schema != self.policy.schema {
             return Err("unsupported retention policy migration".into());
         }
-        let gate = self.gate()?;
-        let mut l = self.load_bound(&sha256(previous_policy))?;
+        let gate = self.all_partition_gate()?;
+        let mut l = self.load_bound(&gate, &sha256(previous_policy))?;
         let mut owners = Vec::new();
         for key in self.transaction_keys()? {
             let record = self
@@ -850,24 +686,6 @@ impl Inventory {
                 )?
                 .ok_or("live output producer/consumer prevents retention migration")?,
             );
-        }
-        let accounted = l
-            .outputs
-            .iter()
-            .try_fold(0u64, |n, o| {
-                let bytes = if o.manifest.sealed {
-                    o.manifest.bytes.saturating_sub(o.removed_logical_bytes)
-                } else {
-                    o.byte_limit.unwrap_or(self.policy.max_output_bytes)
-                };
-                if bytes > self.policy.max_output_bytes {
-                    return None;
-                }
-                n.checked_add(bytes)
-            })
-            .ok_or("candidate retention capacity does not cover original outputs")?;
-        if accounted > self.policy.max_total_bytes {
-            return Err("candidate total byte capacity does not cover originals; account/release through owner first".into());
         }
         let before = l.policy_sha256.clone();
         l.policy_sha256 = sha256(&self.policy_bytes);
@@ -914,9 +732,8 @@ impl Inventory {
             self.reserve_excluded(producer, path, outcome, roots, create, requested_limit)?;
         Ok(publication)
     }
-    // The immediate creation caller can keep this same admitted snapshot through
-    // materialization. All durable intent/attachment writes still occur in order;
-    // returning a standalone plan drops exclusion at the original boundary.
+    // Reservation persists intent and capability identity under addressed
+    // exclusion before the producer can create or change original content.
     fn reserve_excluded(
         self,
         producer: &str,
@@ -925,7 +742,7 @@ impl Inventory {
         roots: &[String],
         create: Option<bool>,
         requested_limit: Option<u64>,
-    ) -> Result<(Publication, Lease, Ledger), String> {
+    ) -> Result<(Publication, Gate, Ledger), String> {
         let byte_limit = requested_limit.unwrap_or(self.policy.max_output_bytes);
         if byte_limit == 0 || byte_limit > self.policy.max_output_bytes {
             return Err("declared output reservation exceeds policy ceiling".into());
@@ -956,34 +773,21 @@ impl Inventory {
         // them before serializing the durable reservation; the destination is
         // still checked and published without replacement under owner exclusion.
         crate::artifact_disposal::source_safe(&self.root, path)?;
-        let gate = self.gate()?;
-        self.exclude_removals(path, None)?;
-        let mut l = self.load()?;
-        if l.outputs.len() + l.retired_leases.len() >= self.policy.max_entries {
-            return Err("protected output inventory capacity; run bounded maintenance or release references".into());
-        }
+        let id = unique_path(&self.directory, "output-", "")?
+            .file_name()
+            .unwrap()
+            .to_str()
+            .ok_or("output id UTF8")?
+            .to_owned();
+        let gate =
+            self.addressed_gate(&[], &[path.into()], roots, Some((&id, path)), false, true)?;
+        let mut l = self.load(&gate)?;
         if l.outputs.iter().any(|o| {
             o.path == path
                 || path.starts_with(&format!("{}/", o.path))
                 || o.path.starts_with(&format!("{path}/"))
         }) {
             return Err("overlapping/already enrolled output identity".into());
-        }
-        let charged = l
-            .outputs
-            .iter()
-            .try_fold(0u64, |n, o| {
-                n.checked_add(o.reserved_bytes.max(if o.manifest.sealed {
-                    o.manifest.bytes.saturating_sub(o.removed_logical_bytes)
-                } else {
-                    o.byte_limit.unwrap_or(self.policy.max_output_bytes)
-                }))
-            })
-            .ok_or("retained byte accounting overflow")?;
-        if charged.saturating_add(byte_limit) > self.policy.max_total_bytes {
-            return Err(
-                "protected total retained byte capacity; release references or maintain".into(),
-            );
         }
         let physical = no_symlink_parents(&self.root, path)?;
         let (output_identity, tree) = if let Some(tree) = create {
@@ -1000,8 +804,6 @@ impl Inventory {
             }
             (identity(&physical)?, m.is_dir())
         };
-        let id = format!("output-{}", l.next_id);
-        l.next_id = l.next_id.checked_add(1).ok_or("output id capacity")?;
         let lease_path = self.directory.join(&id);
         if lease_path.exists() {
             return Err("reserved output capability already exists; preserve it".into());
@@ -1039,7 +841,7 @@ impl Inventory {
             if role.is_empty()
                 || role.len() > 256
                 || l.roots.contains_key(role)
-                || l.roots.len() >= self.policy.max_entries
+                || l.roots.len() >= self.policy.max_related_outputs
             {
                 return Err("historical/current role identity collision or capacity".into());
             }
@@ -1087,8 +889,8 @@ impl Inventory {
         ))
     }
     fn validate_original_reuse(&self, path: &str) -> Result<Option<String>, String> {
-        let gate = self.gate()?;
-        let l = self.load()?;
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let l = self.load(&gate)?;
         if let Some(o) = l.outputs.iter().find(|o| o.path == path) {
             if o.phase == "disposing"
                 || identity(&no_symlink_parents(&self.root, path)?)? != o.identity
@@ -1103,8 +905,8 @@ impl Inventory {
             .map(|o| o.id.clone()))
     }
     pub fn enrolled(&self, path: &str) -> Result<bool, String> {
-        let gate = self.gate()?;
-        let l = self.load()?;
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let l = self.load(&gate)?;
         self.stable(&gate)?;
         Ok(l.outputs.iter().any(|o| o.path == path))
     }
@@ -1116,8 +918,8 @@ impl Inventory {
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let gate = self.addressed_gate(&[], paths, &[consumer.into()], None, false, true)?;
+        let mut l = self.load(&gate)?;
         let mut ids = BTreeSet::new();
         for path in paths {
             crate::relative_path(path)?;
@@ -1134,8 +936,8 @@ impl Inventory {
         }
         if consumer.is_empty()
             || consumer.len() > 256
-            || ids.len() > self.policy.max_entries
-            || (!l.roots.contains_key(consumer) && l.roots.len() >= self.policy.max_entries)
+            || ids.len() > self.policy.max_related_outputs
+            || (!l.roots.contains_key(consumer) && l.roots.len() >= self.policy.max_related_outputs)
         {
             return Err("retention consumer capacity/identity".into());
         }
@@ -1147,8 +949,9 @@ impl Inventory {
         self.save(&l, &gate)
     }
     fn extend_reference_path(&self, consumer: &str, path: &str) -> Result<(), String> {
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let gate =
+            self.addressed_gate(&[], &[path.into()], &[consumer.into()], None, false, true)?;
+        let mut l = self.load(&gate)?;
         let Some(o) = l
             .outputs
             .iter()
@@ -1157,7 +960,7 @@ impl Inventory {
             return Ok(());
         };
         let id = o.id.clone();
-        if !l.roots.contains_key(consumer) && l.roots.len() >= self.policy.max_entries {
+        if !l.roots.contains_key(consumer) && l.roots.len() >= self.policy.max_related_outputs {
             return Err("retention consumer capacity".into());
         }
         let ids = l.roots.entry(consumer.into()).or_default();
@@ -1168,8 +971,15 @@ impl Inventory {
     }
     /// Bind a retained report to the exact originals its producer already declares.
     pub fn dependencies_paths(&self, path: &str, paths: &[String]) -> Result<(), String> {
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let gate = self.addressed_gate(
+            &[],
+            &[paths, &[path.into()]].concat(),
+            &[],
+            None,
+            false,
+            true,
+        )?;
+        let mut l = self.load(&gate)?;
         let ids: BTreeSet<_> = l
             .outputs
             .iter()
@@ -1199,8 +1009,8 @@ impl Inventory {
         if consumer.is_empty() || consumer.len() > 256 {
             return Err("invalid retention consumer role".into());
         }
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let gate = self.addressed_gate(ids, &[], &[consumer.into()], None, false, true)?;
+        let mut l = self.load(&gate)?;
         self.reference_locked(&mut l, consumer, ids)?;
         self.save(&l, &gate)
     }
@@ -1210,10 +1020,10 @@ impl Inventory {
         consumer: &str,
         ids: &[String],
     ) -> Result<(), String> {
-        if ids.len() > self.policy.max_entries
+        if ids.len() > self.policy.max_related_outputs
             || (ids.is_empty() == false
                 && !l.roots.contains_key(consumer)
-                && l.roots.len() >= self.policy.max_entries)
+                && l.roots.len() >= self.policy.max_related_outputs)
         {
             return Err("retention reference capacity".into());
         }
@@ -1242,7 +1052,7 @@ impl Inventory {
     fn consumer_ids(&self, originals: &[OriginalIdentity]) -> Result<Vec<String>, String> {
         let ids: BTreeSet<_> = originals.iter().map(|o| o.id.clone()).collect();
         if originals.is_empty()
-            || originals.len() > self.policy.max_entries
+            || originals.len() > self.policy.max_related_outputs
             || ids.len() != originals.len()
         {
             return Err("consumer originals empty, duplicated or over capacity".into());
@@ -1295,8 +1105,8 @@ impl Inventory {
     }
     /// The actual producer names its new diagnostic consumer, bound to this exact output.
     pub fn protect_path_consumer(&self, consumer: &str, path: &str) -> Result<(), String> {
-        let gate = self.gate()?;
-        let ledger = self.load()?;
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let ledger = self.load(&gate)?;
         let Some(output) = ledger.outputs.iter().find(|o| o.path == path) else {
             return Ok(());
         };
@@ -1317,8 +1127,8 @@ impl Inventory {
     ) -> Result<(), String> {
         let role = self.consumer_role(consumer)?;
         let ids = self.consumer_ids(originals)?;
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let gate = self.addressed_gate(&ids, &[], &[role.clone()], None, false, true)?;
+        let mut l = self.load(&gate)?;
         if l.roots.get(&role).is_some_and(|previous| previous != &ids) {
             return Err("consumer root differs; release its original declaration first".into());
         }
@@ -1334,8 +1144,15 @@ impl Inventory {
         }
         let role = self.consumer_role(&consumer.consumer)?;
         let ids = self.consumer_ids(&consumer.originals)?;
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let gate = self.addressed_gate(
+            &ids,
+            &[destination.into()],
+            &[role.clone()],
+            None,
+            false,
+            true,
+        )?;
+        let mut l = self.load(&gate)?;
         if l.roots.get(&role) != Some(&ids) {
             return Err("caller original handoff root differs".into());
         }
@@ -1359,7 +1176,7 @@ impl Inventory {
             .chain(&ids)
             .cloned()
             .collect();
-        if references.len() > self.policy.max_entries {
+        if references.len() > self.policy.max_related_outputs {
             return Err("caller handoff dependency capacity".into());
         }
         l.outputs[target].references = references.into_iter().collect();
@@ -1384,8 +1201,8 @@ impl Inventory {
         }
         let role = self.consumer_role(consumer)?;
         let ids = self.consumer_ids(originals)?;
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let gate = self.addressed_gate(&ids, &[], &[role.clone()], None, false, true)?;
+        let mut l = self.load(&gate)?;
         if !l.roots.contains_key(&role) {
             let receipt = l
                 .summaries
@@ -1415,9 +1232,16 @@ impl Inventory {
     }
     /// Edges are not roots. Released historical cycles can be reclaimed.
     pub fn dependencies(&self, id: &str, references: &[String]) -> Result<(), String> {
-        let gate = self.gate()?;
-        let mut l = self.load()?;
-        if references.len() > self.policy.max_entries
+        let gate = self.addressed_gate(
+            &[references, &[id.into()]].concat(),
+            &[],
+            &[],
+            None,
+            false,
+            true,
+        )?;
+        let mut l = self.load(&gate)?;
+        if references.len() > self.policy.max_related_outputs
             || references.iter().any(|id| {
                 !l.outputs
                     .iter()
@@ -1448,27 +1272,16 @@ impl Inventory {
     /// Ordinary entries coalesce concurrent reclamation without waiting behind
     /// another bounded pass. Publication still acquires authoritative admission.
     pub fn maintain_available(&self) -> Result<Value, String> {
-        let Some(gate) = Lease::acquire(
-            &self.directory.join("admission.lease"),
-            None,
-            true,
-            true,
-            None,
-        )?
-        else {
-            return Ok(
-                json!({"status":"busy","effects":"maintenance-deferred","completion":"not-established"}),
-            );
-        };
-        self.round_metadata
-            .set(Some(self.policy.max_metadata_bytes_per_round));
-        let result = self.maintain_locked(now()?, &gate);
-        self.round_metadata.set(None);
-        result
+        self.maintain()
     }
     fn maintain_round(&self, observed: u64) -> Result<Value, String> {
-        let gate = self.gate()?;
-        self.maintain_locked(observed, &gate)
+        self.round_began.set(Some(Instant::now()));
+        self.round_node_limit
+            .set(Some(self.policy.max_nodes_per_round));
+        let result = self.partition_round(observed);
+        self.round_node_limit.set(None);
+        self.round_began.set(None);
+        result
     }
     /// Under admission exclusion, only reverse-reachable outputs can still
     /// consume this original. Keep their exclusive capabilities through the
@@ -1506,7 +1319,12 @@ impl Inventory {
         }
         Ok(leases)
     }
-    fn retire_transaction(&self, key: &str, gate: &Lease) -> Result<(), String> {
+    fn retire_transaction(&self, key: &str) -> Result<(), String> {
+        let directory = no_symlink_parents(&self.directory, &format!("transaction-gates/{key}"))?;
+        fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+        let Some(gate) = crate::ownership::DirectoryLease::acquire(&directory, true, None)? else {
+            return Ok(());
+        };
         let Some(mut record) = self.transaction(key)? else {
             return Ok(());
         };
@@ -1527,7 +1345,7 @@ impl Inventory {
                 };
                 record.lease_id = owner.id().into();
                 record.phase = "retiring".into();
-                self.stable(gate)?;
+                self.stable(&gate)?;
                 let bytes = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
                 self.charge_metadata(bytes.len() as u64)?;
                 write(&self.transaction_path(key), &bytes)?;
@@ -1536,7 +1354,7 @@ impl Inventory {
                     key,
                     &identity(&path)?,
                     || {
-                        self.stable(gate)?;
+                        self.stable(&gate)?;
                         owner.stable()
                     },
                 )?;
@@ -1547,29 +1365,22 @@ impl Inventory {
             &self.directory,
             declaration.file_name().unwrap().to_str().unwrap(),
             &identity(&declaration)?,
-            || self.stable(gate),
-        )
+            || self.stable(&gate),
+        )?;
+        fs::remove_dir(&directory).map_err(|e| e.to_string())
     }
-    fn maintain_locked(&self, observed: u64, gate: &Lease) -> Result<Value, String> {
-        let began = Instant::now();
-        let mut l = self.load()?;
+    fn maintain_locked(&self, observed: u64, gate: &Gate) -> Result<Value, String> {
+        let began = self.round_began.get().unwrap_or_else(Instant::now);
+        let mut l = self.load(&gate)?;
         let mut metadata_steps = 0usize;
         let mut accounting_errors = Vec::new();
-        for key in self.transaction_keys()? {
-            if metadata_steps >= self.policy.max_nodes_per_round
-                || !self.metadata_room()
-                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
-            {
-                break;
-            }
-            metadata_steps += 1;
-            if let Err(error) = self.retire_transaction(&key, gate) {
-                accounting_errors.push(json!({"transaction":key,"reason":error}));
-            }
-        }
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {
-            if metadata_steps >= self.policy.max_nodes_per_round
+            if metadata_steps
+                >= self
+                    .round_node_limit
+                    .get()
+                    .unwrap_or(self.policy.max_nodes_per_round)
                 || !self.metadata_room()
                 || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
             {
@@ -1590,7 +1401,11 @@ impl Inventory {
                 }
             }
             if l.outputs[index].phase == "creating"
-                && metadata_steps < self.policy.max_nodes_per_round
+                && metadata_steps
+                    < self
+                        .round_node_limit
+                        .get()
+                        .unwrap_or(self.policy.max_nodes_per_round)
                 && self.metadata_room()
                 && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
             {
@@ -1612,7 +1427,11 @@ impl Inventory {
                 }
             }
         }
-        while metadata_steps < self.policy.max_nodes_per_round
+        while metadata_steps
+            < self
+                .round_node_limit
+                .get()
+                .unwrap_or(self.policy.max_nodes_per_round)
             && !l.retired_leases.is_empty()
             && self.metadata_room()
             && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
@@ -1627,7 +1446,7 @@ impl Inventory {
                     &self.directory,
                     &pending.path,
                     &pending.identity,
-                    || self.stable(&gate),
+                    || self.stable(gate),
                 )?,
             }
             l.retired_leases.remove(0);
@@ -1641,7 +1460,11 @@ impl Inventory {
             .collect();
         for index in account_order {
             if !self.metadata_room()
-                || metadata_steps >= self.policy.max_nodes_per_round
+                || metadata_steps
+                    >= self
+                        .round_node_limit
+                        .get()
+                        .unwrap_or(self.policy.max_nodes_per_round)
                 || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
             {
                 break;
@@ -1669,7 +1492,11 @@ impl Inventory {
             }
             while self.metadata_room()
                 && !l.outputs[index].manifest.sealed
-                && metadata_steps < self.policy.max_nodes_per_round
+                && metadata_steps
+                    < self
+                        .round_node_limit
+                        .get()
+                        .unwrap_or(self.policy.max_nodes_per_round)
                 && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
             {
                 metadata_steps += 1;
@@ -1756,7 +1583,11 @@ impl Inventory {
         order.sort_by_key(|(_, priority)| *priority);
         for (id, _) in order {
             if !self.metadata_room()
-                || nodes >= self.policy.max_nodes_per_round
+                || nodes
+                    >= self
+                        .round_node_limit
+                        .get()
+                        .unwrap_or(self.policy.max_nodes_per_round)
                 || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
             {
                 break;
@@ -1766,7 +1597,6 @@ impl Inventory {
                 .iter()
                 .position(|o| o.id == id)
                 .ok_or("output disappeared")?;
-            nodes += 1;
             l.cursor = (i + 1) % count.max(1);
             if rooted.contains(&id) {
                 protected.push(
@@ -1774,6 +1604,7 @@ impl Inventory {
                 );
                 continue;
             }
+            nodes += 1;
             let o = l.outputs[i].clone();
             let lease_path = self.directory.join(&o.lease);
             let lease = match Lease::acquire(&lease_path, Some(&o.lease_id), false, true, None) {
@@ -1819,7 +1650,11 @@ impl Inventory {
                 while self.metadata_room()
                     && !l.outputs[i].manifest.sealed
                     && !l.outputs[i].overflow_disposal
-                    && nodes < self.policy.max_nodes_per_round
+                    && nodes
+                        < self
+                            .round_node_limit
+                            .get()
+                            .unwrap_or(self.policy.max_nodes_per_round)
                     && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
                 {
                     nodes += 1;
@@ -1841,7 +1676,11 @@ impl Inventory {
                 }
                 if l.outputs[i].overflow_disposal {
                     while self.metadata_room()
-                        && nodes < self.policy.max_nodes_per_round
+                        && nodes
+                            < self
+                                .round_node_limit
+                                .get()
+                                .unwrap_or(self.policy.max_nodes_per_round)
                         && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
                     {
                         nodes += 1;
@@ -1924,7 +1763,7 @@ impl Inventory {
                             &pending.path,
                             &pending.identity,
                             || {
-                                self.stable(&gate)?;
+                                self.stable(gate)?;
                                 lease.stable()?;
                                 for consumer in &consumer_leases {
                                     consumer.stable()?;
@@ -1971,7 +1810,11 @@ impl Inventory {
                     self.save(&l, &gate)?;
                 }
                 while self.metadata_room()
-                    && nodes < self.policy.max_nodes_per_round
+                    && nodes
+                        < self
+                            .round_node_limit
+                            .get()
+                            .unwrap_or(self.policy.max_nodes_per_round)
                     && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
                 {
                     let Some(entry) = l.outputs[i].manifest.entries.last().cloned() else {
@@ -1996,8 +1839,9 @@ impl Inventory {
                         && entry.bytes <= self.policy.max_bytes_per_round
                         && entry.bytes
                             > self
-                                .policy
-                                .max_bytes_per_round
+                                .round_verified_left
+                                .get()
+                                .unwrap_or(self.policy.max_bytes_per_round)
                                 .saturating_sub(verified_bytes)
                     {
                         return Err(
@@ -2022,7 +1866,7 @@ impl Inventory {
                         &entry.path,
                         &entry.identity,
                         || {
-                            self.stable(&gate)?;
+                            self.stable(gate)?;
                             lease.stable()?;
                             for consumer in &consumer_leases {
                                 consumer.stable()?;
@@ -2071,13 +1915,18 @@ impl Inventory {
                     drop(lease);
                     // The explicit retirement queue survives interruption at either side
                     // of unlink. Its size participates in admission capacity.
-                    if nodes < self.policy.max_nodes_per_round {
+                    if nodes
+                        < self
+                            .round_node_limit
+                            .get()
+                            .unwrap_or(self.policy.max_nodes_per_round)
+                    {
                         nodes += 1;
                         crate::artifact_disposal::dispose_entry(
                             &self.directory,
                             &l.retired_leases.last().ok_or("retirement pending")?.path,
                             &l.retired_leases.last().unwrap().identity,
-                            || self.stable(&gate),
+                            || self.stable(gate),
                         )?;
                         l.retired_leases.pop();
                         self.save(&l, &gate)?;
@@ -2091,13 +1940,13 @@ impl Inventory {
         }
         self.save(&l, &gate)?;
         Ok(
-            json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"remaining_outputs":l.outputs.len(),"remaining_capability_retirements":l.retired_leases.len(),"known_retained_file_logical_bytes":l.outputs.iter().filter_map(|o|o.length).sum::<u64>(),"known_retained_allocated_bytes":l.outputs.iter().flat_map(|o|o.manifest.entries.iter()).filter_map(|e|e.allocated_bytes).sum::<u64>(),"unmeasured_allocated_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed || o.manifest.entries.iter().any(|e|e.allocated_bytes.is_none())).count(),"unmeasured_tree_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed).count(),"reserved_logical_bytes":l.outputs.iter().map(|o|o.reserved_bytes).sum::<u64>(),"overflow_outputs":l.outputs.iter().filter(|o|o.manifest.bytes.saturating_sub(o.removed_logical_bytes)>o.byte_limit.unwrap_or(self.policy.max_output_bytes)).count(),"max_total_bytes":self.policy.max_total_bytes,"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_entries,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"}),
+            json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"remaining_outputs":l.outputs.len(),"remaining_capability_retirements":l.retired_leases.len(),"known_retained_file_logical_bytes":l.outputs.iter().filter_map(|o|o.length).sum::<u64>(),"known_retained_allocated_bytes":l.outputs.iter().flat_map(|o|o.manifest.entries.iter()).filter_map(|e|e.allocated_bytes).sum::<u64>(),"unmeasured_allocated_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed || o.manifest.entries.iter().any(|e|e.allocated_bytes.is_none())).count(),"unmeasured_tree_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed).count(),"reserved_logical_bytes":l.outputs.iter().map(|o|o.reserved_bytes).sum::<u64>(),"overflow_outputs":l.outputs.iter().filter(|o|o.manifest.bytes.saturating_sub(o.removed_logical_bytes)>o.byte_limit.unwrap_or(self.policy.max_output_bytes)).count(),"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_related_outputs,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"}),
         )
     }
     fn recover_creation(
         &self,
         output: &mut Output,
-        gate: &Lease,
+        gate: &Gate,
         owner: &Lease,
     ) -> Result<(), String> {
         let creation = output.creation.clone().ok_or("creation intent missing")?;
@@ -2166,8 +2015,15 @@ impl Inventory {
             .ok_or("historical owner enrollment is not registered".into())
     }
     pub(super) fn release_historical(&self, key: &str, roles: &[String]) -> Result<(), String> {
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let gate = self.addressed_gate(
+            &[],
+            &[self.historical(key)?.path.clone()],
+            roles,
+            None,
+            false,
+            true,
+        )?;
+        let mut l = self.load(&gate)?;
         let ids: BTreeSet<_> = l
             .outputs
             .iter()
@@ -2198,8 +2054,7 @@ impl Inventory {
         if artifact_id == 0 || !crate::wire::is_digest(artifact_digest) {
             return Err("native artifact delivery identity missing".into());
         }
-        let gate = self.gate()?;
-        let mut l = self.load()?;
+        let _original = read_guard(&self.root, path)?;
         let raw = fs::read(no_symlink_parents(&self.root, path)?).map_err(|e| e.to_string())?;
         if sha256(&raw) != digest {
             return Err("native delivery report digest differs".into());
@@ -2210,6 +2065,8 @@ impl Inventory {
             .or(report["request_id"].as_str())
             .ok_or("native delivery request identity")?;
         let role = format!("native-delivery:{request_id}");
+        let gate = self.addressed_gate(&[], &[path.into()], &[role.clone()], None, false, true)?;
+        let mut l = self.load(&gate)?;
         let o = l
             .outputs
             .iter()
@@ -2228,8 +2085,8 @@ impl Inventory {
     }
     /// Actual consumers use a shared capability while reading an original.
     pub fn consume(&self, id: &str) -> Result<Lease, String> {
-        let gate = self.gate()?;
-        let l = self.load()?;
+        let gate = self.addressed_gate(&[id.into()], &[], &[], None, false, true)?;
+        let l = self.load(&gate)?;
         let o = l
             .outputs
             .iter()
@@ -2255,14 +2112,21 @@ impl Publication {
     }
     fn materialize_for_consumer(&self, consumer: Option<&str>) -> Result<(), String> {
         self.lease.stable()?;
-        let gate = self.inventory.gate()?;
-        let mut l = self.inventory.load()?;
+        let roles = consumer
+            .map(|c| self.inventory.consumer_role(c))
+            .transpose()?
+            .into_iter()
+            .collect::<Vec<_>>();
+        let gate =
+            self.inventory
+                .addressed_gate(&[self.id.clone()], &[], &roles, None, false, true)?;
+        let mut l = self.inventory.load(&gate)?;
         self.materialize_excluded(&mut l, &gate, consumer)
     }
     fn materialize_excluded(
         &self,
         l: &mut Ledger,
-        gate: &Lease,
+        gate: &Gate,
         consumer: Option<&str>,
     ) -> Result<(), String> {
         self.lease.stable()?;
@@ -2516,8 +2380,15 @@ impl Publication {
         }
         o.expires = now()?.saturating_add(self.inventory.policy.keep_seconds);
         self.lease.stable()?;
-        let gate = self.inventory.gate()?;
-        let mut l = self.inventory.load()?;
+        let roles = consumer
+            .map(|c| self.inventory.consumer_role(c))
+            .transpose()?
+            .into_iter()
+            .collect::<Vec<_>>();
+        let gate =
+            self.inventory
+                .addressed_gate(&[self.id.clone()], &[], &roles, None, false, true)?;
+        let mut l = self.inventory.load(&gate)?;
         let current = l
             .outputs
             .iter_mut()
@@ -2583,7 +2454,6 @@ pub fn begin_adopted(
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    inventory.maintain_available()?;
     let physical_path = fs::canonicalize(path).map_err(|e| e.to_string())?;
     let relative = physical_path
         .strip_prefix(&inventory.root)
@@ -2671,13 +2541,12 @@ fn create_with_consumer(
     crate::relative_path(relative)?;
     if let Some(inventory) = Inventory::adopted(root)? {
         if inventory.accepts(producer, relative) {
-            inventory.maintain_available()?;
             let roots = if producer == "lifecycle-original" {
                 vec![format!("recovery:{relative}")]
             } else {
                 vec![]
             };
-            let (publication, gate, mut ledger) = inventory.reserve_excluded(
+            let (publication, gate, ledger) = inventory.reserve_excluded(
                 producer,
                 relative,
                 outcome,
@@ -2686,7 +2555,8 @@ fn create_with_consumer(
                 byte_limit,
             )?;
             let consumer = consumer_prefix.map(|prefix| format!("{prefix}:{}", publication.id()));
-            publication.materialize_excluded(&mut ledger, &gate, consumer.as_deref())?;
+            drop((gate, ledger));
+            publication.materialize_for_consumer(consumer.as_deref())?;
             return Ok(Some(publication));
         }
     }
@@ -2754,8 +2624,8 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    let gate = inventory.gate()?;
-    let l = inventory.load()?;
+    let gate = inventory.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+    let l = inventory.load(&gate)?;
     let found = l
         .outputs
         .iter()
@@ -2886,7 +2756,6 @@ fn publish_owned_with(
     if length > inventory.policy.max_output_bytes {
         return Err("output byte capacity exceeded before writing".into());
     }
-    inventory.maintain_available()?;
     let _writer = inventory.address_gate("writer", path)?;
     let target = no_symlink_parents(root, path)?;
     fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
@@ -3042,29 +2911,15 @@ pub fn reference_report(
 /// Release the previous fixed-slot reference only after its replacement is durably published.
 pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), String> {
     if let Some(inventory) = Inventory::adopted(root)? {
-        let gate = inventory.gate()?;
-        let mut ledger = inventory.load()?;
         let role = format!("current-report:{}", sha256(slot.as_bytes()));
-        let Some(output) = ledger.outputs.iter().find(|output| output.path == original) else {
-            return Ok(());
-        };
-        let id = output.id.clone();
-        inventory.reference_locked(&mut ledger, &role, &[id.clone()])?;
-        let mut pending = vec![id];
-        let mut closure = BTreeSet::new();
-        while let Some(id) = pending.pop() {
-            if closure.insert(id.clone()) {
-                if let Some(output) = ledger.outputs.iter().find(|o| o.id == id) {
-                    pending.extend(output.references.clone());
-                }
-            }
+        inventory.reference_paths(&role, &[original.into()])?;
+        let gate = inventory.addressed_gate(&[], &[original.into()], &[], None, false, true)?;
+        let ledger = inventory.load(&gate)?;
+        let ids: Vec<_> = ledger.outputs.iter().map(|o| o.id.clone()).collect();
+        drop(gate);
+        for id in ids {
+            inventory.reference(&format!("consumer:publication-recheck:{id}"), &[])?;
         }
-        for id in closure {
-            ledger
-                .roots
-                .remove(&format!("consumer:publication-recheck:{id}"));
-        }
-        inventory.save(&ledger, &gate)?;
     }
     Ok(())
 }
@@ -3074,7 +2929,7 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
 /// removal capability across the effect; independent publication remains free.
 pub struct RemovalGuard {
     inventory: Inventory,
-    exclusion: Lease,
+    exclusion: Gate,
 }
 impl RemovalGuard {
     /// Recheck the final-original policy immediately before the other owner's effect.
@@ -3102,34 +2957,11 @@ pub fn external_removal_guards(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    if paths.is_empty() || paths.len() > inventory.policy.max_entries {
+    if paths.is_empty() || paths.len() > inventory.policy.max_related_outputs {
         return Err("external removal scope is empty or exceeds capacity".into());
     }
-    let address = serde_json::to_string(&paths).map_err(|e| e.to_string())?;
-    if address.len() > 8192 {
-        return Err("external removal declaration byte capacity".into());
-    }
-    let exclusion = inventory.address_gate_scoped("removal", &address, &paths)?;
-    let gate = inventory.gate()?;
-    let key = format!("removal-{}", sha256(address.as_bytes()));
-    for path in &paths {
-        inventory.exclude_removals(path, Some(&key))?;
-    }
-    let ledger = inventory.load()?;
-    if ledger.outputs.iter().any(|output| {
-        paths.iter().any(|path| {
-            output.path == *path
-                || output.path.starts_with(&format!("{path}/"))
-                || (output.tree && path.starts_with(&format!("{}/", output.path)))
-        })
-    }) {
-        return Err(
-            "final-original publication overlaps fixture effect; retain until its owner retires it"
-                .into(),
-        );
-    }
-    inventory.stable(&gate)?;
-    drop(gate);
+    let exclusion = inventory.removal_gate(&paths)?;
+    inventory.stable(&exclusion)?;
     Ok(Some(RemovalGuard {
         inventory,
         exclusion,

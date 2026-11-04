@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/retention_state.rs"]
+mod retention_state;
 use super::*;
 const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
 
@@ -157,8 +159,8 @@ fn caught_capacity_failure_exports_original_inventory_and_command_streams() {
     let destination = tempfile::tempdir().unwrap();
     let originals = [
         (
-            "output-retention-v1/inventory.json",
-            b"original inventory\0\xff".as_slice(),
+            "output-retention-v1/objects/output-diagnostic/record.json",
+            b"original addressed declaration\0\xff".as_slice(),
         ),
         (
             "capacity-excluded.stdout",
@@ -224,13 +226,13 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
         fs::write(
             h.root.join(POLICY_PATH),
             serde_json::to_vec(&value!({
-                "schema":"chrono-output-retention/v1",
+                "schema":"chrono-output-retention/v2",
                 "producers":{"check-original":[".chrono-harness/state/"],
                     "lifecycle-original":[".chrono-harness/state/worktrees/"]},
-                "keep_seconds":0,"max_entries":512,"max_summaries":128,
+                "keep_seconds":0,"max_related_outputs":512,"max_summaries":128,
                 "max_nodes_per_round":256,"max_bytes_per_round":67108864,
                 "max_millis_per_round":25,"max_output_bytes":1073741824,
-                "max_total_bytes":8589934592u64,"max_manifest_nodes":16384,
+                "max_manifest_nodes":16384,
                 "max_metadata_bytes_per_round":67108864
             }))
             .unwrap(),
@@ -249,16 +251,7 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
         let source_bytes = fs::read(h.root.join("payload")).unwrap();
         let index = fs::read(h.root.join(".git/index")).unwrap();
         let inventory = || Inventory::adopted(&h.root).unwrap().unwrap();
-        let state = || {
-            json(
-                &fs::read(
-                    h.root
-                        .join(".chrono-harness/state/output-retention-v1/inventory.json"),
-                )
-                .unwrap(),
-            )
-            .unwrap()
-        };
+        let state = || retention_state::snapshot(&h.root);
         fs::create_dir_all(h.root.join(".chrono-harness/state/worktrees")).unwrap();
         let mut ids = Vec::new();
         let mut live = None;
@@ -339,63 +332,59 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
         inventory()
             .reference("collector-required-inputs", &ids)
             .unwrap();
-        let (code, _, error) = invoke("active");
-        assert_eq!(code, 2, "{error}");
-        assert!(
-            error.contains("protected output inventory capacity"),
-            "{error}"
-        );
-        assert_eq!(state()["outputs"], before["outputs"]);
+        let (code, report, error) = invoke("active");
+        assert_eq!(code, 0, "{report} {error}");
+        for original in before["outputs"].as_array().unwrap() {
+            assert!(state()["outputs"].as_array().unwrap().contains(original));
+        }
         inventory()
             .reference("collector-required-inputs", &[])
             .unwrap();
         let (code, report, error) = invoke("excluded");
-        if all_rooted {
-            assert_eq!(code, 2, "{report} {error}");
-            assert!(
-                error.contains("protected output inventory capacity"),
-                "{error}"
-            );
-            assert_eq!(state()["outputs"], before["outputs"]);
-        } else {
-            assert_eq!(code, 0, "{report} {error}");
-            assert_eq!(
-                report["status"],
-                if operation == "maintain" {
-                    "maintained"
-                } else {
-                    "used"
-                }
-            );
-            if operation == "bootstrap" {
-                assert_eq!(report["managed_process"]["exit_code"], 0);
-                assert_eq!(
-                    report["managed_process"]["argv"],
-                    value!([
-                        env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
-                        "noop",
-                        h.root,
-                        bootstrap
-                    ])
-                );
+        assert_eq!(code, 0, "{report} {error}");
+        assert_eq!(
+            report["status"],
+            if operation == "maintain" {
+                "maintained"
+            } else {
+                "used"
             }
-            let after = state();
+        );
+        if operation == "bootstrap" {
+            assert_eq!(report["managed_process"]["exit_code"], 0);
+            assert_eq!(
+                report["managed_process"]["argv"],
+                value!([
+                    env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
+                    "noop",
+                    h.root,
+                    bootstrap
+                ])
+            );
+        }
+        // Explicit retention maintenance may retire unrelated released originals.
+        // Ordinary use/bootstrap leave them for this owner operation.
+        for _ in 0..8 {
+            let round = inventory().maintain().unwrap();
+            assert!(round["nodes"].as_u64().unwrap() <= 256);
+            if all_rooted
+                || state()["summaries"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
+            {
+                break;
+            }
+        }
+        if !all_rooted {
             assert!(
-                after["summaries"]
+                state()["summaries"]
                     .as_array()
                     .unwrap()
                     .iter()
                     .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
             );
-            assert!(after["outputs"].as_array().unwrap().len() <= 512);
-            assert!(
-                after["outputs"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|o| o["path"] == report["report_path"])
-            );
-            assert_eq!(after["roots"], before["roots"]);
         }
         let after = state();
         for n in 0..if all_rooted { 512 } else { 8 } {

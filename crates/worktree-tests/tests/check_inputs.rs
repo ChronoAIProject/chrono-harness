@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/retention_state.rs"]
+mod retention_state;
 use super::*;
 use chrono_harness::prepared::{self, InputRequest, PreparedCheck, Selection};
 
@@ -219,10 +221,10 @@ fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
     fs::write(
         dest.join(POLICY_PATH),
         serde_json::to_vec(&value!({
-            "schema":"chrono-output-retention/v1",
+            "schema":"chrono-output-retention/v2",
             "producers":{"check-original":[".chrono-harness/state/"],
                 "lifecycle-original":[".chrono-harness/state/worktrees/"]},
-            "keep_seconds":0,"max_entries":64,"max_summaries":64,
+            "keep_seconds":0,"max_related_outputs":64,"max_summaries":64,
             "max_nodes_per_round":256,"max_bytes_per_round":67108864,
             "max_millis_per_round":25
         }))
@@ -281,10 +283,7 @@ fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
             .transfer_consumer(&consumer, &parent.path)
             .is_err()
     );
-    let state = json(
-        &fs::read(dest.join(".chrono-harness/state/output-retention-v1/inventory.json")).unwrap(),
-    )
-    .unwrap();
+    let state = retention_state::snapshot(&dest);
     assert!(
         state["roots"]
             .get(format!("consumer:{}", consumer.consumer))
