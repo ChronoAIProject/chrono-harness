@@ -306,7 +306,10 @@ fn linked_default_wrapper_reclaims_released_copies_on_explicit_maintenance() {
     assert!(producer_objects(&reentered).as_array().unwrap().is_empty());
     let (code, maintained) = owner.drain();
     assert_eq!(code, 0, "{maintained}");
-    assert_eq!(producer_objects(&maintained)[0]["status"], "already-disposed");
+    assert_eq!(
+        producer_objects(&maintained)[0]["status"],
+        "already-disposed"
+    );
 }
 
 #[test]

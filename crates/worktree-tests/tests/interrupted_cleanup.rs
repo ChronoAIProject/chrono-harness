@@ -1954,7 +1954,10 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
             .write(true)
             .open(h.record_directory(&target).join("metadata.lease"))
             .unwrap();
-        assert_eq!(unsafe { libc::flock(metadata.as_raw_fd(), libc::LOCK_EX) }, 0);
+        assert_eq!(
+            unsafe { libc::flock(metadata.as_raw_fd(), libc::LOCK_EX) },
+            0
+        );
     }
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
