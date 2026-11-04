@@ -154,6 +154,8 @@ struct Ledger<O = OutputRecord> {
     next_id: u64,
     #[serde(default)]
     retired_leases: Vec<Node>,
+    #[serde(default, deserialize_with = "strict_transactions")]
+    transactions: BTreeMap<String, String>,
 }
 impl<O> Default for Ledger<O> {
     fn default() -> Self {
@@ -165,6 +167,7 @@ impl<O> Default for Ledger<O> {
             cursor: 0,
             next_id: 0,
             retired_leases: Vec::new(),
+            transactions: BTreeMap::new(),
         }
     }
 }
@@ -183,6 +186,9 @@ fn strict_roots<'de, D: serde::Deserializer<'de>>(
     serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
 }
 fn strict_summaries<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Value>, D::Error> {
+    serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
+}
+fn strict_transactions<'de, D: serde::Deserializer<'de>>(d: D) -> Result<BTreeMap<String, String>, D::Error> {
     serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
 }
 pub struct Inventory {
@@ -414,14 +420,22 @@ impl Inventory {
             cursor: serialized.cursor,
             next_id: serialized.next_id,
             retired_leases: serialized.retired_leases,
+            transactions: serialized.transactions,
         };
         if l.policy_sha256 != policy_digest
             || l.outputs.len() > self.policy.max_entries
             || l.summaries.len() > self.policy.max_summaries
             || l.retired_leases.len() > self.policy.max_entries
             || l.roots.len() > self.policy.max_entries
+            || l.transactions.len() > self.policy.max_entries
         {
             return Err("retention policy migration required; original inventory preserved".into());
+        }
+        for (key, id) in &l.transactions {
+            let digest = key.strip_prefix("writer-").or_else(|| key.strip_prefix("slot-"));
+            if !digest.is_some_and(crate::wire::is_digest) || id.len() > 256 {
+                return Err("unknown addressed retention transaction; preserve originals".into());
+            }
         }
         let mut ids = BTreeSet::new();
         for o in &l.outputs {
@@ -522,6 +536,60 @@ impl Inventory {
         write(&self.directory.join("inventory.json"), &raw)?;
         self.remember(l)
     }
+    // Registration protects only the finite birth/identity transition. The
+    // actual content writer or fixed-pointer publisher holds its addressed
+    // capability with no enrollment admission held. The ordinary maintenance
+    // owner reclaims these declared temporary capabilities after last close.
+    fn address_gate(&self, kind: &str, address: &str) -> Result<Lease, String> {
+        let key = format!("{kind}-{}", sha256(address.as_bytes()));
+        let path = self.directory.join(&key);
+        let began = Instant::now();
+        loop {
+            let gate = self.gate()?;
+            let mut l = self.load()?;
+            match l.transactions.get(&key).cloned() {
+                None => {
+                    if l.transactions.len() >= self.policy.max_entries {
+                        return Err("addressed retention transaction capacity; maintain or join live owners".into());
+                    }
+                    match fs::symlink_metadata(&path) {
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+                        Err(e) => return Err(e.to_string()),
+                        Ok(_) => return Err("unregistered retention transaction capability; preserve it".into()),
+                    }
+                    l.transactions.insert(key.clone(), String::new());
+                    self.save(&l, &gate)?;
+                }
+                Some(id) if !id.is_empty() => {
+                    // A holder may need admission to settle its own output.
+                    // Waiting for this address must never retain that admission.
+                    drop(gate);
+                    let remaining = Duration::from_secs(5).saturating_sub(began.elapsed());
+                    let acquired = Lease::acquire(&path, Some(&id), false, true, Some(remaining));
+                    let gate = self.gate()?;
+                    let l = self.load()?;
+                    if l.transactions.get(&key) != Some(&id) {
+                        // Maintenance retired the exact unused capability while
+                        // this caller was opening it. Reenter its current birth.
+                        if began.elapsed() >= Duration::from_secs(5) {
+                            return Err("addressed retention admission remains busy".into());
+                        }
+                        continue;
+                    }
+                    let lease = acquired?.ok_or("addressed retention transaction busy")?;
+                    self.stable(&gate)?;
+                    lease.stable()?;
+                    return Ok(lease);
+                }
+                Some(_) => (), // Resume this explicit, unattached birth intent.
+            }
+            let lease = Lease::acquire(&path, None, true, true, None)?
+                .ok_or("unattached retention transaction has a live owner; preserve it")?;
+            l.transactions.insert(key, lease.id().into());
+            self.save(&l, &gate)?;
+            return Ok(lease);
+        }
+    }
     /// Explicit owner migration. The caller supplies the exact prior policy bytes;
     /// every existing output must still be declared, and all old producers/readers must be excluded.
     /// This changes no output identity, original outcome, expiry, root, or completion state.
@@ -541,6 +609,13 @@ impl Inventory {
         )?
         .ok_or("live report producer/consumer prevents retention migration")?;
         let mut owners = Vec::new();
+        for (key, id) in &l.transactions {
+            if id.is_empty() {
+                return Err("recover unattached retention transaction before migration".into());
+            }
+            owners.push(Lease::acquire(&self.directory.join(key), Some(id), false, true, None)?
+                .ok_or("live addressed publisher prevents retention migration")?);
+        }
         for output in &l.outputs {
             if matches!(output.phase.as_str(), "reserving" | "creating") {
                 return Err("recover reserved output before policy migration".into());
@@ -1181,6 +1256,40 @@ impl Inventory {
         let mut l = self.load()?;
         let mut metadata_steps = 0usize;
         let mut accounting_errors = Vec::new();
+        for (key, id) in l.transactions.clone() {
+            if metadata_steps >= self.policy.max_nodes_per_round
+                || !self.metadata_room()
+                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
+            {
+                break;
+            }
+            metadata_steps += 1;
+            let path = self.directory.join(&key);
+            match fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+                Err(e) => {
+                    accounting_errors.push(json!({"transaction":key,"reason":e.to_string()}));
+                    continue;
+                }
+                Ok(_) => {
+                    let held = Lease::acquire(&path, (!id.is_empty()).then_some(id.as_str()), false, true, None);
+                    let owner = match held {
+                        Ok(Some(owner)) => owner,
+                        Ok(None) => continue,
+                        Err(error) => {
+                            accounting_errors.push(json!({"transaction":key,"reason":error}));
+                            continue;
+                        }
+                    };
+                    crate::artifact_disposal::dispose_entry(&self.directory, &key, &identity(&path)?, || {
+                        self.stable(gate)?;
+                        owner.stable()
+                    })?;
+                }
+            }
+            l.transactions.remove(&key);
+            self.save(&l, gate)?;
+        }
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {
             if metadata_steps >= self.policy.max_nodes_per_round
@@ -2442,6 +2551,23 @@ pub fn publish_owned_original(
     )
 }
 
+#[cfg(feature = "retention-test")]
+#[doc(hidden)]
+pub fn publish_owned_observed(
+    root: &Path,
+    producer: &str,
+    path: &str,
+    bytes: &[u8],
+    outcome: Value,
+    observe: impl FnOnce(),
+) -> Result<bool, String> {
+    publish_owned_with(root, producer, path, bytes.len() as u64, &sha256(bytes), outcome,
+        |file| {
+            observe();
+            file.write_all(bytes).map_err(|e| e.to_string())
+        }, None)
+}
+
 /// Stream a known original only after its output byte reservation is admitted.
 /// The source's declared length and digest remain authoritative if it changes while copying.
 pub fn publish_owned_file(
@@ -2499,14 +2625,7 @@ fn publish_owned_with(
     }
     inventory.maintain_available()?;
     let _activity = inventory.report_activity()?;
-    let _writer = Lease::acquire(
-        &inventory.directory.join("report-writer.lease"),
-        None,
-        true,
-        true,
-        Some(Duration::from_secs(5)),
-    )?
-    .ok_or("report original publisher busy")?;
+    let _writer = inventory.address_gate("writer", path)?;
     let target = no_symlink_parents(root, path)?;
     fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
     match fs::symlink_metadata(&target) {
@@ -2633,14 +2752,7 @@ pub fn reference_report(
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    let publisher = Lease::acquire(
-        &inventory.directory.join("report-slot.lease"),
-        None,
-        true,
-        true,
-        Some(Duration::from_secs(5)),
-    )?
-    .ok_or("report slot publisher busy")?;
+    let publisher = inventory.address_gate("slot", slot)?;
     inventory.dependencies_paths(original, originals)?;
     // Both old and new originals stay rooted until the fixed pointer was written.
     inventory.extend_reference_path(

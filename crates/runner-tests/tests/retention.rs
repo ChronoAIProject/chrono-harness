@@ -2280,6 +2280,40 @@ fn ordinary_maintenance_defers_busy_exclusion_without_spending_another_round() {
 }
 
 #[test]
+fn independent_report_content_writers_progress_and_retire_their_transaction_metadata() {
+    if !isolated_capability_test(
+        "independent_report_content_writers_progress_and_retire_their_transaction_metadata",
+    ) {
+        return;
+    }
+    use retained_artifacts::retention::{publish_owned_observed, publish_owned_original};
+    let h = report_host();
+    let _activity = inventory(h.path()).report_activity().unwrap();
+    let first = ".chrono-harness/state/preparation/first-writer.json";
+    let second = ".chrono-harness/state/preparation/second-writer.json";
+    publish_owned_observed(h.path(), "check-original", first, b"first original", json!({"exit":7}), || {
+        publish_owned_original(h.path(), "check-original", second, b"second original", json!({"exit":3})).unwrap();
+        assert_eq!(fs::read(h.path().join(second)).unwrap(), b"second original");
+        // The first writer is still inside its original content operation.
+        assert_eq!(fs::read(h.path().join(first)).unwrap(), b"");
+    }).unwrap();
+    assert_eq!(fs::read(h.path().join(first)).unwrap(), b"first original");
+    let state = ledger(h.path());
+    assert_eq!(state["transactions"].as_object().unwrap().len(), 2);
+    let originals = state["outputs"].as_array().unwrap();
+    assert_eq!(originals.iter().find(|o| o["path"] == first).unwrap()["outcome"]["exit"], 7);
+    assert_eq!(originals.iter().find(|o| o["path"] == second).unwrap()["outcome"]["exit"], 3);
+    inventory(h.path()).maintain().unwrap();
+    assert!(ledger(h.path())["transactions"].as_object().unwrap().is_empty());
+    let directory = h.path().join(".chrono-harness/state/output-retention-v1");
+    for path in [first, second] {
+        assert!(!directory.join(format!("writer-{}", chrono_harness::sha256(path.as_bytes()))).exists());
+    }
+    assert!(!directory.join("report-writer.lease").exists());
+    assert!(!directory.join("report-slot.lease").exists());
+}
+
+#[test]
 fn independent_report_slots_publish_while_another_slot_is_held() {
     if !isolated_capability_test("independent_report_slots_publish_while_another_slot_is_held") {
         return;
@@ -2293,11 +2327,24 @@ fn independent_report_slots_publish_while_another_slot_is_held() {
         publish_owned_original(h.path(), "check-original", path, content, json!({"exit":0})).unwrap();
     }
     let first_slot = reference_report(h.path(), "first/check.json", first, &[], None).unwrap();
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+    let root = h.path().to_owned();
+    let competing = std::thread::spawn(move || {
+        entered_tx.send(()).unwrap();
+        let guard = reference_report(&root, "first/check.json", first, &[], None).unwrap();
+        finished_tx.send(()).unwrap();
+        drop(guard);
+    });
+    entered_rx.recv().unwrap();
     let second_slot = reference_report(h.path(), "second/check.json", second, &[], None).unwrap();
+    assert_eq!(finished_rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty));
     settle_report(h.path(), "second/check.json", second).unwrap();
     settle_report(h.path(), "first/check.json", first).unwrap();
     drop(second_slot);
     drop(first_slot);
+    competing.join().unwrap();
+    finished_rx.recv().unwrap();
     assert_eq!(fs::read(h.path().join(first)).unwrap(), b"first original");
     assert_eq!(fs::read(h.path().join(second)).unwrap(), b"second original");
 }
