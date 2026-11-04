@@ -1695,7 +1695,9 @@ class ManagedAttemptCustody(unittest.TestCase):
             listener.bind(("127.0.0.1", 0))
             listener.listen(1)
             host, port = listener.getsockname()
-            with (root / ".chrono-harness/state/custody-channel.json").open("x") as address:
+            channel_path = root / ".chrono-harness/state/custody-channel.json"
+            channel_path.parent.mkdir(parents=True, exist_ok=True)
+            with channel_path.open("x") as address:
                 json.dump({"host": host, "port": port}, address)
             child = subprocess.Popen(command, cwd=root, env=attempt.environment,
                                      pass_fds=fixture.PASS_FDS, stdout=out, stderr=err)

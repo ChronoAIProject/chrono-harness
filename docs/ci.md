@@ -279,7 +279,9 @@ The live custody test waits for the actual fixture's readiness through a local
 socket, alongside one native wait for the managed owner's original exit. Both
 notifications enter the same blocking selector. Readiness uses the existing
 40-second attempt deadline, including owner admission; the former separate
-10-second file-poll timer could expire during that admission. The fixture requires
+10-second file-poll timer could expire during that admission. The parent creates
+the fixture's ignored state directory before publishing the channel address or
+launching the owner, including on a fresh native fixture. The fixture requires
 an actual release message and produces its release marker before exit. Its
 15-second hold bound, 20-second operation limit, 25-second final join and the
 registered suite bounds remain unchanged. Early owner rejection retains the
