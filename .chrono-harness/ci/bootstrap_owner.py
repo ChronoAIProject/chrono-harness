@@ -271,7 +271,8 @@ def publication(root, reference, expected_sha):
 
 def run_owner(root, program, arguments, directory, name):
     env = dict(os.environ)
-    result = subprocess.run([str(program), *arguments], pass_fds=bootstrap.PASS_FDS,
+    consumer = "bootstrap-owner:" + directory.name + ":" + name
+    result = subprocess.run([str(program), *arguments, "--report-consumer", consumer], pass_fds=bootstrap.PASS_FDS,
                             env=env, capture_output=True)
     for channel in ("stdout", "stderr"):
         shared.write_new(directory / (name + "." + channel), getattr(result, channel))
@@ -283,6 +284,17 @@ def run_owner(root, program, arguments, directory, name):
     except ValueError:
         sys.stdout.buffer.write(result.stdout)
         raise subprocess.CalledProcessError(result.returncode or 1, result.args)
+    declaration = report.get("report_consumer")
+    originals = declaration.get("originals") if isinstance(declaration, dict) else None
+    if (not isinstance(declaration, dict)
+            or declaration.get("schema") != "chrono-retention-consumer/v1"
+            or declaration.get("consumer") != consumer
+            or not isinstance(report.get("report_path"), str)
+            or not isinstance(originals, list) or len(originals) != 1
+            or not isinstance(originals[0], dict)
+            or originals[0].get("path") != report["report_path"]):
+        raise ValueError("owner phase report consumer is missing or differs from the original")
+    shared.write_new(directory / (name + "-consumer.json"), shared.encode(declaration))
     process = report.get("managed_process")
     if process is not None:
         sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
