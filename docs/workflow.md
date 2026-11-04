@@ -68,7 +68,7 @@ remain visible. Routes/projects defer changed historical methods when the
 configured downstream migration validator consumes their results. A replacement
 runs its current registered plan; surviving current tests may evolve their
 methods. Removed operations do not become permanent compatibility obligations.
-Scoped CI and workflow share the registration owner's structural retirement
+Routes, scoped CI and workflow share the registration owner's structural retirement
 check. Actual current replacement execution remains required separately.
 
 Historical profiles in workflow v2/v3 can explicitly register optional
