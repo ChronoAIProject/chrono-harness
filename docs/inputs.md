@@ -54,11 +54,11 @@ absence nor a VM. This host's declarations remain proposed/incomplete.
 
 Local and CI must use the same registered check command. Equal verdicts across
 environments additionally require equal complete effective inputs and deterministic
-evaluation. The separate runner parity comparator requires
-`completeness_proven: true` and complete verdict-bearing observations; registration
-does not produce that stronger evidence. Without it, parity remains unestablished
-without becoming an ordinary full-check gate. A matching pair of observations
-alone does not prove universal determinism; do not handwrite the stronger value.
+evaluation. Current input producers retain `completeness_proven: false`, so
+check reports retain `parity: unestablished`; there is no independent comparator
+or report-rewriting command. This is not an ordinary full-check gate. A matching
+pair of observations alone does not prove input completeness or universal
+determinism; do not handwrite a stronger value.
 
 Config v3 may explicitly adopt a versioned `input_closure.coverage` contract:
 

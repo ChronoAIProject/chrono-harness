@@ -351,15 +351,9 @@ DELTA 比较二者的 tree，不自动改用 merge-base，base 不必是 candida
 前提未建立时报告 parity:unestablished，不能承诺裁决相同；这不另加普通 full check 准入门。其已登记合同所需输入／证据不足仍报错。
 普通 full check 在登记要求及全部选中义务通过后表示该 DELTA 满足现役登记合同；现役 registration 的 effective_inputs 仍可为 completeness_proven:false。
 
-完成两次独立的 full check 后，可显式运行
-`chrono-harness parity --host-root H --report P --compared-report Q` 生成成对对等证据。
-该命令只消费两个已发布报告，不替代 canonical check，也不重新执行业务判官；它要求两份报告
-均为 `configured-judges` 完成报告、所有 verdict-bearing 字段及判官响应均已观察、
-`effective_inputs.completeness_proven = true` 且没有未解决的关键输入。它比较状态、快照身份、
-环境、工具、有效输入、DELTA、影响、测试、findings 及判官结果；绝对执行路径按已观察二进制摘要
-归一化，路径敏感性必须由有效输入显式登记。比较失败会保留当前报告并以非零错误退出，不能把
-相同的未知或不完整报告标成 `parity:established`。这是独立的成对观察证据；即使比较成功，也不单凭一对报告证明普遍确定性。
-其更强前提缺失时 parity 保持 unestablished，不阻止已满足现役登记合同的普通 full check；不得手填 completeness_proven:true 或清除已知未解决项。
+当前不提供独立 `parity` 比较／报告改写命令。现役输入生产者均报告
+`completeness_proven:false`，普通检查报告保持 `parity:unestablished`；相同的两个报告
+不能建立输入完整性或普遍确定性。检查状态归实际生产者，不提供写死宿主状态的 `spec status`。
 宿主尚未登记的 compiler、SDK、网络、凭据或其他已知适用外部输入仍须补齐。
 
 v1 明确选择干净、不可变 commit 快照这一工程边界；不另设 dirty-worktree 验证模式。
@@ -736,7 +730,7 @@ AI 先尝试在现有规则下解决任务；确需改判官时自主变更并�
 `registry_digest, executables, tools, environment, effective_inputs, parity, delta, impact, judges, tests, findings, costs`。
 executables 为 `{path, sha256, version}` 列表；tools 另记录实际解析路径和工具版本。
 effective_inputs 记录两端完整有效输入的 ID、实际值摘要及来源证据；摘要存在本身不证明相等或完整。
-parity 为 `{status: "established"|"unestablished", compared_report: string|null}`；普通 full check 保持 unestablished。
+parity 为 `{status: "unestablished", compared_report: null}`；当前不生成成对比较状态。
 现役独立比较器仅在满足 §4 的更强输入／观察要求并与具名报告匹配时写 established；它记录成对证据，不证明普遍确定性，也不参与普通检查准入。性能测量差异分别报告。
 judges/tests 记录每项的 selected/executed/blocked/retired 状态、退出码和证据摘要。
 这里 selected 是执行计划状态，完整结果不能停留在 selected 就返回 pass。
@@ -951,7 +945,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 首个根提交 | bootstrap/no prior base，无绿色 DELTA 报告 |
 | 当前 CLI：check | **已实现**独立 chrono-ci-check/v1、显式 Git 绑定的 v2 与带 --context 的 chrono-judge/v1；完整宿主仍因 proposed/缺绑定/未实现义务非零，具体范围见 §14 |
 | 当前 CLI：未知命令/信息命令多余参数 | **已实现** E_USAGE，exit 2 |
-| 当前 CLI：spec status | **已实现** draft/not-implemented/proposed，exit 0 |
+| 已退役 CLI：spec status / parity | E_USAGE，exit 2；不写状态或改写报告 |
 | 当前 CLI：help/version | **已实现** 信息输出，exit 0；help 明示完整治理未实现 |
 | 程序输出诊断／进度／告警或处理异常 | §7.1 标准日志记录与实际上下文；机器 stdout、结果输出及子进程原始字节合同保持完整 |
 | 根因经多层包装并跨进程／报告传输 | 可从顶层记录恢复每层 source、原生信息及实际进程证据；只剩摘要字符串不满足 §7.2 |

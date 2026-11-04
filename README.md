@@ -95,7 +95,6 @@ chrono-instructions init --host-root "/path/to/existing-host"
 cargo build --locked --manifest-path crates/runner/Cargo.toml
 cargo test --locked --manifest-path crates/runner-tests/Cargo.toml
 ./crates/runner/target/debug/chrono-harness --help
-./crates/runner/target/debug/chrono-harness spec status
 ```
 
 使用 `sha2` 的独立 Cargo 构建根在 dev 及其继承的 test profile 中，将该上游依赖设为 `opt-level = 3`，降低输入摘要核验的计算成本，同时保留 debug assertions。依赖库的 profile 不向调用方传递，因此这项配置由每个生产、测试项目的 manifest 显式拥有。
@@ -123,9 +122,9 @@ full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findin
 
 普通 full check 在登记要求及全部选中义务通过后表示该 DELTA 满足现役登记合同；AI 对宿主治理／输入范围作负责的 declared-complete 工程声明，现役 registration 仍可报告 completeness_proven:false。已知缺输入、未解决的必需依赖、缺绑定／快照及漂移仍失败，实际工具链／SDK／配置义务保留；普通验收不要求普遍隐藏输入证明或 VM。本宿主仍 proposed/incomplete，不能宣称完整启用。
 
-两次独立 full check 均取得完整有效输入证据后，可运行
-`.chrono-harness/bin/chrono-harness parity --host-root . --report .chrono-harness/state/report.json --compared-report .chrono-harness/state/ci-report.json`。
-该命令要求 completeness_proven:true 与完整观察，只比较已发布报告的裁决字段，成功时同步更新当前报告及其 retained `report_path`；更强前提缺失或裁决不同均保留 unresolved 并以非零退出。parity 不另加普通 full check 门；本地与 CI 必须同命令，普遍同判仍依赖完整相同输入与确定性求值，成对观察本身不证明这些条件。
+检查状态由实际检查报告产生；`spec status` 的固定文本及独立 `parity` 比较命令已退役。
+现役输入生产者报告 `completeness_proven:false`，报告保持 `parity:unestablished`。
+本地与 CI 必须同命令；普遍同判仍要求完整相同有效输入与确定性求值，两个相同报告本身不证明这些条件。
 
 Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite historical decoder are documented in [docs/execution.md](docs/execution.md). ci.verify belongs to the real ci/ci-tests pair. The host remains proposed with incomplete Cargo/SDK closure; workflow has bounded certification; autonomous delivery remains future work. Mixed classification and warnings use the [explicit surface contract](docs/mixed.md). Declared costs and unknown warnings have their own [cost contract](docs/costs.md).
 
