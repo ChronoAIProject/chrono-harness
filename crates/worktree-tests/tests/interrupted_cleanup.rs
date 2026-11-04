@@ -200,6 +200,95 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
         assert!(root.join("payload").exists());
     }
 }
+
+#[test]
+fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let cleanup = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&cleanup).unwrap()).unwrap();
+    policy["retained_producers"] = value!([
+        {"id":"first-fixture","directory":".chrono-harness/state/first-fixture/",
+            "temporary":true,"generated_outputs":[]},
+        {"id":"second-fixture","directory":".chrono-harness/state/second-fixture/",
+            "temporary":true,"generated_outputs":[]}
+    ]);
+    fs::write(cleanup, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let retention = chrono_harness::retained_artifacts::retention::POLICY_PATH;
+    fs::write(
+        h.root.join(retention),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-output-retention/v1",
+            "producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},
+            "keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,
+            "max_bytes_per_round":1048576,"max_millis_per_round":1000
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    fm["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(retention, value!([])));
+    fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("unrooted-linked-report");
+    assert_eq!(h.invoke("feature", "unrooted-linked-report", &target).0, 0);
+    let mut previous = Vec::new();
+    for _ in 0..2 {
+        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+            .current_dir(&target)
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap())
+            .args(["maintain", "--config", POLICY])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report = json(&output.stdout).unwrap();
+        assert_eq!(report["status"], "maintained");
+        assert!(report.get("report_consumer").is_none());
+        for path in &previous {
+            assert!(
+                !h.root.join(path).exists(),
+                "ordinary reentry must reclaim an unrooted original"
+            );
+        }
+        previous.clear();
+        let path = report["report_path"].as_str().unwrap();
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), output.stdout);
+        previous.push(path.to_owned());
+        let drains = report["producer_drains"].as_array().unwrap();
+        assert_eq!(drains.len(), 2);
+        for (entry, producer) in drains.iter().zip(["first-fixture", "second-fixture"]) {
+            assert_eq!(entry["producer"], producer);
+            let original = drain_report(entry);
+            assert_eq!(original["status"], "cleaned");
+            assert_eq!(
+                original["producer_objects"][0]["status"],
+                "protected-unknown"
+            );
+            previous.push(entry["receipt"]["path"].as_str().unwrap().to_owned());
+        }
+    }
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap();
+    inventory.maintain().unwrap();
+    for path in previous {
+        assert!(
+            !h.root.join(path).exists(),
+            "publication adds no persistent consumer root"
+        );
+    }
+    assert!(h.root.join("payload").exists() && target.join("payload").exists());
+}
+
 #[test]
 fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
     let h = Host::new("payload");
