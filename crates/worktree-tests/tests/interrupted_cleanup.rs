@@ -24,60 +24,109 @@ fn output(target: &Path) {
 
 #[test]
 fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment() {
-    use std::{io::{Read, Write}, os::fd::AsRawFd};
+    use std::{
+        io::{Read, Write},
+        os::fd::AsRawFd,
+    };
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
     let target = h.parent.join("slow-cache");
     let sibling = h.parent.join("independent-use");
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    native_git(&h, "cleanup-io", value!({
-        "target":target,
-        "ledger":h.root.join(".chrono-harness/state/automatic-cleanup/ledger.json"),
-        "claim":h.parent.join("cleanup-io-claimed"),
-        "synchronize":listener.local_addr().unwrap().to_string()
-    }));
+    native_git(
+        &h,
+        "cleanup-io",
+        value!({
+            "target":target,
+            "ledger":h.root.join(".chrono-harness/state/automatic-cleanup/ledger.json"),
+            "claim":h.parent.join("cleanup-io-claimed"),
+            "synchronize":listener.local_addr().unwrap().to_string()
+        }),
+    );
     assert_eq!(h.invoke("feature", "independent-use", &sibling).0, 0);
     assert_eq!(h.invoke("feature", "slow-cache", &target).0, 0);
     output(&target);
     let ledger = h.ledger();
-    let original = ledger["entries"].as_array().unwrap().iter()
-        .find(|entry| entry["path"] == value!(target)).unwrap().clone();
+    let original = ledger["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(target))
+        .unwrap()
+        .clone();
     let mut cleanup = CapturedChild::spawn(&mut h.auto_command("maintain", &[]), &h.root);
-    let mut ready = libc::pollfd { fd:listener.as_raw_fd(), events:libc::POLLIN, revents:0 };
-    assert_eq!(unsafe { libc::poll(&mut ready, 1, 30_000) }, 1,
-        "cleanup never reached the actual effect boundary");
+    let mut ready = libc::pollfd {
+        fd: listener.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    assert_eq!(
+        unsafe { libc::poll(&mut ready, 1, 30_000) },
+        1,
+        "cleanup never reached the actual effect boundary"
+    );
     let (mut release, _) = listener.accept().unwrap();
-    release.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    release
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
     let mut message = [0; 5];
     release.read_exact(&mut message).unwrap();
     assert_eq!(&message, b"ready");
     let gate = chrono_harness::ownership::Lease::acquire(
-        &h.root.join(".chrono-harness/state/automatic-cleanup/admission.lease"),
-        None, false, true, None,
-    ).unwrap();
-    assert!(gate.is_some(), "physical cache disposal retained global enrollment exclusion");
+        &h.root
+            .join(".chrono-harness/state/automatic-cleanup/admission.lease"),
+        None,
+        false,
+        true,
+        None,
+    )
+    .unwrap();
+    assert!(
+        gate.is_some(),
+        "physical cache disposal retained global enrollment exclusion"
+    );
     drop(gate);
-    let (code, used, error) = h.auto("use", &[
-        "--path", sibling.to_str().unwrap(), "--operation", "use.consumer",
-    ]);
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            sibling.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
     assert_eq!(code, 0, "independent use: {used} {error}");
     assert!(target.join("output λ/cache").is_file());
     let concurrent = h.ledger();
-    let sibling_entry = concurrent["entries"].as_array().unwrap().iter()
-        .find(|entry| entry["path"] == value!(sibling)).unwrap().clone();
+    let sibling_entry = concurrent["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(sibling))
+        .unwrap()
+        .clone();
     release.write_all(b"x").unwrap();
     let (code, report, error) = h.received(cleanup.wait_with_output().unwrap());
     assert_eq!(code, 0, "cleanup: {report} {error}");
     assert!(!target.join("output λ").exists());
     let after = h.ledger();
     let entries = after["entries"].as_array().unwrap();
-    let cleaned = entries.iter().find(|entry| entry["path"] == value!(target)).unwrap();
+    let cleaned = entries
+        .iter()
+        .find(|entry| entry["path"] == value!(target))
+        .unwrap();
     assert_eq!(cleaned["attachment"], original["attachment"]);
     assert_eq!(cleaned["enrollment"], original["enrollment"]);
     assert_eq!(cleaned["ownership"]["cache_pending"], false);
-    assert_eq!(entries.iter().find(|entry| entry["path"] == value!(sibling)).unwrap(), &sibling_entry,
-        "cleanup overwrote the independently completed use");
+    assert_eq!(
+        entries
+            .iter()
+            .find(|entry| entry["path"] == value!(sibling))
+            .unwrap(),
+        &sibling_entry,
+        "cleanup overwrote the independently completed use"
+    );
 }
 
 #[test]

@@ -963,15 +963,14 @@ impl Manager {
         head: &str,
         lock: Option<&str>,
     ) -> Result<(), String> {
-        if self._gate.lease.is_some() && e.ownership.is_none() {
+        let kernel = self.inputs.policy.schema == "chrono-worktree-automatic-cleanup/v2";
+        if kernel && e.ownership.is_none() {
             return Err(
                 "kernel enrollment ownership is missing; preserve legacy/unknown work".into(),
             );
         }
         if let Some(owner) = &e.ownership {
-            if self._gate.lease.is_none()
-                || !owner.path.starts_with(&self.inputs.policy.state_directory)
-            {
+            if !kernel || !owner.path.starts_with(&self.inputs.policy.state_directory) {
                 return Err("enrollment ownership policy mismatch".into());
             }
             let path = no_symlink_parents(&self.inputs.policy.coordinator_root, &owner.path)?;
@@ -1961,11 +1960,16 @@ impl Manager {
             // The effect released admission and joined an independently updated
             // ledger. Locate this same physical enrollment before attaching its
             // result, retaining every unrelated owner's concurrent changes.
-            let i = self.ledger.entries.iter().position(|current| {
-                current.path == e.path
-                    && current.attachment == e.attachment
-                    && current.enrollment["receipt"] == e.enrollment["receipt"]
-            }).ok_or("cleanup enrollment changed while its physical effect ran")?;
+            let i = self
+                .ledger
+                .entries
+                .iter()
+                .position(|current| {
+                    current.path == e.path
+                        && current.attachment == e.attachment
+                        && current.enrollment["receipt"] == e.enrollment["receipt"]
+                })
+                .ok_or("cleanup enrollment changed while its physical effect ran")?;
             match outcome {
                 Ok(result) => {
                     let path = result["report_path"]
@@ -2219,84 +2223,86 @@ impl Manager {
         });
         self.save()?;
         self.outside_enrollment_readonly(r, |manager, r| {
-        if let Some(reason) = preserved {
-            report["preserved_reason"] = value!(reason);
-            report["worktree_removal"] = value!("preserved");
-            report["branch_removal"] = value!("not-requested");
-            report["artifact_disposals"] = value!([]);
-            manager.check_entry(r, &e, &t.head, None)?;
-            let host_config = r.config.host_config.clone();
-            let (target_regs, _) = start::registrations(r, &e.path, &t.head, &host_config)?;
-            artifact_disposal::registered(
-                &names,
-                &[manager.inputs.registrations.config(), target_regs.config()],
-            )?;
-            artifact_disposal::paths(r, &e.path, &t.head, &names)?;
-            report["destination"] = value!(e.path);
-            report["branch_ref"] = value!(e.branch);
-            report["head"] = value!(t.head);
-            report["base"] = value!(t.head);
-            crate::recovery::publish(&manager.inputs.policy.coordinator_root, report)?;
-            let path = e.path.to_str().ok_or("path UTF-8")?;
-            r.git(
-                &manager.inputs.policy.coordinator_root,
-                &["worktree", "lock", "--reason", token, "--", path],
-            )?;
-            manager.check_entry(r, &e, &t.head, Some(token))?;
-            let paths = artifact_disposal::paths(r, &e.path, &t.head, &names)?;
-            artifact_disposal::dispose(&e.path, &names, &paths, report, || {
+            if let Some(reason) = preserved {
+                report["preserved_reason"] = value!(reason);
+                report["worktree_removal"] = value!("preserved");
+                report["branch_removal"] = value!("not-requested");
+                report["artifact_disposals"] = value!([]);
+                manager.check_entry(r, &e, &t.head, None)?;
+                let host_config = r.config.host_config.clone();
+                let (target_regs, _) = start::registrations(r, &e.path, &t.head, &host_config)?;
+                artifact_disposal::registered(
+                    &names,
+                    &[manager.inputs.registrations.config(), target_regs.config()],
+                )?;
+                artifact_disposal::paths(r, &e.path, &t.head, &names)?;
+                report["destination"] = value!(e.path);
+                report["branch_ref"] = value!(e.branch);
+                report["head"] = value!(t.head);
+                report["base"] = value!(t.head);
+                crate::recovery::publish(&manager.inputs.policy.coordinator_root, report)?;
+                let path = e.path.to_str().ok_or("path UTF-8")?;
+                r.git(
+                    &manager.inputs.policy.coordinator_root,
+                    &["worktree", "lock", "--reason", token, "--", path],
+                )?;
                 manager.check_entry(r, &e, &t.head, Some(token))?;
+                let paths = artifact_disposal::paths(r, &e.path, &t.head, &names)?;
+                artifact_disposal::dispose(&e.path, &names, &paths, report, || {
+                    manager.check_entry(r, &e, &t.head, Some(token))?;
+                    manager.pinned_retention(r, &t)
+                })?;
+                manager.check_entry(r, &e, &t.head, Some(token))?;
+                manager.pinned_retention(r, &t)?;
+                start::unlock(
+                    r,
+                    &manager.inputs.policy.coordinator_root,
+                    path,
+                    &format!("refs/heads/{}", e.branch),
+                    &t.head,
+                )?;
+                manager.check_entry(r, &e, &t.head, None)?;
                 manager.pinned_retention(r, &t)
-            })?;
-            manager.check_entry(r, &e, &t.head, Some(token))?;
-            manager.pinned_retention(r, &t)?;
-            start::unlock(
-                r,
-                &manager.inputs.policy.coordinator_root,
-                path,
-                &format!("refs/heads/{}", e.branch),
-                &t.head,
-            )?;
-            manager.check_entry(r, &e, &t.head, None)?;
-            manager.pinned_retention(r, &t)
-        } else {
-            Cleanup {
-                path: e.path.clone(),
-                branch: e.branch.clone(),
-                head: t.head.clone(),
-                retained_ref: manager.inputs.policy.retained_ref.clone(),
-                retained_commit: t.retained_commit.clone(),
-                retention: manager.inputs.policy.retention.clone(),
-                discard_artifacts: names,
-                remove_branch: manager.inputs.policy.remove_branch,
-                allow_absent_worktree: !e.attempts.is_empty(),
-            }
-            .execute_checked(
-                r,
-                &manager.inputs.policy.coordinator_root,
-                &manager.inputs.registrations,
-                token,
-                report,
-                |r| {
-                    manager.stable(r)?;
-                    manager.git_locks(&e, None)?;
-                    manager.pinned_retention(r, &t)?;
-                    if fs::symlink_metadata(&e.path).is_ok() {
-                        let row = r
-                            .inventory(&manager.inputs.policy.coordinator_root)?
-                            .into_iter()
-                            .find(|row| row.get("worktree").is_some_and(|p| Path::new(p) == e.path))
-                            .ok_or("enrolled checkout inventory disappeared")?;
-                        let lock = row.get("locked").map(String::as_str);
-                        if lock.is_some() && lock != Some(token) {
-                            return Err("another worktree lock owns pending disposal".into());
+            } else {
+                Cleanup {
+                    path: e.path.clone(),
+                    branch: e.branch.clone(),
+                    head: t.head.clone(),
+                    retained_ref: manager.inputs.policy.retained_ref.clone(),
+                    retained_commit: t.retained_commit.clone(),
+                    retention: manager.inputs.policy.retention.clone(),
+                    discard_artifacts: names,
+                    remove_branch: manager.inputs.policy.remove_branch,
+                    allow_absent_worktree: !e.attempts.is_empty(),
+                }
+                .execute_checked(
+                    r,
+                    &manager.inputs.policy.coordinator_root,
+                    &manager.inputs.registrations,
+                    token,
+                    report,
+                    |r| {
+                        manager.stable(r)?;
+                        manager.git_locks(&e, None)?;
+                        manager.pinned_retention(r, &t)?;
+                        if fs::symlink_metadata(&e.path).is_ok() {
+                            let row = r
+                                .inventory(&manager.inputs.policy.coordinator_root)?
+                                .into_iter()
+                                .find(|row| {
+                                    row.get("worktree").is_some_and(|p| Path::new(p) == e.path)
+                                })
+                                .ok_or("enrolled checkout inventory disappeared")?;
+                            let lock = row.get("locked").map(String::as_str);
+                            if lock.is_some() && lock != Some(token) {
+                                return Err("another worktree lock owns pending disposal".into());
+                            }
+                            manager.check_entry(r, &e, &t.head, lock)?;
                         }
-                        manager.check_entry(r, &e, &t.head, lock)?;
-                    }
-                    Ok(())
-                },
-            )
-        }
+                        Ok(())
+                    },
+                )
+            }
         })
     }
 }
