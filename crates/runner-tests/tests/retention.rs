@@ -1626,18 +1626,26 @@ fn completed_child_original_transfers_to_parent_before_its_success_root_is_relea
         inventory(h.path()).maintain().unwrap()["remaining_outputs"],
         2
     );
-    inventory(h.path()).reference("current-parent", &[]).unwrap();
+    inventory(h.path())
+        .reference("current-parent", &[])
+        .unwrap();
     assert_eq!(
         inventory(h.path()).maintain().unwrap()["remaining_outputs"],
         0
     );
     let summaries = ledger(h.path())["summaries"].as_array().unwrap().clone();
     assert_eq!(
-        summaries.iter().find(|row| row["path"] == child_path).unwrap()["original_outcome"]["exit"],
+        summaries
+            .iter()
+            .find(|row| row["path"] == child_path)
+            .unwrap()["original_outcome"]["exit"],
         0
     );
     assert_eq!(
-        summaries.iter().find(|row| row["path"] == parent_path).unwrap()["original_outcome"]["exit"],
+        summaries
+            .iter()
+            .find(|row| row["path"] == parent_path)
+            .unwrap()["original_outcome"]["exit"],
         3
     );
 }
