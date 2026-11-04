@@ -283,9 +283,15 @@ class ProducerSource(unittest.TestCase):
                         (root / owner.CURRENT).write_text(json.dumps({
                             "source_commit": current["commit"], "installed": owner.file_binding(selected)}))
                     return {}
+                actual_stage_report = owner.stage_report
+                def stage_result(root, reference, expected_sha=None, producer_commit=None):
+                    if reference == ".chrono-harness/state/bootstrap-stage.json":
+                        self.assertEqual(expected_sha, "stage-fixture")
+                        return {"owner_stage": {"staged": {
+                            "path": staged.relative_to(fixture.root).as_posix()}}}, {}
+                    return actual_stage_report(root, reference, expected_sha, producer_commit)
                 with mock.patch.object(owner, "run_owner", side_effect=native), mock.patch.object(
-                        owner, "stage_report", return_value=({"owner_stage": {
-                            "staged": {"path": staged.relative_to(fixture.root).as_posix()}}}, {})):
+                        owner, "stage_report", side_effect=stage_result):
                     owner.upgrade(fixture.root, config_path, config)
                 self.assertEqual(calls, ["migration", "construction", "deployment"])
                 self.assertEqual(selected.read_bytes(), b"current built owner")
