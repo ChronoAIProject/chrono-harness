@@ -422,7 +422,12 @@ fn write_json(path: &Path, v: &impl Serialize, immutable: bool) -> Result<Vec<u8
     Ok(bytes)
 }
 fn write_bytes(path: &Path, bytes: &[u8], immutable: bool) -> Result<(), String> {
-    write_bytes_staged(path, bytes, immutable, path.parent().ok_or("publication parent")?)
+    write_bytes_staged(
+        path,
+        bytes,
+        immutable,
+        path.parent().ok_or("publication parent")?,
+    )
 }
 fn write_bytes_staged(
     path: &Path,

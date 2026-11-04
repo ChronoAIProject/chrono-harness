@@ -195,7 +195,7 @@ fn register(
     observer("copy-original-prepared");
     lease.stable()?;
     let mut store = Store::open(&directory, &producer, false)?;
-        store.load(&allocation)?;
+    store.load(&allocation)?;
     let i = store
         .state
         .objects
@@ -528,7 +528,7 @@ impl Manager {
                     .ok_or("fixture body class is not adopted for this producer")?;
                 let directory = policy.directory(target)?;
                 let mut store = Store::open(&directory, &selected.producer, false)?;
-        store.load(&selected.allocation)?;
+                store.load(&selected.allocation)?;
                 let i = store
                     .state
                     .objects
@@ -593,7 +593,7 @@ impl Manager {
                     self.stable(r)?;
                     lease.stable()?;
                     let mut store = Store::open(&directory, &selected.producer, false)?;
-        store.load(&selected.allocation)?;
+                    store.load(&selected.allocation)?;
                     let i = store
                         .state
                         .objects

@@ -208,7 +208,10 @@ fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
     let membership = fs::read(store.join("objects.json")).unwrap();
     let first_record = producer_record_path(&store, first.path());
     let last_record = producer_record_path(&store, last.path());
-    let unrelated_bytes = [fs::read(&first_record).unwrap(), fs::read(&last_record).unwrap()];
+    let unrelated_bytes = [
+        fs::read(&first_record).unwrap(),
+        fs::read(&last_record).unwrap(),
+    ];
     let unrelated_identities = [
         chrono_harness::ownership::identity(&first_record),
         chrono_harness::ownership::identity(&last_record),
@@ -222,17 +225,38 @@ fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
     );
     let after = producer_state(&store);
     assert_eq!(after["objects"].as_array().unwrap().len(), 3);
-    assert!(json(&membership).unwrap().get("objects").is_none(),
-        "the immutable namespace identity must contain no dynamic membership");
-    let find = |state: &Value, allocation: &Path| state["objects"].as_array().unwrap()
-        .iter().find(|object| object["path"] == allocation.file_name().unwrap().to_str().unwrap()).unwrap().clone();
+    assert!(
+        json(&membership).unwrap().get("objects").is_none(),
+        "the immutable namespace identity must contain no dynamic membership"
+    );
+    let find = |state: &Value, allocation: &Path| {
+        state["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|object| object["path"] == allocation.file_name().unwrap().to_str().unwrap())
+            .unwrap()
+            .clone()
+    };
     assert_eq!(find(&after, first.path()), find(&before, first.path()));
     assert_eq!(find(&after, last.path()), find(&before, last.path()));
-    assert_eq!(find(&after, middle.path())["bodies"].as_object().unwrap().len(), 2);
+    assert_eq!(
+        find(&after, middle.path())["bodies"]
+            .as_object()
+            .unwrap()
+            .len(),
+        2
+    );
     assert_eq!(fs::read(&first_record).unwrap(), unrelated_bytes[0]);
     assert_eq!(fs::read(&last_record).unwrap(), unrelated_bytes[1]);
-    assert_eq!(chrono_harness::ownership::identity(&first_record), unrelated_identities[0]);
-    assert_eq!(chrono_harness::ownership::identity(&last_record), unrelated_identities[1]);
+    assert_eq!(
+        chrono_harness::ownership::identity(&first_record),
+        unrelated_identities[0]
+    );
+    assert_eq!(
+        chrono_harness::ownership::identity(&last_record),
+        unrelated_identities[1]
+    );
     assert_eq!(fs::read(original).unwrap(), [0, 255, 7, 8]);
     for allocation in [&first, &middle, &last] {
         assert_eq!(
@@ -261,11 +285,17 @@ fn metadata_publication_for_one_allocation_does_not_lock_another() {
         let pending_store = store.clone();
         let pending = scope.spawn(move || {
             chrono_worktree::RetainedArtifact::begin_with_birth_observer(
-                &pending_store, "test-allocation", &pending, &[],
-                "actual pending publication", "controlled real metadata publication",
-                |stage| if stage == "object-record-admitted" {
-                    entered_tx.send(()).unwrap();
-                    release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                &pending_store,
+                "test-allocation",
+                &pending,
+                &[],
+                "actual pending publication",
+                "controlled real metadata publication",
+                |stage| {
+                    if stage == "object-record-admitted" {
+                        entered_tx.send(()).unwrap();
+                        release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                    }
                 },
             )
         });
@@ -276,12 +306,17 @@ fn metadata_publication_for_one_allocation_does_not_lock_another() {
         let independent = scope.spawn(move || {
             let outcome = (|| -> Result<(), String> {
                 let reference = chrono_worktree::RetainedArtifact::resume(
-                    &independent_store, "test-allocation", &existing,
+                    &independent_store,
+                    "test-allocation",
+                    &existing,
                 )?;
                 reference.acquire("independent diagnostic", "actual concurrent reader")?;
                 reference.release("independent diagnostic", "reader joined")?;
                 let allocation = chrono_worktree::TemporaryHost::allocate(
-                    &independent_store, "test-allocation", &[], "independent metadata ",
+                    &independent_store,
+                    "test-allocation",
+                    &[],
+                    "independent metadata ",
                 )?;
                 assert!(allocation.path().is_dir());
                 Ok(())
@@ -292,7 +327,9 @@ fn metadata_publication_for_one_allocation_does_not_lock_another() {
         release_tx.send(()).unwrap();
         pending.join().unwrap().unwrap();
         independent.join().unwrap();
-        completed_before_release.expect("unrelated metadata must progress while publication is held").unwrap();
+        completed_before_release
+            .expect("unrelated metadata must progress while publication is held")
+            .unwrap();
     });
     assert!(!store.join("registry.lease").exists());
 }
@@ -304,23 +341,59 @@ fn explicit_partition_preserves_original_data_and_current_consumers() {
     let (store, allocation) = allocation(&h);
     let root = allocation.path().to_owned();
     let original = copy(&store, &root, "retained body");
-    let reference = chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
-    reference.acquire("actual diagnostic", "must survive explicit format conversion").unwrap();
+    let reference =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    reference
+        .acquire(
+            "actual diagnostic",
+            "must survive explicit format conversion",
+        )
+        .unwrap();
     let before = producer_state(&store);
     let lease = chrono_harness::ownership::Lease::acquire(
-        &store.join("registry.lease"), None, true, true, None,
-    ).unwrap().unwrap();
+        &store.join("registry.lease"),
+        None,
+        true,
+        true,
+        None,
+    )
+    .unwrap()
+    .unwrap();
     let previous = value!({"schema":"chrono-retained-producer/v1",
         "producer":"test-allocation","directory_id":before["directory_id"],
         "lease_id":lease.id(),"objects":before["objects"]});
     drop(lease);
     let previous_bytes = serde_json::to_vec(&previous).unwrap();
-    fs::rename(store.join("producer-records"), store.join("retained fixture input")).unwrap();
+    fs::rename(
+        store.join("producer-records"),
+        store.join("retained fixture input"),
+    )
+    .unwrap();
     fs::write(store.join("objects.json"), &previous_bytes).unwrap();
-    assert!(chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &[], "refused before migration ").is_err());
-    assert_eq!(fs::read(store.join("objects.json")).unwrap(), previous_bytes);
-    let migrate = || h.auto("migrate", &["--path", h.root.to_str().unwrap(),
-        "--partition-producer", "test-allocation"]);
+    assert!(
+        chrono_worktree::TemporaryHost::allocate(
+            &store,
+            "test-allocation",
+            &[],
+            "refused before migration "
+        )
+        .is_err()
+    );
+    assert_eq!(
+        fs::read(store.join("objects.json")).unwrap(),
+        previous_bytes
+    );
+    let migrate = || {
+        h.auto(
+            "migrate",
+            &[
+                "--path",
+                h.root.to_str().unwrap(),
+                "--partition-producer",
+                "test-allocation",
+            ],
+        )
+    };
     let (code, report, error) = migrate();
     assert_eq!(code, 0, "{report} {error}");
     assert_eq!(report["producer_partition"]["status"], "partitioned");
@@ -335,25 +408,27 @@ fn explicit_partition_preserves_original_data_and_current_consumers() {
     let after = producer_state(&store);
     assert_eq!(after["objects"], before["objects"]);
     assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
-    assert_eq!(fs::read(root.join("retained body")).unwrap(), [0, 255, 7, 8]);
+    assert_eq!(
+        fs::read(root.join("retained body")).unwrap(),
+        [0, 255, 7, 8]
+    );
     let owner_bytes = fs::read(store.join("objects.json")).unwrap();
     let (code, report, error) = migrate();
     assert_eq!(code, 0, "{report} {error}");
     assert_eq!(report["producer_partition"]["status"], "already-current");
     assert_eq!(fs::read(store.join("objects.json")).unwrap(), owner_bytes);
-    chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap()
-        .release("actual diagnostic", "current reader consumed migrated original").unwrap();
+    chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root)
+        .unwrap()
+        .release(
+            "actual diagnostic",
+            "current reader consumed migrated original",
+        )
+        .unwrap();
 }
 
 #[test]
 fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() {
-    for drift in [
-        "allocation",
-        "intent",
-        "cache-lease",
-        "owner",
-        "original",
-    ] {
+    for drift in ["allocation", "intent", "cache-lease", "owner", "original"] {
         let h = host();
         let (store, allocation) = allocation(&h);
         let source = h.root.join("drift-input.bin");
@@ -505,17 +580,21 @@ fn duplicate_producer_map_members_and_nested_fields_refuse_publication() {
         assert_eq!(text.matches(&old).count(), 1, "fixture marker {old}");
         let damaged = text.replacen(&old, &replacement, 1);
         fs::write(&path, &damaged).unwrap();
-        let error = chrono_worktree::RetainedArtifact::resume(
-            &store, "test-allocation", root,
-        ).err().expect("the addressed duplicate declaration must refuse admission");
+        let error = chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", root)
+            .err()
+            .expect("the addressed duplicate declaration must refuse admission");
         assert!(error.contains("duplicate"), "{error}");
         assert_eq!(fs::read(&path).unwrap(), damaged.as_bytes());
         assert_eq!(fs::read(root.join("body.bin")).unwrap(), [0, 255, 7, 8]);
         assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
     }
     let independent = chrono_worktree::TemporaryHost::allocate(
-        &store, "test-allocation", &[], "independent of damaged registration ",
-    ).unwrap();
+        &store,
+        "test-allocation",
+        &[],
+        "independent of damaged registration ",
+    )
+    .unwrap();
     assert!(independent.path().is_dir());
     fs::write(&path, &before).unwrap();
     let next = chrono_worktree::TemporaryHost::allocate(

@@ -836,8 +836,7 @@ fn unavailable_lease_preserves_its_registration_and_allows_an_eligible_allocatio
     fs::create_dir(root.join("cache 空白")).unwrap();
     fs::write(root.join("cache 空白/original"), "preserve").unwrap();
     drop(allocation);
-    let before =
-        producer_state(&store)["objects"][0].clone();
+    let before = producer_state(&store)["objects"][0].clone();
     let lease = before["cache_lease"]["path"].as_str().unwrap();
     fs::rename(store.join(lease), store.join("retained-unavailable-lease")).unwrap();
     let sibling = chrono_worktree::TemporaryHost::allocate(
@@ -853,10 +852,7 @@ fn unavailable_lease_preserves_its_registration_and_allows_an_eligible_allocatio
     drop(sibling);
     let (exit, report, _) = h.auto("maintain", &[]);
     assert_eq!(exit, 2, "{report}");
-    assert_eq!(
-        producer_state(&store)["objects"][0],
-        before
-    );
+    assert_eq!(producer_state(&store)["objects"][0], before);
     assert_eq!(
         fs::read(root.join("cache 空白/original")).unwrap(),
         b"preserve"

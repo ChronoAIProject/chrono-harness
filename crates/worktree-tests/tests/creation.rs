@@ -62,8 +62,10 @@ fn producer_state(directory: &Path) -> Value {
     owner
 }
 fn producer_record_path(directory: &Path, allocation: &Path) -> PathBuf {
-    directory.join("producer-records").join(format!("{}.json",
-        sha256(allocation.file_name().unwrap().to_str().unwrap().as_bytes())))
+    directory.join("producer-records").join(format!(
+        "{}.json",
+        sha256(allocation.file_name().unwrap().to_str().unwrap().as_bytes())
+    ))
 }
 fn fixture_git() -> PathBuf {
     let registry = source().join(".chrono-harness/tests/worktree-tools.json");
