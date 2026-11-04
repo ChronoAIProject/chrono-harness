@@ -1,28 +1,32 @@
-# Host-bootstrap experiment: acquire the missing system Git identity for audit #224.
-# This fixed branch revision is observation data, not a business check or admission.
-name: "chrono / native Git observation"
+name: "chrono / native initial acquisition"
 on:
   push:
-    branches: ["integration/audit-git-data-20261105"]
+    branches: ["integration/pr-inputs-20261023"]
 permissions:
   contents: read
 jobs:
   acquire:
-    name: "Observe system Git / macos-26"
+    name: "Initial acquisition / ${{ matrix.platform }}"
     if: ${{ github.event.deleted != true }}
-    runs-on: macos-26
-    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - platform: macos
+            runner: macos-26
+          - platform: linux
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     steps:
-      - name: Check out exact observation method
+      - name: Check out exact pushed candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-      - name: Observe original system Git bytes, version and OS
-        shell: bash
-        run: |
-          /usr/bin/sw_vers
-          /usr/bin/shasum -a 256 /usr/bin/git
-          /usr/bin/git --version
-          /usr/bin/shasum -a 256 /usr/bin/git
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Run registered initial acquisition and retain originals
+        uses: ./.chrono-harness/ci/native-acquisition
+        with:
+          platform: ${{ matrix.platform }}
