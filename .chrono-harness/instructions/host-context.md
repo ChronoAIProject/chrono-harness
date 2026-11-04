@@ -9,7 +9,7 @@
 下文的旧版本材料只保留其事实用途，不形成支持义务；固定基线 DELTA、必要原件与
 活跃消费的保护继续按当前合同处理。
 
-本仓强制所有 SPEC 和仓内决策、状态逻辑使用 Verus；唯一允许的受信假设是 `.chrono-harness/verus.json` 列明的外部接口。FILEMAP 的 `verification` 是逐文件角色与证明根的真源，同一 check 的覆盖门保留所有未迁移缺口并失败。不得用语言标签、Cargo 绿色或外部 Lean 模型代替实际证明；迁移范围、工具与证据归 [Verus 所有者](../../docs/verus.md)。当前只完成覆盖聚合核心的同源证明，完整迁移未完成。
+本仓强制所有 SPEC 和仓内决策、状态逻辑使用 Verus；唯一允许的受信假设是 `.chrono-harness/verus.json` 列明的外部接口。FILEMAP 的 `verification` 是逐文件角色与证明根的真源，同一 check 的覆盖门保留所有未迁移缺口并失败。不得用语言标签、Cargo 绿色或外部 Lean 模型代替实际证明；迁移范围、工具与证据归 [Verus 所有者](../../docs/verus.md)。当前完成覆盖聚合、OID 与标识符谓词的同源证明，完整迁移未完成。
 
 本仓维护 Rust harness 产品和独立宿主采用数据。[SPEC](../../SPEC.md) 是尚未全部实现的产品合同，当前结果与缺口归[覆盖表](../../docs/spec-coverage.md)。生产／专属测试项目各有独立 manifest、lock、target，无根 workspace；独立 Python 脚本及测试也显式配对。
 

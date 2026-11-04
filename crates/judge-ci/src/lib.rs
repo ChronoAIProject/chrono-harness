@@ -111,21 +111,13 @@ fn strings(v: &Value) -> Result<Vec<String>, String> {
         .collect()
 }
 fn id(s: &str) -> Result<(), String> {
-    if s.is_empty()
-        || !s
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
-    {
+    if !verus_policy::valid_id(s.as_bytes()) {
         return Err(format!("invalid ID {s:?}"));
     }
     Ok(())
 }
 pub fn full_oid(s: &str) -> Result<(), String> {
-    if !matches!(s.len(), 40 | 64)
-        || s.bytes()
-            .any(|b| !b.is_ascii_digit() && !(b'a'..=b'f').contains(&b))
-        || s.bytes().all(|b| b == b'0')
-    {
+    if !verus_policy::valid_oid(s.as_bytes()) {
         return Err(format!("expected full nonzero lowercase OID: {s}"));
     }
     Ok(())
