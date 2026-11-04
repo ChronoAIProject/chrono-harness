@@ -2341,9 +2341,19 @@ fn independent_report_content_writers_progress_and_retire_their_transaction_meta
     let changed_record = serde_json::to_vec(&changed).unwrap();
     fs::write(&first_record, &changed_record).unwrap();
     let partial = inventory(h.path()).maintain().unwrap();
-    assert!(partial["accounting_errors"].as_array().unwrap().iter().any(|r| r["transaction"] == first_key));
+    assert!(
+        partial["accounting_errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["transaction"] == first_key)
+    );
     assert_eq!(fs::read(&first_record).unwrap(), changed_record);
-    assert_eq!(declarations().len(), 1, "the unrelated declared writer must retire");
+    assert_eq!(
+        declarations().len(),
+        1,
+        "the unrelated declared writer must retire"
+    );
     assert!(directory.join(&first_key).exists());
     assert_eq!(fs::read(h.path().join(first)).unwrap(), b"first original");
     assert_eq!(fs::read(h.path().join(second)).unwrap(), b"second original");

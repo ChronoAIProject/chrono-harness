@@ -1347,31 +1347,48 @@ impl Inventory {
         Ok(leases)
     }
     fn retire_transaction(&self, key: &str, gate: &Lease) -> Result<(), String> {
-        let Some(mut record) = self.transaction(key)? else { return Ok(()) };
+        let Some(mut record) = self.transaction(key)? else {
+            return Ok(());
+        };
         let path = self.directory.join(key);
         match fs::symlink_metadata(&path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
             Err(e) => return Err(e.to_string()),
             Ok(_) => {
-                let Some(owner) = Lease::acquire(&path,
+                let Some(owner) = Lease::acquire(
+                    &path,
                     (!record.lease_id.is_empty()).then_some(record.lease_id.as_str()),
-                    false, true, None)? else { return Ok(()) };
+                    false,
+                    true,
+                    None,
+                )?
+                else {
+                    return Ok(());
+                };
                 record.lease_id = owner.id().into();
                 record.phase = "retiring".into();
                 self.stable(gate)?;
                 let bytes = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
                 self.charge_metadata(bytes.len() as u64)?;
                 write(&self.transaction_path(key), &bytes)?;
-                crate::artifact_disposal::dispose_entry(&self.directory, key, &identity(&path)?, || {
-                    self.stable(gate)?;
-                    owner.stable()
-                })?;
+                crate::artifact_disposal::dispose_entry(
+                    &self.directory,
+                    key,
+                    &identity(&path)?,
+                    || {
+                        self.stable(gate)?;
+                        owner.stable()
+                    },
+                )?;
             }
         }
         let declaration = self.transaction_path(key);
-        crate::artifact_disposal::dispose_entry(&self.directory,
-            declaration.file_name().unwrap().to_str().unwrap(), &identity(&declaration)?,
-            || self.stable(gate))
+        crate::artifact_disposal::dispose_entry(
+            &self.directory,
+            declaration.file_name().unwrap().to_str().unwrap(),
+            &identity(&declaration)?,
+            || self.stable(gate),
+        )
     }
     fn maintain_locked(&self, observed: u64, gate: &Lease) -> Result<Value, String> {
         let began = Instant::now();
