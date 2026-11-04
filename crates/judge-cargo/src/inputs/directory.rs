@@ -58,8 +58,8 @@ impl Binding {
         // Earlier directory bindings may have verified the same physical file
         // in this unchanged-inputs pass. Every binding still checks its paths,
         // children and aliases; no content observation crosses a child boundary.
-        let mut physical_directories =
-            validate_files(&self.root, &self.files, false, verified_files)?;
+        let mut physical_directories = self.directory_targets.clone();
+        validate_files(&self.files, false, verified_files, &physical_directories)?;
         for (path, entries) in &self.directories {
             let relative = path
                 .strip_prefix(&self.root)
@@ -213,7 +213,13 @@ fn check_physical_directories(directories: &BTreeSet<PathBuf>) -> Result {
     // This set is never retained across guarded-child boundaries.
     for path in directories {
         let metadata = fs::symlink_metadata(path).map_err(error)?;
-        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        if metadata.file_type().is_symlink() {
+            return Err(error(format!(
+                "directory inventory contains symlink: {}",
+                path.display()
+            )));
+        }
+        if !metadata.is_dir() {
             return Err(error(format!(
                 "directory inventory parent changed: {}",
                 path.display()
@@ -224,25 +230,33 @@ fn check_physical_directories(directories: &BTreeSet<PathBuf>) -> Result {
 }
 
 fn validate_files(
-    root: &Path,
     files: &[(PathBuf, String)],
     initial: bool,
     verified_files: &BTreeMap<&Path, &str>,
-) -> Result<BTreeSet<PathBuf>> {
-    // Keep the two bounded lanes and every regular-path check. Only content
-    // already verified by a completed binding in this same pass can be reused.
-    // Both lanes join and their parents are rechecked before recording new
-    // verified files. Nothing survives a guarded-child boundary.
+    physical_directories: &BTreeSet<PathBuf>,
+) -> Result {
+    // Parent paths are fixed declarations. Check every physical parent once
+    // before the lanes, then the caller checks them again after both lanes and
+    // all aliases. Every file still receives a fresh non-link/type check and
+    // its content check; no physical observation crosses a child boundary.
+    check_physical_directories(physical_directories)?;
     let lanes = usize::from(files.len() > 1) + 1;
     let validate = |lane| {
-        let mut physical_directories = BTreeSet::new();
         for (path, digest) in files.iter().skip(lane).step_by(lanes) {
-            let relative = path
-                .strip_prefix(root)
-                .map_err(error)?
-                .to_str()
-                .ok_or_else(|| error("non UTF-8 directory input"))?;
-            regular_path(root, relative, &mut physical_directories)?;
+            let metadata = fs::symlink_metadata(path)
+                .map_err(|e| error(format!("{}: {e}", path.display())))?;
+            if metadata.file_type().is_symlink() {
+                return Err(error(format!(
+                    "directory inventory contains symlink: {}",
+                    path.display()
+                )));
+            }
+            if !metadata.is_file() {
+                return Err(error(format!(
+                    "directory inventory entry is not a file: {}",
+                    path.display()
+                )));
+            }
             let matches = match verified_files.get(path.as_path()) {
                 Some(verified) => *verified == digest.as_str(),
                 None => file_identity(path).map_err(error)?.0 == *digest,
@@ -259,7 +273,7 @@ fn validate_files(
                 )));
             }
         }
-        Ok(physical_directories)
+        Ok(())
     };
     crate::guard::measure("directory-files", || {
         if lanes == 1 {
@@ -271,9 +285,8 @@ fn validate_files(
             let second = second
                 .join()
                 .map_err(|_| error("directory validation thread panicked"))?;
-            let mut directories = first?;
-            directories.extend(second?);
-            Ok(directories)
+            first?;
+            second
         })
     })
 }
@@ -310,20 +323,6 @@ fn physical_path(
             }
             Err(e) => return Err(error(e)),
         }
-    }
-    Ok(path)
-}
-fn regular_path(
-    root: &Path,
-    relative: &str,
-    physical_directories: &mut BTreeSet<PathBuf>,
-) -> Result<PathBuf> {
-    let path = physical_path(root, relative, physical_directories)?;
-    if !path.is_file() {
-        return Err(error(format!(
-            "directory inventory entry is not a file: {}",
-            path.display()
-        )));
     }
     Ok(path)
 }
@@ -376,15 +375,29 @@ pub(super) fn bind(
     root: &Path,
     declaration: &DirectoryInventory,
     manifest: &Path,
+    previous: &[Binding],
 ) -> Result<(Binding, DirectoryEvidence)> {
+    // Preparation has no child launches between these completed bindings.
+    // Its overlap observations end when preparation returns, just like one
+    // unchanged-inputs pass; paths and expected digests remain binding-specific.
+    let verified_files = previous
+        .iter()
+        .flat_map(|binding| {
+            binding
+                .files
+                .iter()
+                .map(|(path, digest)| (path.as_path(), digest.as_str()))
+        })
+        .collect();
     crate::guard::measure(&format!("directory-bind:{}", declaration.root), || {
-        bind_inner(root, declaration, manifest)
+        bind_inner(root, declaration, manifest, &verified_files)
     })
 }
 fn bind_inner(
     root: &Path,
     declaration: &DirectoryInventory,
     manifest: &Path,
+    verified_files: &BTreeMap<&Path, &str>,
 ) -> Result<(Binding, DirectoryEvidence)> {
     if declaration.root.is_empty()
         || declaration.manifest.is_empty()
@@ -441,7 +454,17 @@ fn bind_inner(
     if files.is_empty() {
         return Err(error("directory inventory must contain a file"));
     }
-    let mut physical_directories = validate_files(&directory, &files, true, &BTreeMap::new())?;
+    let mut physical_directories = BTreeSet::from([directory.clone()]);
+    for (path, _) in &files {
+        physical_directories.extend(
+            path.ancestors()
+                .skip(1)
+                .take_while(|p| p.starts_with(&directory))
+                .map(Path::to_path_buf),
+        );
+    }
+    validate_files(&files, true, verified_files, &physical_directories)?;
+    let file_directories = physical_directories.clone();
     let file_count = files.len();
     let mut directories = Vec::new();
     for entry in parsed.directories.unwrap_or_default() {
@@ -473,15 +496,7 @@ fn bind_inner(
     // expand the whitelist. SDK alias checks otherwise repeatedly scan files.
     let file_targets = files.iter().map(|(p, _)| p.clone()).collect();
     let mut directory_targets: BTreeSet<_> = directories.iter().map(|(p, _)| p.clone()).collect();
-    for (path, _) in &files {
-        for parent in path
-            .ancestors()
-            .skip(1)
-            .take_while(|p| p.starts_with(&directory))
-        {
-            directory_targets.insert(parent.to_path_buf());
-        }
-    }
+    directory_targets.extend(file_directories);
     let binding = Binding {
         source,
         root: directory,

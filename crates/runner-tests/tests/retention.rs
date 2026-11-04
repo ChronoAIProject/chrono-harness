@@ -731,7 +731,7 @@ fn live_consumer_protects_references_even_after_retention_window_expires() {
     ) {
         return;
     }
-    let h = host(256, 16);
+    let h = host(3, 16);
     let a = tree(h.path(), "a");
     let b = tree(h.path(), "b");
     let pa = inventory(h.path())
@@ -745,11 +745,52 @@ fn live_consumer_protects_references_even_after_retention_window_expires() {
     let bid = pb.id().to_owned();
     pb.complete(json!(1)).unwrap();
     let i = inventory(h.path());
-    i.dependencies(&aid, &[bid]).unwrap();
+    i.dependencies(&aid, &[bid.clone()]).unwrap();
     let lease = i.consume(&aid).unwrap();
-    assert_eq!(i.maintain().unwrap()["remaining_outputs"], 2);
-    drop(lease);
-    assert_eq!(i.maintain().unwrap()["remaining_outputs"], 0);
+    let mut rounds = Vec::new();
+    let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // Visit both outputs under the small node budget. A live consumer must
+        // protect the referenced original as well as its own output.
+        for _ in 0..2 {
+            rounds.push(i.maintain().unwrap());
+            let round = rounds.last().unwrap();
+            assert!(round["nodes"].as_u64().unwrap() <= 3, "{round}");
+            assert_eq!(round["remaining_outputs"], 2, "{round}");
+            assert!(h.path().join(&a).is_dir() && h.path().join(&b).is_dir());
+        }
+        drop(lease);
+        // Release ends protection; retirement still obeys the same per-round
+        // bounds and may resume through subsequent ordinary entries.
+        for _ in 0..8 {
+            let round = retained_artifacts::retention::maintain_adopted(h.path())
+                .unwrap()
+                .unwrap();
+            assert!(round["nodes"].as_u64().unwrap() <= 3, "{round}");
+            let completed = round["remaining_outputs"] == 0;
+            rounds.push(round);
+            if completed {
+                break;
+            }
+        }
+        assert_eq!(rounds.last().unwrap()["remaining_outputs"], 0, "{rounds:?}");
+        assert!(!h.path().join(&a).exists() && !h.path().join(&b).exists());
+        let state = ledger(h.path());
+        let summaries = state["summaries"].as_array().unwrap();
+        assert_eq!(summaries.len(), 2);
+        for (id, outcome) in [(&aid, 0), (&bid, 1)] {
+            let original = summaries.iter().find(|row| row["id"] == *id).unwrap();
+            assert_eq!(original["original_outcome"], outcome);
+        }
+    }));
+    if let Err(failure) = verification {
+        let original = ledger(h.path());
+        let path = h.keep();
+        eprintln!(
+            "live consumer verification failed; rounds: {rounds:?}; inventory: {original}; retained fixture: {}",
+            path.display()
+        );
+        std::panic::resume_unwind(failure);
+    }
 }
 
 #[test]

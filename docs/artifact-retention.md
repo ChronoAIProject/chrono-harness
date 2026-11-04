@@ -72,6 +72,13 @@ or increase time, byte, node or output budgets. The unavailable inventory from t
 earlier nested failure is not reconstructed; local causal coverage does not
 establish its unobserved exact interleaving or native acceptance.
 
+The live-consumer closure regression exercises the existing three-node round
+limit. While the lease is held, both the consumer and its referenced original
+must remain physically present; after its release, ordinary bounded rounds must
+retire both and preserve their distinct original outcomes. One round is allowed
+to leave work for the next entry. Failure retains the rounds, inventory and
+fixture, rather than assuming that two outputs must fit one wall-clock window.
+
 Retirement checks physical liveness for the selected output and its declared
 transitive consumers, holding their identity-bound exclusive capabilities through
 the effect. Explicit roots, retention windows and report activity still protect
