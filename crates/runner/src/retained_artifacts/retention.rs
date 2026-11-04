@@ -742,8 +742,11 @@ impl Inventory {
     }
     // Only an overlapping external effect can refuse this reservation. Its
     // owner holds its addressed capability through IO, never global admission.
-    fn exclude_removals(&self, path: &str) -> Result<(), String> {
+    fn exclude_removals(&self, path: &str, own: Option<&str>) -> Result<(), String> {
         for key in self.transaction_keys()?.into_iter().filter(|key| key.starts_with("removal-")) {
+            if own == Some(key.as_str()) {
+                continue;
+            }
             let record = self.transaction(&key)?.ok_or("removal declaration disappeared")?;
             if !record.paths.iter().any(|scope| overlaps(path, scope)) {
                 continue;
@@ -906,7 +909,7 @@ impl Inventory {
         // still checked and published without replacement under owner exclusion.
         crate::artifact_disposal::source_safe(&self.root, path)?;
         let gate = self.gate()?;
-        self.exclude_removals(path)?;
+        self.exclude_removals(path, None)?;
         let mut l = self.load()?;
         if l.outputs.len() + l.retired_leases.len() >= self.policy.max_entries {
             return Err("protected output inventory capacity; run bounded maintenance or release references".into());
@@ -1035,7 +1038,7 @@ impl Inventory {
             l,
         ))
     }
-    fn validate_original_reuse(&self, path: &str) -> Result<(), String> {
+    fn validate_original_reuse(&self, path: &str) -> Result<Option<String>, String> {
         let gate = self.gate()?;
         let l = self.load()?;
         if let Some(o) = l.outputs.iter().find(|o| o.path == path) {
@@ -1045,7 +1048,8 @@ impl Inventory {
                 return Err("retained original unavailable, disposing or replaced".into());
             }
         }
-        self.stable(&gate)
+        self.stable(&gate)?;
+        Ok(l.outputs.iter().find(|o| o.path == path).map(|o| o.id.clone()))
     }
     pub fn enrolled(&self, path: &str) -> Result<bool, String> {
         let gate = self.gate()?;
@@ -2789,10 +2793,15 @@ fn publish_owned_with(
     fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
     match fs::symlink_metadata(&target) {
         Ok(_) => {
+            let _input = read_guard(root, path)?;
             if crate::file_identity(&target)? != (digest.to_owned(), length) {
                 return Err("addressed original bytes mismatch".into());
             }
-            inventory.validate_original_reuse(path)?;
+            if let Some(id) = inventory.validate_original_reuse(path)? {
+                if let Some((prefix, _)) = consumer {
+                    inventory.protect_path_consumer(&format!("{prefix}:{id}"), path)?;
+                }
+            }
             // Reuse leaves the first immutable operation outcome intact.
             return Ok(true);
         }
@@ -2815,6 +2824,9 @@ fn publish_owned_with(
         .map_err(|e| e.to_string())?;
     write_content(&mut file)?;
     file.sync_all().map_err(|e| e.to_string())?;
+    if consumer.is_some() {
+        publication.inventory.remember_input(&publication.lease)?;
+    }
     match role {
         Some((role, true)) => publication.complete_releasing_consumer(outcome, &role)?,
         _ => publication.complete(outcome)?,
@@ -2990,6 +3002,10 @@ pub fn external_removal_guards(
     }
     let exclusion = inventory.address_gate_scoped("removal", &address, &paths)?;
     let gate = inventory.gate()?;
+    let key = format!("removal-{}", sha256(address.as_bytes()));
+    for path in &paths {
+        inventory.exclude_removals(path, Some(&key))?;
+    }
     let ledger = inventory.load()?;
     if ledger.outputs.iter().any(|output| {
         paths.iter().any(|path| {
