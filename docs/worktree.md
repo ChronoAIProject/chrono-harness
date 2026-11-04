@@ -1203,11 +1203,11 @@ continue to consume the unchanged parent `managed_process` streams and status.
 Receipt consumption checks these explicit references transitively,
 deduplicating reads within the check. Missing, changed, incorrectly bound or
 symlinked inputs refuse cleanup; an opaque partial result is preserved without
-requiring valid JSON. Historical inline evidence remains readable. Explicit
+requiring valid JSON. Historical inline drain reports are rejected. Explicit
 maintenance outside automatic lifecycle retains its existing report shape.
 This bounds historical embedding, not the number or total size of necessary
 original observations; retention and disposal remain governed by host policy.
-Historical `drain[].report` remains supported by the current reference verifier.
+Only current `drain[].input` descriptors participate in reference verification.
 The stdout protocol bound is unchanged. Parent publication still fails on its own
 IO or transport errors, and a retained child failure remains a cleanup failure.
 

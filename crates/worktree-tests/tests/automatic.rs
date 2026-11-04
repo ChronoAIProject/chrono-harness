@@ -645,7 +645,7 @@ fn automatic_inventory_requires_current_attachment_but_accepts_advanced_head() {
 }
 
 #[test]
-fn addressed_drain_originals_remain_required_for_birth_consumption() {
+fn independent_birth_has_no_dependency_on_another_worktrees_maintenance_original() {
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
@@ -653,12 +653,15 @@ fn addressed_drain_originals_remain_required_for_birth_consumption() {
     let next = h.parent.join("consumer-next");
     assert_eq!(h.invoke("feature", "drained-first", &first).0, 0);
     output(&first);
-    let (code, birth, error) = h.invoke("feature", "consumer-next", &next);
-    assert_eq!(code, 0, "{birth} {error}");
-    let input = &birth["drain"][0]["input"];
+    let (code, maintenance, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintenance} {error}");
+    let input = &maintenance["drain"][0]["input"];
     let original_path = h.root.join(input["path"].as_str().unwrap());
     let original = fs::read(&original_path).unwrap();
     assert_eq!(sha256(&original), input["sha256"]);
+    let (code, birth, error) = h.invoke("feature", "consumer-next", &next);
+    assert_eq!(code, 0, "{birth} {error}");
+    assert!(birth["drain"].as_array().unwrap().is_empty());
     let args = [
         "--path",
         next.to_str().unwrap(),
@@ -669,57 +672,15 @@ fn addressed_drain_originals_remain_required_for_birth_consumption() {
         if missing {
             fs::remove_file(&original_path).unwrap();
         } else {
-            fs::write(&original_path, b"changed original").unwrap();
+            fs::write(&original_path, b"changed unrelated original").unwrap();
         }
-        let (code, refused, error) = h.auto("use", &args);
-        assert_eq!(code, 2, "{refused} {error}");
-        assert!(refused["managed_process"].is_null());
+        let (code, used, error) = h.auto("use", &args);
+        assert_eq!(code, 0, "{used} {error}");
+        assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
         assert!(next.join("payload").exists());
         fs::write(&original_path, &original).unwrap();
     }
-    let (code, used, error) = h.auto("use", &args);
-    assert_eq!(code, 0, "{used} {error}");
-    assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
     assert_eq!(fs::read(&original_path).unwrap(), original);
-
-    // Supply the supported historical inline representation as separate fixture
-    // input. Keep both producer originals intact, including the sealed birth.
-    let birth_path = h.root.join(birth["report_path"].as_str().unwrap());
-    let birth_bytes = fs::read(&birth_path).unwrap();
-    let mut historical = birth.clone();
-    let mut inline = json(&original).unwrap();
-    inline["original_result"] = value!({"input":input});
-    historical["drain"][0]["report"] = inline;
-    historical["drain"][0]
-        .as_object_mut()
-        .unwrap()
-        .remove("input");
-    let historical_bytes = serde_json::to_vec(&historical).unwrap();
-    let historical_path = ".chrono-harness/state/worktrees/historical-inline-fixture.json";
-    fs::write(h.root.join(historical_path), &historical_bytes).unwrap();
-    let mut ledger = h.ledger();
-    let enrollment = ledger["entries"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|entry| entry["path"] == value!(next))
-        .unwrap();
-    enrollment["enrollment"]["sealed_receipt"] =
-        value!({"path":historical_path,"sha256":sha256(&historical_bytes)});
-    h.set_ledger(&ledger);
-    let (code, used, error) = h.auto("use", &args);
-    assert_eq!(code, 0, "{used} {error}");
-    assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
-    fs::write(&original_path, b"changed nested inline input").unwrap();
-    let (code, refused, error) = h.auto("use", &args);
-    assert_eq!(code, 2, "{refused} {error}");
-    assert!(refused["managed_process"].is_null());
-    fs::write(&original_path, &original).unwrap();
-    assert_eq!(fs::read(birth_path).unwrap(), birth_bytes);
-    assert_eq!(
-        fs::read(h.root.join(historical_path)).unwrap(),
-        historical_bytes
-    );
 }
 
 #[test]

@@ -1480,10 +1480,8 @@ impl Manager {
         Ok(self.retained_input(&path, bytes, "bytes"))
     }
     /// Follow only the reference-bearing fields of the lifecycle contract.
-    /// Historical inline receipts keep their original representation.
     fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(), String> {
-        let mut reports = vec![report];
-        while let Some(report) = reports.pop() {
+        {
             for pointer in [
                 "/terminal_input",
                 "/prior_report/input",
@@ -1518,8 +1516,11 @@ impl Manager {
                         );
                     }
                 }
-                // Historical inline drain reports remain supported unchanged.
-                reports.extend(drain.iter().filter_map(|entry| entry.get("report")));
+                if drain.iter().any(|entry| entry.get("report").is_some()) {
+                    return Err(
+                        "inline lifecycle drain reports are not the current contract".into(),
+                    );
+                }
             }
         }
         Ok(())

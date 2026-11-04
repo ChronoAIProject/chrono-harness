@@ -743,13 +743,19 @@ fn joined_command_body(outcome: &str) {
     } else {
         assert_eq!(code, 0, "{report} {error}");
         assert_eq!(report["managed_process"]["exit_code"], 0);
-        assert_eq!(
+        assert!(
             root.join("joined-body.bin").exists(),
-            outcome == "diagnostic"
+            "ordinary use does not sweep fixture producers"
         );
         assert!(
             report["post_use_cleanup"]["producer_drains"].is_array(),
             "{report}"
+        );
+        let (code, maintenance, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintenance} {error}");
+        assert_eq!(
+            root.join("joined-body.bin").exists(),
+            outcome == "diagnostic"
         );
         if outcome == "diagnostic" {
             assert_eq!(
@@ -767,7 +773,7 @@ fn joined_command_body(outcome: &str) {
 }
 
 #[test]
-fn successful_join_reclaims_copied_bodies_created_during_managed_use() {
+fn explicit_maintenance_reclaims_copied_bodies_after_successful_join() {
     joined_command_body("success");
 }
 
