@@ -2289,8 +2289,12 @@ fn independent_report_slots_publish_while_another_slot_is_held() {
     let first = ".chrono-harness/state/preparation/slot-first.json";
     let second = ".chrono-harness/state/preparation/slot-second.json";
     let _activity = inventory(h.path()).report_activity().unwrap();
-    for (path, content) in [(first, b"first original".as_slice()), (second, b"second original".as_slice())] {
-        publish_owned_original(h.path(), "check-original", path, content, json!({"exit":0})).unwrap();
+    for (path, content) in [
+        (first, b"first original".as_slice()),
+        (second, b"second original".as_slice()),
+    ] {
+        publish_owned_original(h.path(), "check-original", path, content, json!({"exit":0}))
+            .unwrap();
     }
     let first_slot = reference_report(h.path(), "first/check.json", first, &[], None).unwrap();
     let second_slot = reference_report(h.path(), "second/check.json", second, &[], None).unwrap();
@@ -2312,35 +2316,64 @@ fn completion_io_allows_independent_publication_and_preserves_new_references() {
     let h = host(256, 16);
     let original = tree(h.path(), "completion-original");
     let parent = tree(h.path(), "completion-parent");
-    let first = inventory(h.path()).begin("fixture", &original, json!(null)).unwrap();
+    let first = inventory(h.path())
+        .begin("fixture", &original, json!(null))
+        .unwrap();
     let first_id = first.id().to_owned();
     first.complete(json!({"exit":7})).unwrap();
-    let publication = inventory(h.path()).begin("fixture", &parent, json!(null)).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", &parent, json!(null))
+        .unwrap();
     let id = publication.id().to_owned();
-    publication.complete_observed(json!({"exit":101}), || {
-        // Content IO must have no global admission held. The original owner
-        // capability still prevents this output's disposal at the boundary.
-        let gate = chrono_harness::ownership::Lease::acquire(
-            &h.path().join(".chrono-harness/state/output-retention-v1/admission.lease"),
-            None, false, true, None,
-        ).unwrap().expect("completion must release unrelated admission before IO");
-        drop(gate);
-        inventory(h.path()).dependencies(&id, &[first_id.clone()]).unwrap();
-        inventory(h.path()).reference("current-completion", &[id.clone()]).unwrap();
-        let sibling = tree(h.path(), "completion-sibling");
-        inventory(h.path()).begin("fixture", &sibling, json!(null)).unwrap()
-            .complete(json!({"exit":3})).unwrap();
-    }).unwrap();
+    publication
+        .complete_observed(json!({"exit":101}), || {
+            // Content IO must have no global admission held. The original owner
+            // capability still prevents this output's disposal at the boundary.
+            let gate = chrono_harness::ownership::Lease::acquire(
+                &h.path()
+                    .join(".chrono-harness/state/output-retention-v1/admission.lease"),
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap()
+            .expect("completion must release unrelated admission before IO");
+            drop(gate);
+            inventory(h.path())
+                .dependencies(&id, &[first_id.clone()])
+                .unwrap();
+            inventory(h.path())
+                .reference("current-completion", &[id.clone()])
+                .unwrap();
+            let sibling = tree(h.path(), "completion-sibling");
+            inventory(h.path())
+                .begin("fixture", &sibling, json!(null))
+                .unwrap()
+                .complete(json!({"exit":3}))
+                .unwrap();
+        })
+        .unwrap();
     let state = ledger(h.path());
-    let output = state["outputs"].as_array().unwrap().iter().find(|o| o["id"] == id).unwrap();
+    let output = state["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["id"] == id)
+        .unwrap();
     assert_eq!(output["outcome"]["exit"], 101);
     assert_eq!(output["references"], json!([first_id]));
     let round = inventory(h.path()).maintain().unwrap();
     assert_eq!(round["remaining_outputs"], 2, "{round}");
     assert!(h.path().join(original).exists());
     assert!(h.path().join(parent).exists());
-    inventory(h.path()).reference("current-completion", &[]).unwrap();
-    assert_eq!(inventory(h.path()).maintain().unwrap()["remaining_outputs"], 0);
+    inventory(h.path())
+        .reference("current-completion", &[])
+        .unwrap();
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        0
+    );
 }
 
 #[test]

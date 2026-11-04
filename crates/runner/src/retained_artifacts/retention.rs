@@ -381,30 +381,32 @@ impl Inventory {
             serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
         let outputs = DECODED.with(|cache| {
             let previous = cache.borrow();
-            let previous = previous.as_ref().filter(|previous| previous.directory == self.directory);
+            let previous = previous
+                .as_ref()
+                .filter(|previous| previous.directory == self.directory);
             serialized
-            .outputs
-            .into_iter()
-            .enumerate()
-            .map(|(index, encoded)| {
-                if let Some((bytes, value)) = previous
-                    .as_ref()
-                    .and_then(|previous| previous.outputs.get(index))
-                {
-                    if bytes.get() == encoded.get() {
-                        return Ok(OutputRecord {
-                            value: Arc::clone(value),
-                            encoded: RefCell::new(Some(Arc::clone(bytes))),
-                        });
+                .outputs
+                .into_iter()
+                .enumerate()
+                .map(|(index, encoded)| {
+                    if let Some((bytes, value)) = previous
+                        .as_ref()
+                        .and_then(|previous| previous.outputs.get(index))
+                    {
+                        if bytes.get() == encoded.get() {
+                            return Ok(OutputRecord {
+                                value: Arc::clone(value),
+                                encoded: RefCell::new(Some(Arc::clone(bytes))),
+                            });
+                        }
                     }
-                }
-                let value = serde_json::from_str(encoded.get()).map_err(|e| e.to_string())?;
-                Ok(OutputRecord {
-                    value: Arc::new(value),
-                    encoded: RefCell::new(Some(Arc::from(encoded))),
+                    let value = serde_json::from_str(encoded.get()).map_err(|e| e.to_string())?;
+                    Ok(OutputRecord {
+                        value: Arc::new(value),
+                        encoded: RefCell::new(Some(Arc::from(encoded))),
+                    })
                 })
-            })
-            .collect::<Result<Vec<_>, String>>()
+                .collect::<Result<Vec<_>, String>>()
         })?;
         let l = Ledger {
             policy_sha256: serialized.policy_sha256,
@@ -2151,12 +2153,15 @@ impl Publication {
         self.lease.stable()?;
         let gate = self.inventory.gate()?;
         let mut l = self.inventory.load()?;
-        let current = l.outputs
+        let current = l
+            .outputs
             .iter_mut()
             .find(|o| o.id == self.id)
             .ok_or("publication disappeared while sealing")?;
-        if current.path != owned.path || current.identity != owned.identity
-            || current.lease != owned.lease || current.lease_id != owned.lease_id
+        if current.path != owned.path
+            || current.identity != owned.identity
+            || current.lease != owned.lease
+            || current.lease_id != owned.lease_id
             || current.phase == "disposing"
         {
             return Err("publication binding changed while sealing; preserve originals".into());
