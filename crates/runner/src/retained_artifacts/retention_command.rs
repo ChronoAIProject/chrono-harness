@@ -257,7 +257,7 @@ pub fn command(args: &[&str]) -> CliOutput {
         ] = args
         {
             let root = fs::canonicalize(host).map_err(|e| e.to_string())?;
-            let _activity = super::retention::report_activity(&root)?;
+            let _activity = super::retention::read_scope(&root)?;
             let (config, _) = bounded_json(&root, profile, 1024 * 1024)?;
             let path = if *scope == "collect" {
                 config["execution_units"]["report_path"]

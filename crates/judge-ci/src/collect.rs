@@ -184,8 +184,8 @@ pub(super) fn collect(
     declarations: &Value,
     environment_policy: &Value,
 ) -> Result<Response, String> {
-    let _report_activity =
-        chrono_harness::retained_artifacts::retention::report_activity(&req.host_root)?;
+    let _read_scope =
+        chrono_harness::retained_artifacts::retention::read_scope(&req.host_root)?;
     let p = &snapshot.policy;
     let units = p
         .units

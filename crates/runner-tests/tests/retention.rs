@@ -1350,7 +1350,7 @@ fn actual_original_publisher_and_reader_reclaim_rotated_reports_but_preserve_sha
     use retained_artifacts::retention::{reference_report, settle_report};
     let h = report_host();
     let dir = ".chrono-harness/state/preparation/";
-    let activity = inventory(h.path()).report_activity().unwrap();
+    let activity = inventory(h.path()).read_scope().unwrap();
     let shared = retain_original(h.path(), dir, "judge-stdout", b"same original stdout").unwrap();
     let old = retain_original(h.path(), dir, "report", br#"{"request":"one","exit":7}"#).unwrap();
     let old_lock = reference_report(
@@ -1372,7 +1372,7 @@ fn actual_original_publisher_and_reader_reclaim_rotated_reports_but_preserve_sha
         read_original(h.path(), &shared, None).unwrap(),
         b"same original stdout"
     );
-    let activity = inventory(h.path()).report_activity().unwrap();
+    let activity = inventory(h.path()).read_scope().unwrap();
     let reused = retain_original(h.path(), dir, "judge-stdout", b"same original stdout").unwrap();
     assert_eq!(shared, reused);
     let new = retain_original(h.path(), dir, "report", br#"{"request":"two","exit":0}"#).unwrap();
@@ -1457,15 +1457,15 @@ fn interrupted_fixed_pointer_publication_keeps_both_originals_until_owner_settle
     assert!(!h.path().join(second.path).exists());
 }
 #[test]
-fn report_activity_and_pending_publication_preserve_interrupted_originals() {
+fn read_scope_and_pending_publication_preserve_interrupted_originals() {
     if !isolated_capability_test(
-        "report_activity_and_pending_publication_preserve_interrupted_originals",
+        "read_scope_and_pending_publication_preserve_interrupted_originals",
     ) {
         return;
     }
     use chrono_harness::prepared::retain_original;
     let h = report_host();
-    let activity = retained_artifacts::retention::report_activity(h.path()).unwrap();
+    let activity = retained_artifacts::retention::read_scope(h.path()).unwrap();
     let original = retain_original(
         h.path(),
         ".chrono-harness/state/preparation/",
@@ -1488,6 +1488,43 @@ fn report_activity_and_pending_publication_preserve_interrupted_originals() {
         fs::read(h.path().join(original.path)).unwrap(),
         b"partial acquisition"
     );
+}
+
+#[test]
+fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabilities() {
+    if !isolated_capability_test("caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabilities") {
+        return;
+    }
+    let h = host(256, 16);
+    for name in ["required-input", "unrelated-old-output"] {
+        let path = tree(h.path(), name);
+        let p = inventory(h.path()).begin("fixture", &path, json!(null)).unwrap();
+        p.complete(json!({"exit":7})).unwrap();
+    }
+    let caller = retained_artifacts::retention::read_scope(h.path()).unwrap();
+    let nested = retained_artifacts::retention::read_scope(h.path()).unwrap();
+    drop(retained_artifacts::retention::read_guard(h.path(), ".chrono-harness/state/fixtures/required-input").unwrap());
+    drop(nested);
+    let before = ledger(h.path());
+    let original = before["outputs"][0].clone();
+    let unrelated = before["outputs"][1]["lease_id"].as_str().unwrap();
+    let round = inventory(h.path()).maintain().unwrap();
+    assert_eq!(round["remaining_outputs"], 1, "{round}");
+    assert!(!h.path().join(".chrono-harness/state/fixtures/unrelated-old-output").exists());
+    let child = env!("CARGO_BIN_EXE_chrono-test-retention-child");
+    let result = chrono_harness::run_process(h.path(), &chrono_harness::CommandSpec {
+        program: child.into(),
+        args: vec![h.path().to_str().unwrap().into(), "scope-input".into(), original["lease_id"].as_str().unwrap().into(), unrelated.into()],
+        env: Default::default(),
+        timeout_seconds: 5,
+        output_limit_bytes: 4096,
+    }, b"").unwrap();
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    assert_eq!(result.stdout.trim(), "exact input capability inherited");
+    assert!(!h.path().join(".chrono-harness/state/output-retention-v1/reports.lease").exists());
+    assert_eq!(fs::read_dir(h.path().join(".chrono-harness/state/fixtures/required-input")).unwrap().count(), 0);
+    drop(caller);
+    assert_eq!(inventory(h.path()).maintain().unwrap()["remaining_outputs"], 0);
 }
 #[test]
 fn pending_native_delivery_is_independent_of_latest_report_and_explicitly_released() {
@@ -1671,6 +1708,17 @@ fn addressed_reuse_refuses_equal_bytes_at_changed_identity_or_partial_disposal()
             retained_artifacts::retention::settle_report(h.path(), "check.json", &newer.path)
                 .unwrap();
             drop(_slot);
+            // Each addressed transaction retirement consumes this fixture's
+            // single metadata step. Account those declared effects before the
+            // separate output-disposal step; never enlarge the round budget.
+            let transactions = fs::read_dir(h.path().join(".chrono-harness/state/output-retention-v1"))
+                .unwrap().map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with("transaction-") && name.ends_with(".json")).count();
+            for _ in 0..transactions {
+                let round = inventory(h.path()).maintain().unwrap();
+                assert_eq!(round["nodes"], 1);
+                assert_eq!(ledger(h.path())["outputs"][0]["phase"], "released");
+            }
             inventory(h.path()).maintain().unwrap();
             assert_eq!(ledger(h.path())["outputs"][0]["phase"], "disposing");
         }
@@ -2288,7 +2336,7 @@ fn independent_report_content_writers_progress_and_retire_their_transaction_meta
     }
     use retained_artifacts::retention::{publish_owned_observed, publish_owned_original};
     let h = report_host();
-    let _activity = inventory(h.path()).report_activity().unwrap();
+    let _activity = inventory(h.path()).read_scope().unwrap();
     let first = ".chrono-harness/state/preparation/first-writer.json";
     let second = ".chrono-harness/state/preparation/second-writer.json";
     publish_owned_observed(
@@ -2307,12 +2355,14 @@ fn independent_report_content_writers_progress_and_retire_their_transaction_meta
             )
             .unwrap();
             assert_eq!(fs::read(h.path().join(second)).unwrap(), b"second original");
+            drop(retained_artifacts::retention::read_guard(h.path(), second).unwrap());
             // The first writer is still inside its original content operation.
             assert_eq!(fs::read(h.path().join(first)).unwrap(), b"");
         },
     )
     .unwrap();
     assert_eq!(fs::read(h.path().join(first)).unwrap(), b"first original");
+    drop(retained_artifacts::retention::read_guard(h.path(), first).unwrap());
     let state = ledger(h.path());
     let directory = h.path().join(".chrono-harness/state/output-retention-v1");
     let declarations = || {
@@ -2385,13 +2435,14 @@ fn independent_report_slots_publish_while_another_slot_is_held() {
     let h = report_host();
     let first = ".chrono-harness/state/preparation/slot-first.json";
     let second = ".chrono-harness/state/preparation/slot-second.json";
-    let _activity = inventory(h.path()).report_activity().unwrap();
+    let _activity = inventory(h.path()).read_scope().unwrap();
     for (path, content) in [
         (first, b"first original".as_slice()),
         (second, b"second original".as_slice()),
     ] {
         publish_owned_original(h.path(), "check-original", path, content, json!({"exit":0}))
             .unwrap();
+        drop(retained_artifacts::retention::read_guard(h.path(), path).unwrap());
     }
     let first_slot = reference_report(h.path(), "first/check.json", first, &[], None).unwrap();
     let (entered_tx, entered_rx) = std::sync::mpsc::channel();
@@ -3069,7 +3120,7 @@ fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it(
     let passed = ".chrono-harness/state/preparation/passed-final.json";
     let failed_bytes = br#"{"request":{"request_id":"failed-original"},"response":{"status":"failed"},"exit_code":1}"#;
     let publish = |path, bytes: &[u8], exit| {
-        let _activity = inventory(h.path()).report_activity().unwrap();
+        let _activity = inventory(h.path()).read_scope().unwrap();
         publish_final_original(
             h.path(),
             "check-original",
@@ -3079,6 +3130,7 @@ fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it(
             exit == 0,
         )
         .unwrap();
+        assert_eq!(inventory(h.path()).maintain().unwrap()["remaining_outputs"], if exit == 0 { 2 } else { 1 });
         let _slot = reference_report(h.path(), "check.json", path, &[], None).unwrap();
         fs::write(h.path().join("check.json"), bytes).unwrap();
         settle_report(h.path(), "check.json", path).unwrap();
@@ -3308,7 +3360,7 @@ fn final_report_dependencies_include_exact_nested_acquisition_members() {
         .complete(json!({"status":"downloaded-unjudged"}))
         .unwrap();
     let acquisition_use = inventory(h.path()).consume(&id).unwrap();
-    let activity = inventory(h.path()).report_activity().unwrap();
+    let activity = inventory(h.path()).read_scope().unwrap();
     let report = chrono_harness::prepared::retain_original(
         h.path(),
         ".chrono-harness/state/preparation/",

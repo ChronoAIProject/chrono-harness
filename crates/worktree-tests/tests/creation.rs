@@ -1920,7 +1920,7 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
     fs::write(h.root.join(FM), serde_json::to_vec(&filemap).unwrap()).unwrap();
     commit(&h.root);
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-    let activity = inventory.report_activity().unwrap();
+    let activity = inventory.read_scope().unwrap();
     let occupied = h.parent.join("occupied-for-failure");
     fs::create_dir(&occupied).unwrap();
     fs::write(
@@ -1983,7 +1983,7 @@ fn adopted_lifecycle_failure_keeps_large_error_in_original_with_compact_outcome(
     let activity = Inventory::adopted(&h.root)
         .unwrap()
         .unwrap()
-        .report_activity()
+        .read_scope()
         .unwrap();
     let target = h.parent.join("large-failed-original");
     let (code, report, error) = h.invoke("integration", "large-failed-original", &target);

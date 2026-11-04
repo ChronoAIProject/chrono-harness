@@ -86,7 +86,7 @@ pub fn update_files(root: &Path, report: &Path, compared: &Path) -> Result<(Valu
     if report_path == compared_path {
         return Err("E_PARITY_INPUT: reports must be distinct".into());
     }
-    let _activity = crate::retained_artifacts::retention::report_activity(root)?;
+    let _activity = crate::retained_artifacts::retention::read_scope(root)?;
     let _current_use = crate::retained_artifacts::retention::read_guard(
         root,
         report.to_str().ok_or("report path UTF-8")?,

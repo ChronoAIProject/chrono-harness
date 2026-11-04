@@ -9,6 +9,7 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
+    rc::{Rc, Weak},
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -176,6 +177,30 @@ struct DecodedSnapshot {
 // for, evict, or destroy another caller's derived snapshot.
 thread_local! {
     static DECODED: RefCell<Option<DecodedSnapshot>> = const { RefCell::new(None) };
+    static READ_SCOPES: RefCell<Vec<Weak<ReadInputs>>> = const { RefCell::new(Vec::new()) };
+}
+struct ReadInputs {
+    root: PathBuf,
+    #[cfg(unix)]
+    capabilities: RefCell<BTreeMap<String, crate::process_fds::Scope>>,
+}
+/// A caller keeps only the originals it explicitly reads until its output
+/// handoff. The existing process engine forwards these exact capabilities.
+pub struct ReadScope(Rc<ReadInputs>);
+impl Drop for ReadScope {
+    fn drop(&mut self) {
+        let this = Rc::downgrade(&self.0);
+        READ_SCOPES.with(|scopes| scopes.borrow_mut().retain(|scope| !scope.ptr_eq(&this) && scope.strong_count() != 0));
+    }
+}
+pub fn read_scope(root: &Path) -> Result<ReadScope, String> {
+    let inputs = Rc::new(ReadInputs {
+        root: fs::canonicalize(root).map_err(|e| e.to_string())?,
+        #[cfg(unix)]
+        capabilities: RefCell::new(BTreeMap::new()),
+    });
+    READ_SCOPES.with(|scopes| scopes.borrow_mut().push(Rc::downgrade(&inputs)));
+    Ok(ReadScope(inputs))
 }
 fn strict_roots<'de, D: serde::Deserializer<'de>>(
     d: D,
@@ -193,6 +218,8 @@ struct Transaction {
     directory_identity: String,
     lease_id: String,
     phase: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    paths: Vec<String>,
 }
 pub struct Inventory {
     root: PathBuf,
@@ -230,6 +257,10 @@ fn now() -> Result<u64, String> {
 }
 use crate::artifact_disposal::identity;
 
+fn overlaps(left: &str, right: &str) -> bool {
+    left == right || left.starts_with(&format!("{right}/")) || right.starts_with(&format!("{left}/"))
+}
+
 fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
     if raw.len() as u64 > MAX_STATE {
         return Err("retention metadata bound; preserve outputs".into());
@@ -258,6 +289,27 @@ fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
     Ok(())
 }
 impl Inventory {
+    pub fn read_scope(&self) -> Result<ReadScope, String> {
+        read_scope(&self.root)
+    }
+    fn remember_input(&self, lease: &Lease) -> Result<(), String> {
+        READ_SCOPES.with(|scopes| {
+            for inputs in scopes.borrow().iter().filter_map(Weak::upgrade).filter(|inputs| inputs.root == self.root) {
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsFd;
+                    let mut capabilities = inputs.capabilities.borrow_mut();
+                    if !capabilities.contains_key(lease.id()) {
+                        if capabilities.len() >= self.policy.max_entries {
+                            return Err("caller input capability capacity; preserve originals".into());
+                        }
+                        capabilities.insert(lease.id().into(), crate::process_fds::Scope::new(&[lease.capability()?.as_fd()])?);
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
     /// Absence preserves old semantics. Existing unknown output directories are never enrolled by opening.
     pub fn adopted(root: &Path) -> Result<Option<Self>, String> {
         let physical_root = fs::canonicalize(root).map_err(|e| e.to_string())?;
@@ -564,7 +616,15 @@ impl Inventory {
         let record: Transaction = decode(&bytes)?;
         let digest = key
             .strip_prefix("writer-")
-            .or_else(|| key.strip_prefix("slot-"));
+            .or_else(|| key.strip_prefix("slot-"))
+            .or_else(|| key.strip_prefix("removal-"));
+        let removal = key.starts_with("removal-");
+        for path in &record.paths {
+            crate::relative_path(path)?;
+            if path.len() > 4096 {
+                return Err("removal path identity capacity".into());
+            }
+        }
         if record.schema != "chrono-output-transaction/v1"
             || record.key != key
             || !digest.is_some_and(crate::wire::is_digest)
@@ -572,6 +632,9 @@ impl Inventory {
             || record.lease_id.len() > 256
             || !matches!(record.phase.as_str(), "reserving" | "active" | "retiring")
             || (record.phase == "reserving") != record.lease_id.is_empty()
+            || removal == record.paths.is_empty()
+            || record.paths.len() > self.policy.max_entries
+            || (removal && key != format!("removal-{}", sha256(&serde_json::to_vec(&record.paths).map_err(|e| e.to_string())?)))
         {
             return Err("retention transaction binding changed; preserve capability".into());
         }
@@ -605,6 +668,9 @@ impl Inventory {
     // The shared count limit needs exclusion only while a new declaration is
     // born or an unused declaration is reclaimed, never through content IO.
     fn address_gate(&self, kind: &str, address: &str) -> Result<Lease, String> {
+        self.address_gate_scoped(kind, address, &[])
+    }
+    fn address_gate_scoped(&self, kind: &str, address: &str, paths: &[String]) -> Result<Lease, String> {
         let key = format!("{kind}-{}", sha256(address.as_bytes()));
         let path = self.directory.join(&key);
         let began = Instant::now();
@@ -652,6 +718,7 @@ impl Inventory {
                         directory_identity: identity(&self.directory)?,
                         lease_id: String::new(),
                         phase: "reserving".into(),
+                        paths: paths.into(),
                     };
                     self.stable(&gate)?;
                     write(
@@ -673,6 +740,22 @@ impl Inventory {
             return Ok(lease);
         }
     }
+    // Only an overlapping external effect can refuse this reservation. Its
+    // owner holds its addressed capability through IO, never global admission.
+    fn exclude_removals(&self, path: &str) -> Result<(), String> {
+        for key in self.transaction_keys()?.into_iter().filter(|key| key.starts_with("removal-")) {
+            let record = self.transaction(&key)?.ok_or("removal declaration disappeared")?;
+            if !record.paths.iter().any(|scope| overlaps(path, scope)) {
+                continue;
+            }
+            if record.phase != "active" {
+                return Err("overlapping external removal requires recovery".into());
+            }
+            let _excluded = Lease::acquire(&self.directory.join(&key), Some(&record.lease_id), false, true, None)?
+                .ok_or("overlapping external removal has a live owner; preserve its paths")?;
+        }
+        Ok(())
+    }
     /// Explicit owner migration. The caller supplies the exact prior policy bytes;
     /// every existing output must still be declared, and all old producers/readers must be excluded.
     /// This changes no output identity, original outcome, expiry, root, or completion state.
@@ -683,14 +766,6 @@ impl Inventory {
         }
         let gate = self.gate()?;
         let mut l = self.load_bound(&sha256(previous_policy))?;
-        let _reports = Lease::acquire(
-            &self.directory.join("reports.lease"),
-            None,
-            true,
-            true,
-            None,
-        )?
-        .ok_or("live report producer/consumer prevents retention migration")?;
         let mut owners = Vec::new();
         for key in self.transaction_keys()? {
             let record = self
@@ -831,6 +906,7 @@ impl Inventory {
         // still checked and published without replacement under owner exclusion.
         crate::artifact_disposal::source_safe(&self.root, path)?;
         let gate = self.gate()?;
+        self.exclude_removals(path)?;
         let mut l = self.load()?;
         if l.outputs.len() + l.retired_leases.len() >= self.policy.max_entries {
             return Err("protected output inventory capacity; run bounded maintenance or release references".into());
@@ -958,21 +1034,6 @@ impl Inventory {
             gate,
             l,
         ))
-    }
-    /// A complete producer/collector operation protects its explicitly adopted report family.
-    /// The inherited kernel capability closes on interruption even without a finish callback.
-    pub fn report_activity(&self) -> Result<Lease, String> {
-        let gate = self.gate()?;
-        let lease = Lease::acquire(
-            &self.directory.join("reports.lease"),
-            None,
-            true,
-            false,
-            None,
-        )?
-        .ok_or("report retention exclusion busy")?;
-        self.stable(&gate)?;
-        Ok(lease)
     }
     fn validate_original_reuse(&self, path: &str) -> Result<(), String> {
         let gate = self.gate()?;
@@ -1529,28 +1590,12 @@ impl Inventory {
             }
             l.cursor = (index + 1) % l.outputs.len().max(1);
         }
-        let report_exclusion = Lease::acquire(
-            &self.directory.join("reports.lease"),
-            None,
-            true,
-            true,
-            None,
-        )?;
         let mut rooted = BTreeSet::new();
         let mut protection_reasons = BTreeMap::new();
         let mut pending: Vec<_> = l.roots.values().flatten().cloned().collect();
         for o in &l.outputs {
             if matches!(o.phase.as_str(), "reserving" | "creating") {
                 pending.push(o.id.clone());
-            }
-            if matches!(
-                o.producer.as_str(),
-                "check-original" | "full-original" | "lifecycle-original"
-            ) && report_exclusion.is_none()
-            {
-                protection_reasons.insert(o.id.clone(), "live report activity".to_string());
-                pending.push(o.id.clone());
-                continue;
             }
             // A finite window retains bytes that still exist; it cannot turn an
             // already removed successful fixture into permanent metadata.
@@ -2054,7 +2099,6 @@ impl Inventory {
         if artifact_id == 0 || !crate::wire::is_digest(artifact_digest) {
             return Err("native artifact delivery identity missing".into());
         }
-        let _activity = self.report_activity()?;
         let gate = self.gate()?;
         let mut l = self.load()?;
         let raw = fs::read(no_symlink_parents(&self.root, path)?).map_err(|e| e.to_string())?;
@@ -2101,6 +2145,7 @@ impl Inventory {
         )?
         .ok_or("original evidence disposal busy")?;
         self.stable(&gate)?;
+        self.remember_input(&lease)?;
         Ok(lease)
     }
 }
@@ -2625,14 +2670,8 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     )?
     .ok_or("original evidence disposal busy")?;
     inventory.stable(&gate)?;
+    inventory.remember_input(&lease)?;
     Ok(Some(lease))
-}
-
-/// Cross-process original publication/collection lifetime, independent of linked worktree enrollment.
-pub fn report_activity(root: &Path) -> Result<Option<Lease>, String> {
-    Inventory::adopted(root)?
-        .map(|i| i.report_activity())
-        .transpose()
 }
 
 /// Publish a newly addressed original under its opted-in natural producer.
@@ -2745,7 +2784,6 @@ fn publish_owned_with(
         return Err("output byte capacity exceeded before writing".into());
     }
     inventory.maintain_available()?;
-    let _activity = inventory.report_activity()?;
     let _writer = inventory.address_gate("writer", path)?;
     let target = no_symlink_parents(root, path)?;
     fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
@@ -2802,7 +2840,7 @@ pub fn publish_final_original(
         &sha256(bytes),
         outcome,
         |file| file.write_all(bytes).map_err(|e| e.to_string()),
-        Some(("report-recheck", succeeded)),
+        Some((if succeeded { "publication-recheck" } else { "report-recheck" }, false)),
     )
 }
 /// Inputs of an unfinished report stay rooted until the actual fixed-slot
@@ -2916,17 +2954,17 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
 }
 
 /// A second domain may remove a copied body/cache only when the final-original
-/// owner has retired every overlapping publication. Hold admission across its
-/// exact effect, so a concurrent publication cannot acquire the same bytes.
+/// owner has retired every overlapping publication. Hold only an addressed
+/// removal capability across the effect; independent publication remains free.
 pub struct RemovalGuard {
     inventory: Inventory,
-    gate: Lease,
+    exclusion: Lease,
 }
 impl RemovalGuard {
     /// Recheck the final-original policy immediately before the other owner's effect.
-    /// The held admission capability excludes concurrent reference/publication changes.
+    /// The declared paths exclude overlapping publications through this capability.
     pub fn stable(&self) -> Result<(), String> {
-        self.inventory.stable(&self.gate)
+        self.inventory.stable(&self.exclusion)
     }
 }
 pub fn external_removal_guard(root: &Path, path: &str) -> Result<Option<RemovalGuard>, String> {
@@ -2942,6 +2980,15 @@ pub fn external_removal_guards(
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
+    let paths: Vec<_> = paths.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect();
+    if paths.is_empty() || paths.len() > inventory.policy.max_entries {
+        return Err("external removal scope is empty or exceeds capacity".into());
+    }
+    let address = serde_json::to_string(&paths).map_err(|e| e.to_string())?;
+    if address.len() > 8192 {
+        return Err("external removal declaration byte capacity".into());
+    }
+    let exclusion = inventory.address_gate_scoped("removal", &address, &paths)?;
     let gate = inventory.gate()?;
     let ledger = inventory.load()?;
     if ledger.outputs.iter().any(|output| {
@@ -2957,5 +3004,6 @@ pub fn external_removal_guards(
         );
     }
     inventory.stable(&gate)?;
-    Ok(Some(RemovalGuard { inventory, gate }))
+    drop(gate);
+    Ok(Some(RemovalGuard { inventory, exclusion }))
 }

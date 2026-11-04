@@ -1262,7 +1262,7 @@ pub fn check_prepared(
     scope: Option<crate::units::Scope>,
     preparation: Option<Value>,
 ) -> Result<(u8, String), String> {
-    let _report_activity = crate::retained_artifacts::retention::report_activity(root)?;
+    let _read_scope = crate::retained_artifacts::retention::read_scope(root)?;
     let (mut req, bindings, reader, cfg) = prepare_request(
         root,
         config_path,

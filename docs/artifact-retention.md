@@ -35,7 +35,7 @@ The real-bootstrap fixture's cache-attempt reentry consumes every original strea
 
 ## Shared physical effects and overlap
 
-Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then holds final-original admission exclusion across its exact effect. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
+Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then declares its exact effect paths and holds their addressed removal capability across the effect. Enrollment admission is released before physical IO; only overlapping publication is refused. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
 
 Fixture allocation metadata is partitioned at its actual producer. The immutable
 `objects.json` namespace binds the physical directory and `producer-records/`
@@ -105,7 +105,7 @@ envelope, duplicate row field, duplicate opaque field and duplicate root cases
 exercise strict decoding after publication. These local behaviors do not
 establish native or full acceptance.
 
-Retention rounds report the actual retention, report-activity, live-capability or
+Retention rounds report the actual retention, explicit-consumer, live-capability or
 identity-error reason for a protected root. A parent closing a capability is not
 proof of its final kernel close: an unrelated concurrent fork temporarily inherits
 even CLOEXEC descriptors until exec. The Rust retention suite runs each fixture in
@@ -136,7 +136,7 @@ admission bound and all final-output assertions are unchanged.
 
 Retirement checks physical liveness for the selected output and its declared
 transitive consumers, holding their identity-bound exclusive capabilities through
-the effect. Explicit roots, retention windows and report activity still protect
+the effect. Explicit roots, retention windows and actual input capabilities still protect
 their full dependency closure. Cycles use the same reverse reachability check;
 a live, missing or replaced consumer capability preserves its inputs. Unrelated
 output leases are no longer all opened before the retirement cursor can advance.
@@ -178,24 +178,30 @@ whole local/native validation costs remain unmeasured until actual execution.
 
 ## Bounded recovery and migration
 
-Lifecycle entry and output admission perform their existing bounded retention
-rounds before acquiring that invocation's report-family activity. Holding its own
-activity during either prelude protected every old adopted report, so a full inventory
-could refuse both ordinary admission and the advised `chrono-worktree maintain`
-recovery command. Other active publishers/collectors still protect the family;
-exact roots, dependency closures, producer/read capabilities, original identity,
-source/index checks and all finite policy bounds remain authoritative. The new
-invocation holds its activity from after rooted output reservation through
-execution and settlement; its publication capability and durable recovery root
-protect that reservation before content writes. Failed/interrupted originals,
-pending delivery and required consumers are never released by this prelude. A deferred
-or insufficient round can still leave admission refused; no retry loop or
-capacity reserve is added.
+Lifecycle entry and output admission perform their bounded retention rounds.
+There is no report-family lease. Each caller's `ReadScope` retains only the exact
+originals acquired through explicit read guards or consume calls, including nested
+reader calls. It keeps owned descriptor copies registered with the existing process
+engine, so subprocesses inherit those same original capabilities. An idle scope
+protects nothing; another collector does not retain unrelated historical reports.
+Pending publication and failure roots remain durable across interruption. Successful
+final originals retain their publication root until actual fixed-pointer settlement;
+failed final originals keep their separate recheck root. Exact roots, dependency
+closures, producer/read capabilities, original identity, source/index checks and all
+finite policy bounds remain authoritative. A deferred or insufficient round can
+still refuse admission; no retry loop or capacity reserve is added.
+
+External removal uses an explicitly declared path set and addressed capability.
+Admission serializes only its declaration and overlap check. The guard holds no
+inventory admission during another owner's physical effect. New overlapping
+reservations refuse while that capability is live; independent paths still publish.
+Ordinary bounded maintenance retires closed removal declarations with the same
+finite transaction budget and preserves malformed declarations for repair.
 
 The Rust lifecycle regressions exercise real maintenance and bootstrap
 participation at 512 entries with the existing 25 ms / 256-node round. They
-require eligible unrelated originals to retire after an independent collector
-closes, preserve active producers/readers and their dependencies, exact failure,
+require eligible unrelated originals to retire while an independent reader remains
+active, preserve active producers/readers and their dependencies, exact failure,
 interruption, current-report and delivery roots, and unchanged source/index
 bytes. Fully rooted exhaustion still refuses admission. Bootstrap participation
 uses the existing registered Rust interface fixture; it does not establish a

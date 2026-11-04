@@ -616,13 +616,12 @@ impl PolicyInputs {
 impl Manager {
     fn protect_reports(&self, r: &mut Runner, invoking: &Path) -> Result<(), String> {
         let coordinator = &self.inputs.policy.coordinator_root;
-        if coordinator != invoking && r.coordinator_reports.is_none() {
-            // with_report already maintains and protects the invoking root.
-            // A distinct coordinator must reclaim old unrooted reports before
-            // this invocation protects its producer originals through publication.
+        if coordinator != invoking && r.coordinator_inputs.is_none() {
+            // Maintain a distinct coordinator once and retain only this
+            // invocation's explicitly read originals until publication.
             chrono_harness::retained_artifacts::retention::maintain_adopted(coordinator)?;
-            r.coordinator_reports =
-                chrono_harness::retained_artifacts::retention::report_activity(coordinator)?;
+            r.coordinator_inputs =
+                Some(chrono_harness::retained_artifacts::retention::read_scope(coordinator)?);
         }
         Ok(())
     }
