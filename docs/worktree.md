@@ -1392,6 +1392,13 @@ historical references alone do not keep it alive. Original status, error and
 process evidence remain in each producer report. Other duplicated report content,
 physical savings and complete SPEC §10.1 acceptance remain unverified.
 
+Ordinary linked lifecycle, creation and reconstruction calls also protect the
+coordinator's report family until their parent report is published, including
+calls without `--report-consumer`. Before acquiring that protection they run the
+existing bounded maintenance on the distinct coordinator; the invoking root
+keeps its existing admission maintenance and protection. Publication creates no
+persistent consumer root, so later ordinary reentry can reclaim unrooted reports.
+
 `migrate --path WORKTREE --adopt-fixtures STATE_PATH` consumes a finite
 `chrono-fixture-body-custody/v1` declaration through the existing migration owner.
 It binds current HEAD, allocation/intent/physical identity, exact member bytes,

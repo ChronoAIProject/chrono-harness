@@ -276,6 +276,48 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
             previous.push(entry["receipt"]["path"].as_str().unwrap().to_owned());
         }
     }
+    let destination = h.parent.join("linked-start-report");
+    let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        .current_dir(&target)
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .args([
+            "start",
+            "--host-root",
+            target.to_str().unwrap(),
+            "--config",
+            POLICY,
+            "--kind",
+            "feature",
+            "--name",
+            "linked-start-report",
+            "--path",
+            destination.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = json(&output.stdout).unwrap();
+    assert_eq!(report["status"], "created");
+    let parent = target.join(report["report_path"].as_str().unwrap());
+    assert_eq!(fs::read(&parent).unwrap(), output.stdout);
+    for path in &previous {
+        assert!(
+            !h.root.join(path).exists(),
+            "linked creation also reclaims unrooted coordinator reports"
+        );
+    }
+    previous.clear();
+    let drains = report["producer_drains"].as_array().unwrap();
+    assert_eq!(drains.len(), 2);
+    for entry in drains {
+        assert_eq!(drain_report(entry)["status"], "cleaned");
+        previous.push(entry["receipt"]["path"].as_str().unwrap().to_owned());
+    }
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
         .unwrap()
         .unwrap();
@@ -286,7 +328,15 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
             "publication adds no persistent consumer root"
         );
     }
-    assert!(h.root.join("payload").exists() && target.join("payload").exists());
+    chrono_harness::retained_artifacts::retention::Inventory::adopted(&target)
+        .unwrap()
+        .unwrap()
+        .maintain()
+        .unwrap();
+    assert!(!parent.exists());
+    for root in [&h.root, &target, &destination] {
+        assert!(root.join("payload").exists());
+    }
 }
 
 #[test]
