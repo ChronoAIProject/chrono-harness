@@ -99,11 +99,11 @@ pub(super) fn apply(
         .filter_map(|(operation, (_, tool, argv))| {
             if tool != &requirements.tool
                 || !verus_policy::canonical_verifier_arguments(argv)
-                || chrono_harness::relative_path(&argv[8]).is_err()
+                || chrono_harness::relative_path(&argv[10]).is_err()
             {
                 return None;
             }
-            let root = &argv[6];
+            let root = &argv[8];
             let planned = snapshot
                 .plans
                 .values()

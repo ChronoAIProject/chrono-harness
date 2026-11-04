@@ -583,6 +583,8 @@
             "--num-threads",
             "2",
             "--output-json",
+            "--compile",
+            "--emit=link,dep-info",
             "crates/judge-ci/src/verus_policy.rs",
             "-o",
             ".chrono-harness/state/verify.judge-ci-policy.rlib"
@@ -726,6 +728,8 @@
             "--num-threads",
             "2",
             "--output-json",
+            "--compile",
+            "--emit=link,dep-info",
             "crates/judge-ci-tests/tests/verus_policy.rs",
             "-o",
             ".chrono-harness/state/verify.judge-ci-policy-tests.rlib"

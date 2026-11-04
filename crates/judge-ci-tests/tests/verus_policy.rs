@@ -179,7 +179,8 @@ fn canonical_arguments() -> (args: Vec<String>)
     vec![
         "--crate-type=lib".to_owned(), "--no-cheating".to_owned(),
         "--no-external-by-default".to_owned(), "--num-threads".to_owned(),
-        "2".to_owned(), "--output-json".to_owned(), "root.rs".to_owned(),
+        "2".to_owned(), "--output-json".to_owned(),
+        "--compile".to_owned(), "--emit=link,dep-info".to_owned(), "root.rs".to_owned(),
         "-o".to_owned(), "proof.rlib".to_owned(),
     ]
 }
@@ -207,7 +208,7 @@ fn verifier_arguments_cannot_disable_checks_or_select_partial_functions() {
     assert("--external-by-default"@[2] != "--no-external-by-default"@[2]);
     assert(!external);
     args[2] = "--no-external-by-default".to_owned();
-    args[7] = "--verify-function".to_owned();
+    args[9] = "--verify-function".to_owned();
     let partial = policy::canonical_verifier_arguments(&args);
     assert("--verify-function"@.len() != "-o"@.len());
     assert(!partial);

@@ -106,20 +106,22 @@ pub fn valid_requirement_fields(fields: &RequirementFields, tools: &Vec<&str>) -
 /// Fixed checking flags are independent of root/source and output-path binding.
 /// Those bindings remain separate obligations at their actual owners.
 pub open spec fn verifier_arguments(args: Seq<String>) -> bool {
-    args.len() == 9
+    args.len() == 11
         && args[0]@ == "--crate-type=lib"@
         && args[1]@ == "--no-cheating"@
         && args[2]@ == "--no-external-by-default"@
         && args[3]@ == "--num-threads"@
         && args[4]@ == "2"@
         && args[5]@ == "--output-json"@
-        && args[7]@ == "-o"@
+        && args[6]@ == "--compile"@
+        && args[7]@ == "--emit=link,dep-info"@
+        && args[9]@ == "-o"@
 }
 
 pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
     ensures valid <==> verifier_arguments(args@),
 {
-    if args.len() != 9 {
+    if args.len() != 11 {
         return false;
     }
     equal_text(args[0].as_str(), "--crate-type=lib")
@@ -128,7 +130,9 @@ pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
         && equal_text(args[3].as_str(), "--num-threads")
         && equal_text(args[4].as_str(), "2")
         && equal_text(args[5].as_str(), "--output-json")
-        && equal_text(args[7].as_str(), "-o")
+        && equal_text(args[6].as_str(), "--compile")
+        && equal_text(args[7].as_str(), "--emit=link,dep-info")
+        && equal_text(args[9].as_str(), "-o")
 }
 
 /// One record binds the finding identity to the decision which produced it.
