@@ -800,6 +800,39 @@ impl Manager {
         }
         self.inputs.stable(r)
     }
+    // Producer/report owners do not mutate enrollment. Release its admission
+    // while they work, then load the current enrollment under fresh exclusion.
+    // Never publish the pre-release snapshot over another caller's updates.
+    fn outside_enrollment<T>(
+        &mut self,
+        r: &mut Runner,
+        activity: impl FnOnce(&PolicyInputs, &mut Runner) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.stable(r)?;
+        if self._gate.lease.is_none() {
+            return activity(&self.inputs, r);
+        }
+        drop(self._gate.lease.take());
+        let result = activity(&self.inputs, r);
+        let refresh = (|| {
+        let current = Self::open(
+            r,
+            &self.inputs.policy.coordinator_root,
+            &self.inputs.config_path,
+            &self.inputs.config_bytes,
+            &self._gate.token,
+        )?.ok_or("cleanup policy disappeared while independent owners worked")?;
+        // A new admission does not authorize a moving source/policy endpoint.
+        self.inputs.stable(r)?;
+        Ok::<_, String>(current)
+        })();
+        let current = refresh.map_err(|error| match &result {
+            Err(original) => format!("independent owner failed: {original}; enrollment refresh failed: {error}"),
+            Ok(_) => error,
+        })?;
+        *self = current;
+        result
+    }
     fn pinned_retention(&self, r: &mut Runner, t: &Terminal) -> Result<(), String> {
         if r.command(
             &self.inputs.policy.coordinator_root,
@@ -1343,9 +1376,12 @@ impl Manager {
         Ok(b)
     }
     fn retained_input(&self, path: &str, bytes: &[u8], format: &str) -> Value {
+        Self::retained_input_at(&self.inputs.policy.coordinator_root, path, bytes, format)
+    }
+    fn retained_input_at(root: &Path, path: &str, bytes: &[u8], format: &str) -> Value {
         value!(RetainedInput {
             schema: "chrono-worktree-retained-input/v1".into(),
-            source_root: self.inputs.policy.coordinator_root.clone(),
+            source_root: root.to_owned(),
             path: path.into(),
             sha256: sha256(bytes),
             byte_length: bytes.len(),
@@ -1814,11 +1850,11 @@ impl Manager {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
         report["producer_drains"] = value!([]);
-        report["output_retention"] = value!(
+        report["output_retention"] = value!(self.outside_enrollment(r, |inputs, _| {
             chrono_harness::retained_artifacts::retention::maintain_adopted(
-                &self.inputs.policy.coordinator_root
-            )?
-        );
+                &inputs.policy.coordinator_root,
+            )
+        })?);
         self.observe_inventory(r, exclude, report)?;
         let mut failures = vec![];
         for i in 0..self.ledger.entries.len() {
@@ -1968,22 +2004,24 @@ impl Manager {
                 }
             }
         }
-        for producer in self.inputs.policy.retained_producers.clone() {
+        let producer_failures = self.outside_enrollment(r, |inputs, r| {
+        let mut failures = vec![];
+        for producer in inputs.policy.retained_producers.clone() {
             let (config, bytes) = crate::configuration(
-                &self.inputs.policy.coordinator_root,
-                &self.inputs.config_path,
+                &inputs.policy.coordinator_root,
+                &inputs.config_path,
             )?;
-            let root = &self.inputs.policy.coordinator_root;
+            let root = &inputs.policy.coordinator_root;
             let result = start::with_report(
                 root,
-                &self.inputs.config_path,
+                &inputs.config_path,
                 config,
                 &bytes,
                 "producer-cleanup",
                 "cleaned",
                 |r, _, attempt| {
                     attempt["producer_objects"] = value!([]);
-                    producer.drain(self, r, attempt)
+                    producer.drain(inputs, r, attempt)
                 },
             )?;
             if result["status"] != "cleaned" {
@@ -1995,8 +2033,11 @@ impl Manager {
             let bytes = crate::recovery::state_bytes(root, path)?;
             report["producer_drains"].as_array_mut().unwrap().push(value!({"producer":producer.id,
                 "status":result["status"],"error":result["error"],"receipt":{"path":path,"sha256":sha256(&bytes)},
-                "input":self.retained_input(path, &bytes, "receipt")}));
+                "input":Self::retained_input_at(root, path, &bytes, "receipt")}));
         }
+        Ok(failures)
+        })?;
+        failures.extend(producer_failures);
         report["cleanup_failures"] = value!(failures);
         if failures.is_empty() {
             Ok(())

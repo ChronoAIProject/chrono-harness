@@ -161,9 +161,25 @@ impl DirectoryGate {
         bound: std::time::Duration,
         observer: &mut impl FnMut(&str),
     ) -> Result<Self, String> {
+        loop {
+            if let Some(gate) = Self::available(directory)? {
+                return Ok(gate);
+            }
+            observer("birth-gate-busy");
+            if began.elapsed() >= bound {
+                return Err(format!(
+                    "producer directory admission remains busy; preserve objects: directory={} elapsed_millis={} bound_millis={}",
+                    directory.display(), began.elapsed().as_millis(), bound.as_millis()
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    fn available(directory: &Path) -> Result<Option<Self>, String> {
         #[cfg(not(unix))]
         {
-            let _ = (directory, began, bound, observer);
+            let _ = directory;
             Err("kernel ownership is unsupported on this platform".into())
         }
         #[cfg(unix)]
@@ -192,27 +208,18 @@ impl DirectoryGate {
                 if error.kind() != std::io::ErrorKind::WouldBlock {
                     return Err(error.to_string());
                 }
-                observer("birth-gate-busy");
-                if began.elapsed() >= bound {
-                    return Err(format!(
-                        "producer directory admission remains busy; preserve objects: directory={} elapsed_millis={} bound_millis={}",
-                        directory.display(),
-                        began.elapsed().as_millis(),
-                        bound.as_millis()
-                    ));
-                }
-                std::thread::sleep(std::time::Duration::from_millis(10));
+                return Ok(None);
             }
             if directory_id(directory)? != id {
                 return Err("producer directory replaced during admission".into());
             }
             let scope = chrono_harness::process_fds::Scope::new(&[file.as_fd()])?;
-            Ok(Self {
+            Ok(Some(Self {
                 _file: file,
                 directory: directory.to_owned(),
                 id,
                 _scope: scope,
-            })
+            }))
         }
     }
 
@@ -510,6 +517,24 @@ impl Store {
             return Ok(0);
         }
         self.bind(object)?;
+        self.load_owned(object)
+    }
+
+    fn load_available(&mut self, object: &str) -> Result<bool, String> {
+        self.owner_stable()?;
+        self.state.objects.clear();
+        drop(self.object_guard.take());
+        self.object_guard = DirectoryGate::available(
+            &no_symlink_parents(&self.directory, object)?,
+        )?;
+        if self.object_guard.is_none() {
+            return Ok(false);
+        }
+        self.load_owned(object)?;
+        Ok(true)
+    }
+
+    fn load_owned(&mut self, object: &str) -> Result<usize, String> {
         let path = no_symlink_parents(&self.directory, &Self::record_name(object)?)?;
         let record = self.decode_record(&path)?;
         if record.path != object {
@@ -1376,11 +1401,11 @@ impl ProducerPolicy {
 
     pub(super) fn drain(
         &self,
-        manager: &Manager,
+        inputs: &PolicyInputs,
         r: &mut Runner,
         report: &mut Value,
     ) -> Result<(), String> {
-        let root = &manager.inputs.policy.coordinator_root;
+        let root = &inputs.policy.coordinator_root;
         let directory = self.directory(root)?;
         if !directory.exists() || !no_symlink_parents(&directory, "objects.json")?.exists() {
             report["producer_objects"].as_array_mut().unwrap().push(value!({"producer":self.id,
@@ -1432,7 +1457,16 @@ impl ProducerPolicy {
                     store = Some(Store::open(&directory, &self.id, false)?);
                 }
                 let current = store.as_mut().unwrap();
-                if let Err(error) = current.load(&snapshot.path) {
+                let loaded = current.load_available(&snapshot.path);
+                if matches!(loaded, Ok(false)) {
+                    report["producer_objects"].as_array_mut().unwrap().push(value!({
+                        "producer":self.id,"path":format!("{}{}",self.directory,snapshot.path),
+                        "status":"protected","reason":"live allocation metadata transaction"
+                    }));
+                    drop(store.take());
+                    continue;
+                }
+                if let Err(error) = loaded {
                     failures.push(format!("{}: {error}", snapshot.path));
                     report["producer_objects"]
                         .as_array_mut()
@@ -1620,7 +1654,7 @@ impl ProducerPolicy {
                         &value!({
                             "schema":"chrono-retained-artifact-cleanup-intent/v1","path":object.path,
                             "identity":object.identity,"producer_intent":object.intent,"generated":object.generated,
-                            "policy_sha256":sha256(&manager.inputs.policy_bytes),"released_consumers":object.consumers,
+                            "policy_sha256":sha256(&inputs.policy_bytes),"released_consumers":object.consumers,
                             "cache_lease":object.cache_lease,"prospective_outputs":prospective,
                             "producer_outcome":"not-established-by-cache-recovery"
                         }),
@@ -1628,7 +1662,7 @@ impl ProducerPolicy {
                     let mut attempt = value!({"automatic_cleanup":true,"intent":intent,"artifact_disposals":[],"status":"failed"});
                     let outcome =
                         artifact_disposal::dispose(root, &names, &paths, &mut attempt, || {
-                            manager.stable(r)?;
+                            inputs.stable(r)?;
                             Store::stable_in(&directory, &self.id, &registry_id, object)?;
                             if let Some(lease) = &cache_guard {
                                 lease.stable()?;

@@ -1359,6 +1359,18 @@ only its owned record. There is no global decoded snapshot or mutable membership
 index. Original source, consumer, nested-custody and disposal checks still apply;
 performance and complete finite metadata retention require actual acceptance.
 
+An ordinary drain attempts allocation metadata exclusion without waiting. An
+allocation being updated remains protected with its original state, while
+independent registrations continue. The thirty-second producer admission bound
+still applies to actual publication and reference updates for that allocation.
+Report maintenance and retained-producer drains run outside enrollment admission;
+only enrollment transitions retain that shared exclusion. Before continuing the
+caller reacquires it and reloads the latest enrollment, revalidates the fixed
+source/policy, and never writes its stale snapshot over another caller's changes.
+An independent owner's error and a subsequent admission-refresh failure remain
+visible together. Actual regression and coordinator/native acceptance are required;
+the report publication owner still has its own separate concurrency limitations.
+
 `migrate --path COORDINATOR --partition-producer ID` is the sole explicit data
 cutover for an adopted retained producer. It consumes the exact v1 bytes under
 that producer's original exclusive lease, retains those original bytes and an
