@@ -5,6 +5,9 @@ edition = "2024"
 publish = false
 description = "External judge transport and canonical harness check entry"
 
+[features]
+retention-test = []
+
 [lib]
 path = "src/lib.rs"
 test = false

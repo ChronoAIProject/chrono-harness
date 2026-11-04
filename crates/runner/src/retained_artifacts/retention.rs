@@ -9,7 +9,7 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -172,9 +172,11 @@ struct DecodedSnapshot {
     directory: PathBuf,
     outputs: Vec<(Arc<serde_json::value::RawValue>, Arc<Output>)>,
 }
-// One derived snapshot for this process's last inventory. Only exact current row
-// bytes can reuse a decoded value; validation and physical observations stay live.
-static DECODED: Mutex<Option<Arc<DecodedSnapshot>>> = Mutex::new(None);
+// A caller may reuse its own exact decodes. Independent callers never contend
+// for, evict, or destroy another caller's derived snapshot.
+thread_local! {
+    static DECODED: RefCell<Option<DecodedSnapshot>> = const { RefCell::new(None) };
+}
 fn strict_roots<'de, D: serde::Deserializer<'de>>(
     d: D,
 ) -> Result<BTreeMap<String, Vec<String>>, D::Error> {
@@ -377,12 +379,10 @@ impl Inventory {
         // typed decode; altered rows, including malformed unrelated rows, cannot.
         let serialized: Ledger<Box<serde_json::value::RawValue>> =
             serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
-        let previous = DECODED
-            .lock()
-            .map_err(|_| "retention decoded snapshot lock poisoned")?
-            .clone()
-            .filter(|previous| previous.directory == self.directory);
-        let outputs = serialized
+        let outputs = DECODED.with(|cache| {
+            let previous = cache.borrow();
+            let previous = previous.as_ref().filter(|previous| previous.directory == self.directory);
+            serialized
             .outputs
             .into_iter()
             .enumerate()
@@ -404,7 +404,8 @@ impl Inventory {
                     encoded: RefCell::new(Some(Arc::from(encoded))),
                 })
             })
-            .collect::<Result<Vec<_>, String>>()?;
+            .collect::<Result<Vec<_>, String>>()
+        })?;
         let l = Ledger {
             policy_sha256: serialized.policy_sha256,
             outputs,
@@ -507,16 +508,11 @@ impl Inventory {
                 ))
             })
             .collect::<Result<Vec<_>, String>>()?;
-        let snapshot = Arc::new(DecodedSnapshot {
+        let snapshot = DecodedSnapshot {
             directory: self.directory.clone(),
             outputs,
-        });
-        // No IO or potentially large snapshot destruction under the cache mutex.
-        let previous = DECODED
-            .lock()
-            .map_err(|_| "retention decoded snapshot lock poisoned")?
-            .replace(snapshot);
-        drop(previous);
+        };
+        DECODED.with(|cache| *cache.borrow_mut() = Some(snapshot));
         Ok(())
     }
     fn save(&self, l: &Ledger, gate: &Lease) -> Result<(), String> {
@@ -2076,7 +2072,22 @@ impl Publication {
     pub fn complete_releasing_consumer(self, outcome: Value, consumer: &str) -> Result<(), String> {
         self.complete_with_release(outcome, Some(consumer))
     }
+    /// Deterministic observation at the content-IO boundary for the dedicated
+    /// regression consumer; it does not change the publication method.
+    #[cfg(feature = "retention-test")]
+    #[doc(hidden)]
+    pub fn complete_observed(self, outcome: Value, observe: impl FnOnce()) -> Result<(), String> {
+        self.complete_with_release_observed(outcome, None, observe)
+    }
     fn complete_with_release(self, outcome: Value, consumer: Option<&str>) -> Result<(), String> {
+        self.complete_with_release_observed(outcome, consumer, || {})
+    }
+    fn complete_with_release_observed(
+        self,
+        outcome: Value,
+        consumer: Option<&str>,
+        observe: impl FnOnce(),
+    ) -> Result<(), String> {
         if serde_json::to_vec(&outcome)
             .map_err(|e| e.to_string())?
             .len()
@@ -2085,14 +2096,23 @@ impl Publication {
             return Err("output outcome metadata bound".into());
         }
         self.lease.stable()?;
-        let gate = self.inventory.gate()?;
-        let mut l = self.inventory.load()?;
-        let o = l
-            .outputs
-            .iter_mut()
-            .find(|o| o.id == self.id)
-            .ok_or("publication identity missing")?;
-        let o = &mut **o;
+        let mut owned = {
+            let gate = self.inventory.gate()?;
+            let l = self.inventory.load()?;
+            self.inventory.stable(&gate)?;
+            l.outputs
+                .iter()
+                .find(|o| o.id == self.id)
+                .ok_or("publication identity missing")?
+                .value
+                .as_ref()
+                .clone()
+        };
+        // The producer's exact capability excludes accounting/disposal of this
+        // output. Hashing and tree sealing need no enrollment-wide exclusion.
+        // Reference owners may update their own edges while these IOs proceed.
+        observe();
+        let o = &mut owned;
         let path = no_symlink_parents(&self.inventory.root, &o.path)?;
         if identity(&path)? != o.identity {
             return Err("publication output identity changed".into());
@@ -2107,6 +2127,7 @@ impl Publication {
         o.phase = "sealing".into();
         let began = Instant::now();
         let mut steps = 0;
+        let mut accounting_error = None;
         while !o.manifest.sealed
             && steps < self.inventory.policy.max_manifest_nodes.saturating_mul(4)
             && began.elapsed().as_millis() < self.inventory.policy.max_millis_per_round as u128
@@ -2118,8 +2139,8 @@ impl Publication {
                 self.inventory.policy.max_manifest_nodes,
                 self.byte_limit,
             ) {
-                self.inventory.save(&l, &gate)?;
-                return Err(error);
+                accounting_error = Some(error);
+                break;
             }
         }
         if o.manifest.sealed {
@@ -2127,7 +2148,25 @@ impl Publication {
             o.phase = "released".into();
         }
         o.expires = now()?.saturating_add(self.inventory.policy.keep_seconds);
-        if let Some(consumer) = consumer {
+        self.lease.stable()?;
+        let gate = self.inventory.gate()?;
+        let mut l = self.inventory.load()?;
+        let current = l.outputs
+            .iter_mut()
+            .find(|o| o.id == self.id)
+            .ok_or("publication disappeared while sealing")?;
+        if current.path != owned.path || current.identity != owned.identity
+            || current.lease != owned.lease || current.lease_id != owned.lease_id
+            || current.phase == "disposing"
+        {
+            return Err("publication binding changed while sealing; preserve originals".into());
+        }
+        // Keep graph changes made since the original observation. Only this
+        // producer owns the outcome, content accounting and completion fields.
+        owned.references = current.references.clone();
+        *current = owned.into();
+        let o = l.outputs.iter().find(|o| o.id == self.id).unwrap();
+        if let Some(consumer) = consumer.filter(|_| accounting_error.is_none()) {
             // Release only after all original accounting succeeded; any earlier error
             // preserves the root and original partial producer outcome.
             if o.manifest.bytes > self.byte_limit() {
@@ -2141,6 +2180,9 @@ impl Publication {
             self.inventory.reference_locked(&mut l, &role, &[])?;
         }
         self.inventory.save(&l, &gate)?;
+        if let Some(error) = accounting_error {
+            return Err(error);
+        }
         if l.outputs
             .iter()
             .find(|o| o.id == self.id)
