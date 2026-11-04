@@ -9,6 +9,8 @@ use verus_builtin_macros::verus;
 
 verus! {
 
+broadcast use vstd::string::group_string_axioms;
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn complete_inventory_is_accepted() {
     let mut ledger = policy::Ledger::new();
@@ -82,6 +84,140 @@ fn appending_records_preserves_prior_decisions() {
     assert(!coverage.complete);
     assert(coverage.missing.len() == 1);
     assert(coverage.missing[0]@ == "before"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registered_text_requires_exact_identity() {
+    proof {
+        reveal_strlit("verus");
+        reveal_strlit("git");
+        reveal_strlit("Verus");
+        reveal_strlit("ver");
+        reveal_strlit("");
+        reveal_strlit("接口");
+    }
+    let registered = vec!["verus", "git", "verus"];
+    let present = policy::contains_text(&registered, "verus");
+    let absent = policy::contains_text(&registered, "Verus");
+    let prefix = policy::contains_text(&registered, "ver");
+    let empty: Vec<&str> = Vec::new();
+    let no_entries = policy::contains_text(&empty, "");
+    assert(registered[0]@ == "verus"@);
+    assert("verus"@[0] != "Verus"@[0]);
+    assert("git"@[0] != "Verus"@[0]);
+    assert("verus"@.len() != "ver"@.len());
+    assert("git"@[0] != "ver"@[0]);
+    assert(present);
+    assert(!absent);
+    assert(!prefix);
+    assert(!no_entries);
+    let unicode = vec!["接口", ""];
+    let exact_unicode = policy::contains_text(&unicode, "接口");
+    let exact_empty = policy::contains_text(&unicode, "");
+    assert(exact_unicode && exact_empty);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn requirements_need_selected_tool_and_explicit_nonempty_interfaces() {
+    proof {
+        reveal_strlit("verus");
+        reveal_strlit("unregistered");
+        reveal_strlit("chrono-verus/v1");
+        reveal_strlit("chrono-verus/v2");
+        reveal_strlit("pinned");
+        reveal_strlit("identity");
+        reveal_strlit("os");
+        reveal_strlit("library");
+        reveal_strlit("registered bytes");
+        reveal_strlit("pinned contract");
+        reveal_strlit("");
+    }
+    let tools = vec!["verus"];
+    let mut fields = policy::RequirementFields {
+        schema: "chrono-verus/v1",
+        tool: "verus",
+        version: "pinned",
+        commit: "identity",
+        interfaces: vec![("os", "registered bytes"), ("library", "pinned contract")],
+    };
+    let accepted = policy::valid_requirement_fields(&fields, &tools);
+    assert(accepted);
+    fields.tool = "unregistered";
+    let wrong_tool = policy::valid_requirement_fields(&fields, &tools);
+    assert("unregistered"@.len() != "verus"@.len());
+    assert(!wrong_tool);
+    fields.tool = "verus";
+    fields.schema = "chrono-verus/v2";
+    let wrong_schema = policy::valid_requirement_fields(&fields, &tools);
+    assert("chrono-verus/v1"@[14] != "chrono-verus/v2"@[14]);
+    assert(!wrong_schema);
+    fields.schema = "chrono-verus/v1";
+    fields.version = "";
+    let no_version = policy::valid_requirement_fields(&fields, &tools);
+    assert(!no_version);
+    fields.version = "pinned";
+    fields.commit = "";
+    let no_commit = policy::valid_requirement_fields(&fields, &tools);
+    assert(!no_commit);
+    fields.commit = "identity";
+    fields.interfaces[1] = ("library", "");
+    let later_empty_assumption = policy::valid_requirement_fields(&fields, &tools);
+    assert(fields.interfaces[1].1@.len() == 0);
+    assert(!later_empty_assumption);
+    fields.interfaces[1] = ("", "pinned contract");
+    let later_empty_name = policy::valid_requirement_fields(&fields, &tools);
+    assert(fields.interfaces[1].0@.len() == 0);
+    assert(!later_empty_name);
+    fields.interfaces = Vec::new();
+    let no_interfaces = policy::valid_requirement_fields(&fields, &tools);
+    assert(!no_interfaces);
+}
+
+fn canonical_arguments() -> (args: Vec<String>)
+    ensures policy::verifier_arguments(args@),
+{
+    vec![
+        "--crate-type=lib".to_owned(), "--no-cheating".to_owned(),
+        "--no-external-by-default".to_owned(), "--num-threads".to_owned(),
+        "2".to_owned(), "--output-json".to_owned(), "root.rs".to_owned(),
+        "-o".to_owned(), "proof.rlib".to_owned(),
+    ]
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn verifier_arguments_cannot_disable_checks_or_select_partial_functions() {
+    proof {
+        reveal_strlit("--no-cheating");
+        reveal_strlit("--no-cheating=false");
+        reveal_strlit("--no-external-by-default");
+        reveal_strlit("--external-by-default");
+        reveal_strlit("--verify-function");
+        reveal_strlit("-o");
+    }
+    let mut args = canonical_arguments();
+    let accepted = policy::canonical_verifier_arguments(&args);
+    assert(accepted);
+    args[1] = "--no-cheating=false".to_owned();
+    let cheating = policy::canonical_verifier_arguments(&args);
+    assert("--no-cheating=false"@.len() != "--no-cheating"@.len());
+    assert(!cheating);
+    args[1] = "--no-cheating".to_owned();
+    args[2] = "--external-by-default".to_owned();
+    let external = policy::canonical_verifier_arguments(&args);
+    assert("--external-by-default"@[2] != "--no-external-by-default"@[2]);
+    assert(!external);
+    args[2] = "--no-external-by-default".to_owned();
+    args[7] = "--verify-function".to_owned();
+    let partial = policy::canonical_verifier_arguments(&args);
+    assert("--verify-function"@.len() != "-o"@.len());
+    assert(!partial);
+    let mut extended = canonical_arguments();
+    extended.push("--verify-function=one".to_owned());
+    let extra = policy::canonical_verifier_arguments(&extended);
+    assert(!extra);
+    let empty: Vec<String> = Vec::new();
+    let absent = policy::canonical_verifier_arguments(&empty);
+    assert(!absent);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

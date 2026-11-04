@@ -6,6 +6,131 @@ use vstd::prelude::*;
 
 verus! {
 
+pub fn equal_text(actual: &str, expected: &str) -> (equal: bool)
+    ensures equal <==> actual@ == expected@,
+{
+    let equal = equal_bytes(actual.as_bytes(), expected.as_bytes());
+    proof {
+        vstd::utf8::encode_utf8_decode_utf8(actual@);
+        vstd::utf8::encode_utf8_decode_utf8(expected@);
+    }
+    equal
+}
+
+pub open spec fn text_member(values: Seq<&str>, target: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < values.len() && (#[trigger] values[i])@ == target
+}
+
+pub fn contains_text(values: &Vec<&str>, target: &str) -> (found: bool)
+    ensures found <==> text_member(values@, target@),
+{
+    let mut i = 0;
+    while i < values.len()
+        invariant
+            0 <= i <= values.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] values[j])@ != target@,
+        decreases values.len() - i,
+    {
+        if equal_text(values[i], target) {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Decoded fields remain borrowed from the actual registered requirements.
+/// The adapter still owns and must prove their extraction from library values.
+pub struct RequirementFields<'a> {
+    pub schema: &'a str,
+    pub tool: &'a str,
+    pub version: &'a str,
+    pub commit: &'a str,
+    pub interfaces: Vec<(&'a str, &'a str)>,
+}
+
+pub open spec fn requirement_fields_valid(fields: &RequirementFields, tools: Seq<&str>) -> bool {
+    fields.schema@ == "chrono-verus/v1"@
+        && text_member(tools, fields.tool@)
+        && fields.version@.len() > 0 && fields.commit@.len() > 0
+        && fields.interfaces.len() > 0
+        && forall|i: int| 0 <= i < fields.interfaces.len() ==> (
+            (#[trigger] fields.interfaces[i]).0@.len() > 0
+            && fields.interfaces[i].1@.len() > 0
+        )
+}
+
+pub fn valid_requirement_fields(fields: &RequirementFields, tools: &Vec<&str>) -> (valid: bool)
+    ensures valid <==> requirement_fields_valid(fields, tools@),
+{
+    if !equal_text(fields.schema, "chrono-verus/v1")
+        || !contains_text(tools, fields.tool)
+        || fields.version.is_empty() || fields.commit.is_empty()
+        || fields.interfaces.len() == 0
+    {
+        return false;
+    }
+    let mut i = 0;
+    while i < fields.interfaces.len()
+        invariant
+            0 <= i <= fields.interfaces.len(),
+            fields.schema@ == "chrono-verus/v1"@,
+            text_member(tools@, fields.tool@),
+            fields.version@.len() > 0 && fields.commit@.len() > 0,
+            fields.interfaces.len() > 0,
+            forall|j: int| 0 <= j < i ==> (
+                (#[trigger] fields.interfaces[j]).0@.len() > 0
+                && fields.interfaces[j].1@.len() > 0
+            ),
+        decreases fields.interfaces.len() - i,
+    {
+        if fields.interfaces[i].0.is_empty() || fields.interfaces[i].1.is_empty() {
+            return false;
+        }
+        proof {
+            assert forall|j: int| 0 <= j < i + 1 implies (
+                (#[trigger] fields.interfaces[j]).0@.len() > 0
+                && fields.interfaces[j].1@.len() > 0
+            ) by {
+                if j < i {
+                    assert(fields.interfaces[j].0@.len() > 0);
+                    assert(fields.interfaces[j].1@.len() > 0);
+                }
+            }
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Fixed checking flags are independent of root/source and output-path binding.
+/// Those bindings remain separate obligations at their actual owners.
+pub open spec fn verifier_arguments(args: Seq<String>) -> bool {
+    args.len() == 9
+        && args[0]@ == "--crate-type=lib"@
+        && args[1]@ == "--no-cheating"@
+        && args[2]@ == "--no-external-by-default"@
+        && args[3]@ == "--num-threads"@
+        && args[4]@ == "2"@
+        && args[5]@ == "--output-json"@
+        && args[7]@ == "-o"@
+}
+
+pub fn canonical_verifier_arguments(args: &Vec<String>) -> (valid: bool)
+    ensures valid <==> verifier_arguments(args@),
+{
+    if args.len() != 9 {
+        return false;
+    }
+    equal_text(args[0].as_str(), "--crate-type=lib")
+        && equal_text(args[1].as_str(), "--no-cheating")
+        && equal_text(args[2].as_str(), "--no-external-by-default")
+        && equal_text(args[3].as_str(), "--num-threads")
+        && equal_text(args[4].as_str(), "2")
+        && equal_text(args[5].as_str(), "--output-json")
+        && equal_text(args[7].as_str(), "-o")
+}
+
 /// One record binds the finding identity to the decision which produced it.
 pub struct Obligation {
     pub identity: String,

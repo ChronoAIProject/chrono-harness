@@ -26,22 +26,26 @@ pub(super) fn apply(
     let Some(path) = &policy.verus else {
         return Ok(());
     };
-    if !policy.required_inputs.contains(path) {
+    let required_inputs: Vec<_> = policy.required_inputs.iter().map(String::as_str).collect();
+    if !verus_policy::contains_text(&required_inputs, path) {
         return Err("E_VERUS_INPUT: requirements must be a registered required input".into());
     }
     let requirements: Requirements =
         serde_json::from_value(json(&at(reader, &req.host_root, &req.candidate, path)?)?)
             .map_err(|e| format!("E_VERUS_INPUT: {e}"))?;
-    if requirements.schema != "chrono-verus/v1"
-        || !policy.tools.contains_key(&requirements.tool)
-        || requirements.version.is_empty()
-        || requirements.commit.is_empty()
-        || requirements.external_interfaces.is_empty()
-        || requirements
+    let tools: Vec<_> = policy.tools.keys().map(String::as_str).collect();
+    let fields = verus_policy::RequirementFields {
+        schema: &requirements.schema,
+        tool: &requirements.tool,
+        version: &requirements.version,
+        commit: &requirements.commit,
+        interfaces: requirements
             .external_interfaces
             .iter()
-            .any(|(name, assumption)| name.is_empty() || assumption.is_empty())
-    {
+            .map(|(name, assumption)| (name.as_str(), assumption.as_str()))
+            .collect(),
+    };
+    if !verus_policy::valid_requirement_fields(&fields, &tools) {
         return Err("E_VERUS_INPUT: invalid schema, tool or explicit external interfaces".into());
     }
     let mut ledger = verus_policy::Ledger::new();
@@ -94,18 +98,8 @@ pub(super) fn apply(
         .iter()
         .filter_map(|(operation, (_, tool, argv))| {
             if tool != &requirements.tool
-                || argv.len() != 9
-                || argv[7] != "-o"
+                || !verus_policy::canonical_verifier_arguments(argv)
                 || chrono_harness::relative_path(&argv[8]).is_err()
-                || argv[..6]
-                    != [
-                        "--crate-type=lib",
-                        "--no-cheating",
-                        "--no-external-by-default",
-                        "--num-threads",
-                        "2",
-                        "--output-json",
-                    ]
             {
                 return None;
             }

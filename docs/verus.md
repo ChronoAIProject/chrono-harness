@@ -69,6 +69,19 @@ abnormal/missing exit, different identities and missing fields. These proofs do
 not establish JSON decoding, original-report transport, toolchain package
 identity, root/source correspondence, the graph algorithm or other program logic.
 
+Requirements-field validation and fixed verifier-argument admission also use the
+same proved owner. Text membership is exact and works for Unicode and empty
+values; text comparison reuses byte equality and proves the UTF-8 correspondence.
+The requirements predicate requires the current schema, a selected registered
+tool, nonempty version/commit and at least one interface, with every interface
+name and assumption nonempty. The argument predicate requires exactly the
+registered checking flags and output switch; extra arguments, weakened checking
+flags and function selection are rejected. The actual adapter borrows strings
+into these calls. Constructing those borrowed inventories from library values,
+root/source and output-path binding, and plan membership remain unproved adapter
+obligations. These predicates do not certify the adequacy of an external
+interface assumption.
+
 The selected external verifier is official Verus
 `0.2026.04.24.f8e1704`, commit
 `f8e17045c4ac17a02e566b8997070f2eecc255be`, using the existing Rust 1.95.0.
