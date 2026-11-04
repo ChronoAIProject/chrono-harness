@@ -731,7 +731,7 @@ AI 先尝试在现有规则下解决任务；确需改判官时自主变更并�
 executables 为 `{path, sha256, version}` 列表；tools 另记录实际解析路径和工具版本。
 effective_inputs 记录两端完整有效输入的 ID、实际值摘要及来源证据；摘要存在本身不证明相等或完整。
 parity 为 `{status: "unestablished", compared_report: null}`；当前不生成成对比较状态。
-现役独立比较器仅在满足 §4 的更强输入／观察要求并与具名报告匹配时写 established；它记录成对证据，不证明普遍确定性，也不参与普通检查准入。性能测量差异分别报告。
+性能测量差异分别报告，不用状态声明替代实际观察。
 judges/tests 记录每项的 selected/executed/blocked/retired 状态、退出码和证据摘要。
 这里 selected 是执行计划状态，完整结果不能停留在 selected 就返回 pass。
 
