@@ -2835,7 +2835,8 @@ fn publish_owned_with(
 }
 
 /// The final report's actual producer keeps a repair reference on failed/unknown
-/// outcomes. Successful publication releases only its own single-output role.
+/// outcomes. A successful original keeps its publication role until the actual
+/// fixed-slot settlement transfers its closure to the current report.
 pub fn publish_final_original(
     root: &Path,
     producer: &str,
