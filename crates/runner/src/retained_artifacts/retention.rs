@@ -154,8 +154,6 @@ struct Ledger<O = OutputRecord> {
     next_id: u64,
     #[serde(default)]
     retired_leases: Vec<Node>,
-    #[serde(default, deserialize_with = "strict_transactions")]
-    transactions: BTreeMap<String, String>,
 }
 impl<O> Default for Ledger<O> {
     fn default() -> Self {
@@ -167,7 +165,6 @@ impl<O> Default for Ledger<O> {
             cursor: 0,
             next_id: 0,
             retired_leases: Vec::new(),
-            transactions: BTreeMap::new(),
         }
     }
 }
@@ -188,8 +185,14 @@ fn strict_roots<'de, D: serde::Deserializer<'de>>(
 fn strict_summaries<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Value>, D::Error> {
     serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
 }
-fn strict_transactions<'de, D: serde::Deserializer<'de>>(d: D) -> Result<BTreeMap<String, String>, D::Error> {
-    serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Transaction {
+    schema: String,
+    key: String,
+    directory_identity: String,
+    lease_id: String,
+    phase: String,
 }
 pub struct Inventory {
     root: PathBuf,
@@ -422,22 +425,14 @@ impl Inventory {
             cursor: serialized.cursor,
             next_id: serialized.next_id,
             retired_leases: serialized.retired_leases,
-            transactions: serialized.transactions,
         };
         if l.policy_sha256 != policy_digest
             || l.outputs.len() > self.policy.max_entries
             || l.summaries.len() > self.policy.max_summaries
             || l.retired_leases.len() > self.policy.max_entries
             || l.roots.len() > self.policy.max_entries
-            || l.transactions.len() > self.policy.max_entries
         {
             return Err("retention policy migration required; original inventory preserved".into());
-        }
-        for (key, id) in &l.transactions {
-            let digest = key.strip_prefix("writer-").or_else(|| key.strip_prefix("slot-"));
-            if !digest.is_some_and(crate::wire::is_digest) || id.len() > 256 {
-                return Err("unknown addressed retention transaction; preserve originals".into());
-            }
         }
         let mut ids = BTreeSet::new();
         for o in &l.outputs {
@@ -538,20 +533,83 @@ impl Inventory {
         write(&self.directory.join("inventory.json"), &raw)?;
         self.remember(l)
     }
-    // Registration protects only the finite birth/identity transition. The
-    // actual content writer or fixed-pointer publisher holds its addressed
-    // capability with no enrollment admission held. The ordinary maintenance
-    // owner reclaims these declared temporary capabilities after last close.
+    fn transaction_path(&self, key: &str) -> PathBuf {
+        self.directory.join(format!("transaction-{key}.json"))
+    }
+    fn transaction(&self, key: &str) -> Result<Option<Transaction>, String> {
+        let path = self.transaction_path(key);
+        let file = match fs::File::open(no_symlink_parents(&self.directory, path.file_name().unwrap().to_str().ok_or("transaction path UTF8")?)?) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.to_string()),
+        };
+        if !file.metadata().map_err(|e| e.to_string())?.is_file() {
+            return Err("retention transaction declaration must be a regular file".into());
+        }
+        let mut bytes = Vec::new();
+        file.take(16385).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+        self.charge_metadata(bytes.len() as u64)?;
+        if bytes.len() > 16384 {
+            return Err("retention transaction declaration byte capacity".into());
+        }
+        let record: Transaction = decode(&bytes)?;
+        let digest = key.strip_prefix("writer-").or_else(|| key.strip_prefix("slot-"));
+        if record.schema != "chrono-output-transaction/v1" || record.key != key
+            || !digest.is_some_and(crate::wire::is_digest)
+            || record.directory_identity != identity(&self.directory)? || record.lease_id.len() > 256
+            || !matches!(record.phase.as_str(), "reserving" | "active" | "retiring")
+            || (record.phase == "reserving") != record.lease_id.is_empty()
+        {
+            return Err("retention transaction binding changed; preserve capability".into());
+        }
+        Ok(Some(record))
+    }
+    // Enumerate owner declarations only for finite admission/maintenance. No
+    // output tree or unknown legacy artifact is discovered or enrolled here.
+    fn transaction_keys(&self) -> Result<Vec<String>, String> {
+        let mut keys = Vec::new();
+        for entry in fs::read_dir(&self.directory).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if let Some(key) = name.strip_prefix("transaction-").and_then(|n| n.strip_suffix(".json")) {
+                if keys.len() >= self.policy.max_entries {
+                    return Err("addressed retention transaction capacity; maintain or join live owners".into());
+                }
+                keys.push(key.to_owned());
+            }
+        }
+        keys.sort();
+        Ok(keys)
+    }
+    // Established addresses touch only their own declaration and capability.
+    // The shared count limit needs exclusion only while a new declaration is
+    // born or an unused declaration is reclaimed, never through content IO.
     fn address_gate(&self, kind: &str, address: &str) -> Result<Lease, String> {
         let key = format!("{kind}-{}", sha256(address.as_bytes()));
         let path = self.directory.join(&key);
         let began = Instant::now();
         loop {
+            if let Some(record) = self.transaction(&key)?.filter(|r| r.phase == "active") {
+                let remaining = Duration::from_secs(5).saturating_sub(began.elapsed());
+                let acquired = Lease::acquire(&path, Some(&record.lease_id), false, true, Some(remaining));
+                if self.transaction(&key)?.as_ref() != Some(&record) {
+                    if began.elapsed() >= Duration::from_secs(5) {
+                        return Err("addressed retention admission remains busy".into());
+                    }
+                    continue; // Its unused capability retired during this open.
+                }
+                let lease = acquired?.ok_or("addressed retention transaction busy")?;
+                self.stable(&lease)?;
+                return Ok(lease);
+            }
             let gate = self.gate()?;
-            let mut l = self.load()?;
-            match l.transactions.get(&key).cloned() {
+            let mut record = match self.transaction(&key)? {
+                Some(record) if record.phase == "retiring" => return Err("addressed transaction retirement incomplete; resume ordinary maintenance".into()),
+                Some(record) if !record.lease_id.is_empty() => continue,
+                Some(record) => record, // Exact interrupted birth, never an unknown lease.
                 None => {
-                    if l.transactions.len() >= self.policy.max_entries {
+                    if self.transaction_keys()?.len() >= self.policy.max_entries {
                         return Err("addressed retention transaction capacity; maintain or join live owners".into());
                     }
                     match fs::symlink_metadata(&path) {
@@ -559,36 +617,19 @@ impl Inventory {
                         Err(e) => return Err(e.to_string()),
                         Ok(_) => return Err("unregistered retention transaction capability; preserve it".into()),
                     }
-                    l.transactions.insert(key.clone(), String::new());
-                    self.save(&l, &gate)?;
-                }
-                Some(id) if !id.is_empty() => {
-                    // A holder may need admission to settle its own output.
-                    // Waiting for this address must never retain that admission.
-                    drop(gate);
-                    let remaining = Duration::from_secs(5).saturating_sub(began.elapsed());
-                    let acquired = Lease::acquire(&path, Some(&id), false, true, Some(remaining));
-                    let gate = self.gate()?;
-                    let l = self.load()?;
-                    if l.transactions.get(&key) != Some(&id) {
-                        // Maintenance retired the exact unused capability while
-                        // this caller was opening it. Reenter its current birth.
-                        if began.elapsed() >= Duration::from_secs(5) {
-                            return Err("addressed retention admission remains busy".into());
-                        }
-                        continue;
-                    }
-                    let lease = acquired?.ok_or("addressed retention transaction busy")?;
+                    let record = Transaction { schema: "chrono-output-transaction/v1".into(),
+                        key: key.clone(), directory_identity: identity(&self.directory)?, lease_id: String::new(), phase: "reserving".into() };
                     self.stable(&gate)?;
-                    lease.stable()?;
-                    return Ok(lease);
+                    write(&self.transaction_path(&key), &serde_json::to_vec(&record).map_err(|e| e.to_string())?)?;
+                    record
                 }
-                Some(_) => (), // Resume this explicit, unattached birth intent.
-            }
+            };
             let lease = Lease::acquire(&path, None, true, true, None)?
                 .ok_or("unattached retention transaction has a live owner; preserve it")?;
-            l.transactions.insert(key, lease.id().into());
-            self.save(&l, &gate)?;
+            record.lease_id = lease.id().into();
+            record.phase = "active".into();
+            self.stable(&gate)?;
+            write(&self.transaction_path(&key), &serde_json::to_vec(&record).map_err(|e| e.to_string())?)?;
             return Ok(lease);
         }
     }
@@ -611,11 +652,12 @@ impl Inventory {
         )?
         .ok_or("live report producer/consumer prevents retention migration")?;
         let mut owners = Vec::new();
-        for (key, id) in &l.transactions {
-            if id.is_empty() {
+        for key in self.transaction_keys()? {
+            let record = self.transaction(&key)?.ok_or("transaction disappeared during migration")?;
+            if record.phase != "active" {
                 return Err("recover unattached retention transaction before migration".into());
             }
-            owners.push(Lease::acquire(&self.directory.join(key), Some(id), false, true, None)?
+            owners.push(Lease::acquire(&self.directory.join(&key), Some(&record.lease_id), false, true, None)?
                 .ok_or("live addressed publisher prevents retention migration")?);
         }
         for output in &l.outputs {
@@ -1258,7 +1300,7 @@ impl Inventory {
         let mut l = self.load()?;
         let mut metadata_steps = 0usize;
         let mut accounting_errors = Vec::new();
-        for (key, id) in l.transactions.clone() {
+        for key in self.transaction_keys()? {
             if metadata_steps >= self.policy.max_nodes_per_round
                 || !self.metadata_room()
                 || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
@@ -1266,6 +1308,15 @@ impl Inventory {
                 break;
             }
             metadata_steps += 1;
+            let mut record = match self.transaction(&key) {
+                Ok(Some(record)) => record,
+                Ok(None) => continue,
+                Err(error) => {
+                    accounting_errors.push(json!({"transaction":key,"reason":error}));
+                    continue;
+                }
+            };
+            let id = &record.lease_id;
             let path = self.directory.join(&key);
             match fs::symlink_metadata(&path) {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
@@ -1283,14 +1334,18 @@ impl Inventory {
                             continue;
                         }
                     };
+                    record.lease_id = owner.id().into();
+                    record.phase = "retiring".into();
+                    self.stable(gate)?;
+                    write(&self.transaction_path(&key), &serde_json::to_vec(&record).map_err(|e| e.to_string())?)?;
                     crate::artifact_disposal::dispose_entry(&self.directory, &key, &identity(&path)?, || {
                         self.stable(gate)?;
                         owner.stable()
                     })?;
                 }
             }
-            l.transactions.remove(&key);
-            self.save(&l, gate)?;
+            let declaration = self.transaction_path(&key);
+            crate::artifact_disposal::dispose_entry(&self.directory, declaration.file_name().unwrap().to_str().unwrap(), &identity(&declaration)?, || self.stable(gate))?;
         }
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {

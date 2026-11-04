@@ -2299,13 +2299,16 @@ fn independent_report_content_writers_progress_and_retire_their_transaction_meta
     }).unwrap();
     assert_eq!(fs::read(h.path().join(first)).unwrap(), b"first original");
     let state = ledger(h.path());
-    assert_eq!(state["transactions"].as_object().unwrap().len(), 2);
+    let directory = h.path().join(".chrono-harness/state/output-retention-v1");
+    let declarations = || fs::read_dir(&directory).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("transaction-") && n.ends_with(".json")).collect::<Vec<_>>();
+    assert_eq!(declarations().len(), 2);
+    assert!(state.get("transactions").is_none());
     let originals = state["outputs"].as_array().unwrap();
     assert_eq!(originals.iter().find(|o| o["path"] == first).unwrap()["outcome"]["exit"], 7);
     assert_eq!(originals.iter().find(|o| o["path"] == second).unwrap()["outcome"]["exit"], 3);
     inventory(h.path()).maintain().unwrap();
-    assert!(ledger(h.path())["transactions"].as_object().unwrap().is_empty());
-    let directory = h.path().join(".chrono-harness/state/output-retention-v1");
+    assert!(declarations().is_empty());
     for path in [first, second] {
         assert!(!directory.join(format!("writer-{}", chrono_harness::sha256(path.as_bytes()))).exists());
     }
