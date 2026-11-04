@@ -538,7 +538,8 @@ schema 不可解析影响本轮输入时是错误；不能以“历史问题”�
 历史 trureturing 模型、Lean 编译及既有 Rust 回归仍可作研究或反例数据；
 它们不满足当前 Verus 合同，不执行旧判官或把旧模型绿色状态记为实现证明。
 
-当前 `crates/judge-ci/src/verus_policy.rs` 的覆盖聚合、OID 与标识符谓词具有同源 Verus 规格；
+当前 `crates/judge-ci/src/verus_policy.rs` 的覆盖聚合、完整有序缺口列表、编译证明结果接纳、
+字节身份比较、OID 与标识符谓词具有同源 Verus 规格；
 图算法、真实输入对应、所有其他承重逻辑与本节完整义务仍待迁移。
 程序须报告未迁移，不手填成功。
 

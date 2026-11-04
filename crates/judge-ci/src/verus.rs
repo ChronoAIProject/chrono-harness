@@ -71,15 +71,21 @@ pub(super) fn apply(
                 .map_err(|e| format!("E_VERUS_RESULT: original stdout bytes: {e}"))?;
             let proof = json(&bytes)?;
             let result = &proof["verification-results"];
-            Ok(original["exit_code"] == 0
-                && result["success"] == true
-                && result["encountered-error"] == false
-                && result["encountered-vir-error"] == false
-                && result["errors"] == 0
-                && result["verified"].as_u64().is_some_and(|count| count > 0)
-                && result["is-verifying-entire-crate"] == true
-                && proof["verus"]["version"] == requirements.version
-                && proof["verus"]["commit"] == requirements.commit)
+            Ok(verus_policy::accept_compiler_result(
+                &verus_policy::CompilerResult {
+                    exit_code: original["exit_code"].as_i64(),
+                    success: result["success"].as_bool(),
+                    encountered_error: result["encountered-error"].as_bool(),
+                    encountered_vir_error: result["encountered-vir-error"].as_bool(),
+                    errors: result["errors"].as_u64(),
+                    verified: result["verified"].as_u64(),
+                    entire_crate: result["is-verifying-entire-crate"].as_bool(),
+                    version: proof["verus"]["version"].as_str().map(str::as_bytes),
+                    commit: proof["verus"]["commit"].as_str().map(str::as_bytes),
+                },
+                requirements.version.as_bytes(),
+                requirements.commit.as_bytes(),
+            ))
         })();
         add(
             format!("operation:{operation}:compiler-proof"),
@@ -159,10 +165,9 @@ pub(super) fn apply(
     }
     add("specifications:nonempty".into(), specifications > 0);
     let complete = verus_policy::complete(&obligations);
-    let missing: Vec<_> = identities
-        .iter()
-        .zip(&obligations)
-        .filter_map(|(id, accepted)| (!accepted).then_some(id))
+    let missing: Vec<_> = verus_policy::missing_obligations(&obligations)
+        .into_iter()
+        .map(|index| &identities[index])
         .collect();
     response.evidence["verus"] = object!({
         "schema":"chrono-verus-coverage/v1",

@@ -44,16 +44,27 @@ verification. Its FILEMAP record deliberately has empty roots.
 uses the pinned `verus_builtin_macros` erasure of that same source; admission calls
 its executable predicate. Verus proves that `first_unverified` returns exactly
 the earliest false obligation, or none precisely when all obligations hold.
-`complete` additionally rejects an empty inventory. Six boundary/example
+`complete` additionally rejects an empty inventory. `missing_obligations` returns
+every false obligation exactly once, in increasing inventory order; its loop
+proves soundness, completeness and termination. The actual adapter uses these
+indices when reporting missing identities. Boundary/example
 functions in the dedicated test project are verified by Verus as well; Cargo's
 ordinary tests do not replace this verification. The same source also proves the full nonzero lowercase hexadecimal OID predicate
 (40 or 64 bytes) and the nonempty ASCII identifier predicate. Actual `full_oid`
 and `id` callers use these predicates through byte slices, without allocating a
 copy. The dedicated examples cover zero/empty/uppercase rejection, both OID
 lengths, identifier ASCII range endpoints and invalid separator/non-ASCII bytes.
-There are thirteen verified obligations in the test root including the loops.
-These proofs alone do not establish the JSON adapter, graph algorithm or any
-other program logic.
+
+The same owner now contains the executable compiler-result admission decision.
+It accepts exactly a successful, error-free whole-crate result with a positive
+verified count, normal exit and exact nonempty version/commit bytes. Every field
+is optional at the external decoding boundary: absent or wrongly typed values
+cannot become success. The byte comparison proves equality including length;
+the typed decision and missing-obligation collector are called by the actual
+adapter. Verified examples include zero proofs, partial verification, errors,
+abnormal/missing exit, different identities and missing fields. These proofs do
+not establish JSON decoding, original-report transport, toolchain package
+identity, root/source correspondence, the graph algorithm or other program logic.
 
 The selected external verifier is official Verus
 `0.2026.04.24.f8e1704`, commit
