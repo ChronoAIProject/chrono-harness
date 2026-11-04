@@ -11,52 +11,77 @@ verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn complete_inventory_is_accepted() {
-    let obligations = vec![true, true, true];
-    let result = policy::complete(&obligations);
-    assert(result);
+    let mut ledger = policy::Ledger::new();
+    ledger.record("first".to_owned(), true);
+    ledger.record("last".to_owned(), true);
+    let coverage = ledger.finish();
+    assert(coverage.obligations == 2);
+    assert(coverage.complete);
+    assert(coverage.missing.len() == 0);
+    let first = coverage.first_missing();
+    assert(first.is_none());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn empty_inventory_is_rejected() {
-    let obligations: Vec<bool> = Vec::new();
-    let result = policy::complete(&obligations);
-    assert(!result);
+    let ledger = policy::Ledger::new();
+    let coverage = ledger.finish();
+    assert(coverage.obligations == 0);
+    assert(!coverage.complete);
+    assert(coverage.missing.len() == 0);
+    let first = coverage.first_missing();
+    assert(first.is_none());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn failure_identity_is_the_first_missing_obligation() {
-    let obligations = vec![true, false, false];
-    let result = policy::complete(&obligations);
-    assert(!result);
-    let first = policy::first_unverified(&obligations);
-    assert(first == Some(1usize));
+fn every_failed_identity_is_retained_in_order() {
+    let mut ledger = policy::Ledger::new();
+    ledger.record("first".to_owned(), false);
+    ledger.record("accepted".to_owned(), true);
+    ledger.record("middle".to_owned(), false);
+    ledger.record("last".to_owned(), false);
+    let coverage = ledger.finish();
+    reveal_with_fuel(policy::rejected_identities, 5);
+    assert(coverage.obligations == 4);
+    assert(!coverage.complete);
+    assert(coverage.missing.len() == 3);
+    assert(coverage.missing[0]@ == "first"@);
+    assert(coverage.missing[1]@ == "middle"@);
+    assert(coverage.missing[2]@ == "last"@);
+    let first = coverage.first_missing();
+    assert(first.is_some() && first.unwrap()@ == "first"@);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn first_and_last_obligations_cannot_be_skipped() {
-    let first = vec![false, true];
-    let last = vec![true, false];
-    let a = policy::first_unverified(&first);
-    assert(a == Some(0usize));
-    let b = policy::first_unverified(&last);
-    assert(b == Some(1usize));
+fn duplicate_and_empty_identities_are_not_conflated() {
+    let mut ledger = policy::Ledger::new();
+    ledger.record("same".to_owned(), false);
+    ledger.record("".to_owned(), false);
+    ledger.record("same".to_owned(), true);
+    ledger.record("same".to_owned(), false);
+    let coverage = ledger.finish();
+    reveal_with_fuel(policy::rejected_identities, 5);
+    assert(coverage.obligations == 4);
+    assert(!coverage.complete);
+    assert(coverage.missing.len() == 3);
+    assert(coverage.missing[0]@ == "same"@);
+    assert(coverage.missing[1]@ == ""@);
+    assert(coverage.missing[2]@ == "same"@);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn every_missing_obligation_is_retained_in_order() {
-    let obligations = vec![false, true, false, true, false];
-    let missing = policy::missing_obligations(&obligations);
-    assert(missing@.contains(0usize));
-    assert(missing@.contains(2usize));
-    assert(missing@.contains(4usize));
-    assert(!missing@.contains(1usize));
-    assert(!missing@.contains(3usize));
-    let complete = vec![true, true];
-    let none = policy::missing_obligations(&complete);
-    assert(none.len() == 0);
-    let empty: Vec<bool> = Vec::new();
-    let empty_missing = policy::missing_obligations(&empty);
-    assert(empty_missing.len() == 0);
+fn appending_records_preserves_prior_decisions() {
+    let mut ledger = policy::Ledger::new();
+    ledger.record("before".to_owned(), false);
+    let ghost before = ledger.view();
+    ledger.record("after".to_owned(), true);
+    assert(ledger.view().take(1) =~= before);
+    let coverage = ledger.finish();
+    reveal_with_fuel(policy::rejected_identities, 3);
+    assert(coverage.obligations == 2);
+    assert(!coverage.complete);
+    assert(coverage.missing.len() == 1);
+    assert(coverage.missing[0]@ == "before"@);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

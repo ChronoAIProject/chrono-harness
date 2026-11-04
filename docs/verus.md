@@ -42,12 +42,15 @@ verification. Its FILEMAP record deliberately has empty roots.
 
 `crates/judge-ci/src/verus_policy.rs` is the first executable Verus owner. Cargo
 uses the pinned `verus_builtin_macros` erasure of that same source; admission calls
-its executable predicate. Verus proves that `first_unverified` returns exactly
-the earliest false obligation, or none precisely when all obligations hold.
-`complete` additionally rejects an empty inventory. `missing_obligations` returns
-every false obligation exactly once, in increasing inventory order; its loop
-proves soundness, completeness and termination. The actual adapter uses these
-indices when reporting missing identities. Boundary/example
+its executable logic. `Ledger` owns a private sequence of identity/decision
+records. Its constructor establishes the empty state, and `record` proves that
+appending preserves every preceding record. Consuming `finish` proves the exact
+ordered sequence of rejected identities and the original count; duplicate and
+empty identities remain distinct records. Coverage requires a nonempty inventory
+and every decision to be accepted. `first_missing` safely returns the first
+rejected identity, or none exactly when the result has no missing records. The
+actual adapter uses this ledger instead of parallel identity/decision arrays or
+unchecked indexing. Boundary/example
 functions in the dedicated test project are verified by Verus as well; Cargo's
 ordinary tests do not replace this verification. The same source also proves the full nonzero lowercase hexadecimal OID predicate
 (40 or 64 bytes) and the nonempty ASCII identifier predicate. Actual `full_oid`
@@ -60,7 +63,7 @@ It accepts exactly a successful, error-free whole-crate result with a positive
 verified count, normal exit and exact nonempty version/commit bytes. Every field
 is optional at the external decoding boundary: absent or wrongly typed values
 cannot become success. The byte comparison proves equality including length;
-the typed decision and missing-obligation collector are called by the actual
+the typed decision and coverage ledger are called by the actual
 adapter. Verified examples include zero proofs, partial verification, errors,
 abnormal/missing exit, different identities and missing fields. These proofs do
 not establish JSON decoding, original-report transport, toolchain package

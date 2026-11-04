@@ -6,96 +6,108 @@ use vstd::prelude::*;
 
 verus! {
 
-/// Empty inventories cannot establish coverage. For a nonempty inventory,
-/// return the first unsatisfied obligation, retaining its caller-owned identity.
-pub fn first_unverified(obligations: &Vec<bool>) -> (result: Option<usize>)
-    ensures
-        result.is_none() <==> (forall|i: int| 0 <= i < obligations.len() ==> obligations[i]),
-        result.is_some() ==> (
-            0 <= result.unwrap() < obligations.len()
-            && !obligations[result.unwrap() as int]
-            && forall|i: int| 0 <= i < result.unwrap() ==> obligations[i]
-        ),
-{
-    let mut i = 0;
-    while i < obligations.len()
-        invariant
-            0 <= i <= obligations.len(),
-            forall|j: int| 0 <= j < i ==> obligations[j],
-        decreases obligations.len() - i,
-    {
-        if !obligations[i] {
-            return Some(i);
-        }
-        i += 1;
-    }
-    None
+/// One record binds the finding identity to the decision which produced it.
+pub struct Obligation {
+    pub identity: String,
+    pub accepted: bool,
 }
 
-/// Absence of obligations is a registration failure, not a passing proof.
-pub fn complete(obligations: &Vec<bool>) -> (result: bool)
-    ensures result <==> (
-        obligations.len() > 0
-        && forall|i: int| 0 <= i < obligations.len() ==> obligations[i]
-    ),
+/// The identity sequence preserves every rejected record, including duplicates.
+pub open spec fn rejected_identities(entries: Seq<Obligation>) -> Seq<String>
+    decreases entries.len(),
 {
-    !obligations.is_empty() && first_unverified(obligations).is_none()
+    if entries.len() == 0 {
+        Seq::empty()
+    } else {
+        let earlier = rejected_identities(entries.drop_last());
+        if entries.last().accepted {
+            earlier
+        } else {
+            earlier.push(entries.last().identity)
+        }
+    }
 }
 
-/// Return every failed obligation exactly once, in inventory order.
-pub fn missing_obligations(obligations: &Vec<bool>) -> (missing: Vec<usize>)
-    ensures
-        forall|j: int| 0 <= j < missing.len() ==> (
-            0 <= #[trigger] missing[j] < obligations.len() && !obligations[missing[j] as int]
-        ),
-        forall|i: int| 0 <= i < obligations.len() ==> (
-            !obligations[i] <==> missing@.contains(i as usize)
-        ),
-        forall|a: int, b: int| 0 <= a < b < missing.len() ==> missing[a] < missing[b],
-        missing.len() == 0 <==> (forall|i: int| 0 <= i < obligations.len() ==> obligations[i]),
-{
-    let mut missing = Vec::new();
-    let mut i = 0;
-    while i < obligations.len()
-        invariant
-            0 <= i <= obligations.len(),
-            forall|j: int| 0 <= j < missing.len() ==> (
-                0 <= #[trigger] missing[j] < i && !obligations[missing[j] as int]
-            ),
-            forall|j: int| 0 <= j < i ==> (
-                !obligations[j] <==> missing@.contains(j as usize)
-            ),
-            forall|a: int, b: int| 0 <= a < b < missing.len() ==> missing[a] < missing[b],
-            missing.len() == 0 <==> (forall|j: int| 0 <= j < i ==> obligations[j]),
-        decreases obligations.len() - i,
+pub struct Coverage {
+    pub obligations: usize,
+    pub complete: bool,
+    pub missing: Vec<String>,
+}
+
+impl Coverage {
+    pub fn first_missing(&self) -> (first: Option<&str>)
+        ensures
+            first.is_none() <==> self.missing.len() == 0,
+            first.is_some() ==> first.unwrap()@ == self.missing[0]@,
     {
-        proof {
-            assert(!missing@.contains(i)) by {
-                if missing@.contains(i) {
-                    let j = choose|j: int| 0 <= j < missing.len() && missing[j] == i;
-                    assert(missing[j] < i);
-                }
-            }
+        if self.missing.len() == 0 {
+            None
+        } else {
+            Some(self.missing[0].as_str())
         }
-        let ghost before = missing@;
-        if !obligations[i] {
-            missing.push(i);
-        }
-        proof {
-            assert forall|j: int| 0 <= j < i + 1 implies (
-                !obligations[j] <==> missing@.contains(j as usize)
-            ) by {
-                if !obligations[i as int] {
-                    vstd::seq_lib::lemma_seq_contains_after_push(before, i, j as usize);
-                }
-                if j < i {
-                    assert(!obligations[j] <==> before.contains(j as usize));
-                }
-            }
-        }
-        i += 1;
     }
-    missing
+}
+
+/// The private vector is the sole owner of coverage registration state.
+/// Finishing consumes the ledger, so no later record can change that result.
+pub struct Ledger {
+    entries: Vec<Obligation>,
+}
+
+impl Ledger {
+    pub closed spec fn view(&self) -> Seq<Obligation> {
+        self.entries@
+    }
+
+    pub fn new() -> (ledger: Ledger)
+        ensures ledger.view() == Seq::<Obligation>::empty(),
+    {
+        Ledger { entries: Vec::new() }
+    }
+
+    pub fn record(&mut self, identity: String, accepted: bool)
+        ensures self.view() == old(self).view().push(Obligation { identity, accepted }),
+    {
+        self.entries.push(Obligation { identity, accepted });
+    }
+
+    pub fn finish(self) -> (coverage: Coverage)
+        ensures
+            coverage.obligations == self.view().len(),
+            coverage.missing@ == rejected_identities(self.view()),
+            coverage.complete <==> (
+                self.view().len() > 0
+                && forall|i: int| 0 <= i < self.view().len() ==> #[trigger] self.view()[i].accepted
+            ),
+            coverage.missing.len() == 0 <==> (
+                forall|i: int| 0 <= i < self.view().len() ==> #[trigger] self.view()[i].accepted
+            ),
+    {
+        let mut missing = Vec::new();
+        let mut i = 0;
+        while i < self.entries.len()
+            invariant
+                0 <= i <= self.entries.len(),
+                missing@ == rejected_identities(self.entries@.take(i as int)),
+                missing.len() == 0 <==> (
+                    forall|j: int| 0 <= j < i ==> #[trigger] self.entries[j].accepted
+                ),
+            decreases self.entries.len() - i,
+        {
+            if !self.entries[i].accepted {
+                missing.push(self.entries[i].identity.clone());
+            }
+            proof {
+                let prefix = self.entries@.take(i + 1);
+                assert(prefix.drop_last() =~= self.entries@.take(i as int));
+                assert(prefix.last() == self.entries@[i as int]);
+            }
+            i += 1;
+        }
+        assert(self.entries@.take(i as int) =~= self.entries@);
+        let complete = self.entries.len() > 0 && missing.len() == 0;
+        Coverage { obligations: self.entries.len(), complete, missing }
+    }
 }
 
 pub fn equal_bytes(actual: &[u8], expected: &[u8]) -> (equal: bool)

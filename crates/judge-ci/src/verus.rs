@@ -44,12 +44,7 @@ pub(super) fn apply(
     {
         return Err("E_VERUS_INPUT: invalid schema, tool or explicit external interfaces".into());
     }
-    let mut identities = Vec::new();
-    let mut obligations = Vec::new();
-    let mut add = |identity: String, accepted: bool| {
-        identities.push(identity);
-        obligations.push(accepted);
-    };
+    let mut ledger = verus_policy::Ledger::new();
     for execution in response.evidence["executed"]
         .as_array()
         .into_iter()
@@ -87,7 +82,7 @@ pub(super) fn apply(
                 requirements.commit.as_bytes(),
             ))
         })();
-        add(
+        ledger.record(
             format!("operation:{operation}:compiler-proof"),
             accepted.unwrap_or(false),
         );
@@ -123,11 +118,11 @@ pub(super) fn apply(
         })
         .collect();
     for (id, unit) in &snapshot.projects {
-        add(
+        ledger.record(
             format!("unit:{id}:language=verus"),
             unit["language"] == "verus",
         );
-        add(
+        ledger.record(
             format!("unit:{id}:registered-verifier"),
             unit["actions"].as_object().is_some_and(|actions| {
                 actions.values().any(|action| {
@@ -142,7 +137,7 @@ pub(super) fn apply(
     for (path, file) in &snapshot.files {
         let verification = &file["verification"];
         let kind = verification["kind"].as_str();
-        add(
+        ledger.record(
             format!("file:{path}:declared-role"),
             matches!(kind, Some("program" | "specification" | "data")),
         );
@@ -150,7 +145,7 @@ pub(super) fn apply(
             specifications += 1;
         }
         if matches!(kind, Some("program" | "specification")) {
-            add(
+            ledger.record(
                 format!("file:{path}:verification-roots"),
                 verification["roots"].as_array().is_some_and(|declared| {
                     !declared.is_empty()
@@ -163,17 +158,14 @@ pub(super) fn apply(
             );
         }
     }
-    add("specifications:nonempty".into(), specifications > 0);
-    let complete = verus_policy::complete(&obligations);
-    let missing: Vec<_> = verus_policy::missing_obligations(&obligations)
-        .into_iter()
-        .map(|index| &identities[index])
-        .collect();
+    ledger.record("specifications:nonempty".into(), specifications > 0);
+    let coverage = ledger.finish();
+    let complete = coverage.complete;
     response.evidence["verus"] = object!({
         "schema":"chrono-verus-coverage/v1",
         "complete":complete,
-        "obligations":identities.len(),
-        "missing":missing,
+        "obligations":coverage.obligations,
+        "missing":coverage.missing,
         "external_interfaces":requirements.external_interfaces,
         "assurance":"declaration and registered-route admission; compiler proofs and source correspondence remain required"
     });
@@ -189,8 +181,8 @@ pub(super) fn apply(
         } else {
             format!(
                 "E_VERUS_COVERAGE: {} unmet obligations; first: {}",
-                missing.len(),
-                missing[0]
+                coverage.missing.len(),
+                coverage.first_missing().unwrap_or("empty inventory")
             )
         },
         exit_code: None,
