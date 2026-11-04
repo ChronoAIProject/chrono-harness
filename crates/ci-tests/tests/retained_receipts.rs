@@ -216,7 +216,7 @@ impl Owner {
 }
 
 #[test]
-fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
+fn linked_default_wrapper_reclaims_released_copies_on_explicit_maintenance() {
     assert!(std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_none());
     let owner = Owner::new();
     owner.participating();
@@ -261,7 +261,11 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
             "expected failure and original streams checked",
         )
         .unwrap();
-    let (code, protected) = owner.reenter(&linked);
+    let (code, reentered) = owner.reenter(&linked);
+    assert_eq!(code, 0, "{reentered}");
+    assert!(producer_objects(&reentered).as_array().unwrap().is_empty());
+    assert!(object.join(GENERATED[1]).exists());
+    let (code, protected) = owner.drain();
     assert_eq!(code, 0, "{protected}");
     assert_eq!(producer_objects(&protected)[0]["status"], "protected");
     assert!(object.join(GENERATED[1]).exists());
@@ -269,7 +273,11 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
         .release("diagnostic", "real diagnostic consumer finished")
         .unwrap();
     drop(receipt);
-    let (code, reclaimed) = owner.reenter(&linked);
+    let (code, reentered) = owner.reenter(&linked);
+    assert_eq!(code, 0, "{reentered}");
+    assert!(producer_objects(&reentered).as_array().unwrap().is_empty());
+    assert!(object.join(GENERATED[1]).exists());
+    let (code, reclaimed) = owner.drain();
     assert_eq!(code, 0, "{reclaimed}");
     assert_eq!(producer_objects(&reclaimed)[0]["status"], "cleaned");
     for path in GENERATED {
@@ -293,10 +301,12 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
     );
     assert_eq!(fs::read(owner.root.join(".git/index")).unwrap(), index);
     assert!(owner.root.is_dir());
-    assert_eq!(
-        producer_objects(&owner.reenter(&linked).1)[0]["status"],
-        "already-disposed"
-    );
+    let (code, reentered) = owner.reenter(&linked);
+    assert_eq!(code, 0, "{reentered}");
+    assert!(producer_objects(&reentered).as_array().unwrap().is_empty());
+    let (code, maintained) = owner.drain();
+    assert_eq!(code, 0, "{maintained}");
+    assert_eq!(producer_objects(&maintained)[0]["status"], "already-disposed");
 }
 
 #[test]

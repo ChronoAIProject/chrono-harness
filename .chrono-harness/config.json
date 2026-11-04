@@ -11,6 +11,10 @@
         {
           "sha256": "34129c71a01a74f7f3b2443521519b2e5447553fa187f5fcafaaf8c42cc192e2",
           "path": ".chrono-harness/git/macos-27.json"
+        },
+        {
+          "sha256": "61e77a2d557f8677a9da3b403c054c8b6e2d2ba5f6389bce100b55b65977df2e",
+          "path": ".chrono-harness/git/macos-26.json"
         }
       ]
     }

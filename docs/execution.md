@@ -79,9 +79,10 @@ claims and exact output claims remain for their actual conflicting effects.
 The operation cap remains two, with unchanged internal test threads, assertions,
 lease deadlines and operation limits. Product ownership and host scheduling
 policy change together; canonical DELTA and native checks must validate the
-new overlap. This removal is not evidence that the remaining aggregate report
-inventory or coordinator enrollment has been partitioned. Total elapsed, storage
-and CI cost remains unknown. Original registry-lease failures stay retained
+new overlap. Coordinator enrollment and final-output retention now also use
+addressed records; ordinary operations touch only the target and its declared
+dependencies. Total elapsed, storage and CI cost remains unknown. Original
+registry-lease failures stay retained
 without an established historical holder attribution.
 
 `priority` optionally lists distinct registered operation IDs in launch order.

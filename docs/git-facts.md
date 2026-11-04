@@ -216,6 +216,18 @@ identity; its original developer/native tuples and historical source snapshot
 are unchanged. Cache artifact registration and release staging explicitly consume
 the preserved direct policy's artifact metadata, independently of Git selection.
 
+The macos-26 instructions job in run `41927937485`, attempt 1, observed a
+previously unregistered `/usr/bin/git` SHA-256
+`61e77a2d557f8677a9da3b403c054c8b6e2d2ba5f6389bce100b55b65977df2e`
+on macOS 26.7.2 (25G332), runner image `20261102.0473.1`. The host explicitly
+registers that identity in `git/macos-26.json` and the worktree v3 alternatives.
+Its declared version expectation remains `git version 2.50.1 (Apple Git-155)`;
+that version and full native acceptance require the candidate's actual bound
+probe, rather than inference from the runner label. Unknown bytes still fail.
+This changes host policy only; current older-image and local macOS-27 consumers
+retain their separate exact declarations. Validation uses the ordinary source
+bootstrap, canonical DELTA and native check; total extra cost is unmeasured.
+
 Dedicated Rust tests cover successful selection, fixed/request bindings, drift,
 unknown bytes, malformed/ambiguous declarations and target binding disagreement.
 The extra local cost is one declared executable read per selector resolution;

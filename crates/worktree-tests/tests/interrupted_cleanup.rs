@@ -452,7 +452,7 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
         for path in &previous {
             assert!(
                 !h.root.join(path).exists(),
-                "ordinary reentry must reclaim an unrooted original"
+                "explicit maintenance must reclaim an unrooted original"
             );
         }
         previous.clear();
@@ -503,11 +503,10 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
     assert_eq!(fs::read(&parent).unwrap(), output.stdout);
     for path in &previous {
         assert!(
-            !h.root.join(path).exists(),
-            "linked creation also reclaims unrooted coordinator reports"
+            h.root.join(path).exists(),
+            "linked creation preserves unrelated coordinator reports"
         );
     }
-    previous.clear();
     let drains = report["producer_drains"].as_array().unwrap();
     assert!(
         drains.is_empty(),
@@ -1930,20 +1929,34 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
     start.await_file(&h.parent.join("admission-holder"));
     let _group = OwnedGroup(fs::read_to_string(h.parent.join("admission-holder")).unwrap());
     assert!(!start.wait().unwrap().success());
-    let mut pending = CapturedChild::spawn(&mut h.auto_command("maintain", &[]), &h.root);
-    thread::sleep(Duration::from_millis(100));
-    assert!(
-        pending.try_wait().unwrap().is_none(),
-        "mutation child still owns admission"
-    );
-    fs::write(h.parent.join("release-mutation"), "continue Git").unwrap();
-    await_file(&h.parent.join("native-hook"));
-    assert!(
-        pending.try_wait().unwrap().is_none(),
-        "actual Git/hook must inherit admission"
-    );
-    fs::write(h.parent.join("release-hook"), "join native hook").unwrap();
-    let (code, report, error) = h.received(pending.wait_with_output().unwrap());
+    for release in ["release-mutation", "release-hook"] {
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        let preserved = report["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["path"] == value!(target))
+            .expect("interrupted target remains explicitly protected");
+        assert_eq!(preserved["status"], "preserved");
+        assert_eq!(preserved["preserved_reason"], "enrollment metadata is busy");
+        assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+        assert!(!h.parent.join(release).exists());
+        fs::write(h.parent.join(release), "join original mutation/hook").unwrap();
+        if release == "release-mutation" {
+            await_file(&h.parent.join("native-hook"));
+        }
+    }
+    {
+        use std::os::fd::AsRawFd;
+        let metadata = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(h.record_directory(&target).join("metadata.lease"))
+            .unwrap();
+        assert_eq!(unsafe { libc::flock(metadata.as_raw_fd(), libc::LOCK_EX) }, 0);
+    }
+    let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
     assert!(target.join("payload").exists());
     assert!(
