@@ -41,19 +41,28 @@ fn command_carrier_count(command: &Command) -> usize {
 
 #[test]
 fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
-    use std::{os::fd::AsRawFd, time::{Duration, Instant}};
-    unsafe extern "C" { fn flock(fd: i32, operation: i32) -> i32; }
+    use std::{
+        os::fd::AsRawFd,
+        time::{Duration, Instant},
+    };
+    unsafe extern "C" {
+        fn flock(fd: i32, operation: i32) -> i32;
+    }
     let h = host();
-    let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
-        &h.root, POLICY, "test-allocation",
-    ).unwrap();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
     let mut paths = vec![];
     for prefix in ["busy metadata ", "independent cleanup "] {
-        let allocation = chrono_worktree::TemporaryHost::allocate(
-            &store, "test-allocation", &outputs, prefix,
-        ).unwrap();
+        let allocation =
+            chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, prefix)
+                .unwrap();
         fs::create_dir(allocation.path().join("cache 空白")).unwrap();
-        fs::write(allocation.path().join("cache 空白/generated"), b"rebuildable").unwrap();
+        fs::write(
+            allocation.path().join("cache 空白/generated"),
+            b"rebuildable",
+        )
+        .unwrap();
         paths.push(allocation.path().to_owned());
         drop(allocation);
     }
@@ -64,14 +73,25 @@ fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
     let (code, report, error) = h.auto("maintain", &[]);
     let elapsed = began.elapsed();
     assert_eq!(code, 0, "{report} {error}");
-    assert!(elapsed < Duration::from_secs(10), "busy metadata spent the producer admission deadline: {elapsed:?}");
+    assert!(
+        elapsed < Duration::from_secs(10),
+        "busy metadata spent the producer admission deadline: {elapsed:?}"
+    );
     assert!(paths[0].join("cache 空白").is_dir());
-    assert!(!paths[1].join("cache 空白").exists(), "independent allocation must be reclaimed while the first remains locked: {report}");
-    assert!(producer_objects(&report).as_array().unwrap().iter().any(|row|
-        row["path"].as_str().is_some_and(|path| path.ends_with(paths[0].file_name().unwrap().to_str().unwrap()))
-        && row["status"] == "protected"
-        && row["reason"] == "live allocation metadata transaction"
-    ));
+    assert!(
+        !paths[1].join("cache 空白").exists(),
+        "independent allocation must be reclaimed while the first remains locked: {report}"
+    );
+    assert!(
+        producer_objects(&report)
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["path"].as_str().is_some_and(
+                |path| path.ends_with(paths[0].file_name().unwrap().to_str().unwrap())
+            ) && row["status"] == "protected"
+                && row["reason"] == "live allocation metadata transaction")
+    );
     drop(held);
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");

@@ -815,19 +815,22 @@ impl Manager {
         drop(self._gate.lease.take());
         let result = activity(&self.inputs, r);
         let refresh = (|| {
-        let current = Self::open(
-            r,
-            &self.inputs.policy.coordinator_root,
-            &self.inputs.config_path,
-            &self.inputs.config_bytes,
-            &self._gate.token,
-        )?.ok_or("cleanup policy disappeared while independent owners worked")?;
-        // A new admission does not authorize a moving source/policy endpoint.
-        self.inputs.stable(r)?;
-        Ok::<_, String>(current)
+            let current = Self::open(
+                r,
+                &self.inputs.policy.coordinator_root,
+                &self.inputs.config_path,
+                &self.inputs.config_bytes,
+                &self._gate.token,
+            )?
+            .ok_or("cleanup policy disappeared while independent owners worked")?;
+            // A new admission does not authorize a moving source/policy endpoint.
+            self.inputs.stable(r)?;
+            Ok::<_, String>(current)
         })();
         let current = refresh.map_err(|error| match &result {
-            Err(original) => format!("independent owner failed: {original}; enrollment refresh failed: {error}"),
+            Err(original) => {
+                format!("independent owner failed: {original}; enrollment refresh failed: {error}")
+            }
             Ok(_) => error,
         })?;
         *self = current;

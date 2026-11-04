@@ -41,7 +41,8 @@ fn registry(directory: &Path) -> Value {
     assert_eq!(owner["schema"], "chrono-retained-producer/v2");
     let mut objects = vec![];
     for entry in fs::read_dir(directory.join("producer-records")).unwrap() {
-        let record: Value = serde_json::from_slice(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
+        let record: Value =
+            serde_json::from_slice(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
         assert_eq!(record["schema"], "chrono-retained-producer-object/v1");
         assert_eq!(record["owner_sha256"], chrono_harness::sha256(&bytes));
         objects.push(record["object"].clone());
@@ -51,8 +52,10 @@ fn registry(directory: &Path) -> Value {
     owner
 }
 fn object_record(directory: &Path, allocation: &Path) -> PathBuf {
-    directory.join("producer-records").join(format!("{}.json",
-        chrono_harness::sha256(allocation.file_name().unwrap().as_encoded_bytes())))
+    directory.join("producer-records").join(format!(
+        "{}.json",
+        chrono_harness::sha256(allocation.file_name().unwrap().as_encoded_bytes())
+    ))
 }
 
 pub(super) struct Owner {
@@ -756,12 +759,7 @@ fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation
         "duplicate root".into(),
         compact.replacen("{", r#"{"schema":"chrono-retained-producer-object/v1","#, 1),
     ));
-    for pointer in [
-        "",
-        "/object",
-        "/object/bodies/copy",
-        "/object/cache_lease",
-    ] {
+    for pointer in ["", "/object", "/object/bodies/copy", "/object/cache_lease"] {
         let mut malformed = original_record.clone();
         malformed.pointer_mut(pointer).unwrap()["unknown_field"] = json!(true);
         invalid.push((
@@ -805,8 +803,12 @@ fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation
             .unwrap();
     let current = registry(&directory);
     assert_eq!(current["objects"].as_array().unwrap().len(), 2);
-    let retained = current["objects"].as_array().unwrap().iter()
-        .find(|object| object["path"] == original_record["object"]["path"]).unwrap();
+    let retained = current["objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|object| object["path"] == original_record["object"]["path"])
+        .unwrap();
     assert_eq!(retained, &original_record["object"]);
     assert!(allocation.path().is_dir() && second.path().is_dir());
     assert_eq!(fs::read(original).unwrap(), b"required original input");
@@ -904,7 +906,11 @@ fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
             "{error}"
         );
         assert_eq!(fs::read(directory.join("objects.json")).unwrap(), original);
-        assert_eq!(records.exists(), replaced, "missing namespace must stay missing");
+        assert_eq!(
+            records.exists(),
+            replaced,
+            "missing namespace must stay missing"
+        );
         assert!(saved.exists());
     }
 }
@@ -945,7 +951,10 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
         assert!(!directory.join("objects.json").exists());
         let namespace_identity = fs::metadata(&directory).unwrap();
         let namespace = fs::File::open(&directory).unwrap();
-        assert!(namespace.try_lock().is_err(), "birth must already hold actual namespace exclusion");
+        assert!(
+            namespace.try_lock().is_err(),
+            "birth must already hold actual namespace exclusion"
+        );
         assert!(!directory.join("registry.lease").exists());
         let first_copy = fs::read_dir(&directory)
             .unwrap()

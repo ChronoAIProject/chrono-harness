@@ -169,7 +169,9 @@ impl DirectoryGate {
             if began.elapsed() >= bound {
                 return Err(format!(
                     "producer directory admission remains busy; preserve objects: directory={} elapsed_millis={} bound_millis={}",
-                    directory.display(), began.elapsed().as_millis(), bound.as_millis()
+                    directory.display(),
+                    began.elapsed().as_millis(),
+                    bound.as_millis()
                 ));
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -524,9 +526,8 @@ impl Store {
         self.owner_stable()?;
         self.state.objects.clear();
         drop(self.object_guard.take());
-        self.object_guard = DirectoryGate::available(
-            &no_symlink_parents(&self.directory, object)?,
-        )?;
+        self.object_guard =
+            DirectoryGate::available(&no_symlink_parents(&self.directory, object)?)?;
         if self.object_guard.is_none() {
             return Ok(false);
         }
@@ -1459,10 +1460,13 @@ impl ProducerPolicy {
                 let current = store.as_mut().unwrap();
                 let loaded = current.load_available(&snapshot.path);
                 if matches!(loaded, Ok(false)) {
-                    report["producer_objects"].as_array_mut().unwrap().push(value!({
-                        "producer":self.id,"path":format!("{}{}",self.directory,snapshot.path),
-                        "status":"protected","reason":"live allocation metadata transaction"
-                    }));
+                    report["producer_objects"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(value!({
+                            "producer":self.id,"path":format!("{}{}",self.directory,snapshot.path),
+                            "status":"protected","reason":"live allocation metadata transaction"
+                        }));
                     drop(store.take());
                     continue;
                 }
