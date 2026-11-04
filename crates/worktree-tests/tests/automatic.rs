@@ -278,9 +278,9 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
             .unwrap();
             h.received(out)
         };
-        // This collector explicitly consumes all originals. Its own exact
-        // inputs prevent reclamation; an unrelated activity has no such effect.
-        let activity: Vec<_> = ids.iter().map(|id| inventory().consume(id).unwrap()).collect();
+        // This collector declares every original as a required input. Its
+        // exact root prevents reclamation; an unrelated activity has no effect.
+        inventory().reference("collector-required-inputs", &ids).unwrap();
         let (code, _, error) = invoke("active");
         assert_eq!(code, 2, "{error}");
         assert!(
@@ -288,7 +288,7 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
             "{error}"
         );
         assert_eq!(state()["outputs"], before["outputs"]);
-        drop(activity);
+        inventory().reference("collector-required-inputs", &[]).unwrap();
         let (code, report, error) = invoke("excluded");
         if all_rooted {
             assert_eq!(code, 2, "{report} {error}");
