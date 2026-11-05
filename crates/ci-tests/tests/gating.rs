@@ -2027,17 +2027,22 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
         let source_length = fs::metadata(h.host.root.join(".github/workflows/collection.yml"))
             .unwrap()
             .len();
-        h.host.modify(PROVIDER, |c| {
-            if mode == "artifact-deadline" {
-                c["gather"]["timeout_seconds"] = json!(2);
-            }
-            if mode == "artifact-stdout" {
-                c["gather"]["output_limit_bytes"] = json!(source_length + 1024);
-            }
-            if mode == "artifact-stderr" {
-                c["gather"]["output_limit_bytes"] = json!(24576);
-            }
-        });
+        if matches!(
+            mode,
+            "artifact-deadline" | "artifact-stdout" | "artifact-stderr"
+        ) {
+            h.host.modify(PROVIDER, |c| {
+                if mode == "artifact-deadline" {
+                    c["gather"]["timeout_seconds"] = json!(2);
+                }
+                if mode == "artifact-stdout" {
+                    c["gather"]["output_limit_bytes"] = json!(source_length + 1024);
+                }
+                if mode == "artifact-stderr" {
+                    c["gather"]["output_limit_bytes"] = json!(24576);
+                }
+            });
+        }
         h.change(&["a.txt"]);
         let d = h.detection();
         h.units(&d);
