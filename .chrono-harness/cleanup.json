@@ -168,6 +168,10 @@
       "generated_outputs": [
         "original-state/cargo/producer/target/",
         "original-state/cargo/tests/target/"
+      ],
+      "operations": [
+        "test.ci-tests",
+        "validate.delta"
       ]
     },
     {
@@ -186,7 +190,27 @@
         "source with spaces/",
         "cargo-linked/",
         "native-cargo/"
-      ]
+      ],
+      "operations": [
+        "test.worktree-tests",
+        "test.worktree.core",
+        "test.worktree.adoption",
+        "test.worktree.capacity",
+        "validate.delta",
+        "test.worktree.age"
+      ],
+      "capacity": {
+        "max_generated_bytes": 2147483648,
+        "max_copy_bytes": 1073741824,
+        "max_capture_bytes": 67108864,
+        "max_captures": 256,
+        "min_available_bytes": 536870912,
+        "max_records_per_round": 16,
+        "max_record_snapshot": 16384,
+        "max_millis_per_round": 2000,
+        "max_entries_per_checkpoint": 65536,
+        "max_metadata_bytes_per_round": 67108864
+      }
     },
     {
       "id": "ci-test-host",
@@ -202,7 +226,23 @@
       "source_roots": [
         "arbitrary non Cargo layout/",
         "unavailable original checkout/"
-      ]
+      ],
+      "operations": [
+        "test.ci-tests",
+        "validate.delta"
+      ],
+      "capacity": {
+        "max_generated_bytes": 2147483648,
+        "max_copy_bytes": 1073741824,
+        "max_capture_bytes": 67108864,
+        "max_captures": 256,
+        "min_available_bytes": 536870912,
+        "max_records_per_round": 16,
+        "max_record_snapshot": 16384,
+        "max_millis_per_round": 2000,
+        "max_entries_per_checkpoint": 65536,
+        "max_metadata_bytes_per_round": 67108864
+      }
     },
     {
       "id": "projects-test-host",
@@ -222,7 +262,23 @@
       "source_roots": [
         "fixture/",
         "retained-offline-checkout/"
-      ]
+      ],
+      "operations": [
+        "test.judge-projects-tests",
+        "validate.delta"
+      ],
+      "capacity": {
+        "max_generated_bytes": 2147483648,
+        "max_copy_bytes": 1073741824,
+        "max_capture_bytes": 67108864,
+        "max_captures": 256,
+        "min_available_bytes": 536870912,
+        "max_records_per_round": 16,
+        "max_record_snapshot": 16384,
+        "max_millis_per_round": 2000,
+        "max_entries_per_checkpoint": 65536,
+        "max_metadata_bytes_per_round": 67108864
+      }
     },
     {
       "id": "workflow-test-tools",
@@ -237,7 +293,25 @@
       ],
       "source_roots": [
         "fixture/local-lane/"
-      ]
+      ],
+      "operations": [
+        "test.workflow.core",
+        "test.workflow.short",
+        "test.workflow.units",
+        "validate.delta"
+      ],
+      "capacity": {
+        "max_generated_bytes": 2147483648,
+        "max_copy_bytes": 1073741824,
+        "max_capture_bytes": 67108864,
+        "max_captures": 256,
+        "min_available_bytes": 536870912,
+        "max_records_per_round": 16,
+        "max_record_snapshot": 16384,
+        "max_millis_per_round": 2000,
+        "max_entries_per_checkpoint": 65536,
+        "max_metadata_bytes_per_round": 67108864
+      }
     },
     {
       "id": "projects-migration-host",
@@ -254,7 +328,25 @@
       ],
       "source_roots": [
         "fixture/"
-      ]
+      ],
+      "operations": [],
+      "capacity": {
+        "max_generated_bytes": 2147483648,
+        "max_copy_bytes": 1073741824,
+        "max_capture_bytes": 67108864,
+        "max_captures": 256,
+        "min_available_bytes": 536870912,
+        "max_records_per_round": 16,
+        "max_record_snapshot": 16384,
+        "max_millis_per_round": 2000,
+        "max_entries_per_checkpoint": 65536,
+        "max_metadata_bytes_per_round": 67108864
+      }
     }
-  ]
+  ],
+  "age_policy": {
+    "reuse_after_seconds": 7200,
+    "delete_after_seconds": 14400,
+    "preserved_branch_prefix": "cleanup-preserved/automatic/"
+  }
 }
