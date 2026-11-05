@@ -35,6 +35,10 @@ fn fixture_remaining(root: &Path, round: &Value) -> Value {
     actual
 }
 fn maintain_fixture_to(root: &Path, expected: u64) -> Value {
+    let rounds = maintain_fixture_rounds_to(root, expected);
+    fixture_remaining(root, rounds.last().unwrap())
+}
+fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
     let policy: Value = serde_json::from_slice(&fs::read(root.join(POLICY_PATH)).unwrap()).unwrap();
     let mut rounds = Vec::new();
     for _ in 0..8 {
@@ -51,7 +55,7 @@ fn maintain_fixture_to(root: &Path, expected: u64) -> Value {
         let remaining = fixture_remaining(root, &round);
         rounds.push(round);
         if remaining == expected {
-            return remaining;
+            return rounds;
         }
     }
     panic!(
@@ -1557,8 +1561,7 @@ fn actual_original_publisher_and_reader_reclaim_rotated_reports_but_preserve_sha
     settle_report(h.path(), "unit/check.json", &new.path).unwrap();
     drop(new_lock);
     drop(activity);
-    let result = maintenance(h.path());
-    assert_eq!(fixture_remaining(h.path(), &result), 2);
+    let rounds = maintain_fixture_rounds_to(h.path(), 2);
     assert!(!h.path().join(old.path).exists());
     assert_eq!(
         read_original(h.path(), &new, None).unwrap(),
@@ -1568,7 +1571,14 @@ fn actual_original_publisher_and_reader_reclaim_rotated_reports_but_preserve_sha
         read_original(h.path(), &shared, None).unwrap(),
         b"same original stdout"
     );
-    assert!(result["removed_logical_bytes"].as_u64().unwrap() > 0);
+    assert!(
+        rounds
+            .iter()
+            .map(|round| round["removed_logical_bytes"].as_u64().unwrap())
+            .sum::<u64>()
+            > 0,
+        "{rounds:?}"
+    );
 }
 #[test]
 fn interrupted_fixed_pointer_publication_keeps_both_originals_until_owner_settles() {

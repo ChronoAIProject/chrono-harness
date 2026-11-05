@@ -6,6 +6,8 @@ use std::{
     os::fd::{AsFd, AsRawFd},
     path::Path,
 };
+#[path = "support/isolated_capability.rs"]
+mod isolated_capability;
 fn spec(program: &str, args: Vec<String>) -> CommandSpec {
     CommandSpec {
         program: program.into(),
@@ -344,24 +346,9 @@ fn held_native_capability_helper() {
 #[test]
 fn overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff() {
     use std::io::{BufRead, Write};
-    // 其他并行测试的 fork 会在 exec 前短暂继承本进程的 CLOEXEC 描述符。
-    // 在独立进程验证最后一个受测子进程退出后的锁释放，避免混入无关 fork。
-    if std::env::var_os("CHRONO_FD_ISOLATED_OVERLAP").is_none() {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff",
-                "--nocapture",
-            ])
-            .env("CHRONO_FD_ISOLATED_OVERLAP", "1")
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{} {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
+    if !isolated_capability::isolated_capability_test(
+        "overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff",
+    ) {
         return;
     }
     for signal in [libc::SIGTERM, libc::SIGKILL] {
