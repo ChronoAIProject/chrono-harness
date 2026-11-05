@@ -11,6 +11,63 @@ verus! {
 
 broadcast use vstd::string::group_string_axioms;
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn result_membership_requires_inventory_operations_and_adopted_coverage() {
+    proof {
+        reveal_strlit("ci.inventory");
+        reveal_strlit("verify.root");
+        reveal_strlit("test:other");
+        reveal_strlit("ci.verus-coverage");
+    }
+    let operations = vec!["verify.root"];
+    let not_required = vec!["test:other"];
+    let complete = vec!["test:other", "ci.verus-coverage", "verify.root", "ci.inventory"];
+    assert(policy::text_values(operations@) =~= seq!["verify.root"@]);
+    assert(policy::text_values(not_required@) =~= seq!["test:other"@]);
+    assert(policy::expected_result_ids(operations@, not_required@, true)
+        =~= seq!["ci.inventory"@, "verify.root"@, "test:other"@, "ci.verus-coverage"@]);
+    let accepted = policy::matches_result_ids(&complete, &operations, &not_required, true, Some((true, None)));
+    assert("ci.inventory"@[0] != "verify.root"@[0]);
+    assert("ci.inventory"@[0] != "test:other"@[0]);
+    assert("ci.inventory"@.len() != "ci.verus-coverage"@.len());
+    assert(accepted);
+    let no_coverage = vec!["ci.inventory", "verify.root", "test:other"];
+    let missing = policy::matches_result_ids(&no_coverage, &operations, &not_required, true, None);
+    let unadopted = policy::matches_result_ids(&no_coverage, &operations, &not_required, false, None);
+    let extra_coverage = policy::matches_result_ids(&complete, &operations, &not_required, false, None);
+    assert(!missing && unadopted && !extra_coverage);
+    let no_inventory = vec!["verify.root", "test:other", "ci.verus-coverage"];
+    let missing_inventory = policy::matches_result_ids(&no_inventory, &operations, &not_required, true, Some((true, None)));
+    assert(!missing_inventory);
+    let absent = policy::matches_result_ids(&complete, &operations, &not_required, true, None);
+    let unpassed = policy::matches_result_ids(&complete, &operations, &not_required, true, Some((false, None)));
+    let process_exit = policy::matches_result_ids(&complete, &operations, &not_required, true, Some((true, Some(0))));
+    assert(!absent && !unpassed && !process_exit);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn result_membership_preserves_set_semantics_unicode_and_empty_boundaries() {
+    proof { reveal_strlit("ci.inventory"); }
+    let empty: Vec<&str> = Vec::new();
+    let empty_membership = policy::matches_text_membership(&empty, &empty);
+    let missing_inventory = policy::matches_result_ids(&empty, &empty, &empty, false, None);
+    let inventory = vec!["ci.inventory"];
+    assert(inventory[0]@ == "ci.inventory"@);
+    assert(policy::expected_result_ids(empty@, empty@, false) =~= seq!["ci.inventory"@]);
+    assert(policy::expected_result_ids(empty@, empty@, false)[0] == "ci.inventory"@);
+    assert(!policy::text_member(empty@, "ci.inventory"@));
+    let inventory_only = policy::matches_result_ids(&inventory, &empty, &empty, false, None);
+    assert(empty_membership);
+    assert(!missing_inventory);
+    assert(inventory_only);
+    let values = vec!["接口", ""];
+    let reordered_duplicates = vec!["", "接口", "接口"];
+    let same = policy::matches_text_membership(&values, &reordered_duplicates);
+    let absent = policy::matches_text_membership(&values, &empty);
+    let extra = policy::matches_text_membership(&empty, &values);
+    assert(same && !absent && !extra);
+}
+
 fn metadata_fixture(path: Vec<u8>, length: u64) -> (source: policy::sources::SourceBinding)
     ensures source.path@ == path@, source.length == length,
         source.sha256.len() == 64,

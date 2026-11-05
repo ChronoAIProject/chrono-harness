@@ -83,6 +83,22 @@ root/source and output-path binding, and plan membership remain unproved adapter
 obligations. These predicates do not certify the adequacy of an external
 interface assumption.
 
+The same owner specifies and implements unordered result-ID membership and the
+expected inventory composed from `ci.inventory`, registered operations,
+not-required tests and, when adopted, `ci.verus-coverage`. Character values own
+identity; string reference identity and ordering do not affect membership. The
+collector calls this proved predicate. Adopted coverage additionally requires a
+passed result with no process exit code; missing, unpassed or exit-bearing
+coverage fails. Shared response-protocol validation still
+owns duplicate rejection. Verified examples cover adopted and unadopted coverage,
+missing inventory/coverage, empty inventories, Unicode and duplicate membership.
+The collector also retains digest-bound report references, receipt digests and
+original-response pointers for validated unit execution rows in
+`collected_executions`, avoiding another copy of process output. Its local
+`executed` list stays empty because it
+runs no business operations. These rows are transport data; compiler/source
+re-admission from them and retained library transport remain incomplete.
+
 The registered verification operations additionally require `--compile` and
 explicit `--emit=link=OUTPUT,dep-info=OUTPUT.d`, so successful verification is followed by Rust compilation
 and compiler-produced dependency output. They also require
