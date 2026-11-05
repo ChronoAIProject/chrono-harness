@@ -1,5 +1,16 @@
 # Registered operation execution
 
+The workflow short-entry tests use their existing Rust-owned native fixture tool
+for prepared-input responses and the declared GitHub seed API. Request digests,
+unit/collection scopes, acquisition rejection cases, paginated jobs and carried
+attempts stay in the test implementation language. The genuine Python native
+adapter and its registered interpreter remain external interfaces exercised by
+the Rust tests; they are not replaced by fixture behavior.
+Each real-Cargo workflow fixture also declares its own Cargo home beneath its
+registered state directory for both setup and business commands. Independent
+fixtures do not use the caller's shared package cache; their offline builds still
+compile and test the real Rust production/test pairs under the existing bounds.
+
 Unix process observations record the engine's actual capability carrier in optional
 `ownership_fds`. The `environment` map and `environment_digest` describe business
 inputs, excluding reserved `CHRONO_PROCESS_FDS`; that child environment variable
