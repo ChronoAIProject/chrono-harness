@@ -18,6 +18,19 @@ The former inventory-test-source edges to the two Rust worktree groups are remov
 with that import check; two-endpoint DELTA still covers the removed relationships
 for this migration. Verification and total-cost savings remain unmeasured.
 
+The input consumer's synthetic decoder and compatibility programs live in
+explicit Python fixture files. Their temporary host keeps the existing Python
+script/test pairs; Rust owns the integration driver and checks actual results,
+retained snapshot bytes and downstream judge views. Native input assertions,
+the absent-input writer, product changes and rejection controls are standalone
+fixtures too. The writer receives its explicit path as argv. The original
+success, rejection and immutable-baseline obligations remain.
+**Fixture and host registration change together:** literal compile edges connect
+the files embedded with `include_str!` to `inputs-tests`. Existing operations,
+assertions and bounds remain; candidate bootstrap, canonical DELTA and native
+validation are required. Total cost and other fixture-owner migrations remain
+unmeasured or incomplete.
+
 Each real-Cargo workflow fixture also declares its own Cargo home beneath its
 registered state directory for both setup and business commands. Independent
 fixtures do not use the caller's shared package cache; their offline builds still
