@@ -846,6 +846,24 @@ transport reduces helper processes; complete wall time, network/storage cost and
 native delivery remain unmeasured until candidate execution. Full uploaded
 originals and their existing retention/acknowledgement remain required.
 
+The host now uploads each unit's existing `.chrono-harness/state/units/<id>/`
+report root. Short preparation already retains the report, context, acquisition
+and original stdout/stderr under that selected root. Successful collection does
+not consume the temporary test hosts or their copied executables. In native run
+`42004257959`, those CI fixtures occupied 1,566,217,208 of 1,567,248,867 compressed
+member bytes; the entire ZIP was 1,575,243,167 bytes and timed out during download.
+These are observations of that one artifact, not an end-to-end saving claim.
+
+Optional `failure_artifact_directory` preserves the wider diagnostic owner when
+a job fails. It uses the same pinned upload action with `failure()` and a distinct
+`-diagnostics` artifact name. The host selects `.chrono-harness/state/`, retaining
+failed fixture originals without sending successful fixture bodies to collection.
+The ordinary report upload and delivery acknowledgement keep their own artifact
+and mapping. Equal directories need no duplicate diagnostic upload. No new
+downloader, packaging command, permission or timeout allowance is introduced.
+Native report-root consumption and the failure-only upload remain separate
+validation obligations; the latter is not established by a successful job.
+
 The bootstrap list is a literal argv. Register only the tools each unit needs;
 the generator never infers packages, language setup or build dependencies. Each
 unit's report and context must be inside its uploaded artifact directory.
