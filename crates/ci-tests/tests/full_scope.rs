@@ -572,6 +572,37 @@ fn scoped_generation_cannot_take_a_legacy_projection_from_another_source() {
 }
 
 #[test]
+fn unscoped_full_generation_and_init_preserve_other_source_outputs() {
+    for schema in [full::SCHEMA, full::SHORT_SCHEMA] {
+        for operation in ["generate", "init"] {
+            let d = tempfile::tempdir().unwrap();
+            let root = d.path();
+            let previous = ".chrono-harness/providers/previous.json";
+            let current = ".chrono-harness/providers/current.json";
+            let mut c = config();
+            c.schema = schema.into();
+            write(root, previous, &serde_json::to_value(&c).unwrap());
+            generate(root, previous, false).unwrap();
+            let workflow = fs::read(root.join(&c.workflow_path)).unwrap();
+            let previous_bytes = fs::read(root.join(previous)).unwrap();
+            c.name = "another source's full workflow".into();
+            write(root, current, &serde_json::to_value(&c).unwrap());
+            let current_bytes = fs::read(root.join(current)).unwrap();
+            let result = if operation == "init" {
+                init(root, &root.join(current))
+            } else {
+                generate(root, current, false)
+            };
+            assert!(result.is_err(), "{schema} {operation}: {result:?}");
+            assert_eq!(fs::read(root.join(&c.workflow_path)).unwrap(), workflow);
+            assert_eq!(fs::read(root.join(previous)).unwrap(), previous_bytes);
+            assert_eq!(fs::read(root.join(current)).unwrap(), current_bytes);
+            assert!(!root.join(".chrono-harness/ci/full.json").exists());
+        }
+    }
+}
+
+#[test]
 fn collection_symlink_is_rejected_without_provisioning_or_output() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
