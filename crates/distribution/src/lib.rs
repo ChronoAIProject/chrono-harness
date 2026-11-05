@@ -11,9 +11,9 @@ use std::{
 };
 
 type Result<T> = std::result::Result<T, String>;
-const LAUNCHER: &str = include_str!("../../../assets/distribution/bootstrap.py");
+const LAUNCHER: &str = include_str!("../../../assets/distribution/bootstrap.sh");
 const LOCK_PATH: &str = ".chrono-harness/distribution.json";
-const BOOTSTRAP_PATH: &str = ".chrono-harness/install.py";
+const BOOTSTRAP_PATH: &str = ".chrono-harness/install.sh";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -287,7 +287,8 @@ fn pack(root: &Path, plan: &Path, out: &Path) -> Result<Value> {
     )
 }
 /// Combine explicitly supplied, matching platform packages; no directory discovery.
-fn assemble(inputs: &[PathBuf], out: &Path) -> Result<Value> {
+fn assemble(inputs: &[PathBuf], out: &Path, origin: Source) -> Result<Value> {
+    source(&origin)?;
     if inputs.is_empty() || out.exists() {
         return Err("need inputs and absent output".into());
     }
@@ -332,9 +333,20 @@ fn assemble(inputs: &[PathBuf], out: &Path) -> Result<Value> {
     release(&r)?;
     write(&stage.path().join("release.json"), &r)?;
     let identity = inspect(&stage.path().join("release.json"), "release.json".into())?;
+    let members = r
+        .platforms
+        .values()
+        .next()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    let l = adoption(&stage.path().join("release.json"), &r, origin, &members)?;
+    launcher(&stage.path().join("install.sh"), &l, None)?;
+    let bootstrap = inspect(&stage.path().join("install.sh"), "install.sh".into())?;
     fs::rename(stage.path(), out).map_err(|e| e.to_string())?;
     Ok(
-        value!({"manifest":identity,"version":r.version,"platforms":r.platforms.keys().collect::<Vec<_>>()}),
+        value!({"manifest":identity,"bootstrap":bootstrap,"version":r.version,"platforms":r.platforms.keys().collect::<Vec<_>>()}),
     )
 }
 
@@ -395,16 +407,8 @@ fn publish(root: &Path, stage: &Path, entries: &[(PathBuf, String)]) -> Result<(
     }
     Ok(())
 }
-pub fn adopt(
-    root: &Path,
-    manifest: &Path,
-    origin: Source,
-    members: &[String],
-    replace: bool,
-) -> Result<Value> {
+fn adoption(manifest: &Path, r: &Release, origin: Source, members: &[String]) -> Result<Lock> {
     source(&origin)?;
-    let r: Release = read(manifest)?;
-    release(&r)?;
     let install: BTreeMap<_, _> = members
         .iter()
         .map(|n| (n.clone(), format!(".chrono-harness/bin/{n}")))
@@ -421,7 +425,7 @@ pub fn adopt(
     }
     let l = Lock {
         schema: "chrono-install/v1".into(),
-        version: r.version,
+        version: r.version.clone(),
         source: origin,
         manifest: inspect(manifest, "release.json".into())?,
         installers: r
@@ -432,10 +436,83 @@ pub fn adopt(
         install,
     };
     lock(&l)?;
+    Ok(l)
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+/// Generate a launcher from validated declarations; the shell never parses JSON.
+fn launcher(path: &Path, l: &Lock, bound_lock: Option<&Asset>) -> Result<()> {
+    lock(l)?;
+    let (kind, location, curl) = match &l.source {
+        Source::Directory { path } => (
+            "directory",
+            path.to_str().ok_or("source directory must be UTF-8")?,
+            "",
+        ),
+        Source::Https { base_url, curl } => ("https", base_url.as_str(), curl.as_str()),
+    };
+    let defaults = l.install.keys().cloned().collect::<Vec<_>>().join(" ");
+    let mut declarations = String::new();
+    for (name, value) in [
+        (
+            "mode",
+            if bound_lock.is_some() {
+                "install"
+            } else {
+                "adopt"
+            },
+        ),
+        ("version", l.version.as_str()),
+        ("source_kind", kind),
+        ("source_location", location),
+        ("curl", curl),
+        ("default_tools", defaults.as_str()),
+        ("manifest_sha256", l.manifest.sha256.as_str()),
+        ("manifest_size", &l.manifest.size.to_string()),
+    ] {
+        declarations.push_str(&format!("    {name}={}\n", shell_quote(value)));
+    }
+    if let Some(a) = bound_lock {
+        declarations.push_str(&format!(
+            "    lock_sha256={}\n    lock_size={}\n",
+            shell_quote(&a.sha256),
+            a.size
+        ));
+    }
+    let mut installers = String::new();
+    for (platform, a) in &l.installers {
+        installers.push_str(&format!(
+            "        {}) installer_sha256={}; installer_size={} ;;\n",
+            shell_quote(platform),
+            shell_quote(&a.sha256),
+            a.size
+        ));
+    }
+    let rendered = LAUNCHER
+        .replace("@INSTALLERS@", &installers)
+        .replace("@DECLARATIONS@", &declarations);
+    fs::write(path, rendered).map_err(|e| e.to_string())?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())
+}
+
+pub fn adopt(
+    root: &Path,
+    manifest: &Path,
+    origin: Source,
+    members: &[String],
+    replace: bool,
+) -> Result<Value> {
+    let r: Release = read(manifest)?;
+    release(&r)?;
+    let l = adoption(manifest, &r, origin, members)?;
     let _guard = guard(root)?;
     let stage = tempfile::tempdir_in(root.join(".chrono-harness")).map_err(|e| e.to_string())?;
     write(&stage.path().join("lock"), &l)?;
-    fs::write(stage.path().join("launcher"), LAUNCHER).map_err(|e| e.to_string())?;
+    let bound_lock = inspect(&stage.path().join("lock"), "distribution.json".into())?;
+    launcher(&stage.path().join("launcher"), &l, Some(&bound_lock))?;
     let entries: Vec<(PathBuf, String)> = vec![
         (stage.path().join("lock"), LOCK_PATH.into()),
         (stage.path().join("launcher"), BOOTSTRAP_PATH.into()),
@@ -556,7 +633,13 @@ pub fn run(args: &[String]) -> Result<Value> {
     }
     let allowed: &[&str] = match command.as_str() {
         "pack" => &["--root", "--plan", "--output"],
-        "assemble" => &["--input", "--output"],
+        "assemble" => &[
+            "--input",
+            "--output",
+            "--source-dir",
+            "--base-url",
+            "--curl",
+        ],
         "adopt" => &[
             "--host-root",
             "--manifest",
@@ -581,6 +664,23 @@ pub fn run(args: &[String]) -> Result<Value> {
             .map(|s| s.as_str())
             .ok_or_else(|| format!("missing {key}"))
     };
+    let origin = || -> Result<Source> {
+        match (
+            values.contains_key("--source-dir"),
+            values.contains_key("--base-url"),
+        ) {
+            (true, false) if !values.contains_key("--curl") => Ok(Source::Directory {
+                path: PathBuf::from(get("--source-dir")?)
+                    .canonicalize()
+                    .map_err(|e| e.to_string())?,
+            }),
+            (false, true) => Ok(Source::Https {
+                base_url: get("--base-url")?.into(),
+                curl: get("--curl")?.into(),
+            }),
+            _ => Err("choose one source: --source-dir or --base-url with --curl".into()),
+        }
+    };
     match command.as_str() {
         "pack" => pack(
             Path::new(get("--root")?),
@@ -595,24 +695,11 @@ pub fn run(args: &[String]) -> Result<Value> {
                 .map(PathBuf::from)
                 .collect::<Vec<_>>(),
             Path::new(get("--output")?),
+            origin()?,
         ),
         "install" => install(Path::new(get("--host-root")?)),
         "adopt" => {
-            let s = match (
-                values.contains_key("--source-dir"),
-                values.contains_key("--base-url"),
-            ) {
-                (true, false) if !values.contains_key("--curl") => Source::Directory {
-                    path: PathBuf::from(get("--source-dir")?)
-                        .canonicalize()
-                        .map_err(|e| e.to_string())?,
-                },
-                (false, true) => Source::Https {
-                    base_url: get("--base-url")?.into(),
-                    curl: get("--curl")?.into(),
-                },
-                _ => return Err("choose one source: --source-dir or --base-url with --curl".into()),
-            };
+            let s = origin()?;
             adopt(
                 Path::new(get("--host-root")?),
                 Path::new(get("--manifest")?),

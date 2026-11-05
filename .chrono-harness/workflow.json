@@ -172,7 +172,7 @@
         "crates/distribution/Cargo.lock",
         "crates/distribution/src/lib.rs",
         "crates/distribution/src/main.rs",
-        "assets/distribution/bootstrap.py",
+        "assets/distribution/bootstrap.sh",
         ".chrono-harness/release/plan.json",
         ".chrono-harness/release/build.json",
         ".chrono-harness/release/build.py",
