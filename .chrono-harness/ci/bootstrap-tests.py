@@ -21,6 +21,35 @@ PASS_FDS = inherited_fds()
 OPERATION = ".chrono-harness/ci/fixtures/bootstrap-operation.py"
 
 
+class SourceImports(unittest.TestCase):
+    def test_bootstrap_import_preserves_sources_without_bytecode(self):
+        root = Path(tempfile.mkdtemp(prefix="bootstrap import "))
+        sources = [".chrono-harness/process_fds.py", ".chrono-harness/ci/bootstrap.py"]
+        try:
+            for path in sources:
+                destination = root / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(SOURCE.parents[1] / path, destination)
+            environment = dict(os.environ)
+            for key in ("PYTHONDONTWRITEBYTECODE", "PYTHONPYCACHEPREFIX", "CHRONO_PROCESS_FDS"):
+                environment.pop(key, None)
+            loaded = subprocess.run(
+                [sys.executable, str(SOURCE / "fixtures/source-import.py"), sources[1]],
+                cwd=root, env=environment, capture_output=True, pass_fds=PASS_FDS)
+            (root / "stdout.bin").write_bytes(loaded.stdout)
+            (root / "stderr.bin").write_bytes(loaded.stderr)
+            self.assertEqual(loaded.returncode, 0, loaded.stderr)
+            for parent in (".chrono-harness", ".chrono-harness/ci"):
+                self.assertFalse((root / parent / "__pycache__").exists(), parent)
+            for path in sources:
+                self.assertEqual((root / path).read_bytes(), (SOURCE.parents[1] / path).read_bytes())
+        except BaseException:
+            print("retained bootstrap import fixture: " + str(root), file=sys.stderr)
+            raise
+        else:
+            shutil.rmtree(root)
+
+
 class NativeRuntimeLocations(unittest.TestCase):
     """Own /usr's Python components, never /usr; keep split runtimes and errors."""
 
