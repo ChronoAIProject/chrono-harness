@@ -70,6 +70,6 @@
 
 本仓有意识地把产品数据采用到 [.chrono-harness/instructions/catalog.json](../.chrono-harness/instructions/catalog.json)，两份字节相同但所有者不同；其它宿主不会自动更新。当前 manifest 的短流程中文根、完整英文 Markdown 与聚焦 skill 由实际重建二进制生成；AGENTS 是指向 CLAUDE 的实际字面相对链接。新宿主仍默认仅根输出，复制二进制无需源码 checkout；显式多输出配方在 [生成合同](instructions.md)。生成不依赖此处置表或源仓。
 
-原作 Copyright 2026 The Omega Institute，Apache-2.0；[原许可全文](licenses/trureturing-Apache-2.0.txt) 按固定提交精确保留，未发现该提交根 NOTICE。许可仅说明派生指令资产的来源与义务，不给 chrono-harness 整仓添加许可证，不把法律资料变成运行时政策。分发内嵌这些资产的二进制或派生指南时须一同提供对应许可资料。
+原作 Copyright 2026 The Omega Institute，采用 Apache-2.0。[许可全文](licenses/trureturing-Apache-2.0.txt) 提供中文译文，后附原文按固定提交原样保留；该提交根目录没有 NOTICE 文件。许可只说明派生指令资产的来源和分发义务，不给 chrono-harness 整仓增加许可证，也不是运行政策。分发内含这些资产的二进制或派生指南时，须随附对应许可资料。
 
 五份通用登记保持 proposed，input_closure 未完成；已有有界判官／DELTA／scoped CI，完整宿主启用仍未完成。命令及实际消费者验证检查运输、已声明引用与当前平台 IO；它们不证明通用语义完整、AI 遵守、未来环境等价或 dev 已交付。Git 合并、推送及远端落地核验由 caller 负责。
