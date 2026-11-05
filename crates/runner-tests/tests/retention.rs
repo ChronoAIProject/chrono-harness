@@ -4,6 +4,9 @@ use chrono_harness::retained_artifacts::{
 };
 use serde_json::{Value, json};
 use std::{fs, path::Path};
+#[path = "support/isolated_capability.rs"]
+mod isolated_capability;
+use isolated_capability::isolated_capability_test;
 fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
     fs::create_dir_all(d.path().join(".chrono-harness/state/fixtures")).unwrap();
@@ -231,32 +234,6 @@ fn independent_components_share_the_existing_round_verification_byte_budget() {
     );
 }
 
-// fork duplicates every thread's open descriptions until exec, even CLOEXEC
-// capabilities that the child never intentionally consumes. Tests asserting an
-// immediate last-close boundary need a process without unrelated fixture forks.
-fn isolated_capability_test(name: &str) -> bool {
-    const MARKER: &str = "CHRONO_RETENTION_CAPABILITY_TEST";
-    if std::env::var(MARKER).as_deref() == Ok(name) {
-        return true;
-    }
-    let output = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", name, "--nocapture"])
-        .env(MARKER, name)
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let one_passed = stdout
-        .lines()
-        .any(|line| line.starts_with("test result: ok. 1 passed; 0 failed;"));
-    assert!(
-        output.status.success() && one_passed,
-        "isolated capability test failed: {}; stdout: {}; stderr: {}",
-        output.status,
-        stdout,
-        String::from_utf8_lossy(&output.stderr)
-    );
-    false
-}
 #[test]
 fn isolated_capability_driver_rejects_a_successful_zero_test_process() {
     if !isolated_capability_test(

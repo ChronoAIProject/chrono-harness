@@ -821,7 +821,7 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 
 | 产生物类别 | 自动清理与留存要求 |
 | --- | --- |
-| 当前运行／恢复所需状态 | 存活消费者的租约、当前 ledger／指针、未终结操作的 intent、尚需恢复或交付的实际输入按明确角色保护；租约身份保持稳定。历史副本不因与它们同目录而获得相同保护 |
+| 当前运行／恢复所需状态 | 存活消费者的租约、当前对象登记／指针、未终结操作的 intent、尚需恢复或交付的实际输入按明确角色保护；租约身份保持稳定。历史副本不因与它们同目录而获得相同保护 |
 | 成功检查的完整报告与原始输出 | 操作终结、登记消费者释放且保留期届满后自动回收；可保留有界的提交／输入身份、结果及处置摘要，不默认永久保存完整测试现场 |
 | 失败、取消或未知结果的现场 | 保留原异常链、真实结果和当前恢复／复查所需原件；有用的回归程序与最小复现数据归其自然所有者。失败本身不授予整套现场无限留存，释放后按同一有界政策回收 |
 | 缓存与临时产物 | 下载包、解压副本、测试仓库的已登记编译／增量输出、临时验证程序和工件副本在实际消费／保存结束后按兼容复用及容量政策自动回收；未保存源码、必要实验程序／数据和未保留提交继续保护 |
@@ -1042,7 +1042,7 @@ init/generate 只接受当前 schema 2 / atomic-rules/relative-alias/v3 manifest
 [来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
 五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。
 
-`automatic_cleanup/v2` 以稳定 admission flock 与附件代际 SH/EX 租约，在后续普通生命周期与已采用 check/bootstrap 中恢复未调用 finish 的会话中断，包含正常返回且没有遗留 use token 的情况。EX 取得后，准确的两端登记可重建缓存以专属不可覆盖 intent、原缺失／失败输入和新真实回执重试；不创建持久自有 Git lock，不设 terminal，不删除源码、分支、未保留提交、bin/state 或证据。旧／缺失／漂移身份保留，整树 finish 保留真实交接合同。描述符由原进程 engine 的子副本与登记 Python pass_fds 明确传递，不推断通用继承。本地真实 Cargo test／原生子进程回归验证独立父子进程的租约转交，完整采用仍需已提交组合与支持平台验收；不从父进程退出、PID 缺失、年龄或空闲推断子孙终止。源与宿主政策同时修改，兼容协调者部署、旧生产者排除、已提交组合、支持平台验收、真实宿主切换和 Git/PR/发布仍归调用方。
+`automatic_cleanup/v2` 以目标独立的 metadata 租约与附件代际 SH/EX 租约，在后续普通生命周期与已采用 check/bootstrap 中恢复未调用 finish 的会话中断，包含正常返回且没有遗留 use token 的情况。EX 取得后，准确的两端登记可重建缓存以专属不可覆盖 intent、原缺失／失败输入和新真实回执重试；不创建持久自有 Git lock，不设 terminal，不删除源码、分支、未保留提交、bin/state 或证据。旧／缺失／漂移身份保留，整树 finish 保留真实交接合同。描述符由原进程 engine 的子副本与登记 Python pass_fds 明确传递，不推断通用继承。本地真实 Cargo test／原生子进程回归验证独立父子进程的租约转交，完整采用仍需已提交组合与支持平台验收；不从父进程退出、PID 缺失、年龄或空闲推断子孙终止。源与宿主政策同时修改，兼容协调者部署、旧生产者排除、已提交组合、支持平台验收、真实宿主切换和 Git/PR/发布仍归调用方。
 现役本地执行扩展由 projects 唯一调度 routes 已合并的 DAG。显式有限 cap 只限操作数，不推断 CPU／语言，不限工具内部线程；前置未终结等待，失败只阻断后继，冲突 ready 项可让位于独立项。回执保留原字节与失败，结果按规范计划顺序输出，线程与已知嵌套 runner 进程由原 runner 引擎收束。FILEMAP 声明缺失／未知／歧义在执行前失败；两端 cap、claim、冲突消费者与输出登记变更进入 DELTA，collection 仅重建核原登记和证据。Unix 匿名继承描述符承载已知 launch tree，超时后有限清理不延长执行额度；不承诺跨调用锁或关闭继承描述符的未登记外部进程树。本宿主 cap 2 与独立输出／workflow inventory 共用 claim 属于宿主政策；未从 owner suites 声称完整 canonical／native 成功、交付或完整 SPEC 验收。
 
 `execution_scheduling.priority` 可显式登记启动优先顺序，只含不重复的已登记操作 ID；空／未知 ID 或类型错误在业务执行前拒绝。就绪项先按该列表、再按未列项的规范计划顺序选择；依赖、失败传播、cap 和资源／输出排斥仍同时生效。优先级不新增选择义务、不推断耗时，也不阻止不冲突的就绪项前进。完整列表进入计划身份及留存核对；缺省或空列表保留旧序列化身份。列表重排、修改和删除按两端登记影响所有计划消费者，报告顺序仍为规范计划顺序。
@@ -1058,12 +1058,12 @@ observer 接收端的 recvmsg 失败（EAGAIN／EINTR 除外）与不完整 hand
 已登记 v2 birth 的封口中断由原 worktree owner 在正常入口取得实际排除、核原附件与政策后恢复；保留原缺失／部分结果及独立恢复回执，重复中断重用固定回执，不据恢复制造原成功或 finish。新消费在已发布缓存尝试后开启新代际、保留旧 intent/result；后续回收可绑定当前 HEAD。bootstrap 消费原 managed_command_failed 分类，原非零构建与后续生命周期拒绝及报告引用分别保留。
 
 
-自动清理政策的已登记 v2 内核附件可以显式迁移：从存活协调宿主调用 `chrono-worktree migrate --path <已登记工作树>`，在原 admission 与附件独占租约下核已提交的两端同政策／配置、原物理附件、有效 birth 和两端工件登记。原登记及回执不改写，另保留旧新输入原字节与固定提交的不可覆盖迁移记录；后续普通操作核整条关联并消费最终绑定。迁移不删除、不更新 Git、不设完成；active 开新缓存代际，retained 保持已保留状态并要求新的 finish。缺失／损坏原证据、未知租约、未封口 birth、待执行终态删除及协调锚／状态地址／政策地址搬迁不自动解释。发布迁移记录但尚未登记的中断允许按同一绑定重试；旧 binary 不得解释包含新迁移字段的 ledger。兼容 binary 部署、实际宿主切换、未登记写入加入及落地验证仍由调用方完成。
+自动清理政策的已登记 v2 内核附件可以显式迁移：从存活协调宿主调用 `chrono-worktree migrate --path <已登记工作树>`，在目标 metadata 与附件独占租约下核已提交的两端同政策／配置、原物理附件、有效 birth 和两端工件登记。原登记及回执不改写，另保留旧新输入原字节与固定提交的不可覆盖迁移记录；后续普通操作核整条关联并消费最终绑定。迁移不删除、不更新 Git、不设完成；active 开新缓存代际，retained 保持已保留状态并要求新的 finish。缺失／损坏原证据、未知租约、未封口 birth、待执行终态删除及协调锚／状态地址／政策地址搬迁不自动解释。发布迁移记录但尚未登记的中断允许按同一绑定重试；普通入口只消费当前登记格式。当前 binary 部署、实际宿主切换、未登记写入加入及落地验证仍由调用方完成。
 
 
-Git main 的已登记历史可重建工件可经同一生命周期所有者 `migrate --path <main> --adopt-cache <state-input>` 接管当前 custody。`chrono-main-cache-custody/v1` 输入显式绑定物理 main、当前完整 HEAD、逐项 dispose 路径、`current_consumers_released:true` 与当前工程原因；操作方须实际加入或排除旧的未登记消费者，不据目录、年龄或静默猜 release。原 admission／附件独占租约保护 active main；源码、index、bin／证据、未知路径及活的已采用消费者仍拒绝。不可覆盖的独立接管回执保留原声明、附件与所有权 DELTA，历史 producer outcome 保持 unknown，原 producer／disposal outcome 保留，不制造 terminal。现有 `reconcile_uses` 可追加中断消费历史并移除过期 token，mutable enrollment／uses 不保证字节不变。已托管项重入不增接管历史，未登记的独立对象不否决已选择的合法兄弟；发布中断可按同绑定重试。接管本身不删除，新 pending 代际由现有普通入口／maintain drain 回收；后续普通构建及中断恢复继续使用同一租约。该局部源与行为合同不证明 native、全 SPEC、PR 或发布完成。
+Git main 的已登记历史可重建工件可经同一生命周期所有者 `migrate --path <main> --adopt-cache <state-input>` 接管当前 custody。`chrono-main-cache-custody/v1` 输入显式绑定物理 main、当前完整 HEAD、逐项 dispose 路径、`current_consumers_released:true` 与当前工程原因；操作方须实际加入或排除旧的未登记消费者，不据目录、年龄或静默猜 release。目标 metadata／附件独占租约保护 active main；源码、index、bin／证据、未知路径及活的已采用消费者仍拒绝。不可覆盖的独立接管回执保留原声明、附件与所有权 DELTA，历史 producer outcome 保持 unknown，原 producer／disposal outcome 保留，不制造 terminal。现有 `reconcile_uses` 可追加中断消费历史并移除过期 token，mutable enrollment／uses 不保证字节不变。已托管项重入不增接管历史，未登记的独立对象不否决已选择的合法兄弟；发布中断可按同绑定重试。接管本身不删除，新 pending 代际由现有普通入口／maintain drain 回收；后续普通构建及中断恢复继续使用同一租约。该局部源与行为合同不证明 native、全 SPEC、PR 或发布完成。
 
-已结束历史复制路径消费的精确证据别名，可由 worktree 现役 maintenance 所有者执行 `retire-evidence`。当前 custodian 输入绑定物理 checkout、固定 HEAD／branch、明确结束消费、权威声明原件及逐项路径／长度／SHA256／保留原件／所有者／原因；等同字节不独自授权处置。复用现有协调 admission 和附件租约，核现役单一 enrollment、Git 锁、干净源码与真实工件登记，不迁移历史源码或执行旧判官，不清理其它登记项。逐文件稳定身份／原件核验后删除，独立失败不阻断合格兄弟；独立原 intent/result 日志保留部分效果，重入只报告实际缺失，不制造原成功或 release。`removed` 只计完全核验的删除完成；unlink 后的核验失败可记 failed，因此 removed=0 不证明没有删除效果。回执依赖精确引用的 retained declaration／authority，不保证自包含副本。历史 manifest 可由当前 custodian 明确结束 replay，原字节仍保留。当前 CI gather 对不超过 64 MiB 且有明确 retained_report 的同 artifact 原报告副本保留两个接口路径而共用 inode；更大报告不共享，失败 native／transport 原件不删除，reference 发布不改。该有限行为不证明通用全历史回收、完整自动证据终点、native parity、PR／发布或持续目标完成。
+已结束历史复制路径消费的精确证据别名，可由 worktree 现役 maintenance 所有者执行 `retire-evidence`。当前 custodian 输入绑定物理 checkout、固定 HEAD／branch、明确结束消费、权威声明原件及逐项路径／长度／SHA256／保留原件／所有者／原因；等同字节不独自授权处置。复用目标独立 metadata 和附件租约，核现役单一 enrollment、Git 锁、干净源码与真实工件登记，不迁移历史源码或执行旧判官，不清理其它登记项。逐文件稳定身份／原件核验后删除，独立失败不阻断合格兄弟；独立原 intent/result 日志保留部分效果，重入只报告实际缺失，不制造原成功或 release。`removed` 只计完全核验的删除完成；unlink 后的核验失败可记 failed，因此 removed=0 不证明没有删除效果。回执依赖精确引用的 retained declaration／authority，不保证自包含副本。历史 manifest 可由当前 custodian 明确结束 replay，原字节仍保留。当前 CI gather 对不超过 64 MiB 且有明确 retained_report 的同 artifact 原报告副本保留两个接口路径而共用 inode；更大报告不共享，失败 native／transport 原件不删除，reference 发布不改。该有限行为不证明通用全历史回收、完整自动证据终点、native parity、PR／发布或持续目标完成。
 
 
 当前独立工作树的生命周期登记按物理工作树地址分别存储和互斥，不得使用跨工作树的可变成员账本或全局准入独占锁。一个工作树的登记占用、损坏或清理失败只阻断该目标及显式依赖，维护继续处理可用的独立目标。普通 start／reconstruct／use／check／bootstrap／finish 只维护本目标，不把其他工作树或 fixture producer 的清理作为前置；跨目标回收使用显式 maintain，继续处理可用的独立目标。共享执行程序的替换须排除其全部实际使用者；普通操作对该程序持共享保护。当前登记的历史格式不构成兼容义务，切换须保护并迁移仍在使用的原状态。详见 docs/worktree.md。

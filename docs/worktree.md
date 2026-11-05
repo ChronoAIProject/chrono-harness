@@ -856,10 +856,11 @@ coordinator. Failed creation, missing state and unknown ownership remain protect
 For v2, persisted enrollment with unsealed birth evidence is reconciled at a normal
 entry after admission/attachment exclusion and original policy validation. The
 original missing or partial outcome stays unknown; recovery does not claim an
-original successful birth or terminal handoff. Before creation, both entries call the shared
-drain after validating policy/identity, excluding the invoking source and intended
-destination. Unrelated drain failures retain their original reports and do not block valid
-admission; target identity and coordinator publication failures still block.
+original successful birth or terminal handoff. Before creation, both entries
+validate policy/identity and maintain only the addressed target. Cross-target
+drain belongs to explicit `maintain`; unrelated worktrees and fixture producers
+are not creation prerequisites. Target identity and target-state publication
+failures still block that target.
 
 The fixed lifecycle commands default to `--host-root .` and
 `--config .chrono-harness/worktree.json`:
@@ -873,8 +874,8 @@ chrono-worktree migrate --path /exact/enrolled-worktree
 ```
 
 `use` consumes exactly one registered project/script operation and its tool,
-argv, environment and process bounds. It records managed use under the same
-admission gate used by finish/disposal, invokes the existing bounded process
+argv, environment and process bounds. It records managed use under the target's
+metadata lease used by finish/disposal, invokes the existing bounded process
 owner, preserves original process bytes and exit, and releases use after the child
 has joined. A nonzero child exit is reported as failure even when use was safely
 released. Lifecycle results publish at the surviving coordinator even when the

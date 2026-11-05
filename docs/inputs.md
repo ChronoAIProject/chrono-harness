@@ -374,8 +374,15 @@ native pinned policies retain the common graph. Package file and crate-archive e
 PR163 source and must match the independently fetched packages; selected private
 Rustup 1.29.1 comes from its official versioned archive and published checksum.
 The previous 1.29.2 observation remains a failed selection, not an expectation.
-Observer, private bootstrap and ordinary guard select the same private homes,
-compiler, empty wrappers, sysroot, linker and SDK environment.
+The ordinary guard selects the current checkout's bootstrap Cargo cache and the
+explicit shared read-only Rust toolchain, empty wrappers, sysroot, linker and SDK
+environment. Its configuration-absence rows name that checkout-local Cargo home.
+Its package vector includes the current runner manifest's direct `tracing`
+dependency, already present in the declared transitive package inventory; no
+package-file or resolver-input digest changes. The separate isolated observer
+and private bootstrap proposal still names another home and requires explicit
+reconciliation before consumption; it does not establish agreement with the
+ordinary guard.
 
 The current Xcode acquisition identifies Xcode 26.5 / 17F42. Its Developer-only
 inventory rejected `usr/bin/altool` because that literal alias reaches the sibling

@@ -55,11 +55,11 @@
       "input": null
     },
     {
-      "path": ".chrono-harness/state/isolated-rust/cargo/config",
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/config",
       "input": null
     },
     {
-      "path": ".chrono-harness/state/isolated-rust/cargo/config.toml",
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/config.toml",
       "input": null
     }
   ],
@@ -71,7 +71,7 @@
   },
   "toolchain": {
     "sysroot": {
-      "root": ".chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "root": "/Users/macstudio2/chrono-input-q1-validation-20261028/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
       "manifest": "toolchain.rust.inventory",
       "manifest_root": "/Users/macstudio2/chrono-pr-inputs-20261023/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin"
     },
@@ -548,6 +548,16 @@
         {
           "package": "tempfile@3.27.0",
           "name": "tempfile",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "tracing@0.1.44",
+          "name": "tracing",
           "kinds": [
             {
               "kind": null,

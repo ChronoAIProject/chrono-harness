@@ -1154,7 +1154,14 @@ The downloaded collection archive matches its provider length/digest; original
 report and stream digests verify, with all 25 aggregate results passing. The
 registered runner action separately passed 241 tests with one existing ignored
 test. PR #221 landed as `3b605cf80aa9e96a6442b2e54991602713acca31`; its tree is
-identical to the tested candidate. Other coordinators, including the original
-main checkout's nine aggregate enrollment
-records, still require protected state cutover. Complete SPEC delivery and total
+identical to the tested candidate. Subsequent PR #227 landed as
+`2ec6e5ce6c16cd6e56433729a06db7a4cab3ba49`; landed native run `41965898150`
+verified all 13 selected aggregate results. The original main checkout's nine
+enrollments have completed protected state partition and shared-owner deployment.
+Its ordinary bootstrap passed, and an independent linked start succeeded while
+an unrelated old worktree's metadata EX lease remained held through completion.
+That linked checkout's equal-endpoint canonical check selected no business tests;
+it does not repeat the earlier worktree-suite result. Old originals and two
+independent unique commits remain retained. Other coordinators still require
+their own protected state cutover. Complete SPEC delivery and total
 runtime, CI and storage savings remain unestablished.

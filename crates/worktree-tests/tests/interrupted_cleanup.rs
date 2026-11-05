@@ -220,6 +220,11 @@ fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment
 
 #[test]
 fn caller_report_consumer_protects_primary_and_coordinator_publication() {
+    if !super::isolated_capability::isolated_capability_test(
+        "interrupted_cleanup::caller_report_consumer_protects_primary_and_coordinator_publication",
+    ) {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "noop");

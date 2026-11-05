@@ -442,8 +442,13 @@ drift still reject. The observer-produced original is consumed by the existing
 guard, including its post-operation checks. Bounded phase observations retain
 where a failure occurred without replacing any check.
 
-The host registers one proposed isolated `guard.check.runner` consumer; its
-current selected-home, input and participant bindings remain incomplete. Its
+The host registers one proposed `guard.check.runner` consumer. Its ordinary
+macOS 27 policy selects the registered read-only Rust toolchain and the current
+checkout's `.chrono-harness/cache/bootstrap-owner-tooling/cargo` configuration
+locations, matching the current bootstrap. Its package vector includes the
+runner's direct `tracing` dependency from its current manifest. Expected file
+digests remain unchanged. The separate isolated provisioning proposal still
+requires its own selected-home and participant reconciliation. Its
 generic behavior cases stay in the dedicated Rust owner tests. Cargo guarding is
 optional: the 95 current methods corresponding to PR163 retain 94 direct Cargo
 recipes and one ordinary `build.diagnostics` action through
