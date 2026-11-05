@@ -456,6 +456,52 @@ fn shared_graph_does_not_need_full_registration_and_only_execution_edges_select(
 }
 
 #[test]
+fn edge_kind_json_adapters_use_exact_canonical_strings() {
+    let pairs = [
+        ("compile", EdgeKind::Compile),
+        ("build-input", EdgeKind::BuildInput),
+        ("runtime-input", EdgeKind::RuntimeInput),
+        ("test-execution", EdgeKind::TestExecution),
+        ("judge-trigger", EdgeKind::JudgeTrigger),
+    ];
+    for (name, kind) in pairs {
+        let value = json!(name);
+        assert_eq!(serde_json::to_value(kind).unwrap(), value);
+        assert_eq!(serde_json::from_value::<EdgeKind>(value).unwrap(), kind);
+        let text = format!("\"{name}\"");
+        assert_eq!(serde_json::from_str::<EdgeKind>(&text).unwrap(), kind);
+    }
+    assert_eq!(
+        serde_json::from_str::<EdgeKind>(r#""\u0063ompile""#).unwrap(),
+        EdgeKind::Compile
+    );
+    for value in [
+        json!(""),
+        json!("Compile"),
+        json!("compil"),
+        json!("compilex"),
+        json!("build_input"),
+        json!(" compile"),
+        json!("compile\0"),
+        json!("编译"),
+        json!(null),
+        json!(0),
+        json!(true),
+        json!([]),
+        json!({"compile": null}),
+    ] {
+        assert!(
+            serde_json::from_value::<EdgeKind>(value.clone()).is_err(),
+            "{value}"
+        );
+        assert!(
+            serde_json::from_str::<EdgeKind>(&value.to_string()).is_err(),
+            "{value}"
+        );
+    }
+}
+
+#[test]
 fn indexed_closure_preserves_shortest_ties_edge_kinds_and_seed_identity() {
     let rows = [
         ("根", EdgeKind::RuntimeInput, "a"),

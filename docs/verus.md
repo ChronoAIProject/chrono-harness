@@ -89,7 +89,28 @@ target, reusing the existing pinned toolchain and macro. No external assumption
 is added. Proof/build/storage costs beyond the existing bounds are unmeasured;
 the runner's remaining whole-file and unit migration gaps stay declared.
 
-`crates/judge-filemap/src/verified_graph.rs` also owns exact name lookup. Its byte
+`crates/judge-filemap/src/verified_graph.rs` owns the actual `EdgeKind` type.
+Its explicit equality, Ord and PartialOrd implementations prove the declared
+Compile, BuildInput, RuntimeInput, TestExecution, JudgeTrigger order. Rank
+identity is injective; equal order means the same variant, and strict order is
+transitive with the matching reverse order. The pinned Verus ignores derived
+comparison implementations, so these traits are implemented and checked
+explicitly. The actual typed-edge BTree ordering calls these implementations.
+Canonical wire names are injective, and parsing succeeds exactly for one of the
+five complete byte names, returning that variant. No case folding, trimming,
+prefix acceptance or alias is present. Serde adapters in `graph.rs` delegate
+JSON string serialization/parsing to these functions and reject nonstrings.
+Those adapters and diagnostic formatting remain unproved in their empty-root
+owner; the full Edge field-order/adjacency correspondence remains outstanding.
+Independent Verus examples check all 25 kind pairs, exact names and roundtrips,
+and noncanonical boundaries. Runtime tests additionally exercise both owned
+JSON values and text, escaped strings and wrong JSON types. An always-Equal
+comparator is rejected by its order postcondition. These changes reuse existing
+proof operations and add no dependency or trusted interface. Five fixed names
+bound parsing comparisons; complete runtime/build/CI/storage costs remain
+unmeasured.
+
+The same source also owns exact name lookup. Its byte
 comparator proves lexicographic order over complete slices, including empty and
 prefix-related slices and every byte value. Strictness and transitivity connect
 adjacent inventory checks to every ordered pair. `valid_names` accepts exactly

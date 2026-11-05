@@ -17,6 +17,153 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn all_edge_kind_pairs_obey_the_declared_order_and_equality() {
+    use policy::EdgeKind::*;
+    use core::cmp::Ordering;
+    let kinds = vec![Compile, BuildInput, RuntimeInput, TestExecution, JudgeTrigger];
+    proof {
+        assert forall|i: int| 0 <= i < kinds.len()
+            implies (#[trigger] kinds@[i].rank_spec()) == i by {}
+    }
+    let mut i: usize = 0;
+    while i < kinds.len()
+        invariant i <= kinds.len(), kinds.len() == 5,
+            forall|k: int| 0 <= k < kinds.len() ==> (#[trigger] kinds@[k].rank_spec()) == k,
+        decreases kinds.len() - i,
+    {
+        let mut j: usize = 0;
+        while j < kinds.len()
+            invariant i < kinds.len(), j <= kinds.len(), kinds.len() == 5,
+                forall|k: int| 0 <= k < kinds.len() ==> (#[trigger] kinds@[k].rank_spec()) == k,
+            decreases kinds.len() - j,
+        {
+            proof { policy::edge_kind_order_laws(kinds@[i as int], kinds@[j as int], Compile); }
+            let equal = kinds[i] == kinds[j];
+            assert(equal == (i == j));
+            let different = kinds[i] != kinds[j];
+            assert(different == (i != j));
+            let order = kinds[i].cmp(&kinds[j]);
+            let partial = kinds[i].partial_cmp(&kinds[j]);
+            if i < j {
+                assert(order == Ordering::Less);
+                assert(partial == Some(Ordering::Less));
+            } else if i > j {
+                assert(order == Ordering::Greater);
+                assert(partial == Some(Ordering::Greater));
+            } else {
+                assert(order == Ordering::Equal);
+                assert(partial == Some(Ordering::Equal));
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn canonical_edge_kind_names_have_exact_identity_and_roundtrip() {
+    use policy::EdgeKind::*;
+    let kinds = vec![Compile, BuildInput, RuntimeInput, TestExecution, JudgeTrigger];
+    let names = vec!["compile", "build-input", "runtime-input", "test-execution", "judge-trigger"];
+    proof {
+        assert forall|i: int| 0 <= i < kinds.len()
+            implies (#[trigger] kinds@[i].wire_spec()) == names@[i].spec_bytes() by {}
+    }
+    let mut i: usize = 0;
+    while i < kinds.len()
+        invariant i <= kinds.len(), kinds.len() == 5, names.len() == 5,
+            forall|k: int| 0 <= k < kinds.len()
+                ==> (#[trigger] kinds@[k].wire_spec()) == names@[k].spec_bytes(),
+        decreases kinds.len() - i,
+    {
+        let name = kinds[i].wire_name();
+        let order = policy::compare_bytes(name.as_bytes(), names[i].as_bytes());
+        assert(order == 0);
+        let decoded = policy::EdgeKind::from_wire(names[i]);
+        proof { assert(exists|k: policy::EdgeKind| k.wire_spec() == names@[i as int].spec_bytes()); }
+        assert(decoded.is_some());
+        let decoded = decoded.unwrap();
+        proof { policy::edge_kind_wire_unique(decoded, kinds@[i as int]); }
+        let equal = decoded == kinds[i];
+        assert(equal);
+        i += 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn edge_kind_parser_rejects_noncanonical_names() {
+    proof {
+        reveal_strlit("");
+        reveal_strlit("Compile");
+        reveal_strlit("compil");
+        reveal_strlit("compilex");
+        reveal_strlit("build_input");
+        reveal_strlit(" compile");
+        reveal_strlit("compile\0");
+        vstd::string::is_ascii_spec_bytes("");
+        vstd::string::is_ascii_spec_bytes("Compile");
+        vstd::string::is_ascii_spec_bytes("compil");
+        vstd::string::is_ascii_spec_bytes("compilex");
+        vstd::string::is_ascii_spec_bytes("build_input");
+        vstd::string::is_ascii_spec_bytes(" compile");
+        vstd::string::is_ascii_spec_bytes("compile\0");
+        // Establish the five canonical spellings independently of the parser.
+        reveal_strlit("compile");
+        reveal_strlit("build-input");
+        reveal_strlit("runtime-input");
+        reveal_strlit("test-execution");
+        reveal_strlit("judge-trigger");
+        vstd::string::is_ascii_spec_bytes("compile");
+        vstd::string::is_ascii_spec_bytes("build-input");
+        vstd::string::is_ascii_spec_bytes("runtime-input");
+        vstd::string::is_ascii_spec_bytes("test-execution");
+        vstd::string::is_ascii_spec_bytes("judge-trigger");
+        assert("compile".spec_bytes().len() == 7);
+        assert("build-input".spec_bytes().len() == 11);
+        assert("runtime-input".spec_bytes().len() == 13);
+        assert("test-execution".spec_bytes().len() == 14);
+        assert("judge-trigger".spec_bytes().len() == 13);
+        assert("".spec_bytes().len() == 0);
+        assert("Compile".spec_bytes().len() == 7);
+        assert("Compile".spec_bytes()[0] == 67);
+        assert("compile".spec_bytes()[0] == 99);
+        assert("compil".spec_bytes().len() == 6);
+        assert("compilex".spec_bytes().len() == 8);
+        assert("build_input".spec_bytes().len() == 11);
+        assert("build_input".spec_bytes()[5] == 95);
+        assert("build-input".spec_bytes()[5] == 45);
+        assert(" compile".spec_bytes().len() == 8);
+        assert("compile\0".spec_bytes().len() == 8);
+    }
+    let names = vec!["", "Compile", "compil", "compilex", "build_input", " compile", "compile\0"];
+    proof {
+        assert forall|i: int, k: policy::EdgeKind| 0 <= i < names.len()
+            implies (#[trigger] names@[i].spec_bytes()) != (#[trigger] k.wire_spec()) by {
+            if i == 0 {} else if i == 1 {} else if i == 2 {}
+            else if i == 3 {} else if i == 4 {} else if i == 5 {} else {}
+            match k {
+                policy::EdgeKind::Compile => {},
+                policy::EdgeKind::BuildInput => {},
+                policy::EdgeKind::RuntimeInput => {},
+                policy::EdgeKind::TestExecution => {},
+                policy::EdgeKind::JudgeTrigger => {},
+            }
+        }
+    }
+    let mut i: usize = 0;
+    while i < names.len()
+        invariant i <= names.len(),
+            forall|j: int, k: policy::EdgeKind| 0 <= j < names.len()
+                ==> (#[trigger] names@[j].spec_bytes()) != (#[trigger] k.wire_spec()),
+        decreases names.len() - i,
+    {
+        let parsed = policy::EdgeKind::from_wire(names[i]);
+        assert(parsed.is_none());
+        i += 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn named_slots_keep_parallel_edges_cycles_and_root_positions() {
     proof {
         reveal_strlit("");

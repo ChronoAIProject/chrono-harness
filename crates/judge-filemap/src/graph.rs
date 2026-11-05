@@ -2,14 +2,39 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum EdgeKind {
-    Compile,
-    BuildInput,
-    RuntimeInput,
-    TestExecution,
-    JudgeTrigger,
+pub use crate::verified_graph::EdgeKind;
+
+impl std::fmt::Debug for EdgeKind {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Compile => "Compile",
+            Self::BuildInput => "BuildInput",
+            Self::RuntimeInput => "RuntimeInput",
+            Self::TestExecution => "TestExecution",
+            Self::JudgeTrigger => "JudgeTrigger",
+        })
+    }
+}
+impl Serialize for EdgeKind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.wire_name())
+    }
+}
+impl<'de> Deserialize<'de> for EdgeKind {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct KindVisitor;
+        impl serde::de::Visitor<'_> for KindVisitor {
+            type Value = EdgeKind;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a canonical FILEMAP edge kind")
+            }
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<EdgeKind, E> {
+                EdgeKind::from_wire(value)
+                    .ok_or_else(|| E::invalid_value(serde::de::Unexpected::Str(value), &self))
+            }
+        }
+        deserializer.deserialize_str(KindVisitor)
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Edge {

@@ -1,12 +1,199 @@
-//! Exact name lookup and indexed FIFO graph traversal.
+//! Typed edge ordering, exact name lookup and indexed FIFO graph traversal.
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
+use core::cmp::Ordering;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+#[derive(Clone, Copy)]
+pub enum EdgeKind {
+    Compile,
+    BuildInput,
+    RuntimeInput,
+    TestExecution,
+    JudgeTrigger,
+}
+
+impl EdgeKind {
+    pub open spec fn rank_spec(&self) -> u8 {
+        match self {
+            Self::Compile => 0,
+            Self::BuildInput => 1,
+            Self::RuntimeInput => 2,
+            Self::TestExecution => 3,
+            Self::JudgeTrigger => 4,
+        }
+    }
+
+    pub fn rank(&self) -> (rank: u8)
+        ensures rank == self.rank_spec(),
+    {
+        match self {
+            Self::Compile => 0,
+            Self::BuildInput => 1,
+            Self::RuntimeInput => 2,
+            Self::TestExecution => 3,
+            Self::JudgeTrigger => 4,
+        }
+    }
+
+    pub open spec fn order_spec(&self, other: &Self) -> Ordering {
+        if self.rank_spec() < other.rank_spec() { Ordering::Less }
+        else if self.rank_spec() > other.rank_spec() { Ordering::Greater }
+        else { Ordering::Equal }
+    }
+
+    pub fn compare(&self, other: &Self) -> (order: Ordering)
+        ensures order == self.order_spec(other),
+    {
+        let rank = self.rank();
+        let other_rank = other.rank();
+        if rank < other_rank { Ordering::Less }
+        else if rank > other_rank { Ordering::Greater }
+        else { Ordering::Equal }
+    }
+
+    pub open spec fn wire_spec(&self) -> Seq<u8> {
+        match self {
+            Self::Compile => "compile".spec_bytes(),
+            Self::BuildInput => "build-input".spec_bytes(),
+            Self::RuntimeInput => "runtime-input".spec_bytes(),
+            Self::TestExecution => "test-execution".spec_bytes(),
+            Self::JudgeTrigger => "judge-trigger".spec_bytes(),
+        }
+    }
+
+    pub fn wire_name(&self) -> (name: &'static str)
+        ensures name.spec_bytes() == self.wire_spec(),
+    {
+        match self {
+            Self::Compile => "compile",
+            Self::BuildInput => "build-input",
+            Self::RuntimeInput => "runtime-input",
+            Self::TestExecution => "test-execution",
+            Self::JudgeTrigger => "judge-trigger",
+        }
+    }
+
+    pub fn from_wire(name: &str) -> (kind: Option<Self>)
+        ensures
+            kind.is_some() <==> exists|k: Self| k.wire_spec() == name.spec_bytes(),
+            kind matches Some(k) ==> k.wire_spec() == name.spec_bytes(),
+    {
+        let kind = if compare_bytes(name.as_bytes(), "compile".as_bytes()) == 0 {
+            Some(Self::Compile)
+        } else if compare_bytes(name.as_bytes(), "build-input".as_bytes()) == 0 {
+            Some(Self::BuildInput)
+        } else if compare_bytes(name.as_bytes(), "runtime-input".as_bytes()) == 0 {
+            Some(Self::RuntimeInput)
+        } else if compare_bytes(name.as_bytes(), "test-execution".as_bytes()) == 0 {
+            Some(Self::TestExecution)
+        } else if compare_bytes(name.as_bytes(), "judge-trigger".as_bytes()) == 0 {
+            Some(Self::JudgeTrigger)
+        } else {
+            proof {
+                assert forall|k: Self| k.wire_spec() != name.spec_bytes() by {
+                    match k {
+                        Self::Compile => {},
+                        Self::BuildInput => {},
+                        Self::RuntimeInput => {},
+                        Self::TestExecution => {},
+                        Self::JudgeTrigger => {},
+                    }
+                }
+            }
+            None
+        };
+        proof {
+            if let Some(k) = kind {
+                assert(k.wire_spec() == name.spec_bytes());
+                assert(exists|accepted: Self| accepted.wire_spec() == name.spec_bytes());
+            }
+        }
+        kind
+    }
+}
+
+pub proof fn edge_kind_order_laws(a: EdgeKind, b: EdgeKind, c: EdgeKind)
+    ensures
+        a.rank_spec() <= 4,
+        (a.rank_spec() == b.rank_spec()) == (a == b),
+        (a.order_spec(&b) == Ordering::Equal) == (a == b),
+        (a.order_spec(&b) == Ordering::Less) == (b.order_spec(&a) == Ordering::Greater),
+        a.order_spec(&b) == Ordering::Less && b.order_spec(&c) == Ordering::Less
+            ==> a.order_spec(&c) == Ordering::Less,
+{}
+
+pub proof fn edge_kind_wire_unique(a: EdgeKind, b: EdgeKind)
+    ensures (a.wire_spec() == b.wire_spec()) == (a == b),
+{
+    reveal_strlit("compile");
+    reveal_strlit("build-input");
+    reveal_strlit("runtime-input");
+    reveal_strlit("test-execution");
+    reveal_strlit("judge-trigger");
+    vstd::string::is_ascii_spec_bytes("compile");
+    vstd::string::is_ascii_spec_bytes("build-input");
+    vstd::string::is_ascii_spec_bytes("runtime-input");
+    vstd::string::is_ascii_spec_bytes("test-execution");
+    vstd::string::is_ascii_spec_bytes("judge-trigger");
+    assert("compile".spec_bytes().len() == 7);
+    assert("build-input".spec_bytes().len() == 11);
+    assert("runtime-input".spec_bytes().len() == 13);
+    assert("test-execution".spec_bytes().len() == 14);
+    assert("judge-trigger".spec_bytes().len() == 13);
+    assert("runtime-input".spec_bytes()[0] == 114);
+    assert("judge-trigger".spec_bytes()[0] == 106);
+}
+
+impl vstd::std_specs::cmp::PartialEqSpecImpl for EdgeKind {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { *self == *other }
+}
+
+impl PartialEq for EdgeKind {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == (*self == *other),
+    {
+        self.rank() == other.rank()
+    }
+}
+
+impl Eq for EdgeKind {}
+
+impl vstd::std_specs::cmp::OrdSpecImpl for EdgeKind {
+    open spec fn obeys_cmp_spec() -> bool { true }
+    open spec fn cmp_spec(&self, other: &Self) -> Ordering {
+        self.order_spec(other)
+    }
+}
+
+impl Ord for EdgeKind {
+    fn cmp(&self, other: &Self) -> (order: Ordering)
+        ensures order == self.order_spec(other),
+    {
+        self.compare(other)
+    }
+}
+
+impl vstd::std_specs::cmp::PartialOrdSpecImpl for EdgeKind {
+    open spec fn obeys_partial_cmp_spec() -> bool { true }
+    open spec fn partial_cmp_spec(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order_spec(other))
+    }
+}
+
+impl PartialOrd for EdgeKind {
+    fn partial_cmp(&self, other: &Self) -> (order: Option<Ordering>)
+        ensures order == Some(self.order_spec(other)),
+    {
+        Some(self.compare(other))
+    }
+}
 
 pub open spec fn byte_prefix(a: Seq<u8>, b: Seq<u8>, n: int) -> bool {
     0 <= n <= a.len() && n <= b.len()
@@ -48,7 +235,7 @@ pub fn compare_bytes(a: &[u8], b: &[u8]) -> (order: i8)
     ensures
         -1 <= order <= 1,
         order == -1 ==> byte_lt(a@, b@),
-        order == 0 ==> a@ == b@,
+        order == 0 <==> a@ == b@,
         order == 1 ==> byte_lt(b@, a@),
 {
     let mut i: usize = 0;
@@ -58,21 +245,25 @@ pub fn compare_bytes(a: &[u8], b: &[u8]) -> (order: i8)
     {
         if a[i] < b[i] {
             assert(byte_lt(a@, b@));
+            proof { byte_lt_strict(a@, b@); }
             return -1;
         }
         if a[i] > b[i] {
             assert(byte_prefix(b@, a@, i as int));
             assert(byte_lt(b@, a@));
+            proof { byte_lt_strict(b@, a@); }
             return 1;
         }
         i += 1;
     }
     if a.len() < b.len() {
         assert(byte_lt(a@, b@));
+        proof { byte_lt_strict(a@, b@); }
         -1
     } else if a.len() > b.len() {
         assert(byte_prefix(b@, a@, i as int));
         assert(byte_lt(b@, a@));
+        proof { byte_lt_strict(b@, a@); }
         1
     } else {
         assert(a@ =~= b@);

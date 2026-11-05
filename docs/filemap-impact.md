@@ -29,6 +29,16 @@ The closure adapter calls the executable Verus FIFO owner in
 `crates/judge-filemap/src/verified_graph.rs`. It indexes the explicit node names
 and preserves each existing sorted typed-edge adjacency slot. Its Verus byte
 comparator and exact binary lookup replace the separate name-to-index map.
+The actual `EdgeKind` now belongs to that Verus owner too: explicit equality,
+Ord and PartialOrd implementations prove the declared five-kind order, with
+injective ranks, exact equality, reverse order and transitivity. Canonical
+wire-name production and complete-byte parsing prove an injective correspondence
+to those variants. Typed-edge BTree sorting calls the proved comparison;
+the JSON adapters call the proved name functions and reject nonstring inputs.
+The JSON/diagnostic adapters and the complete Edge field-order and adjacency
+correspondence remain unproved. No ignored derived comparison is counted as a
+proof. All 25 pairs and name success/rejection boundaries have independent
+Verus examples; runtime JSON tests cover owned/text and wrong-type inputs.
 The proved merge constructor replaces BTreeSet name sorting/deduplication: its
 output is strictly ordered, has exactly the supplied byte-name set and has length
 equal to that set's cardinality. A separate validator retains exact admission of
@@ -48,7 +58,7 @@ zero-length root paths. Its complete result also equals the in-source `fifo`
 contract: queue order and first adjacency slots fix every predecessor, and later
 discoveries cannot overwrite one. Independent exact inventories verify parallel
 slots, reordered ties, longer alternatives and cycle returns. The adapter still
-owns extraction of the supplied edge/seed names and target-name rows, edge kinds,
+owns extraction of the supplied edge/seed names and target-name rows,
 cause merging and the mapping from sorted typed edges to indexed slots;
 these and union/test selection remain unmet Verus
 obligations. The independent test project checks the actual adapter's ties,
