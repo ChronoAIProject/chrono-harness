@@ -101,7 +101,7 @@ five complete byte names, returning that variant. No case folding, trimming,
 prefix acceptance or alias is present. Serde adapters in `graph.rs` delegate
 JSON string serialization/parsing to these functions and reject nonstrings.
 Those adapters and diagnostic formatting remain unproved in their empty-root
-owner; the full Edge field-order/adjacency correspondence remains outstanding.
+owner; complete projection from typed rows to indexed slots remains outstanding.
 Independent Verus examples check all 25 kind pairs, exact names and roundtrips,
 and noncanonical boundaries. Runtime tests additionally exercise both owned
 JSON values and text, escaped strings and wrong JSON types. An always-Equal
@@ -109,6 +109,29 @@ comparator is rejected by its order postcondition. These changes reuse existing
 proof operations and add no dependency or trusted interface. Five fixed names
 bound parsing comparisons; complete runtime/build/CI/storage costs remain
 unmeasured.
+
+The actual `Edge` type now belongs to the same proof root. Its executable Clone
+preserves all fields, and explicit equality/Ord/PartialOrd implementations compare
+complete from-name bytes, the declared kind rank, then complete to-name bytes.
+Equality is exactly identity of those three keys; reverse order, strict
+transitivity and the full vstd comparison laws are proved. Byte trichotomy and
+asymmetry connect every unequal field to exactly one direction. No ignored
+derived comparison is counted as proof.
+
+The production closure now extracts each existing typed BTreeSet row through
+`edge_inventory`. This implementation proves exact set membership, distinct-member
+cardinality, no duplicate references and strict full-field order. It reuses the
+matching vstd BTreeSet iterator contract after establishing the key's comparison
+laws; no sorting implementation, trusted interface or verification operation is
+added. The returned reference vector replaces the previous collected reference
+vector, with the same O(E_row) traversal/storage bound. Complete measured costs
+remain unknown. Independent examples cover field precedence, prefixes, empty and
+NUL-containing names, Unicode, cloning, empty rows and duplicate insertions.
+Runtime consumer cases require all 196 pairs of a separately declared 14-edge
+inventory and exercise JSON field transport/errors. JSON/diagnostic adapter
+implementations remain outside the proof root with their obligation retained.
+Mapping row references into target-name/index slots, name/seed extraction and the
+remaining closure/union/selection logic still require proof.
 
 The same source also owns exact name lookup. Its byte
 comparator proves lexicographic order over complete slices, including empty and

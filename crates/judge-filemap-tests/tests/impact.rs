@@ -502,6 +502,73 @@ fn edge_kind_json_adapters_use_exact_canonical_strings() {
 }
 
 #[test]
+fn complete_edge_order_and_inventory_match_the_declared_field_order() {
+    let expected: Vec<Edge> = [
+        ("", EdgeKind::JudgeTrigger, "根"),
+        ("a", EdgeKind::Compile, ""),
+        ("a", EdgeKind::Compile, "a"),
+        ("a", EdgeKind::Compile, "a\0"),
+        ("a", EdgeKind::Compile, "aa"),
+        ("a", EdgeKind::Compile, "é"),
+        ("a", EdgeKind::Compile, "根"),
+        ("a", EdgeKind::BuildInput, ""),
+        ("a", EdgeKind::RuntimeInput, ""),
+        ("a", EdgeKind::TestExecution, ""),
+        ("a", EdgeKind::JudgeTrigger, ""),
+        ("aa", EdgeKind::Compile, ""),
+        ("é", EdgeKind::Compile, ""),
+        ("根", EdgeKind::Compile, ""),
+    ]
+    .into_iter()
+    .map(|(from, kind, to)| Edge {
+        from: from.into(),
+        kind,
+        to: to.into(),
+    })
+    .collect();
+    for (i, a) in expected.iter().enumerate() {
+        for (j, b) in expected.iter().enumerate() {
+            assert_eq!(a.cmp(b), i.cmp(&j), "indices {i}, {j}");
+            assert_eq!(a.partial_cmp(b), Some(i.cmp(&j)), "indices {i}, {j}");
+            assert_eq!(a == b, i == j, "indices {i}, {j}");
+        }
+        assert_eq!(a.clone(), *a);
+    }
+    let row: BTreeSet<&Edge> = expected.iter().rev().chain(expected.iter()).collect();
+    let actual = chrono_judge_filemap::verified_graph::edge_inventory(&row);
+    assert_eq!(actual, expected.iter().collect::<Vec<_>>());
+}
+
+#[test]
+fn edge_json_adapters_preserve_fields_and_report_invalid_inputs() {
+    let edge = Edge {
+        from: "根\0".into(),
+        kind: EdgeKind::BuildInput,
+        to: "é".into(),
+    };
+    let expected = json!({"from": "根\0", "kind": "build-input", "to": "é"});
+    assert_eq!(serde_json::to_value(&edge).unwrap(), expected);
+    assert_eq!(serde_json::from_value::<Edge>(expected).unwrap(), edge);
+    let text = r#"{"to":"\u00e9","kind":"build-input","from":"根\u0000"}"#;
+    assert_eq!(serde_json::from_str::<Edge>(text).unwrap(), edge);
+    assert_eq!(
+        format!("{edge:?}"),
+        "Edge { from: \"根\\0\", kind: BuildInput, to: \"é\" }"
+    );
+    for value in [
+        json!({"from": "a", "kind": "compile"}),
+        json!({"kind": "compile", "to": "b"}),
+        json!({"from": "a", "to": "b"}),
+        json!({"from": 1, "kind": "compile", "to": "b"}),
+        json!({"from": "a", "kind": "Compile", "to": "b"}),
+        json!({"from": "a", "kind": "compile", "to": null}),
+    ] {
+        assert!(serde_json::from_value::<Edge>(value.clone()).is_err());
+        assert!(serde_json::from_str::<Edge>(&value.to_string()).is_err());
+    }
+}
+
+#[test]
 fn indexed_closure_preserves_shortest_ties_edge_kinds_and_seed_identity() {
     let rows = [
         ("根", EdgeKind::RuntimeInput, "a"),

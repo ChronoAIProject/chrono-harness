@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use crate::verified_graph::EdgeKind;
+pub use crate::verified_graph::{Edge, EdgeKind};
 
 impl std::fmt::Debug for EdgeKind {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,11 +36,32 @@ impl<'de> Deserialize<'de> for EdgeKind {
         deserializer.deserialize_str(KindVisitor)
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Edge {
-    pub from: String,
-    pub kind: EdgeKind,
-    pub to: String,
+impl std::fmt::Debug for Edge {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Edge")
+            .field("from", &self.from)
+            .field("kind", &self.kind)
+            .field("to", &self.to)
+            .finish()
+    }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Edge", rename = "Edge")]
+struct EdgeFields {
+    from: String,
+    kind: EdgeKind,
+    to: String,
+}
+impl Serialize for Edge {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        EdgeFields::serialize(self, serializer)
+    }
+}
+impl<'de> Deserialize<'de> for Edge {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        EdgeFields::deserialize(deserializer)
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -105,7 +126,10 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
     let nodes = crate::verified_graph::name_inventory(&supplied_names);
     let edge_rows: Vec<Vec<&Edge>> = nodes
         .iter()
-        .map(|node| adjacency.get(node).into_iter().flatten().copied().collect())
+        .map(|node| match adjacency.get(node) {
+            Some(row) => crate::verified_graph::edge_inventory(row),
+            None => vec![],
+        })
         .collect();
     let indices = {
         let target_names: Vec<Vec<&str>> = edge_rows

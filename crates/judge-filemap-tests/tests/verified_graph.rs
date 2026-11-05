@@ -16,6 +16,128 @@ verus! {
 
 broadcast use vstd::string::group_string_axioms;
 
+fn edge(from: &str, kind: policy::EdgeKind, to: &str) -> (out: policy::Edge)
+    ensures out.from_bytes() == from.spec_bytes(), out.kind == kind,
+        out.to_bytes() == to.spec_bytes(),
+{
+    policy::Edge { from: from.to_owned(), kind, to: to.to_owned() }
+}
+
+fn edge_before(a: &policy::Edge, b: &policy::Edge)
+    requires a.less(b), !a.same(b),
+{
+    use core::cmp::Ordering;
+    proof { policy::edge_order_laws(a, b, b); }
+    let forward = a.cmp(b);
+    let reverse = b.cmp(a);
+    let partial = a.partial_cmp(b);
+    let equal = a == b;
+    assert(forward == Ordering::Less);
+    assert(reverse == Ordering::Greater);
+    assert(partial == Some(Ordering::Less));
+    assert(!equal);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn full_edge_order_obeys_field_precedence_prefixes_and_unicode() {
+    use policy::EdgeKind::*;
+    proof {
+        reveal_strlit(""); reveal_strlit("a"); reveal_strlit("a\0"); reveal_strlit("aa");
+        reveal_strlit("é"); reveal_strlit("根");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a\0"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("aa"@);
+        assert(vstd::utf8::encode_scalar(233) == seq![195u8, 169]) by (compute);
+        assert(vstd::utf8::encode_scalar(26681) == seq![230u8, 160, 185]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 4);
+        assert("".spec_bytes() == Seq::<u8>::empty());
+        assert("a".spec_bytes() == seq![97u8]);
+        assert("a\0".spec_bytes() == seq![97u8, 0]);
+        assert("aa".spec_bytes() == seq![97u8, 97]);
+        assert("é".spec_bytes() == seq![195u8, 169]);
+        assert("根".spec_bytes() == seq![230u8, 160, 185]);
+    }
+    let first = edge("", JudgeTrigger, "根");
+    let next = edge("a", Compile, "");
+    proof { assert(policy::byte_prefix(first.from_bytes(), next.from_bytes(), 0)); }
+    edge_before(&first, &next);
+    let first = edge("a", JudgeTrigger, "根");
+    let next = edge("aa", Compile, "");
+    proof { assert(policy::byte_prefix(first.from_bytes(), next.from_bytes(), 1)); }
+    edge_before(&first, &next);
+    let first = edge("é", JudgeTrigger, "根");
+    let next = edge("根", Compile, "");
+    proof { assert(policy::byte_prefix(first.from_bytes(), next.from_bytes(), 0)); }
+    edge_before(&first, &next);
+    let first = edge("a", Compile, "根");
+    let next = edge("a", BuildInput, "");
+    edge_before(&first, &next);
+    let first = edge("a", Compile, "");
+    let next = edge("a", Compile, "a");
+    proof { assert(policy::byte_prefix(first.to_bytes(), next.to_bytes(), 0)); }
+    edge_before(&first, &next);
+    let first = edge("a", Compile, "a");
+    let next = edge("a", Compile, "a\0");
+    proof { assert(policy::byte_prefix(first.to_bytes(), next.to_bytes(), 1)); }
+    edge_before(&first, &next);
+    let first = edge("a", Compile, "a\0");
+    let next = edge("a", Compile, "aa");
+    proof { assert(policy::byte_prefix(first.to_bytes(), next.to_bytes(), 1)); }
+    edge_before(&first, &next);
+    let first = edge("a", Compile, "é");
+    let next = edge("a", Compile, "根");
+    proof { assert(policy::byte_prefix(first.to_bytes(), next.to_bytes(), 0)); }
+    edge_before(&first, &next);
+    let cloned = next.clone();
+    let equal = next == cloned;
+    let order = next.cmp(&cloned);
+    assert(equal);
+    assert(order == core::cmp::Ordering::Equal);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn edge_inventory_preserves_empty_rows_duplicates_and_exact_kind_slots() {
+    use policy::EdgeKind::*;
+    use std::collections::BTreeSet;
+    proof {
+        policy::edge_obeys_cmp();
+        broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+        assert(vstd::laws_cmp::obeys_cmp::<&policy::Edge>());
+    }
+    let empty: BTreeSet<&policy::Edge> = BTreeSet::new();
+    let out = policy::edge_inventory(&empty);
+    assert(out.len() == 0);
+    let a = edge("a", Compile, "根");
+    let b = edge("a", BuildInput, "");
+    let mut row = BTreeSet::new();
+    row.insert(&b);
+    row.insert(&a);
+    row.insert(&b);
+    assert(row@ == Set::<&policy::Edge>::empty().insert(&a).insert(&b));
+    assert(row@.len() == 2);
+    let out = policy::edge_inventory(&row);
+    assert(out.len() == 2);
+    proof {
+        assert(out@.to_set().contains(&a));
+        assert(out@.contains(&a));
+        assert(out@.to_set().contains(out@[0]));
+        assert(out@[0] == &a || out@[0] == &b);
+        let i = choose|i: int| 0 <= i < out.len() && out@[i] == &a;
+        if i == 1 {
+            assert(out@[0] == &b);
+            assert(out@[0].order_spec(out@[1]) != core::cmp::Ordering::Less);
+        }
+        assert(out@[0] == &a);
+        assert(out@.to_set().contains(out@[1]));
+        assert(out@[1] != out@[0]);
+        assert(out@[1] == &b);
+    }
+    let first = out[0] == &a;
+    let second = out[1] == &b;
+    assert(first);
+    assert(second);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn all_edge_kind_pairs_obey_the_declared_order_and_equality() {
     use policy::EdgeKind::*;

@@ -35,10 +35,21 @@ injective ranks, exact equality, reverse order and transitivity. Canonical
 wire-name production and complete-byte parsing prove an injective correspondence
 to those variants. Typed-edge BTree sorting calls the proved comparison;
 the JSON adapters call the proved name functions and reject nonstring inputs.
-The JSON/diagnostic adapters and the complete Edge field-order and adjacency
-correspondence remain unproved. No ignored derived comparison is counted as a
-proof. All 25 pairs and name success/rejection boundaries have independent
+The same root owns the actual Edge type, its field-preserving clone and explicit
+equality/Ord/PartialOrd. It compares complete from bytes, kind rank, then complete
+to bytes, proving exact three-key equality, reverse ordering, transitivity and
+the full vstd comparison laws. Each actual adjacency row is now extracted by
+`edge_inventory`, which proves exact membership/cardinality, no duplicates and
+strict full-field order through the existing vstd BTreeSet iterator contract.
+The returned O(E_row) reference vector replaces the previous collected vector;
+no additional sorting, trusted interface, dependency or proof operation is used.
+JSON/diagnostic adapters and complete target-name/index-slot projection remain
+unproved. No ignored derived comparison is counted as a proof.
+All 25 kind pairs and name success/rejection boundaries have independent
 Verus examples; runtime JSON tests cover owned/text and wrong-type inputs.
+Further Verus cases check full-field precedence, empty/prefix/NUL/Unicode names,
+cloning and exact empty/deduplicated row slots. Runtime cases compare all 196
+pairs of an independent 14-edge inventory and check full Edge JSON transport.
 The proved merge constructor replaces BTreeSet name sorting/deduplication: its
 output is strictly ordered, has exactly the supplied byte-name set and has length
 equal to that set's cardinality. A separate validator retains exact admission of

@@ -2,6 +2,7 @@
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 use core::cmp::Ordering;
+use std::collections::BTreeSet;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
@@ -198,6 +199,116 @@ impl PartialOrd for EdgeKind {
     }
 }
 
+pub struct Edge {
+    pub from: String,
+    pub kind: EdgeKind,
+    pub to: String,
+}
+
+impl Edge {
+    pub open spec fn from_bytes(&self) -> Seq<u8> {
+        vstd::utf8::encode_utf8(self.from@)
+    }
+
+    pub open spec fn to_bytes(&self) -> Seq<u8> {
+        vstd::utf8::encode_utf8(self.to@)
+    }
+
+    pub open spec fn same(&self, other: &Self) -> bool {
+        self.from_bytes() == other.from_bytes() && self.kind == other.kind
+            && self.to_bytes() == other.to_bytes()
+    }
+
+    pub open spec fn less(&self, other: &Self) -> bool {
+        byte_lt(self.from_bytes(), other.from_bytes())
+            || self.from_bytes() == other.from_bytes() && (
+                self.kind.rank_spec() < other.kind.rank_spec()
+                || self.kind == other.kind && byte_lt(self.to_bytes(), other.to_bytes()))
+    }
+
+    pub open spec fn order_spec(&self, other: &Self) -> Ordering {
+        if self.same(other) { Ordering::Equal }
+        else if self.less(other) { Ordering::Less }
+        else { Ordering::Greater }
+    }
+
+    pub fn compare(&self, other: &Self) -> (order: Ordering)
+        ensures order == self.order_spec(other),
+    {
+        proof { edge_order_laws(self, other, other); }
+        let from = compare_bytes(self.from.as_str().as_bytes(), other.from.as_str().as_bytes());
+        if from < 0 { return Ordering::Less; }
+        if from > 0 { return Ordering::Greater; }
+        let kind = self.kind.compare(&other.kind);
+        match kind {
+            Ordering::Less => { return Ordering::Less; },
+            Ordering::Greater => { return Ordering::Greater; },
+            Ordering::Equal => {},
+        }
+        let to = compare_bytes(self.to.as_str().as_bytes(), other.to.as_str().as_bytes());
+        if to < 0 { Ordering::Less }
+        else if to > 0 { Ordering::Greater }
+        else { Ordering::Equal }
+    }
+}
+
+impl Clone for Edge {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    {
+        Self { from: self.from.clone(), kind: self.kind, to: self.to.clone() }
+    }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for Edge {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { self.same(other) }
+}
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == self.same(other),
+    {
+        match self.compare(other) {
+            Ordering::Equal => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Edge {}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::OrdSpecImpl for Edge {
+    open spec fn obeys_cmp_spec() -> bool { true }
+    open spec fn cmp_spec(&self, other: &Self) -> Ordering { self.order_spec(other) }
+}
+
+impl Ord for Edge {
+    fn cmp(&self, other: &Self) -> (order: Ordering)
+        ensures order == self.order_spec(other),
+    {
+        self.compare(other)
+    }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialOrdSpecImpl for Edge {
+    open spec fn obeys_partial_cmp_spec() -> bool { true }
+    open spec fn partial_cmp_spec(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order_spec(other))
+    }
+}
+
+impl PartialOrd for Edge {
+    fn partial_cmp(&self, other: &Self) -> (order: Option<Ordering>)
+        ensures order == Some(self.order_spec(other)),
+    {
+        Some(self.compare(other))
+    }
+}
+
 pub open spec fn byte_prefix(a: Seq<u8>, b: Seq<u8>, n: int) -> bool {
     0 <= n <= a.len() && n <= b.len()
         && forall|i: int| 0 <= i < n ==> a[i] == b[i]
@@ -231,6 +342,169 @@ proof fn byte_lt_transitive(a: Seq<u8>, b: Seq<u8>, c: Seq<u8>)
     }
     assert(k == a.len() || a[k] < c[k]);
     assert(0 <= k <= a.len() && k < c.len());
+}
+
+proof fn byte_lt_asymmetric(a: Seq<u8>, b: Seq<u8>)
+    ensures byte_lt(a, b) ==> !byte_lt(b, a),
+{
+    if byte_lt(a, b) && byte_lt(b, a) {
+        byte_lt_transitive(a, b, a);
+        byte_lt_strict(a, a);
+    }
+}
+
+proof fn byte_trichotomy(a: Seq<u8>, b: Seq<u8>)
+    ensures a == b || byte_lt(a, b) || byte_lt(b, a),
+    decreases a.len() + b.len(),
+{
+    if a.len() == 0 {
+        if b.len() == 0 { assert(a =~= b); }
+        else { assert(byte_prefix(a, b, 0)); assert(byte_lt(a, b)); }
+    } else if b.len() == 0 {
+        assert(byte_prefix(b, a, 0)); assert(byte_lt(b, a));
+    } else if a[0] < b[0] {
+        assert(byte_prefix(a, b, 0)); assert(byte_lt(a, b));
+    } else if b[0] < a[0] {
+        assert(byte_prefix(b, a, 0)); assert(byte_lt(b, a));
+    } else {
+        let x = a.subrange(1, a.len() as int);
+        let y = b.subrange(1, b.len() as int);
+        byte_trichotomy(x, y);
+        if x == y {
+            assert(a =~= b) by {
+                assert forall|j: int| 0 <= j < a.len() implies a[j] == b[j] by {
+                    if j > 0 { assert(x[j - 1] == y[j - 1]); }
+                }
+            }
+        } else if byte_lt(x, y) {
+            let i = choose|i: int| 0 <= i <= x.len() && i < y.len() && byte_prefix(x, y, i)
+                && (i == x.len() || x[i] < y[i]);
+            assert(byte_prefix(a, b, i + 1)) by {
+                assert forall|j: int| 0 <= j < i + 1 implies a[j] == b[j] by {
+                    if j > 0 { assert(x[j - 1] == y[j - 1]); }
+                }
+            }
+            assert(byte_lt(a, b));
+        } else {
+            let i = choose|i: int| 0 <= i <= y.len() && i < x.len() && byte_prefix(y, x, i)
+                && (i == y.len() || y[i] < x[i]);
+            assert(byte_prefix(b, a, i + 1)) by {
+                assert forall|j: int| 0 <= j < i + 1 implies b[j] == a[j] by {
+                    if j > 0 { assert(y[j - 1] == x[j - 1]); }
+                }
+            }
+            assert(byte_lt(b, a));
+        }
+    }
+}
+
+pub proof fn edge_order_laws(a: &Edge, b: &Edge, c: &Edge)
+    ensures
+        (a.order_spec(b) == Ordering::Equal) == a.same(b),
+        (a.order_spec(b) == Ordering::Less) == (b.order_spec(a) == Ordering::Greater),
+        a.order_spec(b) == Ordering::Less && b.order_spec(c) == Ordering::Less
+            ==> a.order_spec(c) == Ordering::Less,
+{
+    byte_trichotomy(a.from_bytes(), b.from_bytes());
+    byte_trichotomy(a.to_bytes(), b.to_bytes());
+    byte_lt_asymmetric(a.from_bytes(), b.from_bytes());
+    byte_lt_asymmetric(a.to_bytes(), b.to_bytes());
+    if byte_lt(a.from_bytes(), b.from_bytes()) { byte_lt_strict(a.from_bytes(), b.from_bytes()); }
+    if byte_lt(b.from_bytes(), a.from_bytes()) { byte_lt_strict(b.from_bytes(), a.from_bytes()); }
+    if byte_lt(a.to_bytes(), b.to_bytes()) { byte_lt_strict(a.to_bytes(), b.to_bytes()); }
+    if byte_lt(b.to_bytes(), a.to_bytes()) { byte_lt_strict(b.to_bytes(), a.to_bytes()); }
+    edge_kind_order_laws(a.kind, b.kind, c.kind);
+    if a.less(b) && b.less(c) {
+        if byte_lt(a.from_bytes(), b.from_bytes()) && byte_lt(b.from_bytes(), c.from_bytes()) {
+            byte_lt_transitive(a.from_bytes(), b.from_bytes(), c.from_bytes());
+        }
+        if a.from_bytes() == b.from_bytes() && b.from_bytes() == c.from_bytes()
+            && a.kind == b.kind && b.kind == c.kind
+            && byte_lt(a.to_bytes(), b.to_bytes()) && byte_lt(b.to_bytes(), c.to_bytes()) {
+            byte_lt_transitive(a.to_bytes(), b.to_bytes(), c.to_bytes());
+        }
+        assert(a.less(c));
+        if byte_lt(a.from_bytes(), c.from_bytes()) { byte_lt_strict(a.from_bytes(), c.from_bytes()); }
+        if byte_lt(a.to_bytes(), c.to_bytes()) { byte_lt_strict(a.to_bytes(), c.to_bytes()); }
+    }
+}
+
+pub proof fn edge_obeys_cmp()
+    ensures vstd::laws_cmp::obeys_cmp::<Edge>(),
+{
+    use vstd::std_specs::cmp::{PartialEqSpec, PartialOrdSpec, OrdSpec};
+    reveal(vstd::laws_eq::obeys_eq_spec_properties);
+    reveal(vstd::laws_cmp::obeys_partial_cmp_spec_properties);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    assert forall|a: Edge, b: Edge|
+        a.partial_cmp_spec(&b) == Some(Ordering::Less)
+            <==> b.partial_cmp_spec(&a) == Some(Ordering::Greater) by {
+        edge_order_laws(&a, &b, &b);
+    }
+    assert forall|a: Edge, b: Edge, c: Edge|
+        a.partial_cmp_spec(&b) == Some(Ordering::Less)
+            && b.partial_cmp_spec(&c) == Some(Ordering::Less)
+            implies a.partial_cmp_spec(&c) == Some(Ordering::Less) by {
+        edge_order_laws(&a, &b, &c);
+    }
+    assert forall|a: Edge, b: Edge, c: Edge|
+        a.partial_cmp_spec(&b) == Some(Ordering::Greater)
+            && b.partial_cmp_spec(&c) == Some(Ordering::Greater)
+            implies a.partial_cmp_spec(&c) == Some(Ordering::Greater) by {
+        edge_order_laws(&a, &b, &c);
+        edge_order_laws(&b, &c, &a);
+        edge_order_laws(&c, &b, &a);
+    }
+}
+
+/// Preserve the exact BTreeSet row while exposing its proved full edge order.
+pub fn edge_inventory<'a>(edges: &BTreeSet<&'a Edge>) -> (out: Vec<&'a Edge>)
+    ensures
+        out@.to_set() == edges@,
+        out@.no_duplicates(),
+        out.len() == edges@.len(),
+        forall|i: int, j: int| 0 <= i < j < out.len()
+            ==> (#[trigger] out@[i]).order_spec(#[trigger] out@[j]) == Ordering::Less,
+{
+    proof {
+        edge_obeys_cmp();
+        broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+        assert(vstd::laws_cmp::obeys_cmp::<&Edge>());
+    }
+    let mut iter = edges.iter();
+    let ghost contents = iter@.1;
+    proof {
+        use vstd::std_specs::cmp::OrdSpec;
+        broadcast use vstd::std_specs::btree::axiom_increasing_seq_meaning;
+        assert forall|i: int, j: int| 0 <= i < j < contents.len()
+            implies (#[trigger] contents[i]).order_spec(#[trigger] contents[j]) == Ordering::Less by {
+            assert(<&Edge as OrdSpec>::cmp_spec(&contents[i], &contents[j]) == Ordering::Less);
+        }
+        contents.unique_seq_to_set();
+    }
+    let mut out = Vec::with_capacity(edges.len());
+    loop
+        invariant
+            iter@.1 == contents,
+            0 <= iter@.0 <= contents.len(),
+            out@ == contents.take(iter@.0),
+            contents.to_set() == edges@,
+            contents.no_duplicates(),
+            vstd::std_specs::btree::increasing_seq(contents),
+            contents.len() == edges@.len(),
+            forall|i: int, j: int| 0 <= i < j < contents.len()
+                ==> (#[trigger] contents[i]).order_spec(#[trigger] contents[j]) == Ordering::Less,
+        decreases contents.len() - iter@.0,
+    {
+        match iter.next() {
+            None => {
+                assert(out@ == contents);
+                return out;
+            },
+            Some(edge) => { out.push(*edge); },
+        }
+    }
 }
 
 /// -1, 0 and 1 denote less, byte-identical and greater respectively.
