@@ -165,7 +165,7 @@ impl Host {
         v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":""},"inputs":[{"id":"interpreter","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
         v.get_mut(FM).unwrap()["schema_version"] = json!(2);
         v.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["prepare.p","execute.t"],"timeout_seconds":15,"output_limit_bytes":4096}});
-        let pre = json!({"operation":"prepare.p","tool":"python","argv":["-c","open('.chrono-harness/state/order','a').write('p')"]});
+        let pre = json!({"operation":"prepare.p","tool":"python","argv":["-B","p/prepare.py"]});
         let run = json!({"operation":"execute.t","tool":"python","argv":["-B","t/check.py","$HOME `literal` <tag>","","line\nnext"]});
         if script {
             v.get_mut(PROJECTS).unwrap()["projects"] = json!([]);
@@ -202,7 +202,11 @@ impl Host {
                 f["edges"] = json!([{"kind":"runtime-input","to":format!("{prefix}:{id}")}]);
             }
         }
-        for (path, owner) in [("p/product.py", "p"), ("t/check.py", "t")] {
+        for (path, owner) in [
+            ("p/product.py", "p"),
+            ("t/check.py", "t"),
+            ("p/prepare.py", "p"),
+        ] {
             let mut f = file(
                 path,
                 json!([{"kind":"runtime-input","to":format!("{prefix}:{owner}")}]),
@@ -233,11 +237,28 @@ impl Host {
             "[package]\nname='t'\nversion='0.1.0'\n[dev-dependencies]\np={path='../p'}\n",
         )
         .unwrap();
-        fs::write(root.join("p/product.py"), "def double(n): return n*2\n").unwrap();
-        fs::write(root.join("t/check.py"),"import runpy,sys,os,json\nf=runpy.run_path('p/product.py')['double']\nassert f(21)==42\nassert open('.chrono-harness/state/order').read().endswith('p')\nprint(json.dumps([sys.argv[1:],os.getcwd(),os.environ.get('EMPTY'),os.environ.get('ABSENT')]))\nopen('.chrono-harness/state/order','a').write('t')\n").unwrap();
+        fs::write(
+            root.join("p/prepare.py"),
+            include_str!("../fixtures/execution-prepare.py"),
+        )
+        .unwrap();
+        fs::write(
+            root.join("p/product.py"),
+            include_str!("../fixtures/execution-product-base.py"),
+        )
+        .unwrap();
+        fs::write(
+            root.join("t/check.py"),
+            include_str!("../fixtures/execution-check.py"),
+        )
+        .unwrap();
         write_values(&root, &v);
         let base = commit(&root);
-        fs::write(root.join("p/product.py"), "def double(n): return n+n\n").unwrap();
+        fs::write(
+            root.join("p/product.py"),
+            include_str!("../fixtures/execution-product-candidate.py"),
+        )
+        .unwrap();
         let candidate = commit(&root);
         Self {
             dir,
