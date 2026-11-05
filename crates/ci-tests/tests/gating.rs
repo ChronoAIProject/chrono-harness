@@ -7,6 +7,37 @@ fn gating() -> Value {
     json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["host-tools-only"],"sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}})
 }
 
+fn migrate_provider(root: &Path, next: &Value) {
+    let previous = ".chrono-harness/state/previous-units.json";
+    let prior: Value = serde_json::from_slice(&fs::read(root.join(PROVIDER)).unwrap()).unwrap();
+    json_file(root, previous, &prior);
+    json_file(root, PROVIDER, next);
+    chrono_ci::migrate::migrate(root, previous, PROVIDER, PROVIDER).unwrap();
+}
+
+#[test]
+fn parent_generation_uses_only_current_projection_ownership() {
+    let h = ShortHost::new();
+    let mut next: Value =
+        serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
+    next["job_gating"] = gating();
+    migrate_provider(&h.root, &next);
+    let parent = fs::read(h.root.join(".github/workflows/collection.yml")).unwrap();
+    for path in [".github/workflows/alpha.yml", ".github/workflows/beta.yml"] {
+        fs::write(h.root.join(path), b"host-owned\n").unwrap();
+    }
+
+    assert!(!generate(&h.root, PROVIDER, true).unwrap());
+    assert!(!generate(&h.root, PROVIDER, false).unwrap());
+    assert_eq!(
+        fs::read(h.root.join(".github/workflows/collection.yml")).unwrap(),
+        parent
+    );
+    for path in [".github/workflows/alpha.yml", ".github/workflows/beta.yml"] {
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), b"host-owned\n");
+    }
+}
+
 #[test]
 fn parent_generation_verifies_and_retires_only_exact_legacy_projections() {
     let h = ShortHost::new();
