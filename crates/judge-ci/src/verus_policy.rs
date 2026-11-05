@@ -148,11 +148,11 @@ pub open spec fn expected_result_ids(
 
 pub fn matches_result_ids(
     actual: &Vec<&str>, operations: &Vec<&str>, not_required: &Vec<&str>, require_verus: bool,
-    coverage: Option<(bool, Option<i64>)>,
+    coverage: Option<(bool, Option<i32>)>,
 ) -> (matches: bool)
     ensures matches <==> (result_membership(
         actual@, expected_result_ids(operations@, not_required@, require_verus))
-        && (!require_verus || coverage == Some((true, None::<i64>)))),
+        && (!require_verus || coverage == Some((true, None::<i32>)))),
 {
     let mut expected = Vec::new();
     expected.push("ci.inventory");
