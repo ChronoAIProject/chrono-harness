@@ -946,8 +946,9 @@ unchanged; a separate immutable adoption receipt records `already-absent` and
 
 For the three manually removed native-recovery/pr-inputs/pr-lifecycle records,
 the caller must retain the supplied expiry-results and manual-expiry-operation
-originals, select their exact rows and existing birth bindings, deploy compatible
-coordinator inputs/binary, then invoke this migration separately for each path.
+originals, select their exact rows and existing birth bindings, obtain compatible
+candidate execution through the qualified stage described below, then invoke
+this migration separately for each path before coordinator owner publication.
 The original failed main maintenance and native cleanup receipts remain evidence;
 the migration does not turn those original exit-2 outcomes into successes.
 

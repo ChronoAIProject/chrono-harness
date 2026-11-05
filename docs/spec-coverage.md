@@ -618,7 +618,10 @@ migration and CI release tests consume current source build outputs from their
 existing declared prerequisites and native staging destinations. Cargo policy
 failures retain their original code/message and policy path while referencing the
 candidate registry, so unchanged policy files do not produce invalid findings.
-Original test operations, assertions, selectors, threads and bounds remain. This source foundation is not a
+Portable-evidence assertions and bounds remain. The worktree core, adoption and
+complete actions now explicitly use two Rust test threads, within the host cap
+of two, after a default-parallel run exposed deadline failures; no assertion or
+deadline was raised. This source foundation is not a
 beta21-compatible release by itself: Cargo/full-input/scoped/collection deltas,
 remaining prerequisites, clean committed canonical/native checks, review, landing,
 installation/publication and full SPEC acceptance remain caller/ordered follow-up
@@ -638,8 +641,33 @@ manual receipts and failed/missing lifecycle outcomes. This product/policy
 cochange requires the registered age behavior checks, current capacity and
 producer-lifetime regression, current candidate DELTA verification and compatible
 host adoption. Local age tests use real time and configurable short thresholds;
-they do not establish installed >2h/>4h acceptance. Current I3 command outcomes
-must be supplied before promoting these implementation statements to evidence.
+they do not establish installed >2h/>4h acceptance. I3's committed core run passed
+229 cases and failed nine (six adoption cases filtered), including passing all
+five age/absence cases with source, original-index and reflog-only commit
+conservation, live-consumer deferral, retained-evidence protection, and actual
+SIGKILL/reentry without inventing the missing original result. Eight failures
+reported the real coordinator policy/configuration identity mismatch. The ninth
+exposed a disposed allocation bypassing nonblocking metadata admission; the
+owner now defers that transaction too. The registered capacity action includes
+the strengthened pending/disposed metadata regression and passed all 33 cases
+(211 filtered) on the corrected committed source in 159.54 total seconds.
+The separate adoption action passed five and failed one on the same coordinator
+mismatch. Both affected consumer compile checks and candidate CLI builds passed.
+The final focused age action passed all five cases (239 filtered) on the corrected
+source in 137.36 total seconds; these configurable short-threshold observations
+do not establish a real coordinator's two/four-hour adoption.
+
+The registered linked bootstrap and owner-stage commands each exited 1 before
+construction: the deployed coordinator rejects the new `age_policy` field.
+Canonical check could not launch (missing installed executable, exit 127); no
+current DELTA judge ran. Bootstrap's Python suite exited 1 after 91 tests with
+nine errors requiring the unavailable installed candidate worktree owner. These
+original results remain prerequisite failures, with no substitute deployment or
+judge pass. The full corrected core/DELTA, compatible coordinator cutover, exact
+three-record absence adoption and real ordinary-host success/failure/reentry/age
+acceptance remain caller/I4 obligations. The worktree adoption section specifies
+the qualified two-stage cutover. This is implementation evidence with open
+acceptance, not installed-host satisfaction or full SPEC completion.
 
 ## Registered automatic lifecycle cleanup
 
