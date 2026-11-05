@@ -548,13 +548,16 @@ pub(crate) fn prepare(
             "registered operation does not invoke this guard binary",
         ));
     }
+    // Runtime/build project relationships consume an already built output.
+    // Only compile relationships import that project's construction inputs.
     let declared_edges = edges(r)
         .into_iter()
         .filter(|e| {
             matches!(
                 e.kind,
                 EdgeKind::Compile | EdgeKind::BuildInput | EdgeKind::RuntimeInput
-            )
+            ) && !(e.from.starts_with("project:")
+                && matches!(e.kind, EdgeKind::BuildInput | EdgeKind::RuntimeInput))
         })
         .map(|e| graph::Edge {
             from: e.to,

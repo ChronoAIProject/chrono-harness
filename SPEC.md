@@ -248,6 +248,10 @@ operation 在全部 actions 与 canonical_check 中唯一；同名不同参数�
 宿主可以没有 manifest、lockfile、统一 source root 或编译输出目录。可选 legacy manifest/lockfile 只是显式归属的 opaque 文件引用；root 不授予内容或输出推断权。通用 projects 判官检查一对一配对、显式测试边、实际文件归属与声明产物目录的隔离，不解析语言文件，也不根据路径猜 `target/`。产物登记变更与删除按两端显式 owner 唤醒对应 project/script，再沿 FILEMAP 边选择测试。
 构建、测试依赖只由 FILEMAP 提供。语言工具可作为可选一致性判官，例如 [chrono-judge-cargo](docs/cargo-projects.md)；适配器消费显式语言政策与既有边，不能补登记或选测试。
 可选 Cargo guard 的配置合同必须显式登记每个查找位置的存在／缺失、命令行配置与递归 include；文件内容沿既有输入 ID 和 FILEMAP 边连接消费者。缺失也是有效输入，不能以未发现文件替代缺失声明。登记表按 Cargo 的固定版本查找规则核完整性，不因此取得自动补登记权。配置闭包不代表编译器、SDK、构建脚本或外部服务输入闭包。当前有界实现及 v1→v2 迁移见同文档。
+Cargo guard 的输入范围沿当前消费者的 compile 源依赖及各自直接登记的输入展开。
+project 的 runtime-input／build-input 关系消费其产物，不把该生产项目自身的构建输入
+递归并入本次 Cargo 输入域；产物、工具及前置执行仍由其显式登记和实际回执核验。
+源码编译依赖、所选配置／工具链／包输入及操作前后身份核验继续适用。
 可选 guard v4 进一步显式绑定 Cargo 与 `RUSTC` 的输入 ID、文件身份、路径和版本，
 要求宿主登记唯一编译器选择环境，拒绝另一套 Cargo 配置／wrapper 选择来源。
 这只绑定被传给 Cargo 的执行入口，不证明其委托程序、编译器库、链接器或 SDK 闭包。

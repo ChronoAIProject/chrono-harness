@@ -98,6 +98,22 @@ declarations, and only then runs the declared Cargo consumer. It checks input
 identities again after metadata and after the consumer. The ordinary full and
 scoped execution paths require no Cargo-specific callback or schema field.
 
+The guard's input scope follows the consumer's explicit `compile` source
+dependencies and their direct file, tool, environment and input relationships.
+A project supplying a runtime or build product does not contribute the inputs
+used to construct that product. Its output, tool binding and prerequisite
+receipts remain obligations of their registered execution owners. Source
+dependencies and selected configuration, toolchain and package inputs retain
+their original before/after identity checks.
+
+**Product and host policy change:** this boundary prevents the local diagnostics
+guard from importing 1,533 construction inputs through its runtime tools. Its
+1,138 declared file inputs remain in scope. The same-language regression requires
+real Cargo execution across runtime/build producer relationships and rejection
+of a changed input across a compile relationship. Candidate bootstrap, canonical
+DELTA and native validation remain required; total runtime and storage savings
+are unmeasured. This does not close the host's complete input domain.
+
 The guarded `run` entry accepts direct host configurations and the existing
 `chrono-git-configs/v1` and `v2` selectors through the shared registry acquisition
 owner. The registered action still names the caller's entry path exactly.
