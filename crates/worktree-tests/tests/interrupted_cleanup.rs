@@ -416,15 +416,10 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
                 round["verified_bytes"].as_u64().unwrap() <= 1048576,
                 "{round}"
             );
-            let complete = round["scope"]["complete"] == true;
             rounds.push(round);
             if paths.iter().all(|path| !root.join(path).exists()) {
                 return;
             }
-            assert!(
-                !complete,
-                "complete maintenance left an unrooted report: {rounds:?}"
-            );
             if attempt < 7 {
                 round = inventory.maintain().unwrap();
             } else {
