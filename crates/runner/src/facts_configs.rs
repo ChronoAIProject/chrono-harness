@@ -6,7 +6,7 @@ use std::{fs, path::Path};
 pub(crate) fn is_selector(config: &Value) -> bool {
     matches!(
         config["schema"].as_str(),
-        Some("chrono-git-configs/v1" | "chrono-git-configs/v2")
+        Some("chrono-git-configs/v1" | "chrono-git-configs/v2" | "chrono-git-configs/v3")
     )
 }
 
@@ -14,6 +14,13 @@ pub(crate) struct Selection {
     pub path: String,
     pub bytes: Vec<u8>,
     pub observation: Value,
+    pub registry_path: String,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct RegistryTarget<'a> {
+    pub path: &'a str,
+    pub sha256: Option<&'a str>,
 }
 
 /// The identity of the configuration used by a fixed endpoint.  `entry_path`
@@ -57,7 +64,7 @@ pub(crate) fn resolve(
 pub(crate) fn resolve_target(
     path: &str,
     bytes: Vec<u8>,
-    target: Option<&str>,
+    target: Option<RegistryTarget<'_>>,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
     let config = json(&bytes)?;
@@ -81,13 +88,14 @@ pub(crate) fn resolve_target(
         .as_object()
         .filter(|map| !map.is_empty())
         .ok_or("Git config selector requires nonempty platforms")?;
-    let version2 = config["schema"] == "chrono-git-configs/v2";
+    let version3 = config["schema"] == "chrono-git-configs/v3";
+    let identities = config["schema"] != "chrono-git-configs/v1";
     for (platform, target) in platforms {
         if platform.is_empty() || platform.trim() != platform {
             return Err("Git config selector platform must be nonempty and literal".into());
         }
-        let targets = if version2 {
-            identity_targets(target)?
+        let targets = if identities {
+            identity_targets(target, version3)?
         } else {
             vec![target.as_str().ok_or("Git config selector path required")?]
         };
@@ -103,15 +111,26 @@ pub(crate) fn resolve_target(
         .get(&platform)
         .ok_or_else(|| format!("Git config selector has no registered platform {platform}"))?;
     let mut identity = None;
-    let selected = if version2 {
+    let mut registry_path = None;
+    let selected = if identities {
         let program = host["program"]
             .as_str()
             .ok_or("Git selector program required")?;
         let rows = host["configurations"].as_array().unwrap();
         let row = if let Some(target) = target {
-            rows.iter()
-                .find(|row| row["path"] == target)
-                .ok_or_else(|| format!("Git config selector has no bound registry policy path for {platform}: {target}"))?
+            // Current executable identities retain each endpoint's explicit
+            // target. Otherwise only the candidate-declared data path is eligible;
+            // it never admits an executable or selects an unregistered policy.
+            target
+                .sha256
+                .and_then(|hash| rows.iter().find(|row| row["sha256"] == hash))
+                .or_else(|| rows.iter().find(|row| row["path"] == target.path))
+                .ok_or_else(|| {
+                    format!(
+                        "Git config selector has no bound registry policy path for {platform}: {}",
+                        target.path
+                    )
+                })?
         } else {
             let hash =
                 sha256(&fs::read(program).map_err(|e| format!("Git selector executable: {e}"))?);
@@ -120,6 +139,9 @@ pub(crate) fn resolve_target(
                 .ok_or_else(|| format!("Git config selector has no registered executable identity for {platform}: {program} sha256={hash}"))?
         };
         identity = Some((program, row["sha256"].as_str().unwrap()));
+        if version3 {
+            registry_path = Some(row["registry_path"].as_str().unwrap());
+        }
         row["path"].as_str().unwrap()
     } else {
         host.as_str().ok_or("Git config selector path required")?
@@ -139,10 +161,15 @@ pub(crate) fn resolve_target(
             return Err("Git config selector identity differs from selected policy binding".into());
         }
     }
+    let mut observation = value!({"schema":"chrono-git-config-selection/v1",
+        "path":path,"sha256":sha256(&bytes),"platform":platform,"config_path":selected});
+    if let Some(registry_path) = registry_path {
+        observation["registry_path"] = value!(registry_path);
+    }
     let selection = Selection {
         path: path.into(),
-        observation: value!({"schema":"chrono-git-config-selection/v1",
-            "path":path,"sha256":sha256(&bytes),"platform":platform,"config_path":selected}),
+        registry_path: registry_path.unwrap_or(selected).into(),
+        observation,
         bytes,
     };
     Ok((
@@ -171,16 +198,19 @@ pub fn identity(
     // A captured value map contains exactly one effective policy. Reconstruct
     // its declared identity from that data, without consulting today's Git.
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
-    let target = if entry["schema"] == "chrono-git-configs/v2" {
+    let target = if entry["schema"] != "chrono-git-configs/v1" {
         let host = &entry["platforms"][&platform];
-        let present: Vec<_> = identity_targets(host)?
+        let present: Vec<_> = identity_targets(host, entry["schema"] == "chrono-git-configs/v3")?
             .into_iter()
             .filter(|target| values.contains_key(*target))
             .collect();
         if present.len() != 1 {
             return Err("registry values require exactly one registered effective policy".into());
         }
-        Some(present[0])
+        Some(RegistryTarget {
+            path: present[0],
+            sha256: None,
+        })
     } else {
         None
     };
@@ -210,7 +240,7 @@ pub fn identity(
     })
 }
 
-fn identity_targets(host: &Value) -> Result<Vec<&str>, String> {
+fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
     let object = host
         .as_object()
         .ok_or("Git selector identity object required")?;
@@ -242,8 +272,12 @@ fn identity_targets(host: &Value) -> Result<Vec<&str>, String> {
             .as_str()
             .filter(|s| crate::wire::is_digest(s))
             .ok_or("Git selector configuration digest required")?;
-        if object.len() != 2 || !object.contains_key("path") || !hashes.insert(hash) {
-            return Err("Git selector configuration requires unique digest and path only".into());
+        if object.len() != if version3 { 3 } else { 2 }
+            || !object.contains_key("path")
+            || (version3 && !object.contains_key("registry_path"))
+            || !hashes.insert(hash)
+        {
+            return Err("Git selector configuration requires a unique digest/path and the declared v3 registry_path only".into());
         }
         let path = row["path"]
             .as_str()
@@ -252,6 +286,19 @@ fn identity_targets(host: &Value) -> Result<Vec<&str>, String> {
             return Err("Git selector configuration paths must be unique".into());
         }
         paths.push(path);
+    }
+    if version3 {
+        for row in rows {
+            let path = row["registry_path"]
+                .as_str()
+                .ok_or("Git selector registry_path required")?;
+            host_path(path)?;
+            if !paths.contains(&path) {
+                return Err(
+                    "Git selector registry_path must name a registered policy target".into(),
+                );
+            }
+        }
     }
     Ok(paths)
 }

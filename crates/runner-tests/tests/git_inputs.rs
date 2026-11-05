@@ -484,13 +484,7 @@ fn exact_host_identity_selects_registered_policy_and_preserves_guards() {
 #[test]
 fn fixed_selector_data_does_not_require_the_retired_executable() {
     let mut h = Host::new(json!({"mode":"passthrough"}));
-    let mut registries = serde_json::Map::new();
-    for role in ["judges", "projects", "filemap", "workflow"] {
-        let path = format!(".chrono-harness/{role}.json");
-        fs::write(h.root.join(&path), b"{}\n").unwrap();
-        registries.insert(role.into(), json!(path));
-    }
-    h.config["registries"] = registries.into();
+    empty_registries(&mut h);
     h.config["tools"][0]["program"] = json!(h.tool);
     let current = h.config.clone();
     let retired_program = h.root.join("absent retired git");
@@ -562,6 +556,115 @@ fn fixed_selector_data_does_not_require_the_retired_executable() {
     inconsistent.get_mut(CONFIG).unwrap()["environment"]["inputs"][0]["sha256"] =
         json!("f".repeat(64));
     assert!(chrono_harness::facts::registry_identity(&inconsistent, SELECTOR).is_err());
+}
+
+fn empty_registries(h: &mut Host) {
+    let mut registries = serde_json::Map::new();
+    for role in ["judges", "projects", "filemap", "workflow"] {
+        let path = format!(".chrono-harness/{role}.json");
+        fs::write(h.root.join(&path), b"{}\n").unwrap();
+        registries.insert(role.into(), json!(path));
+    }
+    h.config["registries"] = registries.into();
+}
+
+#[test]
+fn registered_data_paths_cover_each_current_executable_without_runtime_fallback() {
+    const ADDITIONAL: &str = ".chrono-harness/additional.json";
+    for additional in [false, true] {
+        let mut h = Host::new(json!({"mode":"passthrough"}));
+        empty_registries(&mut h);
+        h.config["tools"][0]["program"] = json!(h.tool);
+        let current = h.config.clone();
+        let retired_program = h.root.join("absent retired git");
+        assert!(!retired_program.exists());
+        h.config["tools"][0]["program"] = json!(retired_program);
+        h.config["environment"]["inputs"][0]["location"] = json!(retired_program);
+        h.config["environment"]["inputs"][0]["sha256"] = json!("0".repeat(64));
+        let retired = h.config.clone();
+        let mut selector = identity_selection(&h);
+        selector["platforms"][platform()]["program"] = json!(retired_program);
+        selector["platforms"][platform()]["configurations"] =
+            json!([{"sha256":"0".repeat(64),"path":CONFIG}]);
+        select(&h, &selector);
+        let base = commit(&h);
+
+        h.config = current;
+        let hash = sha256(&fs::read(&h.tool).unwrap());
+        selector = json!({"schema":"chrono-git-configs/v3","platforms":{platform():{
+        "program":h.tool,"configurations":[
+            {"sha256":if additional { "0".repeat(64) } else { hash.clone() },"path":CONFIG,"registry_path":CONFIG},
+            {"sha256":if additional { hash.clone() } else { "0".repeat(64) },"path":ADDITIONAL,"registry_path":CONFIG}
+        ]}}});
+        select(&h, &selector);
+        let mut unused = h.config.clone();
+        unused["environment"]["inputs"][0]["sha256"] = json!("0".repeat(64));
+        fs::write(
+            h.root.join(if additional { CONFIG } else { ADDITIONAL }),
+            serde_json::to_vec(&unused).unwrap(),
+        )
+        .unwrap();
+        let effective = if additional { ADDITIONAL } else { CONFIG };
+        fs::write(
+            h.root.join(effective),
+            serde_json::to_vec(&h.config).unwrap(),
+        )
+        .unwrap();
+        let candidate = commit(&h);
+        let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
+        reader.verify_config(&h.root, &candidate).unwrap();
+        let old = reader.registry_snapshot(&h.root, &base, SELECTOR).unwrap();
+        assert_eq!(old.effective_path, CONFIG);
+        assert_eq!(old.values[CONFIG], retired);
+        assert_eq!(
+            chrono_harness::facts::registry_identity(&old.values, SELECTOR)
+                .unwrap()
+                .effective_path,
+            CONFIG
+        );
+        assert!(!retired_program.exists());
+        let candidate_values = reader
+            .registry_snapshot(&h.root, &candidate, SELECTOR)
+            .unwrap();
+        assert_eq!(candidate_values.effective_path, effective);
+        assert_eq!(candidate_values.values[effective], h.config);
+        let observed = reader.observation();
+        assert_eq!(observed["selection"]["registry_path"], CONFIG);
+        let mut supplied = json!({"environment":observed["environment"],"git_facts":observed});
+        supplied["git_facts"]["selection"]["registry_path"] = json!(ADDITIONAL);
+        let trace = fs::read(h.root.join("trace")).unwrap();
+        assert!(Reader::from_observations(&h.root, SELECTOR, &candidate, &supplied).is_err());
+        assert_eq!(fs::read(h.root.join("trace")).unwrap(), trace);
+        for case in ["missing", "unregistered", "traversal", "unknown-bytes"] {
+            let mut invalid = selector.clone();
+            let row = &mut invalid["platforms"][platform()]["configurations"][0];
+            match case {
+                "missing" => {
+                    row.as_object_mut().unwrap().remove("registry_path");
+                }
+                "unregistered" => row["registry_path"] = json!(".chrono-harness/unregistered.json"),
+                "traversal" => row["registry_path"] = json!(".chrono-harness/../outside.json"),
+                "unknown-bytes" => {
+                    for row in invalid["platforms"][platform()]["configurations"]
+                        .as_array_mut()
+                        .unwrap()
+                    {
+                        if row["sha256"] == hash {
+                            row["sha256"] = json!("f".repeat(64));
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            }
+            fs::write(h.root.join(SELECTOR), serde_json::to_vec(&invalid).unwrap()).unwrap();
+            assert!(Reader::for_config(&h.root, SELECTOR).is_err(), "{case}");
+            assert_eq!(
+                fs::read(h.root.join("trace")).unwrap(),
+                trace,
+                "{case} executed Git"
+            );
+        }
+    }
 }
 
 #[test]

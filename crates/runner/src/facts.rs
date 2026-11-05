@@ -219,7 +219,7 @@ pub fn registry_snapshot_with(
 }
 fn registry_snapshot_with_target(
     path: &str,
-    target: Option<&str>,
+    target: Option<crate::facts_configs::RegistryTarget<'_>>,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<RegistrySnapshot, String> {
     let (mut snapshot, paths) = registry_snapshot_start(path, target, &mut read)?;
@@ -243,7 +243,7 @@ pub fn registry_snapshot_with_batches(
 }
 fn registry_snapshot_with_batches_target(
     path: &str,
-    target: Option<&str>,
+    target: Option<crate::facts_configs::RegistryTarget<'_>>,
     mut read: impl FnMut(&[String]) -> Result<Vec<(String, Vec<u8>)>, String>,
 ) -> Result<RegistrySnapshot, String> {
     let (mut snapshot, paths) = registry_snapshot_start(path, target, |path| {
@@ -275,7 +275,7 @@ fn registry_snapshot_with_batches_target(
 }
 fn registry_snapshot_start(
     path: &str,
-    target: Option<&str>,
+    target: Option<crate::facts_configs::RegistryTarget<'_>>,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(RegistrySnapshot, Vec<String>), String> {
     let original = read(path)?;

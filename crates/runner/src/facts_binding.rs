@@ -831,9 +831,16 @@ impl Reader {
         }
         Ok(())
     }
-    pub(crate) fn registry_target(&self, entry: &str) -> Option<&str> {
+    pub(crate) fn registry_target(
+        &self,
+        entry: &str,
+    ) -> Option<crate::facts_configs::RegistryTarget<'_>> {
         let bound = self.bound.as_ref()?;
-        (bound.selection.as_ref()?.path == entry).then_some(bound.config_path.as_str())
+        let selected = bound.selection.as_ref()?;
+        (selected.path == entry).then_some(crate::facts_configs::RegistryTarget {
+            path: &selected.registry_path,
+            sha256: bound.binding["sha256"].as_str(),
+        })
     }
     pub fn git(&self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
         if self.bound.is_none() {
