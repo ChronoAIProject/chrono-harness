@@ -351,15 +351,9 @@ DELTA 比较二者的 tree，不自动改用 merge-base，base 不必是 candida
 前提未建立时报告 parity:unestablished，不能承诺裁决相同；这不另加普通 full check 准入门。其已登记合同所需输入／证据不足仍报错。
 普通 full check 在登记要求及全部选中义务通过后表示该 DELTA 满足现役登记合同；现役 registration 的 effective_inputs 仍可为 completeness_proven:false。
 
-完成两次独立的 full check 后，可显式运行
-`chrono-harness parity --host-root H --report P --compared-report Q` 生成成对对等证据。
-该命令只消费两个已发布报告，不替代 canonical check，也不重新执行业务判官；它要求两份报告
-均为 `configured-judges` 完成报告、所有 verdict-bearing 字段及判官响应均已观察、
-`effective_inputs.completeness_proven = true` 且没有未解决的关键输入。它比较状态、快照身份、
-环境、工具、有效输入、DELTA、影响、测试、findings 及判官结果；绝对执行路径按已观察二进制摘要
-归一化，路径敏感性必须由有效输入显式登记。比较失败会保留当前报告并以非零错误退出，不能把
-相同的未知或不完整报告标成 `parity:established`。这是独立的成对观察证据；即使比较成功，也不单凭一对报告证明普遍确定性。
-其更强前提缺失时 parity 保持 unestablished，不阻止已满足现役登记合同的普通 full check；不得手填 completeness_proven:true 或清除已知未解决项。
+当前不提供独立 `parity` 比较／报告改写命令。现役输入生产者均报告
+`completeness_proven:false`，普通检查报告保持 `parity:unestablished`；相同的两个报告
+不能建立输入完整性或普遍确定性。检查状态归实际生产者，不提供写死宿主状态的 `spec status`。
 宿主尚未登记的 compiler、SDK、网络、凭据或其他已知适用外部输入仍须补齐。
 
 v1 明确选择干净、不可变 commit 快照这一工程边界；不另设 dirty-worktree 验证模式。
@@ -525,21 +519,13 @@ Theorem 6 的派生结论是：给定任意顶点类型、两端有向关系及�
 
 当前对应限于上述参数映射、冻结声明与派生推论、精确应用及反例的既有编译证据与现有行为回归。相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
 
-### 5.2 依赖 DAG 驱动的自主结构优化（目标合同）
+### 5.2 按实际消费者重构依赖
 
-系统须利用已登记依赖持续降低实际耦合与局部理解成本，并遵守第 1 节的真实消费者要求。每项优化须先绑定现有宿主操作与具体问题，说明哪些实际调用／构建／测试受影响及改进结果由谁使用；不能从抽象图指标臆造业务场景或先建通用优化平台。工具计算可复核的结构事实，AI 自主选择和实施重构、更新登记、验证并交付；只输出图、排名或建议不算完成结构优化。优化政策、分析范围、目标、成本输入、检查方法及生产者均由宿主在 `.chrono-harness/` 显式登记，沿固定入口调用指定二进制；本地与 CI 仍以同一 `chrono-harness check` 验证。没有人工选择、批准或维护清单的必需步骤，也不增加守护进程、宿主语言或目录布局前提。
+依赖重构须绑定现有宿主操作、真实消费者和具体耦合问题，说明哪些调用、构建或测试受影响。AI 从最新 dev 建隔离候选，在自然所有者修改代码与显式登记，沿同一检查入口验证 DELTA，核落地并清理。只报告图或建议不算交付；不为假想优化预建分析器或固定排名。
 
-**图的含义与来源。** 分别消费文件／项目的有类型依赖与操作执行 DAG，保留所有权、测试配对、边类型、输入来源、共享资源／输出及前置操作；不得把这些关系混成无类型边。FILEMAP 可包含循环，分析须显式报告强连通分量及原始环见证，以分量压缩图计算 DAG 层次；压缩不消除实际环、不授权合并项目，也不替代执行 DAG 的无环要求。层深取最长依赖路径，无前置为 0，不以拓扑序号或入度冒充。结构输入只能来自显式登记和有绑定的实际操作读数，程序不扫描源码推断或静默补删依赖。
+FILEMAP 只须产生第 5 节的两端有类型并集、逐种子影响闭包、真实边与有限路径见证。它不常态产生 SCC、压缩图层深、关系数、跨所有者排名、执行冲突摘要或这些辅助报告的自检；当前没有使用这些输出的生产消费者。FILEMAP 允许循环，有限闭包仍须保留环边、菱形替代路径和全部种子。执行 DAG 的无环、前置与资源／输出排斥仍由 routes 和 projects 的现役入口检查，不得以退休辅助报告省略它们；执行回执的必要自诊断保持。
 
-结构报告在发布前还须由同一判官核对自身的结构不变量：schema、端点和边计数、节点分区、SCC 身份及闭合环见证、压缩图层深、DELTA 受影响分量以及执行计划边必须与本次已绑定的登记输入一致。发现报告内部不一致时返回 `E_SELF_DIAGNOSTIC` 并拒绝把该 impact 当作成功结果。这个自检只暴露判官输出的内部矛盾，不证明算法完备、登记必要性、输入完整性或结构优化已经完成；它不能替代独立行为、迁移和真实消费者验证。
-
-**优化目标。** 在相同功能、外部接口与必要测试义务下，优先减少变更会影响的独立单元、跨所有者依赖、必须一起构建／测试的范围、共享输出冲突和单个所有者必须理解的直接关系。报告每个热点的原节点／边、两端来源、影响闭包和原因。登记为独立且无必要执行前置或资源冲突的单元应独立构建、配专属测试并独立 CI；真实共用前置保留。候选可以抽取已有稳定接口的自然所有者、拆开无须合建的模块或测试执行组、解除无实际必要的前置及共享活输出；不能为降节点数制造大项目，也不能靠空壳、重复实现或复制测试制造独立性。
-
-**比较而非猜测。** 固定优化前后提交、分析政策、比较范围和文件／项目／操作的对应关系，保留新增、拆分、合并、退休的映射及原义务。结构向量至少分别记录直接关系数、跨所有者边、循环分量、按同一逻辑变更种子计算的影响项目／测试数、执行层深与输出冲突；不同粒度不得直接互比。CPU、墙钟、内存、IO 及磁盘读数各自注明来源、样本与范围，未知保留 unknown，不折算统一分数。无时长输入只报告图层次，不能声称已测关键路径时间或加速。宿主登记目标维度与可接受的权衡；报告改善、退化及未验证维度，不默认每一维都可同时改善，也不把图指标的改善当作行为等价或全局最优证明。
-
-**自主实施与判官边界。** AI 从最新 dev 建隔离 lane，按登记目标处理可行动的局部候选，同时迁移真实代码、输入、配对、FILEMAP、构建操作和生成 CI。判官消费固定前后图、对应关系与实际检查结果，只裁决该 DELTA 及受影响闭包；全图可作分析上下文，未受影响历史热点不据此判红。不能仅删除登记边、测试或依赖声明以缩小闭包；必要行为和测试必须保留或经第 6 节完成实际替换／退休。判断结构改善不等于判定语义保持，后者仍由适用检查和有证据的接口／行为合同承担。缺登记、未知成本、失败、无可行改进及证据不足分别如实报告；无法验证的收益不记为完成，也不阻断无关已授权工作。
-
-**交付与演进。** 自动流程必须完成候选修改、同命令本地／CI 检查、适用 integration 验证、PR／合并、落地核验和生命周期清理；失败保留实际原因并由 AI 修复或撤回该候选的优化结论，不把分析成功或测试子集通过记为结构改进已交付。每轮在宿主登记的范围与工作预算内结束，后续从当前图重新分析，不冻结目录、项目数、特定模块名或历史排名。改动优化政策与业务代码时沿 mixed 的可见成本警告处理，无额外人工门。复用实际所有者；只有具体消费者确需独立通用实现时才新增 Rust 生产／测试配对，不预建无人调用的分析二进制。宿主语言适配仍由宿主显式登记。
+每项重构固定前后提交、范围与必要对应关系，保留实际接口、行为、配对和测试义务。不得通过删除必要登记边、测试或创建空壳缩小闭包；退休按第 6 节处理。只量与当前问题有关的成本，注明输入、方法、单位及窗口，未知保持未知，不要求所有改动生成固定结构向量或统一评分。图闭合或指标改善不证明语义、输入完整、加速或最优。政策与产品同改须明确说明影响和验证成本，适用检查未完成或失败时保留原件并如实报告，不升级为已交付。
 
 ## 6. 登记变化、移除与演进
 
@@ -736,8 +722,8 @@ AI 先尝试在现有规则下解决任务；确需改判官时自主变更并�
 `registry_digest, executables, tools, environment, effective_inputs, parity, delta, impact, judges, tests, findings, costs`。
 executables 为 `{path, sha256, version}` 列表；tools 另记录实际解析路径和工具版本。
 effective_inputs 记录两端完整有效输入的 ID、实际值摘要及来源证据；摘要存在本身不证明相等或完整。
-parity 为 `{status: "established"|"unestablished", compared_report: string|null}`；普通 full check 保持 unestablished。
-现役独立比较器仅在满足 §4 的更强输入／观察要求并与具名报告匹配时写 established；它记录成对证据，不证明普遍确定性，也不参与普通检查准入。性能测量差异分别报告。
+parity 为 `{status: "unestablished", compared_report: null}`；当前不生成成对比较状态。
+性能测量差异分别报告，不用状态声明替代实际观察。
 judges/tests 记录每项的 selected/executed/blocked/retired 状态、退出码和证据摘要。
 这里 selected 是执行计划状态，完整结果不能停留在 selected 就返回 pass。
 
@@ -951,7 +937,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 首个根提交 | bootstrap/no prior base，无绿色 DELTA 报告 |
 | 当前 CLI：check | **已实现**独立 chrono-ci-check/v1、显式 Git 绑定的 v2 与带 --context 的 chrono-judge/v1；完整宿主仍因 proposed/缺绑定/未实现义务非零，具体范围见 §14 |
 | 当前 CLI：未知命令/信息命令多余参数 | **已实现** E_USAGE，exit 2 |
-| 当前 CLI：spec status | **已实现** draft/not-implemented/proposed，exit 0 |
+| 已退役 CLI：spec status / parity | E_USAGE，exit 2；不写状态或改写报告 |
 | 当前 CLI：help/version | **已实现** 信息输出，exit 0；help 明示完整治理未实现 |
 | 程序输出诊断／进度／告警或处理异常 | §7.1 标准日志记录与实际上下文；机器 stdout、结果输出及子进程原始字节合同保持完整 |
 | 根因经多层包装并跨进程／报告传输 | 可从顶层记录恢复每层 source、原生信息及实际进程证据；只剩摘要字符串不满足 §7.2 |
@@ -976,7 +962,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 除 Shell／Python 配对外，登记或实际执行证据显示不同语言承担测试逻辑，包括源码字符串／解释器参数／薄包装 | 配对判官拒绝并指出生产单元、语言声明及不符的测试入口；不能凭外层文件语言放行，也不声称自动识别任意隐藏逻辑 |
 | Shell 脚本显式配对 Python 测试 | 允许该配对；继续核对独立归属、依赖、操作及实际测试结果 |
 | 混合语言宿主分别登记各生产单元与同语言测试 | 各单元独立选测；不推断宿主语言、不合并测试项目，不引入 Rust 工具链前提 |
-| 登记图含循环、共享前置、菱形依赖和不同边类型 | 原边与环见证保留，分量 DAG 层次和去重影响可核验；不把压缩图当实际无环或独立构建证据 |
+| 登记图含循环、共享前置、菱形依赖和不同边类型 | 有限影响闭包保留原边、全部种子和路径见证；只有 test-execution 边选测；执行 DAG 另由现役 routes 检查 |
 | 同一逻辑单元拆分、改名或合并前后比较 | 固定两端与显式对应；保持测试／接口义务，比较相同逻辑种子，不靠粒度变化制造收益 |
 | AI 按依赖候选拆开可独立构建／测试的单元 | 实际代码、配对、输入、操作和 CI 一并迁移；同一 check 选择真实依赖并验证原有行为 |
 | 仅删登记边、必要测试或制造空壳使图指标改善 | 不授予结构优化完成；缺失登记、执行或替换证据由对应判官报错，未知保持未验证 |
@@ -1000,9 +986,9 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 §4.2、§7.1 与 §7.2 是尚未完整验收的目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，结构化日志与跨层异常链尚未全面采用。缓存键与 provider 投影已有候选实现，主宿主显式登记实际检查／Rust 发布作业、需求、用途和项目编译产物，生成固定版本的 restore/save action；当前运行输入与编译源码分别取有界命令观察及 FILEMAP 显式闭包。生成成功不证明实际恢复、保存或增量复用；v2 消费者引用原操作登记，恢复前拒绝生产操作已退出计划的缓存订阅，消费者增减不使未变产物失效。当前报告保存 action 原始读数；save 步骤成功本身仍报未确认。v2 可显式登记有界 GitHub 后端查询，在已有 report 步骤只核待确认保存；精确 key/ref 的单一后端条目可报告可用性已观察，不能归因到本次 action 或证明归档内容。分页非原子快照，未观察到不证明不存在；歧义、查询失败、超时与截断保留原始读数及未确认状态，业务失败不改判。无待确认保存不发请求；查询成本计入原 cache-report 分类，凭据值不进入保留环境。启动构建成功的显式子集可在后续检查失败并结束后保存；完整原生验收、后端观察验收、损坏恢复、任意项目的测试失败后独立保存、完整适用输入及 linked worktree 全程租约仍未完成。现有 target、bin、名为 cache 的目录和 artifact 传输本身不满足缓存合同。具体实现边界与待实现项见 docs/ci-cache.md 和 docs/spec-coverage.md。
 
-The native release recipe v2 emits `chrono-native-build/v3` evidence with explicit passed/failed status and ordered actual process records for source observation, installation, versions, builds, registered verification and packaging. Ordinary child failures retain original bytes, hashes and exits before the CLI returns failure; unstarted processes and unknown source identity are not invented. Preflight rejects an existing output or invalid registration without starting work. Native workflow artifact upload is attempted on success and failure; report or directory presence alone is not release success. Hard termination, storage failure recovery, complete build provenance and input closure are not certified by this evidence. The recipe contract remains host-owned under `.chrono-harness/release/`; see [docs/distribution.md](docs/distribution.md).
+The host-owned native release recipe accepts only `chrono-release-build/v5`; retired formats fail before tool execution or output creation. Its explicit build, verification and collector units retain `chrono-release-unit/v1` receipts with actual source observations, process argv/cwd, original stdout/stderr files, hashes and exits. The local driver retains `chrono-release-local/v1` metadata and the same unit evidence. Preflight rejects invalid registration and existing outputs. Native artifact upload is attempted on success and failure; directory or report presence alone is not release success.
 
-Release recipe v3 explicitly declares required Rust components and selects release-plan assets and consumer destinations admitted by one untracked host artifact declaration. Git-tracked paths, symlinks and source/destination overlaps are rejected. Exact release bytes are staged at these declared consumer paths before registered verification. The v4 native report preserves original v3 process evidence and records source/destination identity observations after staging, before and after each verification operation and packaging. A changed or missing identity prevents success; a failed child keeps its actual exit even when the post-check also finds a change. These bounded observations do not certify absence of transient replacement, complete build input closure, all tests invoking CLI binaries, or full native host governance. V2 keeps its previous behavior and rejects the new field.
+The current recipe explicitly declares Rust components, per-verifier toolchain use and build dependencies, release-plan assets and consumer destinations admitted by one untracked host artifact declaration. Git-tracked destinations, symlinks and source/destination overlaps are rejected before staging. Selected release bytes and modes are staged before verification or packaging, with identity observations before and after each operation. Identity drift prevents success; a failed child retains its original exit even when an additional observation fails. These bounded observations do not certify transient-replacement absence, hard-termination or storage recovery, complete build inputs, universal CLI consumption or full native governance. The recipe contract remains under `.chrono-harness/release/`; see [docs/distribution.md](docs/distribution.md).
 
 `chrono-github-release/v1` explicitly declares a GitHub release-build projection under host `.chrono-harness/`, selected by the existing chrono-ci init/generate/verify commands. Each job declares its runner, complete command argv, timeout and literal artifact directory/name; no host language, project layout or release recipe is inferred. The generator shares output preflight and writing with check projections but uses a distinct ownership marker. Verification does not repair drift; unknown declarations and ownership collisions fail. Failed build commands retain their exit and artifact upload is attempted with `always()`. Local and CI consumers use the same declared command. Source checkout is a requested revision, not a generator-certified immutable OID; the registered build consumer owns source identity and release acceptance. Generation neither publishes a release nor certifies input closure or parity. Existing check schemas retain their semantics; the host adoption and limits are specified in [release CI](docs/release-ci.md).
 

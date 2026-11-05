@@ -46,15 +46,15 @@ class Fixture:
         self.temp=tempfile.TemporaryDirectory(prefix='release unit λ ')
         self.root=Path(self.temp.name)/'source with spaces';self.root.mkdir()
         self.calls=Path(self.temp.name)/'calls.jsonl'
-        self.cfg={'schema':'chrono-release-build/v4','rust_toolchain':'1.95.0','rust_components':[],
+        self.cfg={'schema':'chrono-release-build/v5','rust_toolchain':'1.95.0','rust_components':[],
                   'manifests':['registered/a.toml','registered/distribution.toml'],
                   'projects':'registered/projects.json','tools':{n:'tools/'+n for n in ['git','cargo','rustc','rustup','probe']},
                   'verification_operations':['original.first','original.second'],
                   'consumer_staging':{'release_plan':PLAN,'host_config':'registered/host.json','bindings':[{'asset':'a','destinations':['consumer/a']},{'asset':'distribution','destinations':['consumer/distribution']}]},
                   'units':[{'id':'build_a','kind':'build','manifest':'registered/a.toml','asset':'a','needs':[],'handoff':'handoffs/build_a'},
                            {'id':'build_distribution','kind':'build','manifest':'registered/distribution.toml','asset':'distribution','needs':[],'handoff':'handoffs/build_distribution'},
-                           {'id':'verify_first','kind':'verify','operation':'original.first','needs':['build_a','build_distribution'],'handoff':'handoffs/verify_first'},
-                           {'id':'verify_second','kind':'verify','operation':'original.second','needs':['build_a','build_distribution'],'handoff':'handoffs/verify_second'}],
+                           {'id':'verify_first','kind':'verify','operation':'original.first','rust_toolchain':True,'needs':['build_a','build_distribution'],'handoff':'handoffs/verify_first'},
+                           {'id':'verify_second','kind':'verify','operation':'original.second','rust_toolchain':True,'needs':['build_a','build_distribution'],'handoff':'handoffs/verify_second'}],
                   'collector':{'id':'package','needs':['build_a','build_distribution','verify_first','verify_second'],'package_asset':'distribution','dependency_metadata':'dependencies.json'},
                   'unit_costs':{n:'unmeasured' for n in ['build_a','build_distribution','verify_first','verify_second','package']},'limits':{'unit_seconds':2700,'platform_seconds':2700},
                   'native_jobs':{'fixture':{n:'native_'+n for n in ['build_a','build_distribution','verify_first','verify_second','package']}},'local_workers':2}
@@ -110,6 +110,19 @@ class ReleaseUnits(unittest.TestCase):
     def setUp(self):self.f=Fixture();self.addCleanup(self.f.close)
     def tearDown(self):retain_failed_fixture(self,Path(self.f.temp.name))
     def passed(self,p):self.assertEqual(p.returncode,0,p.stderr.decode(errors='replace'))
+    def test_retired_schema_is_rejected_before_tools_or_output(self):
+        f=self.f
+        f.cfg['schema']='chrono-release-build/v4'
+        for unit in f.cfg['units']:
+            unit.pop('rust_toolchain',None)
+        put(f.root/BUILD,f.cfg)
+        output=Path(f.temp.name)/'unsupported-output'
+        result=subprocess.run([sys.executable,str(SCRIPT),str(f.root),str(output)],
+                              env=dict(os.environ,CALLS=str(f.calls)),capture_output=True)
+        self.assertEqual(result.returncode,2,result.stderr.decode(errors='replace'))
+        self.assertIn(b'unsupported release build schema',result.stderr)
+        self.assertEqual(f.calls_read(),[])
+        self.assertFalse(output.exists())
     def test_producer_verifier_collector_execute_distinct_original_commands(self):
         f=self.f;f.ready();before=f.calls_read();p,out=f.run('package');self.passed(p)
         new=f.calls_read()[len(before):]
@@ -126,6 +139,32 @@ class ReleaseUnits(unittest.TestCase):
                 for stream in ['stdout','stderr']:
                     data=process[stream];raw=(directory/data['path']).read_bytes()
                     self.assertEqual(hashlib.sha256(raw).hexdigest(),data['sha256']);self.assertEqual(len(raw),data['size'])
+    def test_source_and_install_failures_preserve_actual_processes(self):
+        f=self.f
+        for fault,phase in [('source','source-identity'),('install','toolchain-install')]:
+            with self.subTest(fault=fault):
+                result,output=f.run('build_a',fault)
+                self.assertEqual(result.returncode,41,result.stderr)
+                report=json.loads((output/'receipt.json').read_bytes())
+                self.assertEqual(report['status'],'failed')
+                self.assertEqual(report['failure']['phase'],phase)
+                self.assertEqual(report['failure']['exit_code'],41)
+                process=report['processes'][-1]
+                self.assertEqual(process['exit_code'],41)
+                for stream,raw in [('stdout',b'failed phase\xff\n'),('stderr',b'original diagnostic\xfe\n')]:
+                    self.assertEqual((output/process[stream]['path']).read_bytes(),raw)
+                self.assertFalse(any(p['phase']=='build' for p in report['processes']))
+                if fault=='source':self.assertIsNone(report['context'])
+    def test_compiler_mismatch_keeps_successful_process_exit(self):
+        result,output=self.f.run('build_a','version')
+        self.assertEqual(result.returncode,2,result.stderr)
+        report=json.loads((output/'receipt.json').read_bytes())
+        self.assertIsNone(report['failure']['exit_code'])
+        process=report['processes'][-1]
+        self.assertEqual(process['phase'],'compiler-version')
+        self.assertEqual(process['exit_code'],0)
+        self.assertEqual((output/process['stdout']['path']).read_bytes(),b'rustc different-version\n')
+        self.assertFalse(any(p['phase']=='build' for p in report['processes']))
     def test_local_full_driver_uses_isolated_roots_declared_handoffs_and_same_units(self):
         f=self.f;output=Path(f.temp.name)/'full-output'
         p=subprocess.run([sys.executable,str(SCRIPT),str(f.root),str(output)],env=dict(os.environ,CALLS=str(f.calls)),capture_output=True)
@@ -212,12 +251,13 @@ class ReleaseUnits(unittest.TestCase):
         shutil.rmtree(f.root/'handoffs/build_a');p,_=f.run('package');self.assertEqual(p.returncode,2)
     def test_before_after_all_assets_reject_mutation_absence_and_mode(self):
         f=self.f;f.builds()
-        for fault in ['destination-change','source-change','destination-mode','destination-missing']:
-            p,out=f.run('verify_first',fault);self.assertEqual(p.returncode,2,fault)
+        for fault in ['destination-change','source-change','destination-mode','destination-missing','destination-change-verify']:
+            p,out=f.run('verify_first',fault);self.assertEqual(p.returncode,73 if fault=='destination-change-verify' else 2,fault)
             r=json.loads((out/'receipt.json').read_text());o=r['consumer_staging']['observations']
             self.assertEqual([s['phase'] for s in o],['staged','before-verification','after-verification'])
             self.assertFalse(o[-1]['matches'])
             self.assertEqual(len(o[-1]['files']),4)
+            if fault=='destination-change-verify':self.assertEqual(r['failure']['exit_code'],73)
     def test_package_failure_and_final_byte_mismatch_preserve_failed_receipts(self):
         f=self.f;f.ready()
         for fault,code in [('pack',41),('package-change',2),('package-mode',2),('package-extra',2)]:
@@ -225,19 +265,72 @@ class ReleaseUnits(unittest.TestCase):
             r=json.loads((out/'receipt.json').read_text());self.assertEqual(r['status'],'failed')
     def test_invalid_membership_paths_and_duplicate_operations_fail_before_effects(self):
         f=self.f;original=json.loads(json.dumps(f.cfg))
-        mutations=[lambda c:c['units'].pop(),lambda c:c['units'][2].update(needs=['build_a']),lambda c:c['units'][0].update(handoff='../escape'),lambda c:c['units'][0].update(asset='unknown'),lambda c:c['units'][1].update(asset='a'),lambda c:c['units'][3].update(operation='original.first'),lambda c:c['collector'].update(needs=['build_a'])]
+        mutations=[lambda c:c['units'].pop(),lambda c:c['units'][2].update(needs=['missing']),lambda c:c['units'][0].update(handoff='../escape'),lambda c:c['units'][0].update(asset='unknown'),lambda c:c['units'][1].update(asset='a'),lambda c:c['units'][3].update(operation='original.first'),lambda c:c['collector'].update(needs=['build_a'])]
         for change in mutations:
             f.cfg=json.loads(json.dumps(original));f.edit(change)
             output=Path(f.temp.name)/'bad-out'
             p=subprocess.run([sys.executable,str(SCRIPT),str(f.root),str(output),'--unit','build_a'],capture_output=True)
             self.assertEqual(p.returncode,2);self.assertFalse(output.exists());self.assertEqual(f.calls_read(),[])
         f.cfg=original;put(f.root/BUILD,original)
+    def test_invalid_staging_is_rejected_before_tools_or_output(self):
+        f=self.f;original=json.loads(json.dumps(f.cfg));host=f.root/'registered/host.json'
+        host_bytes=host.read_bytes()
+        for case in range(10):
+            with self.subTest(case=case):
+                f.cfg=json.loads(json.dumps(original));host.write_bytes(host_bytes)
+                binding=f.cfg['consumer_staging']['bindings'][0]
+                if case==0:binding['asset']='unknown'
+                elif case==1:binding['destinations']=['undeclared/tool']
+                elif case==2:put(host,{'artifacts':[{'path':'consumer/','tracked':True}]})
+                elif case==3:binding['destinations']=['consumer/a','consumer/a']
+                elif case==4:binding['destinations']=['consumer/a','consumer/a/child']
+                elif case==5:binding['destinations']=['products/a']
+                elif case==6:binding['destinations']=['consumer/../source']
+                elif case==7:f.cfg['rust_components']=['rustfmt','rustfmt']
+                elif case==8:f.cfg['rust_components']='rustfmt'
+                else:
+                    (f.root/'elsewhere').mkdir()
+                    (f.root/'consumer').symlink_to('elsewhere',target_is_directory=True)
+                put(f.root/BUILD,f.cfg)
+                output=Path(f.temp.name)/'bad-staging'
+                result=subprocess.run([sys.executable,str(SCRIPT),str(f.root),str(output),'--unit','build_a'],
+                    env=dict(os.environ,CALLS=str(f.calls)),capture_output=True)
+                self.assertEqual(result.returncode,2,result.stderr)
+                self.assertEqual(f.calls_read(),[])
+                self.assertFalse(output.exists())
     def test_absent_output_and_dirty_source(self):
         f=self.f;out=Path(f.temp.name)/'existing';out.mkdir()
         p=subprocess.run([sys.executable,str(SCRIPT),str(f.root),str(out),'--unit','build_a'],capture_output=True)
         self.assertEqual(p.returncode,2);self.assertEqual(f.calls_read(),[])
         p,out=f.run('build_a','dirty');self.assertEqual(p.returncode,2)
         self.assertFalse(any(c['tool']=='cargo' for c in f.calls_read()))
+    def test_staging_git_paths_remain_literal(self):
+        f=self.f;git=shutil.which('git');self.assertIsNotNone(git)
+        for argv in [['init','-q'],['add','--','consumer/neighbor']]:
+            if argv[0]=='add':
+                (f.root/'consumer').mkdir()
+                (f.root/'consumer/neighbor').write_bytes(b'preserved tracked neighbor')
+            result=subprocess.run([git,*argv],cwd=f.root,capture_output=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+        f.cfg['consumer_staging']['bindings'][0]['destinations']=['consumer/*']
+        source=f.root/'products/a';source.parent.mkdir()
+        shutil.copy2(f.root/'producer-a',source);source.chmod(0o755)
+        spec=importlib.util.spec_from_file_location('literal_staging_recipe',SCRIPT)
+        recipe=importlib.util.module_from_spec(spec)
+        exec(compile(SCRIPT.read_bytes(),str(SCRIPT),'exec'),recipe.__dict__)
+        staging=recipe.selected_staging(recipe.staging_plan(f.root,f.cfg),{'a':{}})
+        execution=recipe.UnitExecution(f.root,Path(f.temp.name)/'literal-output',f.cfg,
+            {'git':git},{'id':'literal','kind':'verify','rust_toolchain':False})
+        recipe.check_staging(execution,staging)
+        self.assertEqual((f.root/'consumer/*').read_bytes(),source.read_bytes())
+        self.assertEqual((f.root/'consumer/neighbor').read_bytes(),b'preserved tracked neighbor')
+        self.assertTrue(recipe.observe(f.root,staging,'after-verification'))
+        tracked=subprocess.run([git,'--literal-pathspecs','add','--','consumer/*'],cwd=f.root,capture_output=True)
+        self.assertEqual(tracked.returncode,0,tracked.stderr)
+        execution=recipe.UnitExecution(f.root,Path(f.temp.name)/'tracked-output',f.cfg,
+            {'git':git},{'id':'tracked','kind':'verify','rust_toolchain':False})
+        with self.assertRaisesRegex(ValueError,'tracked by Git'):
+            recipe.check_staging(execution,staging)
     def test_literal_archive_member_cannot_escape_or_hide_additional_files(self):
         f=self.f;f.builds()
         archive=f.root/'handoffs/build_a/executable.tar'
@@ -376,10 +469,10 @@ class UnitFailureRetention(unittest.TestCase):
     def tearDown(self):retain_failed_fixture(self,self.root)
 
     def failed_child(self,stderr,evidence=None,setup=''):
-        cfg={'rust_toolchain':'1.95.0','limits':{'unit_seconds':2700,'platform_seconds':2700}}
+        cfg={'schema':'chrono-release-build/v5','rust_toolchain':'1.95.0','limits':{'unit_seconds':2700,'platform_seconds':2700}}
         if evidence is not None:cfg['failure_evidence']=evidence
         execution=self.recipe.UnitExecution(self.root,self.output,
-            cfg, {}, {'id':'verify'})
+            cfg, {}, {'id':'verify','kind':'verify','rust_toolchain':False})
         stdout=b'original stdout\xff\n'
         code='import sys;from pathlib import Path;'+setup+'stdout='+repr(stdout)+';stderr='+repr(stderr)+';Path("child.stdout").write_bytes(stdout);Path("child.stderr").write_bytes(stderr);sys.stdout.buffer.write(stdout);sys.stderr.buffer.write(stderr);sys.exit(73)'
         stdout_capture=io.TextIOWrapper(io.BytesIO(),encoding='utf-8')
@@ -406,6 +499,77 @@ class UnitFailureRetention(unittest.TestCase):
                 self.assertEqual(retained['status'],'unavailable')
                 self.assertEqual(bytes(retained['bytes']),raw)
         return execution.report,stderr_capture.buffer.getvalue()
+
+    def test_native_failure_retention_preserves_directory_and_byte_boundaries(self):
+        retain, bound = self.recipe.retain_failure_evidence, self.recipe.EVIDENCE_BOUND
+        with tempfile.TemporaryDirectory() as temporary, tempfile.TemporaryDirectory(prefix='chrono-native-publication-failure-') as original:
+            outside, source = Path(temporary).resolve(), Path(original).resolve()
+            output = outside / 'output'
+            def marker(path):
+                return b'original native publication process evidence: ' + str(path).encode() + b'\n'
+            self.assertIsNone(retain(output, 'none', b'no marker', b''))
+            invalid = outside / 'chrono-native-publication-failure-outside'
+            invalid.mkdir()
+            self.assertEqual(retain(output, 'outside', marker(invalid), b'')['status'], 'unavailable')
+            leaf = outside / 'chrono-native-publication-failure-link'
+            leaf.symlink_to(source, target_is_directory=True)
+            self.assertEqual(retain(output, 'link', marker(leaf), b'')['status'], 'unavailable')
+            (source / 'stdout').write_bytes(b'original\xff')
+            (source / 'stderr').write_bytes(b'original\xfe')
+            (source / 'process.json').write_text('{"exit_code":73}')
+            preparation = source / 'state/collection/preparation'
+            preparation.mkdir(parents=True)
+            with (preparation / 'oversized').open('wb') as stream:
+                stream.truncate(bound + 1)
+            secret = outside / 'not-evidence'
+            secret.write_bytes(b'not an original stream')
+            (preparation / 'linked').symlink_to(secret)
+            result = retain(output, 'bounded', b'', marker(source))
+            self.assertEqual(result['status'], 'partial')
+            self.assertEqual(result['bound_bytes'], bound)
+            self.assertEqual(bound, 67108864)
+            self.assertLessEqual(result['bytes'], bound)
+            rows = {row['source']: row for row in result['files']}
+            self.assertEqual(rows['state/collection/preparation/oversized']['reason'], 'bounded evidence limit')
+            self.assertEqual(rows['state/collection/preparation/linked']['status'], 'omitted')
+            for name in ['linked', 'oversized']:
+                self.assertFalse((output / ('failure-evidence/bounded/state/collection/preparation/' + name)).exists())
+            for name in ['stdout', 'stderr', 'process.json']:
+                raw = (source / name).read_bytes()
+                self.assertEqual((output / rows[name]['path']).read_bytes(), raw)
+                self.assertEqual(rows[name]['sha256'], hashlib.sha256(raw).hexdigest())
+            self.assertEqual(result['bytes'], sum(row.get('bytes', 0) for row in rows.values() if row['status'] == 'retained'))
+
+    def test_native_nested_failure_bytes_survive_in_the_release_artifact(self):
+        with tempfile.TemporaryDirectory(prefix='chrono-native-publication-failure-') as temporary:
+            source=Path(temporary).resolve()
+            originals={'process.json':b'{"exit_code":73}','stdout':b'original\xff','stderr':b'original\xfe',
+                       'state/collection/preparation/receipt.json':b'{"exit_code":73}',
+                       'state/collection/preparation/stdin.bin':b'original input',
+                       'state/collection/preparation/stdout.bin':b'partial output',
+                       'state/collection/preparation/stderr.bin':b'original stderr'}
+            for name,raw in originals.items():
+                target=source/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
+            report,_=self.failed_child(b'original native publication process evidence: '+str(source).encode()+b'\n')
+            nested=report['processes'][0]['failure_evidence']
+            self.assertEqual(nested['status'],'retained')
+            for name,raw in originals.items():
+                row=next(row for row in nested['files'] if row['source']==name)
+                self.assertEqual((self.output/row['path']).read_bytes(),raw)
+                self.assertEqual(row['sha256'],hashlib.sha256(raw).hexdigest())
+                self.assertEqual(row['bytes'],len(raw))
+
+    def test_missing_executable_does_not_invent_a_process_exit(self):
+        cfg={'schema':'chrono-release-build/v5','limits':{'unit_seconds':2700,'platform_seconds':2700}}
+        execution=self.recipe.UnitExecution(self.root,self.output,cfg,{},
+            {'id':'verify','kind':'verify','rust_toolchain':False})
+        with self.assertRaises(OSError) as caught:
+            execution.run('verification',[str(self.root/'absent-executable')])
+        self.assertEqual(execution.save(caught.exception),2)
+        report=json.loads((self.output/'receipt.json').read_bytes())
+        self.assertEqual(report['status'],'failed')
+        self.assertIsNone(report['failure']['exit_code'])
+        self.assertEqual(report['processes'],[])
 
     def test_registered_nested_failure_bytes_survive_in_the_release_artifact(self):
         raw=b'nested original failure\xff\x00\n'
@@ -610,12 +774,11 @@ def cases(suite):
 
 def load_tests(loader, standard_tests, pattern):
     suite=unittest.TestSuite([standard_tests])
-    for name in ['recipe-tests.py','dependency-tests.py']:
-        path=Path(__file__).with_name(name)
-        spec=importlib.util.spec_from_file_location(name.removesuffix('.py').replace('-','_'),path)
-        module=importlib.util.module_from_spec(spec)
-        exec(compile(path.read_bytes(),str(path),'exec'),module.__dict__)
-        suite.addTests(loader.loadTestsFromModule(module))
+    path=Path(__file__).with_name('dependency-tests.py')
+    spec=importlib.util.spec_from_file_location('dependency_tests',path)
+    module=importlib.util.module_from_spec(spec)
+    exec(compile(path.read_bytes(),str(path),'exec'),module.__dict__)
+    suite.addTests(loader.loadTestsFromModule(module))
     tests=list(cases(suite))
     identities=[test.id() for test in tests]
     if len(set(identities))!=len(identities) or not INTEGRATION_TESTS <= set(identities):

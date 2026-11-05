@@ -339,7 +339,7 @@ fn native_output_preserves_bad_descriptor_primary_related_and_diagnostic_causes(
 
 #[test]
 #[cfg(unix)]
-fn runner_binary_publication_preserves_bytes_and_attempts_parity_stderr_after_stdout_failure() {
+fn runner_binary_publication_preserves_bytes_and_reports_broken_stdout() {
     use std::process::Stdio;
     fn broken_pipe() -> Stdio {
         let (writer, reader) = std::os::unix::net::UnixStream::pair().unwrap();
@@ -355,28 +355,11 @@ fn runner_binary_publication_preserves_bytes_and_attempts_parity_stderr_after_st
         assert_eq!(actual.stdout, expected.stdout.as_bytes());
         assert_eq!(actual.stderr, expected.stderr.as_bytes());
     }
-    let dir = TempDir::new().unwrap();
-    let report =
-        json!({"schema_version":1,"scope":"configured-judges","status":"pass","unresolved":{}});
-    for name in ["current.json", "compared.json"] {
-        fs::write(dir.path().join(name), serde_json::to_vec(&report).unwrap()).unwrap();
-    }
-    let args = [
-        "parity",
-        "--host-root",
-        dir.path().to_str().unwrap(),
-        "--report",
-        "current.json",
-        "--compared-report",
-        "compared.json",
-    ];
+    let args = ["--help"];
     let expected = dispatch(&args);
-    assert_eq!(expected.exit_code, 2);
-    assert!(!expected.stdout.is_empty() && !expected.stderr.is_empty());
-    let healthy = Command::new(&binary).args(args).output().unwrap();
-    assert_eq!(healthy.status.code(), Some(2));
-    assert_eq!(healthy.stdout, expected.stdout.as_bytes());
-    assert_eq!(healthy.stderr, expected.stderr.as_bytes());
+    assert_eq!(expected.exit_code, 0);
+    assert!(!expected.stdout.is_empty());
+    assert!(expected.stderr.is_empty());
 
     // The peer is already closed, so publication fails without a timing race.
     let actual = Command::new(&binary)
@@ -386,18 +369,13 @@ fn runner_binary_publication_preserves_bytes_and_attempts_parity_stderr_after_st
         .unwrap();
     assert_eq!(actual.status.code(), Some(2));
     assert!(actual.stdout.is_empty());
-    assert!(
-        actual.stderr.starts_with(expected.stderr.as_bytes()),
-        "independent parity explanation was suppressed: {:?}",
-        actual.stderr
-    );
-    let diagnostic = &actual.stderr[expected.stderr.len()..];
+    let diagnostic = &actual.stderr;
     assert_eq!(std::str::from_utf8(diagnostic).unwrap().lines().count(), 1);
     let event: Value = serde_json::from_slice(diagnostic).unwrap();
     assert_eq!(event["schema"], "chrono-log/v1");
     assert_eq!(event["event"], "runner.output_publication_failed");
     assert_eq!(event["error"]["error"]["context"]["stream"], "stdout");
-    assert_eq!(event["error"]["error"]["context"]["operation_exit_code"], 2);
+    assert_eq!(event["error"]["error"]["context"]["operation_exit_code"], 0);
     assert_eq!(
         event["error"]["error"]["source"]["source"]["native_code"],
         libc::EPIPE
@@ -1609,6 +1587,8 @@ fn unknown_and_malformed_commands_are_errors() {
     for args in [
         vec!["checks"],
         vec!["spec"],
+        vec!["spec", "status"],
+        vec!["parity"],
         vec!["spec", "status", "x"],
         vec!["--version", "check"],
         vec!["check"],
@@ -1618,11 +1598,7 @@ fn unknown_and_malformed_commands_are_errors() {
     }
 }
 #[test]
-fn status_help_and_version_are_information_only() {
-    let s = dispatch(&["spec", "status"]);
-    assert_eq!(s.exit_code, 0);
-    assert!(s.stdout.contains("ENFORCEMENT=not-implemented"));
-    assert!(s.stdout.contains("CI_CHECK=chrono-ci-check/v1"));
+fn help_and_version_are_information_only() {
     assert!(dispatch(&[]).stdout.contains("NOT IMPLEMENTED"));
     assert!(
         dispatch(&["--version"])

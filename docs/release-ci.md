@@ -40,9 +40,9 @@ python3 .chrono-harness/release/build.py ROOT ABSENT_OUTPUT --unit ID
 python3 .chrono-harness/release/build.py ROOT ABSENT_OUTPUT --collect
 ```
 
-v4/v5 完整本地入口要求 clean 固定 HEAD，以有界并发运行相同注册单元；每个单元使用独立临时 clone、固定 OID 和声明 handoff，输出中保留原始单元证据和本地驱动进程。仅删除本次创建的临时 roots，不改源检出。通过后的平台清单和[发布计划](../.chrono-harness/release/plan.json)中全部资产位于 ABSENT_OUTPUT 根；原始 receipt、逐单元过程与完整驱动状态一并保留。v2/v3 完整入口仍执行原有顺序方法。已有输出（包括 symlink）在子进程前被拒绝；结构预检失败不制造成功报告。
+当前只接受 `chrono-release-build/v5`；旧格式在启动工具或创建输出前拒绝。完整本地入口要求 clean 固定 HEAD，以有界并发运行相同注册单元；每个单元使用独立临时 clone、固定 OID 和声明 handoff，输出中保留原始单元证据和本地驱动进程。仅删除本次创建的临时 roots，不改源检出。通过后的平台清单和[发布计划](../.chrono-harness/release/plan.json)中全部资产位于 ABSENT_OUTPUT 根；原始 receipt、逐单元过程与完整驱动状态一并保留。已有输出（包括 symlink）在子进程前被拒绝；结构预检失败不制造成功报告。
 
-build 单元只构建声明 manifest 一次，运输一个可执行文件及原始 receipt／过程流；可执行文件位于 mode 保持的 tar，而不进入 JSON 或 64 MiB portable-artifact 容器。摘要和复制分块流式处理，没有增加通用容量上限。v4 verification 保留完整构建向量的合同。v5 verification 的 `needs` 必须是显式声明的构建单元子集，可为空；只下载和核对所选资产、消费者路径及其原始生产者身份。
+build 单元只构建声明 manifest 一次，运输一个可执行文件及原始 receipt／过程流；可执行文件位于 mode 保持的 tar，而不进入 JSON 或 64 MiB portable-artifact 容器。摘要和复制分块流式处理，没有增加通用容量上限。v5 verification 的 `needs` 必须是显式声明的构建单元子集，可为空；只下载和核对所选资产、消费者路径及其原始生产者身份。
 
 v5 verification 另须声明布尔值 `rust_toolchain`。为 true 时安装并核对登记的 Rust 工具链，为 false 时只绑定 Git 与登记操作的实际工具，不探测或安装 Rust，也不覆盖继承的 Rust 环境变量。该选择不从语言、命令名或依赖数量推断。消费者可以使用 Rust 二进制而不安装 Rust 编译器。Rust 验证仍需匹配所选构建的工具链；无需 Rust 的验证保留实际执行工具身份及原始过程证据，不能冒领编译器观察。collector 按每个单元的声明核对对应证据。
 
@@ -50,7 +50,7 @@ v5 verification 另须声明布尔值 `rust_toolchain`。为 true 时安装并�
 
 collector 不安装工具链、不构建、不跑测试。它核 exact build/test 成员、当前依赖结果和选中原始 run/attempt；允许兼容的成功前置来自较早 producing attempt，但最新 failure/cancelled/skipped 不能用旧 pass 掩盖。更换选中 producer 或字节使不对应的测试 receipt 失效。collector 核原始过程退出／流、原始 argv、全部资产观察与生产 lineage 后，运行被验证向量中的 `chrono-distribution pack`，再核实际最终清单、发布计划中全部包字节／mode、源及平台。最终 artifact 含完整原始 receipt／过程流和明确选定 artifact-ID 引用；独立 job 的失败 artifact 仍保留。
 
-v5 可在 `failure_evidence` 中按验证 operation 显式登记失败目录列表。路径为以 `/` 结尾的字面相对目录，必须属于宿主唯一的 untracked artifact，单个操作的目录不能重复或嵌套；未登记目录不采集。验证子进程失败后，生产者将这些目录的普通文件及原字节摘要写入该单元的发布 artifact，保留明确的目录缺失、非普通文件、容量省略和复制错误。登记采集与原生 fixture 证据共用现有 64 MiB 内容上限，原 stdout/stderr、退出码及原业务失败不被辅助采集失败覆盖。该配置不从测试名称、语言或输出文本推断路径；v2/v3/v4 不接受此字段。此机制只运输已产生的登记证据，不证明所有异常都已使用标准错误链。
+v5 可在 `failure_evidence` 中按验证 operation 显式登记失败目录列表。路径为以 `/` 结尾的字面相对目录，必须属于宿主唯一的 untracked artifact，单个操作的目录不能重复或嵌套；未登记目录不采集。验证子进程失败后，生产者将这些目录的普通文件及原字节摘要写入该单元的发布 artifact，保留明确的目录缺失、非普通文件、容量省略和复制错误。登记采集与原生 fixture 证据共用现有 64 MiB 内容上限，原 stdout/stderr、退出码及原业务失败不被辅助采集失败覆盖。该配置不从测试名称、语言或输出文本推断路径。此机制只运输已产生的登记证据，不证明所有异常都已使用标准错误链。
 
 专属 owner 验证包括任意非 Rust 字面命令、原生元数据、独立 sibling、隔离本地调度、真实 distribution pack、非 UTF-8 原始失败、缺失／损坏／重封装错误 receipt、路径／mode、变更字节、当前失败与 carried attempt。测试不认证实际原生平台时限、普遍环境同判或公开采用。提交后的 canonical check、原生两平台执行及必要的重试、发布和 main/examples 采用仍须分别验证。
 

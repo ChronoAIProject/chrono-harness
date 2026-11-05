@@ -14,7 +14,7 @@ import sys
 import tarfile
 import time
 import uuid
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 EVIDENCE_BOUND = 64 * 1024 * 1024
 
@@ -42,10 +42,6 @@ def overlaps(a, b):
 
 
 def staging_plan(root, cfg):
-    if cfg['schema'] == 'chrono-release-build/v2':
-        if 'consumer_staging' in cfg or 'rust_components' in cfg:
-            raise ValueError('consumer_staging and rust_components require release build v3')
-        return None
     components = cfg['rust_components']
     if not isinstance(components, list) or any(not isinstance(c, str) or not c or '\0' in c for c in components) or len(set(components)) != len(components):
         raise ValueError('rust_components must list unique nonempty component names')
@@ -110,7 +106,6 @@ def same_identity(a, b):
 
 
 def stage(root, staging):
-    # Destination declarations and Git tracking are checked before build effects.
     # Recheck filesystem paths at the actual copy; replace only the explicit artifact.
     for row in staging['bindings']:
         observed = identity(root, row['source'])
@@ -207,7 +202,7 @@ def failure_evidence_plan(root, cfg, staging):
     if 'failure_evidence' not in cfg:
         return {}
     declaration = cfg['failure_evidence']
-    if cfg['schema'] != 'chrono-release-build/v5' or not isinstance(declaration, dict):
+    if not isinstance(declaration, dict):
         raise ValueError('failure evidence requires a v5 operation-to-directory mapping')
     if not declaration:
         return declaration
@@ -295,10 +290,8 @@ def retain_registered_failure_evidence(root, output, phase, directories, bound):
 
 def preflight(root, required_tools=None, required_manifests=None):
     cfg = json_file(root / '.chrono-harness/release/build.json')
-    if cfg['schema'] not in ('chrono-release-build/v2', 'chrono-release-build/v3', 'chrono-release-build/v4', 'chrono-release-build/v5'):
+    if cfg['schema'] != 'chrono-release-build/v5':
         raise ValueError('unsupported release build schema')
-    if 'verification_consumers' in cfg and cfg['schema'] != 'chrono-release-build/v5':
-        raise ValueError('E_RELEASE_CONSUMPTION: consumer contracts require release build v5')
     incremental_environment(cfg)
     manifests = cfg['manifests']
     if not isinstance(manifests, list) or not manifests or len(set(manifests)) != len(manifests):
@@ -348,122 +341,7 @@ def preflight(root, required_tools=None, required_manifests=None):
     return cfg, tools, operations, staging
 
 
-def legacy_main(root, output):
-    cfg, tools, operations, staging = preflight(root)
-    if os.path.lexists(output):
-        raise ValueError('release output already exists')
-    env = dict(os.environ, RUSTUP_TOOLCHAIN=cfg['rust_toolchain'], CARGO_PROFILE_RELEASE_STRIP='symbols')
-    report = {
-        'schema': 'chrono-native-build/v3', 'status': 'failed',
-        'system': platform.system(), 'machine': platform.machine(),
-        'source_commit': None, 'versions': {}, 'manifests': cfg['manifests'],
-        'verification_operations': cfg['verification_operations'],
-        'processes': [], 'failure': None,
-    }
-    if staging is not None:
-        report['schema'] = 'chrono-native-build/v4'
-        report['consumer_staging'] = staging
-        staging['observations'] = []
-    phase = 'source-identity'
-
-    def checked_snapshot(label, operation=None):
-        nonlocal phase
-        phase = label
-        if not observe(root, staging, label, operation):
-            raise ValueError('release consumer identity changed or unavailable: ' + label)
-
-    def run(label, argv, operation=None):
-        nonlocal phase
-        phase = label
-        process = subprocess.run(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        record = {
-            'phase': phase, 'operation': operation, 'argv': argv, 'cwd': str(root),
-            'exit_code': process.returncode,
-            'stdout_bytes': list(process.stdout), 'stderr_bytes': list(process.stderr),
-            'stdout_sha256': hashlib.sha256(process.stdout).hexdigest(),
-            'stderr_sha256': hashlib.sha256(process.stderr).hexdigest(),
-        }
-        if process.returncode != 0:
-            try:
-                nested = retain_failure_evidence(output, phase, process.stdout, process.stderr)
-            except (OSError, UnicodeError, ValueError) as error:
-                nested = {'status': 'unavailable', 'reason': str(error)}
-            if nested is not None:
-                record['failure_evidence'] = nested
-        report['processes'].append(record)
-        sys.stdout.buffer.write(process.stdout)
-        sys.stdout.buffer.flush()
-        sys.stderr.buffer.write(process.stderr)
-        sys.stderr.buffer.flush()
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, argv)
-        return process.stdout
-
-    exit_code = 0
-    try:
-        source = run('source-identity', [tools['git'], 'rev-parse', 'HEAD']).decode('utf-8').strip()
-        if len(source) not in (40, 64) or any(c not in '0123456789abcdef' for c in source):
-            raise ValueError('invalid source commit observation')
-        report['source_commit'] = source
-        if staging is not None:
-            tracked = run('consumer-tracking', [tools['git'], '--literal-pathspecs', 'ls-files', '-z', '--',
-                          *[row['destination'] for row in staging['bindings']]])
-            if tracked:
-                raise ValueError('release consumer destination is tracked by Git')
-        component_args = [arg for component in cfg.get('rust_components', []) for arg in ['--component', component]]
-        run('toolchain-install', [tools['rustup'], 'toolchain', 'install', cfg['rust_toolchain'], '--profile', 'minimal', *component_args])
-        for tool in ['cargo', 'rustc']:
-            report['versions'][tool] = run('compiler-version', [tools[tool], '--version']).decode('utf-8').strip()
-        if not report['versions']['rustc'].startswith('rustc ' + cfg['rust_toolchain'] + ' '):
-            raise ValueError('unexpected compiler')
-        for manifest in cfg['manifests']:
-            run('build', [tools['cargo'], 'build', '--release', '--locked', '--manifest-path', manifest])
-        if staging is not None:
-            phase = 'consumer-staging'
-            try:
-                stage(root, staging)
-            finally:
-                observe(root, staging, 'staged')
-            checked_snapshot('before-verification')
-        for operation, _tool, argv in operations:
-            if staging is not None:
-                checked_snapshot('before-verification', operation)
-            try:
-                run('verification', argv, operation)
-            finally:
-                # Observe even when the child failed; never mask its original exit.
-                intact = staging is None or observe(root, staging, 'after-verification', operation)
-            if not intact:
-                phase = 'after-verification'
-                raise ValueError('release consumer identity changed after ' + operation)
-        if staging is not None:
-            checked_snapshot('before-package')
-        release_plan = staging['release_plan'] if staging is not None else '.chrono-harness/release/plan.json'
-        try:
-            run('package', [str(root / 'crates/distribution/target/release/chrono-distribution'), 'pack', '--root', str(root), '--plan', str(root / release_plan), '--output', str(output)])
-        finally:
-            intact = staging is None or observe(root, staging, 'after-package')
-        if not intact:
-            phase = 'after-package'
-            raise ValueError('release consumer identity changed after package')
-        report['status'] = 'passed'
-    except (subprocess.CalledProcessError, ValueError, OSError) as error:
-        actual_exit = error.returncode if isinstance(error, subprocess.CalledProcessError) else None
-        report['failure'] = {'phase': phase, 'message': str(error), 'exit_code': actual_exit}
-        exit_code = (actual_exit if actual_exit > 0 else 128 - actual_exit) if actual_exit is not None else 2
-        print(str(error), file=sys.stderr)
-    try:
-        output.mkdir(parents=True, exist_ok=True)
-        with (output / 'build.json').open('x') as stream:
-            stream.write(json.dumps(report, indent=2) + '\n')
-    except OSError as error:
-        print('cannot retain native build evidence: ' + str(error), file=sys.stderr)
-        # Reporting cannot replace an already observed child failure with success.
-        return exit_code or 2
-    return exit_code
-
-
-# v4 is an explicit host recipe. The Rust projection only transports its outputs.
+# The Rust projection only transports the explicit host recipe outputs.
 def sha_file(file):
     digest = hashlib.sha256()
     with file.open('rb') as stream:
@@ -494,8 +372,6 @@ def dependency_contracts(cfg, plan, builds, tests):
     declared = cfg.get('verification_consumers', {})
     if not isinstance(declared, dict) or any(name not in tests for name in declared):
         raise ValueError('E_RELEASE_CONSUMPTION: contracts must name registered verification units')
-    if declared and cfg['schema'] != 'chrono-release-build/v5':
-        raise ValueError('E_RELEASE_CONSUMPTION: consumer contracts require release build v5')
     result = {}
     for name, unit in tests.items():
         assets = sorted(builds[n]['asset'] for n in unit['needs'])
@@ -519,8 +395,8 @@ def dependency_contracts(cfg, plan, builds, tests):
 
 
 def units_plan(root, cfg, operations, staging):
-    if cfg['schema'] not in ('chrono-release-build/v4', 'chrono-release-build/v5'):
-        raise ValueError('independent scopes require release build v4 or v5')
+    if cfg['schema'] != 'chrono-release-build/v5':
+        raise ValueError('unsupported release build schema')
     failure_evidence_plan(root, cfg, staging)
     plan = json_file(path(root, staging['release_plan']))
     units = cfg['units']
@@ -540,10 +416,9 @@ def units_plan(root, cfg, operations, staging):
             builds[id0] = unit
         elif unit['kind'] == 'verify':
             fields = {'id', 'kind', 'operation', 'needs', 'handoff'}
-            if cfg['schema'] == 'chrono-release-build/v5':
-                if type(unit.get('rust_toolchain')) is not bool:
-                    raise ValueError('verification requires an explicit boolean rust_toolchain choice')
-                fields.add('rust_toolchain')
+            if type(unit.get('rust_toolchain')) is not bool:
+                raise ValueError('verification requires an explicit boolean rust_toolchain choice')
+            fields.add('rust_toolchain')
             if set(unit) != fields or unit['operation'] not in cfg['verification_operations']:
                 raise ValueError('verification needs one original registered operation')
             tests[id0] = unit
@@ -559,13 +434,10 @@ def units_plan(root, cfg, operations, staging):
     if sorted(u['operation'] for u in tests.values()) != sorted(cfg['verification_operations']):
         raise ValueError('verification units must cover each unfiltered operation exactly once')
     if set(r['asset'] for r in staging['bindings']) != set(plan['assets']):
-        raise ValueError('release v4 retains staging observations for all assets')
+        raise ValueError('release staging must cover every asset')
     for unit in tests.values():
         needs = unit['needs']
-        if cfg['schema'] == 'chrono-release-build/v4':
-            if not isinstance(needs, list) or sorted(needs) != sorted(builds):
-                raise ValueError('verification must explicitly depend on the complete build vector')
-        elif not isinstance(needs, list) or any(not isinstance(name, str) or name not in builds for name in needs) or len(set(needs)) != len(needs):
+        if not isinstance(needs, list) or any(not isinstance(name, str) or name not in builds for name in needs) or len(set(needs)) != len(needs):
             raise ValueError('verification dependencies must be unique declared build units')
     dependency_contracts(cfg, plan, builds, tests)
     collector = cfg['collector']
@@ -589,8 +461,8 @@ def units_plan(root, cfg, operations, staging):
 def incremental_environment(cfg):
     if 'rust_incremental' not in cfg:
         return {}
-    if cfg.get('schema') != 'chrono-release-build/v5' or type(cfg['rust_incremental']) is not bool:
-        raise ValueError('rust_incremental requires a boolean in a v5 recipe')
+    if type(cfg['rust_incremental']) is not bool:
+        raise ValueError('rust_incremental requires a boolean')
     return {'CARGO_INCREMENTAL': '1' if cfg['rust_incremental'] else '0'}
 
 
@@ -599,7 +471,7 @@ class UnitExecution:
         self.root, self.output, self.cfg, self.tools = root, output, cfg, tools
         incremental = incremental_environment(cfg)
         self.env = dict(os.environ)
-        if cfg.get('schema') != 'chrono-release-build/v5' or uses_rust_toolchain(cfg, unit):
+        if uses_rust_toolchain(unit):
             self.env.update(RUSTUP_TOOLCHAIN=cfg['rust_toolchain'], CARGO_PROFILE_RELEASE_STRIP='symbols')
             self.env.update(incremental)
         self.phase = 'source-identity'
@@ -881,9 +753,8 @@ def read_receipt(execution, unit, selection):
     return directory, receipt, receipt_sha
 
 
-def uses_rust_toolchain(cfg, unit):
-    return unit.get('kind') == 'build' or (unit.get('kind') == 'verify' and
-        (cfg['schema'] == 'chrono-release-build/v4' or unit.get('rust_toolchain') is True))
+def uses_rust_toolchain(unit):
+    return unit.get('kind') == 'build' or (unit.get('kind') == 'verify' and unit.get('rust_toolchain') is True)
 
 
 def verify_tool_identities(identities, required):
@@ -902,7 +773,7 @@ def verify_toolchain(receipt, cfg):
         if not isinstance(projects, str) or projects not in cfg['tools']:
             raise ValueError('missing original verification action tool')
         required.add(projects)
-    if not uses_rust_toolchain(cfg, receipt['unit']):
+    if not uses_rust_toolchain(receipt['unit']):
         if 'toolchain' in receipt or any(p['phase'] in {'toolchain-install', 'compiler-version', 'compiler-executable'} for p in receipt['processes']):
             raise ValueError('undeclared Rust toolchain execution')
         tools = receipt.get('execution_tools')
@@ -1062,7 +933,7 @@ def scoped_main(root, output, scope):
     declaration = json_file(root / '.chrono-harness/release/build.json')
     selected_unit = None if scope == '--collect' else next((u for u in declaration.get('units', []) if u['id'] == scope), None)
     required = {'git'}
-    if selected_unit is not None and uses_rust_toolchain(declaration, selected_unit):
+    if selected_unit is not None and uses_rust_toolchain(selected_unit):
         required.update({'rustup', 'cargo', 'rustc'})
     if selected_unit is not None and selected_unit.get('kind') == 'verify':
         projects = json_file(path(root, declaration['projects']))
@@ -1079,19 +950,18 @@ def scoped_main(root, output, scope):
     if os.path.lexists(output):
         raise ValueError('release output already exists')
     execution = UnitExecution(root, output, cfg, tools, unit)
-    if cfg['schema'] == 'chrono-release-build/v5':
-        contracts = dependency_contracts(cfg, plan, builds, tests)
-        selected_contracts = contracts if scope == '--collect' else {scope: contracts[scope]} if scope in contracts else {}
-        execution.report['dependency_contracts'] = selected_contracts
-        for name, contract in selected_contracts.items():
-            for finding in contract['findings']:
-                print(f'{finding}: {name} selects {len(contract["release_assets"])} release assets without a consumer explanation', file=sys.stderr)
+    contracts = dependency_contracts(cfg, plan, builds, tests)
+    selected_contracts = contracts if scope == '--collect' else {scope: contracts[scope]} if scope in contracts else {}
+    execution.report['dependency_contracts'] = selected_contracts
+    for name, contract in selected_contracts.items():
+        for finding in contract['findings']:
+            print(f'{finding}: {name} selects {len(contract["release_assets"])} release assets without a consumer explanation', file=sys.stderr)
     if unit.get('kind') == 'verify':
         execution.report['action_tool'] = next(o[1] for o in operations if o[0] == unit['operation'])
     error = None
     try:
         execution.context()
-        if uses_rust_toolchain(cfg, unit):
+        if uses_rust_toolchain(unit):
             execution.toolchain()
         if unit.get('kind') == 'build':
             execution.run('build', [tools['cargo'], 'build', '--release', '--locked', '--manifest-path', unit['manifest']])
@@ -1116,9 +986,9 @@ def scoped_main(root, output, scope):
                 build_receipts[id0] = receipt
                 original_receipts[id0] = (plain_path(root, build['handoff']), receipt)
             producer_versions = {toolchain_fingerprint(r) for r in build_receipts.values()}
-            if len(producer_versions) > 1 or (not producer_versions and (scope == '--collect' or cfg['schema'] != 'chrono-release-build/v5')):
+            if len(producer_versions) > 1 or (not producer_versions and scope == '--collect'):
                 raise ValueError('selected producer toolchain versions differ')
-            if uses_rust_toolchain(cfg, unit) and producer_versions and toolchain_fingerprint(execution.report) not in producer_versions:
+            if uses_rust_toolchain(unit) and producer_versions and toolchain_fingerprint(execution.report) not in producer_versions:
                 raise ValueError('verification toolchain differs from selected producers')
             staging = selected_staging(staging, execution.report['assets'])
             check_staging(execution, staging)
@@ -1136,7 +1006,7 @@ def scoped_main(root, output, scope):
                     execution.phase = 'selected-verification:' + id0
                     directory, receipt, receipt_sha = read_receipt(execution, test, selected[id0])
                     tool_evidence = verify_toolchain(receipt, cfg)
-                    if uses_rust_toolchain(cfg, test) and toolchain_fingerprint(receipt) not in producer_versions:
+                    if uses_rust_toolchain(test) and toolchain_fingerprint(receipt) not in producer_versions:
                         raise ValueError('selected verification toolchain differs from producers')
                     original_receipts[id0] = (directory, receipt)
                     verify_consumer(receipt, test, builds, execution.report['assets'], staging)
@@ -1188,14 +1058,6 @@ def scoped_main(root, output, scope):
 
 def run_local_units(cfg, invoke, outcomes):
     with ThreadPoolExecutor(max_workers=cfg['local_workers']) as pool:
-        if cfg['schema'] == 'chrono-release-build/v4':
-            for kind in ['build', 'verify']:
-                dependencies = {id0: {'result': r['result'], 'outputs': r['outputs']} for id0, r in outcomes.items()}
-                futures = [pool.submit(invoke, u['id'], dependencies) for u in cfg['units'] if u['kind'] == kind]
-                for future in as_completed(futures):
-                    id0, result = future.result()
-                    outcomes[id0] = result
-            return
         pending = list(cfg['units'])
         running = {}
         while pending or running:
@@ -1332,12 +1194,9 @@ def local_main(root, output):
 
 
 def main(root, output, scope=None):
-    cfg = json_file(root / '.chrono-harness/release/build.json')
     if scope is not None:
         return scoped_main(root, output, scope)
-    if cfg['schema'] in ('chrono-release-build/v4', 'chrono-release-build/v5'):
-        return local_main(root, output)
-    return legacy_main(root, output)
+    return local_main(root, output)
 
 
 if __name__ == '__main__':

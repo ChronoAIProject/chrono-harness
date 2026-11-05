@@ -93,7 +93,7 @@ necessary evidence before protected lifecycle cleanup.
 
 ## Versioned output
 
-`schema` is `chrono-filemap-impact/v2`. Consumers may deserialize `chrono_judge_filemap::Impact`; JSON consumers must check this schema. Endpoint commits, trees and registry digest are bound by the enclosing v1 request/report. Arrays and maps are emitted deterministically. Unknown cost values remain JSON null. This output is declared graph impact, including validated effective environment changes when supplied; it is not operation evidence or retirement approval. The additive `structure` field is `chrono-filemap-structure/v1` and is a deterministic diagnostic view of the same explicit inputs.
+`schema` is `chrono-filemap-impact/v2`. Consumers may deserialize `chrono_judge_filemap::Impact`; JSON consumers must check this schema. Endpoint commits, trees and registry digest are bound by the enclosing v1 request/report. Arrays and maps are emitted deterministically. Unknown cost values remain JSON null. This output is declared graph impact, including validated effective environment changes when supplied; it is not operation evidence or retirement approval.
 
 | Field | Meaning |
 | --- | --- |
@@ -114,7 +114,6 @@ necessary evidence before protected lifecycle cleanup.
 | `judges` | Each candidate every-delta judge once, plus its reached `judge-trigger` edges as extra explanations |
 | `historical_context` | Unreached semantic edge defects with endpoint and edge; they are not findings for this DELTA |
 | `historical_ambiguities` | Unreached ambiguous node IDs with endpoint and defining identities; factual context, not findings |
-| `structure` | Base, candidate and union graph snapshots with typed SCCs, original cycle witnesses, longest compressed-DAG depth, direct relation counts, explicit cross-owner edges, affected components, and execution-plan/resource conflict diagnostics; absent only in historical v2 reports produced before this field existed |
 | `limits` | Explicit boundaries: no execution/retirement/cost verdict, unretained external bytes, unproven completeness/locality |
 
 Stable record IDs begin `/records/<registry>/<collection>/<key>`, using JSON Pointer escaping for the key. They are identities within `records`, not array-index pointers into the source JSON. File keys are paths, project/script/judge/input/tool/stability keys are IDs, owner keys are names, test cost keys are unprefixed test IDs, and cost model keys are cost IDs. Project-edge keys are compact JSON `[from,kind,to]` tuples. Other singleton fields (including arrays without an explicit unique identity) use `fields/<field-name>`. Input declarations are separate `config/inputs/<id>` records; environment variables have separate `config/environment/<name>` records and explicit consumer edges. All identity arrays are compared as sorted sets of declarations (duplicate declarations are retained in normalized values); `argv`, `version_argv` and plan `operations` preserve order. Record targets never manufacture graph edges. Full evaluation adds registration-validated retained `effective` values to environment records at both endpoints. Null means absent and differs from an empty string; configured values override inheritance. `produce` remains declaration-only, while `produce_with_inputs` validates and consumes retained effective facts through registration's input API. Their graph/record implementation and historical view are shared; missing or inconsistent effective facts cannot be treated as unchanged.
@@ -138,43 +137,26 @@ Only traversing a `test-execution` edge selects a full-policy test. Reaching a t
 
 Reached/changed invalid references and endpoint types produce `E_DANGLING_EDGE` / `E_EDGE_TYPE`. A reached ambiguous ID produces `E_NODE_AMBIGUOUS` unless a finite historical repair accounts for all old definitions and one unique current identity (candidate ambiguity always fails), even if it is only a changed-record seed and no execution edge was traversed. Unaffected base/candidate ambiguities remain factual context; loading all nodes does not globally adjudicate them. A finding's `delta_refs` identifies a seed path or changed record. `causes` is a consecutive node sequence from that seed, following real union edges, ending at the defective endpoint or ambiguous ID; a direct record seed has a one-node witness. The affected registry endpoint and definitions or edge appear in the message. The closure preserves all contributing cause IDs from `seed_causes` even when a finding chooses one deterministic witness. Required unparsable or missing registries/objects, forged empty DELTA and digest disagreement return error without an empty-success impact.
 
-## Structural diagnostics
+## Scope of graph work
 
-`structure` makes the failure modes which a plain impact closure cannot expose
-visible to the same FILEMAP consumer. For each endpoint and their explicit union
-it retains typed edges, direct outgoing relation counts, SCC membership, an
-original-edge cycle witness for every cyclic component, and longest-path depth
-on the SCC condensation DAG. A component is marked affected only when the
-current DELTA closure reaches one of its registered nodes; unrelated historical
-cycles remain context and do not turn a local change into a whole-repository
-finding. Compressing an SCC is a reporting operation and never removes its
-cycle or changes execution semantics.
+Impact computes the endpoint union and finite seed closure used by current
+selection consumers. It retains typed edges, all contributing seeds, alternate
+paths and cycle edges. It does not calculate a second structural report: SCC
+partitions, condensed-graph depths, relation counts, cross-owner rankings and
+execution conflict summaries have no current production reader.
 
-The execution view lowers each registered plan sequence to operation
-precedence edges and records the tests which declared each edge. It reports
-operation cycles and the explicit resource/output claim pairs which serialize
-otherwise ready operations. Claims are read from `execution_scheduling`; no
-resource, output or prerequisite is inferred. An empty conflict list is a
-measured absence for the registered claims, not a proof that undeclared effects
-do not exist. Routes remains the execution authority and rejects a malformed
-operation cycle before launching work.
+**Product and policy change:** SPEC §5.2 no longer requires these observations on
+every impact. Their report-only self-check and two exclusive tests retire with
+the output. The existing cycle/diamond/multiple-seed regression still checks the
+real edges and witnesses, and the real runner consumer still checks the declared
+impact and selected tests. Routes owns execution-DAG admission and resource/output
+claims; its checks and the execution receipt self-diagnostics remain required.
+The ordinary impact schema and authoritative selection fields are unchanged.
 
-Before publishing this diagnostic, the filemap judge runs a bounded
-consistency check over the report it just produced. It checks schema and edge
-counts, node partitioning, SCC identities and closed witnesses, component
-depths, DELTA affected-component membership, and execution-plan precedence
-edges. A violation is an `E_SELF_DIAGNOSTIC` error with the offending
-invariant; the report is not treated as a successful impact result. This
-detects an internally inconsistent judge result, but does not prove the
-algorithm complete, the declarations necessary, or the host inputs complete.
-
-This output is intended to expose a concrete candidate for an autonomous
-refactoring round. It does not rank candidates, invent a consumer, claim a
-runtime speedup or declare an optimization delivered. A real refactoring still
-requires a fixed before/after mapping, preserved behavior and tests, updated
-registrations, and the ordinary local/CI check.
-
-The runner already aggregates `outputs.impact`. For the registration→filemap fixture it is exactly `/judges/1/response/outputs/impact`, recorded in `sources["/impact"]`; full transport also forwards predecessor impact to configured successors. Routes supplies bounded tool/input identities and projects supplies actual operation/test receipts; complete inputs, costs and remaining governance producers remain unresolved. A bounded host pass is not full SPEC or current-host activation.
+A refactoring must address an actual consumer and preserve its explicit test
+obligations. Use the existing graph/selection facts and owner checks for that
+DELTA; additional measurements need a concrete purpose. Runtime, payload and
+build savings from this deletion remain unmeasured until candidate validation.
 
 ## Operational CI adapter and retirement boundary
 
