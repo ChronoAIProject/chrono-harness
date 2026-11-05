@@ -18,7 +18,10 @@
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
       "python3": "/usr/bin/python3",
       "rustup": "rustup",
-      "verus": ".chrono-harness/bin/verus/verus"
+      "verus": ".chrono-harness/bin/verus/verus",
+      "curl": "/usr/bin/curl",
+      "shasum": "/usr/bin/shasum",
+      "tar": "/usr/bin/tar"
     },
     "artifacts": [
       ".chrono-harness/bin/",

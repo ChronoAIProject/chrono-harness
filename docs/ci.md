@@ -80,6 +80,12 @@ their copied-host regressions consume the installed candidate binaries.
 .chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
 
+This profile also delegates to the registered pinned macOS arm64 Verus package
+acquisition. Download, SHA-256 verification and complete package extraction use
+the existing bootstrap operation runner. Fresh native units verify their
+imported core tools and invoke that same package profile before checking. See
+[Verus ownership](verus.md) for external interfaces, costs and remaining gaps.
+
 After changes have been committed and the candidate checkout is clean, the
 canonical judgment command is **identical locally and in generated CI**:
 

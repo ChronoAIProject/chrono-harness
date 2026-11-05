@@ -6,7 +6,8 @@
     "git": "The registered Git executable implements its documented object and command interfaces. Snapshot eligibility, identity comparisons, branch policy and lifecycle decisions remain repository proof obligations.",
     "cargo-rustc-verus-z3": "The pinned Cargo/Rust compiler and Verus/Z3 toolchain implement their documented translation, erasure and verification interfaces. All repository build selection and proof-result decisions remain proof obligations.",
     "library-interfaces": "Pinned third-party library interfaces are external assumptions only where explicitly used. Repository parsing policy, state transitions and error handling remain proof obligations; this list grants no external_body exception to repository functions.",
-    "verus-vstd-and-macros": "The matching pinned Verus standard-library interface specifications and macro erasure implement the documented Rust primitive/container semantics. This trusts external library contracts; it does not exempt repository callers or their invariants."
+    "verus-vstd-and-macros": "The matching pinned Verus standard-library interface specifications and macro erasure implement the documented Rust primitive/container semantics. This trusts external library contracts; it does not exempt repository callers or their invariants.",
+    "verus-package-distribution": "The fixed official GitHub release URL supplies archive bytes over HTTPS through /usr/bin/curl; /usr/bin/shasum implements SHA-256 checking and /usr/bin/tar implements BSD archive extraction and the explicitly registered path substitution. Repository selection, ordering, failure handling, source and installation admission remain proof obligations."
   },
   "version": "0.2026.04.24.f8e1704",
   "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"

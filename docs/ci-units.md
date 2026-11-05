@@ -341,12 +341,18 @@ the existing core profile once and publishes its declared installed tools. The
 current core profile declares six tools, adding the Cargo guard and input producer
 needed by canonical inventory. The qualified source51 native startup retains its
 original five executable payloads; it is not evidence for this changed profile. Consumer
-jobs validate and install the selected profiles, then verify them at the original
-cache/core preparation points. The diagnostics unit uses the registered
+jobs validate and install the selected profiles. Their registered
+`bootstrap-unit.json` preparation verifies the imported core profile as its
+prerequisite, then invokes `host.bootstrap-verus` to acquire and checksum the
+complete pinned Verus package. The package's non-executable libraries and vstd
+resources are acquired through this existing bootstrap composition; the shared
+executable transport format is unchanged. Details and outstanding acceptance
+are owned by [Verus deployment](verus.md). The diagnostics unit uses the registered
 `host.bootstrap-diagnostics-guard` preparation: it first verifies the imported
 core profile as an explicit bootstrap `prerequisites` operation, runs the existing `build.judge-cargo` operation, then delegates
 `host.bootstrap-diagnostics-inputs` and installs that candidate's
-`chrono-judge-cargo`. Guard and observer source builds explicitly select the
+`chrono-judge-cargo`, and also delegates to that same Verus acquisition profile.
+Guard and observer source builds explicitly select the
 ordinary native Cargo home with acquisition allowed for their own locked
 manifests. The ordinary native check config retains dev's ordinary environment;
 only the existing guarded diagnostics action selects the separate diagnostics

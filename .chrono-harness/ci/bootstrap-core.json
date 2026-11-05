@@ -2,7 +2,9 @@
   "schema": "chrono-bootstrap/v1",
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
-  "tools": {},
+  "tools": {
+    "python3": "/usr/bin/python3"
+  },
   "operations": [
     "inputs.fetch.runner",
     "inputs.fetch.judge-ci",
@@ -15,7 +17,8 @@
     "build.ci",
     "build.worktree",
     "build.judge-cargo",
-    "build.inputs"
+    "build.inputs",
+    "host.bootstrap-verus"
   ],
   "install": [
     {

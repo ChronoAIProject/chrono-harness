@@ -297,9 +297,34 @@ The official macOS arm64 archive is
 SHA-256 `023e0a6e67bb9927f43a8757ebdec318b50cbfe1fec4a1c320c53d5fd71008e7`.
 The corresponding Linux x86 archive digest is
 `36b3268ed3a70d948d0d7cb59a5397c54c52e519fc4a644311dadec02d240ce9`.
-Automatic package acquisition, complete verifier/toolchain input binding,
-shared-startup transport and native acceptance remain migration work; a missing
-tool fails and must not fall back to Cargo or an unrelated verifier.
+The existing core/default/macOS acquisition bootstraps now delegate to the
+registered `bootstrap-verus.json` profile. Its three ordered operations download
+that exact archive with curl, require the committed SHA-256 file to pass shasum,
+then use BSD tar's explicit prefix substitution to install the complete package
+under `.chrono-harness/bin/verus/`. The package includes its libraries, solver
+and vstd resources; installing only the driver is insufficient. The existing
+bootstrap producer retains the original streams and exit for each operation and
+stops on failure. This adds registration data, without another installer program
+or changes to bootstrap's still-unproved decisions.
+
+Shared startup continues to transfer the six core executable payloads. Unit
+preparation first verifies that original core profile, then delegates to the same
+Verus acquisition profile; diagnostics delegates after its existing guard/input
+preparation. The collection consumes original proof evidence and does not run
+Verus. The current package profile targets the host's macOS arm64 consumers;
+Linux deployment remains outstanding. Full verifier/toolchain input binding,
+bootstrap proof, fresh-consumer and native acceptance remain migration work. A
+missing tool or failed download/checksum/extraction must fail without fallback.
+
+Host policy changes with this deployment: the official distribution, curl,
+shasum and BSD tar interfaces are explicitly listed in `verus.json`, and their
+tools/actions/configuration inputs are registered. Local utility versions are
+measured; native expected versions remain null until actual native probes supply
+them, so complete input binding is not claimed. Each preparation currently
+downloads and extracts the archive; network, elapsed and total CI/storage costs
+are unmeasured. The existing cache/lifecycle owner retains the reconstructible
+archive under `.chrono-harness/cache/`; original bootstrap reports remain under
+the existing state retention contract. Mandatory proof coverage stays enforced.
 
 Product and host policy change together: the product accepts explicit file
 verification roles and the scoped coverage policy, and this host adopts the
