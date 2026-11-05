@@ -1127,21 +1127,22 @@ The fixed native timeout root cause, committed canonical/native acceptance, broa
 SPEC 7.1/7.2 adoption and full SPEC delivery remain unresolved.
 
 
-The current worktree candidate replaces the aggregate lifecycle ledger and global
-admission with addressed enrollment records and independent metadata capabilities.
-A new real-process regression holds and damages one enrollment while another
-worktree completes managed use; explicit maintenance preserves the damaged record
-and reports its original failure. Existing custody, migration, interruption and
-owner-deployment consumers are migrated to the same storage. Candidate validation
-and actual owner adoption are pending. Runner final-original inventory remains
-aggregate and is a separate unfinished part of the decentralization task.
+The current lifecycle and final-output implementation uses addressed enrollment,
+allocation, output and consumer records. Independent objects share no mutable
+membership ledger or exclusive admission. Global output-count/byte quotas are
+removed; relationship, per-output and per-round limits remain. Ordinary entries
+maintain their addressed worktree and declared dependencies. Explicit maintenance
+preserves busy/damaged records and continues independent objects. Shared executable
+replacement still excludes its actual users. Existing custody, migration,
+interruption and owner-deployment consumers use the addressed storage; old active
+state requires the documented protected owner cutover, without a runtime fallback.
 
-Addressed final-output retention candidate (not yet accepted): output and role
-records replace aggregate inventory/admission, global count/byte quotas are
-removed, ordinary paths omit whole-store maintenance, and explicit component
-maintenance isolates busy/damaged records. Host policy v2 changes with product
-behavior; existing originals require a protected owner cutover. The registered retention seed operation observed 66 Rust tests passing (including
-busy/damaged isolation, interrupted attachments, metadata expiry and shared round
-byte bounds); worktree test compilation and instruction generation also passed.
-Those dirty seed observations do not establish fixed-candidate canonical/native
-acceptance or host cutover, which remain pending.
+Product and host policy change together. Native run `41944861461` on clean
+candidate `a0071a5cec3079a01cc839fcc095fda1323bc923` passed all 24 business units
+and collection. The registered runner action passed 241 tests with one existing
+ignored test. Clean candidate `66806b61ebe5a2892a6fd2e276e28a676f379a6d` passed the
+local canonical worktree unit after the retention test was corrected to exercise
+bounded continuation. Final source bootstrap at
+`a41cd43aa7233a32847fe47c67e7f1b90846881a` passed. Those observations do not establish
+final-candidate acceptance, deployment to other coordinators, actual landing or
+complete SPEC delivery. Total runtime, CI and storage costs remain unmeasured.

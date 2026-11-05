@@ -13,14 +13,13 @@ capabilities have gone. Existing original outcomes, expiry and live consumers
 must survive the explicit owner cutover. Implementation, migration, native and
 total storage costs remain unmeasured until their actual checks.
 
-The full-report publication repair also relocates the current macOS 27 policy's
-private tools, registered inputs, HOME, Cargo/Rustup caches and temporary writes
-into its validation checkout. Expected input digests, tool versions and the
-toolchain domain remain unchanged. The report repair and effective environment
-changes both participate in the two-endpoint DELTA checks; earlier cache effects
-outside that checkout remain unverified. Copying the four missing static inputs
-and validating the relocated inputs add local IO; total validation and storage
-costs remain unknown.
+The current macOS 27 policy uses the validation checkout's Cargo home and its
+registered package/configuration inputs. Existing read-only toolchain and SDK
+bindings remain explicit; HOME and TMPDIR retain their inherited values. Expected
+input digests and tool versions are unchanged. Effective environment changes
+participate in the two-endpoint DELTA checks; earlier cache effects outside the
+checkout remain unverified. Input validation adds local IO; total validation and
+storage costs remain unknown.
 
 ## Publishers and consumers
 
