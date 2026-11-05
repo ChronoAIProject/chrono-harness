@@ -53,15 +53,14 @@ bound. New test binaries are included by the unfiltered action. CI and release
 both consume that same action; historical assertions are explicitly retired,
 without a claim that the remaining tests establish their old behavior.
 
-The CI, projects, three workflow and two worktree test operations share the
-`coordinator-fixture-producers` resource. The native Cargo child regression in
-worktree-adoption maintains the actual source coordinator while these fixtures
-publish retained originals there. The current unfiltered
-`test.judge-projects-tests` action owns the projects claim after its two former
-group actions are retired. These explicit conflicts use the host's existing
-cap of two operations; independent lifecycle/check callers still own isolation.
-This host declaration changes together with the test-entry migration. Its total
-runtime and validation cost remains unmeasured.
+The CI, projects, workflow and worktree test operations no longer share a
+suite-wide fixture-producer claim. Each retained fixture allocation owns its
+registration and exclusion; ordinary commands do not drain unrelated allocations.
+The workflow/worktree inventory operations and exact output namespaces retain
+their actual conflict claims under the existing cap of two operations. Explicit
+maintenance preserves busy independent objects and continues available siblings.
+Cross-invocation callers still own checkout and output isolation. Total elapsed,
+storage and CI costs remain unmeasured.
 
 Providers without `job_gating` retain their original separate-workflow behavior
 and evidence contracts. Installing a new binary or running init does not opt

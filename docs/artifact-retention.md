@@ -1,17 +1,25 @@
 # Final originals and report retention
 
-The retained-artifact owner governs final originals, fixed report slots and their actual readers, upload and repair consumers. It uses the lifecycle's shared kernel `ownership::Lease`, the existing durable inventory and `artifact_disposal` physical effects. Fixture custody remains owned by worktree's retained producer, including prospective allocations, copied members, native captures and diagnostic consumers. Observation never enrolls an unknown historical path.
+The retained-artifact owner governs final originals, fixed report slots and their actual readers, upload and repair consumers. It uses the lifecycle's shared kernel `ownership::Lease`, addressed durable declarations and `artifact_disposal` physical effects. Fixture custody remains owned by worktree's retained producer, including prospective allocations, copied members, native captures and diagnostic consumers. Observation never enrolls an unknown historical path.
 
-**Source and host policy change together:** this candidate selects `.chrono-harness/retention.json` for future report publications, including `keep_seconds:0` and 25 ms maintenance rounds. Count/byte capacities remain PR172's 512 outputs, 128 summaries, 256 steps, 64 MiB verification/metadata per round, 1 GiB per output, 8 GiB total admission and 16384 descendant identities per output. Existing outcomes and expiries require explicit migration and remain unchanged. This source selection is not historical adoption, deployment or release permission. Implementation, native, migration and total storage costs are unknown; per-command observations belong to the actual verification reports.
+**Source and host policy change together:** the host selects
+`chrono-output-retention/v2`. The 512-output bound applies to an actual related
+set, rather than all unrelated publications. There is no global output-count or
+byte admission quota. The host retains 128 summaries per declaration, 256 steps,
+25 ms and 64 MiB of verification/metadata per maintenance round, 1 GiB per output
+and 16384 descendant identities per output. Retired metadata has a declared
+86400-second diagnostic window and is reclaimed only after roots, edges and
+capabilities have gone. Existing original outcomes, expiry and live consumers
+must survive the explicit owner cutover. Implementation, migration, native and
+total storage costs remain unmeasured until their actual checks.
 
-The full-report publication repair also relocates the current macOS 27 policy's
-private tools, registered inputs, HOME, Cargo/Rustup caches and temporary writes
-into its validation checkout. Expected input digests, tool versions and the
-toolchain domain remain unchanged. The report repair and effective environment
-changes both participate in the two-endpoint DELTA checks; earlier cache effects
-outside that checkout remain unverified. Copying the four missing static inputs
-and validating the relocated inputs add local IO; total validation and storage
-costs remain unknown.
+The current macOS 27 policy uses the validation checkout's Cargo home and its
+registered package/configuration inputs. Existing read-only toolchain and SDK
+bindings remain explicit; HOME and TMPDIR retain their inherited values. Expected
+input digests and tool versions are unchanged. Effective environment changes
+participate in the two-endpoint DELTA checks; earlier cache effects outside the
+checkout remain unverified. Input validation adds local IO; total validation and
+storage costs remain unknown.
 
 ## Publishers and consumers
 
@@ -35,149 +43,68 @@ The real-bootstrap fixture's cache-attempt reentry consumes every original strea
 
 ## Shared physical effects and overlap
 
-Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then holds final-original admission exclusion across its exact effect. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
+Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then declares its exact effect paths and holds their addressed removal capability across the effect. Enrollment admission is released before physical IO; only overlapping publication is refused. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
 
-Producer registry admission performs one authoritative snapshot decode while
-holding its existing registry lease. The physical directory gate covers initial
-lease birth and releases before that decode; established registries use their
-named lease without reentering directory birth, even while an independent birth
-capability remains live. Existing registry identities
-still bind the held lease before publication. Missing established leases remain
-missing, and replaced or unknown leases cannot acquire a new binding. The
-30-second acquisition bound is unchanged. The typed registry decoder rejects
-duplicate and unknown struct fields directly, and reuses the strict JSON visitor
-for every dynamic map, including opaque evidence and copied-body metadata. It
-avoids constructing a second generic tree for the complete inventory. Registry
-replacement uses compact JSON through the same synced temporary file and atomic
-publication; historical pretty JSON remains readable. No lease identity, release
-rule, intent write, capacity or time bound changes.
+Fixture allocation metadata is partitioned at its actual producer. The immutable
+`objects.json` namespace binds the physical directory and `producer-records/`
+namespace; it contains no mutable member list. An ordinary allocation opens only
+its addressed record under that allocation's directory exclusion. No global
+registry lease or process-wide decoded fixture inventory participates. Maintenance
+enumerates these explicit declarations, preserves unavailable/changed members and
+continues independent members. A busy allocation metadata transaction is protected
+without waiting behind it. The 30-second publication bound is unchanged.
 
-Immediate output creation retains its admitted ledger through reservation and
-materialization, using the same physical admission lease and all original durable
-intent/attachment writes. Standalone plans still release at their existing
-boundary. This removes a duplicate full inventory load and reacquisition between
-the two adjacent creation phases; it does not merge producer completion or expire
-an active capability. The five-second output-admission bound is unchanged.
+An existing aggregate fixture store requires the explicit
+`chrono-worktree migrate --path COORDINATOR --partition-producer ID` conversion.
+Ordinary operations never fall back to that format. Conversion preserves the
+original source bytes, exact outcome and live capabilities, binds staged records
+to their source digest/length and physical identity, and refuses changed staging
+bytes. Interruption before namespace activation can resume only that exact input.
 
-**Product and host declaration change together:** the runner enables serde_json's
-existing `raw_value` feature and its registered Cargo package declaration names
-that feature. One admitted ledger retains each output's validated JSON alongside
-its typed record. Durable writes reuse unchanged rows; mutable access invalidates
-only that row's encoding. Every new admission still reads and decodes the complete
-current inventory under the existing exclusion lease, including duplicate,
-unknown-field and opaque-evidence rejection. The reuse ends with that ledger;
-physical observations and admission results are not cached. This removes repeated
-encoding within one transaction without dropping intent writes, identity checks
-or the five-second admission bound. Its extra memory is the retained row JSON;
-total memory, runtime, build and validation costs remain unmeasured. The unchanged
-420-output / 28-publisher regression and real-bootstrap consumer remain required
-acceptance, alongside canonical DELTA and native checks.
+## Addressed output and consumer declarations
 
-Retention rounds report the actual retention, report-activity, live-capability or
-identity-error reason for a protected root. A parent closing a capability is not
-proof of its final kernel close: an unrelated concurrent fork temporarily inherits
-even CLOEXEC descriptors until exec. The Rust retention suite runs each fixture in
-its own test process while retaining parallel parent tests and each fixture's
-explicit internal concurrency and assertions. A controlled native pre-exec
-handshake checks preservation during that inherited hold and retirement after the
-joined exec. An unexpected large-original refusal preserves its complete round,
-inventory and fixture for diagnosis. These boundaries do not expire a live lease
-or increase time, byte, node or output budgets. The unavailable inventory from the
-earlier nested failure is not reconstructed; local causal coverage does not
-establish its unobserved exact interleaving or native acceptance.
+`output-retention-v1/objects/OUTPUT_ID/record.json` owns one output, its original
+outcome, incoming attachments, exact consumer names and bounded retirement
+summary. `roles/SHA256(ROLE)/record.json` owns one consumer's membership. The
+namespace has no mutable member list, global admission lease or aggregate
+inventory. Ordinary publication, read, completion and release touch only their
+explicit addresses and outgoing dependency closure. They do not run whole-store
+maintenance. Unique output IDs need no shared sequence counter.
 
-The live-consumer closure regression exercises the existing three-node round
-limit. While the lease is held, both the consumer and its referenced original
-must remain physically present; after its release, ordinary bounded rounds must
-retire both and preserve their distinct original outcomes. One round is allowed
-to leave work for the next entry. Failure retains the rounds, inventory and
-fixture, rather than assuming that two outputs must fit one wall-clock window.
+Path declarations form a component-addressed trie. Ancestors are held shared;
+the target is held exclusive. Sibling paths therefore publish concurrently, while
+a tree effect excludes its declared descendants. Original content writers and
+fixed report slots retain their own identity-bound kernel capabilities. Their
+birth and retirement metadata use addressed directory exclusion, without a
+global transaction-count gate. The existing five-second acquisition limit
+remains; it does not expire another publisher's live protection.
 
-Controlled-write retirement also uses three-node rounds and requires the full
-128 bytes and original failure outcome to retire through at most eight ordinary
-entries. The 512-output capacity regression keeps its 25 ms / 256-node / 64 MiB
-limits and allows at most eight rounds before requiring room for the next actual
-publication. Each round preserves both protected originals. These checks exercise
-resumption after a bounded partial disposal; failures retain every observed round
-and the original inventory and fixture. Concurrent publisher count, its five-second
-admission bound and all final-output assertions are unchanged.
+A relationship update first persists conservative incoming/consumer attachment,
+then publishes the source declaration, then removes superseded attachment.
+Interruption preserves extra protection until owner recovery can reconcile it.
+Producer content IO holds its original capability while metadata exclusion is
+released. Completion reloads the current addressed records and preserves
+references attached during IO. Read scopes forward only explicitly acquired or
+published originals through the existing descriptor handoff.
 
-Retirement checks physical liveness for the selected output and its declared
-transitive consumers, holding their identity-bound exclusive capabilities through
-the effect. Explicit roots, retention windows and report activity still protect
-their full dependency closure. Cycles use the same reverse reachability check;
-a live, missing or replaced consumer capability preserves its inputs. Unrelated
-output leases are no longer all opened before the retirement cursor can advance.
-That preliminary sweep exhausted the adopted 25 ms round at 512 entries even
-when released, unreferenced originals were eligible. The clock, admission and
-physical disposal bounds remain unchanged. The capacity regression creates all
-512 originals through the actual producer, retains a live reader and a required
-failed-original consumer, and requires reclamation to admit the next output;
-separate cycle cases check transitive live and unknown consumers. These checks
-do not establish a universal latency guarantee or release historical consumers.
+Explicit `maintain` enumerates declared records under finite node, byte, metadata
+and time budgets. It attempts each actual connected component without waiting
+for busy metadata, preserves the failed original and records its error, and
+continues independent components. Reports identify their visited scope; a partial
+or refused scan reports `remaining_outputs:null`, never a fabricated global zero.
+Identity-bound physical effects and exact source/index checks remain mandatory.
+Root classification consumes the metadata/time bounds and does not spend a physical disposal slot; a protected current report therefore cannot monopolize a one-step round. Only retired, unreferenced metadata with no surviving capability can expire; path
+trie pruning resumes with bounded per-object progress. Unknown members and
+replaced identities are preserved.
 
-The independent runner test project now uses the runner production project's
-existing development optimization (`opt-level = 1`), retaining debug assertions,
-the original 512-output / 25 ms fixture and all 28 concurrent publishers / 5 s
-admission assertions. Cargo takes profiles from the invoking manifest; previously
-this test manifest rebuilt the same inventory implementation without that
-optimization. Temporary Rust stage measurements located the main CPU work in
-snapshot decode, validation and serialization, and were removed after the
-experiment. With the unchanged fixture inputs, the observed first-candidate
-prelude was 9.055 ms before and 1.730 ms after; concurrent snapshot serialization
-medians were 16.052 ms and 0.636 ms. These are single local operation observations,
-not a universal latency or common-cause proof for the two original failures.
-The complete measured test-operation windows were 85.190 s and 92.758 s (build
-windows 8.00 s and 12.59 s); filesystem and unrelated fixture costs varied, so no
-end-to-end saving is established. The canonical candidate check remains the
-acceptance authority. No inventory format, release rule or product bound changes.
-
-The worktree production and dedicated test manifests adopt the runner's same
-`opt-level = 1` development profile. The projects test manifest applies that
-optimization to its `chrono-worktree` dependency, which owns the actual fixture
-registry transactions. Cargo profiles are selected by the invoking manifest;
-profiles in a path dependency do not configure its caller's build. Debug
-assertions, original test concurrency and all time/output/capacity bounds remain
-in force. The existing capacity and projects admission regressions are the
-behavioral consumers of these build inputs. This addresses the observed build
-configuration discrepancy; it does not identify an unobserved historical lock
-holder or establish a universal latency guarantee. Additional compilation and
-whole local/native validation costs remain unmeasured until actual execution.
-
-## Bounded recovery and migration
-
-Lifecycle entry and output admission perform their existing bounded retention
-rounds before acquiring that invocation's report-family activity. Holding its own
-activity during either prelude protected every old adopted report, so a full inventory
-could refuse both ordinary admission and the advised `chrono-worktree maintain`
-recovery command. Other active publishers/collectors still protect the family;
-exact roots, dependency closures, producer/read capabilities, original identity,
-source/index checks and all finite policy bounds remain authoritative. The new
-invocation holds its activity from after rooted output reservation through
-execution and settlement; its publication capability and durable recovery root
-protect that reservation before content writes. Failed/interrupted originals,
-pending delivery and required consumers are never released by this prelude. A deferred
-or insufficient round can still leave admission refused; no retry loop or
-capacity reserve is added.
-
-The Rust lifecycle regressions exercise real maintenance and bootstrap
-participation at 512 entries with the existing 25 ms / 256-node round. They
-require eligible unrelated originals to retire after an independent collector
-closes, preserve active producers/readers and their dependencies, exact failure,
-interruption, current-report and delivery roots, and unchanged source/index
-bytes. Fully rooted exhaustion still refuses admission. Bootstrap participation
-uses the existing registered Rust interface fixture; it does not establish a
-real bootstrap build, host recovery, canonical adoption or native acceptance.
-
-Caught capacity-fixture panics use the existing Host diagnostic exporter before
-the host is retained and the original panic is propagated. The exporter preserves
-the inventory and command stdout, stderr and status bytes, including incomplete
-disposal state. A dedicated Rust regression checks those original binary bytes,
-the unchanged source/index and the original panic payload. This repairs diagnostic
-availability; capacity recovery remains subject to its unchanged bounded round.
-Default test concurrency, the 512-entry capacity and the 25 ms / 256-node bounds
-are unchanged. The additional export runs only for failed fixtures; its total
-native IO, storage and validation costs remain unmeasured.
+Current regression consumers include independent publication while another
+record is locked or damaged, the original 420 outputs / 28 publishers / five-second
+case, and real lifecycle/bootstrap publication with 512 protected originals. The
+latter now requires independent publication to succeed regardless of unrelated
+occupancy, while retaining live producers/readers, failed/interrupted originals,
+current/delivery roots, dependency closure and unchanged source/index bytes.
+These implementation changes still require candidate checks and host cutover;
+source presence does not establish passing or deployed behavior.
 
 The supported owner entry is:
 
@@ -187,7 +114,7 @@ The supported owner entry is:
 
 `P` is an exact root-relative JSON request bounded to 64 KiB. Operations are `maintain`, `migrate-policy`, `enroll`, `release`, `protect-consumer`, `release-consumer` and `acknowledge-delivery`. A producer-generated result exits 0; invalid input, changed identity, unavailable capability or policy refusal exits 2. The result never declares historical engineering work completed.
 
-Publication persists an intent, exact destination and parent identity before creating an empty staging inode, attaches its identity durably and publishes by a kernel no-replace rename. Actual completion records the original outcome. Ordinary adopted entries resume bounded accounting, interrupted creation and partial effects. The inventory, graph, directory snapshots, summary ring and read/write budgets are finite. Over-capacity protected state refuses controllable publication; external builders remain accounted after exclusion rather than under an invented filesystem quota.
+Publication persists an intent, exact destination and parent identity before creating an empty staging inode, attaches its identity durably and publishes by a kernel no-replace rename. Actual completion records the original outcome. Ordinary adopted entries resume bounded accounting, interrupted creation and partial effects. Each related graph, directory snapshot, summary ring and read/write operation has finite bounds. An oversized related set or output refuses controllable publication; unrelated retained originals impose no admission quota. External builders remain accounted after exclusion.
 
 Every effect rechecks policy, exact output/entry identities, references, capabilities and committed/index source. Sealed manifests/cursors cover only the explicitly enrolled output. Replacements, changed content, unknown late descendants and special files are preserved. Links are unlinked without following their targets. Logical removed bytes, observed allocated blocks and unknown physical savings remain distinct facts. Maintenance summaries retain original outcomes without claiming the original bytes still exist after retirement.
 
@@ -227,3 +154,16 @@ response exceeded the unchanged 8 MiB bound. Those failures remain failed;
 composed-source prerequisite checks need their own originals before any shared
 acceptance. No native, deployment, landing or complete SPEC acceptance follows
 from composition. The two correction reserves are exhausted.
+
+The current isolated-host cutover stages the new worktree owner from a clean
+program candidate while the existing host selection remains usable by the old
+producer. The custodian then excludes the old admission, actual output and
+transaction capabilities, preserves the exact inventory/policy originals,
+materializes addressed declarations with unchanged domain state and selects policy
+v2. Commit that selection before deployment, whose publication callback requires
+the exact current clean source. The retained candidate then owns the registered
+stage bootstrap; the selected old owner cannot read the newly selected policy.
+Deploy that stage through `deploy-owner`, then run the normal clean bootstrap and
+canonical checks. The intermediate program candidate is staging evidence and
+does not establish final acceptance.
+No ordinary operation decodes the old aggregate layout.

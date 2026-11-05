@@ -1930,8 +1930,7 @@ fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> 
             },
             _ => unreachable!(),
         };
-        retained_artifacts::retention::maintain_adopted(&root)?;
-        let _report_activity = retained_artifacts::retention::report_activity(&root)?;
+        let _read_scope = retained_artifacts::retention::read_scope(&root)?;
         let (req, p, binding) = prepared::prepare(&root, selection)?;
         let retention = prepared::retention_directory(&req);
         let result = execute_check(
@@ -2056,7 +2055,6 @@ fn execute_check(
     entry: Value,
     preparation: Option<Value>,
 ) -> Result<(u8, String), String> {
-    retained_artifacts::retention::maintain_adopted(&root)?;
     let (_, _, profile, _) = facts_configs::load(&root, &config_path)?;
     let full_units = if scope.is_some() && profile["schema"] != units::PROFILE {
         units::full_execution_units(&profile)?

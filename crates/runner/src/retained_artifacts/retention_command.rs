@@ -1,5 +1,5 @@
 //! Host-selected historical owner migration through the existing retention owner.
-use super::retention::{Inventory, OriginalIdentity, POLICY_PATH};
+use super::retention::{Consumer, Inventory, OriginalIdentity, POLICY_PATH};
 use crate::{CliOutput, decode, no_symlink_parents, ownership::Lease, sha256};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -32,15 +32,6 @@ pub(super) struct Historical {
     pub owner_lease_identity: String,
     pub roots: Vec<String>,
     pub release: Option<Release>,
-}
-/// A host/consumer declaration, outside its disposable originals. No discovery.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Consumer {
-    schema: String,
-    consumer: String,
-    purpose: String,
-    originals: Vec<OriginalIdentity>,
 }
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "kebab-case", deny_unknown_fields)]
@@ -257,7 +248,7 @@ pub fn command(args: &[&str]) -> CliOutput {
         ] = args
         {
             let root = fs::canonicalize(host).map_err(|e| e.to_string())?;
-            let _activity = super::retention::report_activity(&root)?;
+            let _activity = super::retention::read_scope(&root)?;
             let (config, _) = bounded_json(&root, profile, 1024 * 1024)?;
             let path = if *scope == "collect" {
                 config["execution_units"]["report_path"]

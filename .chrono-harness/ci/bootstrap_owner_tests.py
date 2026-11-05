@@ -207,13 +207,23 @@ class OwnerPublication(unittest.TestCase):
 
 
 class ProducerSource(unittest.TestCase):
-    def published_fixture(self):
+    def published_fixture(self, reuse=False):
         fixture, selected = self.selected_original_fixture()
         host = fixture.host
         profile = dict(host.config, install=[], report_path=".chrono-harness/state/bootstrap-fixture-stage.json",
                        owner_stage={"source": "built-tool", "selected": selected.relative_to(fixture.root).as_posix()})
         config_path = ".chrono-harness/ci/stage.json"
         host.write_json(fixture.root / config_path, profile)
+        if reuse:
+            core = dict(host.config, owner_upgrade=".chrono-harness/ci/owner-upgrade.json",
+                        reuse_owner_operations=profile["operations"],
+                        participation={"coordinator_root": "git-main-worktree", "git": "git",
+                                       "program": selected.relative_to(fixture.root).as_posix(),
+                                       "config": ".chrono-harness/worktree.json"})
+            host.write_json(fixture.root / ".chrono-harness/ci/reuse-core.json", core)
+            host.write_json(fixture.root / core["owner_upgrade"], {
+                "schema": "chrono-bootstrap-owner-upgrade/v1", "stage_config": config_path,
+                "selected_original": ".chrono-harness/state/bootstrap.json"})
         host.declare("write", "built-tool", "staged owner")
         host.git("add", ".")
         host.git("commit", "-qm", "new owner candidate")
@@ -234,6 +244,51 @@ class ProducerSource(unittest.TestCase):
         adoption["receipt"] = {"path": receipt, "sha256": owner.shared.digest((fixture.root / receipt).read_bytes())}
         owner.shared.write_new(fixture.root / owner.CURRENT, owner.shared.encode(adoption))
         return fixture, selected, adoption
+
+    def test_core_consumes_the_actual_current_stage_without_rebuilding_or_replacing_it(self):
+        fixture, selected, adoption = self.published_fixture(reuse=True)
+        original = owner.file_binding(selected)
+        stage = json.loads((fixture.root / adoption["stage_result"]).read_bytes())
+        # A separately rebuilt scratch output is neither the deployed bytes nor
+        # an input to this already successful construction's handoff.
+        (fixture.root / "built-tool").write_bytes(b"different scratch rebuild")
+        with tempfile.TemporaryFile() as lease, mock.patch.object(bootstrap, "PASS_FDS", (lease.fileno(),)), mock.patch.dict(
+                os.environ, dict(fixture.host.environment, CHRONO_WORKTREE_BOOTSTRAP=str(fixture.root))), mock.patch.object(
+                sys, "argv", ["bootstrap.py", str(fixture.root), ".chrono-harness/ci/reuse-core.json"]), mock.patch.object(
+                bootstrap, "run_operation", side_effect=AssertionError("duplicate owner construction")):
+            bootstrap.main()
+        result = json.loads((fixture.root / ".chrono-harness/state/bootstrap.json").read_bytes())
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(owner.file_binding(selected), original)
+        for row, source in zip(result["operations"], stage["operations"]):
+            self.assertEqual({k: v for k, v in row.items() if k != "reused_from"}, source)
+            self.assertEqual(row["reused_from"], {"path": adoption["stage_result"],
+                                                  "sha256": adoption["stage_sha256"]})
+        config = json.loads((fixture.root / ".chrono-harness/ci/reuse-core.json").read_bytes())
+        owner.shared.original_report(fixture.root, {"config": ".chrono-harness/ci/reuse-core.json"},
+                                     config, bootstrap.observe_source(fixture.root))
+
+    def test_construction_reuse_refuses_different_selection_observation_and_missing_operations(self):
+        fixture, selected, adoption = self.published_fixture(reuse=True)
+        config = json.loads((fixture.root / ".chrono-harness/ci/reuse-core.json").read_bytes())
+        report = json.loads((fixture.root / adoption["stage_result"]).read_bytes())
+        observed = bootstrap.observe_source(fixture.root)
+        for defect in ("selection", "observation", "operation", "candidate"):
+            with self.subTest(defect=defect):
+                selected_config = json.loads(json.dumps(config))
+                result = json.loads(json.dumps(report))
+                source = dict(observed)
+                if defect == "selection":
+                    selected_config["environment"] = {"CARGO_NET_OFFLINE": "true"}
+                elif defect == "observation":
+                    result["environment"]["CARGO_INCREMENTAL"] = "different"
+                elif defect == "operation":
+                    selected_config["operations"].append("unproduced")
+                    selected_config["reuse_owner_operations"] = ["unproduced"]
+                else:
+                    source["commit"] = "0" * 40
+                with self.assertRaises(ValueError):
+                    owner.reuse_construction(fixture.root, selected_config, result, source)
 
     def test_changed_candidate_qualifies_published_owner_after_interrupted_core_install(self):
         fixture, selected, adoption = self.published_fixture()

@@ -40,14 +40,15 @@ fn nested_released(
     }
     for binding in bindings {
         let directory = no_symlink_parents(allocation, &binding.directory)?;
-        let store = Store::open(&directory, &binding.producer, false)?;
+        let mut store = Store::open(&directory, &binding.producer, false)?;
+        store.load(&binding.allocation)?;
         let object = store
-            .registry
+            .state
             .objects
             .iter()
             .find(|o| o.path == binding.allocation)
             .ok_or("nested diagnostic allocation is not registered")?;
-        if store.registry.directory_id != binding.registry_identity
+        if store.state.directory_id != binding.registry_identity
             || object.identity != binding.identity
             || value!(object.intent) != value!(binding.intent)
         {
@@ -137,7 +138,7 @@ fn register(
     if provenance.is_null() {
         return Err("copied body requires real producer provenance".into());
     }
-    let object = &store.registry.objects[i];
+    let object = &store.state.objects[i];
     store.stable(object)?;
     if object
         .cache_lease
@@ -178,9 +179,9 @@ fn register(
         return Err("fixture allocation has an unreleased diagnostic consumer".into());
     }
     let directory = store.directory.clone();
-    let producer = store.registry.producer.clone();
-    let registry_identity = store.registry.directory_id.clone();
-    let registry_lease = store.registry.lease_id.clone();
+    let producer = store.state.producer.clone();
+    let registry_identity = store.state.directory_id.clone();
+    let owner_identity = store.state.owner_id.clone();
     let allocation = object.path.clone();
     let allocation_identity = object.identity.clone();
     let producer_intent = object.intent.clone();
@@ -194,15 +195,16 @@ fn register(
     observer("copy-original-prepared");
     lease.stable()?;
     let mut store = Store::open(&directory, &producer, false)?;
+    store.load(&allocation)?;
     let i = store
-        .registry
+        .state
         .objects
         .iter()
         .position(|object| object.path == allocation)
         .ok_or("copy allocation disappeared during original custody transfer")?;
-    let object = &store.registry.objects[i];
-    if store.registry.directory_id != registry_identity
-        || store.registry.lease_id != registry_lease
+    let object = &store.state.objects[i];
+    if store.state.directory_id != registry_identity
+        || store.state.owner_id != owner_identity
         || object.identity != allocation_identity
         || value!(object.intent) != value!(producer_intent)
         || value!(object.cache_lease) != value!(cache_lease)
@@ -241,7 +243,7 @@ fn register(
             "original_custody":"retained", "historical_producer_outcome":"unchanged"
         }),
     )?;
-    Arc::make_mut(&mut store.registry.objects[i]).bodies.insert(
+    Arc::make_mut(&mut store.state.objects[i]).bodies.insert(
         member.into(),
         Body {
             intent,
@@ -282,9 +284,10 @@ impl TemporaryHost {
         let new_relative = new_root
             .strip_prefix(&allocation)
             .map_err(|e| e.to_string())?;
-        let store = Store::open(directory, producer, false)?;
+        let mut store = Store::open(directory, producer, false)?;
+        store.load(object)?;
         let record = store
-            .registry
+            .state
             .objects
             .iter()
             .find(|o| o.path == object)
@@ -397,14 +400,15 @@ impl TemporaryHost {
             .and_then(|p| p.as_os_str().to_str())
             .ok_or("copy allocation UTF-8")?;
         let member = parts.as_path().to_str().ok_or("copy member UTF-8")?;
-        let store = Store::open(directory, producer, false)?;
+        let mut store = Store::open(directory, producer, false)?;
+        store.load(object)?;
         let i = store
-            .registry
+            .state
             .objects
             .iter()
             .position(|o| o.path == object)
             .ok_or("copy destination has no exact allocation registration")?;
-        let binding = store.registry.objects[i]
+        let binding = store.state.objects[i]
             .cache_lease
             .as_ref()
             .ok_or("copy has no allocation lease")?;
@@ -523,14 +527,15 @@ impl Manager {
                     .find(|p| p.id == selected.producer && p.fixture_bodies)
                     .ok_or("fixture body class is not adopted for this producer")?;
                 let directory = policy.directory(target)?;
-                let store = Store::open(&directory, &selected.producer, false)?;
+                let mut store = Store::open(&directory, &selected.producer, false)?;
+                store.load(&selected.allocation)?;
                 let i = store
-                    .registry
+                    .state
                     .objects
                     .iter()
                     .position(|o| o.path == selected.allocation)
                     .ok_or("unknown allocation is never imported by fixture custody")?;
-                let object = &store.registry.objects[i];
+                let object = &store.state.objects[i];
                 if object.identity != selected.identity
                     || value!(object.intent) != value!(selected.intent)
                 {
@@ -587,14 +592,15 @@ impl Manager {
                     let source = r.blob(target, &self.inputs.anchor_head, &member.recipe)?;
                     self.stable(r)?;
                     lease.stable()?;
-                    let store = Store::open(&directory, &selected.producer, false)?;
+                    let mut store = Store::open(&directory, &selected.producer, false)?;
+                    store.load(&selected.allocation)?;
                     let i = store
-                        .registry
+                        .state
                         .objects
                         .iter()
                         .position(|o| o.path == selected.allocation)
                         .ok_or("custody allocation disappeared during original transfer")?;
-                    let object = &store.registry.objects[i];
+                    let object = &store.state.objects[i];
                     if object.identity != selected.identity
                         || value!(object.intent) != value!(selected.intent)
                     {
@@ -685,7 +691,7 @@ fn protect_source(
 
 pub(super) fn drain(
     policy: &ProducerPolicy,
-    manager: &Manager,
+    inputs: &PolicyInputs,
     r: &mut Runner,
     directory: &Path,
     object: &Object,
@@ -826,7 +832,7 @@ pub(super) fn drain(
                         return Err("copied input original changed before removal".into());
                     }
                     protect_source(r, &allocation, member, body.git_root.as_deref())?;
-                    manager.stable(r)?;
+                    inputs.stable(r)?;
                     lease.stable()?;
                     Store::stable_in(directory, &policy.id, registry_id, object)?;
                     for dependency in &dependencies {
@@ -879,7 +885,7 @@ pub(super) fn drain(
     Ok(row)
 }
 
-fn fingerprint(path: &Path) -> Result<String, String> {
+pub(super) fn fingerprint(path: &Path) -> Result<String, String> {
     let m = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {

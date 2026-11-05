@@ -1,6 +1,7 @@
+#[path = "../../runner-tests/tests/support/retention_state.rs"]
+mod retention_state;
 use super::*;
 const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
-const STATE: &str = ".chrono-harness/state/automatic-cleanup/ledger.json";
 
 impl Host {
     pub(super) fn automatic(&self, disposition: &str) {
@@ -75,9 +76,66 @@ impl Host {
         self.received(self._dir.capture_bound(&mut command))
     }
     pub(super) fn ledger(&self) -> Value {
-        json(&fs::read(self.root.join(STATE)).unwrap()).unwrap()
+        snapshot(&self.root).unwrap()
+    }
+    pub(super) fn ledger_path(&self, target: &Path) -> PathBuf {
+        self.record_directory(target).join("ledger.json")
+    }
+    pub(super) fn record_directory(&self, target: &Path) -> PathBuf {
+        self.root
+            .join(".chrono-harness/state/automatic-cleanup/enrollments")
+            .join(sha256(target.to_str().unwrap().as_bytes()))
+    }
+    pub(super) fn set_ledger(&self, ledger: &Value) {
+        let directory = self
+            .root
+            .join(".chrono-harness/state/automatic-cleanup/enrollments");
+        for item in fs::read_dir(directory).unwrap() {
+            let path = item.unwrap().path().join("ledger.json");
+            let mut current = json(&fs::read(&path).unwrap()).unwrap();
+            let marker =
+                json(&fs::read(path.parent().unwrap().join("owner.json")).unwrap()).unwrap();
+            current["entries"] = value!(
+                ledger["entries"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|entry| entry["path"] == marker["path"])
+                    .cloned()
+                    .collect::<Vec<_>>()
+            );
+            fs::write(path, serde_json::to_vec_pretty(&current).unwrap()).unwrap();
+        }
     }
 }
+pub(super) fn snapshot(root: &Path) -> Result<Value, String> {
+    let mut ledger = value!({"entries":[]});
+    let namespace = root.join(".chrono-harness/state/automatic-cleanup/enrollments");
+    for item in fs::read_dir(namespace).map_err(|e| e.to_string())? {
+        let bytes = fs::read(item.map_err(|e| e.to_string())?.path().join("ledger.json"))
+            .map_err(|e| e.to_string())?;
+        let current = json(&bytes)?;
+        ledger["entries"]
+            .as_array_mut()
+            .unwrap()
+            .extend(current["entries"].as_array().unwrap().iter().cloned());
+    }
+    ledger["entries"]
+        .as_array_mut()
+        .unwrap()
+        .sort_by_key(|entry| {
+            entry["enrollment"]["receipt"]["report_path"]
+                .as_str()
+                .unwrap_or("")
+                .split('-')
+                .rev()
+                .nth(1)
+                .unwrap_or("")
+                .to_owned()
+        });
+    Ok(ledger)
+}
+
 fn output(target: &Path) {
     fs::create_dir_all(target.join("output λ")).unwrap();
     fs::write(target.join("output λ/data"), vec![42u8; 8192]).unwrap();
@@ -101,8 +159,8 @@ fn caught_capacity_failure_exports_original_inventory_and_command_streams() {
     let destination = tempfile::tempdir().unwrap();
     let originals = [
         (
-            "output-retention-v1/inventory.json",
-            b"original inventory\0\xff".as_slice(),
+            "output-retention-v1/objects/output-diagnostic/record.json",
+            b"original addressed declaration\0\xff".as_slice(),
         ),
         (
             "capacity-excluded.stdout",
@@ -168,13 +226,13 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
         fs::write(
             h.root.join(POLICY_PATH),
             serde_json::to_vec(&value!({
-                "schema":"chrono-output-retention/v1",
+                "schema":"chrono-output-retention/v2",
                 "producers":{"check-original":[".chrono-harness/state/"],
                     "lifecycle-original":[".chrono-harness/state/worktrees/"]},
-                "keep_seconds":0,"max_entries":512,"max_summaries":128,
+                "keep_seconds":0,"max_related_outputs":512,"max_summaries":128,
                 "max_nodes_per_round":256,"max_bytes_per_round":67108864,
                 "max_millis_per_round":25,"max_output_bytes":1073741824,
-                "max_total_bytes":8589934592u64,"max_manifest_nodes":16384,
+                "max_manifest_nodes":16384,
                 "max_metadata_bytes_per_round":67108864
             }))
             .unwrap(),
@@ -193,16 +251,7 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
         let source_bytes = fs::read(h.root.join("payload")).unwrap();
         let index = fs::read(h.root.join(".git/index")).unwrap();
         let inventory = || Inventory::adopted(&h.root).unwrap().unwrap();
-        let state = || {
-            json(
-                &fs::read(
-                    h.root
-                        .join(".chrono-harness/state/output-retention-v1/inventory.json"),
-                )
-                .unwrap(),
-            )
-            .unwrap()
-        };
+        let state = || retention_state::snapshot(&h.root);
         fs::create_dir_all(h.root.join(".chrono-harness/state/worktrees")).unwrap();
         let mut ids = Vec::new();
         let mut live = None;
@@ -278,64 +327,64 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
             .unwrap();
             h.received(out)
         };
-        // An independent active collector still roots the whole family. The
-        // new entrant must not remove evidence to make room for its own report.
-        let activity = inventory().report_activity().unwrap();
-        let (code, _, error) = invoke("active");
-        assert_eq!(code, 2, "{error}");
-        assert!(
-            error.contains("protected output inventory capacity"),
-            "{error}"
-        );
-        assert_eq!(state()["outputs"], before["outputs"]);
-        drop(activity);
+        // This collector declares every original as a required input. Its
+        // exact root prevents reclamation; an unrelated activity has no effect.
+        inventory()
+            .reference("collector-required-inputs", &ids)
+            .unwrap();
+        let (code, report, error) = invoke("active");
+        assert_eq!(code, 0, "{report} {error}");
+        for original in before["outputs"].as_array().unwrap() {
+            assert!(state()["outputs"].as_array().unwrap().contains(original));
+        }
+        inventory()
+            .reference("collector-required-inputs", &[])
+            .unwrap();
         let (code, report, error) = invoke("excluded");
-        if all_rooted {
-            assert_eq!(code, 2, "{report} {error}");
-            assert!(
-                error.contains("protected output inventory capacity"),
-                "{error}"
-            );
-            assert_eq!(state()["outputs"], before["outputs"]);
-        } else {
-            assert_eq!(code, 0, "{report} {error}");
-            assert_eq!(
-                report["status"],
-                if operation == "maintain" {
-                    "maintained"
-                } else {
-                    "used"
-                }
-            );
-            if operation == "bootstrap" {
-                assert_eq!(report["managed_process"]["exit_code"], 0);
-                assert_eq!(
-                    report["managed_process"]["argv"],
-                    value!([
-                        env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
-                        "noop",
-                        h.root,
-                        bootstrap
-                    ])
-                );
+        assert_eq!(code, 0, "{report} {error}");
+        assert_eq!(
+            report["status"],
+            if operation == "maintain" {
+                "maintained"
+            } else {
+                "used"
             }
-            let after = state();
+        );
+        if operation == "bootstrap" {
+            assert_eq!(report["managed_process"]["exit_code"], 0);
+            assert_eq!(
+                report["managed_process"]["argv"],
+                value!([
+                    env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
+                    "noop",
+                    h.root,
+                    bootstrap
+                ])
+            );
+        }
+        // Explicit retention maintenance may retire unrelated released originals.
+        // Ordinary use/bootstrap leave them for this owner operation.
+        for _ in 0..8 {
+            let round = inventory().maintain().unwrap();
+            assert!(round["nodes"].as_u64().unwrap() <= 256);
+            if all_rooted
+                || state()["summaries"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
+            {
+                break;
+            }
+        }
+        if !all_rooted {
             assert!(
-                after["summaries"]
+                state()["summaries"]
                     .as_array()
                     .unwrap()
                     .iter()
                     .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
             );
-            assert!(after["outputs"].as_array().unwrap().len() <= 512);
-            assert!(
-                after["outputs"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|o| o["path"] == report["report_path"])
-            );
-            assert_eq!(after["roots"], before["roots"]);
         }
         let after = state();
         for n in 0..if all_rooted { 512 } else { 8 } {
@@ -585,7 +634,7 @@ fn automatic_inventory_requires_current_attachment_but_accepts_advanced_head() {
 }
 
 #[test]
-fn addressed_drain_originals_remain_required_for_birth_consumption() {
+fn independent_birth_has_no_dependency_on_another_worktrees_maintenance_original() {
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
@@ -593,12 +642,15 @@ fn addressed_drain_originals_remain_required_for_birth_consumption() {
     let next = h.parent.join("consumer-next");
     assert_eq!(h.invoke("feature", "drained-first", &first).0, 0);
     output(&first);
-    let (code, birth, error) = h.invoke("feature", "consumer-next", &next);
-    assert_eq!(code, 0, "{birth} {error}");
-    let input = &birth["drain"][0]["input"];
+    let (code, maintenance, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintenance} {error}");
+    let input = &maintenance["drain"][0]["input"];
     let original_path = h.root.join(input["path"].as_str().unwrap());
     let original = fs::read(&original_path).unwrap();
     assert_eq!(sha256(&original), input["sha256"]);
+    let (code, birth, error) = h.invoke("feature", "consumer-next", &next);
+    assert_eq!(code, 0, "{birth} {error}");
+    assert!(birth["drain"].as_array().unwrap().is_empty());
     let args = [
         "--path",
         next.to_str().unwrap(),
@@ -609,57 +661,15 @@ fn addressed_drain_originals_remain_required_for_birth_consumption() {
         if missing {
             fs::remove_file(&original_path).unwrap();
         } else {
-            fs::write(&original_path, b"changed original").unwrap();
+            fs::write(&original_path, b"changed unrelated original").unwrap();
         }
-        let (code, refused, error) = h.auto("use", &args);
-        assert_eq!(code, 2, "{refused} {error}");
-        assert!(refused["managed_process"].is_null());
+        let (code, used, error) = h.auto("use", &args);
+        assert_eq!(code, 0, "{used} {error}");
+        assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
         assert!(next.join("payload").exists());
         fs::write(&original_path, &original).unwrap();
     }
-    let (code, used, error) = h.auto("use", &args);
-    assert_eq!(code, 0, "{used} {error}");
-    assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
     assert_eq!(fs::read(&original_path).unwrap(), original);
-
-    // Supply the supported historical inline representation as separate fixture
-    // input. Keep both producer originals intact, including the sealed birth.
-    let birth_path = h.root.join(birth["report_path"].as_str().unwrap());
-    let birth_bytes = fs::read(&birth_path).unwrap();
-    let mut historical = birth.clone();
-    let mut inline = json(&original).unwrap();
-    inline["original_result"] = value!({"input":input});
-    historical["drain"][0]["report"] = inline;
-    historical["drain"][0]
-        .as_object_mut()
-        .unwrap()
-        .remove("input");
-    let historical_bytes = serde_json::to_vec(&historical).unwrap();
-    let historical_path = ".chrono-harness/state/worktrees/historical-inline-fixture.json";
-    fs::write(h.root.join(historical_path), &historical_bytes).unwrap();
-    let mut ledger = h.ledger();
-    let enrollment = ledger["entries"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|entry| entry["path"] == value!(next))
-        .unwrap();
-    enrollment["enrollment"]["sealed_receipt"] =
-        value!({"path":historical_path,"sha256":sha256(&historical_bytes)});
-    fs::write(h.root.join(STATE), serde_json::to_vec(&ledger).unwrap()).unwrap();
-    let (code, used, error) = h.auto("use", &args);
-    assert_eq!(code, 0, "{used} {error}");
-    assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
-    fs::write(&original_path, b"changed nested inline input").unwrap();
-    let (code, refused, error) = h.auto("use", &args);
-    assert_eq!(code, 2, "{refused} {error}");
-    assert!(refused["managed_process"].is_null());
-    fs::write(&original_path, &original).unwrap();
-    assert_eq!(fs::read(birth_path).unwrap(), birth_bytes);
-    assert_eq!(
-        fs::read(h.root.join(historical_path)).unwrap(),
-        historical_bytes
-    );
 }
 
 #[test]
@@ -716,7 +726,7 @@ fn entry_receipts(h: &Host, entry: &Value) -> Vec<(PathBuf, Vec<u8>)> {
         .map(|p| PathBuf::from(p).join("original-lifecycle-state"));
     if let Some(directory) = &evidence {
         fs::create_dir_all(directory).unwrap();
-        let ledger = fs::read(h.root.join(STATE)).unwrap();
+        let ledger = serde_json::to_vec_pretty(&h.ledger()).unwrap();
         fs::write(
             directory.join(format!("ledger-{}.json", sha256(&ledger))),
             ledger,
@@ -974,7 +984,7 @@ fn blocked_remove(h: &Host, after_effect: bool) {
 }
 
 #[test]
-fn automatic_partial_failure_original_reporting_and_later_start_retry() {
+fn automatic_partial_failure_preserves_independent_start_and_explicit_retry() {
     for after_effect in [false, true] {
         let h = Host::new("payload");
         blocked_remove(&h, after_effect);
@@ -1012,17 +1022,18 @@ fn automatic_partial_failure_original_reporting_and_later_start_retry() {
             let (code, admitted, error) = h.invoke("feature", "independent", &independent);
             assert_eq!(code, 0, "{} {error}", admitted["error"]);
             assert!(independent.exists());
-            assert!(!admitted["cleanup_failures"].as_array().unwrap().is_empty());
-            assert_eq!(drain_report(&admitted["drain"][0])["status"], "failed");
+            assert!(admitted["cleanup_failures"].as_array().unwrap().is_empty());
+            assert!(admitted["drain"].as_array().unwrap().is_empty());
             assert_eq!(fs::read(&receipt).unwrap(), bytes);
         }
         fs::remove_file(h.parent.join("fail-remove")).unwrap();
         let (code, r, e) = h.invoke("feature", "next", &next);
         assert_eq!(code, 0, "{r} {e}");
-        assert!(!target.exists());
+        assert_eq!(target.exists(), !after_effect);
         assert!(next.exists());
         assert_eq!(fs::read(receipt).unwrap(), bytes);
         assert_eq!(h.auto("maintain", &[]).0, 0);
+        assert!(!target.exists());
     }
 }
 
@@ -1576,10 +1587,10 @@ fn automatic_failed_birth_and_missing_state_are_protected() {
     let active = h.parent.join("active");
     assert_eq!(h.invoke("feature", "active", &active).0, 0);
     output(&active);
-    fs::remove_file(h.root.join(STATE)).unwrap();
+    fs::remove_file(h.ledger_path(&active)).unwrap();
     let next = h.parent.join("next");
-    assert_ne!(h.invoke("feature", "next", &next).0, 0);
-    assert!(!next.exists());
+    assert_eq!(h.invoke("feature", "next", &next).0, 0);
+    assert!(next.exists());
     assert!(active.join("output λ/data").exists());
 }
 
@@ -1616,7 +1627,10 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
     let next = h.parent.join("fresh");
     let (code, r, e) = h.invoke("feature", "fresh", &next);
     assert_eq!(code, 0, "{r} {e}");
-    assert!(!target.exists());
+    assert!(
+        target.exists(),
+        "another birth has no cleanup dependency on this target"
+    );
     let (code, r, e) = h.received(
         Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir(&h.root)
@@ -1627,6 +1641,7 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
             .unwrap(),
     );
     assert_eq!(code, 0, "{r} {e}");
+    assert!(!target.exists());
     assert!(next.exists());
 }
 
@@ -1649,11 +1664,7 @@ fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
             git(&target, &["add", "-f", "output λ/data"]);
         }
         if fault == "gate" {
-            fs::create_dir(
-                h.root
-                    .join(".chrono-harness/state/automatic-cleanup/gate.lock"),
-            )
-            .unwrap();
+            fs::create_dir(h.record_directory(&target).join("gate.lock")).unwrap();
         }
         let (code, r, e) = h.auto(
             "finish",

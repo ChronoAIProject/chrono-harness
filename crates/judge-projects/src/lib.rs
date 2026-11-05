@@ -518,8 +518,8 @@ fn collect_reports(
     old: &Registrations,
     effective: &Value,
 ) -> Result<(Results, CollectedCompletion), String> {
-    let _report_activity =
-        chrono_harness::retained_artifacts::retention::report_activity(&req.candidate.root)?;
+    let _read_scope =
+        chrono_harness::retained_artifacts::retention::read_scope(&req.candidate.root)?;
     let chrono_harness::units::Scope::Collect { manifest } =
         req.scope.as_ref().ok_or("collection scope missing")?
     else {
@@ -1403,8 +1403,8 @@ pub fn verify_completion(
     artifacts: Option<&Value>,
     declaration_root: &Path,
 ) -> Result<(), String> {
-    let _report_activity =
-        chrono_harness::retained_artifacts::retention::report_activity(&req.candidate.root)?;
+    let _read_scope =
+        chrono_harness::retained_artifacts::retention::read_scope(&req.candidate.root)?;
     let completion = results
         .completion
         .as_ref()
@@ -1439,6 +1439,10 @@ pub fn verify_completion(
             None,
         )?
     } else {
+        let _manifest = chrono_harness::retained_artifacts::retention::read_guard(
+            &req.candidate.root,
+            &completion.source,
+        )?;
         let path = chrono_harness::no_symlink_parents(&req.candidate.root, &completion.source)?;
         let bound = r.config()["execution_units"]["collection_limits"]["manifest_bytes"]
             .as_u64()
