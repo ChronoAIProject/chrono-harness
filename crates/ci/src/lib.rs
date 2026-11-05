@@ -43,7 +43,7 @@ pub struct Config {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
-        deserialize_with = "facts_present"
+        deserialize_with = "string_present"
     )]
     pub facts_config: Option<String>,
     #[serde(
@@ -54,6 +54,12 @@ pub struct Config {
     pub initial_inventory: Option<InitialInventory>,
     pub context_path: String,
     pub artifact_directory: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "string_present"
+    )]
+    pub failure_artifact_directory: Option<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -66,7 +72,7 @@ fn inventory_present<'de, D: Deserializer<'de>>(
 ) -> Result<Option<InitialInventory>, D::Error> {
     InitialInventory::deserialize(d).map(Some)
 }
-fn facts_present<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+fn string_present<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     String::deserialize(d).map(Some)
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -178,10 +184,12 @@ fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
     if !valid_policy || !c.context_path.starts_with(".chrono-harness/") {
         return Err("CI host configuration/context ownership invalid".into());
     }
-    if !c.artifact_directory.ends_with('/') {
-        return Err("artifact_directory must end /".into());
+    for directory in std::iter::once(&c.artifact_directory).chain(&c.failure_artifact_directory) {
+        if !directory.ends_with('/') {
+            return Err("artifact directories must end /".into());
+        }
+        relative_path(directory.trim_end_matches('/'))?;
     }
-    relative_path(c.artifact_directory.trim_end_matches('/'))?;
     if !c.context_path.starts_with(&c.artifact_directory) {
         return Err("context must reside in artifact directory".into());
     }
@@ -429,6 +437,20 @@ on:
         normal = invoke(c, false) + &suffix,
         artifacts = scalar(&c.artifact_directory)
     );
+    let rendered = if let Some(directory) = c
+        .failure_artifact_directory
+        .as_ref()
+        .filter(|d| **d != c.artifact_directory)
+    {
+        format!(
+            "{rendered}      - name: Preserve failed job diagnostics\n        if: ${{{{ failure() }}}}\n        uses: {}\n        with:\n          name: diagnostics-{artifact_prefix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}",
+            c.upload_artifact_action,
+            scalar(directory),
+            artifact_hidden_files(c.include_hidden_files)
+        )
+    } else {
+        rendered
+    };
     let rendered = if c.retention_delivery {
         let selected = match scope {
             Some(chrono_harness::units::Scope::Unit { unit }) => unit.as_str(),

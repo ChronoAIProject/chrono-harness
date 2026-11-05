@@ -2370,12 +2370,6 @@ fn short_transport_preserves_process_failure_before_decoding_partial_output() {
     }
 }
 
-fn script(root: &Path, path: &str, body: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    fs::write(root.join(path), body).unwrap();
-    fs::set_permissions(root.join(path), fs::Permissions::from_mode(0o755)).unwrap();
-}
-
 fn native_fixture(root: &Path, path: &str) {
     use std::os::unix::fs::PermissionsExt;
 
@@ -2614,11 +2608,7 @@ fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
     );
 
     let mut acquisition = ShortHost::new();
-    script(
-        &acquisition.root,
-        ".chrono-harness/bin/mutating-producer",
-        "#!/bin/sh\nif [ \"$1\" = --version ]; then printf 'chrono-worktree 0.1.0\\n'; printf '# changed after version\\n' >> \"$0\"; exit 0; fi\nexit 0\n",
-    );
+    native_fixture(&acquisition.root, ".chrono-harness/bin/mutating-producer");
     acquisition.modify(".chrono-harness/config.json", |c| {
         c["tools"][1]["program"] = json!(".chrono-harness/bin/mutating-producer")
     });

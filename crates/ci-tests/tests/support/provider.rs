@@ -127,6 +127,15 @@ pub fn parent(args: &[String]) {
     serde_json::to_writer(&mut calls, args).unwrap();
     writeln!(calls).unwrap();
     if args[0] == "run" {
+        if mode == "artifact-deadline" {
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+        }
+        if mode == "artifact-stdout" {
+            println!("{}", "x".repeat(2048));
+        }
+        if mode == "artifact-stderr" {
+            eprintln!("{}", "x".repeat(16384));
+        }
         let artifact = option(args, "--name").split_once("chrono-unit-").unwrap().1;
         let unit = artifact.rsplitn(3, '-').nth(2).unwrap();
         if mode == "missing-artifact" {
@@ -150,16 +159,32 @@ pub fn parent(args: &[String]) {
             Path::new(option(args, "--dir")),
         );
     } else if args[1].contains("/contents/") {
+        if mode == "artifact-deadline" {
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+        }
+        if mode == "artifact-stderr" {
+            eprintln!("{}", "x".repeat(16384));
+        }
         contents(&args[1], mode == "wrong-source");
     } else if args[1].contains("/artifacts?") {
-        if mode == "typed-metadata-timeout" {
-            std::thread::sleep(std::time::Duration::from_secs(3));
+        let mut artifacts = Vec::new();
+        for unit in detection["required_units"].as_array().unwrap() {
+            let production = read(&format!(
+                ".chrono-harness/state/production-{}",
+                unit.as_str().unwrap()
+            ));
+            let id = 99 + artifacts.len();
+            artifacts.push(json!({"id":id,"name":production["artifact"],"expired":false,
+                "workflow_run":{"id":101,"head_sha":detection["candidate"]},
+                "archive_download_url":format!("https://api.github.com/repos/owner/host/actions/artifacts/{id}/zip")}));
         }
-        if mode == "typed-metadata-output" {
-            println!("{}", "x".repeat(8192));
-        } else {
-            println!("{}", data["artifact_pages"]);
+        if mode == "artifact-missing" {
+            artifacts.clear();
         }
+        if mode == "artifact-misbound" {
+            artifacts[0]["workflow_run"]["head_sha"] = json!("incorrect-source");
+        }
+        println!("{}", json!([{"artifacts":artifacts}]));
     } else if args[1].contains("/jobs?") {
         let mut rows = vec![json!({"id":200,"run_id":101,"run_attempt":2,
             "name":"Detect registered DELTA","status":"completed", "conclusion":"success",
