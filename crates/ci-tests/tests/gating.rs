@@ -2082,8 +2082,7 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
             // Metadata, download and source checks share one deadline. A slow
             // earlier phase must reject too; reaching the source is not promised.
             assert_eq!(
-                report["error"],
-                "artifact acquisition cumulative deadline exhausted",
+                report["error"], "artifact acquisition cumulative deadline exhausted",
                 "{mode}: {report}"
             );
             assert!(
