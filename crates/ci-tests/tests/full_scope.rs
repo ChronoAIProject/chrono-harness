@@ -28,7 +28,7 @@ fn local_argv(c: &FullConfig, scope: &Value, base: &str, candidate: &str) -> Vec
 }
 
 #[test]
-fn unscoped_source_identity_and_projection_are_stable() {
+fn unscoped_source_identity_and_check_argv_are_explicit() {
     let c = config();
     let source = serde_json::to_value(&c).unwrap();
     assert!(source.get("scope").is_none());
@@ -52,11 +52,6 @@ fn unscoped_source_identity_and_projection_are_stable() {
             "--context".into(),
             c.context_path.clone(),
         ]
-    );
-    // The pre-follow-up v1 renderer's bytes are fixed, including the original ownership marker.
-    assert_eq!(
-        sha256(full::render(&c, SOURCE).unwrap().as_bytes()),
-        "e8755f0e752cee5f45750b96398575d616df4472bb67fb48b190fadbe8904cd1"
     );
 }
 
@@ -270,7 +265,7 @@ fn independent_sources_regenerate_only_their_owned_projection_and_keep_customiza
     assert!(
         generate(root, collect_source, false)
             .unwrap_err()
-            .contains("source")
+            .contains("unowned workflow collision")
     );
     assert_eq!(fs::read(root.join(&unit.workflow_path)).unwrap(), saved);
 }
@@ -509,7 +504,7 @@ fn scoped_git_failure_keeps_original_bytes_status_and_no_outputs() {
 }
 
 #[test]
-fn scoped_init_preserves_host_customization_and_can_adopt_scope_on_legacy_projection() {
+fn scoped_init_preserves_current_source_customization() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
     let input = root.join("incoming.json");
@@ -535,26 +530,19 @@ fn scoped_init_preserves_host_customization_and_can_adopt_scope_on_legacy_projec
 }
 
 #[test]
-fn scoped_generation_cannot_take_a_legacy_projection_from_another_source() {
+fn scoped_generation_preserves_other_source_outputs() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
-    let legacy_source = ".chrono-harness/providers/legacy.json";
+    let previous_source = ".chrono-harness/providers/previous.json";
     let scoped_source = ".chrono-harness/providers/scoped.json";
-    let mut legacy = config();
-    // A legitimate bootstrap invocation is not the projection's source binding.
-    legacy.bootstrap = vec![
-        legacy.generator.clone(),
-        "prepare".into(),
-        "--host-root".into(),
-        ".".into(),
-        "--config".into(),
-        scoped_source.into(),
-        "--event".into(),
-        "workflow_dispatch".into(),
-    ];
-    write(root, legacy_source, &serde_json::to_value(&legacy).unwrap());
-    generate(root, legacy_source, false).unwrap();
-    let original = fs::read(root.join(&legacy.workflow_path)).unwrap();
+    let previous = config();
+    write(
+        root,
+        previous_source,
+        &serde_json::to_value(&previous).unwrap(),
+    );
+    generate(root, previous_source, false).unwrap();
+    let original = fs::read(root.join(&previous.workflow_path)).unwrap();
     write(
         root,
         scoped_source,
@@ -563,12 +551,43 @@ fn scoped_generation_cannot_take_a_legacy_projection_from_another_source() {
     assert!(
         generate(root, scoped_source, false)
             .unwrap_err()
-            .contains("source ownership collision")
+            .contains("unowned workflow collision")
     );
     assert_eq!(
-        fs::read(root.join(&legacy.workflow_path)).unwrap(),
+        fs::read(root.join(&previous.workflow_path)).unwrap(),
         original
     );
+}
+
+#[test]
+fn unscoped_full_generation_and_init_preserve_other_source_outputs() {
+    for schema in [full::SCHEMA, full::SHORT_SCHEMA] {
+        for operation in ["generate", "init"] {
+            let d = tempfile::tempdir().unwrap();
+            let root = d.path();
+            let previous = ".chrono-harness/providers/previous.json";
+            let current = ".chrono-harness/providers/current.json";
+            let mut c = config();
+            c.schema = schema.into();
+            write(root, previous, &serde_json::to_value(&c).unwrap());
+            generate(root, previous, false).unwrap();
+            let workflow = fs::read(root.join(&c.workflow_path)).unwrap();
+            let previous_bytes = fs::read(root.join(previous)).unwrap();
+            c.name = "another source's full workflow".into();
+            write(root, current, &serde_json::to_value(&c).unwrap());
+            let current_bytes = fs::read(root.join(current)).unwrap();
+            let result = if operation == "init" {
+                init(root, &root.join(current))
+            } else {
+                generate(root, current, false)
+            };
+            assert!(result.is_err(), "{schema} {operation}: {result:?}");
+            assert_eq!(fs::read(root.join(&c.workflow_path)).unwrap(), workflow);
+            assert_eq!(fs::read(root.join(previous)).unwrap(), previous_bytes);
+            assert_eq!(fs::read(root.join(current)).unwrap(), current_bytes);
+            assert!(!root.join(".chrono-harness/ci/full.json").exists());
+        }
+    }
 }
 
 #[test]
