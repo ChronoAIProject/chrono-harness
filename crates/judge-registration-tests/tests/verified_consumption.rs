@@ -11,6 +11,17 @@ verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn preparation_requires_exact_command_and_prerequisite() {
+    proof {
+        reveal_strlit("python"); reveal_strlit("bootstrap"); reveal_strlit(".");
+        reveal_strlit("profile"); reveal_strlit("projects"); reveal_strlit("verify");
+        reveal_strlit("chrono-bootstrap/v1"); reveal_strlit("other"); reveal_strlit("extra");
+        assert("verify"@.len() != "other"@.len());
+        assert("profile"@.len() != "other"@.len());
+        assert("chrono-bootstrap/v1"@.len() != "other"@.len());
+        assert("."@.len() != "other"@.len());
+        assert("python"@.len() != "other"@.len());
+        assert("projects"@.len() != "other"@.len());
+    }
     let command = vec!["python", "bootstrap", ".", "profile"];
     let prerequisites = vec!["verify"];
     let accepted = policy::matches_preparation(&command, "python", "bootstrap", "profile",

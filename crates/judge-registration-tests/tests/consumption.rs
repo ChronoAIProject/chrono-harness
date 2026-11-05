@@ -180,6 +180,8 @@ fn preparation_requires_registered_invocation_and_early_verification() {
         "schema",
         "entrypoint",
         "document",
+        "tool",
+        "projects",
     ] {
         let old = host();
         let mut new = host();

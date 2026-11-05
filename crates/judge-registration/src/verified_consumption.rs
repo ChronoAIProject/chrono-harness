@@ -13,6 +13,7 @@ use identifiers::equal_text;
 
 verus! {
 
+#[verifier::inline]
 pub open spec fn preparation(
     command: Seq<&str>, program: Seq<char>, script: Seq<char>, config: Seq<char>,
     schema: Seq<char>, prerequisites: Seq<&str>, verifier: Seq<char>,
@@ -20,7 +21,7 @@ pub open spec fn preparation(
 ) -> bool {
     command.len() == 4
         && command[0]@ == program && command[1]@ == script
-        && command[2]@ == seq!['.'] && command[3]@ == config
+        && command[2]@ == "."@ && command[3]@ == config
         && schema == "chrono-bootstrap/v1"@
         && prerequisites.len() == 1 && prerequisites[0]@ == verifier
         && executor == verifier_program && projects == expected_projects
