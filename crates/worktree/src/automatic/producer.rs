@@ -1625,9 +1625,15 @@ impl TemporaryHost {
         let _custody;
         if let Some(context) = &context {
             let before = context.checkpoint(root)?;
+            if before["status"] == "retiring" {
+                return Err(
+                    "fixture original lifetime released; native capture refused before writing"
+                        .into(),
+                );
+            }
             if before["capture_logical_bytes"]
                 .as_u64()
-                .unwrap()
+                .ok_or("fixture native capture capacity observation unavailable")?
                 .saturating_add(input.map_or(0, |b| b.len() as u64))
                 > context.capacity.max_capture_bytes
             {
