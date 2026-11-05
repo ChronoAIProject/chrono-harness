@@ -265,7 +265,7 @@ fn independent_sources_regenerate_only_their_owned_projection_and_keep_customiza
     assert!(
         generate(root, collect_source, false)
             .unwrap_err()
-            .contains("source")
+            .contains("unowned workflow collision")
     );
     assert_eq!(fs::read(root.join(&unit.workflow_path)).unwrap(), saved);
 }
