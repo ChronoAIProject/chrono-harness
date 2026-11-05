@@ -339,25 +339,15 @@ its inventory completion does not activate full governance.
 
 The check exits 0 only after a valid passing response; judge failure exits 1;
 usage, unsupported configuration, transport, malformed protocol or report I/O
-failure exits 2. Information commands (`--help`, `--version`, `spec status`) do
+failure exits 2. Information commands (`--help`, `--version`) do
 not perform checks. A valid no-project-check result still validates snapshots and
 registered inventory and reports each unselected binding as `not-required`.
 
-After the local and CI invocations have each published a full report, an
-explicit parity evidence step may consume them:
-
-```sh
-.chrono-harness/bin/chrono-harness parity \
-  --host-root . \
-  --report .chrono-harness/state/report.json \
-  --compared-report .chrono-harness/state/ci-report.json
-```
-
-This step does not rerun a judge or alter the canonical command. It marks parity
-established only when both reports prove complete effective inputs and their
-verdict-bearing projections match; otherwise it preserves the unresolved reason
-and exits 2. Absolute executable paths are compared by observed digest/version,
-while path-sensitive behavior remains an explicitly registered effective input.
+Check reports retain `parity: unestablished`. Current effective-input producers
+report `completeness_proven: false`; matching two reports cannot establish input
+completeness or universal determinism. There is no separate parity comparison or
+report-rewriting command. The fixed `spec status` output is also retired: actual
+check producers own their status. Both retired commands return usage errors.
 
 Reports reside in the ignored `.chrono-harness/state/` directory. `check.json`
 contains the request, runner and judge identities, actual selected operations,

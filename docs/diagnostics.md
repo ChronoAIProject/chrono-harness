@@ -66,8 +66,7 @@ claim.
 
 The runner's invalid UTF-8 argument path uses the shared logger, emits no stdout
 and exits with status 2. All post-dispatch `CliOutput` consumers now use the
-runner-owned publication boundary, including unestablished parity's machine
-stdout plus stderr explanation. Both existing channels are attempted and flushed
+runner-owned publication boundary. Both existing channels are attempted and flushed
 independently. Successful publication preserves the bytes and operation exit
 status. A write or flush failure exits 2, retains the original typed IO value,
 stream, phase, acknowledged byte count and original operation outcome, and keeps
@@ -103,7 +102,7 @@ framing and an unavailable diagnostic sink. Existing help/domain outputs supply
 the empty-channel cases: healthy binary publication and direct empty-channel
 flush-failure observations, without adding a new output producer. An actual
 runner binary regression also covers help/version,
-domain failure, unestablished parity, stdout rejection and both unavailable
+domain failure, broken-pipe stdout rejection and both unavailable
 descriptors, detecting a main that still uses the former publication path.
 The read-only stdout regression runs a successful nonempty help command and
 requires exit 2 with exactly one framed stderr event carrying native EBADF.

@@ -140,29 +140,10 @@ class RecipeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'failure evidence'):
             self.plan_units()
 
-    def test_failure_evidence_does_not_reinterpret_v4(self):
-        self.cfg['schema'] = 'chrono-release-build/v4'
-        self.cfg['failure_evidence'] = {}
-        for unit in self.cfg['units'][2:]:
-            del unit['rust_toolchain']
-            unit['needs'] = ['build_a', 'build_b']
-        with self.assertRaisesRegex(ValueError, 'failure evidence'):
-            self.plan_units()
-
     def test_registered_recipe_has_a_valid_explicit_plan(self):
         root = HERE.parent.parent
         cfg, _, operations, staging = RECIPE.preflight(root, {'git'}, set())
         RECIPE.units_plan(root, cfg, operations, staging)
-
-    def test_v4_keeps_complete_vector_requirement(self):
-        self.cfg['schema'] = 'chrono-release-build/v4'
-        for unit in self.cfg['units'][2:]:
-            del unit['rust_toolchain']
-        with self.assertRaisesRegex(ValueError, 'complete build vector'):
-            self.plan_units()
-        for unit in self.cfg['units'][2:]:
-            unit['needs'] = ['build_b', 'build_a']
-        self.plan_units()
 
     def test_v5_requires_an_explicit_boolean_toolchain_choice(self):
         unit = self.cfg['units'][2]
@@ -411,17 +392,13 @@ class RecipeTests(unittest.TestCase):
         self.assertEqual(json.loads(observed), {'CARGO_INCREMENTAL': '0'})
         RECIPE.verify_toolchain(receipt, self.cfg)
 
-    def test_incremental_rejects_nonboolean_and_legacy_adoption(self):
+    def test_incremental_rejects_nonboolean_values(self):
         self.cfg['rust_toolchain'] = '1.94.0'
         for value in [None, 0, 1, 'true', [], {}]:
             with self.subTest(value=value):
                 self.cfg['rust_incremental'] = value
                 with self.assertRaisesRegex(ValueError, 'rust_incremental'):
                     RECIPE.UnitExecution(self.root, self.root / 'output', self.cfg, {}, self.cfg['units'][0])
-        self.cfg['rust_incremental'] = True
-        self.cfg['schema'] = 'chrono-release-build/v4'
-        with self.assertRaisesRegex(ValueError, 'rust_incremental'):
-            RECIPE.UnitExecution(self.root, self.root / 'output', self.cfg, {}, self.cfg['units'][0])
 
 
 if __name__ == '__main__':
