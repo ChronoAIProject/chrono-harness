@@ -13,8 +13,9 @@ capabilities have gone. Existing original outcomes, expiry and live consumers
 must survive the explicit owner cutover. Implementation, migration, native and
 total storage costs remain unmeasured until their actual checks.
 
-The current macOS 27 policy uses the validation checkout's Cargo home and its
-registered package/configuration inputs. Existing read-only toolchain and SDK
+The current macOS 27 policy uses the validation checkout's
+`.chrono-harness/cache/bootstrap-owner-tooling/cargo` and its registered
+package/configuration inputs, matching bootstrap's reconstructable cache lifecycle. Existing read-only toolchain and SDK
 bindings remain explicit; HOME and TMPDIR retain their inherited values. Expected
 input digests and tool versions are unchanged. Effective environment changes
 participate in the two-endpoint DELTA checks; earlier cache effects outside the
