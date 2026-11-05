@@ -28,8 +28,9 @@ pub open spec fn parent_component_at(path: Seq<u8>, i: int) -> bool {
 pub open spec fn relative_path(path: Seq<u8>) -> bool {
     path.len() > 0 && path[0] != 47
         && !(path[0] == 46 && (path.len() == 1 || path[1] == 47))
-        && (forall|i: int| 0 <= i < path.len() ==> path_byte(#[trigger] path[i]))
-        && (forall|i: int| 0 <= i < path.len() ==> !parent_component_at(path, i))
+        && (forall|i: int| 0 <= i < path.len() ==> (
+            path_byte(#[trigger] path[i]) && !parent_component_at(path, i)
+        ))
 }
 
 pub fn valid_relative_path(path: &[u8]) -> (valid: bool)
@@ -46,8 +47,9 @@ pub fn valid_relative_path(path: &[u8]) -> (valid: bool)
             0 <= i <= path.len(),
             path.len() > 0 && path[0] != 47,
             !(path[0] == 46 && (path.len() == 1 || path[1] == 47)),
-            forall|j: int| 0 <= j < i ==> path_byte(#[trigger] path[j]),
-            forall|j: int| 0 <= j < i ==> !parent_component_at(path@, j),
+            forall|j: int| 0 <= j < i ==> (
+                path_byte(#[trigger] path[j]) && !parent_component_at(path@, j)
+            ),
         decreases path.len() - i,
     {
         let byte = path[i];
