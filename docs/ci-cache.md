@@ -1,498 +1,206 @@
-# Registered CI caches
+# 登记式 CI 缓存
 
-`chrono-cache` is an independent Rust product with its own `cache-tests` project,
-CI unit and central release asset. It does not compile with the CI generator.
+`chrono-cache` 是独立 Rust 产品，拥有专属 `cache-tests` 项目、CI 单元和中央发行资产，不与 CI 生成器合建。
 
-`chrono-cache plan --host-root H --config .chrono-harness/cache.json
---consumer ID` prepares keys for one explicitly registered consumer. This is an
-internal provider entry; the daily check remains `chrono-harness check`.
+`chrono-cache plan --host-root H --config .chrono-harness/cache.json --consumer ID` 为一个明确登记的消费者准备键。它是 provider 内部入口；日常检查仍使用 `chrono-harness check`。
 
-## Bounded native acceptance
+<a id="bounded-native-acceptance"></a>
 
-The host has a real GitHub Actions consumer for the registered `cache` unit. The
-first run of [workflow 37627480033](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033)
-was a cold run: both `check.cache` and `check.cache-tests` reported misses,
-continued through the original bootstrap and canonical check, and completed their
-native saves. A later rerun observed the platform's cache visibility delay and
-saved again; this is retained as an observation rather than generalized cache
-behavior. On [attempt 3](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033/attempts/3)
-of the same immutable commit, both entries restored with `exact` status. The
-transport report recorded `current_executable_verification: matched`,
-`recovery.status: not-required`, no warnings, a successful original work result,
-and `verdict: not-a-judgment`. The canonical bootstrap and check still ran after
-the hits, and no save was attempted for the exact-hit attempt.
+## 真实 CI 已验证的范围
 
-This historical observation proves the registered consumer's bounded cold miss/save and exact-hit
-restore path, including current cache executable identity and recovery evidence.
-It does not prove changed-source reuse, incompatible-input partitioning, corrupt
-or unavailable archive handling, concurrent producers/reruns, complete backend
-lifecycle protection, or cache completeness for other consumers.
+本宿主的 `cache` 单元已有真实 GitHub Actions 消费者。[运行 37627480033](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033) 首次为冷运行：`check.cache`、`check.cache-tests` 都未命中，继续执行原 bootstrap 和标准检查，并完成原生保存。后一次重跑观察到平台缓存可见性延迟，再次保存；这只是当次观察，不能推广为通用缓存行为。
 
-The current `producer-manifest/v1` domain has additional bounded native evidence
-on macos-26, Rust/Cargo 1.95.0, under PR #207's `refs/pull/207/merge` scope:
+同一固定提交的[第 3 次尝试](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033/attempts/3) 中，两项都以 `exact` 恢复。传输报告记录 `current_executable_verification: matched`、`recovery.status: not-required`、无警告、原业务成功及 `verdict: not-a-judgment`。命中后仍运行标准 bootstrap／检查，精确命中这次没有尝试保存。
 
-| Scenario, both `check.cache` and `check.cache-tests` | Fixed native observation |
+这证明了登记消费者有限的冷未命中／保存、精确命中恢复路径，以及当前缓存执行物身份和恢复证据。尚不证明源码变化复用、不兼容输入分域、损坏或不可用归档处理、并发生产／重跑、完整后端生命周期保护或其他消费者缓存完整。
+
+当前 `producer-manifest/v1` 范围在 macos-26、Rust／Cargo 1.95.0、PR #207 的 `refs/pull/207/merge` 下还有以下有限证据，两项缓存均适用：
+
+| 场景 | 固定原生观察 |
 | --- | --- |
-| Cold production domain | [39688684172/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172/attempts/1), seed `98615238`: original Cargo work, seal/save and collection passed |
-| Compatible source change | [39690377913/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/1), production `72b1d08`: equal compatibility prefixes, distinct source suffixes, seed-key restores and matched producer inventories, retained incremental data and current registered rebuild/tests passed |
-| Healthy exact hit | [39690377913/2](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/2): both primary keys matched, inventories verified and original canonical work/collection passed; detector/startup retain their original attempt 1 identities |
-| Incompatible producer environment | [39695762671/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671/attempts/1), scenario `c515cd05`: both domains changed, neither restore matched a key, and original optimized Cargo builds/tests, seals and collection passed |
-| Unusable contents, recovery, persistent repair and repaired exact hit | Initial observation: Variables GET/list HTTP 403 prevented activation. Later C1 partially observed unusable payload recovery/rebuild and replacement caches; repaired original-domain healthy exact hit remains unmet (see retirement below). |
+| 生产范围冷启动 | [39688684172/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172/attempts/1)，种子 `98615238`：原 Cargo 操作、封存／保存、汇总通过 |
+| 兼容源码变更 | [39690377913/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/1)，生产 `72b1d08`：兼容前缀相同、源码后缀不同，恢复种子键并匹配生产者清单，保留增量数据，当前登记重建／测试通过 |
+| 健康精确命中 | [39690377913/2](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/2)：两个主键匹配，清单验证、原标准操作／汇总通过；detector／startup 保留原 attempt 1 身份 |
+| 不兼容生产环境 | [39695762671/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671/attempts/1)，场景 `c515cd05`：两个兼容范围改变，均未恢复匹配键；原优化 Cargo 构建／测试、封存、汇总通过 |
+| 不可用内容、恢复、持久修复及修复后精确命中 | 初次被 Variables GET／list HTTP 403 阻断。后续 C1 部分观察到坏内容恢复／重建和替换缓存，但原兼容范围的健康精确命中仍未达成，见末尾退役说明 |
 
-In the incompatible scenario the only changed selected observation was
-`check.environment`; all other selected runtime/probe/absence observations and
-producer argv matched production. Compatibility digests changed from
-`d24c19748a988bdb5732af429ed07932e5e4ac25774ef4d4613b5be87ce34c6f` to
-`b9653959eb2bc10a7a166822f4e59c4374d31105acf865a8b980c372c4af7987`
-for `check.cache`, and from
-`070f000f3499ba497fc6d1c4eac347720586017d61c114954293f69c21964228` to
-`17b22e6e2b9ea72b6eb2afdc98a63075b62fe778baba507511337f259b317cbc`
-for `check.cache-tests`. Each restore exposed only its new domain prefix;
-production fallback was impossible through that declared key set. Both actual
-Cargo producers received `CARGO_INCREMENTAL=1` and the two optimization values,
-and reported optimized dev/test output. The transport retained
-`miss-or-unavailable`, successful original work and matched current planner
-identity; backend entries `9310328424` / `9310330849` were observed, with creator
-unestablished. This is partition/rebuild evidence, not an exact-restore test of
-those scenario archives.
+不兼容场景只改变所选 `check.environment` 观察，其他运行／探测／缺失观察和生产者 argv 均与生产相同。`check.cache` 兼容摘要从 `d24c19748a988bdb5732af429ed07932e5e4ac25774ef4d4613b5be87ce34c6f` 变为 `b9653959eb2bc10a7a166822f4e59c4374d31105acf865a8b980c372c4af7987`；`check.cache-tests` 从 `070f000f3499ba497fc6d1c4eac347720586017d61c114954293f69c21964228` 变为 `17b22e6e2b9ea72b6eb2afdc98a63075b62fe778baba507511337f259b317cbc`。
 
-Original scenario artifacts are cache `12391316467`, detector `12391201225`,
-startup `12391076536`, runner `12390726564` and collection `12391598633`, all from
-attempt 1. Collection verified 26 unit originals and passed all 27 result rows.
-The cache and collection jobs measured 113 and 106 seconds respectively from
-native start/completion timestamps; these windows are not billing, speedup or
-complete lifecycle costs. Transfer/storage and total incremental costs remain
-unknown. An ordinary revert `c72c141` restores the exact production `72b1d08`
-tree and removes both temporary optimization settings while preserving the
-scenario commit. Unusable-content acceptance remains required; the access gap
-does not waive it. The optional remote activation continuation has since been retired as documented below;
-its partial historical observations do not establish a repaired exact hit. Other consumers,
-concurrency, linked ownership and complete compiler/SDK/input closure remain open.
+每次恢复只暴露新范围前缀，因此声明键集合无法回退到生产缓存。两个真实 Cargo 生产者都收到 `CARGO_INCREMENTAL=1` 和两个优化值，报告优化的 dev／test 输出。传输保留 `miss-or-unavailable`、原业务成功和当前 planner 身份匹配。观察到后端条目 `9310328424`／`9310330849`，创建者未确认。这是分域／重建证据，没有测试这些场景归档的精确恢复。
 
-The planner prepares identities; the GitHub provider projects pinned native
-restore/save actions around the original bootstrap and check/release command.
-The host explicitly adopts those actions in its check and release registrations.
-A successful plan or generated workflow does not establish native restoration,
-saving, compiler reuse or acceptance. SPEC §4.2 still requires backend evidence,
-cold/warm/changed-source/failure/concurrent acceptance and current executable
-verification. Each plan also records the exact `chrono-cache` executable digest
-and version that prepared it. The report step compares that identity with the
-currently running executable before publishing transport evidence; a mismatch
-fails closed. The transport currently requires a primary Git checkout; linked
-worktree restore/save needs a lease spanning the entire transport and remains
-unsupported.
+场景原产物为 cache `12391316467`、detector `12391201225`、startup `12391076536`、runner `12390726564`、collection `12391598633`，均来自 attempt 1。汇总核验 26 个单元原件，27 条结果全部通过。按原生开始／完成时间，cache、collection job 分别耗时 113、106 秒；该窗口不代表计费、加速或完整生命周期成本。传输／存储和总增量成本未知。
 
-This host explicitly sets `CARGO_INCREMENTAL=1` for its canonical check actions.
-The core, full and cache seed bootstrap registrations and the v5 release recipe set
-`rust_incremental: true`; their existing build invocations receive the matching
-environment value, including release builds and Rust verification units. The
-release recipe's explicit `rust_toolchain` selection keeps that setting scoped
-to Rust consumers. Non-Rust units retain their own environment.
+普通 revert `c72c141` 恢复与生产 `72b1d08` 完全相同的树，移除两项临时优化设置，保留场景提交。不可用内容仍须验收，访问失败不豁免。下文已退役可选远端激活层，其历史部分观察不证明修复后精确命中。其他消费者、并发、linked 所有权及完整编译器／SDK／输入范围仍待完成。
 
-Bootstrap and release receipts record the value passed to children. Release
-import and collection compare it with the registered choice and include it in
-the producer toolchain fingerprint. Omitted settings preserve the previous
-environment behavior; malformed settings fail before launching build tools.
-These observations do not establish cache transport, actual compiler reuse,
-complete build inputs, or native acceptance. Rust profile, flags, compiler and
-SDK identities still belong in the persistent cache compatibility contract.
+planner 准备身份；GitHub provider 在原 bootstrap 和检查／发布命令两侧生成固定版本的原生 restore／save action。本宿主在检查、发布登记中明确采用。计划或工作流生成成功，不代表真实恢复／保存、编译器复用或验收通过。SPEC §4.2 仍要求后端证据、冷／热／源码变化／失败／并发验收和当前执行物验证。
 
-The host adopts `chrono-cache/v2`; the registration belongs to its `.chrono-harness/`
-directory. It explicitly declares:
+每份计划记录准备它的 `chrono-cache` 精确摘要和版本。报告前与当前执行物比较，不符即拒绝发布传输证据。当前传输要求主 Git 检出；linked worktree 需要贯穿恢复／保存的租约，尚不支持。
 
-- A namespace and an `artifact_registry` path. Host cache artifacts reference
-  exact paths in that registry's `artifacts` array; each must have the same owner,
-  `tracked: false`, and must not be execution evidence. An explicitly external
-  dependency cache may instead declare an absolute path. Other artifacts remain
-  relative to the host. No directories or languages are discovered.
-- Named inputs: `file` has a literal path and expected `presence` (`present` or
-  `absent`); `environment` has a variable name and expected presence; `literal`
-  carries a JSON declaration. Present files are hashed from their actual bytes;
-  environment observations retain a digest and byte length without the value.
-  `json-value` has a literal `path` and an explicit RFC 6901 `pointer` into a
-  present JSON document. Its key binds the selected value, including explicit
-  null, independent of object ordering, formatting and other fields. Empty
-  pointer selects the whole document. Invalid JSON/pointers and missing values
-  fail; the planner does not infer a selection. The plan also retains the whole
-  file's digest and length in `source_file` as provenance outside the key.
-  The same path and input/output exclusion rules apply as for file inputs.
-  Literal declarations are not observations of actual toolchains or platforms.
-  A `command` explicitly registers a bounded runner command, inherited variable
-  names and `result: stdout` or `file-path`. Successful observations bind the
-  executable bytes, actual argv, hashed environment and stdout/stderr. The latter
-  mode also hashes the actual file named by one absolute UTF-8 output path.
-  Failed probes retain their original process report before returning nonzero.
-  Raw reports belong to the host's private execution evidence and may contain
-  inherited environment values; the key uses observations, not an evidence path.
-  A `registered-files` input names a FILEMAP v2 `registry`, `node` and explicit
-  `edges` kinds. It hashes the registered transitive source closure and selected
-  edges; it does not scan imports, directories, languages or undeclared files.
-  FILEMAP validation remains the existing judge's responsibility.
-- Named artifacts with `owner`, `path`, `kind` (`dependencies`, `compilation`, or
-  `executable-candidate`) and explicit `external` boolean.
-- Named caches with `owner`, registered `producer` operation ID, `consumers`,
-  artifact IDs, disjoint `compatibility_inputs` and `source_inputs`, and `restore`
-  (`exact` or `compatible`). Each list is nonempty and has unique members.
-- `consumer_operations` binds every consumer to its existing method registrations.
-  Each reference has a literal host `registry` path and a JSON `pointer` selecting
-  one operation ID or a nonempty array of unique IDs. Missing references, malformed
-  values and subscriptions whose producer is absent from that consumer's selected
-  operations fail before input probes and native restoration. The plan retains
-  source digests and selected IDs. It does not infer methods from language, paths
-  or runtime activity, and a valid declaration does not prove actual execution.
+本宿主标准检查 action 明确设 `CARGO_INCREMENTAL=1`。core、full、cache seed bootstrap 和 v5 发布配方设 `rust_incremental: true`，原构建调用收到对应环境值，包含 release 构建和 Rust 验证单元。发布配方通过明确 `rust_toolchain` 把设置限制在 Rust 消费者；非 Rust 单元保留自身环境。
 
-A consumer selects only caches naming it. Missing consumers fail instead of
-selecting all caches. Only the selected input closure is read; an unavailable
-input belonging solely to another consumer does not affect this plan. Registration
-shape and input/artifact references are checked without probing unrelated inputs.
-Only the selected consumer's operation sources are read; unselected consumers'
-sources are not probed. Source registries cannot themselves be cached. The host
-references its bootstrap recipes and FILEMAP plans for check jobs, and its release
-recipe's build unit IDs or verification operations for release jobs. Native
-execution and completed producer evidence remain separate obligations.
+bootstrap／发布回执记录传给子进程的值。发布导入／汇总与登记选择比较，并纳入生产者工具链指纹。省略设置保留原环境行为，格式错误在构建工具启动前失败。这些观察不证明缓存传输、实际编译器复用、构建输入完整或原生验收。Rust profile、标志、编译器和 SDK 身份仍须纳入持久缓存兼容合同。
 
-The compatibility digest binds the namespace, cache identity, owner, producer,
-restore policy, artifact declarations and their selected registry records, plus observations of
-the declared compatibility inputs. The source digest binds the declared source
-input observations. Keys are `chrono-v2-<compatibility digest>-<source digest>`.
-Consumer routing is checked separately; adding a consumer does not invalidate
-unchanged producer outputs. Any consumer-specific build inputs must still be
-declared in the selected cache's compatibility or source inputs.
-Reordering input IDs does not change the digest. Changes to unrelated cache
-declarations or unrelated files do not invalidate the selected cache.
+## 宿主须明确登记什么
 
-The earlier v1 draft remains readable under its original contract: consumer names
-participate in its `chrono-v1-` keys and it has no operation-reference enforcement.
-V1 cannot adopt `consumer_operations`. V2 uses a separate compatibility domain;
-it does not restore v1 archives through a broad fallback.
+本宿主采用 `chrono-cache/v2`，登记归自身 `.chrono-harness/`。内容包括：
 
-`compatible` supplies exactly one restore prefix ending after the compatibility
-digest. Source changes can therefore find older compilation data in the same
-compatibility domain. Compiler, target, profile, flags, SDK, build-script,
-configuration and environment identities belong in that domain whenever
-applicable; the host must register them explicitly. The planner does not infer
-these dependencies or prove that this list is complete. Lock files and manifests
-must likewise be assigned according to their actual compatibility role.
+- namespace 和 `artifact_registry` 路径。宿主缓存产物精确引用该登记的 `artifacts` 路径，所有者须相同、`tracked: false`，且不得为执行证据。明确的外部依赖缓存可用绝对路径，其他产物相对宿主。不发现目录或语言。
+- 具名输入。各种输入的具体规则见下表。
+- 具名产物，声明 `owner`、`path`、`kind`（`dependencies`、`compilation`、`executable-candidate`）和明确 `external` 布尔值。
+- 具名缓存，声明 `owner`、登记 `producer` 操作 ID、`consumers`、产物 ID、互不相交的 `compatibility_inputs`／`source_inputs`、`restore`（`exact` 或 `compatible`）。每个列表均非空且成员唯一。
+- `consumer_operations`，将每个消费者绑定到已有方法登记。每个引用用字面宿主 `registry` 路径和 JSON `pointer` 选择一个操作 ID，或非空且唯一的 ID 数组。引用缺失、值错误、订阅缓存的 producer 不在消费者所选操作内，都会在输入探测和原生恢复前失败。计划保留来源摘要和所选 ID，不从语言、路径或运行活动猜方法；声明有效也不证明实际执行。
 
-`executable-candidate` artifacts permit exact restoration only. Every plan entry
-still requires its registered build producer; this interface never authorizes
-direct execution of a restored historical judge. Current executable verification
-also verifies the cache planner/report executable identity. The selected
-judgments/tests remain obligations of the consuming pipeline; this identity
-check does not prove that a restored project executable was rebuilt.
+| 输入种类 | 读取与绑定规则 |
+| --- | --- |
+| `file` | 字面路径和预期 `presence`（`present`／`absent`）；存在文件从真实字节计算摘要 |
+| `environment` | 变量名及预期存在状态；只保留摘要和字节数，不保留值 |
+| `literal` | JSON 声明；不能当作实际工具链或平台观察 |
+| `json-value` | 字面 `path` 和明确 RFC 6901 `pointer`，选择存在 JSON 文档中的值，含明确 null。键不受对象顺序、格式和其他字段影响；空 pointer 选整份文档。无效 JSON／pointer 或值缺失会失败，不猜选择。另在键外 `source_file` 保留整文件摘要／长度作为来源，路径及输入／输出排斥规则与 file 相同 |
+| `command` | 明确登记有限 runner 命令、继承变量名和 `result: stdout` 或 `file-path`。成功时绑定执行物字节、实际 argv、环境摘要及 stdout／stderr；后者另对输出的唯一绝对 UTF-8 文件路径计算文件摘要。探测失败先保留原进程报告再非零返回。原报告归宿主私有执行证据，可能含继承环境值；键使用观察结果，不用证据路径 |
+| `registered-files` | 点名 FILEMAP v2 `registry`、`node` 和明确 `edges` 种类，对登记的传递源码范围及所选边算摘要；不扫描 import、目录、语言或未声明文件。FILEMAP 有效性仍由已有判官负责 |
 
-Literal paths reject traversal, globs and symlink components. Selected outputs
-cannot overlap one another, contain Git metadata or harness execution state, or
-contain one of their declared file inputs. This is a finite path/registration
-check, not a claim that arbitrary contents of a cache have been proved safe or
-that all rebuild inputs are known. Restoring and saving must additionally hold
-the adopted lifecycle protection until joined producers and saving are complete.
+消费者只选择明确列出自己的缓存，消费者缺失报错，不全选。只读取所选输入范围；仅属其他消费者的不可用输入不影响本计划。检查登记形状和输入／产物引用时不探测无关输入，也不读未选消费者的操作来源。来源登记自身不能缓存。
 
-The returned `chrono-cache-plan/v2` includes selected entries and input
-observations. Its status is `prepared-unrestored`, execution is `not-started`, and
-`input_completeness_proven` is false. These are plan facts, not passing judgments,
-cache hit states, successful builds or parity evidence. Cache backend results,
-failure chains and original reports must be supplied by their actual producers.
+检查 job 引用 bootstrap 配方和 FILEMAP 计划，发布 job 引用发布配方的构建单元 ID 或验证操作。真实执行和生产者完成证据仍须分别取得。
 
-## Restore recovery
+兼容摘要绑定 namespace、缓存身份、owner、producer、恢复政策、产物声明及其所选登记记录，以及兼容输入观察。源码摘要绑定源码输入观察。键为 `chrono-v2-<compatibility digest>-<source digest>`。消费者路由另核；增加消费者不使未变的生产输出失效，但消费者特有构建输入仍须归入所选缓存的兼容或源码输入。
 
-V2 can explicitly enable `recover_failed_restores: true` for isolated primary
-checkouts. Selected external artifacts remain unsupported because their separate
-ownership is not established. This choice is retained in the plan outside build
-cache keys. The planner publishes the adopted method to the native provider;
-older registrations and planners do not execute recovery.
+输入 ID 排序变化不改摘要；无关缓存声明或文件变化不使所选缓存失效。
 
-The final transport report checks each planned restore step against the original
-observations consumed by recovery. Later bootstrap, build, test and save steps
-may be added, but an existing restore observation cannot disappear or change.
-On a mismatch the report retains both snapshots in the upload directory and
-returns `E_CACHE_REPORT` with the cache ID and both original paths; it does not
-publish a normal transport report or query the backend. This checks consistency
-between retained observations, not the truth of the native action's claim.
+早期 v1 草案仍按原合同读取：消费者名参与 `chrono-v1-` 键，没有操作引用检查，不能采用 `consumer_operations`。v2 使用独立兼容范围，不通过宽泛回退恢复 v1 归档。
 
-The provider invokes `chrono-cache recover` after native restores and before the
-original bootstrap/build, using the existing plan, registration and original step
-observations. The owner revalidates the selected artifact/consumer contract with
-the original declared observations, without executing input probes again. Changed
-registration, host, selected paths or plan bindings fail before removal. Only
-caches whose native restore **outcome** is `failure` have their registered host
-artifacts removed. Success or skipped outcomes preserve outputs; missing,
-cancelled or unknown outcomes fail. Nested symlinks are removed without following
-their targets, while symlinked artifact roots or ancestors are refused.
+`compatible` 只提供一个到兼容摘要为止的恢复前缀，使源码变化可找到同范围旧编译数据。适用的编译器、target、profile、标志、SDK、构建脚本、配置、环境身份都须由宿主明确登记到兼容范围；planner 不推断这些依赖，也不证明列表完整。lockfile、manifest 也须按真实兼容作用归类。
 
-An intent precedes removal. Results retain the original restore observations,
-each attempted path and any failure; partial cleanup or publication failure is
-nonzero and stops the original build. The final transport report retains the
-recovery result and its original step bytes alongside the unchanged restore and
-business outcomes. Missing or damaged recovery evidence makes reporting fail.
-Repeating an already completed attempt returns its original result without
-discarding outputs that a later producer rebuilt. An unfinished intent is retained
-and refused; a previous failure is not automatically retried.
+`executable-candidate` 只允许精确恢复。每项计划仍要求登记构建生产者，绝不授权直接执行恢复的历史判官。当前执行物核验也检查缓存 planner／report 执行物身份，但不能证明恢复的项目执行物已重建。所选判断／测试仍由消费流程执行。
 
-The host adopts this method in its existing jobs and classifies its step time as
-`cache-recovery`. No job, build recipe or business-test retry is added. The failure-only policy covers
-reported native restore failures and partial extraction. The optional producer
-content verification below also covers reported valid hits for selected caches.
-Backend archive replacement, linked-worktree leases and full native
-failure-scenario acceptance remain obligations.
+字面路径拒绝穿越、glob、符号链接组件。所选输出不能互相重叠、包含 Git metadata／harness 执行状态或任何声明文件输入。这只是有限路径／登记检查，不证明任意缓存内容安全或重建输入齐全。恢复和保存还须持有已采用生命周期保护，直到生产者全部等待结束且保存完成。
 
-The host additionally adopts `recover_unconfirmed_restores: true`. This optional
-v2 policy requires `recover_failed_restores` and its primary-checkout boundary;
-omission preserves the earlier failure-only behavior. The same recovery entry
-also discards registered outputs after a successful restore step whose matched
-key is absent, empty or outside the declared exact/compatible domain. A step can
-succeed after the native cache implementation suppresses download or extraction
-errors. Missing keys remain `miss-or-unavailable`; cleanup does not diagnose which
-case occurred or manufacture a restore failure. Recovery and transport use the
-same key classification. Exact/compatible hits and skipped restores preserve
-outputs; missing/cancelled outcomes and malformed outputs still fail before any
-removal. The policy enters the retained recovery plan, not compilation cache keys.
+返回 `chrono-cache-plan/v2`，包含所选项及输入观察。状态为 `prepared-unrestored`，执行为 `not-started`，`input_completeness_proven` 为 false。这些只描述计划，不是判断通过、命中、构建成功或同判证据。后端结果、失败链和原报告须由真实生产者提供。
 
-Original outcomes, reasons and per-artifact results remain available to the
-transport reporter. Completed reentry preserves subsequent builds. An ordinary
-cold miss with all selected artifacts already absent adds no recovery warning;
-removed leftovers and explicit failures remain visible. The original build and
-selected tests still run, and their failures remain failures. This extension alone does
-not verify the contents of a restore that reports a valid matched key, preserve
-external ownership, or establish a native corruption experiment.
+## 恢复失败后如何清理
 
-## Opted-in producer content verification
+v2 可为隔离主检出明确启用 `recover_failed_restores: true`。外部产物所有权尚未建立，不支持。该选择保留在计划中，不进入构建缓存键。planner 将所选方法交给原生 provider；旧登记和旧 planner 不执行恢复。
 
-This host opts only `check.cache` and `check.cache-tests`, consumed by the existing
-`check.unit_cache` job, into `verify_contents: true`. This v2 option requires the
-existing primary-checkout failed/unconfirmed recovery policies; external artifacts
-remain unsupported. Other consumers retain their previous contract. The method
-`producer-manifest/v1` enters the compatibility identity, so earlier unsealed
-archives cannot enter this domain through a broad prefix.
+最终传输报告把每个计划恢复步骤与恢复程序消费的原观察核对。可增加后续 bootstrap、构建、测试、保存步骤，但已有恢复观察不能消失或改变。不符时在上传目录保留两份快照，返回带缓存 ID 和两个原路径的 `E_CACHE_REPORT`，不发布正常传输报告，也不查后端。这只核保留观察一致，不证明原生 action 声明真实。
 
-Those two compatibility domains additionally select their actual producer action
-from `projects.json` (`build.cache` or `test.cache-tests`, including tool and argv)
-and the Cargo tool record in the adopted direct Git policy. Existing inputs bind
-check environment, Cargo/compiler observations, manifests, locks, bootstrap and
-platform declarations. Unrelated project metadata remains outside these selected
-values. These declarations do not prove complete compiler/SDK input closure.
+provider 在原生恢复后、原 bootstrap／构建前，用已有计划、登记及原步骤观察调用 `chrono-cache recover`。所有者使用原声明观察重核所选产物／消费者合同，不重跑输入探测。登记、宿主、所选路径或计划绑定变化，都在删除前失败。
 
-The provider's existing save phase invokes `chrono-cache seal` after the original
-work has ended and before saving. It revalidates the plan/registration and current
-planner identity, requires the original producer step's successful **outcome**,
-and inventories the explicitly selected artifact directories. Each artifact gets
-`.chrono-cache-content-v1.json`, binding cache ID, producer operation, actual source
-key, artifact declaration and its contents. The inventory records regular-file
-SHA-256/length/execute bits, directories (including empty ones), and literal
-symlink targets without following them; special files and non-UTF-8 names fail.
-Only this method's own marker is excluded. The marker contains output identities,
-not test results, judge responses or a cached passing status. Original native
-steps, manifests and sealing observations remain in host execution evidence.
-Saving an opted-in entry requires its successful seal output in addition to the
-existing producer/save conditions. No build recipe, job or test retry is added.
+只有原生恢复 **outcome** 为 `failure` 的缓存，才删除其登记宿主产物。success／skipped 保留输出；缺失、cancelled、未知 outcome 报错。嵌套符号链接只删链接、不跟随目标；产物根或祖先是符号链接则拒绝。
 
-Before any original build consumes a claimed exact/compatible hit, `recover`
-compares its producer manifest and a fresh content inventory. Compatible restores
-bind the manifest to the **matched** source key, while the candidate retains its
-new source identity. Changed/missing contents, a missing/malformed manifest or an
-incompatible producer binding are recorded as unusable. Original manifest bytes,
-observed content identities/errors and native restore observations are retained
-before the existing recovery contract discards only selected registered outputs.
-The original build and check still run; replaying completed recovery preserves
-subsequently rebuilt outputs. Reporting retains the original key classification
-and exposes `unusable-content` separately from an accepted hit, copying referenced
-verification evidence into the existing upload directory.
+删除前先写 intent。结果保留原恢复观察、每个尝试路径及失败；清理不完整或发布失败均非零，阻止原构建。最终传输报告与原恢复／业务 outcome 一起保留恢复结果及步骤原字节。恢复证据缺失或损坏，报告失败。
 
-Hashing cost is additional: sealing and restore verification record wall-clock
-seconds per selected cache, with the measured window in each observation; the
-native step is classified `cache-verification`. Total transfer/storage/runner
-cost remains unknown; bounded native acceptance is recorded above. Local Rust regressions include an
-actual Cargo invocation read from the unchanged registered producer action on a
-small fixture: compatible source changes produce the candidate binary and retain
-incremental data, while changed producer settings partition the compatibility
-domain. This fixture is compiler evidence, not a native archive acceptance run.
-Content manifests are consistency evidence from trusted but fallible producers,
-not archive authentication or proof of complete build inputs. The native results
-above cover cold/save, exact, compatible changed-source and incompatible-input
-scenarios for these two entries. Unusable-content recovery remains unverified.
+重复已完成尝试返回原结果，不删除后来生产者重建的输出。未完成 intent 保留并拒绝，旧失败不自动重试。本宿主在已有 job 采用，步骤耗时归 `cache-recovery`，不增加 job、构建配方或业务测试重试。此失败政策覆盖报告的原生恢复失败和部分解压；下文可选内容核验还覆盖所选缓存声称有效的命中。后端归档替换、linked worktree 租约及完整原生失败场景仍待验收。
 
-## Actual provider consumers
+### 未确认恢复的处理
 
-The optional `persistent_cache` field on check/release providers adopts
-`chrono-github-cache/v1`. It contains the registered planner `program`, registry
-`config`, pinned `restore_action` and `save_action`, and an explicit `jobs` map.
-Each existing job names `need`, `output_use`, its literal `prepare` argv,
-`consumer` ID and exact `caches` set. The two purpose fields declare why that
-existing job needs the outputs; they are not measured usage evidence. Unknown
-jobs and missing, empty, extra or mismatched cache references fail before output
-writes. The host cache registry explicitly sets `require_primary_checkout: true`.
-The planner rejects a linked worktree before restoration; this filesystem guard
-is not a general proof of Git ownership or lifecycle exclusion.
+本宿主另采用 `recover_unconfirmed_restores: true`。此 v2 选项要求 `recover_failed_restores` 及其主检出边界；省略则保留只处理失败的旧行为。
 
-This host's detector builds the shared startup profiles and selects their four
-registered compilation caches. Its 26 check units and aggregate install the
-source-bound startup artifact. Unit cache registrations select only the actual
-Cargo producers remaining in each unit's FILEMAP plan; the aggregate and units
-without compilation operations have no compilation-cache subscriptions. Existing
-native Rust release builds and verification units select their own project
-output. Python release verification and the package collector have no registered
-compilation cache. Distinct grouped test producers have distinct cache entries.
-The cache seed runs `host.bootstrap-cache`, which builds the candidate planner
-using the existing bootstrap owner and `build.cache`, then installs that binary.
-Its bootstrap recipe explicitly selects `report_path` as
-`.chrono-harness/state/cache-bootstrap.json`; the later core bootstrap retains
-the default `.chrono-harness/state/bootstrap.json`. The host bootstrap accepts
-an optional literal report file under `.chrono-harness/state/`, rejects escaped
-or symlinked locations, and propagates report publication errors. Each recipe
-owns its selected report slot; repeated use of the same slot replaces its latest
-result. The existing artifact upload retains both independent records.
+同一恢复入口还处理以下情况：恢复步骤成功，但 matched key 缺失、为空或不在声明的 exact／compatible 范围内，此时也丢弃登记输出。原生缓存实现可能压下下载／解压错误后返回成功。缺 key 仍记 `miss-or-unavailable`，清理不猜是哪种原因，也不编造恢复失败。恢复与传输共用 key 分类。
 
-Cache transport reports retain the reporting process's executable path, observed
-file digest and version. Consumers can match that digest to the installed cache
-binary in the separate bootstrap record and its clean source identity. A digest
-observation does not prove complete compiler inputs or loaded-memory identity;
-missing or dirty-source bootstrap evidence cannot establish a clean source binding.
+exact／compatible 命中和 skipped 保留输出；缺失／cancelled outcome 或格式错误的输出，都在删除前失败。政策进入保留恢复计划，不进入编译缓存键。原 outcome、原因及逐产物结果继续提供给传输报告；完成后重入保全后续构建。
 
-The detector cache binds its own bootstrap recipe and has no business-check
-policy input. Check compilation caches explicitly select `/policy/environment`
-and `/policy/tools/cargo` from the host check configuration. Unit membership and
-report locations do not change those keys; environment or Cargo-tool changes do.
-Dedicated Rust host-adoption regressions exercise these distinctions, including
-an absent business-check policy for the detector and a changed detector build
-parameter. They cover these declared dependencies, not complete build-input
-closure or a general proof that all registrations are necessary.
+普通冷未命中且所选产物原本都不存在时，不增加恢复警告；删除残留和明确失败仍可见。原构建和所选测试继续运行，失败仍是失败。此扩展本身不核验有效 matched key 的实际内容，不保护外部所有权，也不证明原生损坏实验已完成。
 
-The provider obtains output keys from `chrono-cache plan --github-output`, retains
-the plan and original probe outputs, and restores before the original work.
-By default it saves all selected caches after successful work. Optional
-`save_caches` selects the caches this job may save; an empty list is restore-only.
-Unknown or duplicate entries are rejected. Across one provider configuration,
-each cache ID has at most one saving job. Generation and verification reject
-conflicting writers with `E_CACHE_SAVE_OWNERSHIP`, identifying the cache and both
-jobs. Other consumers explicitly select restore-only for that cache; a pipeline
-may intentionally have no writer. Separate cache identities keep independently
-registered production domains separate, including different release platforms.
-This host assigns the four shared startup caches to the existing detector and
-each remaining cache to its registered production unit. Consumers still restore,
-rebuild and check without extra jobs or prerequisite waits. If the chosen writer
-is skipped or does not complete its producer, that run supplies no new archive.
-An explicit `save_after_bootstrap`
-subset may instead use the separate bootstrap step's success after the original
-work has ended, preserving reusable startup compilation after later test failure.
-Unknown, duplicate or non-saving subset entries fail projection; cancellation prevents saves.
-This subset is a host declaration, not proof that each later build succeeded.
-Restored compilation candidates still require the original build entry.
-The planner and provider sort the consumer's exact cache set lexically and use
-`cache_0_key`, `cache_0_paths`, `cache_0_restore` (then `cache_1_*`, etc.) as
-job-local output names. These compact references do not rename cache identities
-or keys. Planner and provider must implement the same output contract; registry
-validation rejects mismatched selected sets before projection.
-It does not skip the canonical check or replace build/test results with cache
-status. A final `chrono-cache report` step records the native action outputs,
-requested and matched keys, original work/bootstrap outcomes and immutable source
-reports. `evidence_directory` may place originals within the existing release
-upload directory; ordinary checks retain them under the uploaded host state.
-The detector's optional `evidence_directory` retains originals through the same
-pinned upload action in its existing job, including after failure. The directory
-must be a literal host state path, with hidden-file upload explicitly enabled;
-missing files fail that upload instead of claiming preservation. This host chooses
-`.chrono-harness/state/` to include bootstrap, plans and probe originals. Without
-this adoption, detector files remain temporary runner state.
-The transport report runs in the existing job. Without a registered backend it makes no API request. Exact/compatible restoration is reported
-only from a successful action with a matching key. Empty outputs are
-`miss-or-unavailable`. Native save success is `unconfirmed` with
-`W_CACHE_SAVE_UNCONFIRMED`: the pinned action can catch backend exceptions and
-exit successfully. This report cannot claim a saved archive, compiler reuse or
-verified executable identity from action outcomes. A cache excluded from this
-job's save selection reports `not-requested` when no save was observed; an actual
-save outside that selection remains visible with `W_CACHE_UNREGISTERED_SAVE`.
-Backend and action logs remain necessary to attribute a particular save or diagnose archive contents. Failed report production or evidence retention fails its workflow step and job;
-the original business result is retained independently. The report step has no
-`continue-on-error` exemption. A backend query failure that is successfully
-recorded remains a nonfatal availability warning.
+## 可选的生产者内容核验
 
-Cache backend failures remain nonfatal to the following build. Native acceptance of backend observations, explicit corrupt-cache recovery and preserving arbitrary project compilation
-after a later test failure remain unfinished. Saving does not include `.chrono-harness/state`, release
-handoffs, selected test results, installed `bin`, Git metadata or lifecycle locks.
+本宿主仅为已有 `check.unit_cache` job 消费的 `check.cache`、`check.cache-tests` 选择 `verify_contents: true`。此 v2 选项要求已有主检出失败／未确认恢复政策，不支持外部产物。其他消费者合同不变。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。
 
-`chrono-cache/v2` optionally registers `backend` with `kind: github`, a concrete
-`need` and `output_use`, a bounded `command`, explicit `inherit` and
-`credential_environment` lists, and `repository_environment` / `ref_environment`
-names. Exactly one complete command argument is `{endpoint}`. The host uses
-`gh api --paginate --slurp {endpoint}` with a 30-second, 4-MiB bound. The command
-receives `repos/{repository}/actions/caches?ref={encoded-ref}&per_page=100` and
-returns an array of GitHub response pages. The policy is retained in the plan
-but is outside build cache identity; planning never queries the backend.
+两项兼容范围还从 `projects.json` 选择真实生产 action（`build.cache` 或 `test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
 
-The existing report step queries once per batch only when a native save succeeded
-and is still unconfirmed. Otherwise it records `not-required` without launching a
-query. The generated report step supplies `GH_TOKEN`; cache workflows permit
-`actions: read`. The subprocess inherits only declared variables. Retained process
-evidence includes the executable digest, command, raw stdout/stderr, original
-exit/failure and environment digest; declared credential values are omitted from
-the retained environment. Commands must not print credentials into raw streams.
+provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-cache seal`。它重核计划／登记和当前 planner 身份，要求原生产步骤 **outcome** 成功，并枚举明确选择的产物目录。
 
-An exact key and ref with one observed backend entry changes save status to
-`backend-entry-observed`, with availability `confirmed: true` and
-`creator: unestablished`. This confirms an entry observed at query time, not which
-action created it, archive integrity, compiler reuse or current executable identity.
-Multiple archive identities are `ambiguous`; missing matches are `not-observed`,
-not proof of absence, because pagination is not an atomic inventory. Query failure,
-timeout, truncated/malformed responses and conflicting identities retain the original
-failure, emit `W_CACHE_BACKEND_UNAVAILABLE` and leave saves unconfirmed. Failed or
-skipped native saves and the original business verdict are never replaced by backend
-presence. Query cost remains in the registered `cache-report` step category.
+每个产物得到 `.chrono-cache-content-v1.json`，绑定缓存 ID、生产操作、实际源码键、产物声明和内容。清单记录普通文件 SHA-256／长度／执行位、目录（含空目录）、字面符号链接目标，不跟随链接；特殊文件和非 UTF-8 名称失败。只排除该方法自己的标记。标记包含输出身份，不含测试结果、judge 响应或缓存的通过状态。原生步骤、manifest 和封存观察保存在宿主执行证据中。
 
-The host registry binds actual compiler/Cargo files and version, OS/architecture,
-registered linker/SDK observations, declared flag absence, manifests/locks and
-build configuration. Source changes use FILEMAP's explicit compile closure.
-Check, release build, release verification and platform declarations use separate
-compatibility domains. This finite registration does not establish complete
-compiler backend, SDK library, build-script or ambient configuration closure.
-Current native adoption and missing evidence remain visible in the coverage map.
+保存已采用项时，除原生产／保存条件外，还须封存成功。不增加构建配方、job 或测试重试。
 
-With explicit shared startup adoption, the detector builds the host core tools
-once and publishes them to registered consumers (see [startup transfer](ci-units.md)).
-Only actual remaining build/test producers retain target cache subscriptions;
-aggregate and script-only consumers do not restore startup compilation targets.
-The detector is the sole saver for its separate `detect.*` startup caches; actual
-unit producers save their `check.*` caches. Detector compatibility excludes check
-policy inputs that its bootstrap does not consume. Imported startup verification is not a compilation
-producer and does not grant `save_after_bootstrap`. Original producer reports and
-explicit imported provenance remain available in each consumer's evidence; startup
-binaries stay outside evidence uploads. Transfer costs are measured separately,
-and a source-bound artifact is not proof of complete build input provenance.
+原构建消费声称 exact／compatible 命中的内容前，`recover` 比较生产者 manifest 与新内容清单。兼容恢复的 manifest 绑定**实际匹配**源码键，候选保留新源码身份。内容变化／缺失、manifest 缺失／错误、生产者绑定不兼容都记为不可用。
 
-发行验证的 `chrono-cache` 资产在 Cargo test destination 被消费；bootstrap 安装的运输 executable 保持归 bootstrap。发行配方不再将资产 staging 到同一个 bin 路径。Python release integration 回归覆盖真实 CLI 的 plan／recover／staging／report 与 inode、摘要保留；这个本地证据不证明原生缓存后端或外围 workflow 成功。详见[发布所有者](release-ci.md)。
+先保留 manifest 原字节、观察内容身份／错误和原生恢复观察，再按已有恢复合同丢弃所选登记输出。原构建／检查继续执行，重复已完成恢复保全之后重建的输出。报告保留原键分类，另以 `unusable-content` 区分未接纳的命中，并把引用的验证证据复制到已有上传目录。
 
-## Retired remote acceptance controls
+摘要计算是新增成本。封存和恢复核验按所选缓存记录实际墙钟秒数，每份观察说明测量窗口，原生步骤归 `cache-verification`。总传输／存储／runner 成本未知，有限原生证据见前文。
 
-**Product and host policy change:** the optional native manifest-removal fixture,
-its CLI/configuration and provider registration, repository Variables activation,
-and live PR-body reader have been removed. The provider no longer adds
-`pull-requests: read` for activation or reads PR metadata. No replacement
-activation transport, variable management, remote cache deletion or additional
-permission is required. Retired configuration fields fail normal strict decoding;
-they are not silently accepted as successful activation.
+本地 Rust 回归在小 fixture 中，从未改登记 action 读取真实 Cargo 调用：兼容源码变化产生候选二进制并保留增量数据，生产者设置变化则划分新兼容范围。它是编译器证据，不是原生归档验收。内容 manifest 是可信但可能出错的生产者提供的一致性证据，不是归档认证或构建输入完整证明。上文两项缓存已有冷／保存、精确、兼容源码变化及不兼容输入证据；不可用内容恢复的完整验收仍未完成，部分观察见末节。
 
-The existing `check.unit_cache` consumers still plan and restore their two
-registered compilation archives, validate `producer-manifest/v1` contents, discard
-unusable host outputs through ordinary recovery, execute the original candidate
-build/tests, seal successful producer outputs and save through the existing
-native cache actions. Required producer/seal outcomes still gate saving. Ordinary
-backend observation retains its existing necessary scope and original failures.
-Other registered build/release cache consumers retain their existing behavior.
+## provider 的真实消费者
 
-Historical native evidence remains attached to its exact source/run/attempt.
-Variables GET/list HTTP 403 was a real historical failure. Later bounded C1
-observations recorded unusable payload save/restore/rejection, rebuild and
-replacement caches for both entries, but a healthy exact hit in the original
-compatibility domain was not achieved: the selected rustup identity changed;
-the latest collection returned HTTP 502. Those observations are partial, and
-this deletion neither reruns nor completes them. Original records, streams,
-commits and retained evidence remain under their existing custodian. The former
-fixture and its finite caller sequence remain reproducible from retained source
-`f52442addfa3079f644cc7be59809a4ca6e756d5`; they are not current instructions.
+检查／发布 provider 可通过 `persistent_cache` 采用 `chrono-github-cache/v1`，包含登记 planner `program`、登记 `config`、固定 `restore_action`／`save_action` 和明确 `jobs` 映射。每个已有 job 点名 `need`、`output_use`、字面 `prepare` argv、`consumer` ID 及精确 `caches` 集合。前两个用途字段解释该 job 为何需要输出，不是实测使用证据。
 
-Costs: ordinary execution needs no activation process/API request. Deleting the
-optional layer removes its reader, fixture, response/intent evidence IO and
-exclusive tests; native time, transfer, storage and total lifecycle savings are
-unmeasured. Existing same-language content/recovery, invalid-input and provider
-regressions and the registered DELTA-selected canonical check remain required.
-Native acceptance, concurrency, other-consumer adoption, full input closure,
-parity and actual delivery remain separate uncompleted obligations.
+未知 job、缺失／空／多余／不匹配的缓存引用都在写输出前失败。本宿主缓存登记明确 `require_primary_checkout: true`；planner 在恢复前拒绝 linked worktree。这个文件系统保护不证明一般 Git 所有权或生命周期排除。
+
+### 本仓的缓存归属
+
+本仓 detector 构建共享启动 profile，选择四项登记编译缓存。26 个检查单元和汇总安装绑定源码的 startup 产物。单元缓存登记只选择各 FILEMAP 计划仍实际存在的 Cargo 生产者；汇总和没有编译操作的单元不订阅编译缓存。
+
+已有原生 Rust 发布构建／验证单元选择自己的项目输出，Python 发布验证和包收集器无登记编译缓存。分组测试中不同生产者使用不同条目。
+
+缓存种子运行 `host.bootstrap-cache`，通过已有 bootstrap 所有者和 `build.cache` 构建候选 planner，再安装二进制。其配方明确 `report_path: .chrono-harness/state/cache-bootstrap.json`；之后 core bootstrap 保留默认 `.chrono-harness/state/bootstrap.json`。
+
+宿主 bootstrap 接受可选的 `.chrono-harness/state/` 下字面报告文件，拒绝越界或符号链接位置，并传递报告发布错误。各配方拥有自己的报告位置；重复用同一位置会替换最新结果。已有产物上传保留两份独立记录。
+
+传输报告保留报告进程的执行路径、实测文件摘要及版本。消费者可与独立 bootstrap 记录中的安装二进制摘要及干净源码身份匹配。文件摘要不证明编译器输入完整或内存加载身份；bootstrap 证据缺失或源码不干净，不能证明绑定到干净源码。
+
+detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
+
+专属 Rust 宿主采用回归覆盖这些区别，包括 detector 没有业务检查政策，以及 detector 构建参数变化。它们只验证这些声明依赖，不证明构建输入完整或所有登记都有必要。
+
+### 恢复、保存与写入者
+
+provider 从 `chrono-cache plan --github-output` 取得输出键，保留计划和探测原输出，在原操作前恢复。默认业务成功后保存全部所选缓存。可选 `save_caches` 限定本 job 可保存项，空列表表示只恢复；未知或重复项拒绝。
+
+同一 provider 配置内，每个缓存 ID 至多一个保存 job。生成／验证用 `E_CACHE_SAVE_OWNERSHIP` 拒绝冲突，指出缓存和两个 job。其他消费者明确只恢复；流程也可刻意没有写入者。独立登记生产范围使用不同缓存身份，包含不同发布平台。
+
+本宿主把四项共享启动缓存交给已有 detector 保存，其他缓存交给登记生产单元。消费者仍恢复、重建、检查，不增加 job 或前置等待。写入者跳过或未完成生产时，该运行不提供新归档。
+
+明确的 `save_after_bootstrap` 子集可在原操作结束后，改用独立 bootstrap 步骤成功作为保存条件，使后续测试失败时仍保留可复用启动编译。未知、重复或不在可保存集合的子集项会让生成失败；取消时不保存。该子集是宿主声明，不证明后续每次构建成功。恢复的编译候选仍须经过原构建入口。
+
+planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key`、`cache_0_paths`、`cache_0_restore`，再用 `cache_1_*` 等作为 job 内输出名。这些短引用不改缓存身份或键。两者须实现同一输出合同，登记验证在生成前拒绝集合不符。
+
+### 传输报告与原件
+
+缓存不跳过标准检查，不用缓存状态替代构建／测试结果。最终 `chrono-cache report` 记录原生 action 输出、请求／匹配键、原业务／bootstrap outcome 及不可变来源报告。
+
+`evidence_directory` 可把原件放入已有发布上传目录，普通检查则放入上传的宿主状态。detector 可选择同一字段，通过已有 job 的固定上传 action 保留原件，包括失败后。目录须是字面宿主状态路径，并明确上传隐藏文件；文件缺失使上传失败，不能声称已保留。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划、探测原件。未采用时，detector 文件只是 runner 临时状态。
+
+报告在已有 job 运行。未登记 backend 就不发 API 请求。只有 action 成功且 key 匹配，才报告 exact／compatible；空输出记 `miss-or-unavailable`。原生保存成功仍为 `unconfirmed`，带 `W_CACHE_SAVE_UNCONFIRMED`，因为固定 action 可能捕获后端异常后成功退出。不能由 action outcome 推断归档已保存、编译器复用或执行物身份验证。
+
+本 job 未选择保存且未观察到保存的缓存记 `not-requested`；实际发生未登记保存仍可见，带 `W_CACHE_UNREGISTERED_SAVE`。具体保存归因和归档内容诊断仍需后端／action 日志。
+
+报告生产或证据保留失败使对应步骤和 job 失败，原业务结果独立保留；报告步骤没有 `continue-on-error` 豁免。后端查询失败若已成功记录，则只是非致命可用性警告。缓存后端失败不阻止后续构建。
+
+后端观察原生验收、明确坏缓存恢复，以及后续测试失败后保留任意项目编译，仍未完成。保存内容不包括 `.chrono-harness/state`、发布交接、所选测试结果、已安装 `bin`、Git metadata 或生命周期锁。
+
+### 可选 GitHub 后端查询
+
+`chrono-cache/v2` 可登记 `backend`：`kind: github`、具体 `need`／`output_use`、有限 `command`、明确 `inherit`／`credential_environment` 列表，以及 `repository_environment`／`ref_environment` 名称。恰好一个完整命令参数为 `{endpoint}`。
+
+本宿主使用 `gh api --paginate --slurp {endpoint}`，限 30 秒／4 MiB。命令收到 `repos/{repository}/actions/caches?ref={encoded-ref}&per_page=100`，返回 GitHub 响应页数组。政策保留在计划中，不参与构建缓存身份；计划阶段从不查询后端。
+
+已有报告步骤只在原生保存成功但仍未确认时，每批查询一次；否则记 `not-required`，不启动查询。生成步骤提供 `GH_TOKEN`，缓存工作流允许 `actions: read`。子进程只继承声明变量。保留证据包含执行物摘要、命令、原 stdout／stderr、原退出／失败及环境摘要，但从保留环境中移除声明凭据值。命令不得向原始流打印凭据。
+
+精确 key／ref 匹配唯一后端条目时，保存状态改为 `backend-entry-observed`，可用性 `confirmed: true`、`creator: unestablished`。这只确认查询时观察到条目，不确认哪个 action 创建、归档完整、编译器复用或当前执行物身份。
+
+多归档身份记 `ambiguous`；无匹配记 `not-observed`，分页不是原子清单，因此不证明不存在。查询失败、超时、截断／错误响应或身份冲突保留原失败，发 `W_CACHE_BACKEND_UNAVAILABLE`，保存仍未确认。后端存在不能替换失败／跳过的原生保存或原业务结论。查询成本仍归登记 `cache-report` 步骤。
+
+### 输入和共享启动边界
+
+宿主登记绑定真实编译器／Cargo 文件及版本、OS／架构、登记链接器／SDK 观察、声明标志缺失、manifest／lock、构建配置。源码变化使用 FILEMAP 明确 compile 依赖范围。检查、发布构建、发布验证和平台声明各用独立兼容范围。这份有限登记不证明编译器后端、SDK 库、构建脚本或环境配置输入完整，当前原生采用及缺失证据仍在覆盖表列明。
+
+明确采用共享启动后，detector 一次构建核心工具，发布给登记消费者，见[共享启动传递](ci-units.md)。只有实际剩余的构建／测试生产者订阅 target 缓存；汇总和纯脚本消费者不恢复启动编译 target。
+
+detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `check.*`。detector 兼容输入不含自身 bootstrap 不消费的检查政策。导入 startup 验证不是编译生产者，不能取得 `save_after_bootstrap` 资格。各消费者证据保留原生产报告和明确导入来源；startup 二进制不进入证据上传。传输成本单独测量，绑定源码的产物不证明构建输入来源完整。
+
+发布验证在 Cargo test destination 消费 `chrono-cache` 资产；bootstrap 安装的传输执行物仍归 bootstrap。发布配方不再把资产放到同一 bin 路径。Python 发布集成回归覆盖真实 CLI 的 plan／recover／staging／report，以及 inode、摘要保留；本地证据不证明原生缓存后端或外层工作流成功。详见[发布说明](release-ci.md)。
+
+<a id="retired-remote-acceptance-controls"></a>
+
+## 已退役的远端验收控制
+
+**产品与宿主政策曾同步删除：**可选原生 manifest 删除 fixture、对应 CLI／配置和 provider 登记、仓库 Variables 激活及实时 PR 正文读取器。provider 不再为激活增加 `pull-requests: read` 或读 PR metadata。不需要替代激活传输、变量管理、远端缓存删除或额外权限。退役字段按普通严格解码失败，不会静默当作激活成功。
+
+已有 `check.unit_cache` 仍计划、恢复两项登记编译归档，核 `producer-manifest/v1` 内容，通过普通恢复丢弃不可用宿主输出，执行原候选构建／测试，封存成功生产输出并经原生 action 保存。保存仍受必需生产者／封存 outcome 限制。普通后端观察保留原有必要范围及原失败，其他构建／发布缓存行为不变。
+
+历史证据仍绑定精确 source／run／attempt。Variables GET／list HTTP 403 是真实历史失败。后续有限 C1 观察记录两项坏内容保存／恢复／拒绝、重建和替换缓存，但原兼容范围健康精确命中未达成：所选 rustup 身份改变，最新 collection 返回 HTTP 502。
+
+这些只是部分观察；删除控制层不会重跑或完成验收。原记录、输出、提交和证据继续由原保管者保留。旧 fixture 及有限调用步骤可从保留源码 `f52442addfa3079f644cc7be59809a4ca6e756d5` 复现，但不是现役指令。
+
+普通执行不再需要激活进程／API 请求。删除该层移除读取器、fixture、响应／intent 证据 IO 及专用测试；原生耗时、传输、存储和总生命周期收益未测。现有同语言内容／恢复、无效输入、provider 回归，以及按登记变更范围选择的标准检查仍为必需。原生验收、并发、其他消费者采用、完整输入、同判和实际交付仍分别未完成。
