@@ -536,7 +536,11 @@ fn scoped_generation_preserves_other_source_outputs() {
     let previous_source = ".chrono-harness/providers/previous.json";
     let scoped_source = ".chrono-harness/providers/scoped.json";
     let previous = config();
-    write(root, previous_source, &serde_json::to_value(&previous).unwrap());
+    write(
+        root,
+        previous_source,
+        &serde_json::to_value(&previous).unwrap(),
+    );
     generate(root, previous_source, false).unwrap();
     let original = fs::read(root.join(&previous.workflow_path)).unwrap();
     write(
