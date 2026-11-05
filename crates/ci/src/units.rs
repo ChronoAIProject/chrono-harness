@@ -535,27 +535,15 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
     Ok(outputs)
 }
 
-type ProjectionChanges = (Vec<(String, String)>, Vec<(String, String)>);
 fn projection_changes(
     root: &Path,
     path: &str,
     c: &Config,
     verify: bool,
-) -> Result<ProjectionChanges, String> {
+) -> Result<Vec<(String, String)>, String> {
     super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let outputs = render(c, path)?;
     let mut writes = vec![];
-    let legacy_outputs = if c.job_gating.is_some() {
-        let mut legacy = c.clone();
-        legacy.job_gating = None;
-        // Parent transport settings do not belong to legacy workflow ownership.
-        legacy.gather.resource_observation = None;
-        legacy.native_adoption = None;
-        legacy.persistent_cache = None;
-        render(&legacy, path)?
-    } else {
-        BTreeMap::new()
-    };
     for (path, bytes) in &outputs {
         let marker = if c
             .native_adoption
@@ -568,56 +556,23 @@ fn projection_changes(
         } else {
             MARKER
         };
-        let target = no_symlink_parents(root, path)?;
-        let legacy_match = legacy_outputs
-            .get(path)
-            .is_some_and(|old| fs::read(&target).ok().as_deref() == Some(old.as_bytes()));
-        if legacy_match || !output_preflight(root, path, bytes, marker)? {
+        if !output_preflight(root, path, bytes, marker)? {
             if verify {
                 return Err(format!("generated unit workflow drift: {path}"));
             }
             writes.push((path.clone(), bytes.clone()));
         }
     }
-    let mut retire = vec![];
-    if c.job_gating.is_some() {
-        for (path, bytes) in legacy_outputs {
-            if outputs.contains_key(&path) {
-                continue;
-            }
-            let target = no_symlink_parents(root, &path)?;
-            if target.exists() {
-                if fs::read(&target).map_err(|e| e.to_string())? != bytes.as_bytes() {
-                    return Err(format!(
-                        "obsolete workflow differs; use explicit migrate and preserve host edits: {path}"
-                    ));
-                }
-                if verify {
-                    return Err(format!("obsolete owned unit workflow: {path}"));
-                }
-                retire.push((path, bytes));
-            }
-        }
-    }
-    Ok((writes, retire))
+    Ok(writes)
 }
 pub fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
     profile(root, c)?;
-    let (writes, retire) = projection_changes(root, path, c, verify)?;
+    let writes = projection_changes(root, path, c, verify)?;
     // Preflight every output before modifying any of them; I/O failure is reported, never atomicity claimed.
     for (path, bytes) in &writes {
         write_file(root, path, bytes.as_bytes())?;
     }
-    for (path, bytes) in &retire {
-        let target = no_symlink_parents(root, path)?;
-        if fs::read(&target).map_err(|e| e.to_string())? != bytes.as_bytes() {
-            return Err(format!(
-                "obsolete workflow changed before retirement: {path}"
-            ));
-        }
-        fs::remove_file(target).map_err(|e| e.to_string())?;
-    }
-    Ok(!writes.is_empty() || !retire.is_empty())
+    Ok(!writes.is_empty())
 }
 
 pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {

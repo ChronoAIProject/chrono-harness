@@ -7,75 +7,67 @@ fn gating() -> Value {
     json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["host-tools-only"],"sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}})
 }
 
+fn migrate_provider(root: &Path, next: &Value) {
+    let previous = ".chrono-harness/state/previous-units.json";
+    fs::create_dir_all(root.join(previous).parent().unwrap()).unwrap();
+    fs::copy(root.join(PROVIDER), root.join(previous)).unwrap();
+    json_file(root, PROVIDER, next);
+    chrono_ci::migrate::migrate(root, previous, PROVIDER, PROVIDER).unwrap();
+}
+
 #[test]
-fn parent_generation_verifies_and_retires_only_exact_legacy_projections() {
+fn parent_generation_uses_only_current_projection_ownership() {
+    let h = ShortHost::new();
+    let mut next: Value =
+        serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
+    next["job_gating"] = gating();
+    migrate_provider(&h.root, &next);
+    let parent = fs::read(h.root.join(".github/workflows/collection.yml")).unwrap();
+    for path in [".github/workflows/alpha.yml", ".github/workflows/beta.yml"] {
+        fs::write(h.root.join(path), b"host-owned\n").unwrap();
+    }
+
+    assert!(!generate(&h.root, PROVIDER, true).unwrap());
+    assert!(!generate(&h.root, PROVIDER, false).unwrap());
+    assert_eq!(
+        fs::read(h.root.join(".github/workflows/collection.yml")).unwrap(),
+        parent
+    );
+    for path in [".github/workflows/alpha.yml", ".github/workflows/beta.yml"] {
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), b"host-owned\n");
+    }
+}
+
+#[test]
+fn parent_generation_requires_explicit_topology_migration() {
     let h = ShortHost::new();
     let paths = [
         ".github/workflows/collection.yml",
         ".github/workflows/alpha.yml",
         ".github/workflows/beta.yml",
     ];
-    let legacy = paths.map(|path| fs::read(h.root.join(path)).unwrap());
-    let mut c: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
-    c["job_gating"] = gating();
-    c["gather"]["timeout_seconds"] = json!(60);
-    let runtime: chrono_ci::units::Config = serde_json::from_value(c.clone()).unwrap();
-    let expected = chrono_ci::units::render(&runtime, PROVIDER).unwrap();
-    json_file(&h.root, PROVIDER, &c);
+    let previous = paths.map(|path| fs::read(h.root.join(path)).unwrap());
+    let mut next: Value =
+        serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
+    next["job_gating"] = gating();
+    json_file(&h.root, PROVIDER, &next);
     let source = fs::read(h.root.join(PROVIDER)).unwrap();
-    fs::write(h.root.join(".github/workflows/host.yml"), b"host-owned\n").unwrap();
 
-    // Verification diagnoses adoption drift without changing any old projection.
-    assert!(
-        generate(&h.root, PROVIDER, true)
-            .unwrap_err()
-            .contains("drift")
-    );
-    for (path, bytes) in paths.iter().zip(&legacy) {
-        assert_eq!(fs::read(h.root.join(path)).unwrap(), *bytes);
+    for verify in [true, false] {
+        assert!(generate(&h.root, PROVIDER, verify).is_err());
+        for (path, bytes) in paths.iter().zip(&previous) {
+            assert_eq!(fs::read(h.root.join(path)).unwrap(), *bytes);
+        }
+        assert_eq!(fs::read(h.root.join(PROVIDER)).unwrap(), source);
     }
-    assert!(generate(&h.root, PROVIDER, false).unwrap());
-    let parent = fs::read(h.root.join(paths[0])).unwrap();
-    assert_eq!(parent, expected[paths[0]].as_bytes());
-    assert!(!h.root.join(paths[1]).exists());
-    assert!(!h.root.join(paths[2]).exists());
-    assert!(!generate(&h.root, PROVIDER, true).unwrap());
-
-    // Already adopted parents still diagnose and protect obsolete host edits.
-    fs::write(h.root.join(paths[1]), &legacy[1]).unwrap();
-    assert!(
-        generate(&h.root, PROVIDER, true)
-            .unwrap_err()
-            .contains("obsolete owned")
-    );
-    assert_eq!(fs::read(h.root.join(paths[1])).unwrap(), legacy[1]);
-    let edited = [legacy[1].as_slice(), b"# host edit\n"].concat();
-    fs::write(h.root.join(paths[1]), &edited).unwrap();
-    assert!(
-        generate(&h.root, PROVIDER, false)
-            .unwrap_err()
-            .contains("obsolete workflow differs")
-    );
-    assert_eq!(fs::read(h.root.join(paths[1])).unwrap(), edited);
-    assert_eq!(fs::read(h.root.join(paths[0])).unwrap(), parent);
-    fs::write(h.root.join(paths[1]), &legacy[1]).unwrap();
-    assert!(generate(&h.root, PROVIDER, false).unwrap());
-    assert!(!h.root.join(paths[1]).exists());
-    assert!(!generate(&h.root, PROVIDER, true).unwrap());
-    assert_eq!(fs::read(h.root.join(PROVIDER)).unwrap(), source);
-    assert_eq!(
-        fs::read(h.root.join(".github/workflows/host.yml")).unwrap(),
-        b"host-owned\n"
-    );
 }
 
 #[test]
-fn parent_registration_preserves_unit_settings_and_retires_only_owned_outputs() {
+fn explicit_parent_migration_preserves_unit_settings() {
     let h = ShortHost::new();
     let mut c: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
     c["job_gating"] = gating();
-    json_file(&h.root, PROVIDER, &c);
-    assert!(generate(&h.root, PROVIDER, false).unwrap());
+    migrate_provider(&h.root, &c);
     assert!(!generate(&h.root, PROVIDER, true).unwrap());
     let text = fs::read_to_string(h.root.join(".github/workflows/collection.yml")).unwrap();
     assert!(text.contains("  detect:"));
@@ -169,8 +161,7 @@ impl GatedHost {
             serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
         provider["job_gating"] = gating();
         provider["gather"]["program"] = json!(".chrono-harness/bin/parent-gh");
-        json_file(&h.root, PROVIDER, &provider);
-        generate(&h.root, PROVIDER, false).unwrap();
+        migrate_provider(&h.root, &provider);
         let mut fm: Value =
             serde_json::from_slice(&fs::read(h.root.join(".chrono-harness/FILEMAP.json")).unwrap())
                 .unwrap();
@@ -1240,17 +1231,13 @@ fn fresh_short_host_init_selects_parent_topology_and_retains_host_settings() {
 
 #[test]
 fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_edits() {
-    for conflict in ["none", "obsolete", "target"] {
+    for conflict in ["none", "target"] {
         let h = ShortHost::new();
-        let original = fs::read(h.root.join(".github/workflows/collection.yml")).unwrap();
         let mut c: Value =
             serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
         c["job_gating"] = gating();
-        json_file(&h.root, PROVIDER, &c);
+        migrate_provider(&h.root, &c);
         fs::write(h.root.join(".github/workflows/host.yml"), "host-owned\n").unwrap();
-        if conflict == "obsolete" {
-            fs::write(h.root.join(".github/workflows/beta.yml"), "host edit\n").unwrap();
-        }
         if conflict == "target" {
             fs::write(
                 h.root.join(".github/workflows/collection.yml"),
@@ -1264,15 +1251,13 @@ fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_e
         let result = init(&h.root, &incoming);
         if conflict != "none" {
             assert!(result.is_err());
-            assert!(h.root.join(".github/workflows/alpha.yml").exists());
-            if conflict == "obsolete" {
-                assert_eq!(
-                    fs::read(h.root.join(".github/workflows/collection.yml")).unwrap(),
-                    original
-                );
-            }
+            assert!(!h.root.join(".github/workflows/alpha.yml").exists());
+            assert_eq!(
+                fs::read_to_string(h.root.join(".github/workflows/collection.yml")).unwrap(),
+                "host edit\n"
+            );
         } else {
-            assert!(result.unwrap());
+            assert!(!result.unwrap());
             assert!(!init(&h.root, &incoming).unwrap());
             assert!(!generate(&h.root, PROVIDER, true).unwrap());
             let mut custom = c.clone();

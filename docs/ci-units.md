@@ -486,17 +486,24 @@ are known. Historical registries needing a decoder fail with a named scheduling
 boundary instead of executing historical code or guessing. Actual full native
 context/snapshot provisioning and activation remain a separate caller handoff.
 
-On adoption, generate/init preflight all outputs and retire only exact known
-legacy unit projections. A modified obsolete file or unowned parent collision
-fails before writes; use explicit `migrate` with the exact prior provider snapshot
-when settings/addresses also change. Regeneration preserves explicit runners,
-bootstrap argv, timeouts and all host source data. In this opt-in form,
-`units.*.workflow_path` retains the declared legacy addresses for migration; all
-current preparation and source checks bind the one `collection.workflow_path`.
-The existing gather wait/poll settings keep their legacy-workflow meaning and are
-unused by this nonpolling parent transport. Unlisted or edited files are never
-retired by scanning. Verification detects both
-parent drift and still-present known obsolete projections without repairing them.
+Ordinary `init`, `generate` and `verify` own only the outputs rendered by the
+current provider. They preflight those outputs, preserve host source data and
+reject unowned collisions. Verification reports current projection drift without
+repairing it. They do not derive another topology, inspect its old workflow files
+or retire them.
+
+Topology changes use the existing explicit `migrate` operation with the exact
+previous provider snapshot and the next provider source. It verifies previous
+projections and new collisions before writes, preserves customized settings and
+retires only outputs owned by that previous snapshot. Update the host's FILEMAP
+and explicit consumers with the transition. With `job_gating`, preparation and
+source checks bind `collection.workflow_path`; the separately declared unit
+addresses do not grant ordinary generation ownership of inactive workflows.
+The gather wait/poll settings retain their separate-workflow meaning and are
+unused by this nonpolling parent transport.
+
+This removes duplicate transition logic and the extra old-topology render and
+file reads on ordinary generation. Runtime and CI savings remain unmeasured.
 
 The [copyable conditional host](../examples/ci-host-job-gating/README.md) uses
 installed tools and the fixed short commands. The old ci-host bundle and released
