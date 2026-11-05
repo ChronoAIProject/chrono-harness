@@ -196,7 +196,8 @@
         "test.worktree.core",
         "test.worktree.adoption",
         "test.worktree.capacity",
-        "validate.delta"
+        "validate.delta",
+        "test.worktree.age"
       ],
       "capacity": {
         "max_generated_bytes": 2147483648,
@@ -342,5 +343,10 @@
         "max_metadata_bytes_per_round": 67108864
       }
     }
-  ]
+  ],
+  "age_policy": {
+    "reuse_after_seconds": 7200,
+    "delete_after_seconds": 14400,
+    "preserved_branch_prefix": "cleanup-preserved/automatic/"
+  }
 }

@@ -840,6 +840,7 @@ v2 policy retains these v1 fields:
 | `remove_branch` | Explicit choice; main host keeps branches. |
 | `allow_evidence_disposal` | Whether the terminal owner may additionally select evidence disposal. Main host disables it. |
 | `artifacts` | Exact `config.artifacts` directory paths, each with `dispose`, `retain`, or `evidence-retain`. No kind-name or layout interpretation. Omitted paths remain retained. |
+| `age_policy` | Optional v2 creation-age eligibility: positive `reuse_after_seconds`, strictly greater `delete_after_seconds`, and `preserved_branch_prefix`. This host selects 7200 / 14400 seconds and `cleanup-preserved/automatic/`. Equality is ineligible. |
 
 Policy/configuration bytes must match committed inputs at the invoking host and
 coordinator. Selected artifacts must be untracked declarations at both disposal
@@ -861,6 +862,94 @@ validate policy/identity and maintain only the addressed target. Cross-target
 drain belongs to explicit `maintain`; unrelated worktrees and fixture producers
 are not creation prerequisites. Target identity and target-state publication
 failures still block that target.
+
+### Creation-age reuse and expiry
+
+**Product/policy cochange:** this candidate adds creation-age decisions and source
+preservation to the existing addressed worktree owner, and this host selects the
+user's >2h reuse / >4h deletion policy. Compatible committed binary/policy adoption
+is required. The implementation is local candidate work until the surviving
+coordinator is cut over and ordinary host operations are observed.
+
+Age comes from the physical checkout directory's filesystem creation time, never
+mtime, branch time, enrollment/import time or a refreshed activity timestamp.
+Missing creation time or a future timestamp protects the checkout. Main remains
+protected. The existing admission and enrollment leases exclude managed writers;
+unknown ownership, foreign Git locks and changed attachments still refuse effects.
+Live toolchain carriers and external dependencies require their existing consumer
+protection and custody; age is not a substitute for joining/excluding those users.
+
+Ordinary `use`, check and bootstrap can reuse their exact >2h target. Before new
+use, an excluded target preserves HEAD, the original staged index and current
+source (including ignored, nonartifact source) in actual direct local branches.
+The source snapshot is committed on its work branch; source bytes are not reset.
+The original index is separately recoverable as a commit. Exact registered
+generated directories are excluded through the existing Git inventory owner;
+tracked source inside such a directory refuses age cleanup. Missing author
+identity, unresolved index conflicts, input drift or preservation failures retain
+the work and the original command error. Retained source branches are ordinary
+source history, outside temporary-output retirement.
+
+After a managed command and its participating descendants release their leases,
+the same addressed owner can reclaim caches and delete an eligible >4h target.
+The invoking checkout remains protected. A start/reconstruct of an exact expired
+destination may retire that enrollment before normal fresh creation. Explicit
+`maintain` visits declared enrollments; ordinary use never requests `all=true`.
+Busy siblings defer independently. A durable age-retirement intent, original
+attempts and original missing/partial results survive interruption; reentry
+validates the retained branch and resumes through the existing mechanical
+Cleanup owner. No task completion or original process success is inferred.
+
+Deletion still requires every remaining artifact to be disposable under current
+policy and retention guards. This host retains bin/state evidence, so a needed or
+unresolved original defers whole-checkout deletion while disposable caches can
+still be reclaimed. The report records that deferral; >4h is eligibility, not a
+claim that protected content was removed. Exact custodian release and compatible
+policy migration are prerequisites to deleting those protected historical trees.
+There is no idle scanner, extra service, global catalogue, admission quota or
+filesystem-wide ceiling. External builder checkpoint/overshoot limits below stay
+unchanged. Validation cost and installed-host observations belong to the coverage
+table and original command records.
+
+### Adopt an already completed external disposal
+
+An active enrollment whose checkout was removed externally remains a real failed
+observation. Ordinary maintenance cannot manufacture its missing source or a
+successful lifecycle attempt. After retaining the actual operation registration
+and original result bytes under the coordinator's registered state directory, use
+`chrono-worktree migrate --path /exact/absent/worktree --adopt-absence STATE_PLAN`.
+This is the existing migration entry with an exact owner-local adoption plan:
+
+```json
+{
+  "schema": "chrono-worktree-absent-adoption/v1",
+  "binding": "the exact existing enrollment birth_binding object",
+  "original_result": {"path": ".chrono-harness/state/expiry/results.json", "sha256": "original digest"},
+  "result_index": 0,
+  "original_registration": {"path": ".chrono-harness/state/expiry/operation.json", "sha256": "original digest"}
+}
+```
+
+`binding` is an object containing `path`, `branch`, `attachment`, birth
+`policy_sha256`, `observed_head`, `policy_inputs`, `original_receipt`, and
+`ownership: {path, id}` from that enrollment. The result is the original array;
+the selected row must contain exact `path`, `head`, `retained_ref` and
+`status: "verified-absent"`. The original registration's `targets` must bind that
+path, head and `owner_git_common`. The owner verifies current physical path and
+original Git metadata absence, Git inventory exclusion, direct retained branch
+and exact source OID under the original enrollment's exclusive kernel lease.
+Recreated paths, active/unknown consumers, missing/changed originals and missing
+source branches refuse. No target policy read or synthetic successful cleanup is
+required for an absent checkout. Birth/policy histories and all old attempts stay
+unchanged; a separate immutable adoption receipt records `already-absent` and
+`task_completion: "not-claimed"`. Only then does the owner retire its enrollment.
+
+For the three manually removed native-recovery/pr-inputs/pr-lifecycle records,
+the caller must retain the supplied expiry-results and manual-expiry-operation
+originals, select their exact rows and existing birth bindings, deploy compatible
+coordinator inputs/binary, then invoke this migration separately for each path.
+The original failed main maintenance and native cleanup receipts remain evidence;
+the migration does not turn those original exit-2 outcomes into successes.
 
 The fixed lifecycle commands default to `--host-root .` and
 `--config .chrono-harness/worktree.json`:

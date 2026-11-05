@@ -592,15 +592,15 @@ the exact custodian entry can release them without inventing completion. Explici
 layout/context/cursor migration retains old bytes and pending addresses. The host
 policy selects finite values, retirement scopes and actual operation edges;
 [the worktree owner](worktree.md#prospective-fixture-custody-and-inventory-observations)
-documents the enforcement and overshoot boundaries. These changes are uncommitted
-candidate behavior, not installed-host evidence. Local registered
+documents the enforcement and overshoot boundaries. These changes were preserved in I2 commit `da23244a` and merged with fixed dev
+`99f3c8fb` by `b9a3d337`; they remain candidate behavior without installed-host evidence. Local registered
 `test.worktree.capacity` passed 32 tests (207 filtered) in 187.07 test seconds /
 194.21 total seconds; `worktree.inventory` accounted for 239 tests across the
 233 core / 6 adoption groups without executing those groups. The registered
 candidate CLI build, four affected formatting checks and both changed consumer
 test-project compile checks passed. Original results and the source/executable
 binding belong to the I2 implementation handoff; these local observations do not
-certify the uncommitted FILEMAP DELTA.
+certify the current post-merge FILEMAP DELTA.
 Exact historical migrations/cleanup, canonical committed checks, compatible
 coordinator/binary adoption and actual ordinary host verification remain required.
 Protected/unknown consumers remain protected and capacity unmet is observable;
@@ -626,6 +626,20 @@ obligations. Product and host registrations change together; the applicable
 `W_MIXED_JUDGE_PRODUCT` warning does not waive validation. Build/test/storage costs
 for the composition remain measured only by its source validation receipts;
 unmeasured physical reclamation remains unknown.
+
+The I3 candidate also selects >7200-second reuse / >14400-second deletion in
+cleanup.json. The existing lifecycle owner reads actual filesystem creation time,
+preserves source and the original index in retained branch commits, reclaims
+eligible addressed caches, and resumes durable age disposal through Cleanup.
+Main, live/unknown consumers, current dependency inputs and retained evidence
+stay protected. It adds exact external-disposal adoption for the three actually
+observed absent enrollments through `migrate --adopt-absence`, retaining original
+manual receipts and failed/missing lifecycle outcomes. This product/policy
+cochange requires the registered age behavior checks, current capacity and
+producer-lifetime regression, current candidate DELTA verification and compatible
+host adoption. Local age tests use real time and configurable short thresholds;
+they do not establish installed >2h/>4h acceptance. Current I3 command outcomes
+must be supplied before promoting these implementation statements to evidence.
 
 ## Registered automatic lifecycle cleanup
 

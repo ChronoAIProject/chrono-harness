@@ -3239,7 +3239,9 @@
             "test",
             "--locked",
             "--manifest-path",
-            "crates/worktree-tests/Cargo.toml"
+            "crates/worktree-tests/Cargo.toml",
+            "--",
+            "--test-threads=2"
           ]
         },
         "execute_core": {
@@ -3262,7 +3264,8 @@
             "--skip",
             "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
             "--skip",
-            "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect"
+            "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect",
+            "--test-threads=2"
           ]
         },
         "execute_adoption": {
@@ -3280,7 +3283,8 @@
             "interrupted_cleanup::adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease",
             "interrupted_cleanup::registered_python_consumers_forward_leases_after_both_wrappers_die",
             "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
-            "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect"
+            "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect",
+            "--test-threads=2"
           ]
         },
         "format": {
@@ -3372,6 +3376,21 @@
             "--",
             "temporary::capacity_",
             "fixture_body::",
+            "--test-threads=1"
+          ]
+        },
+        "age": {
+          "operation": "test.worktree.age",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--test",
+            "creation",
+            "age::",
+            "--",
             "--test-threads=1"
           ]
         }

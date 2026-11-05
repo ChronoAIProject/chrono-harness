@@ -1,4 +1,6 @@
 //! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
+mod absent;
+mod age;
 mod cache_adoption;
 mod migration;
 mod owner_deployment;
@@ -223,6 +225,8 @@ struct Policy {
     allow_evidence_disposal: bool,
     #[serde(default)]
     main_cache_only: bool,
+    #[serde(default)]
+    age_policy: Option<age::AgePolicy>,
     #[serde(default)]
     retained_producers: Vec<producer::ProducerPolicy>,
     artifacts: Vec<Artifact>,
@@ -515,6 +519,9 @@ fn load_policy(
     relative_path(p.state_directory.trim_end_matches('/'))?;
     if p.main_cache_only && p.schema != "chrono-worktree-automatic-cleanup/v2" {
         return Err("main cache ownership requires kernel cleanup v2".into());
+    }
+    if let Some(age) = &p.age_policy {
+        age.validate(p.schema == "chrono-worktree-automatic-cleanup/v2")?;
     }
     if !p.retained_producers.is_empty() && p.schema != "chrono-worktree-automatic-cleanup/v2" {
         return Err("retained producer references require kernel cleanup v2".into());
@@ -1494,6 +1501,12 @@ impl Manager {
                 "/original_report/result/input",
                 "/unreferenced_original_receipt/input",
                 "/original_result/input",
+                "/age_retirement_input",
+                "/prior_age_result/input",
+                "/age_reuse/input",
+                "/original_result_input",
+                "/original_registration_input",
+                "/prior_terminal_input",
             ] {
                 if let Some(input) = report.pointer(pointer) {
                     inputs.push(serde_json::from_value(input.clone()).map_err(|e| {
@@ -2066,7 +2079,21 @@ impl Manager {
             let e = self.ledger.entries[i].clone();
             let cache =
                 e.status == "active" && e.ownership.as_ref().is_some_and(|o| o.cache_pending);
-            if e.status != "terminal" && !cache {
+            let age = if matches!(e.status.as_str(), "active" | "retained" | "terminal")
+                && e.enrollment["age_retirement"].is_null()
+            {
+                match self.age_eligible(&e, false) {
+                    Ok(eligible) => eligible,
+                    Err(error) => {
+                        report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,
+                            "status":"preserved","age_eligibility":"unknown","preserved_reason":error}));
+                        false
+                    }
+                }
+            } else {
+                false
+            };
+            if e.status != "terminal" && !cache && !age {
                 continue;
             }
             if self._gate.lease.is_some() && e.ownership.is_none() {
@@ -2135,7 +2162,9 @@ impl Manager {
                     if let Some(lease) = &_lease {
                         self.reconcile_birth(r, i, lease)?;
                     }
-                    if cache {
+                    if age {
+                        self.execute_age(r, i, token, attempt, true)
+                    } else if cache {
                         self.execute_cache(r, i, token, attempt)
                     } else {
                         self.execute_entry(r, i, token, attempt)
@@ -2161,7 +2190,7 @@ impl Manager {
                         .ok_or("cleanup report path")?
                         .to_owned();
                     let b = crate::recovery::state_bytes(&root, &path)?;
-                    if cache {
+                    {
                         if let Some(a) = self.ledger.entries[i]
                             .cache_attempts
                             .last_mut()
@@ -2188,7 +2217,7 @@ impl Manager {
                             });
                         }
                     }
-                    if !cache
+                    if self.ledger.entries[i].terminal.is_some()
                         && result["status"] == "cleaned"
                         && matches!(
                             result["worktree_removal"].as_str(),
@@ -2196,7 +2225,7 @@ impl Manager {
                         )
                     {
                         self.ledger.entries[i].status = "disposed".into();
-                    } else if !cache
+                    } else if self.ledger.entries[i].terminal.is_some()
                         && result["status"] == "cleaned"
                         && result["worktree_removal"] == "preserved"
                     {
@@ -2330,6 +2359,9 @@ impl Manager {
         token: &str,
         report: &mut Value,
     ) -> Result<(), String> {
+        if !self.ledger.entries[i].enrollment["age_retirement"].is_null() {
+            return self.execute_age_retirement(r, i, token, report);
+        }
         if self.ledger.entries[i].cache_only
             || self.ledger.entries[i].path == self.inputs.policy.coordinator_root
         {
@@ -2559,8 +2591,7 @@ pub(crate) fn create(
         return create(r, report);
     };
     manager.protect_reports(r, &o.root)?;
-    manager.preflight_birth(r, &destination)?;
-    manager.drain_for_admission(r, &[o.root.clone(), destination.clone()], report)?;
+    manager.drain_for_admission(r, &[o.root.clone()], report)?;
     manager.stable(r)?;
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
@@ -2630,6 +2661,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--adopt-cache",
             "--adopt-fixtures",
             "--partition-producer",
+            "--adopt-absence",
             "--stage-result",
             "--stage-sha256",
             "--report-consumer",
@@ -2658,6 +2690,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (values.contains_key("--adopt-cache") && operation != "migrate")
         || (values.contains_key("--adopt-fixtures") && operation != "migrate")
         || (values.contains_key("--partition-producer") && operation != "migrate")
+        || (values.contains_key("--adopt-absence")
+            && (operation != "migrate"
+                || values.contains_key("--adopt-cache")
+                || values.contains_key("--adopt-fixtures")
+                || values.contains_key("--partition-producer")))
         || (values.contains_key("--stage-result") && operation != "deploy-owner")
         || (values.contains_key("--stage-sha256") && operation != "deploy-owner")
         || (operation == "deploy-owner"
@@ -2691,7 +2728,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     let target = if operation == "maintain" {
         None
     } else {
-        Some(absolute(&target, false)?)
+        Some(absolute(&target, values.contains_key("--adopt-absence"))?)
     };
     let success = match operation.as_str() {
         "finish" => "finished",
@@ -2752,6 +2789,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 ),
                 "migrate" => {
                     let target = target.as_ref().unwrap();
+                    if let Some(plan) = values.get("--adopt-absence") {
+                        return manager.adopt_absence(r, target, plan, report);
+                    }
                     manager.migrate(r, target, report)?;
                     if let Some(producer) = values.get("--partition-producer") {
                         manager.partition_producer(r, target, producer, report)?;
@@ -2787,6 +2827,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     };
                     manager.recover_operation_producers(r, consuming_operation, report)?;
                     manager.drain_for_admission(r, &[invoking.clone(), target.clone()], report)?;
+                    manager.prepare_age_use(r, target, report)?;
                     if manager.current_entry(target).is_none()
                         && target == &manager.inputs.policy.coordinator_root
                         && manager.inputs.policy.main_cache_only
@@ -2949,13 +2990,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     }
                     manager.ledger.entries[i].uses.retain(|s| s != token);
                     manager.save()?;
+                    let age_cleanup = manager.inputs.policy.age_policy.is_some();
+                    if age_cleanup {
+                        drop(use_guard.take());
+                    }
                     let mut post_use_cleanup = value!({});
                     manager.recover_operation_producers(r, use_operation, &mut post_use_cleanup)?;
-                    let cleanup = manager.drain_for_admission(
-                        r,
-                        &[invoking.clone(), target.clone()],
-                        &mut post_use_cleanup,
-                    );
+                    let cleanup_exclusions = if age_cleanup {
+                        vec![invoking.clone()]
+                    } else {
+                        vec![invoking.clone(), target.clone()]
+                    };
+                    let cleanup =
+                        manager.drain_for_admission(r, &cleanup_exclusions, &mut post_use_cleanup);
                     report["post_use_cleanup"] = post_use_cleanup;
                     if process.failure.is_some() || process.exit_code != 0 {
                         report["managed_command_failed"] = value!(true);

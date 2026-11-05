@@ -87,6 +87,7 @@ fn fixture_git() -> PathBuf {
     assert!(Path::new(program).is_absolute());
     chrono_harness::resolve_program(&source(), program, None).unwrap()
 }
+mod age;
 mod automatic;
 mod bounded_cleanup;
 mod check_inputs;
