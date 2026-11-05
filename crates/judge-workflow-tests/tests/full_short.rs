@@ -1324,8 +1324,10 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
             .push(f);
     }
     write_values(&lane, &h.values);
-    let mut provider: Value =
-        chrono_harness::json(&fs::read(lane.join(PROVIDER)).unwrap()).unwrap();
+    let previous_provider = ".chrono-harness/state/previous-native-provider.json";
+    let previous_bytes = fs::read(lane.join(PROVIDER)).unwrap();
+    fs::write(lane.join(previous_provider), &previous_bytes).unwrap();
+    let mut provider: Value = chrono_harness::json(&previous_bytes).unwrap();
     let seed_directory = ".chrono-harness/state/shared-seed/";
     provider["job_gating"] = json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"fixture-native","timeout_minutes":20,"bootstrap":["/bin/true"],"sparse_checkout":[".chrono-harness/",".github/workflows/collection.yml"]}});
     h.values.get_mut(FM).unwrap()["files"]
@@ -1351,7 +1353,17 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         &lane,
         Command::new(lane.join(".chrono-harness/bin/chrono-ci"))
             .current_dir(&lane)
-            .args(["generate", "--host-root", ".", "--config", PROVIDER]),
+            .args([
+                "migrate",
+                "--host-root",
+                ".",
+                "--from",
+                previous_provider,
+                "--previous-config",
+                PROVIDER,
+                "--config",
+                PROVIDER,
+            ]),
     );
     assert!(
         generated.status.success(),
