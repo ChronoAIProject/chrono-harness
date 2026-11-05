@@ -1607,7 +1607,12 @@ fn actual_original_publisher_and_reader_reclaim_rotated_reports_but_preserve_sha
     drop(new_lock);
     drop(activity);
     let result = maintenance(h.path());
-    assert_eq!(fixture_remaining(h.path(), &result), 2);
+    assert_eq!(
+        fixture_remaining(h.path(), &result),
+        2,
+        "round: {result}; declarations: {}",
+        ledger(h.path())
+    );
     assert!(!h.path().join(old.path).exists());
     assert_eq!(
         read_original(h.path(), &new, None).unwrap(),
@@ -1802,7 +1807,7 @@ fn completed_child_original_transfers_to_parent_before_its_success_root_is_relea
     };
     assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
     let between = maintenance(h.path());
-    assert_eq!(between["remaining_outputs"], 1, "{between}");
+    assert_eq!(fixture_remaining(h.path(), &between), 1, "{between}");
     assert!(!h.path().join(unrelated).exists());
     assert_eq!(
         fs::read(h.path().join(&child_path).join("stdout")).unwrap(),
