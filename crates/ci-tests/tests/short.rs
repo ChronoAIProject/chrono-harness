@@ -272,7 +272,10 @@ fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budg
                     |o, _| {
                         if o.path == path {
                             if corrupt {
-                                return Ok(b"altered compiler original".to_vec());
+                                let mut raw =
+                                    prepared::read_original(&h.root, o, transport.as_ref())?;
+                                raw[0] ^= 1;
+                                return Ok(raw);
                             }
                             return Err("missing compiler original fixture".into());
                         }
