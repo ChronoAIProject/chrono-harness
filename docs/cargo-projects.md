@@ -455,7 +455,12 @@ documentation, manual and completion contents are outside this build inventory.
 This removes 52,036 file and 1,455 directory rows from repeated guard validation,
 without changing the guard's before/after checks or claiming complete inputs.
 SDK and Xcode inventories retain their existing scope. Runtime, CI and storage
-savings require comparable consumer measurements. The separate isolated provisioning proposal still
+savings require comparable consumer measurements. The same local consumer binds
+only its 50 current external packages' archive/index pairs and the crates.io
+registry configuration: 101 cache inputs. Twenty-six unrelated or superseded
+cache declarations and their runner edges are removed; current package source
+inputs and archive checksums remain intact. A fresh selected home no longer needs
+another project's caches to admit this runner check. The separate isolated provisioning proposal still
 requires its own selected-home and participant reconciliation. Its
 generic behavior cases stay in the dedicated Rust owner tests. Cargo guarding is
 optional: the 95 current methods corresponding to PR163 retain 94 direct Cargo
