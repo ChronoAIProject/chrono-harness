@@ -56,6 +56,50 @@ fn verus_report_host() -> Host {
 }
 
 #[test]
+fn changed_verus_specification_requires_its_proof_in_the_explicit_delta_closure() {
+    let h = verus_report_host();
+    let base = h.head();
+    h.write("doc.txt", "changed specification without a consumer edge\n");
+    let candidate = h.commit();
+    for response in [
+        unit(&h, &base, &candidate, "alpha"),
+        collect(&h, &base, &candidate, json!([])),
+    ] {
+        fail(&response, "file:doc.txt:root:doc.txt:delta-proof");
+        assert_eq!(response.evidence["verus"]["complete"], false);
+        assert_eq!(response.evidence["executed"], json!([]));
+        assert_eq!(response.evidence["global_selected"], json!([]));
+    }
+    // Repair the explicit registration. Coverage must consume its real route;
+    // it must never infer a test selection from the root declaration.
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        let file = v["files"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|f| f["path"] == "doc.txt")
+            .unwrap();
+        file["edges"] = json!([{"kind":"compile","to":"project:lib"}]);
+    });
+    let repaired = h.commit();
+    let reference = write_report(&h, &candidate, &repaired, "alpha");
+    let original = h.read(reference["path"].as_str().unwrap());
+    assert_eq!(original["response"]["status"], "passed", "{original:#}");
+    assert_eq!(
+        original["response"]["evidence"]["global_selected"],
+        json!(["test:suite"])
+    );
+    assert_eq!(
+        original["response"]["evidence"]["verus"]["compiler_evidence"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    pass(&collect(&h, &candidate, &repaired, json!([reference])));
+}
+
+#[test]
 fn collected_verus_sources_readmit_original_bytes_and_reject_rehashed_semantic_changes() {
     let h = verus_report_host();
     let base = h.head();
