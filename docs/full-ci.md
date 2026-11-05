@@ -55,11 +55,21 @@ the host's registered choices:
 `chrono-ci init --host-root H --config INPUT` adopts this schema into
 `.chrono-harness/ci/full.json`. Existing adopted customization is preserved.
 `generate` and `verify` use the same source and renderer; verify never repairs
-drift. The workflow has a distinct ownership marker. Unowned outputs, symlinks,
+drift. Every current full workflow carries the full-provider marker and its exact
+source path. The shared output preflight checks that complete marker directly;
+generation never parses an old workflow's preparation command to infer ownership.
+A different source cannot replace an existing projection, including an unscoped
+one. Historical marker-only projections are not adopted automatically.
+Unowned outputs, symlinks,
 overlapping paths, unknown fields, unpinned actions and expression-bearing
 settings fail. Settings are literal single-line strings; shell metacharacters
 in allowed literal arguments retain their bytes. Register source, workflow,
 bootstrap, policy and their actual consumers in FILEMAP explicitly.
+
+This removes the former historical ownership inference and second workflow read.
+The fixed old-renderer byte assertion is retired; current customization, collision,
+drift, generated Bash and context-preparation behavior remain verified. Product
+and contract change together. Runtime and total validation savings are unmeasured.
 
 ## Separate unit and collection sources
 
