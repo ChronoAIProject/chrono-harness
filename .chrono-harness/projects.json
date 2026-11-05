@@ -3376,6 +3376,7 @@
             "--",
             "temporary::capacity_",
             "fixture_body::",
+            "temporary::busy_allocation_metadata_does_not_delay_independent_cleanup",
             "--test-threads=1"
           ]
         },

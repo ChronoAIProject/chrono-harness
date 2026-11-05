@@ -951,6 +951,35 @@ coordinator inputs/binary, then invoke this migration separately for each path.
 The original failed main maintenance and native cleanup receipts remain evidence;
 the migration does not turn those original exit-2 outcomes into successes.
 
+The actual I3 linked-host bootstrap refused before construction because the
+deployed owner rejects `age_policy`; the registered owner-stage entry hit the
+same incompatibility. Upgrading policy first cannot bootstrap through that old
+binary. The caller's cutover therefore needs two committed increments in its
+authorized surviving coordinator lifecycle. First stage the new product source
+with the coordinator's currently compatible cleanup/configuration selection
+(omit the new age selection at this stage), using the registered source bootstrap
+and owner-stage/owner-publication path. Preserve the original qualified selected
+owner and stage execution receipts. The staged candidate can run exact
+`migrate --adopt-absence` for the three missing records before `deploy-owner`;
+publication requires every remaining affected enrollment to be available and
+excluded under its original capabilities, with no unjoined use inputs. Other
+tasks' live leases or ownership mismatches remain real cutover prerequisites.
+Do not replace selected bytes or transplant a stage report from another root:
+publication binds the exact coordinator root, clean commit, staged inode and
+original execution. An independent clean Git-main validation clone is the
+documented caller-owned staging alternative when permitted; I3 has no authority
+to create one or deploy the coordinator.
+
+After the compatible binary is installed through that owner, commit the final
+7200/14400-second host selection and matching configuration/participation inputs,
+then migrate each actual affected enrollment with compatible committed target
+inputs. Preserve original outcomes and old policy histories. Run the ordinary
+registered bootstrap and canonical check on the final clean committed candidate,
+then real producer success/failure/reentry and aged reuse/disposal acceptance
+from the surviving coordinator. A staging commit, local Rust fixture, binary hash
+or failed linked bootstrap establishes none of that adoption. The original full
+FILEMAP DELTA and applicable native/platform checks still need passing originals.
+
 The fixed lifecycle commands default to `--host-root .` and
 `--config .chrono-harness/worktree.json`:
 

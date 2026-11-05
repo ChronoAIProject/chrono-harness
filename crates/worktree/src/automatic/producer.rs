@@ -2047,9 +2047,9 @@ impl ProducerPolicy {
                     continue;
                 }
             };
-            let owned = if !snapshot.disposed
-                && (snapshot.cache_lease.is_none() || cache_guard.is_some())
-            {
+            // Disposed caches still have retained metadata and capacity inputs.
+            // Their transactions must defer just as promptly as pending caches.
+            let owned = if snapshot.cache_lease.is_none() || cache_guard.is_some() {
                 if store.is_none() {
                     store = Some(Store::open(&directory, &self.id, false)?);
                 }

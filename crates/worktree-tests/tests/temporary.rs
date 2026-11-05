@@ -463,6 +463,7 @@ fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
         chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
             .unwrap();
     let mut paths = vec![];
+    let mut allocations = vec![];
     for prefix in ["busy metadata ", "independent cleanup "] {
         let allocation =
             chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, prefix)
@@ -474,11 +475,14 @@ fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
         )
         .unwrap();
         paths.push(allocation.path().to_owned());
-        drop(allocation);
+        // Keep the first allocation live while allocating the second: ordinary
+        // allocation recovery must not reclaim this test's pending outputs.
+        allocations.push(allocation);
     }
     // Hold the real allocation metadata exclusion through the complete drain.
     let held = fs::File::open(&paths[0]).unwrap();
     assert_eq!(unsafe { flock(held.as_raw_fd(), 2 | 4) }, 0);
+    drop(allocations);
     let began = Instant::now();
     let (code, report, error) = h.auto("maintain", &[]);
     let elapsed = began.elapsed();
@@ -506,6 +510,28 @@ fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
     assert!(!paths[0].join("cache 空白").exists());
+
+    // Cache disposal does not release the metadata transaction or original
+    // lifetime. A later maintenance round must defer this exact metadata too.
+    let held = fs::File::open(&paths[0]).unwrap();
+    assert_eq!(unsafe { flock(held.as_raw_fd(), 2 | 4) }, 0);
+    let began = Instant::now();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(began.elapsed() < Duration::from_secs(10));
+    assert!(
+        producer_objects(&report)
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| {
+                row["path"].as_str().is_some_and(|path| {
+                    path.ends_with(paths[0].file_name().unwrap().to_str().unwrap())
+                }) && row["status"] == "protected"
+                    && row["reason"] == "live allocation metadata transaction"
+            })
+    );
+    drop(held);
 }
 
 #[test]
