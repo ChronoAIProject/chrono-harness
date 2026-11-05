@@ -158,25 +158,25 @@ impl Context {
                 value!(errors)
             ));
         }
-        let mut leases = vec![];
         let mut metadata = vec![];
         for object in &objects {
+            let guard = DirectoryGate::available(&directory.join(&object.path))?
+                .ok_or("context migration metadata busy")?;
             if let Some(binding) = &object.cache_lease {
-                leases.push(
-                    Lease::acquire(
-                        &no_symlink_parents(directory, &binding.path)?,
-                        Some(&binding.id),
-                        false,
-                        true,
-                        None,
-                    )?
-                    .ok_or("context migration has active allocation consumers")?,
-                );
+                let lease = Lease::acquire(
+                    &no_symlink_parents(directory, &binding.path)?,
+                    Some(&binding.id),
+                    false,
+                    true,
+                    None,
+                )?
+                .ok_or("context migration has active allocation consumers")?;
+                lease.stable()?;
+                // Every new consumer of this existing allocation first enters
+                // its metadata gate. Retain that EX gate after proving current
+                // cache holders quiescent; a second retained FD adds no exclusion.
             }
-            metadata.push(
-                DirectoryGate::available(&directory.join(&object.path))?
-                    .ok_or("context migration metadata busy")?,
-            );
+            metadata.push(guard);
         }
         let path = no_symlink_parents(directory, "producer-context.json")?;
         let previous = match fs::read(&path) {
@@ -259,9 +259,6 @@ impl Context {
                     serde_json::to_vec(&recovery).map_err(|e| e.to_string())?,
                 ));
             }
-        }
-        for lease in &leases {
-            lease.stable()?;
         }
         for guard in &metadata {
             guard.stable()?;
@@ -391,8 +388,31 @@ impl Context {
                 report["error"], report["report_path"]
             ));
         }
-        report["original_retention"] =
-            value!(chrono_harness::retained_artifacts::retention::maintain_adopted(&self.root)?);
+        let inventory =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(&self.root)?;
+        let mut retirements = vec![];
+        for row in report["producer_objects"].as_array().into_iter().flatten() {
+            let Some(paths) = row["original_retirement"]["retention_paths"].as_array() else {
+                continue;
+            };
+            let paths = paths
+                .iter()
+                .map(|p| {
+                    p.as_str()
+                        .map(str::to_owned)
+                        .ok_or("retirement path is not a string")
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if let Some(inventory) = &inventory {
+                match inventory.maintain_paths(&paths) {
+                    Ok(result) => retirements.push(result),
+                    Err(error) => {
+                        retirements.push(value!({"paths":paths,"status":"deferred","error":error}))
+                    }
+                }
+            }
+        }
+        report["original_retention"] = value!(retirements);
         Ok(report)
     }
     pub(super) fn measure(&self, allocation: &Path) -> Result<Value, String> {

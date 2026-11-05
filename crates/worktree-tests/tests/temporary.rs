@@ -2040,3 +2040,139 @@ fn capacity_layout_context_and_pending_cursor_migrate_without_resetting_outcomes
         "unknown original was discarded"
     );
 }
+
+#[test]
+fn capacity_context_migration_retains_one_gate_per_allocation() {
+    use std::os::unix::process::CommandExt;
+
+    let h = capacity_host(|_| {});
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut originals = vec![];
+    for _ in 0..48 {
+        let allocation = chrono_worktree::TemporaryHost::allocate(
+            &store,
+            "test-allocation",
+            &outputs,
+            "descriptor-bound-",
+        )
+        .unwrap();
+        let record = producer_record_path(&store, allocation.path());
+        originals.push(record);
+        drop(allocation);
+    }
+    let originals: Vec<_> = originals
+        .into_iter()
+        .map(|path| {
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+    let context_path = store.join("producer-context.json");
+    let mut context = json(&fs::read(&context_path).unwrap()).unwrap();
+    context["policy_sha256"] = value!("previous-context-binding");
+    let previous = serde_json::to_vec(&context).unwrap();
+    fs::write(&context_path, &previous).unwrap();
+    let mut command = h.auto_command(
+        "migrate",
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--partition-producer",
+            "test-allocation",
+        ],
+    );
+    // Lower only this native child; do not change the test runner or host limit.
+    unsafe {
+        command.pre_exec(|| {
+            let mut limit = std::mem::zeroed::<libc::rlimit>();
+            if libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if limit.rlim_cur < 384 {
+                return Err(std::io::Error::other(
+                    "fixture requires 384 available descriptors, including reserved native transport slots",
+                ));
+            }
+            limit.rlim_cur = 384;
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let output = h._dir.capture_bound(&mut command);
+    let (code, report, error) = h.received(output);
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(report["producer_context_migration"]["objects"], 48);
+    assert_eq!(
+        fs::read(store.join(format!(
+            "producer-context-source-{}.json",
+            sha256(&previous)
+        )))
+        .unwrap(),
+        previous
+    );
+    for (path, bytes) in originals {
+        assert_eq!(fs::read(path).unwrap(), bytes, "original object changed");
+    }
+}
+
+#[test]
+fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
+    let h = capacity_host(|c| c["max_capture_bytes"] = value!(4096));
+    let path = h.root.join(".chrono-harness/retention.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["max_nodes_per_round"] = value!(8);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut host = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "partial-retirement-",
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command.arg("capture-once");
+    let original = host.capture_output(&mut command).unwrap();
+    drop(command);
+    assert_eq!(original.status.code(), Some(7));
+    let record = producer_record_path(&store, host.path());
+    host.finish().unwrap();
+    assert!(
+        host.path().exists(),
+        "fixture did not exercise partial disposal"
+    );
+    assert!(
+        record.exists(),
+        "partial retirement lost its continuation record"
+    );
+    for _ in 0..16 {
+        if !host.path().exists() {
+            break;
+        }
+        assert!(
+            record.exists(),
+            "continuation disappeared before original container"
+        );
+        let mut next = chrono_worktree::TemporaryHost::allocate(
+            &store,
+            "test-allocation",
+            &outputs,
+            "ordinary-reentry-",
+        )
+        .unwrap();
+        next.finish().unwrap();
+    }
+    assert!(
+        !host.path().exists(),
+        "bounded ordinary recovery did not advance"
+    );
+    assert_eq!(original.status.code(), Some(7));
+}

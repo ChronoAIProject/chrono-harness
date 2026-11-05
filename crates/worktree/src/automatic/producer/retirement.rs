@@ -383,13 +383,33 @@ pub(super) fn resume_retirement(
     }
     let inventory = Inventory::adopted(&inputs.policy.coordinator_root)?
         .ok_or("fixture retirement requires adopted output retention; capacity unmet")?;
-    for path in retained_paths(directory, object)? {
+    let record = no_symlink_parents(directory, &Store::record_name(&object.path)?)?;
+    let record_relative = record
+        .strip_prefix(&inputs.policy.coordinator_root)
+        .map_err(|e| e.to_string())?
+        .to_str()
+        .ok_or("record UTF-8")?
+        .to_owned();
+    let role = format!("fixture-retirement:{}", sha256(object.path.as_bytes()));
+    let mut paths = retained_paths(directory, object)?;
+    // Keep the resumable producer record until every declared effect is done.
+    // Its temporary root also protects interrupted enrollment/link publication.
+    paths.sort_by_key(|path| path != &record);
+    let mut selected = vec![];
+    for path in paths {
         let relative = path
             .strip_prefix(&inputs.policy.coordinator_root)
             .map_err(|e| e.to_string())?
             .to_str()
             .ok_or("retirement UTF-8")?;
-        if !path.exists() || inventory.enrolled(relative)? {
+        selected.push(relative.to_owned());
+        if !path.exists() {
+            continue;
+        }
+        if inventory.enrolled(relative)? {
+            if path == record {
+                inventory.reference_paths(&role, &[record_relative.clone()])?;
+            }
             continue;
         }
         if path == allocation {
@@ -433,10 +453,29 @@ pub(super) fn resume_retirement(
         }
         let publication=Inventory::adopted(&inputs.policy.coordinator_root)?.unwrap().begin("fixture-retirement",relative,
             value!({"producer_outcome":"unchanged","original_consumer_release":object.original_release,"operation":"fixture-original-retirement"}))?;
+        if path == record {
+            inventory.reference_paths(&role, &[record_relative.clone()])?;
+        }
         publication.complete(value!({"producer_outcome":"unchanged","original_consumer_release":object.original_release,"operation":"fixture-original-retirement"}))?;
     }
+    for digest in object.shared_originals.keys() {
+        selected.push(
+            no_symlink_parents(directory, &format!("body-inputs/{digest}.bin"))?
+                .strip_prefix(&inputs.policy.coordinator_root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("shared original UTF-8")?
+                .to_owned(),
+        );
+    }
+    for path in &selected {
+        if path != &record_relative && inventory.enrolled(path)? {
+            inventory.dependencies_paths(path, &[record_relative.clone()])?;
+        }
+    }
+    inventory.reference(&role, &[])?;
     Ok(
-        value!({"status":"retiring","owner":"output-retention/v2","physical_absence":"pending","producer_outcome":"unchanged"}),
+        value!({"status":"retiring","owner":"output-retention/v2","physical_absence":"pending","producer_outcome":"unchanged","retention_paths":selected}),
     )
 }
 pub(super) fn retire(

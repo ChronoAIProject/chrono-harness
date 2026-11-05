@@ -55,6 +55,47 @@ impl Gate {
     }
 }
 impl Inventory {
+    /// Reclaim only an actual producer's declared retirement relationship.
+    /// The normal node, byte, metadata and time bounds still apply.
+    pub fn maintain_paths(&self, paths: &[String]) -> Result<Value, String> {
+        if paths.is_empty() || paths.len() > self.policy.max_related_outputs {
+            return Err("retirement path scope is empty or exceeds capacity".into());
+        }
+        self.round_metadata
+            .set(Some(self.policy.max_metadata_bytes_per_round));
+        self.round_began.set(Some(Instant::now()));
+        self.round_node_limit
+            .set(Some(self.policy.max_nodes_per_round));
+        let result = (|| {
+            // Resolve the declared addresses, then release their path gates
+            // before the maintenance closure acquires those same capabilities.
+            // The second gate revalidates each immutable output identity; a
+            // concurrently replaced address cannot authorize new output bytes.
+            let selected = self.addressed_gate(&[], paths, &[], None, false, false)?;
+            let ids: Vec<_> = selected.objects.borrow().keys().cloned().collect();
+            drop(selected);
+            let gate = self.addressed_gate(&ids, &[], &[], None, true, false)?;
+            let owned: Vec<_> = gate.objects.borrow().keys().cloned().collect();
+            let mut result = self.maintain_locked(now()?, &gate)?;
+            drop(gate);
+            let mut nodes = result["nodes"].as_u64().ok_or("retirement nodes")? as usize;
+            for id in owned {
+                if let Err(error) = self.prune_object(&id, now()?, &mut nodes) {
+                    result["accounting_errors"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(json!({"id":id,"reason":error}));
+                }
+            }
+            result["nodes"] = json!(nodes);
+            result["scope"] = json!({"kind":"declared-retirement-paths","paths":paths});
+            Ok(result)
+        })();
+        self.round_metadata.set(None);
+        self.round_began.set(None);
+        self.round_node_limit.set(None);
+        result
+    }
     fn remove_metadata_directory(
         &self,
         directory: &Path,

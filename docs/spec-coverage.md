@@ -657,17 +657,48 @@ The final focused age action passed all five cases (239 filtered) on the correct
 source in 137.36 total seconds; these configurable short-threshold observations
 do not establish a real coordinator's two/four-hour adoption.
 
-The registered linked bootstrap and owner-stage commands each exited 1 before
-construction: the deployed coordinator rejects the new `age_policy` field.
-Canonical check could not launch (missing installed executable, exit 127); no
-current DELTA judge ran. Bootstrap's Python suite exited 1 after 91 tests with
-nine errors requiring the unavailable installed candidate worktree owner. These
-original results remain prerequisite failures, with no substitute deployment or
-judge pass. The full corrected core/DELTA, compatible coordinator cutover, exact
-three-record absence adoption and real ordinary-host success/failure/reentry/age
-acceptance remain caller/I4 obligations. The worktree adoption section specifies
-the qualified two-stage cutover. This is implementation evidence with open
-acceptance, not installed-host satisfaction or full SPEC completion.
+I3's linked bootstrap and owner-stage each exited 1 before construction because
+the installed coordinator rejected `age_policy`; canonical could not launch
+(exit 127), and the 91-case Python bootstrap suite had nine missing-owner errors.
+Those original failures remain unchanged. I4 fixed scheduling participation,
+constructed clean source in the authorized independent Git-main candidate, and
+used qualified coordinator stages/publication with the compatible old selection
+before committing the selected policy. Ordinary main source bootstrap then
+passed with the selected 7200/14400-second policy. Seventeen actually absent
+enrollments were retired through exact original-bound absence adoption, including
+two singleton receipts; their old failed/missing outcomes remain unchanged.
+The singleton Rust age action passed six cases, including its new format case,
+after rebuilding the actual CLI prerequisite. These are short real-age fixtures,
+not positive actual-host two/four-hour effects.
+
+Three producer context migrations completed (46 worktree, 804 projects and 278
+workflow objects). CI's partition completed, but its 1,418-object context migration
+hit the real process open-file limit. Context migration now retains one metadata
+EX gate per allocation after briefly excluding cache consumers, rather than
+retaining both metadata and cache capabilities per allocation. Existing consumers still refuse the
+migration; new existing-allocation consumers must enter that gate. Its Rust
+regression lowers only the native child's descriptor limit and verifies original
+registration/context preservation. No host limit or acceptance bound is raised.
+The same capacity run exposed incomplete original retirement. Retirement now
+addresses its declared output relationship directly through the existing
+retention owner, within its unchanged budgets. Other declared retirement effects
+reference the continuation record, which remains rooted while enrollment/link
+publication is incomplete. Thus partial disposal retains its ordinary reentry
+path. Existing original-release assertions and a bounded partial-disposal
+regression cover this relationship. Corrected CI migration and final
+clean-candidate canonical results remain to be established before this scope can
+be called verified.
+
+The adopted ordinary bootstrap reclaimed five registered target directories:
+3,475,018,109 logical bytes before, zero after. The later ordinary formatting
+command found them already absent; it did not produce that nonzero deletion.
+Exclusive physical release and net savings are unknown. The selected policy and
+binary are adopted, while positive actual-host >2h reuse / >4h disposal,
+ordinary producer failure/reentry/capacity acceptance and the full corrected
+FILEMAP DELTA remain open. Protected original sources, live dependencies,
+unknown outcomes and other tasks' source-policy mismatches remain protected.
+This is implementation evidence, not independent review, landing or full SPEC
+completion.
 
 ## Registered automatic lifecycle cleanup
 
