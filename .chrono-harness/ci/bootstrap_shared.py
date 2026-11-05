@@ -124,9 +124,11 @@ def validate_execution(root, profile, report, read_input=read):
     if report.get("registrations") != expected_registrations:
         raise ValueError("startup execution registrations differ")
     if "host_environment" in profile:
+        # This is fixed producer data: bind its declared location literally.
+        # Admission of current writable homes belongs to provision_environment.
         if (report.get("host_environment") != profile["host_environment"]
                 or any(report.get("environment", {}).get(key) != str(
-                    bootstrap.host_path(Path(report["host_root"]), path, ".chrono-harness/state/"))
+                    bootstrap.host_path(Path(report["host_root"]), path))
                     for key, path in profile["host_environment"].items())):
             raise ValueError("startup producer host environment differs")
     bindings = bootstrap.binding_declarations(root, profile, read_input)

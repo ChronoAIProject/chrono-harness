@@ -658,7 +658,7 @@ acceptance, deployment and complete SPEC delivery remain separate obligations.
 
 The release recipe v5 consumes explicit build subsets and a mandatory per-verifier boolean Rust toolchain choice. Python verification can execute without available Rust tool bindings; actual Rust asset consumers retain declared build dependencies without requiring the compiler. The local scheduler uses registered dependencies and bounded concurrency; the collector checks each selected producer, tool evidence, raw process and complete unit membership. Rust behavior tests remain Cargo actions, Python behavior/driver/assertion code and external fixtures have their own registered owner. This source increment does not establish native candidate acceptance, public distribution, remaining helper migration or full host activation.
 
-The host bootstrap has an explicit Python production/test script pair and separate Python SDK and operation fixtures. Its independent CI and release units execute the registered Python test directly, including source identity, selected configuration, installed digests, toolchain installation and failure propagation. Rust lifecycle integration tests retain their real bootstrap boundary. Complete candidate/native acceptance, remaining language ownership and public adoption are separate obligations.
+The host bootstrap has an explicit Python production/test script pair and separate Python SDK and operation fixtures. Its independent CI and release units execute the registered Python test directly, including source identity, selected configuration, installed digests, toolchain installation and failure propagation. Rust lifecycle integration tests retain their real bootstrap boundary. Writable host environments now resolve only under the existing cache artifact root; all three adopted profiles migrate together, while original reports and streams remain in state. An original release-unit ZIP measured 179,203,963 compressed bytes of rebuildable tools and 636,057 compressed bytes of other members; candidate native payload and elapsed savings remain unverified. Complete candidate/native acceptance, remaining language ownership and public adoption are separate obligations.
 
 The bootstrap's optional explicit `report_path` separates the host's cache-tool
 record from the later core-tool record. Python regressions cover consecutive
@@ -1137,12 +1137,15 @@ replacement still excludes its actual users. Existing custody, migration,
 interruption and owner-deployment consumers use the addressed storage; old active
 state requires the documented protected owner cutover, without a runtime fallback.
 
-Product and host policy change together. Native run `41944861461` on clean
-candidate `a0071a5cec3079a01cc839fcc095fda1323bc923` passed all 24 business units
-and collection. The registered runner action passed 241 tests with one existing
-ignored test. Clean candidate `66806b61ebe5a2892a6fd2e276e28a676f379a6d` passed the
-local canonical worktree unit after the retention test was corrected to exercise
-bounded continuation. Final source bootstrap at
-`a41cd43aa7233a32847fe47c67e7f1b90846881a` passed. Those observations do not establish
-final-candidate acceptance, deployment to other coordinators, actual landing or
-complete SPEC delivery. Total runtime, CI and storage costs remain unmeasured.
+Product and host policy change together. Clean candidate
+`21a5e6acebabe285fbec0bbe821e297327d51f98` passed source bootstrap (12 operations,
+six tools), the local canonical worktree unit (215 tests, six assigned to the
+adoption group), and native run `41950114155` (all 24 business units and collection).
+The downloaded collection archive matches its provider length/digest; original
+report and stream digests verify, with all 25 aggregate results passing. The
+registered runner action separately passed 241 tests with one existing ignored
+test. PR #221 landed as `3b605cf80aa9e96a6442b2e54991602713acca31`; its tree is
+identical to the tested candidate. Other coordinators, including the original
+main checkout's nine aggregate enrollment
+records, still require protected state cutover. Complete SPEC delivery and total
+runtime, CI and storage savings remain unestablished.

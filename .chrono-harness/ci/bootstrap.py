@@ -305,7 +305,7 @@ def provision_environment(root, config):
                 or set(values) - {"HOME", "CARGO_HOME", "TMPDIR"}
                 or set(values) & set(config.get("environment", {}))):
             raise ValueError("invalid bootstrap host environment selection")
-        env.update({key: str(host_path(root, value, ".chrono-harness/state/"))
+        env.update({key: str(host_path(root, value, ".chrono-harness/cache/"))
                     for key, value in values.items()})
     declaration = config.get("toolchain_provision")
     if "toolchain_provision" in config:
@@ -512,7 +512,7 @@ def main():
         # Only after prerequisites succeed may the selected build homes and SDK
         # have effects. Ordinary participation already protects all these jobs.
         for path in config.get("host_environment", {}).values():
-            host_path(root, path, ".chrono-harness/state/").mkdir(parents=True, exist_ok=True)
+            host_path(root, path, ".chrono-harness/cache/").mkdir(parents=True, exist_ok=True)
         env, versions, bindings = toolchain_environment(config, root)
         result["versions"] = versions
         result["environment"] = {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL",
