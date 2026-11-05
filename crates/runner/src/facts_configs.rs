@@ -46,6 +46,18 @@ pub(crate) fn load(
 pub(crate) fn resolve(
     path: &str,
     bytes: Vec<u8>,
+    read: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
+    resolve_target(path, bytes, None, read)
+}
+
+/// A request-bound reader fixes the policy path, while an immutable endpoint
+/// supplies that path's original executable declaration as data. Only opening
+/// the candidate's execution binding reads the current executable bytes.
+pub(crate) fn resolve_target(
+    path: &str,
+    bytes: Vec<u8>,
+    target: Option<&str>,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
     let config = json(&bytes)?;
@@ -95,11 +107,18 @@ pub(crate) fn resolve(
         let program = host["program"]
             .as_str()
             .ok_or("Git selector program required")?;
-        let hash = sha256(&fs::read(program).map_err(|e| format!("Git selector executable: {e}"))?);
-        let row = host["configurations"].as_array().unwrap().iter()
-            .find(|row| row["sha256"] == hash)
-            .ok_or_else(|| format!("Git config selector has no registered executable identity for {platform}: {program} sha256={hash}"))?;
-        identity = Some((program, hash));
+        let rows = host["configurations"].as_array().unwrap();
+        let row = if let Some(target) = target {
+            rows.iter()
+                .find(|row| row["path"] == target)
+                .ok_or_else(|| format!("Git config selector has no bound registry policy path for {platform}: {target}"))?
+        } else {
+            let hash = sha256(&fs::read(program).map_err(|e| format!("Git selector executable: {e}"))?);
+            rows.iter()
+                .find(|row| row["sha256"] == hash)
+                .ok_or_else(|| format!("Git config selector has no registered executable identity for {platform}: {program} sha256={hash}"))?
+        };
+        identity = Some((program, row["sha256"].as_str().unwrap()));
         row["path"].as_str().unwrap()
     } else {
         host.as_str().ok_or("Git config selector path required")?
@@ -148,9 +167,24 @@ pub fn identity(
             selection: None,
         });
     }
-    // Reuse the same strict parser and platform key validation as file loading.
+    // A captured value map contains exactly one effective policy. Reconstruct
+    // its declared identity from that data, without consulting today's Git.
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let target = if entry["schema"] == "chrono-git-configs/v2" {
+        let host = &entry["platforms"][&platform];
+        let present: Vec<_> = identity_targets(host)?
+            .into_iter()
+            .filter(|target| values.contains_key(*target))
+            .collect();
+        if present.len() != 1 {
+            return Err("registry values require exactly one registered effective policy".into());
+        }
+        Some(present[0])
+    } else {
+        None
+    };
     let bytes = serde_json::to_vec(entry).map_err(|e| e.to_string())?;
-    let (effective_path, _, _, selection) = resolve(path, bytes, |target| {
+    let (effective_path, _, _, selection) = resolve_target(path, bytes, target, |target| {
         let value = values
             .get(target)
             .ok_or_else(|| format!("missing selected configuration target {target}"))?;
@@ -197,6 +231,7 @@ fn identity_targets(host: &Value) -> Result<Vec<&str>, String> {
         .filter(|rows| !rows.is_empty())
         .ok_or("Git selector requires nonempty configurations")?;
     let mut hashes = std::collections::BTreeSet::new();
+    let mut unique_paths = std::collections::BTreeSet::new();
     let mut paths = vec![];
     for row in rows {
         let object = row
@@ -209,11 +244,13 @@ fn identity_targets(host: &Value) -> Result<Vec<&str>, String> {
         if object.len() != 2 || !object.contains_key("path") || !hashes.insert(hash) {
             return Err("Git selector configuration requires unique digest and path only".into());
         }
-        paths.push(
-            row["path"]
-                .as_str()
-                .ok_or("Git selector configuration path required")?,
-        );
+        let path = row["path"]
+            .as_str()
+            .ok_or("Git selector configuration path required")?;
+        if !unique_paths.insert(path) {
+            return Err("Git selector configuration paths must be unique".into());
+        }
+        paths.push(path);
     }
     Ok(paths)
 }

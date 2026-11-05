@@ -213,9 +213,16 @@ pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistryS
 /// process observations; this helper performs no disk or Git acquisition.
 pub fn registry_snapshot_with(
     path: &str,
+    read: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<RegistrySnapshot, String> {
+    registry_snapshot_with_target(path, None, read)
+}
+fn registry_snapshot_with_target(
+    path: &str,
+    target: Option<&str>,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<RegistrySnapshot, String> {
-    let (mut snapshot, paths) = registry_snapshot_start(path, &mut read)?;
+    let (mut snapshot, paths) = registry_snapshot_start(path, target, &mut read)?;
     for path in paths {
         if !snapshot.bytes.contains_key(&path) {
             let original = read(&path)?;
@@ -230,9 +237,16 @@ pub fn registry_snapshot_with(
 /// The reader must return the requested paths in order with their original bytes.
 pub fn registry_snapshot_with_batches(
     path: &str,
+    read: impl FnMut(&[String]) -> Result<Vec<(String, Vec<u8>)>, String>,
+) -> Result<RegistrySnapshot, String> {
+    registry_snapshot_with_batches_target(path, None, read)
+}
+fn registry_snapshot_with_batches_target(
+    path: &str,
+    target: Option<&str>,
     mut read: impl FnMut(&[String]) -> Result<Vec<(String, Vec<u8>)>, String>,
 ) -> Result<RegistrySnapshot, String> {
-    let (mut snapshot, paths) = registry_snapshot_start(path, |path| {
+    let (mut snapshot, paths) = registry_snapshot_start(path, target, |path| {
         let mut originals = read(&[path.to_owned()])?;
         if originals.len() != 1 || originals[0].0 != path {
             return Err("registry acquisition path mismatch".into());
@@ -261,11 +275,12 @@ pub fn registry_snapshot_with_batches(
 }
 fn registry_snapshot_start(
     path: &str,
+    target: Option<&str>,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(RegistrySnapshot, Vec<String>), String> {
     let original = read(path)?;
     let (effective_path, effective_bytes, effective_config, selection) =
-        crate::facts_configs::resolve(path, original.clone(), &mut read)?;
+        crate::facts_configs::resolve_target(path, original.clone(), target, &mut read)?;
     let config = json(&original)?;
     let paths = registry_paths(&effective_config, &effective_path)?;
     let mut snapshot = RegistrySnapshot {
@@ -471,9 +486,12 @@ impl Reader {
         oid: &str,
         path: &str,
     ) -> Result<RegistrySnapshot, String> {
+        let target = self.registry_target(path);
         if !self.can_reuse_oid(oid) {
-            return registry_snapshot_with(path, |path| self.blob(root, oid, path));
+            return registry_snapshot_with_target(path, target, |path| self.blob(root, oid, path));
         }
-        registry_snapshot_with_batches(path, |paths| self.immutable_blobs(root, oid, paths))
+        registry_snapshot_with_batches_target(path, target, |paths| {
+            self.immutable_blobs(root, oid, paths)
+        })
     }
 }

@@ -831,6 +831,10 @@ impl Reader {
         }
         Ok(())
     }
+    pub(crate) fn registry_target(&self, entry: &str) -> Option<&str> {
+        let bound = self.bound.as_ref()?;
+        (bound.selection.as_ref()?.path == entry).then_some(bound.config_path.as_str())
+    }
     pub fn git(&self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
         if self.bound.is_none() {
             return facts::git(root, args);

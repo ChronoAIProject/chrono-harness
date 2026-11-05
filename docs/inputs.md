@@ -66,6 +66,16 @@ compiler/SDK closure and native adoption remain incomplete, so the policy keeps
 bootstrap, canonical DELTA check and native PR/landing checks; total validation
 and storage costs remain unmeasured.
 
+Its writable `CARGO_HOME` now uses the current checkout's
+`.chrono-harness/state/bootstrap-owner-tooling/cargo`, matching the registered
+source bootstrap. Package/configuration input locations and the local diagnostics
+Cargo policy move with that home; expected digests remain unchanged. `HOME` and
+`TMPDIR` use the existing inherited environment instead of another checkout's
+directories. Independent checkouts therefore do not share that mutable Cargo
+cache or configuration. The explicitly bound Rust toolchain and SDK remain shared
+read inputs. Bootstrap acquisition and actual guarded/canonical consumers must
+validate the relocated Cargo home; missing required bytes remain failures.
+
 Local and CI must use the same registered check command. Equal verdicts across
 environments additionally require equal complete effective inputs and deterministic
 evaluation. The separate runner parity comparator requires

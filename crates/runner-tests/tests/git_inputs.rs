@@ -482,10 +482,94 @@ fn exact_host_identity_selects_registered_policy_and_preserves_guards() {
 }
 
 #[test]
+fn fixed_selector_data_does_not_require_the_retired_executable() {
+    let mut h = Host::new(json!({"mode":"passthrough"}));
+    let mut registries = serde_json::Map::new();
+    for role in ["judges", "projects", "filemap", "workflow"] {
+        let path = format!(".chrono-harness/{role}.json");
+        fs::write(h.root.join(&path), b"{}\n").unwrap();
+        registries.insert(role.into(), json!(path));
+    }
+    h.config["registries"] = registries.into();
+    h.config["tools"][0]["program"] = json!(h.tool);
+    let current = h.config.clone();
+    let retired_program = h.root.join("absent retired git");
+    assert!(!retired_program.exists());
+    h.config["tools"][0]["program"] = json!(retired_program);
+    h.config["environment"]["inputs"][0]["location"] = json!(retired_program);
+    h.config["environment"]["inputs"][0]["sha256"] = json!("0".repeat(64));
+    let retired = h.config.clone();
+    let mut selector = identity_selection(&h);
+    selector["platforms"][platform()]["program"] = json!(retired_program);
+    selector["platforms"][platform()]["configurations"] =
+        json!([{"sha256":"0".repeat(64),"path":CONFIG}]);
+    select(&h, &selector);
+    let base = commit(&h);
+
+    // Neither a removed path nor a changed policy binding can be guessed from
+    // another registered row when interpreting an immutable endpoint.
+    selector["platforms"][platform()]["configurations"][0]["path"] =
+        json!(".chrono-harness/removed-policy.json");
+    select(&h, &selector);
+    let removed = commit(&h);
+    selector["platforms"][platform()]["configurations"][0]["path"] = json!(CONFIG);
+    h.config["environment"]["inputs"][0]["sha256"] = json!("1".repeat(64));
+    select(&h, &selector);
+    let mismatched = commit(&h);
+
+    h.config = current;
+    select(&h, &identity_selection(&h));
+    let candidate = commit(&h);
+    let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
+    reader.verify_config(&h.root, &candidate).unwrap();
+    let old = reader.registry_snapshot(&h.root, &base, SELECTOR).unwrap();
+    assert_eq!(old.effective_path, CONFIG);
+    assert_eq!(old.values[CONFIG], retired);
+    assert_eq!(
+        chrono_harness::facts::registry_identity(&old.values, SELECTOR)
+            .unwrap()
+            .effective_path,
+        CONFIG
+    );
+    reader.verify_oid(&h.root, &base).unwrap();
+    let batched = reader.registry_snapshot(&h.root, &base, SELECTOR).unwrap();
+    assert_eq!(batched.bytes, old.bytes);
+    assert_eq!(batched.selection, old.selection);
+    assert!(
+        reader
+            .registry_snapshot(&h.root, &removed, SELECTOR)
+            .err()
+            .unwrap()
+            .contains("bound registry policy path")
+    );
+    assert!(
+        reader
+            .registry_snapshot(&h.root, &mismatched, SELECTOR)
+            .is_err()
+    );
+    assert!(!retired_program.exists());
+    assert_eq!(
+        reader
+            .registry_snapshot(&h.root, &candidate, SELECTOR)
+            .unwrap()
+            .values[CONFIG],
+        h.config
+    );
+    let mut missing = old.values.clone();
+    missing.remove(CONFIG);
+    assert!(chrono_harness::facts::registry_identity(&missing, SELECTOR).is_err());
+    let mut inconsistent = old.values;
+    inconsistent.get_mut(CONFIG).unwrap()["environment"]["inputs"][0]["sha256"] =
+        json!("f".repeat(64));
+    assert!(chrono_harness::facts::registry_identity(&inconsistent, SELECTOR).is_err());
+}
+
+#[test]
 fn invalid_host_identity_selection_never_executes_git() {
     for case in [
         "unknown-bytes",
         "duplicate",
+        "duplicate-path",
         "empty",
         "relative",
         "bad-hash",
@@ -502,6 +586,11 @@ fn invalid_host_identity_selection_never_executes_git() {
             "duplicate" => {
                 let row = host["configurations"][1].clone();
                 host["configurations"].as_array_mut().unwrap().push(row);
+                Value::Null
+            }
+            "duplicate-path" => {
+                let path = host["configurations"][1]["path"].clone();
+                host["configurations"][0]["path"] = path;
                 Value::Null
             }
             "empty" => {
