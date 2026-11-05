@@ -28,3 +28,9 @@ name = "chrono-test-ci-diagnostics"
 path = "tests/support/diagnostics_child.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-test-verus-interface"
+path = "tests/support/verus_interface.rs"
+test = false
+bench = false
