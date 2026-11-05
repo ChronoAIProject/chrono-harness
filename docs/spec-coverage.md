@@ -6,6 +6,9 @@ The proved admission owner additionally binds affected roots to unique registere
 routes, global explicit DELTA selection and the original proofs required by each
 unit or collection. Missing consumer edges and ambiguous root operations fail;
 split units keep their own proof obligations and collection joins their originals.
+Root obligations also consume changed FILEMAP file records, so role/root-only
+edits cannot pass merely because the source bytes are unchanged. Dedicated unit
+and collection regressions retain the exact byte-level `changed_paths` boundary.
 This remains a partial migration: selection construction, the adapter, complete
 SPEC correspondence and unchanged-root proof reuse still require verification.
 

@@ -108,7 +108,8 @@ Accepted compiler/source rows enter the collection's coverage ledger. Native and
 complete proof evidence for every declared root remain outstanding.
 
 The same executable Verus owner now proves unique root-route lookup and DELTA
-root coverage. A changed program/specification file, or a changed root it claims,
+root coverage. A changed program/specification file, its changed FILEMAP record,
+or a changed root or root record it claims,
 requires that unique route in the global explicit execution closure. Every
 locally selected root additionally needs an admitted original compiler result and
 candidate-source comparison. A unit may defer a globally selected root assigned
@@ -124,7 +125,12 @@ satisfies affected-root coverage without its explicit selected proof consumer.
 This gate reports the missing relationship and does not select extra tests or
 infer dependencies. Dedicated behavior cases exercise the missing-edge failure,
 explicit repair, split unit proofs, collection and ambiguous registration. A
-pre-change canonical run observed the missing-edge case wrongly pass. The same
+pre-change canonical run observed the missing-edge case wrongly pass. Another
+observed a role/root-only FILEMAP change wrongly pass without any source-byte
+change. The inventory now supplies the same explicit file-record delta to graph
+seeds and proof obligations; `changed_paths` retains its Git byte-delta meaning.
+Dedicated unit and collection cases require proof for both role and root changes,
+with passing controls using an explicit consumer and admitted originals. The same
 registered commands remain current. Additional comparisons are bounded by the
 registered roots and proof observations; total runtime/storage cost is unmeasured.
 This predicate does not prove selection-input construction, JSON decoding, the

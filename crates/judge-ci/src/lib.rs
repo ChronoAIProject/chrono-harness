@@ -540,17 +540,34 @@ fn changed<T: PartialEq>(a: &BTreeMap<String, T>, b: &BTreeMap<String, T>) -> BT
         .cloned()
         .collect()
 }
+struct ScopedImpact {
+    paths: BTreeSet<String>,
+    verification_paths: BTreeSet<String>,
+    selected: BTreeSet<String>,
+    explanation: Value,
+    affected: BTreeSet<String>,
+}
+
 // Scoped CI owns legacy seeds and selections; it consumes only shared union/closure mechanics.
-fn ci_impact(
-    old: Option<&Snapshot>,
-    new: &Snapshot,
-) -> (BTreeSet<String>, BTreeSet<String>, Value, BTreeSet<String>) {
+fn ci_impact(old: Option<&Snapshot>, new: &Snapshot) -> ScopedImpact {
     let paths = if let Some(old) = old {
         changed(&old.tree, &new.tree)
     } else {
         new.tree.keys().cloned().collect()
     };
-    let mut seeds: BTreeSet<_> = paths.iter().map(|p| format!("file:{p}")).collect();
+    // File declarations can change without changing their source bytes. Share
+    // this exact endpoint delta between graph seeds and proof obligations, while
+    // retaining the byte-level meaning of the published changed_paths.
+    let mut verification_paths = paths.clone();
+    if let Some(old) = old {
+        verification_paths.extend(changed(&old.files, &new.files));
+    } else {
+        verification_paths.extend(new.files.keys().cloned());
+    }
+    let mut seeds: BTreeSet<_> = verification_paths
+        .iter()
+        .map(|p| format!("file:{p}"))
+        .collect();
     let mut extras: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     if let Some(old) = old {
         // Adopting a new document contract affects every declared owner, even
@@ -562,9 +579,6 @@ fn ci_impact(
                     .chain(new.owner_nodes.values())
                     .cloned(),
             );
-        }
-        for path in changed(&old.files, &new.files) {
-            seeds.insert(format!("file:{path}"));
         }
         for p in changed(&old.projects, &new.projects) {
             for snapshot in [old, new] {
@@ -752,7 +766,13 @@ fn ci_impact(
             affected.extend(bindings.into_iter().map(|binding| binding.owner));
         }
     }
-    (paths, selected, explanation, affected)
+    ScopedImpact {
+        paths,
+        verification_paths,
+        selected,
+        explanation,
+        affected,
+    }
 }
 
 pub fn judge(req: &Request) -> Response {
@@ -855,6 +875,7 @@ struct Inventory {
     new: Snapshot,
     previous: String,
     paths: BTreeSet<String>,
+    verification_paths: BTreeSet<String>,
     selected: BTreeSet<String>,
     global_selected: BTreeSet<String>,
     selection_explanation: Value,
@@ -1236,7 +1257,13 @@ fn inventory_profile(
             "E_VERUS_RETIRED: the adopted Verus requirement cannot be silently removed".into(),
         );
     }
-    let (paths, mut selected, mut selection_explanation, affected) = ci_impact(old.as_ref(), &new);
+    let ScopedImpact {
+        paths,
+        verification_paths,
+        mut selected,
+        explanation: mut selection_explanation,
+        affected,
+    } = ci_impact(old.as_ref(), &new);
     let consumption = chrono_judge_registration::consumption::check_scoped(
         reader,
         root,
@@ -1504,6 +1531,7 @@ fn inventory_profile(
         new,
         previous,
         paths,
+        verification_paths,
         selected,
         global_selected,
         selection_explanation,
@@ -1631,6 +1659,7 @@ fn evaluate(
         new,
         previous,
         paths,
+        verification_paths,
         mut selected,
         global_selected,
         selection_explanation,
@@ -1676,7 +1705,7 @@ fn evaluate(
             reader,
             &p,
             &new,
-            &paths,
+            &verification_paths,
             &global_selected,
             &global_selected,
             &mut response,
@@ -1817,7 +1846,7 @@ fn evaluate(
         reader,
         &p,
         &new,
-        &paths,
+        &verification_paths,
         &selected,
         &global_selected,
         &mut response,
