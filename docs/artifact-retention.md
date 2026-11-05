@@ -1,170 +1,97 @@
-# Final originals and report retention
+# 原始报告与文件保留
 
-The retained-artifact owner governs final originals, fixed report slots and their actual readers, upload and repair consumers. It uses the lifecycle's shared kernel `ownership::Lease`, addressed durable declarations and `artifact_disposal` physical effects. Fixture custody remains owned by worktree's retained producer, including prospective allocations, copied members, native captures and diagnostic consumers. Observation never enrolls an unknown historical path.
+原件保留模块负责最终原件、固定报告位置，以及实际读取、上传和修复这些文件的消费者。这里的“消费者”指仍需要原文件的程序或活动；只要还有消费者，原件就不能清理。
 
-**Source and host policy change together:** the host selects
-`chrono-output-retention/v2`. The 512-output bound applies to an actual related
-set, rather than all unrelated publications. There is no global output-count or
-byte admission quota. The host retains 128 summaries per declaration, 256 steps,
-25 ms and 64 MiB of verification/metadata per maintenance round, 1 GiB per output
-and 16384 descendant identities per output. Retired metadata has a declared
-86400-second diagnostic window and is reclaimed only after roots, edges and
-capabilities have gone. Existing original outcomes, expiry and live consumers
-must survive the explicit owner cutover. Implementation, migration, native and
-total storage costs remain unmeasured until their actual checks.
+该模块使用生命周期共用的内核 `ownership::Lease` 锁、逐项持久声明和 `artifact_disposal` 删除实现。测试样本仍由 worktree 的保留生产者负责，包括预先分配、复制成员、真实 CI 输出和诊断消费者。仅观察到历史路径，不会自动把它纳入管理。
 
-The current macOS 27 policy uses the validation checkout's
-`.chrono-harness/cache/bootstrap-owner-tooling/cargo` and its registered
-package/configuration inputs, matching bootstrap's reconstructable cache lifecycle. Existing read-only toolchain and SDK
-bindings remain explicit; HOME and TMPDIR retain their inherited values. Expected
-input digests and tool versions are unchanged. Effective environment changes
-participate in the two-endpoint DELTA checks; earlier cache effects outside the
-checkout remain unverified. Input validation adds local IO; total validation and
-storage costs remain unknown.
+**源码与本仓政策曾同步修改：**本仓选择 `chrono-output-retention/v2`。512 个输出的上限约束实际有关联的一组，不限制无关发布的全库数量或总字节数。其余限制为：每项声明保留 128 条摘要；每轮维护最多 256 步、25 ms、64 MiB 验证／元数据；每个输出最多 1 GiB、16384 个后代身份。移除后的元数据有 86400 秒诊断保留期，且只有保留根、引用边和使用凭据全部消失后才能回收。切换负责人时必须保留原结果、到期时间和活跃消费者。实现、迁移、真实 CI 和总存储成本在实际检查前均未测。
 
-## Publishers and consumers
+当前 macOS 27 政策使用验证工作树中的 `.chrono-harness/cache/bootstrap-owner-tooling/cargo` 及已登记的 package／配置输入，与 bootstrap 的可重建缓存生命周期一致。只读工具链和 SDK 仍明确绑定，HOME、TMPDIR 继续继承。预期输入摘要和工具版本不变。实际环境变化参与两端变更检查；早先在工作树外造成的缓存影响仍未验证。输入验证增加本地 IO，总验证和存储成本未知。
 
-| Natural owner | Publication and current use | Release |
+## 谁发布，谁释放
+
+| 负责人 | 发布内容和用途 | 何时交接或释放 |
 | --- | --- | --- |
-| preparation and retained blobs | durable creation intent, original digest/length, explicit preparation dependencies and `publication-recheck:OUTPUT_ID` consumer | actual fixed-slot publication transfers the exact closure to its final report; interruption retains the consumer |
-| scoped/native process capture | prospective stdout/stderr enrollment before native writes, inherited capabilities, separately published launch record and actual joined outcome | final report closure handoff; failed/missing publication retains its repair consumer |
-| scoped/full check | immutable report original, explicit snapshot/blob/preparation/stream dependencies, fixed current report slot | pointer replacement releases prior current closure; full reports retain the producer's `report-recheck:OUTPUT_ID` until both original and current-slot publication succeed with a passing check |
-| full baseline export | reserved output before export, cumulative controlled byte admission and explicit recovery role | published final report owns the snapshot closure; failed/interrupted work keeps original recovery state |
-| lifecycle reports | exact intent/result originals and actual recovery readers | terminal result transfers failed diagnostics to an exact recheck consumer; interrupted work and failed rebind resume retain recovery roles |
-| native gather | exact acquisition intent, original gather report and unmodified downloaded reports at all attempt paths | current gather report owns acquisitions; failed gather retains a distinct exact recheck consumer |
-| generated CI upload | optional `retention_delivery` in the current provider; successful upload action supplies actual artifact ID/digest | acknowledgement verifies the matching original report and exact `native-delivery:REQUEST_ID` root, preserving the original check result |
+| 准备流程和保留 blob | 持久创建意图、原摘要／长度、明确的准备依赖、`publication-recheck:OUTPUT_ID` 消费者 | 实际发布到固定位置后，把完整依赖交给最终报告；中断时保留消费者 |
+| 按范围检查／真实 CI 的进程采集 | 原生写入前先登记 stdout／stderr、继承的使用凭据、单独发布的启动记录和实际已等待的结果 | 交给最终报告；发布失败或缺失时保留修复消费者 |
+| 按范围／完整检查 | 不可变报告原件、明确的快照／blob／准备／输出流依赖、固定当前报告位置 | 指针替换后释放旧报告依赖；完整报告的 `report-recheck:OUTPUT_ID` 要等原件和当前位置都发布成功且检查通过后才释放 |
+| 完整基线导出 | 导出前预留输出、累计受控字节统计和明确恢复角色 | 最终报告发布后负责快照依赖；失败或中断保留原恢复状态 |
+| 生命周期报告 | 精确的 intent／result 原件及实际恢复读取者 | 最终结果把失败诊断交给精确的复核消费者；中断工作和失败 rebind 续跑保留恢复角色 |
+| 真实 CI 汇总 | 精确的获取意图、原始汇总报告，以及各 attempt 路径下未修改的下载报告 | 当前汇总报告负责这些获取结果；失败时保留独立且精确的复核消费者 |
+| 生成的 CI 上传流程 | 当前 provider 可选的 `retention_delivery`；成功上传动作提供实际 artifact ID／摘要 | 确认过程核验匹配的原报告和精确 `native-delivery:REQUEST_ID` 保留根，原检查结果不变 |
 
-Readers of original descriptors and external blobs acquire shared use protection. Projects, workflow certificate, parity and offline collection readers use that owner too. Adopted parity publishes a new original and returns its address, preserving both compared originals and their old outcomes; a distinct fixed pointer follows the new publication. No check status, current pointer or upload metadata alone proves all external consumers have released their originals. Required report roots retain their explicit dependency closure; historical references and cycles alone are not roots. New current-slot publication protects old and candidate originals until the actual pointer write succeeds. Unknown/unpublished outcomes never become success.
+原始描述符和外部 blob 的读取者须取得共享使用保护。projects、工作流证明、同判比较和离线汇总也使用同一模块。采用的同判比较会发布新原件并返回地址，保留两份被比较原件及旧结果，再以单独固定指针指向新结果。
 
-Retained process adoption preserves the existing original stream/launch interfaces. Unadopted hosts retain existing behavior. Adopted stream creation is reserved before writes; a failed spawn keeps its enrolled empty/partial originals and repair state instead of silently removing owner evidence. Native process ownership still joins or excludes actual descendants; no PID/age inference substitutes for capabilities.
+检查状态、当前指针或上传元数据，都不能单独证明外部消费者已经释放原件。必需报告保留根保护明确依赖的全部内容；只有历史引用或环，不会自动成为保留根。更新当前报告位置时，旧、新原件都保护到指针实际写入成功。未知或未发布的结果不能算成功。
 
-Lifecycle outcome metadata records operation/status and an exact report digest plus `/error` pointer for a failure. The complete original keeps the entire error chain. This avoids duplicating a large diagnostic in the finite inventory; existing outcomes remain unchanged.
+进程输出保留沿用已有原始输出流／启动接口，未采用的宿主保持原行为。采用后，写入前先预留输出；进程启动失败也保留已登记的空／部分原件及修复状态，不能静默删除负责人的证据。进程模块仍须实际等待或排除后代，不能用 PID 或年龄猜测来替代使用凭据。
 
-The real-bootstrap fixture's cache-attempt reentry consumes every original stream and verifies its actual joined outcome and exclusive disposal receipt. A completed failed producer may then use a new attempt slot while its failed originals remain protected in place. Previously that gate required success even after verified cache disposal. Live/interrupted commands, missing or altered originals, contradictory outcomes and unsuccessful setup/release still refuse; the single unresolved-slot capacity is unchanged. This changes cache admission, not final-original release or the old result.
+生命周期结果元数据记录操作、状态、精确报告摘要，以及失败时的 `/error` 指针。完整原件保留整条错误链，有限清单不重复复制大段诊断，原结果也不改变。
 
-## Shared physical effects and overlap
+真实 bootstrap 样本重进缓存尝试时，读取全部原始输出流，并核验实际结束结果与独占删除回执。失败生产者若已结束、缓存已核验删除，可用新尝试位置重试，旧失败原件仍在原位受保护。旧规则即使已验证缓存删除也要求前次成功，现已修正。活跃／中断命令、缺失或变化的原件、矛盾结果、准备或释放失败仍会被拒绝；只允许一个未解决位置的限制不变。这只改变缓存进入条件，不释放最终原件，也不改写旧结果。
 
-Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then declares its exact effect paths and holds their addressed removal capability across the effect. Enrollment admission is released before physical IO; only overlapping publication is refused. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
+## 删除范围重叠时怎么处理
 
-Fixture allocation metadata is partitioned at its actual producer. The immutable
-`objects.json` namespace binds the physical directory and `producer-records/`
-namespace; it contains no mutable member list. An ordinary allocation opens only
-its addressed record under that allocation's directory exclusion. No global
-registry lease or process-wide decoded fixture inventory participates. Maintenance
-enumerates these explicit declarations, preserves unavailable/changed members and
-continues independent members. A busy allocation metadata transaction is protected
-without waiting behind it. The 30-second publication bound is unchanged.
+测试样本保管和最终原件保留各自有不同的释放含义。当前样本恢复适配器点名已登记的嵌套 Git 仓库及操作路径，再为精确路径取得删除凭据，并持有到操作结束。进入管理的锁在实际 IO 前释放，只有重叠发布会被拒绝。任一重叠的受管原件都会阻止样本删除，直到最终原件模块将其移除。复制内容使用同样保护和共用的逐项取消链接实现。
 
-An existing aggregate fixture store requires the explicit
-`chrono-worktree migrate --path COORDINATOR --partition-producer ID` conversion.
-Ordinary operations never fall back to that format. Conversion preserves the
-original source bytes, exact outcome and live capabilities, binds staged records
-to their source digest/length and physical identity, and refuses changed staging
-bytes. Interruption before namespace activation can resume only that exact input.
+这些关系来自明确登记，不扫描目录推断。普通发布不能静默接管已有样本文件：按地址复用旧内容时须核对字节并保留原所有权；历史纳管须有精确的原所有者证据和排除保护。两套机制的最终组合与存活协调仓库验收仍须另行完成。
 
-## Addressed output and consumer declarations
+样本分配元数据按实际生产者分开。不可变 `objects.json` 绑定物理目录及 `producer-records/` 命名空间，不存可变成员总表。普通分配只在自身目录的独占保护下打开自己的记录，不用全局登记锁或进程级解码清单。维护枚举明确声明，保留不可用／已改变成员，继续处理独立成员。分配元数据正在修改时直接保护该项，不排队等待。发布上限仍为 30 秒。
 
-`output-retention-v1/objects/OUTPUT_ID/record.json` owns one output, its original
-outcome, incoming attachments, exact consumer names and bounded retirement
-summary. `roles/SHA256(ROLE)/record.json` owns one consumer's membership. The
-namespace has no mutable member list, global admission lease or aggregate
-inventory. Ordinary publication, read, completion and release touch only their
-explicit addresses and outgoing dependency closure. They do not run whole-store
-maintenance. Unique output IDs need no shared sequence counter.
+旧的汇总式样本存储须通过 `chrono-worktree migrate --path COORDINATOR --partition-producer ID` 明确转换，普通操作不回退读取旧格式。转换保留源字节、精确结果和活跃使用凭据，把暂存记录绑定到源摘要、长度和物理身份，拒绝已变化的暂存字节。新命名空间启用前中断，只能用同一精确输入继续。
 
-Path declarations form a component-addressed trie. Ancestors are held shared;
-the target is held exclusive. Sibling paths therefore publish concurrently, while
-a tree effect excludes its declared descendants. Original content writers and
-fixed report slots retain their own identity-bound kernel capabilities. Their
-birth and retirement metadata use addressed directory exclusion, without a
-global transaction-count gate. The existing five-second acquisition limit
-remains; it does not expire another publisher's live protection.
+## 每个输出和消费者各自登记
 
-A relationship update first persists conservative incoming/consumer attachment,
-then publishes the source declaration, then removes superseded attachment.
-Interruption preserves extra protection until owner recovery can reconcile it.
-Producer content IO holds its original capability while metadata exclusion is
-released. Completion reloads the current addressed records and preserves
-references attached during IO. Read scopes forward only explicitly acquired or
-published originals through the existing descriptor handoff.
+`output-retention-v1/objects/OUTPUT_ID/record.json` 负责一个输出、原结果、入向关联、精确消费者名称和有限移除摘要。`roles/SHA256(ROLE)/record.json` 负责一个消费者的成员关系。命名空间没有可变成员总表、全局进入锁或汇总清单。普通发布、读取、完成、释放只访问明确地址及向外依赖的内容，不触发全库维护。唯一输出 ID 也不需要共享计数器。
 
-Explicit `maintain` enumerates declared records under finite node, byte, metadata
-and time budgets. It attempts each actual connected component without waiting
-for busy metadata, preserves the failed original and records its error, and
-continues independent components. Reports identify their visited scope; a partial
-or refused scan reports `remaining_outputs:null`, never a fabricated global zero.
-Identity-bound physical effects and exact source/index checks remain mandatory.
-Root classification consumes the metadata/time bounds and does not spend a physical disposal slot; a protected current report therefore cannot monopolize a one-step round. Only retired, unreferenced metadata with no surviving capability can expire; path
-trie pruning resumes with bounded per-object progress. Unknown members and
-replaced identities are preserved.
+路径声明按路径段组织成树：祖先持共享锁，目标持独占锁。因此兄弟路径可同时发布，目录树操作则排除声明的后代。原件写入者和固定报告位置继续持有绑定身份的内核使用凭据；创建和移除元数据只锁对应目录，不加全局事务数量门。获取锁仍限五秒，超时不使别人的活跃保护失效。
 
-Current regression consumers include independent publication while another
-record is locked or damaged, the original 420 outputs / 28 publishers / five-second
-case, and real lifecycle/bootstrap publication with 512 protected originals. The
-latter now requires independent publication to succeed regardless of unrelated
-occupancy, while retaining live producers/readers, failed/interrupted originals,
-current/delivery roots, dependency closure and unchanged source/index bytes.
-These implementation changes still require candidate checks and host cutover;
-source presence does not establish passing or deployed behavior.
+更新关系时，先持久保存保守的入向／消费者关联，再发布来源声明，最后移除被替代关联。中断会多留保护，等负责人恢复时协调。内容 IO 期间保留原件凭据，但释放元数据独占锁。完成时重新读取当前记录，保留 IO 期间新增的引用。读取范围只通过已有描述符交接，转交明确取得或发布的原件。
 
-The supported owner entry is:
+显式 `maintain` 在节点、字节、元数据和时间预算内枚举声明。它逐个尝试实际关联组，不等待繁忙元数据；失败时保留原件、记录错误，继续独立组。报告注明已访问范围，遍历不全或被拒时写 `remaining_outputs:null`，不能编造全库剩余零项。
+
+绑定身份的实际删除，以及精确源码／索引检查仍为必需。判断保留根消耗元数据和时间预算，不占实际删除步数，所以一个受保护的当前报告不能独占单步维护。只有已移除、无引用且无活跃凭据的元数据才能到期；路径树修剪逐对象有限推进。未知成员和身份被替换的对象继续保留。
+
+现有回归覆盖：其他记录被锁或损坏时独立发布；原 420 输出／28 发布者／五秒用例；以及保留 512 份受保护原件时真实生命周期／bootstrap 发布。最后一种要求无关占用不阻止独立发布，同时保护活跃生产者／读取者、失败／中断原件、当前／交付保留根和依赖，且源码／索引字节不变。源码中有实现不代表测试通过或已经部署，仍须候选检查和宿主切换。
+
+## 正式入口和操作要求
 
 ```sh
 .chrono-harness/bin/chrono-harness retention --host-root H --request P
 ```
 
-`P` is an exact root-relative JSON request bounded to 64 KiB. Operations are `maintain`, `migrate-policy`, `enroll`, `release`, `protect-consumer`, `release-consumer` and `acknowledge-delivery`. A producer-generated result exits 0; invalid input, changed identity, unavailable capability or policy refusal exits 2. The result never declares historical engineering work completed.
+`P` 是相对根目录的精确 JSON 请求，最多 64 KiB。操作有 `maintain`、`migrate-policy`、`enroll`、`release`、`protect-consumer`、`release-consumer`、`acknowledge-delivery`。程序产生结果后退出 `0`；输入无效、身份改变、使用凭据不可取得或政策拒绝时退出 `2`。结果不宣称历史工程工作已经完成。
 
-Publication persists an intent, exact destination and parent identity before creating an empty staging inode, attaches its identity durably and publishes by a kernel no-replace rename. Actual completion records the original outcome. Ordinary adopted entries resume bounded accounting, interrupted creation and partial effects. Each related graph, directory snapshot, summary ring and read/write operation has finite bounds. An oversized related set or output refuses controllable publication; unrelated retained originals impose no admission quota. External builders remain accounted after exclusion.
+发布先持久保存意图、精确目的路径和父目录身份，再建立空暂存文件，把其 inode 身份持久关联，最后通过内核“不覆盖已有目标”的重命名发布。实际完成时记录原结果。普通已采用入口可恢复有限统计、中断创建和部分操作。每组关联图、目录快照、摘要环和读写都有上限。关联组或输出过大时拒绝受控发布；无关原件不占进入配额。外部构建者被排除后仍须统计其结果。
 
-Every effect rechecks policy, exact output/entry identities, references, capabilities and committed/index source. Sealed manifests/cursors cover only the explicitly enrolled output. Replacements, changed content, unknown late descendants and special files are preserved. Links are unlinked without following their targets. Logical removed bytes, observed allocated blocks and unknown physical savings remain distinct facts. Maintenance summaries retain original outcomes without claiming the original bytes still exist after retirement.
+每次实际操作都重新检查政策、精确输出／条目身份、引用、使用凭据，以及已提交／索引源码。封存清单和游标只覆盖明确纳管的输出。替换、内容变化、未知新增后代和特殊文件一律保留。符号链接只删除链接，不跟随目标。逻辑删除字节、实际观察的分配块和未知物理节省分别报告。维护摘要保留原结果，不声称移除后原字节还在。
 
-Policy migration requires the exact previous policy bytes and exclusive original producer/reader protection. It updates only the policy binding, preserving paths, original outcomes, expiries, roots and partial effects. Missing scopes, incomplete accounting, incompatible capacity or live consumers refuse migration. No backdating, scanner, handwritten inventory edits or capacity increase is supported.
+政策迁移要求精确的旧政策字节，以及对原生产者／读取者的独占排除保护。它只更新政策绑定，保留路径、原结果、到期时间、保留根和部分操作。范围缺失、统计不完整、容量不兼容或仍有活跃消费者时拒绝迁移。不支持倒填时间、扫描接管、手工改清单或抬高容量。
 
-A repair consumer uses a digest-bound declaration outside its disposable originals:
+修复消费者的声明放在待清理原件之外，并绑定摘要：
 
 ```json
-{"schema":"chrono-retention-consumer/v1","consumer":"ACTIVITY_ID","purpose":"Actual required recheck inputs and release responsibility","originals":[{"id":"OUTPUT_ID","path":"EXACT_PATH","identity":"EXACT_DEVICE:INODE:TYPE"}]}
+{"schema":"chrono-retention-consumer/v1","consumer":"ACTIVITY_ID","purpose":"实际复核所需输入与释放责任","originals":[{"id":"OUTPUT_ID","path":"EXACT_PATH","identity":"EXACT_DEVICE:INODE:TYPE"}]}
 ```
 
-`protect-consumer` takes `declaration:{path,sha256}`. `release-consumer` additionally takes `receipt:{path,sha256}` and a JSON `pointer`. The responsible consumer must publish `{consumer, declaration_sha256, state:"released"}` at that pointer after actually accounting its inputs and preserving any still-required originals under their real consumers. Release checks exact membership, identity and exclusive reader exclusion. It changes no expiry or original result. Partial/shrinking declarations, unresolved state, changed originals and live readers refuse; bounded digest/count receipts support exact reentry while retained. A new consumption activity uses a new ID.
+`protect-consumer` 接收 `declaration:{path,sha256}`。`release-consumer` 另需 `receipt:{path,sha256}` 和 JSON `pointer`。负责消费者实际核清输入、将仍必需原件交给真实消费者保护后，在指针处发布 `{consumer, declaration_sha256, state:"released"}`。
 
-Historical enrollment separately requires a policy-selected exact producer source/receipt, original owner lease, path/outcome binding, required roots and any exact consumer release evidence. It does not scan or delete. Compatible deployment must join/exclude old writers and readers, including legacy implementations that lack these capabilities. Older strict inventories/binaries must not be mixed without that cutover.
+释放时核对精确成员、身份和读取者独占排除，不改变到期时间或原结果。声明不完整／缩小、状态未解决、原件变化或仍有活跃读取者都会被拒绝。保留期内，有上限的摘要／数量回执支持同一精确请求重进；新消费活动使用新 ID。
 
-## Outstanding acceptance
+历史纳管另需政策选定的精确生产源码／回执、原所有者租约、路径／结果绑定、必需保留根，以及适用的精确消费者释放证据。它不扫描也不删除。兼容部署必须等待或排除旧写入者和读取者，包括不支持这些凭据的旧实现。未完成切换前，不能混用旧严格清单或二进制。
 
-The historical 512 records / 493 extant / 19 absent observation, OS39/OS54 originals, historical current-release and `ci-persistent-cache` two-endpoint migration mismatch remain unresolved. Their originals and current consumers stay protected under their actual owners; future policy selection does not settle them. L1 source and all retained commits remain intact. Fixed compatible input/native/PR207 handoffs, complete shared acceptance, exact-source native runs, independent review, coordinator deployment, actual landing/postconditions and full SPEC §10.1 acceptance remain caller/L3/L4 obligations. Local Rust regressions or generated upload YAML do not establish remote artifact availability or real native release.
+## 尚未完成的验收
 
-## Fixed-source composition boundary
+历史 512 记录／493 存在／19 缺失观察、OS39／OS54 原件、历史 current-release，以及 `ci-persistent-cache` 两端政策迁移不匹配仍未解决。原件和当前消费者由实际负责人继续保护，未来选择新政策不会自动解决它们。L1 源码和全部保留提交保持完整。
 
-The lifecycle source is composed with input handoff
-`cf7ee4d85bb002491c84173a5e5320b13e29fff0` and principles source
-`24949168c0eaad671f98e0d033e16040378f284f`. Configuration-scoped FILEMAP
-edges and `explicit-graph/v1` selection evidence retain their input-owner
-contracts. Retained stream/launch publication now composes with typed process
-failure records; full-report publication retains both original judge failures
-and publication errors. The report-slot lease remains held through actual
-pointer publication and settlement. Failed publication keeps repair/current
-roots instead of acknowledging release.
+固定兼容输入／真实 CI／PR207 交接、完整共享验收、精确源码的真实 CI 运行、独立评审、协调仓库部署、实际落地及后续状态、完整 SPEC §10.1 验收，仍归调用方／L3／L4。局部 Rust 回归或生成上传 YAML 不能证明远端产物可用或真实发布完成。
 
-This composition preserves the removal of Variables/PR-body activation and
-extra permission overrides. It does not repair the retained producer admission
-or retirement algorithms: the preceding lifecycle candidate failed CI/projects
-registry admission and two runner retirement cases, and its complete global
-response exceeded the unchanged 8 MiB bound. Those failures remain failed;
-composed-source prerequisite checks need their own originals before any shared
-acceptance. No native, deployment, landing or complete SPEC acceptance follows
-from composition. The two correction reserves are exhausted.
+## 固定来源的组合范围
 
-The current isolated-host cutover stages the new worktree owner from a clean
-program candidate while the existing host selection remains usable by the old
-producer. The custodian then excludes the old admission, actual output and
-transaction capabilities, preserves the exact inventory/policy originals,
-materializes addressed declarations with unchanged domain state and selects policy
-v2. Commit that selection before deployment, whose publication callback requires
-the exact current clean source. The retained candidate then owns the registered
-stage bootstrap; the selected old owner cannot read the newly selected policy.
-Deploy that stage through `deploy-owner`, then run the normal clean bootstrap and
-canonical checks. The intermediate program candidate is staging evidence and
-does not establish final acceptance.
-No ordinary operation decodes the old aggregate layout.
+生命周期源码与输入交接 `cf7ee4d85bb002491c84173a5e5320b13e29fff0`、原则来源 `24949168c0eaad671f98e0d033e16040378f284f` 组合。按配置选择的 FILEMAP 边及 `explicit-graph/v1` 选测证据仍遵循输入负责人要求。保留输出流／启动发布已与有类型进程失败记录组合；完整报告同时保留原检查失败和发布错误。报告位置的租约持有到指针实际发布和结算完成。发布失败时保留修复／当前保留根，不确认释放。
+
+这个组合保留了对 Variables／PR 正文激活层及额外权限覆盖的删除。它没有修复保留生产者的进入或移除算法：前一个生命周期候选曾在 CI／projects 登记检查和两项 runner 移除用例失败，其完整全局响应也超过未改变的 8 MiB 上限。这些失败仍是失败；组合源码的前置检查必须有自己的原件，才能开始共享验收。源码组合本身不证明真实 CI、部署、落地或完整 SPEC 通过。此前预留的两次修正机会已经用完。
+
+当前独立宿主切换先从干净程序候选暂存新的 worktree 所有者，同时保留旧生产者可用的宿主选择。保管者再排除旧进入锁、实际输出和事务凭据，保存精确清单／政策原件，以不变的领域状态建立逐项声明，并选择政策 v2。
+
+部署前先提交这个选择，因为发布回调要求精确的当前干净源码。保留候选随后负责登记的 stage bootstrap；所选旧所有者不能读取新政策。通过 `deploy-owner` 部署暂存所有者，再运行普通干净 bootstrap 和标准检查。中间程序候选只作暂存证据，不代表最终验收。普通操作不解码旧汇总布局。

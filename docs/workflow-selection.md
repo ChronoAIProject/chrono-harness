@@ -1,69 +1,38 @@
-# Declared workflow test selection
+# 按工作流要求选择测试
 
-FILEMAP impact v2 makes declared stability tests part of the normal execution
-plan. It calls mixed's shared explicit classifier, lowers applicable workflow
-requirements to `test-execution` edges, and computes the same endpoint union and
-closure used by ordinary dependencies. Routes merges the resulting registered
-plans; projects executes each shared operation once. No second executor or
-all-tests fallback is introduced.
+FILEMAP impact v2 把明确登记的稳定性测试加入普通执行计划。它调用 mixed 共用的分类逻辑，将适用的工作流要求转换成 `test-execution` 依赖边，再按普通依赖使用的两端合并图计算影响范围。routes 合并登记计划，projects 对共享操作只执行一次，不另建执行器，也不以跑全量测试兜底。
 
-For each endpoint, a stability row applies when its explicit `paths` intersect
-the DELTA, or its normalized definition/registry location changed. Path matches
-use literal registered paths. Definition changes retain old and new test lists;
-source pointers retain each endpoint's actual row index. Reordering sets within
-the same stability definition does not change that definition.
+## 什么时候选择测试
 
-Integration is required by an applicable stability row, or by an explicit rule
-change when either endpoint enables `semantic_changes_require_integration`.
-The rule classification is exactly the implementation used by the mixed judge:
-whole executable-rule surfaces and explicitly selected semantic fields. The
-base and candidate `integration.tests` lists then apply. Removing a requirement
-or disabling the candidate flag cannot erase the base obligation in that DELTA.
-Ordinary membership/edge registration and disconnected docs do not activate this
-suite. The suite contains only declared test IDs, never discovered tests.
+对基线和候选分别判断：稳定性记录中的 `paths` 与变更路径有交集，或者这条记录的标准化定义、登记位置改变时，该记录生效。路径按登记原样匹配。定义改变时保留旧、新测试列表；来源指针保留各端真实行号。同一稳定性定义中的集合换序，不算定义改变。
 
-`impact.workflow` uses `chrono-workflow-selection/v1` and contains:
+适用的稳定性记录提出要求，或发生明确规则变化且任一端启用 `semantic_changes_require_integration` 时，需要集成。规则分类与 mixed 共用：既看整份可执行规则文件，也看明确选中的含义字段。
 
-| Field | Meaning |
+此时两端的 `integration.tests` 都适用。候选删除要求或关闭开关，不能抹掉该次变更在基线已有的义务。普通成员／依赖边登记，以及没有相关依赖的文档修改，不触发这组测试。测试只能来自登记的 ID。
+
+## 输出内容
+
+`impact.workflow` 使用 `chrono-workflow-selection/v1`：
+
+| 字段 | 含义 |
 | --- | --- |
-| `integration_required` | Whether this DELTA requires integration; not proof it occurred |
-| `rule_changes` | Shared mixed classification before cost packaging |
-| `trigger_paths` | Paths that activated stability or semantic requirements |
-| `requirements` | Endpoint, registry, physical pointer, reason, trigger paths, declared test IDs and lowered edges |
-| `schema_transitions` | Original registry versions/paths before and after decoding |
-| `certification` | Explicit selection-only boundary |
+| `integration_required` | 本次变更是否要求集成；不代表已经集成 |
+| `rule_changes` | mixed 共用的分类结果，此时还未附上成本 |
+| `trigger_paths` | 触发稳定性或规则要求的路径 |
+| `requirements` | 所属端、登记文件、实际指针、原因、触发路径、测试 ID 和转换后的边 |
+| `schema_transitions` | 解码前后的原始登记版本和路径 |
+| `certification` | 明示这里只负责选测，不证明测试已通过 |
 
-Every lowered edge goes from a trigger file to a declared test. Its origin remains
-base/candidate/both in the normal union, and changes carry references to the
-requirement in `impact.workflow`. New/deleted trigger paths are resolved in the
-union of file identities: a newly added rule can trigger a suite declared in the
-base, and a deleted rule can trigger candidate tests. Targets must exist in the
-declaring endpoint. Ordinary FILEMAP edges retain endpoint-local reference checks;
-a workflow edge does not hide a dangling FILEMAP edge.
+每条转换后的边从触发文件指向登记测试，在普通合并图中保留来源 `base`、`candidate` 或 `both`。变化还指向 `impact.workflow` 中对应的要求。新增和删除的触发路径通过两端文件身份的并集解析，所以新增规则可以触发基线登记的测试，删除规则也可以触发候选测试。
 
-The usual typed-edge errors, ambiguity checks, required/retired tests and old/new
-cost references apply. No edge means no selected test. Missing selected targets,
-plans, operations or semantic inputs fail explicitly. An unrelated historical
-bad requirement does not become a new finding solely because it was read.
+目标必须存在于声明它的一端。普通 FILEMAP 边仍按各自端点核引用，工作流新增的边不能掩盖悬空引用。类型错误、身份歧义、必需／移除测试和旧新成本引用都沿用原规则。没有选测边就不选择测试；被选中的目标、计划、操作或必需含义输入缺失时明确报错。无关的旧错误不能只因被读到就变成本次变更新问题。
 
-Full judge execution reads named JSON only from fixed Git objects and consumes
-registration's single interpreted view. The `produce` and `produce_with_inputs`
-library APIs provide the five known registry documents; callers using other
-named semantic JSON must supply it through `produce_with_documents` or
-`produce_with_inputs_and_documents`. Missing required documents are errors, not
-an empty classification. Mixed consumes FILEMAP v2 as a wire value, so its shared
-classifier has no compile dependency on the downstream impact or cost producers.
+## 输入和验证范围
 
-Dedicated tests cover declaration removal, old costs, semantic versus ordinary
-edits, row ordering, new/deleted paths, relevant reference failures and docs
-locality. Real runner → registration → filemap → routes → projects consumers
-verify additional suite execution, shared prerequisites running once and failures
-before operations. The existing mixed consumers verify the shared named-JSON
-decoder, which now rejects invalid semantic input before downstream judges run.
+完整检查只从固定 Git 对象读取点名的 JSON，并使用 registration 唯一的解释结果。库 API `produce` 和 `produce_with_inputs` 提供五份已知登记；若点名其他 JSON，调用方必须通过 `produce_with_documents` 或 `produce_with_inputs_and_documents` 提供。缺少必需文档会报错，不能当作没有规则变化。mixed 通过进程协议读取 FILEMAP v2，分类逻辑不在编译时依赖后续的影响或成本程序。
 
-Original schema changes also activate integration and lower explicitly matching
-`migrations[].test` registrations to compatibility-test edges. Decoding cannot hide
-the original version change. These remain selection facts; the [workflow judge](workflow.md)
-certifies freshness, completed integration, retirement and finite migrations.
-The scoped CI adapter retains its labelled legacy selection boundary; full native
-activation, complete inputs and parity remain unfinished.
+专属测试覆盖删除声明、旧成本、规则与普通修改的区别、记录换序、新增／删除路径、相关引用失败和文档修改范围。真实 runner → registration → filemap → routes → projects 调用链验证新增测试实际执行、共享前置只运行一次，以及操作开始前的错误。现有 mixed 消费者测试核对共用 JSON 解码器；无效含义输入会在后续检查程序启动前失败。
+
+原始格式版本变化也要求集成，并把明确匹配的 `migrations[].test` 转成兼容性测试边；解码不能藏掉原始版本变化。这些仍只是选测事实。分支是否过旧、集成是否完成、移除和有限迁移是否合格，由[工作流检查](workflow.md)判断。
+
+按范围检查的 CI 适配器保留其注明的旧版选测范围。真实 CI 全面启用、输入齐全和本地／CI 必然同判仍未完成。

@@ -13,8 +13,11 @@ use std::{fs, io::Write, path::Path};
 pub const SCHEMA: &str = "chrono-github-full-ci/v1";
 pub const SHORT_SCHEMA: &str = "chrono-github-full-ci/v2";
 const MARKER: &str = "# chrono-ci: owned github-full-ci/v1\n";
-const SOURCE_MARKER: &str = "# chrono-ci: full source ";
 const ADOPTED: &str = ".chrono-harness/ci/full.json";
+
+fn marker(path: &str) -> String {
+    format!("{MARKER}# chrono-ci: full source {}\n", scalar(path))
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -207,11 +210,7 @@ pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
         shell(&c.generator),
         shell(config_path)
     );
-    let marker = if c.scope.is_some() {
-        format!("{MARKER}{SOURCE_MARKER}{}\n", scalar(config_path))
-    } else {
-        MARKER.into()
-    };
+    let marker = marker(config_path);
     let rendered = format!(
         r#"{marker}name: {name}
 on:
@@ -313,54 +312,10 @@ fn scope_preflight(root: &Path, c: &Config) -> Result<(), String> {
     Ok(())
 }
 
-fn projection_preflight(root: &Path, path: &str, c: &Config, output: &str) -> Result<bool, String> {
-    let same = output_preflight(root, &c.workflow_path, output, MARKER)?;
-    if same {
-        return Ok(true);
-    }
-    match fs::read(no_symlink_parents(root, &c.workflow_path)?) {
-        Ok(bytes) => {
-            let text = std::str::from_utf8(&bytes).map_err(|_| "owned output is not UTF-8")?;
-            let body = text
-                .strip_prefix(MARKER)
-                .ok_or("full CI ownership marker required")?;
-            let owned = if body.starts_with(SOURCE_MARKER) {
-                body.starts_with(&format!("{SOURCE_MARKER}{}\n", scalar(path)))
-            } else if c.scope.is_some() {
-                // A legacy projection can adopt a scope only from its original explicit source.
-                let binding = format!(
-                    " 'prepare' '--host-root' '.' '--config' {} '--event' ",
-                    shell(path)
-                );
-                text.split_once("      - name: Preserve fixed full context\n")
-                    .and_then(|(_, step)| {
-                        step.split_once("      - name: Canonical full harness check\n")
-                    })
-                    .is_some_and(|(step, _)| {
-                        step.lines()
-                            .any(|line| line.starts_with("          ") && line.contains(&binding))
-                    })
-            } else {
-                // Preserve the unscoped v1 regeneration contract.
-                true
-            };
-            if !owned {
-                return Err(format!(
-                    "full CI workflow source ownership collision: {}",
-                    c.workflow_path
-                ));
-            }
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e.to_string()),
-    }
-    Ok(false)
-}
-
 pub(crate) fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
     let output = render(c, path)?;
     scope_preflight(root, c)?;
-    let same = projection_preflight(root, path, c, &output)?;
+    let same = output_preflight(root, &c.workflow_path, &output, &marker(path))?;
     if verify && !same {
         return Err(format!(
             "generated full CI workflow drift: {}",
@@ -383,7 +338,7 @@ pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     };
     let rendered = render(&c, ADOPTED)?;
     scope_preflight(root, &c)?;
-    let same = projection_preflight(root, ADOPTED, &c, &rendered)?;
+    let same = output_preflight(root, &c.workflow_path, &rendered, &marker(ADOPTED))?;
     if !existing {
         write_file(
             root,
