@@ -203,8 +203,8 @@ fn expand_edge(
             bounded_queue(q@.push(v), n);
         }
         let depth = d[node] + 1;
-        d.set(v, depth);
-        p.set(v, Some((node, slot)));
+        d[v] = depth;
+        p[v] = Some((node, slot));
         q.push(v);
         proof {
             assert(q@.no_duplicates());
@@ -262,7 +262,7 @@ pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
         p.push(None);
     }
     proof { assert(p[root as int].is_none()) by { assert(d[root as int] == n); } }
-    d.set(root, 0);
+    d[root] = 0;
     let mut q = Vec::new();
     q.push(root);
     proof {
