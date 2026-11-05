@@ -868,8 +868,11 @@ failures still block that target.
 **Product/policy cochange:** this candidate adds creation-age decisions and source
 preservation to the existing addressed worktree owner, and this host selects the
 user's >2h reuse / >4h deletion policy. Compatible committed binary/policy adoption
-is required. The implementation is local candidate work until the surviving
-coordinator is cut over and ordinary host operations are observed.
+is required. I4's surviving coordinator has completed qualified owner publication
+and ordinary source bootstrap with this selected policy. Positive real-host
+>2h reuse / >4h disposal still requires an eligible, authorized checkout whose
+source and consumers can be preserved/excluded; short-age fixtures and cache
+reclamation alone do not establish those effects.
 
 Age comes from the physical checkout directory's filesystem creation time, never
 mtime, branch time, enrollment/import time or a refreshed activity timestamp.
@@ -985,6 +988,19 @@ then real producer success/failure/reentry and aged reuse/disposal acceptance
 from the surviving coordinator. A staging commit, local Rust fixture, binary hash
 or failed linked bootstrap establishes none of that adoption. The original full
 FILEMAP DELTA and applicable native/platform checks still need passing originals.
+
+I4 completed this staged cutover and exact absence adoption for all seventeen
+actually absent enrolled checkouts using retained original manual bytes. The
+single-checkout receipt support above was needed by two of them. Ordinary source
+bootstrap on the committed selected policy passed, and its normal completion
+reclaimed registered targets; missing historical command outcomes remain unknown.
+Producer partition/context migration is separate: context migration keeps one
+metadata EX gate per existing allocation, briefly excludes cache consumers and
+then publishes context/cursor under those retained gates. It preserves the old
+context bytes and original registrations, refuses live consumers and does not
+raise descriptor limits. A real CI producer migration exhausted descriptors
+before this change; its original partial partition result remains evidence.
+See the coverage table for current check and actual-host acceptance gaps.
 
 The fixed lifecycle commands default to `--host-root .` and
 `--config .chrono-harness/worktree.json`:
