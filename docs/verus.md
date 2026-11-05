@@ -54,11 +54,31 @@ rejected identity, or none exactly when the result has no missing records. The
 actual adapter uses this ledger instead of parallel identity/decision arrays or
 unchecked indexing. Boundary/example
 functions in the dedicated test project are verified by Verus as well; Cargo's
-ordinary tests do not replace this verification. The same source also proves the full nonzero lowercase hexadecimal OID predicate
-(40 or 64 bytes) and the nonempty ASCII identifier predicate. Actual `full_oid`
-and `id` callers use these predicates through byte slices, without allocating a
-copy. The dedicated examples cover zero/empty/uppercase rejection, both OID
-lengths, identifier ASCII range endpoints and invalid separator/non-ASCII bytes.
+ordinary tests do not replace this verification.
+
+`crates/runner/src/verified_identifiers.rs` now owns the shared full nonzero
+lowercase hexadecimal OID predicate (40 or 64 bytes) and nonempty ASCII identifier
+predicate. Runner Git facts, runner unit IDs, CI event/action OIDs and the CI judge
+call this source through borrowed byte slices. The CI policy's Cargo erasure
+reuses the runner module; its Verus root includes the same registered source.
+The independent runner test project owns the moved boundary proofs, covering
+zero/empty/uppercase rejection, both OID lengths, identifier ASCII range endpoints
+and invalid separator/non-ASCII bytes. Both shared source and test roots have
+explicit verifier actions in the runner test plan. This does not clear the
+unproved remainder of runner, CI or their adapters.
+
+**Product and host execution registration change together:** the shared runner
+source uses the already pinned erasure macro dependency, replacing duplicated
+repository predicates. The existing Verus binary, checking flags and external
+interface assumptions remain current. Each affected independent Cargo project
+registers `inputs.resolve.ID`, delegating directly to Cargo's offline
+`update --workspace` with its fixed manifest. Cargo produces the lockfiles; this
+method retains already locked third-party versions unless the dependency change
+requires new packages. The new proof operations and exact output claims join the
+existing runner execution plan. All effects propagate through the two endpoints'
+explicit edges; no test is inferred from imports or lockfile discovery. Broader
+build, test, verification and storage costs remain unmeasured. Whole-file and
+project-language gaps remain visible until their actual implementations migrate.
 
 The same owner now contains the executable compiler-result admission decision.
 It accepts exactly a successful, error-free whole-crate result with a positive

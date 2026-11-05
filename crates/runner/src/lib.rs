@@ -27,6 +27,8 @@ pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
+#[allow(unexpected_cfgs)]
+pub mod verified_identifiers;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]

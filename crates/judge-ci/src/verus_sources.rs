@@ -158,7 +158,7 @@ pub fn normalize_relative_path(input: &[u8]) -> (normalized: Option<Vec<u8>>)
 }
 
 pub open spec fn sha256_text(bytes: Seq<u8>) -> bool {
-    bytes.len() == 64 && forall|i: int| 0 <= i < bytes.len() ==> super::oid_byte(#[trigger] bytes[i])
+    bytes.len() == 64 && forall|i: int| 0 <= i < bytes.len() ==> super::identifiers::oid_byte(#[trigger] bytes[i])
 }
 
 /// SHA-256 text may be all zeroes; unlike an object ID it has no nonzero rule.
@@ -169,7 +169,7 @@ pub fn valid_sha256_text(bytes: &[u8]) -> (valid: bool)
     let mut i = 0;
     while i < bytes.len()
         invariant 0 <= i <= bytes.len(), bytes.len() == 64,
-            forall|j: int| 0 <= j < i ==> super::oid_byte(#[trigger] bytes[j]),
+            forall|j: int| 0 <= j < i ==> super::identifiers::oid_byte(#[trigger] bytes[j]),
         decreases bytes.len() - i,
     {
         let byte = bytes[i];

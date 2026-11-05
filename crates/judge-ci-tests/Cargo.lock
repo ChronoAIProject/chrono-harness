@@ -64,6 +64,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "tracing",
+ "verus_builtin_macros",
 ]
 
 [[package]]
