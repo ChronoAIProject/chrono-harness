@@ -100,6 +100,64 @@ fn changed_verus_specification_requires_its_proof_in_the_explicit_delta_closure(
 }
 
 #[test]
+fn changed_verus_file_declarations_require_their_roots_without_source_byte_changes() {
+    for previous in [
+        json!({"kind":"data","roots":[]}),
+        json!({"kind":"specification","roots":["src.txt"]}),
+    ] {
+        let h = verus_report_host();
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            let file = v["files"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|f| f["path"] == "doc.txt")
+                .unwrap();
+            file["verification"] = previous;
+        });
+        let base = h.commit();
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            let file = v["files"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|f| f["path"] == "doc.txt")
+                .unwrap();
+            file["verification"] = json!({"kind":"specification","roots":["doc.txt"]});
+        });
+        let candidate = h.commit();
+        for response in [
+            unit(&h, &base, &candidate, "alpha"),
+            collect(&h, &base, &candidate, json!([])),
+        ] {
+            assert_eq!(
+                response.evidence["changed_paths"],
+                json!([".chrono-harness/FILEMAP.json"])
+            );
+            fail(&response, "file:doc.txt:root:doc.txt:delta-proof");
+            assert_eq!(response.evidence["executed"], json!([]));
+            assert_eq!(response.evidence["global_selected"], json!([]));
+        }
+        // The same metadata-only transition passes only through its explicit
+        // consumer and admitted original proof, without fabricating source edits.
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            let file = v["files"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|f| f["path"] == "doc.txt")
+                .unwrap();
+            file["edges"] = json!([{"kind":"compile","to":"project:lib"}]);
+        });
+        let repaired = h.commit();
+        let reference = write_report(&h, &candidate, &repaired, "alpha");
+        let original = h.read(reference["path"].as_str().unwrap());
+        assert_eq!(original["response"]["status"], "passed", "{original:#}");
+        pass(&collect(&h, &candidate, &repaired, json!([reference])));
+    }
+}
+
+#[test]
 fn verus_root_proofs_follow_assigned_units_and_join_only_at_collection() {
     let h = verus_report_host();
     h.change_registry(".chrono-harness/projects.json", |v| {

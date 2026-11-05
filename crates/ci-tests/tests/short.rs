@@ -164,7 +164,19 @@ fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budg
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["report_publication"] = json!("retained-reference/v2");
     });
-    let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
+    let payload = json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false});
+    json_file(&h.root, ".chrono-harness/state/event.json", &payload);
+    let out = h
+        .command(&["check", "--unit", "alpha"])
+        .env(prepared::SOURCE, "ci")
+        .env("GITHUB_EVENT_NAME", "push")
+        .env(
+            "GITHUB_EVENT_PATH",
+            h.root.join(".chrono-harness/state/event.json"),
+        )
+        .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+        .output()
+        .unwrap();
     assert!(out.status.success(), "{out:?}");
     let config =
         chrono_harness::load_config(&h.root.join(".chrono-harness/ci/check.json")).unwrap();
@@ -175,6 +187,12 @@ fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budg
             prepared::read_original(&h.root, o, None)
         })
         .unwrap();
+    let input: prepared::InputRequest = serde_json::from_value(
+        complete.report["request"]["observations"]["preparation"]["request"].clone(),
+    )
+    .unwrap();
+    let directory = prepared::retention_directory(&input);
+    let upload = input.native_artifacts.as_ref().unwrap().directory.clone();
     let mut producer = complete.producer;
     let mut response: Value = serde_json::from_slice(&producer.stdout_bytes).unwrap();
     let mut artifacts = Vec::new();
@@ -183,9 +201,7 @@ fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budg
         ("compiler-dependency", b"dependency fixture\n".as_slice()),
         ("compiler-library", &[0u8, 255, 128, 1]),
     ] {
-        let original =
-            prepared::retain_original(&h.root, ".chrono-harness/state/preparation/", prefix, raw)
-                .unwrap();
+        let original = prepared::retain_original(&h.root, &directory, prefix, raw).unwrap();
         artifacts.push(json!({"path":prefix,"original":original,"byte_length":raw.len()}));
     }
     response["evidence"]["verus"] = json!({"compiler_evidence":[{
@@ -198,16 +214,12 @@ fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budg
     producer.stdout = String::from_utf8(producer.stdout_bytes.clone()).unwrap();
     producer.stdout_sha256 = sha256(&producer.stdout_bytes);
     let mut report = complete.report;
-    report["judge"] = chrono_harness::scoped_report::retain_process(
-        &h.root,
-        ".chrono-harness/state/preparation/",
-        &producer,
-    )
-    .unwrap();
-    let path = ".chrono-harness/state/preparation/compiler-transport-report.json";
+    report["judge"] =
+        chrono_harness::scoped_report::retain_process(&h.root, &directory, &producer).unwrap();
+    let path = format!("{directory}compiler-transport-report.json");
     report["retained_report"] = json!(path);
     let raw = serde_json::to_vec(&report).unwrap();
-    fs::write(h.root.join(path), &raw).unwrap();
+    fs::write(h.root.join(&path), &raw).unwrap();
     let published = serde_json::to_vec(&json!({
         "schema":"chrono-check-reference/v1",
         "original":{"path":path,"sha256":sha256(&raw)}
@@ -231,7 +243,7 @@ fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budg
     for transport in [
         None,
         Some(prepared::ArtifactTransport {
-            source_directory: ".chrono-harness/state/".into(),
+            source_directory: upload,
             directory: ".chrono-harness/state/relocated/".into(),
         }),
     ] {
