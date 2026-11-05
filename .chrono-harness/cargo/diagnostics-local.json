@@ -48,11 +48,11 @@
       "input": null
     },
     {
-      "path": ".chrono-harness/state/bootstrap-owner-tooling/cargo/config",
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/config",
       "input": null
     },
     {
-      "path": ".chrono-harness/state/bootstrap-owner-tooling/cargo/config.toml",
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/config.toml",
       "input": null
     }
   ],

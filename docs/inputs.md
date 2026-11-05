@@ -67,7 +67,7 @@ bootstrap, canonical DELTA check and native PR/landing checks; total validation
 and storage costs remain unmeasured.
 
 Its writable `CARGO_HOME` now uses the current checkout's
-`.chrono-harness/state/bootstrap-owner-tooling/cargo`, matching the registered
+`.chrono-harness/cache/bootstrap-owner-tooling/cargo`, matching the registered
 source bootstrap. Package/configuration input locations and the local diagnostics
 Cargo policy move with that home; expected digests remain unchanged. `HOME` and
 `TMPDIR` use the existing inherited environment instead of another checkout's
