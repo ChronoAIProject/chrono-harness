@@ -152,7 +152,11 @@ fn owner_deployment_retains_original_ex_through_publication_and_adoption() {
         code, 0,
         "excluded linked consumers do not couple deployment to their policy: {report} {error}"
     );
-    assert_eq!(h.ledger(), before, "deployment does not adopt linked policy");
+    assert_eq!(
+        h.ledger(),
+        before,
+        "deployment does not adopt linked policy"
+    );
     assert_eq!(fs::read(&policy_path).unwrap(), policy_bytes);
     let (code, report, error) = h.auto(
         "use",
