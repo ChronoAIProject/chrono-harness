@@ -44,12 +44,8 @@ beta.8 的历史验证中，四个已合入宿主在本地 macOS arm64 使用当
 
 同一消费显式准备暂存／未暂存内容、二进制、Unicode 路径、可执行文件和字面 symlink，损坏 index 并移除旧生产者收据。`inspect-rebind`／`rebind` 按给定 branch、HEAD、index tree、备份和 donor 重建，核对可见工作、选定索引及残存旧 metadata 均保留。原操作结果仍未知；保存该工作到保留提交后，登记 cleanup 成功。该结果不包含中断 rebind 续跑、历史索引推断、完整治理或同判。
 
-## Conditional-job source example
+## 按条件启动 CI 单元的源码示例
 
-[`examples/ci-host-job-gating`](../examples/ci-host-job-gating/README.md) is the new
-copyable installed-tools scoped host for the fixed short commands and one
-conditional-job parent. It has explicit detector/harness acquisition, two unit
-settings and original-report collection. The legacy
-ci-host bundle and the public Go/TS/mix native evidence above retain their original
-versions. Public binary release, those consumers' explicit migration and actual
-native Actions adoption of this correction belong to the caller.
+[`examples/ci-host-job-gating`](../examples/ci-host-job-gating/README.md) 可以复制到新仓库，使用已安装工具、固定短命令和一个按条件启动单元的父工作流。它明确登记 detector／harness 工具的获取、两个单元设置，以及原报告汇总。
+
+旧 `ci-host` 示例和上文公开 Go／TS／混合仓库的真实 CI 证据，继续保留各自原版本。公开二进制发布、这些消费者的明确迁移，以及本次修正是否在真实 Actions 中采用，仍由调用方负责。
