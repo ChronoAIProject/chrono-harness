@@ -1081,11 +1081,14 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
             "id":"cargo", "program":cargo, "resolution":"PATH-once", "version_argv":["--version"],
             "expected_version":String::from_utf8(version.stdout).unwrap().trim_end()
         }));
-    for key in ["PATH", "HOME", "RUSTUP_HOME", "CARGO_HOME"] {
+    for key in ["PATH", "HOME", "RUSTUP_HOME"] {
         if let Ok(value) = std::env::var(key) {
             h.values.get_mut(CONFIG).unwrap()["environment"]["values"][key] = json!(value);
         }
     }
+    let cargo_home = h.root().join(".chrono-harness/state/cargo-home");
+    h.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_HOME"] =
+        json!(cargo_home);
     h.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTUP_TOOLCHAIN"] =
         json!("1.95.0");
     let argv = json!(["test", "--locked", "--manifest-path", "t/Cargo.toml"]);
@@ -1138,11 +1141,12 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         fs::create_dir_all(h.root().join(path).parent().unwrap()).unwrap();
         fs::write(h.root().join(path), body).unwrap();
     }
-    let lock = h.capture_native(Command::new(&cargo).current_dir(h.root()).args([
-        "generate-lockfile",
-        "--manifest-path",
-        "t/Cargo.toml",
-    ]));
+    let lock = h.capture_native(
+        Command::new(&cargo)
+            .current_dir(h.root())
+            .env("CARGO_HOME", &cargo_home)
+            .args(["generate-lockfile", "--manifest-path", "t/Cargo.toml"]),
+    );
     assert!(lock.status.success(), "{lock:?}");
     let scoped_path = ".chrono-harness/ci/group-check.json";
     let scoped_registration = ".chrono-harness/ci/group-registration.json";
