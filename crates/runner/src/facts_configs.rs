@@ -113,7 +113,8 @@ pub(crate) fn resolve_target(
                 .find(|row| row["path"] == target)
                 .ok_or_else(|| format!("Git config selector has no bound registry policy path for {platform}: {target}"))?
         } else {
-            let hash = sha256(&fs::read(program).map_err(|e| format!("Git selector executable: {e}"))?);
+            let hash =
+                sha256(&fs::read(program).map_err(|e| format!("Git selector executable: {e}"))?);
             rows.iter()
                 .find(|row| row["sha256"] == hash)
                 .ok_or_else(|| format!("Git config selector has no registered executable identity for {platform}: {program} sha256={hash}"))?
