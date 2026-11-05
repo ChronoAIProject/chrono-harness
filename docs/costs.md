@@ -1,42 +1,15 @@
-# Declared impact costs
+# 变更影响的成本报告
 
-The independent `chrono-judge-cost` executable consumes registration's interpreted
-endpoint views and FILEMAP's existing `chrono-filemap-impact/v2` output. It does
-not discover dependencies, select tests, execute operations or measure resources.
-Its dedicated test project is `judge-cost-tests`.
+`chrono-judge-cost` 读取 registration 解释后的基线与候选登记，以及 FILEMAP 的 `chrono-filemap-impact/v2` 结果，报告受影响内容的登记成本。它不查找依赖、不选择或执行测试，也不测量实际资源消耗。专属测试项目是 `judge-cost-tests`。
 
-The judge publishes `outputs.costs` with schema `chrono-costs/v1`. The runner carries
-that original value into the report's `costs` field and records its source pointer.
-The output binds the exact base, candidate, candidate tree, registry and context.
-Missing or conflicting FILEMAP output, unsupported impact schema or mismatched
-DELTA produces an error; no empty success is substituted.
+结果放在 `outputs.costs`，格式为 `chrono-costs/v1`。runner 把原值放进报告的 `costs` 字段，并记录来源位置。结果绑定精确的基线提交、候选提交、候选文件树、登记和上下文。FILEMAP 结果缺失、冲突、格式不支持或变更范围不符时会报错，不能用空结果代替成功。
 
-`declared_before` and `declared_after` map affected node IDs to cost entries. They
-include changed/affected files, projects and scripts reached by the explicit graph,
-and required tests from both endpoints. A missing endpoint is JSON null, preserving
-additions and removals. Each entry retains its member identity, cost-model reference,
-four coordinate values, basis and JSON pointers to the model and declaration in the
-corresponding endpoint's FILEMAP. Projects/scripts retain the costs of their
-explicitly owned files; no project multiplier or inferred member is added.
+`declared_before` 和 `declared_after` 按受影响节点的 ID 保存成本，包括依赖图中受影响的文件、项目、脚本，以及两端要求的测试。某一端没有该节点时记为 JSON `null`，因此新增和删除都能看到。每项保存成员身份、成本模型引用、四个维度的数值、估算依据，以及该端 FILEMAP 中模型和声明的 JSON 指针。项目和脚本保留其明确拥有的文件成本，不自行添加成员或乘数。
 
-`affected_tests`, `retired_tests` and `removed_nodes` preserve distinct identities.
-Multiple paths reaching one test do not duplicate it. Equal model references on
-different members remain separate references. No total is calculated: memory peaks
-and parallel wall time are not additive, and no scalar penalty is invented.
+`affected_tests`、`retired_tests` 和 `removed_nodes` 分别保留受影响测试、已移除测试和已移除节点的身份。同一测试经多条路径被选中，只记一次；不同成员引用同一模型，仍分别保留引用。报告不计算总分：并行运行时间和内存峰值不能直接相加，也没有人为设定的统一惩罚分。
 
-`unknown` identifies the endpoint, node, member, reference, unknown coordinates and
-declared basis. Missing member cost references are explicitly unknown. A null
-coordinate stays null while known coordinates remain intact. Any unknown produces
-`W_COST_UNKNOWN`, status `warn`, exit 0; a dangling model or test-cost reference is
-an error. Warnings also work for retained-environment impact with no Git-path delta.
+`unknown` 写明哪一端、哪个节点和成员、哪个引用、哪些成本维度未知，以及登记依据。缺少成员成本引用也记为未知。某个维度为 `null` 不影响其他已知数值。出现未知成本时输出 `W_COST_UNKNOWN`，状态为 `warn`，退出码为 `0`；模型或测试成本引用不存在则报错。即使 Git 路径没变，保留的环境变化产生影响时也能给出警告。
 
-`measured` is null with an explicit reason. These are declared estimates, not
-measurements of the invoked build or test. No timing, memory or IO claim is derived
-from process receipts. A future measurement producer must retain its tool, sample
-and observation time separately from declarations.
+`measured` 为 `null`，并说明原因。这里报告的是登记估算，不是本次构建或测试的实测成本，不能从进程回执推导耗时、内存或 IO 结论。以后如要增加实测数据，测量程序须另行保留工具、样本和观察时间，并与估算分开。
 
-The repository's full configuration remains proposed. Current scoped CI builds
-the binary and runs its registered test plan; the dedicated consumer tests invoke
-actual runner/registration/filemap/cost processes on fixed Git commits. This is
-cost-report behavior evidence, not full host activation, mixed-change enforcement,
-migration/retirement certification or complete Cargo/SDK input closure.
+本仓完整配置仍为 `proposed`。当前按范围检查的 CI 会构建程序并运行登记测试；专属消费者测试在固定 Git 提交上实际调用 runner、registration、filemap 和 cost。它们验证成本报告行为，不能证明本仓已全面启用检查、混合修改规则已全面执行、迁移或移除已通过，或 Cargo、SDK 输入已齐全。

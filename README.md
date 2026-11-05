@@ -1,159 +1,119 @@
 # chrono-harness
 
-用 Rust 构建的、以显式登记和 DELTA 判官为核心的 harness，附独立的宿主指令生成器。
+chrono-harness 帮仓库按登记的依赖选择检查，让本地和 CI 使用同一条检查命令。它用 Rust 编写，还提供工作树管理、发布安装、CI 配置生成和 AI 工作指南生成工具。
 
-**已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed、workflow 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
-完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
+这里的“宿主”就是接入工具的仓库；“判官”就是按规则给出结果的检查程序；“DELTA”就是两次提交之间的变化。工具只按明确登记的文件、依赖和操作做事，不靠目录名、语言或扫描代码猜依赖。
 
-[公开测试版 v0.1.0-beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
+**目前已实现指南生成、CI 生成、共用的 `check` 入口，以及各检查程序的一部分功能。本仓正在使用按变更范围检查的 CI；五份完整检查登记仍标为 `proposed`，尚未全面启用。** 完整要求见 [SPEC.md](SPEC.md)，进度和缺口见[覆盖表](docs/spec-coverage.md)。
 
-公开的独立示例宿主：
+[公开测试版 v0.1.0-beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19) 提供 macOS arm64 和 Linux x86_64 可执行文件。接入仓库可以直接安装，无需 Rust，详见[发布与安装](docs/distribution.md)。
 
-| 仓库 | 用途 |
+## 从哪里开始
+
+| 要做的事 | 阅读位置 |
 | --- | --- |
-| [chrono-harness-examples-go](https://github.com/ChronoAIProject/chrono-harness-examples-go) | Go 生产模块与独立测试模块，显式构建、测试和文件登记 |
-| [chrono-harness-examples-ts](https://github.com/ChronoAIProject/chrono-harness-examples-ts) | TypeScript，无 package.json 或 tsconfig，分别登记生产与测试类型检查 |
-| [chrono-harness-examples-mix](https://github.com/ChronoAIProject/chrono-harness-examples-mix) | Go、TypeScript、独立 Python 脚本，共享数据通过显式依赖选择测试 |
-| [chrono-harness-examples-initial](https://github.com/ChronoAIProject/chrono-harness-examples-initial) | 无业务项目的文档宿主，显式登记首次库存检查与后续 DELTA，使用生成的 v2 CI |
+| 生成 AI 工作指南和技能文件 | [指南生成](docs/instructions.md) |
+| 生成 CI、准备事件输入 | [CI 使用说明](docs/ci.md) |
+| 按单元检查、汇总原始报告 | [CI 单元与汇总](docs/ci-units.md) |
+| 理解如何按变更选择测试 | [文件影响范围](docs/filemap-impact.md)、[执行检查](docs/execution.md) |
+| 同时修改检查规则和产品 | [混合修改警告](docs/mixed.md)、[成本报告](docs/costs.md) |
+| 检查分支、集成结果和迁移 | [工作流检查](docs/workflow.md)、[工作流选测](docs/workflow-selection.md) |
+| 创建、恢复或清理工作树 | [工作树管理](docs/worktree.md) |
+| 收集外部输入、核对 Git 实际状态 | [输入快照](docs/inputs.md)、[Git 状态核对](docs/git-facts.md) |
+| 管理缓存、日志和保留文件 | [CI 缓存](docs/ci-cache.md)、[诊断](docs/diagnostics.md)、[文件保留](docs/artifact-retention.md) |
+| 接入发布或完整检查流程 | [发布 CI](docs/release-ci.md)、[完整 CI](docs/full-ci.md) |
+| 增加 Cargo 专用检查 | [Cargo 项目检查](docs/cargo-projects.md) |
 
-这四个仓库是测试版安装与本地/原生 CI 的实际验收宿主；覆盖范围和当前限制见 [示例索引](docs/examples.md)。
+## 生成 AI 工作指南
 
-宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `cache` / `cache-tests`、`diagnostics` / `diagnostics-tests`、`runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`judge-registration` / `judge-registration-tests`、`judge-filemap` / `judge-filemap-tests`、`judge-routes` / `judge-routes-tests`、`judge-projects` / `judge-projects-tests`、`judge-cargo` / `judge-cargo-tests`、`judge-cost` / `judge-cost-tests`、`judge-mixed` / `judge-mixed-tests`、`judge-workflow` / `judge-workflow-tests`、`inputs` / `inputs-tests`、`distribution` / `distribution-tests`、`ci` / `ci-tests` 、`worktree` / `worktree-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
-
-```text
-crates/                    独立 Rust 生产项目及各自测试项目
-  cache/                   显式缓存输入、所有者与兼容键规划
-  cache-tests/
-  diagnostics/             标准日志与显式错误链，独立于 runner
-  diagnostics-tests/
-  runner/                  判官运输与统一 check 入口
-  runner-tests/
-  worktree/                  显式目标抓取、工作树创建与登记重建
-  worktree-tests/
-  distribution/            发布打包、版本锁定和宿主安装
-  distribution-tests/
-  inputs/                  显式输入采集与保留内容运输
-  inputs-tests/
-  judge-registration/      v1 登记结构、实际快照与受影响引用
-  judge-registration-tests/
-  judge-filemap/           有类型 union 图、种子、因果闭包与影响输出
-  judge-filemap-tests/
-  judge-routes/            登记方法、工具绑定和回执核对
-  judge-routes-tests/
-  judge-projects/          受影响配对与真实操作执行
-  judge-projects-tests/
-  judge-cargo/             显式采用的 Cargo 一致性判官
-  judge-cargo-tests/
-  judge-cost/              显式四维成本、旧新来源和未知值告警
-  judge-cost-tests/
-  judge-mixed/             显式规则变化分类、混合修改与旧新成本警告
-  judge-mixed-tests/
-  judge-workflow/          分支新鲜度、退休迁移与 integration 证据
-  judge-workflow-tests/
-  judge-ci/                scoped CI 登记、快照、DELTA 与操作执行
-  judge-ci-tests/
-  ci/                      CI 初始化、生成和事件准备
-  ci-tests/
-  instructions/            原子指南与 skill 生成
-  instructions-tests/
-assets/instructions/       产品默认规则和输出计划
-docs/                      合同说明、来源和生成文档
-examples/                  可复制的宿主示例
-skills/                    本仓生成并采用的 skill
-.chrono-harness/           本仓采用的约束、登记和工具绑定
-.github/workflows/         从宿主配置生成的 CI
-```
-
-`crates/` 只组织目录；构建与选测由 `.chrono-harness/` 中的显式登记决定。
-`assets/` 提供可分发的产品默认值，宿主采用后的独立数据归 `.chrono-harness/`。
-
-[标准诊断库](docs/diagnostics.md) 提供 Rust tracing 的 JSON Lines、显式错误链与日志失败保留。当前首个消费者为 runner 的无效 UTF-8 参数路径；全产品异常传播、应急发布和其它语言适配仍待完成。
+在产品源码中安装生成器，再初始化要接入的仓库。先确保 Cargo 的可执行文件目录在 `PATH` 中：
 
 ```sh
-# 在本项目 checkout 中安装；确保 Cargo 的 bin 目录在 PATH 中
 cargo install --locked --path crates/instructions
-# 安装后从任意工作目录初始化已有宿主，只需这一条命令
 chrono-instructions init --host-root "/path/to/existing-host"
 ```
 
-可执行文件内嵌[通用规则 catalog](assets/instructions/catalog.json) 与 root-only 默认 manifest，复制二进制后也无需 checkout。逐条迁移后的 98 个内容叶子具有中文/英文 variant；16 个普通聚合保留原有 17 个稳定入口及 core.general，依赖显式；宿主 `.chrono-harness/instructions/` 采用独立 catalog、manifest 与空上下文。
+生成器内置[默认规则](assets/instructions/catalog.json)和只生成根指南的默认计划，复制可执行文件后也能使用。初始化在目标仓库的 `.chrono-harness/instructions/` 下建立独立的规则目录、输出计划和空上下文，再生成 `CLAUDE.md`，让 `AGENTS.md` 以相对符号链接指向它。
 
-默认产生含 20 个叶子短流程的普通 `CLAUDE.md`，`AGENTS.md -> CLAUDE.md` 是字面相对链接。每项受治理操作只呈现一条当前登记路径，定制与演进通过登记及适用验证完成。新宿主可用 `--locale en` 绑定英文；`--methodology M` 保留自定义 UTF-8 方法为 opaque file atom，未声明语言时为 und；`--host-context C` 独立指定上下文。
+默认使用中文。新仓库可用 `--locale en` 选英文，用 `--methodology M` 导入自定义 UTF-8 方法文件，用 `--host-context C` 导入仓库背景。导入文件未指定语言时记为 `und`；生成器不会猜测或翻译内容。
 
-默认两种语言的短流程新根字节数及宿主定制边界见[实际消费者读数](docs/methodology-extraction.md#实际消费者边界)；完整双语库仍可供显式组合。
-
-日常编辑宿主 catalog 与输出计划，再运行 `chrono-instructions generate --host-root H`。计划可引用共享原子，选择语言并生成任意登记 Markdown 或聚焦 skill。不选布局时按依赖先行的 DFS；可选具名布局显式组织标题和内容，必须完整覆盖非空闭包一次。默认双语共用五节同级的 `workflow` 布局；完整 `core.general/general` 的三部分、12 主题仍供自定义输出，本仓英文指南继续选择它。阅读层次不代表权威或执行顺序；聚焦 skill 仍平铺。缺失选中翻译、循环或无效引用均明确失败，无自动翻译或 fallback。可复制 schema 与组合配方见[生成合同](docs/instructions.md)。
-
-当前只接受 schema 2 / `atomic-rules/relative-alias/v3` manifest；不支持的格式报错并保全原文件。重复 init 省略选项保留采用数据，显式不同输入或 locale 拒绝；原子组合不能被 raw method 覆盖。
-
-根块外原文属于宿主；两普通根只在渲染后整份字节相同才转换，有差异明确报错供授权 AI 保全并整合。额外输出为有身份标记的整文件投影，拒绝覆盖未声明所有权的现有文件。删除或改名输出条目保留旧文件；旧 skill 须明确退休，否则仍可能被发现。无变化时无写入，已有有效根链接不重建。
-
-支持 Unix，行为验证限定当前 macOS。普通 IO 失败尝试回滚并报告未恢复路径/备份；无崩溃原子性或并发写者保证。退出码 0 完整、2 用法错误、1 生成/IO 失败。
-[来源说明](docs/methodology-extraction.md) 与 [逐条处置表](docs/methodology-clause-map.md) 记录固定 918 行来源的实际义务、泛化、重复与排除。[派生文本许可](docs/licenses/methodology-attribution.md) 仅适用于相应指令资产；规则经过修改、泛化及翻译，不改变整仓许可。本仓通过同一工具生成根中文、[英文方法](docs/generated/general-methods.en.md) 与[重复故障诊断 skill](skills/diagnose-recurring-failures/SKILL.md)；默认新宿主只生成根指南。生成不证明 AI 遵守、翻译语义等价或判官已执行。
+以后修改仓库自己登记的规则或输出计划，再运行：
 
 ```sh
-cargo build --locked --manifest-path crates/runner/Cargo.toml
-cargo test --locked --manifest-path crates/runner-tests/Cargo.toml
-./crates/runner/target/debug/chrono-harness --help
+chrono-instructions generate --host-root "/path/to/existing-host"
 ```
 
-使用 `sha2` 的独立 Cargo 构建根在 dev 及其继承的 test profile 中，将该上游依赖设为 `opt-level = 3`，降低输入摘要核验的计算成本，同时保留 debug assertions。依赖库的 profile 不向调用方传递，因此这项配置由每个生产、测试项目的 manifest 显式拥有。
+规则可组合成 Markdown 指南或专用技能文件。未指定布局时先输出依赖，再输出使用它的规则；指定布局时，每条选中的非空规则必须出现一次。布局只影响阅读顺序。缺少翻译、循环依赖或无效引用都会报错。完整格式和示例见[指南生成](docs/instructions.md)。
 
-现役 CI 使用独立的 `judge-ci` 执行显式登记的 DELTA 检查；runner 只承担外部判官运输与报告。独立 `chrono-ci` 从宿主配置生成 GitHub Actions，提供 init/generate/verify 和事件输入准备。宿主可通过 `push_baselines` 显式登记分支前缀及远端基线；本仓的 integration 连续 push 均对照所观察的 dev 提交，使用相同的 check 指令。
+生成器只接受 schema 2、`atomic-rules/relative-alias/v3` 的输出计划。重复初始化且省略选项时保留已有选择；显式传入不同内容或语言时拒绝覆盖。根指南标记块外的内容由接入仓库维护；额外输出必须有正确的生成器标记。删除或改名输出登记不会自动删旧文件，旧技能文件需要明确清理。内容没变时不写文件，也不重建已有的正确链接。
+
+目前支持 Unix，行为验证范围是当前 macOS。普通读写失败会尝试回滚，报告未恢复路径和备份；尚不保证崩溃或多个写入者同时操作时的完整恢复。退出码：`0` 成功，`2` 用法错误，`1` 生成或读写失败。
+
+规则的[来源说明](docs/methodology-extraction.md)、[逐条处理表](docs/methodology-clause-map.md)和[许可说明](docs/licenses/methodology-attribution.md)另行保留。生成指南只说明文件已生成，不能证明 AI 已阅读、遵守规则或执行检查。
+
+## 在本仓运行检查
+
+本仓约束和工具选择登记在 [.chrono-harness/](.chrono-harness/config.json)。先从当前候选源码安装工具，再使用日常检查入口：
 
 ```sh
 /usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
-.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/units.json
-# 候选须已提交且检出干净；本地和 CI 使用完全相同的入口
-.chrono-harness/bin/chrono-harness check --unit ci
+# 先提交候选改动，确保工作树干净
+.chrono-harness/bin/chrono-harness check
 ```
 
-普通命令固定为 `check`、`check --unit ID` 和 `check --collect`。config schema4 在固定 `.chrono-harness/config.json` 登记 profile、输入生产者 action、工具、环境和协议边界。未设或 `local` 的 `CHRONO_CHECK_SOURCE` 自动从登记 remote/workflow target 取得 base 和 clean committed HEAD；生成的 CI 显式设 `ci`，命令内执行原事件准备与原生汇总。真实短 argv、解析后的配置／端点／scope 和原始生产者证据分别保留；采用短合同的宿主拒绝旧长拼写。full unscoped 从 worktree start/reconstruct 的目的地 origin receipt 生成 schema2 context；full 独立单元／汇总短入口已有源实现，实际原生 full 启用、相关二进制发布及完整 SPEC 验收仍未完成。旧配置的显式合同及未迁移示例保留。
+同一入口支持 `check --unit ID` 检查单元，以及 `check --collect` 汇总已有结果。汇总不重跑业务操作。本地从登记的远端、目标分支和干净的已提交 `HEAD` 取得输入；生成的 CI 设置 `CHRONO_CHECK_SOURCE=ci`，从事件取得输入。工具保留实际参数、配置、提交范围和输入生产过程。已采用短命令的仓库不能再用旧的长参数拼写。
 
-公开工具支持[按显式单元生成条件 job、汇总原始报告及保留宿主自定义的迁移](docs/ci-units.md)。本仓在 `check.json` 登记完整测试计划及其单元归属，在 `units.json` 显式采用 `job_gating`：一个 Git DELTA detector、按登记单元生成的 job-level if 独立 job 和一个 `always()` aggregate，全部投影到 `.github/workflows/chrono-ci.yml`。只将 aggregate 的 **chrono / collection** 设为 required check；本次不修改远端保护规则。未选单元不分配 runner 或启动 SDK；各单元保留独立 runner/bootstrap/timeout/证据与 job 重跑。Git 给出完整 PR base/head 或 push before/after；integration 继续使用 detector 一次观察并固定的 dev 基线。完整 Git DELTA 不设路径数量门。日常入口仍为 `check`、`check --unit ID`、`check --collect`，汇总执行零业务操作并交现役判官准入。旧 provider 不自动改义，公开 Go/TS/mix 的发布迁移与本次原生 Actions 验证归调用方。[新复制示例](examples/ci-host-job-gating/README.md) 使用 installed tools 和同一短入口。
+本仓 CI 的配置源是 `.chrono-harness/ci/units.json`，生成结果是 `.github/workflows/chrono-ci.yml`。流程先确定 Git 变更范围，只启动被选中的单元，最后汇总原始报告。每个单元有独立环境、时限和重跑入口。只要求汇总检查 **chrono / collection** 通过；这里不修改远端分支保护。完整说明见 [CI 单元与汇总](docs/ci-units.md)。
 
-复制二进制初始化新仓、操作扩展、schema、首次采用和事件合同见 [docs/ci.md](docs/ci.md)；可复制完整实例见 [examples/ci-host](examples/ci-host/README.md)。`verify` 检测工作流漂移，不先修复输出。未知路径、缺对象、脏输入、无效登记或失败命令均非零；文档等闭包外变更明确报告未选项目检查。
+更新工作流时使用登记的生成入口：
 
-带 `--context .chrono-harness/state/context.json` 的 full check 调用登记的 v1 外部判官，绑定请求身份、候选二进制摘要、白名单环境与直接前驱 DAG。registration 验证五份结构、固定身份、工作树 dirt、保留输入及受影响引用，并提供唯一历史解释视图。FILEMAP 生成两端 impact v2，并按显式 stability 与 integration 登记选择测试；routes 合并显式执行计划并绑定实际工具；projects 核配对并执行、核对真实回执。现役 scoped CI 复用该规划和执行路径，保留其已注明的选择及输入边界。版本化输出见 [FILEMAP impact 合同](docs/filemap-impact.md) 和 [执行合同](docs/execution.md)。`.chrono-harness/config.json` 仍 proposed、缺完整输入闭包与绑定，完整宿主检查必须非零。完整 SPEC 的生产者、直接测试与缺口见 [覆盖矩阵](docs/spec-coverage.md)。完整 Cargo/SDK 输入闭包、裁决确定性、本地/CI 同判、完整宿主的分支与 integration 接线仍未认证。原生 GitHub 事件须以实际 run 的固定身份和结果验证；本地测试不能替代。
+```sh
+.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/units.json
+```
 
-配置 v3 可用 `facts_git` 显式绑定 Git 的工具、输入摘要、版本和环境，贯穿 full/initial 读取及下游判官；v1/v2 保持旧语义。调用方式与边界见 [Git 事实绑定](docs/git-facts.md)。CI provider v3 可通过 `facts_config` 显式选择同一绑定机制用于事件准备；仅明确缺失的对象触发 fetch，工具失败保留原始证据。scoped profile v2 也可通过 `policy.facts_config` 选择该绑定，两端快照及可选完整登记解释复用同一 Git，成功与失败均保留实际进程证据；选测和操作环境仍沿用 scoped 合同。这些扩展已包含在 beta.9；升级二进制不自动采用新版配置。本仓使用 scoped v3 的独立单元扩展，没有自动采用上述 Git 绑定；完整输入闭包尚未完成。
+`verify` 只检查生成结果有没有漂移，不先修复文件。未知路径、缺少 Git 对象、未提交改动、无效登记或命令失败都会返回非零。只改文档且没有依赖边选中业务检查时，报告会明确写出未选择项目检查。
 
-full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findings 和具名 outputs 并标来源。未配置或未取得的工具、有效输入、影响、测试、成本结果显式为 null，unresolved 给出原因；配置中的版本不冒充实测版本。scope 仍为 configured-judges，parity 默认是 unestablished；有界 registration/filemap pass 不表示完整治理成功。
+完整检查依次涉及 `registration`、`filemap`、`routes`、`projects`、`cost`、`mixed` 和 `workflow`，分别负责登记核验、影响范围、操作计划、真实执行、成本、混合修改和工作流验证。当前本仓的完整输入和工具绑定仍不齐全；创建工作树、生成配置或局部测试通过，都不能算全面启用。
 
-普通 full check 在登记要求及全部选中义务通过后表示该 DELTA 满足现役登记合同；AI 对宿主治理／输入范围作负责的 declared-complete 工程声明，现役 registration 仍可报告 completeness_proven:false。已知缺输入、未解决的必需依赖、缺绑定／快照及漂移仍失败，实际工具链／SDK／配置义务保留；普通验收不要求普遍隐藏输入证明或 VM。本宿主仍 proposed/incomplete，不能宣称完整启用。
+检查状态必须来自实际报告。固定文本的 `spec status` 和独立 `parity` 比较命令已移除。现有输入生产程序仍报告 `completeness_proven:false`，报告仍标为 `parity:unestablished`。相同命令是本地与 CI 的共同要求；要证明结果必然相同，还须有完整且相同的有效输入，以及确定性的求值过程。两个相同报告本身不足以证明这些条件。
 
-检查状态由实际检查报告产生；`spec status` 的固定文本及独立 `parity` 比较命令已退役。
-现役输入生产者报告 `completeness_proven:false`，报告保持 `parity:unestablished`。
-本地与 CI 必须同命令；普遍同判仍要求完整相同有效输入与确定性求值，两个相同报告本身不证明这些条件。
+## 示例仓库
 
-Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite historical decoder are documented in [docs/execution.md](docs/execution.md). ci.verify belongs to the real ci/ci-tests pair. The host remains proposed with incomplete Cargo/SDK closure; workflow has bounded certification; autonomous delivery remains future work. Mixed classification and warnings use the [explicit surface contract](docs/mixed.md). Declared costs and unknown warnings have their own [cost contract](docs/costs.md).
+| 仓库 | 用途 |
+| --- | --- |
+| [Go 示例](https://github.com/ChronoAIProject/chrono-harness-examples-go) | 生产模块与独立测试模块，分别登记构建、测试和文件 |
+| [TypeScript 示例](https://github.com/ChronoAIProject/chrono-harness-examples-ts) | 不使用 package.json 或 tsconfig，分别检查生产与测试类型 |
+| [混合语言示例](https://github.com/ChronoAIProject/chrono-harness-examples-mix) | Go、TypeScript 和独立 Python 脚本，通过明确依赖连接共享数据 |
+| [首次接入示例](https://github.com/ChronoAIProject/chrono-harness-examples-initial) | 只有文档，登记首次文件清单检查和后续变更检查 |
 
-稳定性与规则语义变更的测试选择现已接入同一 routes/projects 执行链，见 [workflow 选择合同](docs/workflow-selection.md)。[workflow 判官](docs/workflow.md) 在 context v2 上核对分支新鲜度、实际 integration 证据及显式退休迁移。工作树创建与按显式计划重新应用旧 DELTA 由独立工具实现；AI 语义协调、提 PR、合并与核验落地仍由调用方负责。
+这四个仓库用于验证安装、本地检查和真实 CI；采用版本、证据和限制见[示例索引](docs/examples.md)。本仓另有可复制的[基础 CI 示例](examples/ci-host/README.md)和[按条件启动单元的示例](examples/ci-host-job-gating/README.md)。旧示例保留各自的命令和版本，不把尚未发生的迁移写成完成。
 
-显式外部输入可由独立 `chrono-inputs capture/pair` 生成两端快照和保留内容，判官流式核对，无需把大文件字节塞进 JSON。调用及格式见 [输入快照合同](docs/inputs.md)。这不自动发现或补齐 Cargo/SDK 依赖，也不自动启用完整宿主。
+## 源码和工具分工
 
-测试版统一从本库 [GitHub Releases](https://github.com/ChronoAIProject/chrono-harness/releases) 分发。独立 `chrono-distribution` 按显式清单打包、合并原生平台产物、生成宿主安装登记与入口，验证清单和二进制摘要后安装；宿主无需保留产品源码包或编译 Rust。合同与命令见 [发布与安装](docs/distribution.md)。
+`crates/` 只用于放置独立 Rust 项目，不决定构建和选测。每个生产项目都有对应的 `*-tests` 测试项目，各有自己的 `Cargo.toml`、锁文件和构建目录，没有根 workspace。
 
-`chrono-ci` 还可按显式 `chrono-github-release/v1` 源生成和核对发布构建工作流，复用同一 init/generate/verify 入口。平台、命令和产物目录均由宿主登记，本地与 CI 执行同一发布命令；该扩展已包含在 beta.10，见[发布 CI 合同](docs/release-ci.md)。
+| 项目 | 负责什么 |
+| --- | --- |
+| `runner` | 调用外部检查程序，提供统一 `check` 入口并保存报告 |
+| `judge-registration`、`judge-filemap` | 核对登记和输入，计算变更影响范围 |
+| `judge-routes`、`judge-projects` | 制定操作计划，执行并核对原始结果 |
+| `judge-cargo` | 可选的 Cargo 一致性检查 |
+| `judge-cost`、`judge-mixed`、`judge-workflow` | 报告成本、混合修改、集成和迁移结果 |
+| `judge-ci`、`ci` | 执行按范围选择的 CI 检查，生成工作流和事件输入 |
+| `cache`、`inputs` | 规划缓存，收集并保留明确登记的输入 |
+| `worktree` | 创建、重建、恢复和清理工作树 |
+| `distribution` | 打包发布、锁定版本和安装工具 |
+| `instructions` | 从登记规则生成指南和技能文件 |
+| `diagnostics` | JSON Lines 日志和明确的错误链；目前先用于 runner 的无效 UTF-8 参数处理 |
 
-完整治理可显式采用 `chrono-github-full-ci/v1`：传入固定 context 原字节，生成 CI
-调用与本地相同的 `check … --context …`。工具和引用证据由宿主 bootstrap 供应；准备
-成功不等于判官通过。该扩展已包含在 beta.10，本仓完整宿主仍未启用，见[完整 CI](docs/full-ci.md)。
+`assets/instructions/` 提供可分发的产品默认规则。接入仓库的选择放在自己的 `.chrono-harness/`，升级产品不会自动覆盖它们。`docs/` 放说明、规范解释和来源资料，`examples/` 放示例，`skills/` 放本仓生成的技能文件。
 
-通用 projects 登记不要求 manifest、lockfile 或根目录，actions 可使用任意非空登记名称。Cargo workspace/路径依赖检查及已登记 registry/Git 输入、metadata 与真实操作的联合校验属于独立可选 [chrono-judge-cargo](docs/cargo-projects.md)；宿主目录和语言不承担隐式登记或选测权威。
+使用 `sha2` 的独立 Cargo 项目在 dev 和 test 配置中显式设置该依赖的 `opt-level = 3`，减少摘要计算成本，同时保留调试断言。该设置由每个调用项目自己声明，依赖库的构建配置不会自动传给调用方。
 
-新工作树使用独立的 `chrono-worktree start` 与宿主 `.chrono-harness/worktree.json`；它抓取已登记目标并保留实际 Git 回执。`reconstruct` 通过逐路径计划在新工作树暂存仍需保留的旧变化；冲突和旧工作均保留，完成后仍须重新提交检查。创建／重建合同及尚未实现的 PR／落地范围见 [worktree 文档](docs/worktree.md)。该二进制已随 beta.8 在 macOS arm64 / Linux x86_64 公开发布；宿主通过锁定的发布安装登记采用。
+## 工作树和交付
 
-源码提供显式 opt-in 的自动清理：start/reconstruct 登记新生工作树并重试终态清理，调用方完成／落地且加入任务后使用固定 `chrono-worktree finish --path <工作树>`；独立入口为 `chrono-worktree maintain`，登记消费命令使用 `use --operation` 持有使用保护。主宿主逐项采用已登记输出，保留 state/bin，默认只清缓存；没有定时空闲清理。合同与失败／证据边界见 [自动生命周期清理](docs/worktree.md#opt-in-automatic-lifecycle-cleanup)。
+`chrono-worktree start` 从登记目标创建新工作树并保存 Git 原始结果；`reconstruct` 按逐路径计划重放要保留的旧改动。冲突和旧工作都会保留，之后仍须重新提交和检查。PR、合并及落地核验由调用方完成。
 
-`chrono-worktree recover`／`cleanup`／`cleanup-fetch` 消费宿主 state 下的显式维护计划：保留原失败报告，验证重建后的状态和锁，或核对保留引用与工件白名单后清理指定工作树。它们不产生治理或合并通过判词；完整格式及未实现的恢复范围见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。这三个入口已包含在公开 beta.8 中，可由宿主的版本锁定安装入口取得。
+已采用自动清理的仓库，用 `use --operation` 保护正在消费的文件。调用方等待全部自有任务完成、核对实际交付后，从仍存活的协调仓库运行 `finish --path`；`maintain` 是独立维护入口。未完成或有活跃消费者时保留工作，清缓存不代表任务完成。
 
-公开测试版提供 `chrono-worktree cleanup-remote`，以显式远端地址、提交保留关系及精确 OID lease 清理远端工作分支，保留失败和缺失重试结果。该入口从 beta.10 起公开分发；见 [远端清理合同](docs/worktree.md#remote-branch-retirement)。
-
-公开 beta.8 还提供 `recover-interrupted`：在创建工作树或取得清理锁前保留恢复身份，对缺失／截断结果按显式计划核对当前状态并解锁，原操作结果仍标未知。`cleanup-fetch-interrupted` 还按 fetch 前保留的独立身份清理中断留下的临时 ref，要求明确的当前 OID 与保留分支。这两个入口已包含在公开 beta.8 中；格式与剩余恢复范围见 [中断恢复](docs/worktree.md#interrupted-checkout-recovery)。
-
-beta.11 新增显式 `inspect-rebind`／`rebind` 元数据重建，以及所有现役检查／worktree 消费者共用的原始 checkout 身份核对。真实公开混合宿主已验证：Git 配置隐藏的执行位变化仍被拒绝，损坏索引重建保留未提交工作、显式选择的索引和旧元数据。重建不推断丢失的历史索引，不证明原操作成功；源码新增 `resume-rebind`，按保留 intent 与原计划续跑中断／失败重建，保留原结果与备份；beta.15 开始包含此入口。见[元数据重建](docs/worktree.md#explicit-metadata-rebind)与[原始快照身份](docs/git-facts.md#literal-checkout-identity)。
-
-候选源码增加显式 automatic_cleanup/v2 的内核租约与未 finish 缓存恢复，并为短 check/bootstrap 登记自动参与。本地真实 Cargo test／原生子进程回归验证包装器终止后的租约保留；已提交组合、协调者二进制部署、兼容生产者切换和支持平台验收仍归调用方，尚未宣称完整采用。
-
-Final-original candidate ownership and historical migration boundaries are documented in [artifact retention](docs/artifact-retention.md).
+恢复、远端分支清理、中断恢复和元数据重建均使用明确计划，保留原始失败和未知结果。各入口的版本、命令和剩余限制见[工作树管理](docs/worktree.md)。最终原件归谁保管、何时可以清理，见[文件保留](docs/artifact-retention.md)。
