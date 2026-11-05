@@ -93,6 +93,7 @@ fn add_extra_pair(h: &mut Host) {
     for (path, owner) in [
         ("extra/product.py", "extra"),
         ("extra/test.py", "extra-tests"),
+        ("p/prepare-changed.py", "p"),
     ] {
         let mut f = file(
             path,
@@ -115,10 +116,19 @@ fn add_extra_pair(h: &mut Host) {
     fs::create_dir(h.root().join("extra")).unwrap();
     fs::write(
         h.root().join("extra/product.py"),
-        "def answer(): return 42\n",
+        include_str!("fixtures/workflow-extra-product.py"),
     )
     .unwrap();
-    fs::write(h.root().join("extra/test.py"),"import runpy\nassert runpy.run_path('extra/product.py')['answer']()==42\nassert open('.chrono-harness/state/order').read().count('p')==1\nopen('.chrono-harness/state/extra','w').write('passed')\n").unwrap();
+    fs::write(
+        h.root().join("extra/test.py"),
+        include_str!("fixtures/workflow-extra-test.py"),
+    )
+    .unwrap();
+    fs::write(
+        h.root().join("p/prepare-changed.py"),
+        include_str!("fixtures/workflow-changed-prepare.py"),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -139,8 +149,8 @@ fn actual_semantic_change_runs_additional_declared_suite_with_one_shared_prerequ
     h.save();
     h.base = h.candidate.clone();
     h.values.get_mut(PROJECTS).unwrap()["scripts"][0]["actions"]["execute"]["argv"] = json!([
-        "-c",
-        "open('.chrono-harness/state/order','a').write('p') # changed method"
+        "-B",
+        "p/prepare-changed.py"
     ]);
     h.save();
     let (code, r) = h.run(|_| {});
