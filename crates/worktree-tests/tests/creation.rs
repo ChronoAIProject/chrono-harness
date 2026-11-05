@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod isolated_capability;
 #[path = "../../runner-tests/tests/support/retention_state.rs"]
 mod retention_state;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
