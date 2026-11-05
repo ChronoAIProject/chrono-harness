@@ -7,6 +7,7 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
     let tools = host::tool_directory("workflow native tools λ ");
     let tool_root = fs::canonicalize(tools.path()).unwrap();
     let root = h.root();
+    let cargo_home = root.join(".chrono-harness/state/cargo-home");
     let wrapper = tool_root.join("cargo-fixture");
     let cargo = chrono_harness::resolve_program(&root, "cargo", None).unwrap();
     native_tools::install(&tool_root, &wrapper);
@@ -24,7 +25,15 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
             t["program"] = json!(git_tool);
         }
     }
-    let version = host::capture_native(&root, Command::new(&cargo).arg("--version"));
+    // Setup and business commands share this fixture's registered state, so
+    // independent fixtures do not contend on the caller's package cache.
+    let version = host::capture_native(
+        &root,
+        Command::new(&cargo)
+            .current_dir(source())
+            .env("CARGO_HOME", &cargo_home)
+            .arg("--version"),
+    );
     cfg["tools"][0]["expected_version"] =
         json!(String::from_utf8(version.stdout).unwrap().trim_end());
     // The fixture needs Cargo and system tools, not the caller's editor/agent
@@ -34,6 +43,7 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
         cargo.parent().unwrap().display()
     ));
     cfg["environment"]["values"]["HOME"] = json!(std::env::var("HOME").unwrap());
+    cfg["environment"]["values"]["CARGO_HOME"] = json!(cargo_home);
     // Native bootstrap selects Cargo through rustup with this variable. Keep
     // the same selection in the cleared judge/business environment, including
     // its absence locally, rather than falling back to a different default.
@@ -46,6 +56,7 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
         .unwrap()
         .extend([
             json!("environment:HOME"),
+            json!("environment:CARGO_HOME"),
             json!("environment:RUSTUP_TOOLCHAIN"),
         ]);
     for i in cfg["environment"]["inputs"].as_array_mut().unwrap() {
@@ -101,6 +112,11 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
     });
     fm["project_edges"].as_array_mut().unwrap().push(edge(
         "environment:HOME",
+        "runtime-input",
+        "judge:projects",
+    ));
+    fm["project_edges"].as_array_mut().unwrap().push(edge(
+        "environment:CARGO_HOME",
         "runtime-input",
         "judge:projects",
     ));
@@ -163,6 +179,8 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
                 host::capture_native(
                     &root,
                     Command::new(&cargo)
+                        .current_dir(source())
+                        .env("CARGO_HOME", &cargo_home)
                         .args(["generate-lockfile", "--offline", "--manifest-path"])
                         .arg(root.join(format!("{id}/Cargo.toml")))
                 )
