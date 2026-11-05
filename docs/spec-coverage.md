@@ -687,6 +687,10 @@ publication is incomplete. Thus partial disposal retains its ordinary reentry
 path. Existing original-release assertions and a bounded partial-disposal
 regression cover this relationship. The corrected installed owner migrated all
 1,418 CI objects in 6.84 seconds, preserving reservations and historical outcomes.
+Bounded disposal also requires dependency reentry to accept an identical existing
+relationship after disposal starts; it still rejects changing that relationship.
+The original canonical capacity result retained 34 passing cases and the failing
+partial-retirement case that exposed this remaining gap.
 The original open-file failure remains evidence. The canonical bare check first
 refused a newly fetched dev inventory; I4 integrated that frozen landed revision
 without changing unrelated upstream source. Its next run reached business
@@ -706,6 +710,12 @@ binary are adopted, while positive actual-host >2h reuse / >4h disposal,
 ordinary producer failure/reentry/capacity acceptance and the full corrected
 FILEMAP DELTA remain open. Protected original sources, live dependencies,
 unknown outcomes and other tasks' source-policy mismatches remain protected.
+The latest coordinator construction succeeded but publication refused a newly
+registered Git checkout belonging to another task with no current enrollment.
+Its original custodian must exclude its consumers through the existing owner;
+this task does not enroll that checkout, alter its source or bypass the guard.
+The preceding qualified selected-policy owner remains installed. Newer source
+construction and isolated checks do not establish its coordinator publication.
 This is implementation evidence, not independent review, landing or full SPEC
 completion.
 
