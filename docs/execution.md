@@ -37,6 +37,14 @@ and transport costs remain unmeasured.
 The script's forwarding method describes the existing full-adapter entry; this
 registration does not activate full governance in the scoped product host.
 
+The artifact-acquisition deadline test requires the exact cumulative-deadline
+failure and absence of a collection manifest. Metadata, download and source
+checks share that deadline, so an earlier phase may exhaust it. Separate stdout
+and stderr cases still require reaching the source check and rejecting the
+combined stream cost. The two-second fixture budget, deliberate delays and
+production limits remain unchanged; the test no longer requires a particular
+phase to win a wall-clock race.
+
 Unix process observations record the engine's actual capability carrier in optional
 `ownership_fds`. The `environment` map and `environment_digest` describe business
 inputs, excluding reserved `CHRONO_PROCESS_FDS`; that child environment variable

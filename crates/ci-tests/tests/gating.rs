@@ -2078,6 +2078,22 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
                     .contains("binding differs")
             );
             assert!(!processes.iter().any(|p| p["argv"][1] == "run"));
+        } else if mode == "artifact-deadline" {
+            // Metadata, download and source checks share one deadline. A slow
+            // earlier phase must reject too; reaching the source is not promised.
+            assert_eq!(
+                report["error"],
+                "artifact acquisition cumulative deadline exhausted",
+                "{mode}: {report}"
+            );
+            assert!(
+                processes.iter().any(|p| p["argv"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|a| a.as_str().is_some_and(|s| s.contains("/artifacts?")))),
+                "{mode}: acquisition was not reached"
+            );
         } else {
             assert!(
                 processes.iter().any(|p| p["argv"]
