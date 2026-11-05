@@ -685,7 +685,21 @@ fn parent_collection_requires_transported_streams_without_local_fallback_or_busi
     let collect = |expected_exit| {
         let out = h.command(&["check", "--collect"], &d, &n).output().unwrap();
         assert_eq!(out.status.code(), Some(expected_exit), "{out:?}");
-        stream_report(&h.host.root, ".chrono-harness/state/check.json", &out)
+        if expected_exit == 0 {
+            stream_report(&h.host.root, ".chrono-harness/state/check.json", &out)
+        } else {
+            let gather: Value = serde_json::from_slice(
+                &fs::read(
+                    h.host
+                        .root
+                        .join(".chrono-harness/state/collection/gather.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert!(gather["result"].is_null());
+            gather
+        }
     };
     let report = collect(0);
     assert_eq!(report["response"]["evidence"]["executed"], json!([]));
@@ -703,8 +717,8 @@ fn parent_collection_requires_transported_streams_without_local_fallback_or_busi
             } else {
                 fs::write(&path, b"damaged transported stream").unwrap();
             }
-            let report = collect(1);
-            let cause = report["response"]["results"][0]["cause"].as_str().unwrap();
+            let report = collect(2);
+            let cause = report["error"].as_str().unwrap();
             let expected = if missing {
                 "No such file".into()
             } else {
