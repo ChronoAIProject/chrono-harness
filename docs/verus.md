@@ -30,15 +30,16 @@ they do not erase the original execution results. Unit checks and collection
 both evaluate coverage. Removing an adopted requirement fails explicitly.
 
 The current adapter checks declarations and canonical routes. For actual Verus
-operations it also decodes retained original stdout and requires a successful
+operations it decodes retained original stdout and requires a successful
 whole-crate result with positive proof count, zero errors and the selected Verus
-version/commit. Execution identity, argv, tool binding and original process
-success remain owned by routes/projects. Collection still consumes original unit
-reports. This increment does not prove that every declared root includes every
-claimed source or expresses all natural-language requirements. Compiler source
-coverage, complete clause correspondence, independent-unit proof transport and
-the admission adapter's own Verus migration remain required before claiming full
-verification. Its FILEMAP record deliberately has empty roots.
+version/commit. It also compares the local compiler dependency output with
+explicit regular FILEMAP entries and immutable candidate blobs, including all
+files claiming that root. Execution identity, argv, tool binding and original
+process success remain owned by routes/projects. Collection still consumes
+original unit reports. Complete clause correspondence, retained library bytes,
+independent-unit proof transport and the admission adapter's own Verus migration
+remain required before claiming full verification. Its FILEMAP record
+deliberately has empty roots.
 
 `crates/judge-ci/src/verus_policy.rs` is the first executable Verus owner. Cargo
 uses the pinned `verus_builtin_macros` erasure of that same source; admission calls
@@ -89,10 +90,13 @@ and compiler-produced dependency output. They also require
 by the same proved canonical-argument predicate. The pinned compiler's emitted
 source checksums and unnormalized byte lengths have been compared with the
 actual source bytes. This observation does not bind a later report or candidate.
-Verification success alone is not a
-claim that these artifacts were produced or consumed. Their retained identities,
-source inventory parsing and correspondence checking are still migration work.
-The current coverage adapter therefore continues to report declaration scope.
+Verification success alone is not a claim that these artifacts were produced or
+consumed. The local adapter now reads both bounded regular output files after
+the compiler result is admitted. It retains the exact dependency bytes inside
+the original response, and records the library digest and length. Library bytes
+are not yet retained, and collection does not yet transport/recheck these source
+observations. This is a local post-process observation, with no native or complete
+source-provenance claim.
 
 The same Verus owner now defines and implements dependency-list byte decoding.
 Its contract follows the pinned Rust 1.95.0
@@ -135,11 +139,21 @@ this same executable source. Verified examples include short/long text, uppercas
 and the hexadecimal range boundary. Hash computation and source-byte binding
 remain separate obligations.
 
-These are content predicates against caller-supplied metadata, not a complete
-source-identity admission adapter. Binding and validating that metadata against
-explicit FILEMAP entries and immutable candidate bytes, applying normalization
-at that boundary, retained artifact capture/transport and actual coverage
-integration still require implementation and proof. The complete-content examples exercise an independent
+The same owner now proves paired source-metadata admission. Every compiler path
+must normalize to its corresponding candidate path and match its valid SHA-256
+text and byte length. Candidate paths must be distinct; the nonempty inventory
+must contain the exact root and every explicitly claimed source. Empty or unequal
+inventories, duplicate normalized identities, changed digests/lengths and missing
+roots/claims fail. Independent examples specify those success and rejection cases.
+
+The actual adapter obtains only the needed candidate entries through explicit
+FILEMAP/tree lookups and immutable Git blobs, then calls the proved metadata and
+complete-content predicates. It does not use compiler observations to select
+checks. Dependency bytes and source observations remain in the retained original
+response; the library currently has only a bounded local digest/length observation.
+JSON decoding, lookup/collection construction, hashing-interface correspondence,
+artifact capture/transport and the remaining adapter decisions still require
+proof. The complete-content examples exercise an independent
 byte fixture, missing checksum content and a missing final newline. The source
 adapter's existing empty-root migration obligation remains intact.
 

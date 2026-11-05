@@ -11,6 +11,76 @@ verus! {
 
 broadcast use vstd::string::group_string_axioms;
 
+fn metadata_fixture(path: Vec<u8>, length: u64) -> (source: policy::sources::SourceBinding)
+    ensures source.path@ == path@, source.length == length,
+        source.sha256.len() == 64,
+        forall|i: int| 0 <= i < 64 ==> (#[trigger] source.sha256[i]) == 48u8,
+{
+    let mut hash = Vec::new();
+    let mut i = 0;
+    while i < 64
+        invariant 0 <= i <= 64, hash.len() == i,
+            forall|j: int| 0 <= j < i ==> (#[trigger] hash[j]) == 48u8,
+        decreases 64 - i,
+    { hash.push(48u8); i += 1; }
+    policy::sources::SourceBinding { path, sha256: hash, length }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn source_metadata_requires_normalized_identity_digest_length_root_and_claims() {
+    reveal_with_fuel(policy::sources::path_scan, 8);
+    reveal_with_fuel(policy::sources::joined_components, 3);
+    let raw = metadata_fixture(vec![46u8, 47, 97], 7);
+    let fixed = metadata_fixture(vec![97u8], 7);
+    let sources = vec![raw];
+    let candidate = vec![fixed];
+    let claims = vec![vec![97u8]];
+    let root = [97u8];
+    assert(sources[0].path@ == seq![46u8, 47u8, 97u8]);
+    assert(candidate[0].path@ == seq![97u8]);
+    assert(sources[0].sha256@ =~= candidate[0].sha256@);
+    assert(policy::sources::source_pair_matches(&sources[0], &candidate[0]));
+    assert(policy::sources::listed_source_path(candidate@, root@, 1));
+    assert(!policy::sources::listed_source_path(candidate@, candidate[0].path@, 0));
+    assert(policy::sources::source_metadata_admitted(sources@, candidate@, root@, claims@));
+    let accepted = policy::sources::admit_source_metadata(&sources, &candidate, &root, &claims);
+    assert(accepted);
+    let changed_candidate = vec![metadata_fixture(vec![97u8], 8)];
+    let changed_length = policy::sources::admit_source_metadata(&sources, &changed_candidate, &root, &claims);
+    assert(!changed_length);
+    let mut changed = metadata_fixture(vec![46u8, 47, 97], 7);
+    changed.sha256[0] = 65u8;
+    let changed_sources = vec![changed];
+    assert(changed_sources[0].sha256[0] == 65u8);
+    assert(candidate[0].sha256[0] == 48u8);
+    assert(!policy::sources::source_pair_matches(&changed_sources[0], &candidate[0]));
+    let changed_digest = policy::sources::admit_source_metadata(&changed_sources, &candidate, &root, &claims);
+    assert(!changed_digest);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn source_metadata_rejects_missing_claims_roots_ambiguity_and_empty_inventories() {
+    reveal_with_fuel(policy::sources::path_scan, 4);
+    reveal_with_fuel(policy::sources::joined_components, 3);
+    let mut sources = vec![metadata_fixture(vec![97u8], 0)];
+    let mut candidate = vec![metadata_fixture(vec![97u8], 0)];
+    let claims = vec![vec![98u8]];
+    let empty_claims: Vec<Vec<u8>> = Vec::new();
+    let missing_claim = policy::sources::admit_source_metadata(&sources, &candidate, &[97u8], &claims);
+    let missing_root = policy::sources::admit_source_metadata(&sources, &candidate, &[98u8], &empty_claims);
+    assert(!missing_claim && !missing_root);
+    sources.push(metadata_fixture(vec![46u8, 47, 97], 0));
+    candidate.push(metadata_fixture(vec![97u8], 0));
+    assert(candidate[0].path@ == candidate[1].path@);
+    assert(policy::sources::listed_source_path(candidate@, candidate[1].path@, 1));
+    let duplicate = policy::sources::admit_source_metadata(&sources, &candidate, &[97u8], &empty_claims);
+    assert(!duplicate);
+    let empty: Vec<policy::sources::SourceBinding> = Vec::new();
+    let no_sources = policy::sources::admit_source_metadata(&empty, &empty, &[97u8], &empty_claims);
+    let unequal = policy::sources::admit_source_metadata(&sources, &empty, &[97u8], &empty_claims);
+    assert(!no_sources && !unequal);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn source_sha256_text_requires_exact_lowercase_hex_length() {
     let mut hash: Vec<u8> = Vec::new();

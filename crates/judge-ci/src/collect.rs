@@ -8,7 +8,7 @@ use chrono_judge_registration::execution::Method;
 use chrono_judge_routes::{Execution, Receipt};
 use std::io::Read;
 
-fn read(
+pub(super) fn read(
     root: &Path,
     path: &str,
     policy: &Policy,

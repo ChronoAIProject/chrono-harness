@@ -6,6 +6,104 @@ use serde::Deserialize;
 use serde_json::json as object;
 use std::collections::BTreeMap;
 
+fn compiler_sources(
+    req: &Request,
+    reader: &Reader,
+    policy: &Policy,
+    snapshot: &Snapshot,
+    argv: &Vec<String>,
+) -> Result<serde_json::Value, String> {
+    use verus_policy::sources::{self, SourceBinding};
+    if !verus_policy::canonical_verifier_arguments(argv) {
+        return Err("E_VERUS_SOURCES: verifier arguments differ from registered route".into());
+    }
+    let output = &argv[10];
+    let dependency = format!("{output}.d");
+    let limit = policy
+        .collection_limits
+        .clone()
+        .unwrap_or_default()
+        .report_bytes;
+    let bytes = super::collect::read(
+        &req.host_root,
+        &dependency,
+        policy,
+        "report_bytes (compiler artifacts)",
+        limit,
+    )?;
+    let paths = sources::compiler_dependency_paths(&bytes, output.as_bytes())
+        .ok_or("E_VERUS_SOURCES: missing or invalid compiler dependency target")?;
+    let mut compiled = Vec::new();
+    let mut fixed = Vec::new();
+    let mut identities = Vec::new();
+    for path in paths {
+        let normalized = sources::normalize_relative_path(&path)
+            .ok_or("E_VERUS_SOURCES: compiler source escapes the relative path domain")?;
+        let name = std::str::from_utf8(&normalized)
+            .map_err(|e| format!("E_VERUS_SOURCES: source path is not UTF-8: {e}"))?;
+        if !snapshot.files.contains_key(name)
+            || snapshot
+                .tree
+                .get(name)
+                .is_none_or(|(mode, _)| !matches!(mode.as_str(), "100644" | "100755"))
+        {
+            return Err(format!(
+                "E_VERUS_SOURCES: source is not an explicit regular candidate file: {name}"
+            ));
+        }
+        let source = at(reader, &req.host_root, &req.candidate, name)?;
+        let digest = chrono_harness::sha256(&source);
+        identities.push(object!({"path":name,"compiler_path_bytes":path,
+            "sha256":digest,"byte_length":source.len()}));
+        compiled.push(SourceBinding {
+            path,
+            sha256: digest.as_bytes().to_vec(),
+            length: source.len() as u64,
+        });
+        fixed.push(SourceBinding {
+            path: normalized,
+            sha256: digest.into_bytes(),
+            length: source.len() as u64,
+        });
+    }
+    let root = &argv[8];
+    let claims = snapshot
+        .files
+        .iter()
+        .filter(|(_, file)| {
+            file["verification"]["roots"]
+                .as_array()
+                .is_some_and(|roots| roots.iter().any(|value| value.as_str() == Some(root)))
+        })
+        .map(|(path, _)| path.as_bytes().to_vec())
+        .collect();
+    if !sources::admit_source_metadata(&compiled, &fixed, root.as_bytes(), &claims)
+        || !sources::matches_dependency_content(&bytes, output.as_bytes(), &compiled)
+    {
+        return Err(
+            "E_VERUS_SOURCES: candidate metadata, explicit root claims or compiler checksums differ"
+                .into(),
+        );
+    }
+    let library = super::collect::read(
+        &req.host_root,
+        output,
+        policy,
+        "report_bytes (remaining compiler artifact budget)",
+        limit - bytes.len() as u64,
+    )?;
+    if library.is_empty() {
+        return Err("E_VERUS_SOURCES: compiled library is empty".into());
+    }
+    Ok(
+        object!({"schema":"chrono-verus-source-observation/v1","candidate":req.candidate,
+        "root":root,"sources":identities,
+        "dependency":{"path":dependency,"sha256":chrono_harness::sha256(&bytes),"bytes":bytes},
+        "library":{"path":output,"sha256":chrono_harness::sha256(&library),"byte_length":library.len()},
+        "assurance":"local post-process source comparison; library bytes and cross-unit transport remain unretained"}),
+    )
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Requirements {
@@ -49,6 +147,7 @@ pub(super) fn apply(
         return Err("E_VERUS_INPUT: invalid schema, tool or explicit external interfaces".into());
     }
     let mut ledger = verus_policy::Ledger::new();
+    let mut compiler_evidence = Vec::new();
     for execution in response.evidence["executed"]
         .as_array()
         .into_iter()
@@ -86,10 +185,28 @@ pub(super) fn apply(
                 requirements.commit.as_bytes(),
             ))
         })();
+        let compiler_accepted = accepted.as_ref().is_ok_and(|value| *value);
         ledger.record(
             format!("operation:{operation}:compiler-proof"),
-            accepted.unwrap_or(false),
+            compiler_accepted,
         );
+        let sources = if compiler_accepted {
+            compiler_sources(
+                req,
+                reader,
+                policy,
+                snapshot,
+                &snapshot.operations[operation].2,
+            )
+        } else {
+            Err("E_VERUS_SOURCES: original compiler result was not admitted".into())
+        };
+        ledger.record(
+            format!("operation:{operation}:compiler-sources"),
+            sources.is_ok(),
+        );
+        compiler_evidence.push(object!({"operation":operation,"compiler_accepted":compiler_accepted,
+            "compiler_error":accepted.err(),"sources":sources.as_ref().ok(),"source_error":sources.as_ref().err()}));
     }
     // Roots are bound to exact registered invocations. Original execution and
     // receipt checking remain the projects owner's responsibility.
@@ -160,8 +277,9 @@ pub(super) fn apply(
         "complete":complete,
         "obligations":coverage.obligations,
         "missing":coverage.missing,
+        "compiler_evidence":compiler_evidence,
         "external_interfaces":requirements.external_interfaces,
-        "assurance":"declaration and registered-route admission; compiler proofs and source correspondence remain required"
+        "assurance":"declarations, compiler results and local source comparison; adapter proofs, retained libraries and cross-unit transport remain required"
     });
     response.results.push(CheckResult {
         id: "ci.verus-coverage".into(),

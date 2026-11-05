@@ -342,6 +342,98 @@ pub struct SourceBinding {
     pub length: u64,
 }
 
+pub open spec fn source_pair_matches(source: &SourceBinding, candidate: &SourceBinding) -> bool {
+    relative_components(source.path@).is_some()
+        && candidate.path@ == joined_components(relative_components(source.path@).unwrap())
+        && sha256_text(candidate.sha256@)
+        && source.sha256@ == candidate.sha256@
+        && source.length == candidate.length
+}
+
+pub fn matches_source_pair(source: &SourceBinding, candidate: &SourceBinding) -> (matched: bool)
+    ensures matched <==> source_pair_matches(source, candidate),
+{
+    let Some(path) = normalize_relative_path(source.path.as_slice()) else { return false; };
+    equal_bytes(path.as_slice(), candidate.path.as_slice())
+        && valid_sha256_text(candidate.sha256.as_slice())
+        && equal_bytes(source.sha256.as_slice(), candidate.sha256.as_slice())
+        && source.length == candidate.length
+}
+
+pub open spec fn listed_source_path(sources: Seq<SourceBinding>, path: Seq<u8>, limit: int) -> bool {
+    exists|i: int| 0 <= i < limit && (#[trigger] sources[i]).path@ == path
+}
+
+pub fn contains_source_path(sources: &Vec<SourceBinding>, path: &[u8], limit: usize) -> (found: bool)
+    requires limit <= sources.len(),
+    ensures found <==> listed_source_path(sources@, path@, limit as int),
+{
+    let mut i = 0;
+    while i < limit
+        invariant 0 <= i <= limit <= sources.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] sources[j]).path@ != path@,
+        decreases limit - i,
+    {
+        if equal_bytes(sources[i].path.as_slice(), path) { return true; }
+        i += 1;
+    }
+    false
+}
+
+pub open spec fn source_metadata_admitted(
+    sources: Seq<SourceBinding>, candidate: Seq<SourceBinding>, root: Seq<u8>, claims: Seq<Vec<u8>>,
+) -> bool {
+    sources.len() > 0 && sources.len() == candidate.len()
+        && (forall|i: int| 0 <= i < sources.len() ==>
+            source_pair_matches(#[trigger] &sources[i], &candidate[i]))
+        && (forall|i: int| 0 <= i < candidate.len() ==>
+            !listed_source_path(candidate, (#[trigger] candidate[i]).path@, i))
+        && listed_source_path(candidate, root, candidate.len() as int)
+        && (forall|i: int| 0 <= i < claims.len() ==>
+            listed_source_path(candidate, (#[trigger] claims[i])@, candidate.len() as int))
+}
+
+/// Each compiler path must match one distinct candidate entry, including its
+/// digest and byte length. The exact root and all explicit claims must be present.
+/// The caller owns obtaining these candidate entries from the fixed registry/Git.
+pub fn admit_source_metadata(
+    sources: &Vec<SourceBinding>, candidate: &Vec<SourceBinding>, root: &[u8], claims: &Vec<Vec<u8>>,
+) -> (accepted: bool)
+    ensures accepted <==> source_metadata_admitted(sources@, candidate@, root@, claims@),
+{
+    if sources.len() == 0 || sources.len() != candidate.len() { return false; }
+    let mut i = 0;
+    while i < sources.len()
+        invariant 0 <= i <= sources.len(), 0 < sources.len() == candidate.len(),
+            forall|j: int| 0 <= j < i ==>
+                source_pair_matches(#[trigger] &sources[j], &candidate[j]),
+            forall|j: int| 0 <= j < i ==>
+                !listed_source_path(candidate@, (#[trigger] candidate[j]).path@, j),
+        decreases sources.len() - i,
+    {
+        if !matches_source_pair(&sources[i], &candidate[i]) { return false; }
+        if contains_source_path(candidate, candidate[i].path.as_slice(), i) { return false; }
+        i += 1;
+    }
+    if !contains_source_path(candidate, root, candidate.len()) { return false; }
+    let mut j = 0;
+    while j < claims.len()
+        invariant 0 <= j <= claims.len(), 0 < sources.len() == candidate.len(),
+            forall|i: int| 0 <= i < sources.len() ==>
+                source_pair_matches(#[trigger] &sources[i], &candidate[i]),
+            forall|i: int| 0 <= i < candidate.len() ==>
+                !listed_source_path(candidate@, (#[trigger] candidate[i]).path@, i),
+            listed_source_path(candidate@, root@, candidate.len() as int),
+            forall|i: int| 0 <= i < j ==>
+                listed_source_path(candidate@, (#[trigger] claims[i])@, candidate.len() as int),
+        decreases claims.len() - j,
+    {
+        if !contains_source_path(candidate, claims[j].as_slice(), candidate.len()) { return false; }
+        j += 1;
+    }
+    true
+}
+
 pub open spec fn checksum_prefix(source: &SourceBinding) -> Seq<u8> {
     vstd::utf8::encode_utf8("# checksum:sha256="@) + source.sha256@ + vstd::utf8::encode_utf8(" file_len:"@)
 }
