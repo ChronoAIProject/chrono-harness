@@ -228,7 +228,7 @@ fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budg
         }),
     ] {
         let mut config = config.clone();
-        config.policy["collection_limits"] = json!({"report_bytes":limit});
+        config.policy["collection_limits"] = json!({"manifest_bytes":4096,"report_bytes":limit});
         let mut reads = std::collections::BTreeSet::new();
         chrono_judge_ci::unit_originals(
             &h.root,
