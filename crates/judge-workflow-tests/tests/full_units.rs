@@ -24,7 +24,12 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
             t["program"] = json!(git_tool);
         }
     }
-    let version = host::capture_native(&root, Command::new(&cargo).arg("--version"));
+    // Relative caller Cargo homes are anchored at the source host, including
+    // these setup commands that run before the fixture's cleared environment.
+    let version = host::capture_native(
+        &root,
+        Command::new(&cargo).current_dir(source()).arg("--version"),
+    );
     cfg["tools"][0]["expected_version"] =
         json!(String::from_utf8(version.stdout).unwrap().trim_end());
     // The fixture needs Cargo and system tools, not the caller's editor/agent
@@ -163,6 +168,7 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
                 host::capture_native(
                     &root,
                     Command::new(&cargo)
+                        .current_dir(source())
                         .args(["generate-lockfile", "--offline", "--manifest-path"])
                         .arg(root.join(format!("{id}/Cargo.toml")))
                 )

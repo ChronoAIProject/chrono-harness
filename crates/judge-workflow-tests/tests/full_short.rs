@@ -749,18 +749,7 @@ fn local_collection_retry_preserves_observation_and_expires_older_producer() {
     let fixture = root.join(".chrono-harness/bin/fixture-producer");
     // Reuse the registered producer-fixture capability, without a production
     // clock override or a direct injection into the workflow judge request.
-    fs::write(&fixture, r#"#!/bin/sh
-if [ "$1" = --version ]; then printf 'chrono-worktree 0.1.0\n'; exit 0; fi
-exec /usr/bin/python3 -c '
-import json,sys,hashlib
-raw=sys.stdin.buffer.read(); q=json.loads(raw)
-p=json.load(open(".chrono-harness/state/fixture-prepared.json"))
-p["request_sha256"]=hashlib.sha256(raw).hexdigest()
-s=q["selection"]
-p["scope"] = None if s["kind"]=="all" else (dict(kind="unit",unit=s["unit"]) if s["kind"]=="unit" else dict(kind="collect",manifest=".chrono-harness/state/collection/manifest.json"))
-print(json.dumps(p))'
-"#).unwrap();
-    fs::set_permissions(&fixture, fs::Permissions::from_mode(0o755)).unwrap();
+    native_tools::install(&root, &fixture);
     h.values.get_mut(CONFIG).unwrap()["tools"]
         .as_array_mut()
         .unwrap()
@@ -1355,45 +1344,7 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     let mock = tools.path().join("mock-gh");
     let metadata = tools.path().join("seed-api.json");
     let uploads = tools.path().join("shared-upload");
-    fs::write(&mock,format!(r#"#!/usr/bin/python3
-import json,pathlib,sys,shutil
-args=sys.argv[1:]; data=json.loads(pathlib.Path({metadata:?}).read_text()); run=dict(id=data.get('seed_run',900),run_attempt=data.get('attempt',1),status='in_progress',head_sha=data['candidate'],event=data.get('event','push'),path='.github/workflows/collection.yml',repository=dict(full_name='fixture/native'))
-case=data.get('case','valid')
-if case=='run-race' and args[:1]==['api'] and args[1].endswith('/runs/900'):run['run_attempt']=2
-if args[:2]==['run','download']:
- name=args[args.index('--name')+1]
- unit=name[len('chrono-unit-'):].rsplit('-',2)[0] if name.startswith('chrono-unit-') else None
- dest=pathlib.Path(args[args.index('--dir')+1]);shutil.copytree(pathlib.Path(data['units'][unit]['upload'] if unit else data['upload']),dest,dirs_exist_ok=True)
- if case in ['wrong-base','wrong-attempt','wrong-workflow','wrong-digest','wrong-fork','stale','nested-loss','wrong-lineage','wrong-branch','wrong-repository','wrong-candidate']:
-  binding=json.loads((dest/'binding.json').read_bytes()); context=json.loads((dest/'context.json').read_bytes())
-  if case=='wrong-base':binding['base']='f'*40
-  if case=='wrong-attempt':binding['attempt']=2
-  if case=='wrong-workflow':binding['workflow_revision']='e'*40
-  if case=='wrong-digest':binding['context_sha256']='0'*64
-  if case=='wrong-repository':binding['repository']='other/repository'
-  if case=='wrong-candidate':binding['candidate']='e'*40
-  if case=='wrong-lineage':(dest/'lineage.json').write_bytes(b'original byte drift')
-  if case=='wrong-branch':context['branch_ref']='feature/wrong'
-  if case=='wrong-fork':context['fork_point']='d'*40
-  if case=='stale':context['observed_at']='2020-01-01T00:00:00Z'
-  if case=='nested-loss':
-   first=next(iter(binding['originals'].values()));(dest/first['file']).unlink()
-  if case in ['wrong-fork','stale','wrong-branch']:
-   import hashlib
-   raw=json.dumps(context,separators=(',',':')).encode();(dest/'context.json').write_bytes(raw);binding['context_sha256']=hashlib.sha256(raw).hexdigest()
-  (dest/'binding.json').write_text(json.dumps(binding))
-elif '/contents/' in args[1]:
- filename=args[1].split('/contents/')[1].split('?')[0]
- sys.stdout.buffer.write((pathlib.Path(data['workflow']).parents[2]/filename).read_bytes())
-elif '/artifacts?' in args[1]:print(json.dumps([dict(artifacts=[] if case=='missing' else [dict(name='chrono-context-'+str(run['id'])+'-1',expired=False)]),dict(artifacts=[dict(name='chrono-context-'+str(run['id'])+'-1',expired=False)] if case=='ambiguous' else [])]))
-elif '/jobs?' in args[1]:
- rows=[dict(id=200,run_id=run['id'],run_attempt=run['run_attempt'],name='Detect registered DELTA',status='completed',conclusion='success',head_sha=run['head_sha'])]
- provider=json.loads((pathlib.Path(data['workflow']).parents[2]/'.chrono-harness/ci/units.json').read_bytes())
- for i,unit in enumerate(sorted(data.get('units',{{}}))):rows.append(dict(id=201+i,run_id=run['id'],run_attempt=run['run_attempt'] if data.get('carried') else data['units'][unit].get('attempt',1),name=provider['units'][unit]['name'],status='completed',conclusion='success',head_sha=run['head_sha']))
- print(json.dumps([dict(jobs=rows[:2]),dict(jobs=rows[2:])]))
-else:print(json.dumps(run))
-"#,metadata=metadata.to_str().unwrap())).unwrap();
-    fs::set_permissions(&mock, fs::Permissions::from_mode(0o755)).unwrap();
+    native_tools::install(tools.path(), &mock);
     provider["gather"]["program"] = json!(mock);
     fs::write(lane.join(PROVIDER), serde_json::to_vec(&provider).unwrap()).unwrap();
     let generated = host::capture_native(
