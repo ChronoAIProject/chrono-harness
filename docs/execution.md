@@ -15,6 +15,9 @@ Release renderer tests execute generated Bash with the existing Rust transport
 fixture, retaining literal arguments, original failures and dependency metadata.
 The Rust YAML consumer checks the pinned download action, artifact-ID input,
 destination, merge-multiple setting and absence of name/pattern selectors.
+Interpreter PATH-shadow and producer prelaunch-drift fixtures use the same Rust
+helper. The drift case replaces only its private executable after its version
+output, retaining the real digest rejection and original acquisition evidence.
 
 Unix process observations record the engine's actual capability carrier in optional
 `ownership_fds`. The `environment` map and `environment_digest` describe business

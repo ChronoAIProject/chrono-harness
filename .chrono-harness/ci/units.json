@@ -30,7 +30,8 @@
     "artifact_directory": ".chrono-harness/state/",
     "facts_config": ".chrono-harness/config.json",
     "include_hidden_files": true,
-    "retention_delivery": true
+    "retention_delivery": true,
+    "failure_artifact_directory": ".chrono-harness/state/"
   },
   "units": {
     "runner": {
@@ -47,7 +48,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/runner/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/runner/"
     },
     "instructions": {
       "workflow_path": ".github/workflows/chrono-ci-instructions.yml",
@@ -63,7 +64,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/instructions/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/instructions/"
     },
     "judge-ci": {
       "workflow_path": ".github/workflows/chrono-ci-judge-ci.yml",
@@ -79,7 +80,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-ci/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-ci/"
     },
     "ci": {
       "workflow_path": ".github/workflows/chrono-ci-ci.yml",
@@ -95,7 +96,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/ci/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/ci/"
     },
     "judge-registration": {
       "workflow_path": ".github/workflows/chrono-ci-judge-registration.yml",
@@ -111,7 +112,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-registration/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-registration/"
     },
     "judge-filemap": {
       "workflow_path": ".github/workflows/chrono-ci-judge-filemap.yml",
@@ -127,7 +128,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-filemap/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-filemap/"
     },
     "judge-routes": {
       "workflow_path": ".github/workflows/chrono-ci-judge-routes.yml",
@@ -143,7 +144,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-routes/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-routes/"
     },
     "judge-projects": {
       "workflow_path": ".github/workflows/chrono-ci-judge-projects.yml",
@@ -159,7 +160,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-projects/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-projects/"
     },
     "judge-cost": {
       "workflow_path": ".github/workflows/chrono-ci-judge-cost.yml",
@@ -175,7 +176,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-cost/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-cost/"
     },
     "judge-mixed": {
       "workflow_path": ".github/workflows/chrono-ci-judge-mixed.yml",
@@ -191,7 +192,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-mixed/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-mixed/"
     },
     "judge-workflow": {
       "workflow_path": ".github/workflows/chrono-ci-judge-workflow.yml",
@@ -207,7 +208,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-workflow/"
     },
     "inputs": {
       "workflow_path": ".github/workflows/chrono-ci-inputs.yml",
@@ -223,7 +224,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/inputs/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/inputs/"
     },
     "distribution": {
       "workflow_path": ".github/workflows/chrono-ci-distribution.yml",
@@ -239,7 +240,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/distribution/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/distribution/"
     },
     "judge-cargo": {
       "workflow_path": ".github/workflows/chrono-ci-judge-cargo.yml",
@@ -255,7 +256,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-cargo/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-cargo/"
     },
     "worktree": {
       "workflow_path": ".github/workflows/chrono-ci-worktree.yml",
@@ -271,7 +272,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/worktree/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/worktree/"
     },
     "judge-workflow-units": {
       "workflow_path": ".github/workflows/chrono-ci-judge-workflow-units.yml",
@@ -287,7 +288,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-units/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-workflow-units/"
     },
     "judge-workflow-short": {
       "workflow_path": ".github/workflows/chrono-ci-judge-workflow-short.yml",
@@ -303,7 +304,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-short/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/judge-workflow-short/"
     },
     "workflow-inventory": {
       "workflow_path": ".github/workflows/chrono-ci-workflow-inventory.yml",
@@ -319,7 +320,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/workflow-inventory/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/workflow-inventory/"
     },
     "release-build": {
       "workflow_path": ".github/workflows/chrono-ci-release-build.yml",
@@ -335,7 +336,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/release-build/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/release-build/"
     },
     "release-build-integration": {
       "workflow_path": ".github/workflows/chrono-ci-release-build-integration.yml",
@@ -351,7 +352,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/release-build-integration/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/release-build-integration/"
     },
     "worktree-adoption": {
       "workflow_path": ".github/workflows/chrono-ci-worktree-adoption.yml",
@@ -367,7 +368,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/worktree-adoption/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/worktree-adoption/"
     },
     "diagnostics": {
       "workflow_path": ".github/workflows/chrono-ci-diagnostics.yml",
@@ -381,7 +382,7 @@
         ".chrono-harness/ci/bootstrap-diagnostics-guard.json"
       ],
       "context_path": ".chrono-harness/state/units/diagnostics/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/diagnostics/"
     },
     "host-bootstrap": {
       "workflow_path": ".github/workflows/chrono-ci-host-bootstrap.yml",
@@ -397,7 +398,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/host-bootstrap/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/host-bootstrap/"
     },
     "cache": {
       "workflow_path": ".github/workflows/chrono-ci-cache.yml",
@@ -413,7 +414,7 @@
         "core"
       ],
       "context_path": ".chrono-harness/state/units/cache/context.json",
-      "artifact_directory": ".chrono-harness/state/"
+      "artifact_directory": ".chrono-harness/state/units/cache/"
     }
   },
   "gather": {
@@ -607,10 +608,6 @@
           "minimum_seconds": 30
         }
       }
-    },
-    "typed_acquisition": {
-      "program": "/usr/bin/python3",
-      "script": ".chrono-harness/ci/artifact_members.py"
     }
   },
   "job_gating": {

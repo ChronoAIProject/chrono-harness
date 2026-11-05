@@ -48,8 +48,7 @@
     "release.tests.integration",
     "test.diagnostics-tests",
     "host.bootstrap-tests",
-    "test.cache-tests",
-    "ci.artifact-member-tests"
+    "test.cache-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -552,14 +551,6 @@
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_cache_tests",
       "rust_toolchain": true
-    },
-    {
-      "id": "verify_artifact_members_tests",
-      "kind": "verify",
-      "operation": "ci.artifact-member-tests",
-      "needs": [],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_artifact_members_tests",
-      "rust_toolchain": false
     }
   ],
   "collector": {
@@ -601,8 +592,7 @@
       "verify_diagnostics_tests",
       "verify_host_bootstrap_tests",
       "build_cache",
-      "verify_cache_tests",
-      "verify_artifact_members_tests"
+      "verify_cache_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -647,8 +637,7 @@
       "verify_diagnostics_tests": "linux_verify_diagnostics_tests",
       "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests",
       "build_cache": "linux_build_cache",
-      "verify_cache_tests": "linux_verify_cache_tests",
-      "verify_artifact_members_tests": "linux_verify_artifact_members_tests"
+      "verify_cache_tests": "linux_verify_cache_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -688,8 +677,7 @@
       "verify_diagnostics_tests": "macos_verify_diagnostics_tests",
       "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests",
       "build_cache": "macos_build_cache",
-      "verify_cache_tests": "macos_verify_cache_tests",
-      "verify_artifact_members_tests": "macos_verify_artifact_members_tests"
+      "verify_cache_tests": "macos_verify_cache_tests"
     }
   },
   "unit_costs": {
@@ -730,8 +718,7 @@
     "verify_diagnostics_tests": "unmeasured",
     "verify_host_bootstrap_tests": "unmeasured",
     "build_cache": "unmeasured",
-    "verify_cache_tests": "unmeasured",
-    "verify_artifact_members_tests": "unmeasured"
+    "verify_cache_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
@@ -924,10 +911,6 @@
       "release_assets": [
         "chrono-cache"
       ]
-    },
-    "verify_artifact_members_tests": {
-      "need": "The ci.artifact-member-tests Python action imports the candidate artifact_members implementation and reads its declared binary fixture; it consumes no release executable.",
-      "release_assets": []
     }
   },
   "rust_incremental": true

@@ -166,6 +166,41 @@ fn invalid_provider_unknown_member_and_unpinned_action_fail() {
         assert!(init(d.path(), &p).is_err());
     }
 }
+
+#[test]
+fn report_upload_and_failed_job_diagnostics_have_separate_consumers() {
+    let d = tempfile::tempdir().unwrap();
+    let p = d.path().join("source.json");
+    let mut raw = serde_json::to_value(config()).unwrap();
+    raw["artifact_directory"] = json!(".chrono-harness/state/reports/");
+    raw["context_path"] = json!(".chrono-harness/state/reports/context.json");
+    raw["failure_artifact_directory"] = json!(".chrono-harness/state/");
+    let configured: Config = serde_json::from_value(raw.clone()).unwrap();
+    write(&p, &configured);
+    init(d.path(), &p).unwrap();
+    let workflow: serde_yaml_ng::Value =
+        serde_yaml_ng::from_slice(&fs::read(d.path().join(".github/workflows/check.yml")).unwrap())
+            .unwrap();
+    let steps = workflow["jobs"]["check"]["steps"].as_sequence().unwrap();
+    let evidence = steps
+        .iter()
+        .find(|s| s["name"] == "Preserve actual check evidence")
+        .unwrap();
+    let diagnostics = steps
+        .iter()
+        .find(|s| s["name"] == "Preserve failed job diagnostics")
+        .unwrap();
+    assert_eq!(evidence["with"]["path"], ".chrono-harness/state/reports/");
+    assert_eq!(evidence["if"], "${{ always() }}");
+    assert_eq!(diagnostics["with"]["path"], ".chrono-harness/state/");
+    assert_eq!(diagnostics["if"], "${{ failure() }}");
+    assert_ne!(diagnostics["with"]["name"], evidence["with"]["name"]);
+    for invalid in [Value::Null, json!("/tmp/"), json!(".chrono-harness/state")] {
+        raw["failure_artifact_directory"] = invalid;
+        fs::write(&p, serde_json::to_vec(&raw).unwrap()).unwrap();
+        assert!(init(d.path(), &p).is_err());
+    }
+}
 #[test]
 fn push_uses_actual_before_after() {
     let (d, b, c) = repo();
@@ -941,9 +976,11 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     tool["expected_version"] = json!(String::from_utf8(observed.stdout).unwrap().trim_end());
     let dir = tempfile::tempdir().unwrap();
     let shadow = dir.path().join("python3");
-    fs::write(&shadow, "#!/bin/sh\nprintf 'Python shadowed\\n'\nexit 0\n").unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(&shadow, fs::Permissions::from_mode(0o755)).unwrap();
+    std::os::unix::fs::symlink(
+        fs::canonicalize(env!("CARGO_BIN_EXE_chrono-ci-test-transport")).unwrap(),
+        &shadow,
+    )
+    .unwrap();
     let control = Command::new("python3")
         .env_clear()
         .env("PATH", dir.path())
