@@ -470,8 +470,9 @@ exact directory children. The root still binds the `share` child name; its
 documentation, manual and completion contents are outside this build inventory.
 This removes 52,036 file and 1,455 directory rows from repeated guard validation,
 without changing the guard's before/after checks or claiming complete inputs.
-SDK and Xcode inventories retain their existing scope. Runtime, CI and storage
-savings require comparable consumer measurements. The same local consumer binds
+The macOS SDK retains its existing scope. The local Xcode build subset is
+described below. Runtime, CI and storage savings require comparable consumer
+measurements. The same local consumer binds
 only its 50 current external packages' archive/index pairs and the crates.io
 registry configuration: 101 cache inputs. Twenty-six unrelated or superseded
 cache declarations and their runner edges are removed; current package source
@@ -484,6 +485,26 @@ recipes and one ordinary `build.diagnostics` action through
 `.chrono-harness/cargo/diagnostics-config.json` and `diagnostics.json`.
 Restoring the historical parallel guard aliases is not required for ordinary
 scoped operation; underlying methods, assertions and input obligations remain.
+
+**Host input policy change:** `local-xcode-build.json` selects original rows from
+the retained Xcode 26.5 Contents inventory for the current macOS runner and
+diagnostics consumers. The five already declared tools (`clang`, `ar`, `ld`,
+`libtool`, `dsymutil`), the linker's four distribution libraries (`libLTO`,
+`libtapi`, `libcodedirectory`, `libswiftDemangle`), clang 21's resource subtree and
+its version alias, and Xcode/toolchain metadata remain bound. An audit of the
+pinned tools' Mach-O imports and clang's resource/link command observations
+identifies these local distribution dependencies. System framework dependencies
+remain outside this bounded inventory's completeness claim.
+
+Every selected file digest, literal alias and exact directory child-name row
+comes unchanged from that original. Parent child-name rows remain, including
+names whose unselected contents belong to mobile SDKs, Swift tooling and the
+Xcode application. Their contents are outside these Rust build consumers' input
+subset. The separate complete macOS SDK inventory and all guard checks after
+child processes remain. This changes declared scope, not the guard algorithm or
+its 600-second deadline. The previous complete Xcode acquisition remains an
+original; this subset does not certify complete input closure or parity. Actual
+consumer validation and total cost measurement remain required.
 
 Exact 51 native run `41021444210/1` qualifies 37 corresponding operations,
 including diagnostics' 27-node locked/offline metadata and guarded offline build.

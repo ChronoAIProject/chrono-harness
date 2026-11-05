@@ -398,7 +398,15 @@ inventory rejected `usr/bin/altool` because that literal alias reaches the sibli
 SharedFrameworks directory. The selected inventory therefore covers the enclosing
 `Xcode.app/Contents` root with unchanged directory-v3 checks; `DEVELOPER_DIR`
 continues to name Developer and `CHRONO_XCODE_CONTENTS` selects the encompassing
-inventory. SDK, Developer, configuration and runtime scopes remain explicit.
+inventory. The current local runner and diagnostics build policy selects
+`.chrono-harness/inputs/local-xcode-build.json` from that original: declared
+link tools, their four local distribution libraries, clang 21 resources and
+alias, and distribution/toolchain metadata, with unchanged file hashes and
+exact parent directory child names. Mobile SDKs and the graphical application's
+contents are outside this selected build subset. The complete macOS SDK remains
+separately bound. The [Cargo owner](cargo-projects.md#compatible-v6-native-target-and-v3-directory-source)
+records the dependency audit and policy boundary. SDK, Developer, configuration
+and runtime scopes remain explicit.
 The original rejected acquisition and successful replacement are retained
 separately. The generated Rust, SDK and Xcode inventories are required original
 inputs under the registered state owner, with digests in the selected policy;
