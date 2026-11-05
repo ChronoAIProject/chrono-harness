@@ -23,6 +23,14 @@ registered state directory for both setup and business commands. Independent
 fixtures do not use the caller's shared package cache; their offline builds still
 compile and test the real Rust production/test pairs under the existing bounds.
 
+The competing receipt-publisher test waits on its actual owned phase channels.
+Copying retained Cargo state before namespace admission has no five-second
+latency contract. Each scoped publisher owns its sender, so early exit closes
+the channel; dropping the scoped resume sender also releases the paused creator
+if a parent assertion unwinds. Both publishers still join before assertions of
+exclusion, unchanged namespace identity and both commands' retained originals.
+The registered operation bound and production admission deadline are unchanged.
+
 Release renderer tests execute generated Bash with the existing Rust transport
 fixture, retaining literal arguments, original failures and dependency metadata.
 The Rust YAML consumer checks the pinned download action, artifact-ID input,
