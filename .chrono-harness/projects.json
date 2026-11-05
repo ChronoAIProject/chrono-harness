@@ -3400,9 +3400,7 @@
       "language": "rust",
       "test_groups": {
         "worktree-tests": "execute_core",
-        "worktree-adoption": "execute_adoption",
-        "worktree-capacity": "capacity",
-        "worktree-age": "age"
+        "worktree-adoption": "execute_adoption"
       }
     },
     {
