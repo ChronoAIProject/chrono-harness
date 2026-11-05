@@ -996,7 +996,7 @@ impl Inventory {
         let references: Vec<_> = ids.iter().cloned().collect();
         if l.outputs
             .iter()
-            .any(|o| o.path == path && o.references == references)
+            .any(|o| o.path == path && o.phase == "disposing" && o.references == references)
         {
             return self.stable(&gate);
         }
