@@ -1137,12 +1137,15 @@ replacement still excludes its actual users. Existing custody, migration,
 interruption and owner-deployment consumers use the addressed storage; old active
 state requires the documented protected owner cutover, without a runtime fallback.
 
-Product and host policy change together. Native run `41944861461` on clean
-candidate `a0071a5cec3079a01cc839fcc095fda1323bc923` passed all 24 business units
-and collection. The registered runner action passed 241 tests with one existing
-ignored test. Clean candidate `66806b61ebe5a2892a6fd2e276e28a676f379a6d` passed the
-local canonical worktree unit after the retention test was corrected to exercise
-bounded continuation. Final source bootstrap at
-`a41cd43aa7233a32847fe47c67e7f1b90846881a` passed. Those observations do not establish
-final-candidate acceptance, deployment to other coordinators, actual landing or
-complete SPEC delivery. Total runtime, CI and storage costs remain unmeasured.
+Product and host policy change together. Clean candidate
+`21a5e6acebabe285fbec0bbe821e297327d51f98` passed source bootstrap (12 operations,
+six tools), the local canonical worktree unit (215 tests, six assigned to the
+adoption group), and native run `41950114155` (all 24 business units and collection).
+The downloaded collection archive matches its provider length/digest; original
+report and stream digests verify, with all 25 aggregate results passing. The
+registered runner action separately passed 241 tests with one existing ignored
+test. PR #221 landed as `3b605cf80aa9e96a6442b2e54991602713acca31`; its tree is
+identical to the tested candidate. Other coordinators, including the original
+main checkout's nine aggregate enrollment
+records, still require protected state cutover. Complete SPEC delivery and total
+runtime, CI and storage savings remain unestablished.
