@@ -1,10 +1,184 @@
-//! Indexed FIFO graph traversal. The caller owns the name/edge-index adapter.
+//! Exact name lookup and indexed FIFO graph traversal.
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+pub open spec fn byte_prefix(a: Seq<u8>, b: Seq<u8>, n: int) -> bool {
+    0 <= n <= a.len() && n <= b.len()
+        && forall|i: int| 0 <= i < n ==> a[i] == b[i]
+}
+
+/// Rust string identity and order use the complete UTF-8 byte sequence.
+pub open spec fn byte_lt(a: Seq<u8>, b: Seq<u8>) -> bool {
+    exists|i: int| 0 <= i <= a.len() && i < b.len() && byte_prefix(a, b, i)
+        && (i == a.len() || a[i] < b[i])
+}
+
+proof fn byte_lt_strict(a: Seq<u8>, b: Seq<u8>)
+    requires byte_lt(a, b),
+    ensures a != b,
+{
+    let i = choose|i: int| 0 <= i <= a.len() && i < b.len() && byte_prefix(a, b, i)
+        && (i == a.len() || a[i] < b[i]);
+}
+
+proof fn byte_lt_transitive(a: Seq<u8>, b: Seq<u8>, c: Seq<u8>)
+    requires byte_lt(a, b), byte_lt(b, c),
+    ensures byte_lt(a, c),
+{
+    let i = choose|i: int| 0 <= i <= a.len() && i < b.len() && byte_prefix(a, b, i)
+        && (i == a.len() || a[i] < b[i]);
+    let j = choose|j: int| 0 <= j <= b.len() && j < c.len() && byte_prefix(b, c, j)
+        && (j == b.len() || b[j] < c[j]);
+    let k = if i < j { i } else { j };
+    assert(byte_prefix(a, c, k)) by {
+        assert forall|t: int| 0 <= t < k implies a[t] == c[t] by {}
+    }
+    assert(k == a.len() || a[k] < c[k]);
+    assert(0 <= k <= a.len() && k < c.len());
+}
+
+/// -1, 0 and 1 denote less, byte-identical and greater respectively.
+pub fn compare_bytes(a: &[u8], b: &[u8]) -> (order: i8)
+    ensures
+        -1 <= order <= 1,
+        order == -1 ==> byte_lt(a@, b@),
+        order == 0 ==> a@ == b@,
+        order == 1 ==> byte_lt(b@, a@),
+{
+    let mut i: usize = 0;
+    while i < a.len() && i < b.len()
+        invariant i <= a.len(), i <= b.len(), byte_prefix(a@, b@, i as int),
+        decreases a.len() - i,
+    {
+        if a[i] < b[i] {
+            assert(byte_lt(a@, b@));
+            return -1;
+        }
+        if a[i] > b[i] {
+            assert(byte_prefix(b@, a@, i as int));
+            assert(byte_lt(b@, a@));
+            return 1;
+        }
+        i += 1;
+    }
+    if a.len() < b.len() {
+        assert(byte_lt(a@, b@));
+        -1
+    } else if a.len() > b.len() {
+        assert(byte_prefix(b@, a@, i as int));
+        assert(byte_lt(b@, a@));
+        1
+    } else {
+        assert(a@ =~= b@);
+        0
+    }
+}
+
+pub open spec fn ordered_names(names: Seq<&str>) -> bool {
+    forall|i: int, j: int| 0 <= i < j < names.len()
+        ==> byte_lt(#[trigger] names[i].spec_bytes(), #[trigger] names[j].spec_bytes())
+}
+
+/// Check the supplied inventory, including uniqueness, without trusting its producer.
+pub fn valid_names(names: &[&str]) -> (valid: bool)
+    ensures valid == ordered_names(names@),
+{
+    let mut end: usize = 1;
+    while end < names.len()
+        invariant 1 <= end, end <= names.len() || names.len() == 0,
+            forall|i: int, j: int| 0 <= i < j < end && j < names.len()
+                ==> byte_lt(#[trigger] names@[i].spec_bytes(), #[trigger] names@[j].spec_bytes()),
+        decreases names.len() - end,
+    {
+        let order = compare_bytes(names[end - 1].as_bytes(), names[end].as_bytes());
+        if order != -1 {
+            proof {
+                if order == 0 {
+                    if ordered_names(names@) {
+                        byte_lt_strict(names@[end as int - 1].spec_bytes(), names@[end as int].spec_bytes());
+                    }
+                } else {
+                    if ordered_names(names@) {
+                        byte_lt_transitive(names@[end as int - 1].spec_bytes(), names@[end as int].spec_bytes(),
+                            names@[end as int - 1].spec_bytes());
+                        byte_lt_strict(names@[end as int - 1].spec_bytes(), names@[end as int - 1].spec_bytes());
+                    }
+                }
+            }
+            return false;
+        }
+        proof {
+            assert forall|i: int, j: int| 0 <= i < j < end + 1 && j < names.len()
+                implies byte_lt(#[trigger] names@[i].spec_bytes(), #[trigger] names@[j].spec_bytes()) by {
+                if j == end && i < end - 1 {
+                    byte_lt_transitive(names@[i].spec_bytes(), names@[end as int - 1].spec_bytes(),
+                        names@[j].spec_bytes());
+                }
+            }
+        }
+        end += 1;
+    }
+    true
+}
+
+/// Exact binary lookup; missing names are never assigned a fallback index.
+pub fn name_index(names: &[&str], key: &str) -> (found: Option<usize>)
+    requires ordered_names(names@),
+    ensures match found {
+        Some(i) => i < names.len() && names@[i as int].spec_bytes() == key.spec_bytes(),
+        None => forall|i: int| 0 <= i < names.len()
+            ==> (#[trigger] names@[i].spec_bytes()) != key.spec_bytes(),
+    },
+{
+    let mut low: usize = 0;
+    let mut high = names.len();
+    while low < high
+        invariant 0 <= low <= high <= names.len(), ordered_names(names@),
+            forall|i: int| 0 <= i < low ==> byte_lt(#[trigger] names@[i].spec_bytes(), key.spec_bytes()),
+            forall|i: int| high <= i < names.len() ==> byte_lt(key.spec_bytes(), #[trigger] names@[i].spec_bytes()),
+        decreases high - low,
+    {
+        let mid = low + (high - low) / 2;
+        let order = compare_bytes(names[mid].as_bytes(), key.as_bytes());
+        if order == 0 {
+            return Some(mid);
+        } else if order == -1 {
+            proof {
+                assert forall|i: int| 0 <= i < mid + 1
+                    implies byte_lt(#[trigger] names@[i].spec_bytes(), key.spec_bytes()) by {
+                    if low <= i < mid {
+                        byte_lt_transitive(names@[i].spec_bytes(), names@[mid as int].spec_bytes(), key.spec_bytes());
+                    }
+                }
+            }
+            low = mid + 1;
+        } else {
+            proof {
+                assert forall|i: int| mid <= i < names.len()
+                    implies byte_lt(key.spec_bytes(), #[trigger] names@[i].spec_bytes()) by {
+                    if mid < i < high {
+                        byte_lt_transitive(key.spec_bytes(), names@[mid as int].spec_bytes(), names@[i].spec_bytes());
+                    }
+                }
+            }
+            high = mid;
+        }
+    }
+    proof {
+        assert forall|i: int| 0 <= i < names.len()
+            implies (#[trigger] names@[i].spec_bytes()) != key.spec_bytes() by {
+            if i < low { byte_lt_strict(names@[i].spec_bytes(), key.spec_bytes()); }
+            else { byte_lt_strict(key.spec_bytes(), names@[i].spec_bytes()); }
+        }
+    }
+    None
+}
 
 pub struct Search {
     /// The graph size denotes an unreachable node; all other values are hop counts.

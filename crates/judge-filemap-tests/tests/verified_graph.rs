@@ -9,8 +9,116 @@ use chrono_harness::verus;
 use chrono_judge_filemap::verified_graph as policy;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+broadcast use vstd::string::group_string_axioms;
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn byte_order_handles_empty_prefixes_and_the_full_byte_range() {
+    let empty: Vec<u8> = vec![];
+    let zero: Vec<u8> = vec![0];
+    let prefix: Vec<u8> = vec![0, 255];
+    let high: Vec<u8> = vec![128];
+    let highest: Vec<u8> = vec![255];
+    let order = policy::compare_bytes(&empty, &empty);
+    assert(order == 0);
+    let order = policy::compare_bytes(&empty, &zero);
+    assert(order == -1);
+    let order = policy::compare_bytes(&zero, &prefix);
+    assert(order == -1);
+    let order = policy::compare_bytes(&prefix, &zero);
+    assert(order == 1);
+    let order = policy::compare_bytes(&prefix, &high);
+    assert(order == -1);
+    let order = policy::compare_bytes(&highest, &high);
+    assert(order == 1);
+    let order = policy::compare_bytes(&prefix, &prefix);
+    assert(order == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn name_inventory_rejects_duplicate_names_and_descending_bytes() {
+    let duplicate: Vec<&str> = vec!["根", "根"];
+    assert(duplicate@[0].spec_bytes() == duplicate@[1].spec_bytes());
+    let valid = policy::valid_names(&duplicate);
+    assert(!valid);
+    proof {
+        reveal_strlit("a");
+        reveal_strlit("b");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let descending: Vec<&str> = vec!["b", "a"];
+    assert(descending@[0].spec_bytes() == seq![98u8]);
+    assert(descending@[1].spec_bytes() == seq![97u8]);
+    let valid = policy::valid_names(&descending);
+    assert(!valid);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn name_lookup_covers_empty_singleton_prefixes_unicode_and_absence() {
+    proof {
+        reveal_strlit("");
+        reveal_strlit("a");
+        reveal_strlit("aa");
+        reveal_strlit("b");
+        reveal_strlit("c");
+        reveal_strlit("é");
+        reveal_strlit("根");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("aa"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("c"@);
+        assert(vstd::utf8::encode_scalar(233) == seq![195u8, 169]) by (compute);
+        assert(vstd::utf8::encode_scalar(26681) == seq![230u8, 160, 185]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 4);
+    }
+    let empty: Vec<&str> = vec![];
+    let valid = policy::valid_names(&empty);
+    assert(valid);
+    let found = policy::name_index(&empty, "a");
+    assert(found.is_none());
+    let one: Vec<&str> = vec!["根"];
+    assert(one@[0].spec_bytes() == "根".spec_bytes());
+    let valid = policy::valid_names(&one);
+    assert(valid);
+    let found = policy::name_index(&one, "根");
+    assert(found == Some(0usize));
+    let names: Vec<&str> = vec!["", "a", "aa", "b", "é", "根"];
+    assert(names@[0].spec_bytes() == Seq::<u8>::empty());
+    assert(names@[1].spec_bytes() == seq![97u8]);
+    assert(names@[2].spec_bytes() == seq![97u8, 97]);
+    assert(names@[3].spec_bytes() == seq![98u8]);
+    assert(names@[4].spec_bytes() == seq![195u8, 169]);
+    assert(names@[5].spec_bytes() == seq![230u8, 160, 185]);
+    proof {
+        assert forall|i: int, j: int| 0 <= i < j < names.len()
+            implies policy::byte_lt(#[trigger] names@[i].spec_bytes(), #[trigger] names@[j].spec_bytes()) by {
+            let a = names@[i].spec_bytes();
+            let b = names@[j].spec_bytes();
+            let first = if i == 1 && j == 2 { 1int } else { 0int };
+            assert(policy::byte_prefix(a, b, first));
+            assert(0 <= first <= a.len() && first < b.len()
+                && (first == a.len() || a[first] < b[first]));
+        }
+    }
+    let valid = policy::valid_names(&names);
+    assert(valid);
+    let found = policy::name_index(&names, "");
+    assert(found == Some(0usize));
+    let found = policy::name_index(&names, "aa");
+    assert(found == Some(2usize));
+    let found = policy::name_index(&names, "é");
+    assert(found == Some(4usize));
+    let found = policy::name_index(&names, "根");
+    assert(found == Some(5usize));
+    let found = policy::name_index(&names, "c");
+    assert(found.is_none());
+}
 
 /// Independent paths give upper bounds; an independently supplied feasible
 /// distance labeling gives lower bounds on every real predecessor path.

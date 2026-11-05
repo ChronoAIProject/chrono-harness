@@ -89,7 +89,27 @@ target, reusing the existing pinned toolchain and macro. No external assumption
 is added. Proof/build/storage costs beyond the existing bounds are unmeasured;
 the runner's remaining whole-file and unit migration gaps stay declared.
 
-`crates/judge-filemap/src/verified_graph.rs` owns indexed graph validation and
+`crates/judge-filemap/src/verified_graph.rs` also owns exact name lookup. Its byte
+comparator proves lexicographic order over complete slices, including empty and
+prefix-related slices and every byte value. Strictness and transitivity connect
+adjacent inventory checks to every ordered pair. `valid_names` accepts exactly
+strictly increasing UTF-8 name inventories, rejecting duplicates and descending
+names. `name_index` proves binary-search bounds and termination: a returned index
+names exactly the supplied bytes, and absence means every inventory name differs.
+The production closure validates its inventory once and uses this lookup for
+every destination and seed, replacing the separate name-to-index BTreeMap. No
+fallback index is introduced. Inventory construction and proof that all supplied
+edge/seed names are present remain adapter obligations. Independent boundary
+proofs cover empty/singleton inventories, duplicate/descending names, prefixes,
+Unicode, absent names and byte values spanning the complete u8 range.
+
+This reuses the registered graph proof roots and the matching vstd string/UTF-8
+interface. It adds no external assumption, dependency or operation. The admission
+scan compares adjacent names once; lookup halves its candidate interval on each
+iteration and compares the supplied byte slices. The extra scan and removal of
+the index map have not been measured as total runtime/build/storage savings.
+
+The same source owns indexed graph validation and
 per-root FIFO traversal. `valid_indices` accepts exactly graphs whose destination
 indices are in range. The caller validates the immutable adjacency once before
 searching several roots; `breadth_first` requires that fact and rejects exactly
@@ -117,7 +137,8 @@ cost remains unmeasured.
 The actual `graph::closure` builds a sorted node inventory and adjacency slots
 from its existing ordered typed edges, then calls this source for each seed.
 It uses returned indices to construct the existing reached causes, predecessor
-maps and traversed typed edges. The adapter, union, seed production, serialization,
+maps and traversed typed edges. Inventory construction, the remaining adapter,
+union, seed production, serialization,
 test selection and the correspondence between typed-edge order and indexed
 slots remain unproved;
 the adapter's empty-root obligation is retained. Independent Verus examples cover

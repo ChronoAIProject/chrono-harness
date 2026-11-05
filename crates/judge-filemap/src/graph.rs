@@ -79,23 +79,28 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    let indices: BTreeMap<&str, usize> = nodes
-        .iter()
-        .enumerate()
-        .map(|(i, name)| (*name, i))
-        .collect();
+    assert!(crate::verified_graph::valid_names(&nodes));
     let edge_rows: Vec<Vec<&Edge>> = nodes
         .iter()
         .map(|node| adjacency.get(node).into_iter().flatten().copied().collect())
         .collect();
     let indexed: Vec<Vec<usize>> = edge_rows
         .iter()
-        .map(|row| row.iter().map(|edge| indices[edge.to.as_str()]).collect())
+        .map(|row| {
+            row.iter()
+                .map(|edge| {
+                    crate::verified_graph::name_index(&nodes, &edge.to)
+                        .expect("edge destination belongs to the explicit node inventory")
+                })
+                .collect()
+        })
         .collect();
     assert!(crate::verified_graph::valid_indices(&indexed));
     let mut traversed: BTreeMap<Edge, BTreeSet<String>> = BTreeMap::new();
     for seed in seeds {
-        let search = crate::verified_graph::breadth_first(&indexed, indices[seed.node.as_str()])
+        let root = crate::verified_graph::name_index(&nodes, &seed.node)
+            .expect("seed name belongs to the explicit node inventory");
+        let search = crate::verified_graph::breadth_first(&indexed, root)
             .expect("seed index belongs to the explicit node inventory");
         let mut parents = BTreeMap::new();
         for node in search.order {
