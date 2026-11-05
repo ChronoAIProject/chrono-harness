@@ -2,6 +2,7 @@
   "schema": "chrono-cargo-input-policies/v1",
   "configurations": {
     ".chrono-harness/git/pinned-macos-diagnostics.json": ".chrono-harness/cargo/diagnostics-native.json",
-    ".chrono-harness/git/macos-27.json": ".chrono-harness/cargo/diagnostics-local.json"
+    ".chrono-harness/git/macos-27.json": ".chrono-harness/cargo/diagnostics-local.json",
+    ".chrono-harness/git/macos-26-diagnostics.json": ".chrono-harness/cargo/diagnostics-native.json"
   }
 }

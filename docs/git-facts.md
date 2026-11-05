@@ -185,12 +185,14 @@ for exact candidates, events and limits.
 
 ## Exact host executable selection
 
-`chrono-git-configs/v2` extends the existing one-level selector for hosts that
-share an OS/architecture but ship different executable bytes. Each platform
-instead declares an absolute `program` and a nonempty `configurations` array of
-`{"sha256":"<registered digest>","path":".chrono-harness/<direct policy>.json"}`.
-Digests and target paths must be valid and unique within that platform. Every target remains a
-direct full-v3 or schema4 policy; nested selectors and fallback entries fail.
+`chrono-git-configs/v3` extends the one-level selector for hosts that share an
+OS/architecture but ship different executable bytes. Each platform declares an
+absolute `program` and a nonempty `configurations` array of
+`{"sha256":"<registered digest>","path":".chrono-harness/<direct policy>.json","registry_path":".chrono-harness/<registered data policy>.json"}`.
+Digests and target paths must be valid and unique within that platform. Every
+target remains a direct full-v3 or schema4 policy; nested selectors and fallback
+entries fail. Each `registry_path` must name a target registered on that platform.
+Different current executable identities may explicitly share that fixed data path.
 
 Selection reads only the declared executable's bytes, without executing it.
 Exactly the registered digest selects a target. The selected policy's Git tool
@@ -198,44 +200,52 @@ program, present input location and expected digest must agree literally with
 that selection before the usual bound reader executes its version probe. Unknown
 bytes fail with the observed path/digest; observations never become expected
 values during validation. Subsequent reader guards still bind the executable,
-selector, selected policy and fixed candidate. The existing selection observation
-and structural snapshot shapes are unchanged: their paths identify the selected
-direct policy, while retained selector bytes define its decision rule.
+selector, selected policy and fixed candidate. The selection observation also
+retains `registry_path`; request consumers reject its substitution. Snapshot
+paths identify the endpoint's selected direct policy, while retained selector
+bytes define its decision rule.
 
-Request-bound immutable snapshots use the candidate's selected policy path as
-the stable data identity for a v2 selector. Each endpoint must explicitly register
-that path and its own matching tool/input digest. Reading the baseline therefore
-does not open or require its executable, or require its selector to register the
-current executable. Missing paths, inconsistent bindings and ambiguous targets
-fail; no alternative policy is guessed. Snapshot identity is reconstructed from
-the single captured target and original selector, without reading today's Git.
+Request-bound immutable snapshots first use an endpoint's registration for the
+candidate's actual executable digest. If that digest is absent from the fixed
+endpoint, only the candidate's explicit `registry_path` is eligible. The endpoint
+must register that path and its own matching tool/input digest. Reading the
+baseline therefore does not open or require its executable, or require its
+selector to register the current executable. Missing paths, inconsistent bindings
+and ambiguous targets fail; no alternative policy is guessed. Snapshot identity
+is reconstructed from the single captured target and original selector, without
+reading today's Git. Fixed endpoint v2 bytes remain data, not an execution path.
 Candidate opening and every subsequent acquisition retain the actual executable,
 selector, configuration and input guards. A policy path relocation requires an
-explicit endpoint declaration; it cannot silently select another environment.
+explicit endpoint declaration.
 
-This repository binds native CI through `.chrono-harness/git/pinned-macos.json`
-and the measured local macOS 27.0.1 (26A434), arm64 executable through
-`git/macos-27.json`. Cache artifact registration and release staging consume the
-native policy's artifact metadata independently of executable selection.
+This repository binds its two current native CI images through
+`.chrono-harness/git/pinned-macos.json` and `git/macos-26.json`, both explicitly
+using the former as their fixed data path, and the measured local macOS 27.0.1
+(26A434), arm64 executable through `git/macos-27.json`. Cache artifact registration
+and release staging consume the pinned native policy's artifact metadata
+independently of executable selection.
 
-The macos-26 instructions job in run `41927937485`, attempt 1, observed a
-previously unregistered `/usr/bin/git` SHA-256
+The macos-26 instructions job in run `41927937485`, attempt 1, observed
 `61e77a2d557f8677a9da3b403c054c8b6e2d2ba5f6389bce100b55b65977df2e`
-on macOS 26.7.2 (25G332), runner image `20261102.0473.1`. The host explicitly
-updates the native policy, diagnostics policy and worktree v3 primary identity
-to those current bytes. The obsolete native digest and duplicate policy are removed.
-Its declared version expectation remains `git version 2.50.1 (Apple Git-155)`;
-that version and full native acceptance require the candidate's actual bound
-probe, rather than inference from the runner label. Unknown bytes still fail.
-This changes product snapshot interpretation and host policy together. Local
-macOS-27 retains its separate exact declaration. Validation uses the ordinary source
-bootstrap, canonical DELTA and native check; total extra cost is unmeasured.
+on macOS 26.7.2 (25G332), runner image `20261102.0473.1`.
+Run `41941690768`, attempt 1, subsequently observed
+`b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9`
+in the same runner queue. Both are current environments. The host registers
+separate complete native and diagnostics policies, and admits both in worktree
+v3. Their declared version expectation remains
+`git version 2.50.1 (Apple Git-155)`; that version and full native acceptance
+require the candidate's actual bound probe, rather than inference from the
+runner label. Unknown bytes still fail.
 
-Dedicated Rust tests cover successful selection, fixed/request bindings, drift,
-unknown bytes, malformed/ambiguous declarations and target binding disagreement.
-Opening a candidate reads the declared executable once per selector resolution;
-fixed endpoint interpretation uses the request-bound path and retained data only.
-total validation/storage costs remain unmeasured. Independent fixture consumers
+This changes product snapshot interpretation and host policy together. Local
+macOS-27 retains its separate exact declaration. Validation uses ordinary source
+bootstrap, canonical DELTA and native check; total extra cost is unmeasured.
+Dedicated Rust tests cover both current identity choices against a fixed baseline
+without its executable, fixed/request bindings, drift, unknown bytes,
+malformed/ambiguous declarations and target binding disagreement. Opening a
+candidate reads the declared executable once per selector resolution; fixed
+endpoint interpretation uses explicit identities/paths and retained data only.
+Total validation/storage costs remain unmeasured. Independent fixture consumers
 read the preserved pinned policy as data and bind their own tools; that does not
 admit its Git on the fixture platform or establish native acceptance.
 

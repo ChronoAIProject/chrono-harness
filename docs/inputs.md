@@ -355,10 +355,11 @@ that identity and the actual artifact/producer attempt must be resolved from the
 original native run. No native run, installed consumption or landing follows from
 committing this workflow.
 
-The root `chrono-git-configs/v2` exact executable identity semantics, worktree v3,
-known identity tuples and unknown-byte rejection are unchanged. No source-selector
-schema, input-set extension, historical full policy, beta.21 installation or new
-installer is adopted. The historical native config/runner fixtures are retired
+The root `chrono-git-configs/v3` binds both current native executable identities
+and explicitly declares their common fixed registry data path; worktree v3 admits
+both identities. Unknown executable bytes still fail. See [Git selection](git-facts.md#exact-host-executable-selection)
+for the current schema and immutable-data boundary. No input-set extension,
+historical full execution policy, beta.21 installation or new installer is adopted. The historical native config/runner fixtures are retired
 with their obsolete test comparison and FILEMAP entries. Their fixed source remains in Git; current
 acquisition tests consume the current observation declarations directly. See
 [input source custody](input-source-custody.md) for the preserved omissions and
@@ -387,8 +388,9 @@ separately. The generated Rust, SDK and Xcode inventories are required original
 inputs under the registered state owner, with digests in the selected policy;
 source declarations alone cannot provision or certify those bytes.
 
-This is a host-policy and registration migration. It changes no Git-v2 or
-worktree-v3 admitted identity and activates no full governance. Guard execution,
+This input-location change is a host-policy and registration migration; it
+activates no full governance. Current Git selection is registered separately as
+described above. Guard execution,
 clean candidate bootstrap/canonical DELTA, native acquisition and installed
 consumer evidence must identify their actual source separately. Missing historical
 endpoint originals, complete input closure/parity, other guarded projects, batch
