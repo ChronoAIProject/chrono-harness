@@ -31,16 +31,16 @@ pub open spec fn tree(
 ) -> bool {
     root < g.len() && d.len() == g.len() && p.len() == g.len()
         && d[root as int] == 0 && p[root as int].is_none()
-        && forall|v: int| 0 <= v < g.len() ==> (
-            (#[trigger] d[v]) <= g.len()
-            && (if d[v] == g.len() { p[v].is_none() }
+        && (forall|v: int| 0 <= v < g.len() ==> (#[trigger] d[v]) <= g.len())
+        && forall|v: int| #![trigger p[v]] 0 <= v < g.len() ==> (
+            if d[v] == g.len() { p[v].is_none() }
                 else if v != root {
                     p[v].is_some() && {
                         let (u, k) = p[v].unwrap();
                         u < g.len() && k < g[u as int].len() && g[u as int]@[k as int] == v
                             && d[u as int] < d[v] && d[v] == d[u as int] + 1
                     }
-                } else { true })
+                } else { true }
         )
 }
 
@@ -133,6 +133,7 @@ pub proof fn walk_bound(g: Seq<Vec<usize>>, d: Seq<usize>, root: usize, w: Seq<u
     }
 }
 
+#[verifier::opaque]
 pub open spec fn complete(g: Seq<Vec<usize>>, root: usize, s: Search) -> bool {
     queue_state(g, root, s.distances@, s.parents@, s.order@)
         && closed(g, s.distances@)
@@ -151,18 +152,18 @@ pub fn valid_indices(g: &[Vec<usize>]) -> (valid: bool)
     let n = g.len();
     let mut u = 0;
     while u < n
-        invariant u <= n,
+        invariant n == g.len(), u <= n,
             forall|i: int, k: int| 0 <= i < u && 0 <= k < g[i].len()
                 ==> (#[trigger] g[i]@[k]) < n,
         decreases n - u,
     {
         let mut k = 0;
         while k < g[u].len()
-            invariant u < n, k <= g[u].len(),
+            invariant n == g.len(), u < n, k <= g[u as int].len(),
                 forall|i: int, j: int| 0 <= i < u && 0 <= j < g[i].len()
                     ==> (#[trigger] g[i]@[j]) < n,
-                forall|j: int| 0 <= j < k ==> (#[trigger] g[u]@[j]) < n,
-            decreases g[u].len() - k,
+                forall|j: int| 0 <= j < k ==> (#[trigger] g[u as int]@[j]) < n,
+            decreases g[u as int].len() - k,
         {
             if g[u][k] >= n { return false; }
             k += 1;
@@ -170,6 +171,72 @@ pub fn valid_indices(g: &[Vec<usize>]) -> (valid: bool)
         u += 1;
     }
     true
+}
+
+/// One adjacency transition, separated from loop bookkeeping for local proofs.
+fn expand_edge(
+    g: &[Vec<usize>], root: usize, d: &mut Vec<usize>,
+    p: &mut Vec<Option<(usize, usize)>>, q: &mut Vec<usize>, front: usize, slot: usize,
+)
+    requires
+        valid_graph(g@), queue_state(g@, root, old(d)@, old(p)@, old(q)@),
+        front < old(q).len(), slot < g[old(q)@[front as int] as int].len(),
+        forall|i: int| 0 <= i < old(q).len()
+            ==> old(d)@[#[trigger] old(q)@[i] as int] <= old(d)@[old(q)@[front as int] as int] + 1,
+        processed(g@, old(d)@, old(q)@, front as int, slot as int),
+    ensures
+        queue_state(g@, root, d@, p@, q@), q.len() <= g.len(), front < q.len(),
+        q@[front as int] == old(q)@[front as int],
+        forall|i: int| 0 <= i < q.len()
+            ==> d@[#[trigger] q@[i] as int] <= d@[q@[front as int] as int] + 1,
+        processed(g@, d@, q@, front as int, slot as int + 1),
+{
+    let n = g.len();
+    let node = q[front];
+    let v = g[node][slot];
+    if d[v] == n {
+        let ghost old_d = d@;
+        let ghost old_p = p@;
+        let ghost old_q = q@;
+        proof {
+            assert(!q@.contains(v));
+            bounded_queue(q@.push(v), n);
+        }
+        let depth = d[node] + 1;
+        d.set(v, depth);
+        p.set(v, Some((node, slot)));
+        q.push(v);
+        proof {
+            assert(q@.no_duplicates());
+            assert(tree(g@, root, d@, p@));
+            assert forall|i: int| 0 <= i < q.len() implies (
+                (#[trigger] q[i]) < n && d[q[i] as int] < n && d[q[i] as int] <= i
+            ) by {
+                if i < old_q.len() { assert(old_q[i] != v); }
+            }
+            assert forall|x: int| 0 <= x < n implies
+                ((#[trigger] d[x]) < n <==> q@.contains(x as usize)) by {
+                vstd::seq_lib::lemma_seq_contains_after_push(old_q, v, x as usize);
+                if x != v { assert(d[x] == old_d[x]); }
+            }
+            assert forall|i: int, j: int| 0 <= i <= j < q.len()
+                implies d[#[trigger] q[i] as int] <= d[#[trigger] q[j] as int] by {
+                if j < old_q.len() { assert(old_q[i] != v && old_q[j] != v); }
+                else if i < old_q.len() { assert(old_q[i] != v); }
+            }
+            assert(processed(g@, d@, q@, front as int, slot as int));
+        }
+    }
+    proof {
+        bounded_queue(q@, n);
+        assert forall|i: int, k: int| 0 <= i < q.len() && 0 <= k < g[q[i] as int].len()
+            && (i < front || (i == front && k < slot + 1)) implies {
+                let target = (#[trigger] g[q[i] as int]@[k]);
+                d[target as int] < n && d[target as int] <= d[q[i] as int] + 1
+            } by {
+            if i == front && k == slot { assert(g[q[i] as int]@[k] == v); }
+        }
+    }
 }
 
 /// FIFO traversal of explicitly validated immutable adjacency. The caller must
@@ -180,21 +247,43 @@ pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
         result.is_some() == (root < g.len()),
         result.is_some() ==> complete(g@, root, result.unwrap()),
 {
+    reveal(complete);
     let n = g.len();
     if root >= n { return None; }
     let mut d: Vec<usize> = Vec::new();
     let mut p: Vec<Option<(usize, usize)>> = Vec::new();
     while d.len() < n
-        invariant d.len() <= n, p.len() == d.len(),
+        invariant n == g.len(), root < n, valid_graph(g@),
+            d.len() <= n, p.len() == d.len(),
             forall|i: int| 0 <= i < d.len() ==> (#[trigger] d[i]) == n && p[i].is_none(),
         decreases n - d.len(),
     {
         d.push(n);
         p.push(None);
     }
+    proof { assert(p[root as int].is_none()) by { assert(d[root as int] == n); } }
     d.set(root, 0);
     let mut q = Vec::new();
     q.push(root);
+    proof {
+        assert(q@ == seq![root]);
+        assert(d.len() == g.len() && p.len() == g.len());
+        assert(d[root as int] == 0 && p[root as int].is_none());
+        assert forall|x: int| 0 <= x < n implies
+            d[x] == (if x == root { 0usize } else { n }) && p[x].is_none() by {}
+        assert forall|x: int| 0 <= x < n implies
+            ((#[trigger] d[x]) < n <==> q@.contains(x as usize)) by {
+            if x == root { assert(q@[0] == x); }
+        }
+        assert(tree(g@, root, d@, p@));
+        assert(q@.no_duplicates());
+        assert forall|i: int| 0 <= i < q.len() implies (
+            (#[trigger] q[i]) < n && d[q[i] as int] < n && d[q[i] as int] <= i
+        ) by {}
+        assert forall|i: int, j: int| 0 <= i <= j < q.len()
+            implies d[#[trigger] q[i] as int] <= d[#[trigger] q[j] as int] by {}
+        assert(queue_state(g@, root, d@, p@, q@));
+    }
     let mut front = 0;
     while front < q.len()
         invariant
@@ -217,39 +306,7 @@ pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
                 processed(g@, d@, q@, front as int, slot as int),
             decreases g[node as int].len() - slot,
         {
-            let v = g[node][slot];
-            if d[v] == n {
-                let ghost old_d = d@;
-                let ghost old_p = p@;
-                let ghost old_q = q@;
-                proof {
-                    assert(!q@.contains(v));
-                    bounded_queue(q@.push(v), n);
-                }
-                let depth = d[node] + 1;
-                d.set(v, depth);
-                p.set(v, Some((node, slot)));
-                q.push(v);
-                proof {
-                    assert(q@.no_duplicates());
-                    assert(tree(g@, root, d@, p@));
-                    assert forall|i: int| 0 <= i < q.len() implies (
-                        (#[trigger] q[i]) < n && d[q[i] as int] < n && d[q[i] as int] <= i
-                    ) by {
-                        if i < old_q.len() { assert(old_q[i] != v); }
-                    }
-                    assert forall|x: int| 0 <= x < n implies
-                        ((#[trigger] d[x]) < n <==> q@.contains(x as usize)) by {
-                        if x != v { assert(d[x] == old_d[x]); }
-                    }
-                    assert forall|i: int, j: int| 0 <= i <= j < q.len()
-                        implies d[#[trigger] q[i] as int] <= d[#[trigger] q[j] as int] by {
-                        if j < old_q.len() { assert(old_q[i] != v && old_q[j] != v); }
-                        else if i < old_q.len() { assert(old_q[i] != v); }
-                    }
-                    assert(processed(g@, d@, q@, front as int, slot as int));
-                }
-            }
+            expand_edge(g, root, &mut d, &mut p, &mut q, front, slot);
             slot += 1;
         }
         front += 1;

@@ -25,6 +25,20 @@ identity selection are unchanged.
 
 The dependency direction is `judge-ci → judge-filemap → judge-mixed → judge-registration → runner`, with direct runner dependencies for facts/transport. The independent filemap test project has its own manifest, lock and target. There is no workspace or generic registry project.
 
+The closure adapter calls the executable Verus FIFO owner in
+`crates/judge-filemap/src/verified_graph.rs`. It indexes the explicit node names
+and preserves each existing sorted typed-edge adjacency slot. One validation
+precedes all per-seed searches. The core proves exact reachability, real
+predecessor edges, acyclic predecessor distances and minimum hop counts, including
+zero-length root paths. The adapter still owns names, edge kinds, cause merging
+and stable tie correspondence; these and union/test selection remain unmet Verus
+obligations. The independent test project checks the actual adapter's ties,
+parallel typed edges, cycles, Unicode and duplicate seed IDs. Two registered
+proof operations verify the source and independent boundary examples. Dense
+per-seed arrays cost O(V) initialization and memory; traversal visits each reached
+edge once. Total runtime/build/storage costs and sparse-closure regression costs
+remain unmeasured; this is a proof migration, without a performance-gain claim.
+
 ## Bounded internal causal consumption
 
 The current scoped check policy may opt in with `causal_consumption.schema` equal to

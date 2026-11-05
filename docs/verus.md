@@ -89,6 +89,41 @@ target, reusing the existing pinned toolchain and macro. No external assumption
 is added. Proof/build/storage costs beyond the existing bounds are unmeasured;
 the runner's remaining whole-file and unit migration gaps stay declared.
 
+`crates/judge-filemap/src/verified_graph.rs` owns indexed graph validation and
+per-root FIFO traversal. `valid_indices` accepts exactly graphs whose destination
+indices are in range. The caller validates the immutable adjacency once before
+searching several roots; `breadth_first` requires that fact and rejects exactly
+out-of-range roots. Its successful result proves that the queue contains each
+reachable node once, and contains a node exactly when a finite walk from the root
+exists. Each nonroot predecessor identifies an actual source/adjacency slot whose
+distance is one smaller. The root has zero distance and no predecessor;
+unreachable nodes have no predecessor. Recorded distances are bounded by every
+walk's hop count and are realized by finite predecessor paths. Those strictly
+decreasing parent distances exclude cycles. Array bounds and loop/recursive
+termination are checked as part of the same whole-crate root.
+
+The actual `graph::closure` builds a sorted node inventory and adjacency slots
+from its existing ordered typed edges, then calls this source for each seed.
+It uses returned indices to construct the existing reached causes, predecessor
+maps and traversed typed edges. The adapter, union, seed production, serialization,
+test selection and complete deterministic tie correspondence remain unproved;
+the adapter's empty-root obligation is retained. Independent Verus examples cover
+empty graphs, invalid roots/destinations, self cycles, disconnected nodes, diamonds
+and parallel edges. Expected shortest distances use independently supplied paths
+and distance potentials. Runtime adapter regressions additionally require stable
+edge-kind/lexical ties, Unicode identities, merged causes and existing duplicate
+seed-ID behavior. Cargo runs the production source but does not replace proof.
+
+**Product and host execution registration change together:** two explicit graph
+verification/compiler operations join the existing filemap test plan, with their
+source inputs, consumers and output claims. The existing pinned macro reexport
+is reused; no external assumption or Cargo dependency is added. Adjacency
+validation costs O(V + E) once, and a seed traversal costs O(V + E_reached) time
+and O(V) auxiliary space, including dense distance/parent initialization. That
+initialization adds work for sparse closures relative to the previous sparse
+map. No runtime speedup or total build/CI/storage cost reduction is claimed;
+those costs remain unmeasured. Mandatory whole-file/unit coverage gaps stay open.
+
 **Product and host execution registration change together:** the shared runner
 source uses the already pinned erasure macro dependency, replacing duplicated
 repository predicates. The existing Verus binary, checking flags and external

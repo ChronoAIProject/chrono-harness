@@ -456,6 +456,58 @@ fn shared_graph_does_not_need_full_registration_and_only_execution_edges_select(
 }
 
 #[test]
+fn indexed_closure_preserves_shortest_ties_edge_kinds_and_seed_identity() {
+    let rows = [
+        ("根", EdgeKind::RuntimeInput, "a"),
+        ("根", EdgeKind::Compile, "z"),
+        ("根", EdgeKind::Compile, "a"),
+        ("a", EdgeKind::Compile, "end"),
+        ("z", EdgeKind::Compile, "end"),
+        ("end", EdgeKind::TestExecution, "test:t"),
+        ("test:t", EdgeKind::RuntimeInput, "根"),
+    ];
+    let seed = |id: &str, node: &str| Seed {
+        id: id.into(),
+        node: node.into(),
+        reference: "explicit".into(),
+        reason: "boundary".into(),
+    };
+    let seeds = [seed("s", "根"), seed("other", "z"), seed("isolated", "孤")];
+    let allowed = oracle_edges(&rows);
+    let mut edges = graph::union(&BTreeSet::new(), &allowed);
+    // Input order and repeated identical edges cannot change adjacency ordering.
+    edges.reverse();
+    edges.push(edges[0].clone());
+    let closure = graph::closure(&edges, &seeds);
+    let expected = vec![
+        Edge {
+            from: "根".into(),
+            kind: EdgeKind::Compile,
+            to: "a".into(),
+        },
+        Edge {
+            from: "a".into(),
+            kind: EdgeKind::Compile,
+            to: "end".into(),
+        },
+    ];
+    assert_eq!(closure.witness("s", "end"), Some(expected));
+    assert_eq!(closure.witness("other", "end").unwrap().len(), 1);
+    assert_eq!(closure.witness("isolated", "孤"), Some(vec![]));
+    assert_eq!(closure.witness("isolated", "end"), None);
+    assert_eq!(closure.selected_tests(), BTreeSet::from(["test:t".into()]));
+    assert_eq!(closure.traversed.len(), allowed.len());
+    assert!(closure.traversed.iter().all(|edge| {
+        allowed.contains(&edge.edge) && edge.seeds == BTreeSet::from(["s".into(), "other".into()])
+    }));
+    // Existing shared-ID behavior: reached causes merge, the last tree owns that ID.
+    let duplicate = graph::closure(&edges, &[seed("same", "根"), seed("same", "孤")]);
+    assert!(duplicate.reached["end"].contains("same"));
+    assert_eq!(duplicate.witness("same", "end"), None);
+    assert_eq!(duplicate.witness("same", "孤"), Some(vec![]));
+}
+
+#[test]
 fn loader_missing_malformed_inputs_are_errors_not_empty_impact() {
     let mut a = values();
     a.remove(FM);
