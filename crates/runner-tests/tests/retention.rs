@@ -1272,6 +1272,54 @@ fn partial_disposal_is_bounded_resumable_and_cannot_be_referenced_again() {
     }
 }
 #[test]
+fn partial_disposal_allows_only_identical_dependency_reentry() {
+    if !isolated_capability_test("partial_disposal_allows_only_identical_dependency_reentry") {
+        return;
+    }
+    let h = host(8, 16);
+    let original = ".chrono-harness/state/fixtures/continuation.json";
+    fs::write(h.path().join(original), b"original failure: exit 7").unwrap();
+    inventory(h.path())
+        .begin("fixture", original, json!(null))
+        .unwrap()
+        .complete(json!({"exit":7}))
+        .unwrap();
+    let effect = tree(h.path(), "partial-effect");
+    for n in 0..20 {
+        fs::write(h.path().join(&effect).join(n.to_string()), [7; 32]).unwrap();
+    }
+    let i = inventory(h.path());
+    i.begin("fixture", &effect, json!(null))
+        .unwrap()
+        .complete(json!({"exit":7}))
+        .unwrap();
+    i.dependencies_paths(&effect, &[original.into()]).unwrap();
+    i.maintain_paths(&[effect.clone(), original.into()])
+        .unwrap();
+    assert!(
+        ledger(h.path())["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|o| o["path"] == effect && o["phase"] == "disposing")
+    );
+    i.dependencies_paths(&effect, &[original.into()]).unwrap();
+    assert!(i.dependencies_paths(&effect, &[]).is_err());
+    assert_eq!(
+        fs::read(h.path().join(original)).unwrap(),
+        b"original failure: exit 7"
+    );
+    for _ in 0..16 {
+        i.maintain_paths(&[effect.clone(), original.into()])
+            .unwrap();
+        if !h.path().join(&effect).exists() && !h.path().join(original).exists() {
+            break;
+        }
+    }
+    assert!(!h.path().join(&effect).exists());
+    assert!(!h.path().join(original).exists());
+}
+#[test]
 fn immutable_file_content_drift_is_refused_without_changing_original_outcome() {
     if !isolated_capability_test(
         "immutable_file_content_drift_is_refused_without_changing_original_outcome",

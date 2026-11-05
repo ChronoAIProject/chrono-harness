@@ -990,6 +990,16 @@ impl Inventory {
             })
             .map(|o| o.id.clone())
             .collect();
+        // Recovery may replay a relationship after bounded disposal starts.
+        // An identical assertion grants no new consumer or dependency; changing
+        // that relationship must still fail once either endpoint is disposing.
+        let references: Vec<_> = ids.iter().cloned().collect();
+        if l.outputs
+            .iter()
+            .any(|o| o.path == path && o.references == references)
+        {
+            return self.stable(&gate);
+        }
         if l.outputs
             .iter()
             .any(|o| ids.contains(&o.id) && o.phase == "disposing")
