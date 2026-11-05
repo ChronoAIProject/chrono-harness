@@ -20,8 +20,12 @@ pub fn equal_text(actual: &str, expected: &str) -> (equal: bool)
     equal
 }
 
-/// Selection is supplied by the explicit execution-plan owner. This predicate
-/// checks that declaration; it never selects or launches a verification route.
+/// The execution-plan owner supplies only its explicit test/operation inventory.
+pub struct RootPlan<'a> {
+    pub test: &'a str,
+    pub operations: Vec<&'a str>,
+}
+
 pub struct RootRoute<'a> {
     pub root: &'a str,
     pub operation: &'a str,
@@ -32,6 +36,69 @@ pub struct RootRoute<'a> {
 pub struct RootProof {
     pub operation: String,
     pub admitted: bool,
+}
+
+pub open spec fn registered_root_operation(plans: Seq<RootPlan>, operation: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < plans.len()
+        && text_member((#[trigger] plans[i]).operations@, operation)
+}
+
+pub open spec fn selected_root_operation(
+    plans: Seq<RootPlan>, selection: Seq<&str>, operation: Seq<char>,
+) -> bool {
+    exists|i: int| 0 <= i < plans.len()
+        && text_member(selection, (#[trigger] plans[i]).test@)
+        && text_member(plans[i].operations@, operation)
+}
+
+/// Classify an existing invocation through explicit plan membership. This does
+/// not add a test to either selection or launch any operation.
+pub fn bind_root_route<'a>(
+    root: &'a str,
+    operation: &'a str,
+    plans: &Vec<RootPlan>,
+    global: &Vec<&str>,
+    local: &Vec<&str>,
+) -> (bound: Option<RootRoute<'a>>)
+    ensures
+        bound.is_none() <==> !registered_root_operation(plans@, operation@),
+        bound.is_some() ==> {
+            let route = bound.unwrap();
+            route.root@ == root@ && route.operation@ == operation@
+                && (route.globally_selected <==> selected_root_operation(plans@, global@, operation@))
+                && (route.locally_required <==> selected_root_operation(plans@, local@, operation@))
+        },
+{
+    let mut planned = false;
+    let mut globally_selected = false;
+    let mut locally_required = false;
+    let mut i = 0;
+    while i < plans.len()
+        invariant
+            0 <= i <= plans.len(),
+            planned <==> (exists|j: int| 0 <= j < i
+                && text_member((#[trigger] plans[j]).operations@, operation@)),
+            globally_selected <==> (exists|j: int| 0 <= j < i
+                && text_member(global@, (#[trigger] plans[j]).test@)
+                && text_member(plans[j].operations@, operation@)),
+            locally_required <==> (exists|j: int| 0 <= j < i
+                && text_member(local@, (#[trigger] plans[j]).test@)
+                && text_member(plans[j].operations@, operation@)),
+        decreases plans.len() - i,
+    {
+        let plan = &plans[i];
+        if contains_text(&plan.operations, operation) {
+            planned = true;
+            if contains_text(global, plan.test) { globally_selected = true; }
+            if contains_text(local, plan.test) { locally_required = true; }
+        }
+        i += 1;
+    }
+    if planned {
+        Some(RootRoute { root, operation, globally_selected, locally_required })
+    } else {
+        None
+    }
 }
 
 pub open spec fn unique_root_route(routes: Seq<RootRoute>, root: Seq<char>, index: int) -> bool {

@@ -6,6 +6,8 @@ The proved admission owner additionally binds affected roots to unique registere
 routes, global explicit DELTA selection and the original proofs required by each
 unit or collection. Missing consumer edges and ambiguous root operations fail;
 split units keep their own proof obligations and collection joins their originals.
+The same proved source constructs route selection flags from explicit plan and
+selected-test membership; an operation name does not select its owning test.
 Root obligations also consume changed FILEMAP file records, so role/root-only
 edits cannot pass merely because the source bytes are unchanged. Dedicated unit
 and collection regressions retain the exact byte-level `changed_paths` boundary.

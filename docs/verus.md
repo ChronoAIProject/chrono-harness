@@ -79,10 +79,10 @@ tool, nonempty version/commit and at least one interface, with every interface
 name and assumption nonempty. The argument predicate requires exactly the
 registered checking flags and output switch; extra arguments, weakened checking
 flags and function selection are rejected. The actual adapter borrows strings
-into these calls. Constructing those borrowed inventories from library values,
-root/source and output-path binding, and plan membership remain unproved adapter
-obligations. These predicates do not certify the adequacy of an external
-interface assumption.
+into these calls. Constructing borrowed inventories from library values and
+validating their registered root/output paths remain unproved adapter obligations.
+The plan membership decision uses the proved root-route classifier below. These
+predicates do not certify the adequacy of an external interface assumption.
 
 The same owner specifies and implements unordered result-ID membership and the
 expected inventory composed from `ci.inventory`, registered operations,
@@ -119,6 +119,19 @@ rejected original cannot be hidden by another success. Missing and ambiguous
 routes, missing global selection and absent or rejected required proof fail.
 Unrelated proof failures retain their own original findings. Identity is text
 value, including Unicode, rather than string reference identity.
+
+The adapter also calls its proved root-route classifier. Given the explicit
+test/operation plans and global/local selected test inventories, it returns a
+route exactly when some plan contains the operation. Its two selection flags
+equal the existence of a selected test whose plan contains that operation. Empty
+plans, unselected registered operations, shared operations, operations assigned
+to another unit, Unicode text values and duplicate memberships have independent
+verified examples. Supplying an operation name as a selected test does not select
+its differently named owner. The classifier replaces the adapter's three
+independent plan/set searches; it adds no execution or dependency inference.
+Decoding and constructing these input inventories, canonical-route filtering and
+the rest of the adapter remain migration obligations. Additional total runtime
+and allocation costs have not been measured.
 
 **Product and coverage policy change together:** declaring a root no longer
 satisfies affected-root coverage without its explicit selected proof consumer.

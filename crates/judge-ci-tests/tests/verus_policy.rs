@@ -12,6 +12,68 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn root_plan_binding_requires_registered_operations_without_inferring_selection() {
+    proof { reveal_strlit("test:root"); reveal_strlit("verify.root"); reveal_strlit("root"); }
+    let empty: Vec<&str> = Vec::new();
+    let no_plans: Vec<policy::RootPlan> = Vec::new();
+    let absent = policy::bind_root_route("root", "verify.root", &no_plans, &empty, &empty);
+    assert(absent.is_none());
+    let plans = vec![policy::RootPlan { test: "test:root", operations: vec!["verify.root"] }];
+    let unselected = policy::bind_root_route("root", "verify.root", &plans, &empty, &empty);
+    assert(unselected.is_some());
+    let route = unselected.unwrap();
+    assert(route.root@ == "root"@ && route.operation@ == "verify.root"@);
+    assert(!route.globally_selected && !route.locally_required);
+    let operation_name = vec!["verify.root"];
+    assert("verify.root"@[0] != "test:root"@[0]);
+    let wrong_selection = policy::bind_root_route("root", "verify.root", &plans, &operation_name, &operation_name);
+    assert(wrong_selection.is_some());
+    let route = wrong_selection.unwrap();
+    assert(!route.globally_selected && !route.locally_required);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn root_plan_binding_separates_shared_local_and_other_unit_operations() {
+    proof {
+        reveal_strlit("alpha"); reveal_strlit("beta");
+        reveal_strlit("shared"); reveal_strlit("local"); reveal_strlit("absent");
+    }
+    let plans = vec![
+        policy::RootPlan { test: "alpha", operations: vec!["shared", "local"] },
+        policy::RootPlan { test: "beta", operations: vec!["shared"] },
+    ];
+    let global = vec!["beta"];
+    let local = vec!["alpha"];
+    assert("alpha"@.len() != "beta"@.len());
+    assert("shared"@.len() != "local"@.len());
+    assert("absent"@[0] != "shared"@[0] && "absent"@[0] != "local"@[0]);
+    let shared = policy::bind_root_route("root", "shared", &plans, &global, &local).unwrap();
+    let local_only = policy::bind_root_route("root", "local", &plans, &global, &local).unwrap();
+    let absent = policy::bind_root_route("root", "absent", &plans, &global, &local);
+    assert(shared.globally_selected && shared.locally_required);
+    assert(!local_only.globally_selected && local_only.locally_required);
+    assert(absent.is_none());
+    let empty: Vec<&str> = Vec::new();
+    let deferred = policy::bind_root_route("root", "shared", &plans, &global, &empty).unwrap();
+    assert(deferred.globally_selected && !deferred.locally_required);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn root_plan_binding_preserves_unicode_value_membership_and_duplicate_declarations() {
+    proof { reveal_strlit("单元"); reveal_strlit("证明"); reveal_strlit("根"); }
+    let unit = "单元".to_owned();
+    let operation = "证明".to_owned();
+    let plans = vec![
+        policy::RootPlan { test: unit.as_str(), operations: vec![operation.as_str(), "证明"] },
+        policy::RootPlan { test: "单元", operations: vec!["证明"] },
+    ];
+    let selected = vec!["单元", unit.as_str()];
+    let bound = policy::bind_root_route("根", "证明", &plans, &selected, &selected).unwrap();
+    assert(bound.root@ == "根"@ && bound.operation@ == "证明"@);
+    assert(bound.globally_selected && bound.locally_required);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn root_delta_requires_global_selection_and_the_locally_owned_proof() {
     proof { reveal_strlit("root"); reveal_strlit("verify.root"); }
     let none: Vec<policy::RootProof> = Vec::new();

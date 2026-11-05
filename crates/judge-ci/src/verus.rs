@@ -463,6 +463,16 @@ pub(super) fn apply(
     }
     // Roots are bound to exact registered invocations. Original execution and
     // receipt checking remain the projects owner's responsibility.
+    let plans = snapshot
+        .plans
+        .iter()
+        .map(|(test, plan)| verus_policy::RootPlan {
+            test,
+            operations: plan.operations.iter().map(String::as_str).collect(),
+        })
+        .collect();
+    let global = global_selected.iter().map(String::as_str).collect();
+    let local = selected.iter().map(String::as_str).collect();
     let roots: Vec<_> = snapshot
         .operations
         .iter()
@@ -474,20 +484,7 @@ pub(super) fn apply(
                 return None;
             }
             let root = &argv[8];
-            let planned = snapshot
-                .plans
-                .values()
-                .any(|plan| plan.operations.contains(operation));
-            planned.then_some(verus_policy::RootRoute {
-                root,
-                operation,
-                globally_selected: snapshot.plans.iter().any(|(test, plan)| {
-                    global_selected.contains(test) && plan.operations.contains(operation)
-                }),
-                locally_required: snapshot.plans.iter().any(|(test, plan)| {
-                    selected.contains(test) && plan.operations.contains(operation)
-                }),
-            })
+            verus_policy::bind_root_route(root, operation, &plans, &global, &local)
         })
         .collect();
     for route in &roots {
