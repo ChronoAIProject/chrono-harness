@@ -213,9 +213,17 @@ fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budg
         "original":{"path":path,"sha256":sha256(&raw)}
     }))
     .unwrap();
+    let stream_bytes: u64 = ["stdout_original", "stderr_original", "launch_original"]
+        .into_iter()
+        .filter_map(|field| report["judge"].get(field))
+        .map(|o| {
+            fs::metadata(h.root.join(o["path"].as_str().unwrap()))
+                .unwrap()
+                .len()
+        })
+        .sum();
     let limit = raw.len() as u64
-        + producer.stdout_bytes.len() as u64
-        + producer.stderr_bytes.len() as u64
+        + stream_bytes
         + artifacts
             .iter()
             .map(|a| a["byte_length"].as_u64().unwrap())
