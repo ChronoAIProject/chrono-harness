@@ -476,3 +476,14 @@ This native diagnostics domain does not qualify ordinary sibling package inputs,
 the local diagnostics selection or the isolated runner home. Full-host bindings,
 input closure and candidate acceptance remain separate. [Custody](input-source-custody.md)
 records the retained source and each remaining consumer prerequisite.
+
+The proposed macOS 27 configuration now binds every file-input node already
+connected to these two local guard consumers. Runner's supplemental binding
+contains 2,653 files, alongside its 18 existing file bindings; diagnostics has
+1,138 files. They use the unconditional FILEMAP edges plus this exact
+configuration's declared edges. The guard already reads connected inputs during
+preparation and rechecks them across child execution; this migration adds no
+file reads, package declarations, dependency selection or guard entry. It does
+not qualify missing snapshots or inputs, close the complete host scope or
+activate full governance. Validation remains candidate bootstrap, canonical
+DELTA and the existing guarded/native consumers; total cost is unmeasured.

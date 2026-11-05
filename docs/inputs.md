@@ -59,8 +59,17 @@ configured environment and tool node. The common FILEMAP names the actual
 consumers, including the 34 registered Cargo build/test owners of
 `CARGO_INCREMENTAL`; those owners also bind `CARGO_TERM_COLOR`. Executors use
 these literal declarations. `GH_TOKEN` retains its credential boundary and
-omission from judge business inputs. File-input bindings, original snapshots,
-compiler/SDK closure and native adoption remain incomplete, so the policy keeps
+omission from judge business inputs. Two file-input bindings now connect the
+existing runner and diagnostics Cargo guard consumers to their selected explicit
+FILEMAP inputs. Runner adds 2,653 references beside its 18 already bound files;
+diagnostics binds its 1,138 declared files. All 2,671 file-input nodes in this
+policy therefore occur in a binding. These are existing package/cache,
+configuration/absence, executable/runtime and inventory declarations; no input,
+dependency edge or execution is discovered or added. The diagnostics action
+keeps its registered configuration and policy selectors, which select this
+macOS 27 policy and `cargo/diagnostics-local.json` for the bound local Git.
+Other consumers, original snapshots, complete compiler/SDK closure and native
+adoption remain incomplete, so the policy keeps
 `status: proposed`, `enforcement: not-implemented` and
 `input_closure.status: incomplete`. Validation uses the registered candidate
 bootstrap, canonical DELTA check and native PR/landing checks; total validation
