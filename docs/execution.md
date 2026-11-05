@@ -44,6 +44,32 @@ Interpreter PATH-shadow and producer prelaunch-drift fixtures use the same Rust
 helper. The drift case replaces only its private executable after its version
 output, retaining the real digest rejection and original acquisition evidence.
 
+The shipped Python native adapter has its own Python script/test pair. Its
+dedicated tests retain the former embedded driver's UTC fraction, executable
+resolution, original IO, credential omission, undeclared invocation, nonzero
+exit, output limit and timeout assertions. The child fixture and provider are
+separate registered files. The same `build.ci` prerequisite supplies the real
+Rust bridge; private fixture roots link that unmodified tool and retain failures
+until diagnosis and acceptance. Successful fixtures are removed after their
+children join and assertions consume the originals. Each invocation owns its
+fresh temporary root; it claims no shared output namespace. The existing `ci` unit
+executes the Python pair beside the unfiltered Rust tests, without a new CI job.
+The release recipe also retains that moved obligation as an independent Python
+verification unit on each existing platform. It consumes only `build_ci`, stages
+the existing bridge path, and requires no Rust toolchain. The package collectors
+require its original result and declared failure evidence. Added verification
+and transport costs remain unmeasured.
+The script's forwarding method describes the existing full-adapter entry; this
+registration does not activate full governance in the scoped product host.
+
+The artifact-acquisition deadline test requires the exact cumulative-deadline
+failure and absence of a collection manifest. Metadata, download and source
+checks share that deadline, so an earlier phase may exhaust it. Separate stdout
+and stderr cases still require reaching the source check and rejecting the
+combined stream cost. The two-second fixture budget, deliberate delays and
+production limits remain unchanged; the test no longer requires a particular
+phase to win a wall-clock race.
+
 Unix process observations record the engine's actual capability carrier in optional
 `ownership_fds`. The `environment` map and `environment_digest` describe business
 inputs, excluding reserved `CHRONO_PROCESS_FDS`; that child environment variable
