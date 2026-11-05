@@ -87,6 +87,14 @@ impl Drop for FixtureDirectory {
                 );
             }
         }
+        match self.host.finish() {
+            Ok(report) if report["recovery_error"].is_null() => (),
+            Ok(report) => eprintln!(
+                "fixture recovery remains failed: {} (report {})",
+                report["recovery_error"], report["report_path"]
+            ),
+            Err(error) => eprintln!("fixture recovery unavailable; outputs preserved: {error}"),
+        }
     }
 }
 pub fn fixture_directory(prefix: &str) -> FixtureDirectory {

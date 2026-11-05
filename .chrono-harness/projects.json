@@ -3179,6 +3179,17 @@
             "--manifest-path",
             "crates/worktree/Cargo.toml"
           ]
+        },
+        "repair_cache": {
+          "operation": "repair.worktree-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml",
+            "--package",
+            "chrono-worktree"
+          ]
         }
       },
       "test_project": "worktree-tests",
@@ -3348,6 +3359,22 @@
             "crates/worktree-tests/Cargo.toml",
             "--package",
             "chrono-worktree-tests"
+          ]
+        },
+        "capacity": {
+          "operation": "test.worktree.capacity",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--test",
+            "creation",
+            "--",
+            "temporary::capacity_",
+            "fixture_body::",
+            "--test-threads=1"
           ]
         }
       },

@@ -2286,6 +2286,43 @@ impl Manager {
             result => result,
         }
     }
+
+    /// Only the host-declared producers of this actual operation participate.
+    /// No all-enrollment sweep is hidden in ordinary use/check/bootstrap.
+    fn recover_operation_producers(
+        &mut self,
+        r: &mut Runner,
+        operation: &str,
+        report: &mut Value,
+    ) -> Result<(), String> {
+        let observations = self.outside_enrollment(r, |inputs, r| {
+            let mut observations = vec![];
+            for producer in inputs
+                .policy
+                .retained_producers
+                .iter()
+                .filter(|p| p.operations.iter().any(|op| op == operation))
+            {
+                let mut attempt =
+                    value!({"producer":producer.id,"operation":operation,"producer_objects":[]});
+                if let Err(error) = producer.drain_selected(inputs, r, &mut attempt, None, true) {
+                    attempt["error"] = value!(error);
+                }
+                observations.push(attempt);
+            }
+            if !observations.is_empty() {
+                let retention = chrono_harness::retained_artifacts::retention::maintain_adopted(
+                    &inputs.policy.coordinator_root,
+                )?;
+                for observation in &mut observations {
+                    observation["original_retention"] = value!(retention);
+                }
+            }
+            Ok(observations)
+        })?;
+        report["related_producer_recovery"] = value!(observations);
+        Ok(())
+    }
     fn execute_entry(
         &mut self,
         r: &mut Runner,
@@ -2741,6 +2778,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
+                    let consuming_operation = if operation == "check" {
+                        "validate.delta"
+                    } else if operation == "bootstrap" {
+                        "bootstrap.build"
+                    } else {
+                        values["--operation"]
+                    };
+                    manager.recover_operation_producers(r, consuming_operation, report)?;
                     manager.drain_for_admission(r, &[invoking.clone(), target.clone()], report)?;
                     if manager.current_entry(target).is_none()
                         && target == &manager.inputs.policy.coordinator_root
@@ -2904,6 +2949,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     }
                     manager.ledger.entries[i].uses.retain(|s| s != token);
                     manager.save()?;
+                    let mut post_use_cleanup = value!({});
+                    manager.recover_operation_producers(r, use_operation, &mut post_use_cleanup)?;
+                    let cleanup = manager.drain_for_admission(
+                        r,
+                        &[invoking.clone(), target.clone()],
+                        &mut post_use_cleanup,
+                    );
+                    report["post_use_cleanup"] = post_use_cleanup;
                     if process.failure.is_some() || process.exit_code != 0 {
                         report["managed_command_failed"] = value!(true);
                         return Err(format!(
@@ -2911,13 +2964,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             process.exit_code, process.failure
                         ));
                     }
-                    let mut post_use_cleanup = value!({});
-                    let cleanup = manager.drain_for_admission(
-                        r,
-                        &[invoking.clone(), target.clone()],
-                        &mut post_use_cleanup,
-                    );
-                    report["post_use_cleanup"] = post_use_cleanup;
                     cleanup?;
                     Ok(())
                 }

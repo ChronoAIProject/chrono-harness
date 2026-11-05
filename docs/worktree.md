@@ -1336,6 +1336,97 @@ CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式�
 
 ### Prospective fixture custody and inventory observations
 
+The disk-capacity candidate binds each registered producer to its coordinator,
+committed cleanup policy and exact output declarations. Ordinary allocation and
+the declared `operations` run a bounded recovery page. Producer-written records
+use sixteen SHA-256 partitions and a durable partition/lexical cursor; total
+history no longer has to fit one record snapshot. Active or corrupt rows preserve
+their original state while later rows and partitions advance. Unvisited ownership
+and total remaining bytes are reported as unknown. The cursor carries scheduling
+addresses and never supplies deletion authority.
+
+`TemporaryHost::finish` explicitly releases the responsible fixture consumer's
+original lifetime, releases this handle and attempts its allocation. Native
+Command copies, descendants and diagnostic references still exclude removal.
+The worktree, CI and projects/workflow consumers call it after diagnostic handoff
+on normal and unwinding paths. Dropping an interrupted handle makes no original
+release, completion or success claim. `RetainedArtifact::release_originals(reason)`
+allows the responsible consumer to release that exact interrupted allocation
+later; diagnostic consumers must separately release their actual references.
+The existing `migrate --adopt-fixtures <plan>` custodian entry also accepts
+`release_originals: true` on an exact identity/intent-bound object selection.
+Its `members` may be empty for this release alone. It requires exclusion and
+released diagnostic consumers, preserves missing/failed native results, and
+leaves physical retirement to the next ordinary producer entry.
+Ordinary managed operations recover only producers listed in `operations` before
+and after the actual command, retaining its original exit and streams on failure.
+
+**Product and host policy change warning:** `capacity`, operation relationships,
+record layout and original retirement change together. The selected allocation
+limits are 2 GiB generated logical bytes, 1 GiB copied members, 64 MiB raw streams,
+256 captures, and a 512 MiB filesystem admission reserve. Recovery processes at
+most 16 records / 64 MiB per page; checkpoints inspect at most 65536 entries.
+The 2000 ms checkpoint limit is checked between entries/objects; existing Git
+checks and an individual physical deletion may overrun it. These defaults respond
+to measured accumulation; their optimum and total cost are unknown.
+
+Copies reserve their known length before releasing metadata exclusion for IO.
+Native input reservations survive interruption and materialized inputs are not
+charged twice. Controlled writes refuse before exceeding their allocation bound.
+An observed excess or an unknown capacity measurement publishes that object's
+capacity obligation. Fresh allocation IDs consult those declarations and refuse
+while the obligation remains; eligible exact recovery can settle one independently.
+Unreleased originals below the bound stay protected without blocking independent
+siblings. Neither missing producer completion nor age releases their consumers.
+There is no shared byte ledger, whole-library quota, admission lock, daemon or
+filesystem reservation. External builders and native raw streams remain outside
+continuous byte enforcement: they can overshoot between launch/join checkpoints,
+including while a producer is interrupted. Overshoot size is unknown and can
+exceed available space. Further related production refuses on the observed
+excess; protected and unknown originals remain preserved with capacity unmet.
+
+Shared `body-inputs/<digest>.bin` keep their content identity. Each actual copy
+publishes a digest-specific allocation claim before handing off custody. Explicit
+original release retires only its claim, after excluded copied members are absent;
+other claims keep the shared original. The final claim hands the exact original
+to `fixture-retirement` in the existing output-retention owner. Native captures,
+per-allocation cleanup receipts, registration and capability metadata use that
+same owner after actual consumer release. Existing final-original retention
+references and source/index checks remain authoritative. Source files, Git
+attachments and unique commits are outside this retirement set. Interrupted
+retirement retains a durable `retiring` record and resumes enrollment without
+inventing the producer outcome. Physical absence, not enrollment, settles a
+capacity obligation. Missing retirement adoption preserves data and reports
+unmet capacity.
+An allocation containing only the declared native container chain can enter
+that same retirement owner as one tree, reclaiming its empty directory skeleton.
+Any source, checkout or unknown member preserves the root. A copy interrupted
+after claim publication but before original IO releases its exact empty claim
+after responsible consumer release; recovery never invents missing original bytes.
+
+Metadata writes have finite byte/node admission. Released output and metadata
+retirement use retention.json's finite content/metadata windows, per-round work
+limits and summary capacity. Diagnostics and unknown consumers do not expire by
+age; they remain protected and can require refusal. These finite per-object
+limits and admission observations do not establish a strict filesystem-wide
+bound against concurrent external writers.
+
+Before adopting this binary, exclude old producers and use the existing
+`migrate --partition-producer <id>` owner operation for flat v2 registrations;
+it retains the old owner/transition receipt and preserves historical outcomes.
+The same entry binds the current committed context, retains previous context and
+pending-list/string cursor bytes, carries exact pending addresses forward, and
+resumes old registration-path retirement after interrupted layout activation.
+Captures without identities or known input lengths, and copied originals without
+allocation claims still require explicit custodian disposition; those historical
+facts cannot be inferred by rebuilding. Do not reset them or infer release. A source
+rebuild alone does not migrate a coordinator or install compatible committed
+policy. The registered `test.worktree.capacity` action exercises the Rust
+behavior contract. Canonical DELTA checks require the caller's committed clean
+candidate and compatible host adoption. Historical partial maintenance remains
+failed until its actual owner verifies recovery. This candidate does not claim
+SPEC §10.1 satisfaction or exclusively reclaimable physical savings.
+
 **Product and host policy change:** the candidate adds `TemporaryHost` to the
 existing retained producer owner and five finite fixture producers in
 cleanup.json. Binary and committed coordinator/producer policy must be deployed
@@ -1658,3 +1749,13 @@ keep failed originals until debugging and acceptance obligations finish, then
 release them to the existing lifecycle owner. Each action keeps its existing
 900-second/1-MiB bounds; no retry or test-thread override is part of the method.
 Build/CI/storage cost beyond these actual observations remains unknown.
+
+### Exact candidate compiler-cache repair
+
+`repair.worktree-cache` in projects.json delegates to Cargo's package-scoped
+clean for `chrono-worktree`. Before using it, join/exclude Cargo/rustc and native
+consumers of that candidate target, retain the original build stderr and record
+HEAD, index tree and source DELTA. It removes only that package's reconstructible
+compiler outputs, not source, Git objects, diagnostic originals or other targets.
+Then use `build.worktree` unchanged. A successful rebuild establishes a new
+candidate CLI binding; it does not establish the cause of an earlier linker error.

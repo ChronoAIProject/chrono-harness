@@ -51,6 +51,25 @@ pub enum FixtureDirectory {
     Ephemeral(tempfile::TempDir),
     Retained(chrono_worktree::TemporaryHost),
 }
+impl Drop for FixtureDirectory {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            if let Err(error) = self.retain_diagnostic() {
+                eprintln!("fixture diagnostic protection unavailable: {error}");
+            }
+        }
+        if let Self::Retained(host) = self {
+            match host.finish() {
+                Ok(report) if report["recovery_error"].is_null() => (),
+                Ok(report) => eprintln!(
+                    "fixture recovery remains failed: {} (report {})",
+                    report["recovery_error"], report["report_path"]
+                ),
+                Err(error) => eprintln!("fixture recovery unavailable; outputs preserved: {error}"),
+            }
+        }
+    }
+}
 impl FixtureDirectory {
     pub fn path(&self) -> &Path {
         match self {

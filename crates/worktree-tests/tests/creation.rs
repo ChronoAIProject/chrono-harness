@@ -55,21 +55,27 @@ fn producer_state(directory: &Path) -> Value {
     let mut owner = json(&owner_bytes).unwrap();
     assert_eq!(owner["schema"], "chrono-retained-producer/v2");
     let mut objects = vec![];
-    for entry in fs::read_dir(directory.join("producer-records")).unwrap() {
-        let record = json(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
-        assert_eq!(record["schema"], "chrono-retained-producer-object/v1");
-        assert_eq!(record["owner_sha256"], sha256(&owner_bytes));
-        objects.push(record["object"].clone());
+    for bucket in 0..16 {
+        let Ok(entries) = fs::read_dir(directory.join(format!("producer-records/{bucket:x}")))
+        else {
+            continue;
+        };
+        for entry in entries {
+            let record = json(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
+            assert_eq!(record["schema"], "chrono-retained-producer-object/v1");
+            assert_eq!(record["owner_sha256"], sha256(&owner_bytes));
+            objects.push(record["object"].clone());
+        }
     }
     objects.sort_by(|a, b| a["path"].as_str().unwrap().cmp(b["path"].as_str().unwrap()));
     owner["objects"] = value!(objects);
     owner
 }
 fn producer_record_path(directory: &Path, allocation: &Path) -> PathBuf {
-    directory.join("producer-records").join(format!(
-        "{}.json",
-        sha256(allocation.file_name().unwrap().to_str().unwrap().as_bytes())
-    ))
+    {
+        let digest = sha256(allocation.file_name().unwrap().to_str().unwrap().as_bytes());
+        directory.join(format!("producer-records/{}/{}.json", &digest[..1], digest))
+    }
 }
 fn fixture_git() -> PathBuf {
     let registry = source().join(".chrono-harness/tests/worktree-tools.json");
@@ -128,6 +134,18 @@ impl HostDirectory {
         }
         Ok(())
     }
+    fn finish(&mut self) {
+        if let Self::Retained(host) = self {
+            match host.finish() {
+                Ok(report) if report["recovery_error"].is_null() => (),
+                Ok(report) => eprintln!(
+                    "fixture recovery remains failed: {} (report {})",
+                    report["recovery_error"], report["report_path"]
+                ),
+                Err(error) => eprintln!("fixture recovery unavailable; outputs preserved: {error}"),
+            }
+        }
+    }
 }
 struct Host {
     _dir: HostDirectory,
@@ -153,10 +171,10 @@ fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> 
 }
 impl Drop for Host {
     fn drop(&mut self) {
-        let Some(directory) = Self::diagnostic_directory(std::thread::panicking()) else {
-            return;
-        };
-        self.retain_fixture_diagnostics(&directory);
+        if let Some(directory) = Self::diagnostic_directory(std::thread::panicking()) {
+            self.retain_fixture_diagnostics(&directory);
+        }
+        self._dir.finish();
     }
 }
 impl Host {

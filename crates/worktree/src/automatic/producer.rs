@@ -2,7 +2,10 @@
 use super::*;
 use std::sync::Arc;
 mod body;
+mod lifecycle;
+mod retirement;
 use body::fingerprint;
+use lifecycle::{Capacity, Context};
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -18,6 +21,11 @@ pub(super) struct ProducerPolicy {
     /// Exact copied input members are enrolled by the producer, never discovered.
     #[serde(default)]
     pub(super) fixture_bodies: bool,
+    /// Ordinary operations that actually produce/consume this fixture set.
+    #[serde(default)]
+    pub(super) operations: Vec<String>,
+    #[serde(default)]
+    capacity: Capacity,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -57,6 +65,30 @@ struct Object {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(deserialize_with = "strict_map")]
     bodies: BTreeMap<String, body::Body>,
+    #[serde(
+        default,
+        skip_serializing_if = "BTreeMap::is_empty",
+        deserialize_with = "strict_evidence"
+    )]
+    captures: BTreeMap<String, Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "BTreeMap::is_empty",
+        deserialize_with = "strict_map"
+    )]
+    copy_intents: BTreeMap<String, u64>,
+    #[serde(default)]
+    original_release: Option<String>,
+    #[serde(default)]
+    shared_originals: BTreeMap<String, u64>,
+    #[serde(default)]
+    retiring: bool,
+    #[serde(default)]
+    metadata_directory: Option<String>,
+    #[serde(default)]
+    metadata_identity: Option<String>,
+    #[serde(default)]
+    born_nanos: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -117,6 +149,8 @@ struct Owner {
     producer: String,
     directory_id: String,
     records_id: String,
+    #[serde(default)]
+    record_layout: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -194,8 +228,21 @@ impl Store {
     ) -> Result<Value, String> {
         let path = no_symlink_parents(directory, "objects.json")?;
         let bytes = fs::read(&path).map_err(|e| e.to_string())?;
-        if serde_json::from_slice::<Owner>(&bytes).is_ok() {
+        if let Ok(previous) = serde_json::from_slice::<Owner>(&bytes) {
+            if previous.record_layout != "sha256-nibble/v1" {
+                return Self::partition_layout(
+                    directory,
+                    producer,
+                    candidate,
+                    &bytes,
+                    previous,
+                    &mut observer,
+                );
+            }
             Self::open(directory, producer, false)?;
+            let _gate =
+                DirectoryGate::available(directory)?.ok_or("producer migration directory busy")?;
+            Self::finish_layout_retirement(directory, &bytes)?;
             return Ok(value!({"status":"already-current","producer":producer,
                 "disposal":"not-performed","historical_outcomes":"unchanged"}));
         }
@@ -245,6 +292,7 @@ impl Store {
             producer: producer.into(),
             directory_id: previous.directory_id.clone(),
             records_id: directory_id(&records)?,
+            record_layout: "sha256-nibble/v1".into(),
         };
         let namespace = value!({"schema":"chrono-producer-partition-namespace/v1",
             "owner":owner,"source_sha256":sha256(&bytes),"source_length":bytes.len(),
@@ -294,6 +342,7 @@ impl Store {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
                 Err(error) => return Err(error.to_string()),
             }
+            fs::create_dir_all(destination.parent().unwrap()).map_err(|e| e.to_string())?;
             write_bytes_staged(&destination, &next_bytes, false, directory)?;
             declarations.push(value!({"path":name,"sha256":sha256(&next_bytes)}));
         }
@@ -320,6 +369,177 @@ impl Store {
             "objects":previous.objects.len(),"disposal":"not-performed",
             "historical_outcomes":"unchanged"}),
         )
+    }
+
+    fn partition_layout(
+        directory: &Path,
+        producer: &str,
+        candidate: &str,
+        bytes: &[u8],
+        previous: Owner,
+        observer: &mut impl FnMut(&str) -> Result<(), String>,
+    ) -> Result<Value, String> {
+        if previous.schema != "chrono-retained-producer/v2"
+            || !previous.record_layout.is_empty()
+            || previous.producer != producer
+            || previous.directory_id != directory_id(directory)?
+            || previous.records_id != directory_id(&directory.join("producer-records"))?
+        {
+            return Err("unknown producer layout; preserve original owner".into());
+        }
+        let gate =
+            DirectoryGate::available(directory)?.ok_or("producer migration directory busy")?;
+        let records = directory.join("producer-records");
+        let mut objects = vec![];
+        let mut capabilities = vec![];
+        let mut metadata = vec![];
+        for entry in fs::read_dir(&records).map_err(|e| e.to_string())? {
+            let path = entry.map_err(|e| e.to_string())?.path();
+            if path.is_dir() {
+                continue;
+            } // Exact interrupted candidate destinations are verified below.
+            let raw = fs::read(&path).map_err(|e| e.to_string())?;
+            let record: ObjectRecord = decode(&raw)?;
+            let digest = sha256(record.object.path.as_bytes());
+            if record.schema != "chrono-retained-producer-object/v1"
+                || record.owner_sha256 != sha256(bytes)
+                || path != records.join(format!("{digest}.json"))
+            {
+                return Err(
+                    "layout migration registration ownership differs; preserve input".into(),
+                );
+            }
+            if let Some(binding) = &record.object.cache_lease {
+                capabilities.push(
+                    Lease::acquire(
+                        &no_symlink_parents(directory, &binding.path)?,
+                        Some(&binding.id),
+                        false,
+                        true,
+                        None,
+                    )?
+                    .ok_or("producer layout has active/unknown allocation consumers")?,
+                );
+            } else if record.object.consumers.values().any(|c| !c.released) {
+                return Err("producer layout retains an unreleased actual consumer".into());
+            }
+            metadata.push(
+                DirectoryGate::available(&directory.join(&record.object.path))?
+                    .ok_or("producer allocation metadata busy")?,
+            );
+            objects.push((path, raw, record.object));
+        }
+        let mut next = previous;
+        next.record_layout = "sha256-nibble/v1".into();
+        let mut next_bytes = serde_json::to_vec_pretty(&next).map_err(|e| e.to_string())?;
+        next_bytes.push(b'\n');
+        let source_name = format!("producer-layout-source-{}.json", sha256(bytes));
+        write_bytes(&directory.join(&source_name), bytes, false)?;
+        let mut members = vec![];
+        for (source, raw, object) in &objects {
+            let destination = directory.join(Self::record_name(&object.path)?);
+            fs::create_dir_all(destination.parent().unwrap()).map_err(|e| e.to_string())?;
+            let record = ObjectRecord {
+                schema: "chrono-retained-producer-object/v1".into(),
+                owner_sha256: sha256(&next_bytes),
+                object,
+            };
+            let encoded = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
+            match fs::read(&destination) {
+                Ok(existing) if existing != encoded => {
+                    return Err("interrupted layout destination changed; preserve originals".into());
+                }
+                Ok(_) => (),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    write_bytes(&destination, &encoded, true)?;
+                }
+                Err(e) => return Err(e.to_string()),
+            }
+            members.push(value!({"source":source,"source_sha256":sha256(raw),"source_identity":fingerprint(source)?,"destination":destination,"destination_sha256":sha256(&encoded)}));
+        }
+        let receipt = Self::receipt_in(
+            directory,
+            "producer-layout-migration",
+            &value!({"schema":"chrono-producer-layout-migration/v1","candidate":candidate,"source":source_name,"source_sha256":sha256(bytes),"members":members,"historical_outcomes":"unchanged","disposal":"registration-path-retirement-only"}),
+        )?;
+        for lease in &capabilities {
+            lease.stable()?;
+        }
+        for lease in &metadata {
+            lease.stable()?;
+        }
+        gate.stable()?;
+        if fs::read(directory.join("objects.json")).map_err(|e| e.to_string())? != bytes {
+            return Err("producer owner changed during layout migration".into());
+        }
+        write_json(
+            &directory.join("producer-layout-pending.json"),
+            &value!({"schema":"chrono-producer-layout-retirement/v1","owner_sha256":sha256(&next_bytes),"members":members}),
+            false,
+        )?;
+        write_bytes(&directory.join("objects.json"), &next_bytes, false)?;
+        observer("layout-owner-activated")?;
+        Self::finish_layout_retirement(directory, &next_bytes)?;
+        Ok(
+            value!({"status":"partitioned","producer":producer,"receipt":receipt,"historical_outcomes":"unchanged","disposal":"registration-path-retirement-only"}),
+        )
+    }
+
+    fn finish_layout_retirement(directory: &Path, owner: &[u8]) -> Result<(), String> {
+        let path = no_symlink_parents(directory, "producer-layout-pending.json")?;
+        let bytes = match fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e.to_string()),
+        };
+        let manifest: Value = json(&bytes)?;
+        if manifest["schema"] != "chrono-producer-layout-retirement/v1"
+            || manifest["owner_sha256"] != sha256(owner)
+        {
+            return Err(
+                "layout retirement binding differs; preserve original registrations".into(),
+            );
+        }
+        for member in manifest["members"]
+            .as_array()
+            .ok_or("layout retirement members missing")?
+        {
+            let source = PathBuf::from(member["source"].as_str().ok_or("layout source missing")?);
+            let name = source
+                .file_name()
+                .and_then(|s| s.to_str())
+                .ok_or("layout source UTF-8")?;
+            if source.parent() != Some(directory.join("producer-records").as_path())
+                || name.len() != 69
+                || !name.ends_with(".json")
+                || !name[..64].bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Err("layout retirement source address differs".into());
+            }
+            let source = no_symlink_parents(directory, &format!("producer-records/{name}"))?;
+            match fs::read(&source) {
+                Ok(raw) => {
+                    if sha256(&raw) != member["source_sha256"]
+                        || fingerprint(&source)?
+                            != member["source_identity"]
+                                .as_str()
+                                .ok_or("layout source identity missing")?
+                    {
+                        return Err(
+                            "old registration changed during layout retirement; preserve original"
+                                .into(),
+                        );
+                    }
+                    fs::remove_file(source).map_err(|e| e.to_string())?;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+        if fs::read(&path).map_err(|e| e.to_string())? != bytes {
+            return Err("layout retirement declaration changed".into());
+        }
+        fs::remove_file(path).map_err(|e| e.to_string())
     }
 
     fn open(directory: &Path, producer: &str, create: bool) -> Result<Self, String> {
@@ -365,6 +585,7 @@ impl Store {
                     producer: producer.into(),
                     directory_id: directory_id(directory)?,
                     records_id: directory_id(&records)?,
+                    record_layout: "sha256-nibble/v1".into(),
                 };
                 birth.stable()?;
                 write_json(&path, &owner, true)?;
@@ -376,13 +597,14 @@ impl Store {
         let owner: Owner = serde_json::from_slice(&owner_bytes)
             .map_err(|e| format!("producer owner requires current v2 format; use explicit producer partition migration for retained v1 data: {e}"))?;
         let owner_id = fingerprint(&path)?;
-        if owner.schema != "chrono-retained-producer/v2"
+        if owner.record_layout != "sha256-nibble/v1"
+            || owner.schema != "chrono-retained-producer/v2"
             || owner.producer != producer
             || owner.directory_id != directory_id(directory)?
             || owner.records_id
                 != directory_id(&no_symlink_parents(directory, "producer-records")?)?
         {
-            return Err("producer owner identity differs; preserve objects".into());
+            return Err("producer owner identity/layout differs; explicit producer partition migration required; preserve objects".into());
         }
         observer("registry-read-returned");
         let store = Self {
@@ -421,10 +643,8 @@ impl Store {
         if Path::new(object).components().count() != 1 || object == "producer-records" {
             return Err("producer artifact must be one exact child outside owner metadata".into());
         }
-        Ok(format!(
-            "producer-records/{}.json",
-            sha256(object.as_bytes())
-        ))
+        let digest = sha256(object.as_bytes());
+        Ok(format!("producer-records/{}/{}.json", &digest[..1], digest))
     }
 
     fn contains(&self, object: &str) -> Result<bool, String> {
@@ -455,7 +675,18 @@ impl Store {
         {
             return Err("producer registration must be a physical regular file".into());
         }
-        let bytes = fs::read(path).map_err(|e| e.to_string())?;
+        use std::io::Read;
+        let mut bytes = Vec::new();
+        fs::File::open(path)
+            .map_err(|e| e.to_string())?
+            .take(8 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        if bytes.len() > 8 * 1024 * 1024 {
+            return Err(
+                "producer registration metadata capacity exceeded; preserve original".into(),
+            );
+        }
         let record: ObjectRecord = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
         if record.schema != "chrono-retained-producer-object/v1"
             || record.owner_sha256 != sha256(&self.owner_bytes)
@@ -505,21 +736,106 @@ impl Store {
     // consumer reads their declared ownership; it never scans artifact trees or
     // infers membership, references or deletion eligibility from a filename.
     fn records(&self) -> Result<(Vec<Arc<Object>>, Vec<Value>), String> {
-        self.owner_stable()?;
-        let directory = no_symlink_parents(&self.directory, "producer-records")?;
-        let mut records = vec![];
+        self.records_bounded(usize::MAX, u64::MAX)
+    }
+
+    fn records_bounded(
+        &self,
+        limit: usize,
+        metadata_limit: u64,
+    ) -> Result<(Vec<Arc<Object>>, Vec<Value>), String> {
+        let mut all = vec![];
         let mut errors = vec![];
-        for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
-            let entry = entry.map_err(|e| e.to_string())?;
-            match self.decode_record(&entry.path()) {
-                Ok(object) => records.push(object),
-                Err(error) => errors.push(value!({"producer":self.owner.producer,
-                    "registration":entry.path(),"status":"failed","error":error,"evidence":"retained"})),
+        for bucket in 0..16 {
+            let (objects, failures, _, _) = self.record_page(bucket, "", limit, metadata_limit)?;
+            all.extend(objects);
+            errors.extend(failures);
+        }
+        all.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok((all, errors))
+    }
+
+    // Read only producer-authored declarations in the addressed partition. A
+    // durable lexical cursor advances even when a page contains corrupt rows.
+    fn record_page(
+        &self,
+        bucket: u8,
+        after: &str,
+        limit: usize,
+        metadata_limit: u64,
+    ) -> Result<(Vec<Arc<Object>>, Vec<Value>, String, bool), String> {
+        self.owner_stable()?;
+        let directory =
+            no_symlink_parents(&self.directory, &format!("producer-records/{bucket:x}"))?;
+        let entries = match fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok((vec![], vec![], String::new(), false));
+            }
+            Err(e) => return Err(e.to_string()),
+        };
+        let mut names = BTreeSet::new();
+        // Keep only the next finite page in memory. Reading names does not read
+        // or infer artifact contents; ownership is decoded from each record.
+        let context = Context::load(&self.directory, &self.owner.producer).ok();
+        let scan_limit = context
+            .as_ref()
+            .map_or(65536, |c| c.capacity.max_entries_per_checkpoint);
+        let scan_millis = context
+            .as_ref()
+            .map_or(2000, |c| c.capacity.max_millis_per_round);
+        let scan_began = std::time::Instant::now();
+        for (index, entry) in entries.enumerate() {
+            if index >= scan_limit || scan_began.elapsed().as_millis() >= scan_millis as u128 {
+                return Ok((
+                    vec![],
+                    vec![
+                        value!({"producer":self.owner.producer,"status":"failed","partition":bucket,"error":"producer declaration-name page bounded; partition ownership remains unknown; originals preserved"}),
+                    ],
+                    String::new(),
+                    false,
+                ));
+            }
+            let name = entry
+                .map_err(|e| e.to_string())?
+                .file_name()
+                .into_string()
+                .map_err(|_| "registration name UTF-8")?;
+            if name.as_str() > after {
+                names.insert(name);
+                if names.len() > limit.saturating_add(1) {
+                    names.pop_last();
+                }
             }
         }
-        records.sort_by(|a, b| a.path.cmp(&b.path));
+        let more = names.len() > limit;
+        if more {
+            names.pop_last();
+        }
+        let mut objects = vec![];
+        let mut errors = vec![];
+        let mut bytes = 0u64;
+        let mut last = after.to_string();
+        for name in names {
+            let path = no_symlink_parents(&directory, &name)?;
+            let length = fs::symlink_metadata(&path)
+                .map_err(|e| e.to_string())?
+                .len();
+            if bytes.saturating_add(length) > metadata_limit {
+                // Preserve this original; later pages and other partitions still advance.
+                errors.push(value!({"producer":self.owner.producer,"registration":path,"status":"failed","error":"registration exceeds remaining metadata page capacity; original preserved"}));
+                last = name;
+                continue;
+            }
+            bytes += length;
+            last = name;
+            match self.decode_record(&path) {
+                Ok(object)=>objects.push(object),
+                Err(error)=>errors.push(value!({"producer":self.owner.producer,"registration":path,"status":"failed","error":error,"evidence":"retained"})),
+            }
+        }
         self.owner_stable()?;
-        Ok((records, errors))
+        Ok((objects, errors, last, more))
     }
 
     fn stable(&self, object: &Object) -> Result<(), String> {
@@ -622,11 +938,58 @@ impl Store {
             object: object.as_ref(),
         };
         let bytes = serde_json::to_vec(&publication).map_err(|e| e.to_string())?;
+        if bytes.len() > 8 * 1024 * 1024 {
+            return Err(
+                "producer registration metadata capacity exceeded before publication".into(),
+            );
+        }
+        fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
         write_bytes_staged(&path, &bytes, false, &self.directory)
     }
 
     fn receipt(&self, prefix: &str, value: &Value) -> Result<Receipt, String> {
-        Self::receipt_in(&self.directory, prefix, value)
+        let object = self
+            .state
+            .objects
+            .first()
+            .filter(|o| o.metadata_directory.is_some())
+            .map(|o| o.path.as_str());
+        Self::receipt_for(&self.directory, object, prefix, value)
+    }
+
+    fn receipt_for(
+        directory: &Path,
+        object: Option<&str>,
+        prefix: &str,
+        value: &Value,
+    ) -> Result<Receipt, String> {
+        let Some(object) = object else {
+            return Self::receipt_in(directory, prefix, value);
+        };
+        let name = retirement::metadata_name(object);
+        let namespace = no_symlink_parents(directory, &name)?;
+        fs::create_dir_all(&namespace).map_err(|e| e.to_string())?;
+        let name_in_namespace = format!(
+            "{prefix}-{}.json",
+            sha256(&serde_json::to_vec(value).map_err(|e| e.to_string())?)
+        );
+        let existing = no_symlink_parents(&namespace, &name_in_namespace)?;
+        if existing.exists() {
+            let bytes = fs::read(&existing).map_err(|e| e.to_string())?;
+            if json(&bytes)? != *value {
+                return Err("producer receipt collision".into());
+            }
+            return Ok(Receipt {
+                path: format!("{name}/{name_in_namespace}"),
+                sha256: sha256(&bytes),
+            });
+        }
+        retirement::admit_metadata(directory, &namespace, value)?;
+        let receipt = Self::receipt_in(&namespace, prefix, value)?;
+        Ok(Receipt {
+            path: format!("{name}/{}", receipt.path),
+            sha256: receipt.sha256,
+        })
     }
 
     fn receipt_in(directory: &Path, prefix: &str, value: &Value) -> Result<Receipt, String> {
@@ -682,6 +1045,8 @@ impl Manager {
             producer,
             &self.inputs.anchor_head,
         )?;
+        report["producer_context_migration"] =
+            Context::migrate(&policy.directory(target)?, &self.inputs, policy, r)?;
         lease.stable()?;
         self.stable(r)
     }
@@ -785,6 +1150,7 @@ impl RetainedArtifact {
                 report["coordinator_root"] = value!(inputs.policy.coordinator_root);
                 report["directory"] = value!(directory);
                 report["generated_outputs"] = value!(declaration.generated_outputs);
+                Context::register(&directory, config_path, &inputs, declaration)?;
                 selected = Some((directory, declaration.generated_outputs.clone()));
                 Ok(())
             },
@@ -870,7 +1236,10 @@ impl RetainedArtifact {
             return Err("producer artifact is already registered".into());
         }
         observer("object-record-admitted");
-        let intent = store.receipt(
+        let managed = Context::load(directory, producer).is_ok();
+        let intent = Store::receipt_for(
+            directory,
+            managed.then_some(object.as_str()),
             "producer-intent",
             &value!({
                 "schema":"chrono-retained-artifact-intent/v1","producer":producer,
@@ -900,6 +1269,20 @@ impl RetainedArtifact {
             attempts: vec![],
             cache_lease: None,
             bodies: BTreeMap::new(),
+            captures: BTreeMap::new(),
+            copy_intents: BTreeMap::new(),
+            original_release: None,
+            shared_originals: BTreeMap::new(),
+            retiring: false,
+            metadata_directory: managed.then(|| retirement::metadata_name(&object)),
+            metadata_identity: if managed {
+                Some(directory_id(
+                    &directory.join(retirement::metadata_name(&object)),
+                )?)
+            } else {
+                None
+            },
+            born_nanos: retirement::now_nanos()?,
         }));
         store.save(store.state.objects.len() - 1)?;
         Ok(Self {
@@ -924,6 +1307,9 @@ impl RetainedArtifact {
             .iter()
             .find(|o| o.path == object)
             .ok_or("unknown producer artifact; preserve it")?;
+        if record.retiring {
+            return Err("producer original lifetime ended; metadata retirement pending".into());
+        }
         store.stable(record)?;
         Ok(Self {
             directory: directory.into(),
@@ -1025,7 +1411,10 @@ impl RetainedArtifact {
                 })
             })
             .transpose()?;
-        if (!object.sealed && object.cache_lease.is_none()) || (!released && object.disposed) {
+        if object.retiring
+            || (!object.sealed && object.cache_lease.is_none())
+            || (!released && object.disposed)
+        {
             return Err(
                 "unsealed/disposed producer artifact cannot acquire or release consumers".into(),
             );
@@ -1047,6 +1436,15 @@ impl RetainedArtifact {
                 receipt: Some(receipt),
             },
         );
+        if store.state.objects[i].cache_lease.is_none()
+            && store.state.objects[i]
+                .consumers
+                .values()
+                .all(|c| c.released)
+        {
+            Arc::make_mut(&mut store.state.objects[i]).original_release =
+                Some("all explicitly registered original consumers released".into());
+        }
         store.save(i)
     }
 }
@@ -1056,7 +1454,8 @@ impl RetainedArtifact {
 /// Native consumers use bind_command; engine consumers inherit the same Scope.
 pub struct TemporaryHost {
     path: PathBuf,
-    lease: Lease,
+    lease: Option<Lease>,
+    context: Context,
 }
 
 impl TemporaryHost {
@@ -1078,6 +1477,13 @@ impl TemporaryHost {
         if prefix.contains(['/', '\\', '\0']) {
             return Err("temporary allocation prefix must be one literal name".into());
         }
+        let context = Context::load(directory, producer)?;
+        if context.generated_outputs != generated_outputs {
+            return Err("allocation outputs differ from registered producer context".into());
+        }
+        context.entry(None)?;
+        context.production_admission()?;
+        context.admit(directory, 0)?;
         fs::create_dir_all(directory).map_err(|e| e.to_string())?;
         let mut store = Store::open(directory, producer, true)?;
         // Keep immediately: even a failed/interrupted enrollment is an unknown
@@ -1107,12 +1513,16 @@ impl TemporaryHost {
         };
         let identity = directory_id(&path)?;
         store.bind(&object)?;
-        let intent = store.receipt(
+        let metadata_directory = retirement::metadata_name(&object);
+        let intent = Store::receipt_for(
+            directory,
+            Some(&object),
             "producer-intent",
             &value!({
                 "schema":"chrono-temporary-host-intent/v1","producer":producer,
                 "path":object,"identity":identity,"generated_outputs":generated_outputs,
-                "cache_lease":binding,"evidence_disposal":"not-authorized",
+                "cache_lease":binding,"metadata_directory":metadata_directory,
+                "original_lifetime":"explicit-consumer-release; interruption-is-unknown",
                 "producer_outcome":"not-established","task_completion":"not-claimed"
             }),
         )?;
@@ -1131,9 +1541,21 @@ impl TemporaryHost {
             attempts: vec![],
             cache_lease: Some(binding),
             bodies: BTreeMap::new(),
+            captures: BTreeMap::new(),
+            copy_intents: BTreeMap::new(),
+            original_release: None,
+            shared_originals: BTreeMap::new(),
+            retiring: false,
+            metadata_identity: Some(directory_id(&directory.join(&metadata_directory))?),
+            metadata_directory: Some(metadata_directory),
+            born_nanos: retirement::now_nanos()?,
         }));
         store.save(store.state.objects.len() - 1)?;
-        Ok(Self { path, lease })
+        Ok(Self {
+            path,
+            lease: Some(lease),
+            context,
+        })
     }
 
     pub fn path(&self) -> &Path {
@@ -1143,12 +1565,19 @@ impl TemporaryHost {
     /// A declared cross-thread engine consumer enters its own process_fds Scope
     /// with this owned copy. It shares the existing kernel open description.
     pub fn capability(&self) -> Result<fs::File, String> {
-        self.lease.stable()?;
-        self.lease.capability()
+        self.lease
+            .as_ref()
+            .ok_or("allocation already released")?
+            .stable()?;
+        self.lease.as_ref().unwrap().capability()
     }
 
     pub fn bind_command(&self, command: &mut std::process::Command) -> Result<(), String> {
-        self.lease.stable()?;
+        self.lease
+            .as_ref()
+            .ok_or("allocation already released")?
+            .stable()?;
+        self.checkpoint()?;
         // The same exact allocation also holds nested default tempfile outputs.
         // It is retained source/evidence, never a disposable mixed TMPDIR root.
         command.env("TMPDIR", &self.path);
@@ -1192,6 +1621,48 @@ impl TemporaryHost {
         command: &mut std::process::Command,
         input: Option<&[u8]>,
     ) -> Result<std::process::Output, String> {
+        let context = Context::for_allocation(root)?;
+        let _custody;
+        if let Some(context) = &context {
+            let before = context.checkpoint(root)?;
+            if before["capture_logical_bytes"]
+                .as_u64()
+                .unwrap()
+                .saturating_add(input.map_or(0, |b| b.len() as u64))
+                > context.capacity.max_capture_bytes
+            {
+                return Err("fixture capture input capacity exceeded before writing".into());
+            }
+            let mut store = Store::open(
+                root.parent().ok_or("allocation parent")?,
+                &context.producer,
+                false,
+            )?;
+            store.load(
+                root.file_name()
+                    .and_then(|p| p.to_str())
+                    .ok_or("allocation UTF-8")?,
+            )?;
+            let object = &store.state.objects[0];
+            store.stable(object)?;
+            context.capture_admission(object, input.map_or(0, |b| b.len() as u64))?;
+            let binding = object
+                .cache_lease
+                .as_ref()
+                .ok_or("capture requires temporary allocation custody")?;
+            _custody = Lease::acquire(
+                &no_symlink_parents(&store.directory, &binding.path)?,
+                Some(&binding.id),
+                false,
+                false,
+                None,
+            )?;
+            if _custody.is_none() {
+                return Err("capture allocation is being recovered".into());
+            }
+        } else {
+            _custody = None;
+        }
         let directory = root.join(".chrono-harness/state/command-captures");
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let capture = tempfile::Builder::new()
@@ -1199,6 +1670,29 @@ impl TemporaryHost {
             .tempdir_in(&directory)
             .map_err(|e| e.to_string())?
             .keep();
+        if let Some(context) = &context {
+            let mut store = Store::open(root.parent().unwrap(), &context.producer, false)?;
+            store.load(
+                root.file_name()
+                    .and_then(|p| p.to_str())
+                    .ok_or("allocation UTF-8")?,
+            )?;
+            store.stable(&store.state.objects[0])?;
+            context
+                .capture_admission(&store.state.objects[0], input.map_or(0, |b| b.len() as u64))?;
+            let relative = capture
+                .strip_prefix(root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("capture UTF-8")?;
+            Arc::make_mut(&mut store.state.objects[0]).captures.insert(
+                relative.into(),
+                value!({"outcome":"not-established","membership":"actual native capture producer",
+                    "reserved_input_bytes":input.map_or(0, |bytes| bytes.len() as u64),
+                    "identity":directory_id(&capture)?}),
+            );
+            store.save(0)?;
+        }
         let stdout = capture.join("stdout.bytes");
         let stderr = capture.join("stderr.bytes");
         let out = fs::File::create_new(&stdout).map_err(|e| e.to_string())?;
@@ -1265,6 +1759,9 @@ impl TemporaryHost {
             "task_completion":"not-claimed"}),
             true,
         )?;
+        if let Some(context) = &context {
+            context.checkpoint(root)?;
+        }
         let result = std::process::Output {
             status,
             stdout: fs::read(stdout).map_err(|e| e.to_string())?,
@@ -1284,6 +1781,15 @@ impl ProducerPolicy {
     }
 
     pub(super) fn validate(&self, policy: &Policy) -> Result<(), String> {
+        self.capacity.validate()?;
+        let mut operations = BTreeSet::new();
+        if self
+            .operations
+            .iter()
+            .any(|operation| operation.is_empty() || !operations.insert(operation))
+        {
+            return Err("producer operations must be explicit and unique".into());
+        }
         relative_path(self.directory.trim_end_matches('/'))?;
         if self.id.is_empty()
             || !self.directory.ends_with('/')
@@ -1373,6 +1879,17 @@ impl ProducerPolicy {
         r: &mut Runner,
         report: &mut Value,
     ) -> Result<(), String> {
+        self.drain_selected(inputs, r, report, None, false)
+    }
+
+    pub(super) fn drain_selected(
+        &self,
+        inputs: &PolicyInputs,
+        r: &mut Runner,
+        report: &mut Value,
+        selected: Option<&str>,
+        bounded: bool,
+    ) -> Result<(), String> {
         let root = &inputs.policy.coordinator_root;
         let directory = self.directory(root)?;
         if !directory.exists() || !no_symlink_parents(&directory, "objects.json")?.exists() {
@@ -1381,7 +1898,98 @@ impl ProducerPolicy {
             return Ok(());
         }
         let opened = Store::open(&directory, &self.id, false)?;
-        let (objects, registration_errors) = opened.records()?;
+        let began = std::time::Instant::now();
+        let mut cursor_guard = None;
+        let mut recovery = retirement::Recovery::default();
+        let cursor = directory.join("recovery-state");
+        if bounded && selected.is_none() {
+            fs::create_dir_all(&cursor).map_err(|e| e.to_string())?;
+            cursor_guard = DirectoryGate::available(&cursor)?;
+            if cursor_guard.is_none() {
+                report["producer_recovery_scope"] = value!({"kind":"related-producer","status":"deferred-busy","remaining":Value::Null});
+                return Ok(());
+            }
+            let path = no_symlink_parents(&cursor, "cursor.json")?;
+            match fs::read(path) {
+                Ok(bytes) if bytes.len() as u64 <= self.capacity.max_metadata_bytes_per_round => recovery = decode(&bytes).map_err(|e| {
+                    format!(
+                        "explicit recovery cursor migration required; preserve previous cursor: {e}"
+                    )
+                })?,
+                Ok(_) => return Err("recovery cursor metadata capacity exceeded".into()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+                Err(e) => return Err(e.to_string()),
+            }
+            recovery.validate()?;
+            if recovery.round_started == 0 {
+                recovery.round_started = retirement::now_nanos()?;
+            }
+        }
+        let pending_mode = bounded && selected.is_none() && !recovery.pending.is_empty();
+        let pending_count = recovery
+            .pending
+            .len()
+            .min(self.capacity.max_records_per_round);
+        let (objects, registration_errors, page_last, page_more) = if let Some(object) = selected {
+            (
+                vec![opened.decode_record(&no_symlink_parents(
+                    &directory,
+                    &Store::record_name(object)?,
+                )?)?],
+                vec![],
+                String::new(),
+                false,
+            )
+        } else if pending_mode {
+            let mut objects = vec![];
+            let mut errors = vec![];
+            for name in recovery.pending.iter().take(pending_count) {
+                match opened.decode_record(&no_symlink_parents(&directory,&Store::record_name(name)?)?) {
+                    Ok(object)=>objects.push(object),
+                    Err(error)=>errors.push(value!({"producer":self.id,"path":name,"status":"failed","error":error,"original_outcome":"unchanged"})),
+                }
+            }
+            (objects, errors, String::new(), false)
+        } else if bounded {
+            let mut page = (vec![], vec![], String::new(), false);
+            for _ in 0..16 {
+                page = opened.record_page(
+                    recovery.bucket,
+                    &recovery.after,
+                    self.capacity
+                        .max_record_snapshot
+                        .min(self.capacity.max_records_per_round),
+                    self.capacity.max_metadata_bytes_per_round,
+                )?;
+                page.0
+                    .retain(|object| object.born_nanos <= recovery.round_started);
+                if !page.0.is_empty() || !page.1.is_empty() {
+                    break;
+                }
+                if page.3 {
+                    recovery.after = page.2.clone();
+                } else {
+                    recovery.bucket = (recovery.bucket + 1) % 16;
+                    recovery.after.clear();
+                    if recovery.bucket == 0 {
+                        recovery.round_started = retirement::now_nanos()?;
+                    }
+                }
+                if began.elapsed().as_millis() >= self.capacity.max_millis_per_round as u128 {
+                    break;
+                }
+            }
+            page
+        } else {
+            let (objects, errors) = opened.records()?;
+            (objects, errors, String::new(), false)
+        };
+        let snapshot_count = objects.len();
+        report["producer_recovery_scope"] = value!({"kind":if selected.is_some(){"exact-allocation"}else{"related-producer"},
+            "snapshot_records":snapshot_count,"partition":recovery.bucket,"after":recovery.after,
+            "bounded":bounded,"remaining":Value::Null,"unvisited_partitions":"unknown",
+            "max_records_per_round":self.capacity.max_records_per_round,"max_millis_per_round":self.capacity.max_millis_per_round});
+        let mut visited = 0;
         let registry_id = opened.state.directory_id.clone();
         let mut store = Some(opened);
         let mut failures = vec![];
@@ -1394,6 +2002,27 @@ impl ProducerPolicy {
         }
         let mut originals = BTreeMap::new();
         for snapshot in &objects {
+            if bounded
+                && visited > 0
+                && (visited >= self.capacity.max_records_per_round
+                    || began.elapsed().as_millis() >= self.capacity.max_millis_per_round as u128)
+            {
+                break;
+            }
+            visited += 1;
+            if snapshot.retiring {
+                match retirement::resume_retirement(inputs, &directory, snapshot) {
+                    Ok(value) => report["producer_objects"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(value),
+                    Err(error) => {
+                        failures.push(error.clone());
+                        report["producer_objects"].as_array_mut().unwrap().push(value!({"producer":self.id,"path":snapshot.path,"status":"failed","error":error}));
+                    }
+                }
+                continue;
+            }
             let excluded = (|| -> Result<Option<Lease>, String> {
                 if let Some(binding) = &snapshot.cache_lease {
                     let path = no_symlink_parents(&directory, &binding.path)?;
@@ -1619,8 +2248,12 @@ impl ProducerPolicy {
                             .map(|p| no_symlink_parents(root, p.trim_end_matches('/')))
                             .collect::<Result<Vec<_>, _>>()?
                     };
-                    let intent = Store::receipt_in(
+                    let intent = Store::receipt_for(
                         &directory,
+                        object
+                            .metadata_directory
+                            .as_ref()
+                            .map(|_| object.path.as_str()),
                         "producer-cleanup-intent",
                         &value!({
                             "schema":"chrono-retained-artifact-cleanup-intent/v1","path":object.path,
@@ -1667,8 +2300,15 @@ impl ProducerPolicy {
                         Ok(()) => attempt["status"] = value!("cleaned"),
                         Err(error) => attempt["error"] = value!(error),
                     }
-                    let receipt =
-                        Store::receipt_in(&directory, "producer-cleanup-result", &attempt)?;
+                    let receipt = Store::receipt_for(
+                        &directory,
+                        object
+                            .metadata_directory
+                            .as_ref()
+                            .map(|_| object.path.as_str()),
+                        "producer-cleanup-result",
+                        &attempt,
+                    )?;
                     attempt["receipt"] = value!(receipt);
                     Ok(Some(attempt))
                 };
@@ -1715,6 +2355,40 @@ impl ProducerPolicy {
                     }
                 }
             }
+            if object.metadata_directory.is_some() {
+                drop(store.take());
+                if (object.cache_lease.is_none() || cache_guard.is_some())
+                    && object.consumers.values().all(|c| c.released)
+                {
+                    match retirement::retire(
+                        self,
+                        inputs,
+                        r,
+                        &directory,
+                        object,
+                        cache_guard.as_ref(),
+                        &row,
+                    ) {
+                        Ok(retirement) => {
+                            row["original_retirement"] = retirement;
+                        }
+                        Err(error) => {
+                            failures.push(error.clone());
+                            row["original_retirement"] = value!({"status":"failed","error":error});
+                        }
+                    }
+                }
+                // A per-object declaration persists excess/unknown original
+                // obligations across allocation IDs; no shared byte ledger.
+                let context = Context::load(&directory, &self.id)?;
+                if self.temporary
+                    && !object.retiring
+                    && row["original_retirement"]["status"] != "retiring"
+                {
+                    let _ = context
+                        .observe_capacity(&directory.join(&object.path), cache_guard.is_some());
+                }
+            }
             if object.cache_lease.is_some()
                 && row["status"] != "already-absent"
                 && row["status"] != "already-disposed"
@@ -1723,6 +2397,40 @@ impl ProducerPolicy {
             }
             drop(store.take());
             report["producer_objects"].as_array_mut().unwrap().push(row);
+        }
+        report["producer_recovery_scope"]["visited"] = value!(visited);
+        report["producer_recovery_scope"]["remaining_in_round"] =
+            value!(snapshot_count.saturating_sub(visited));
+        if let Some(guard) = cursor_guard {
+            guard.stable()?;
+            if pending_mode {
+                let consumed = if visited == objects.len() {
+                    pending_count
+                } else {
+                    visited
+                };
+                recovery.pending.drain(..consumed);
+            } else if visited < objects.len() {
+                recovery.after = format!(
+                    "{}.json",
+                    sha256(objects[visited.saturating_sub(1)].path.as_bytes())
+                );
+            } else if page_more {
+                recovery.after = page_last;
+            } else {
+                recovery.bucket = (recovery.bucket + 1) % 16;
+                recovery.after.clear();
+                if recovery.bucket == 0 {
+                    recovery.round_started = retirement::now_nanos()?;
+                }
+            }
+            write_bytes_staged(
+                &cursor.join("cursor.json"),
+                &serde_json::to_vec(&recovery).map_err(|e| e.to_string())?,
+                false,
+                &directory,
+            )?;
+            report["producer_recovery_scope"]["next"] = value!(recovery);
         }
         if failures.is_empty() {
             Ok(())

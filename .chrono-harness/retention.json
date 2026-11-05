@@ -22,6 +22,14 @@
     ],
     "lifecycle-original": [
       ".chrono-harness/state/worktrees/"
+    ],
+    "fixture-retirement": [
+      ".chrono-harness/state/ci-test-failures/",
+      ".chrono-harness/state/temporary-hosts/worktree/",
+      ".chrono-harness/state/temporary-hosts/ci/",
+      ".chrono-harness/state/temporary-hosts/projects/",
+      ".chrono-harness/state/temporary-hosts/workflow-tools/",
+      ".chrono-harness/state/temporary-hosts/migration/"
     ]
   },
   "keep_seconds": 0,

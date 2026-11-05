@@ -14,6 +14,10 @@ fn host() -> Host {
         "fn producer() { /* copied fixture input */ }\n",
     )
     .unwrap();
+    fs::write(h.root.join(".chrono-harness/retention.json"), serde_json::to_vec(&value!({"schema":"chrono-output-retention/v2",
+        "producers":{"fixture-retirement":[".chrono-harness/state/"],"lifecycle-original":[".chrono-harness/state/worktrees/"]},
+        "keep_seconds":0,"metadata_keep_seconds":0,"max_related_outputs":512,"max_summaries":16,
+        "max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000})).unwrap()).unwrap();
     commit(&h.root);
     h
 }
@@ -517,10 +521,24 @@ fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() 
         assert!(result.is_err(), "{drift} must prevent body publication");
         assert!(!destination.exists());
         assert_eq!(fs::read(&source).unwrap(), bytes);
-        assert_eq!(
-            fs::read(&registry_path).unwrap(),
-            changed_registry.unwrap_or_else(|| before.clone())
-        );
+        if drift == "original" {
+            // The new byte reservation is a real durable producer intent. A
+            // failed transfer keeps it, while all preexisting state survives.
+            let mut current = json(&fs::read(&registry_path).unwrap()).unwrap();
+            assert_eq!(current["object"]["copy_intents"], value!({"copied.bin":4}));
+            current["object"]
+                .as_object_mut()
+                .unwrap()
+                .remove("copy_intents");
+            assert_eq!(
+                current["object"]["shared_originals"],
+                value!({sha256(&bytes):4})
+            );
+            current["object"]["shared_originals"] = value!({});
+            assert_eq!(current, json(&before).unwrap());
+        } else {
+            assert_eq!(fs::read(&registry_path).unwrap(), changed_registry.unwrap());
+        }
         if drift == "original" {
             assert_eq!(fs::read(&original).unwrap(), [9, 9, 9, 9]);
             fs::write(&original, bytes).unwrap();
@@ -738,7 +756,10 @@ fn joined_command_body(outcome: &str) {
             serde_json::from_value(report["managed_process"]["stderr_bytes"].clone()).unwrap();
         assert!(String::from_utf8_lossy(&stderr).contains("assertion `left == right` failed"));
         assert_eq!(report["managed_command_failed"], true);
-        assert!(report["post_use_cleanup"].is_null(), "{report}");
+        assert!(
+            report["post_use_cleanup"]["producer_drains"].is_array(),
+            "{report}"
+        );
         assert!(root.join("joined-body.bin").exists());
     } else {
         assert_eq!(code, 0, "{report} {error}");
@@ -1019,23 +1040,46 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     let (store, allocation) = allocation(&h);
     let root = allocation.path().to_owned();
     fs::write(root.join("legacy-copy"), b"real copied input").unwrap();
-    let nested_store = root.join("nested producer");
-    fs::create_dir(&nested_store).unwrap();
-    let nested =
-        chrono_worktree::TemporaryHost::allocate(&nested_store, "nested-fixture", &[], "child ")
-            .unwrap();
+    let nested_directory = tempfile::Builder::new()
+        .prefix("nested host-")
+        .tempdir_in(&root)
+        .unwrap();
+    let nested_host = super::bounded_cleanup::configure_main(
+        Host::in_directory("payload", HostDirectory::Ephemeral(nested_directory)),
+        "noop",
+    );
+    let policy_path = nested_host.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["retained_producers"] = value!([{"id":"nested-fixture",
+        "directory":".chrono-harness/state/nested producer/","temporary":true,"generated_outputs":[]}]);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&nested_host.root);
+    let (nested_store, nested_outputs) = chrono_worktree::TemporaryHost::registered_store(
+        &nested_host.root,
+        POLICY,
+        "nested-fixture",
+    )
+    .unwrap();
+    let nested = chrono_worktree::TemporaryHost::allocate(
+        &nested_store,
+        "nested-fixture",
+        &nested_outputs,
+        "child ",
+    )
+    .unwrap();
     let nested_root = nested.path().to_owned();
     fs::write(nested_root.join("copy"), b"real copied input").unwrap();
     drop(nested);
     let nested_registry = producer_state(&nested_store);
     let nested_object = &nested_registry["objects"][0];
     let nested_binding = &nested_object["cache_lease"];
+    let nested_directory = nested_store.strip_prefix(&root).unwrap().to_str().unwrap();
     let nested_path = format!(
-        "nested producer/{}",
+        "{nested_directory}/{}",
         nested_binding["path"].as_str().unwrap()
     );
     let nested_member = format!(
-        "nested producer/{}/copy",
+        "{nested_directory}/{}/copy",
         nested_object["path"].as_str().unwrap()
     );
     let nested_id = nested_binding["id"].as_str().unwrap();
@@ -1049,7 +1093,7 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
         "members":[{"path":"legacy-copy","sha256":sha256(b"real copied input"),"length":17,"git_root":".","recipe":"recipe.rs"},
         {"path":nested_member,"sha256":sha256(b"real copied input"),"length":17,"git_root":null,"recipe":"recipe.rs",
         "leases":[{"path":nested_path,"id":nested_id}],
-        "nested_consumers":[{"directory":"nested producer","producer":"nested-fixture",
+        "nested_consumers":[{"directory":nested_directory,"producer":"nested-fixture",
         "registry_identity":nested_registry["directory_id"],"allocation":nested_object["path"],
         "identity":nested_object["identity"],"intent":nested_object["intent"]}]}]}]});
     let plan_path = ".chrono-harness/state/body-custody.json";

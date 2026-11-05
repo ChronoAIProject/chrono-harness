@@ -1,5 +1,411 @@
 use super::*;
 
+// Capacity/recovery contract: a subsequent allocation is a real ordinary
+// consumer of this producer, and must recover an excluded predecessor without
+// turning its unknown original outcome into success. Live siblings survive.
+#[test]
+fn capacity_ordinary_allocation_recovers_excluded_predecessor() {
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let previous =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "previous-")
+            .unwrap();
+    let cache = previous.path().join("cache 空白");
+    fs::create_dir(&cache).unwrap();
+    fs::write(cache.join("generated"), b"rebuildable").unwrap();
+    let path = previous.path().to_owned();
+    // Simulate an interrupted allocation: Drop must not establish its outcome.
+    drop(previous);
+    let live =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "next-")
+            .unwrap();
+    assert!(
+        !cache.exists(),
+        "ordinary allocation left eligible predecessor output"
+    );
+    assert!(path.is_dir(), "allocation source/evidence must survive");
+    assert!(live.path().is_dir());
+    let state = producer_state(&store);
+    let old = state["objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == path.file_name().unwrap().to_str().unwrap())
+        .unwrap();
+    let intent =
+        json(&fs::read(store.join(old["intent"]["path"].as_str().unwrap())).unwrap()).unwrap();
+    assert_eq!(intent["producer_outcome"], "not-established");
+}
+
+fn capacity_host(change: impl FnOnce(&mut Value)) -> Host {
+    let h = host();
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    let capacity = &mut policy["retained_producers"][0]["capacity"];
+    *capacity = value!({"max_generated_bytes":8,"max_copy_bytes":8,"max_capture_bytes":64,
+        "max_captures":2,"min_available_bytes":0,"max_records_per_round":2,
+        "max_record_snapshot":128,"max_metadata_bytes_per_round":1048576,"max_millis_per_round":2000,"max_entries_per_checkpoint":128});
+    change(capacity);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    h
+}
+
+#[test]
+fn capacity_generated_boundary_and_explicit_finish_preserve_source_and_diagnostic() {
+    let h = capacity_host(|_| {});
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "boundary-")
+            .unwrap();
+    let cache = allocation.path().join("cache 空白");
+    let source = allocation.path().join("unique-source.rs");
+    fs::write(&source, b"unique source").unwrap();
+    fs::create_dir(&cache).unwrap();
+    fs::write(cache.join("generated"), b"12345678").unwrap();
+    assert_eq!(
+        allocation.checkpoint().unwrap()["generated_logical_bytes"],
+        8
+    );
+    fs::write(cache.join("generated"), b"123456789").unwrap();
+    let error = allocation.checkpoint().unwrap_err();
+    assert!(error.contains("capacity unmet"), "{error}");
+    let artifact =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", allocation.path())
+            .unwrap();
+    artifact
+        .acquire("diagnostic", "actual failure originals remain required")
+        .unwrap();
+    let result = allocation.finish().unwrap();
+    assert!(
+        result["producer_objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["status"] == "protected")
+    );
+    assert!(cache.is_dir());
+    assert_eq!(fs::read(&source).unwrap(), b"unique source");
+    artifact
+        .release(
+            "diagnostic",
+            "test consumer inspected the original and needs no further cache input",
+        )
+        .unwrap();
+    let next =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recover-")
+            .unwrap();
+    assert!(!cache.exists());
+    assert_eq!(fs::read(&source).unwrap(), b"unique source");
+    assert!(next.path().exists());
+}
+
+#[test]
+fn capacity_copy_refuses_before_original_or_member_bytes_are_written() {
+    let h = capacity_host(|_| {});
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "copy-")
+            .unwrap();
+    let source = allocation.path().join("source");
+    let destination = allocation.path().join("copied");
+    fs::write(&source, b"123456789").unwrap();
+    let error = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        &source,
+        &destination,
+        None,
+        "actual copy",
+    )
+    .unwrap_err();
+    assert!(error.contains("before writing"), "{error}");
+    assert!(!destination.exists());
+    assert!(!store.join("body-inputs").exists());
+    fs::write(&source, b"12345678").unwrap();
+    let original = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        &source,
+        &destination,
+        None,
+        "actual bounded copy",
+    )
+    .unwrap();
+    assert_eq!(fs::read(original).unwrap(), b"12345678");
+}
+
+#[test]
+fn capacity_pending_copy_reserves_before_releasing_metadata_for_io() {
+    use std::sync::mpsc;
+    let h = capacity_host(|_| {});
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "parallel-copy-",
+    )
+    .unwrap();
+    let source = allocation.path().join("first-source");
+    let destination = allocation.path().join("first-copy");
+    fs::write(&source, b"12345").unwrap();
+    let (entered, observed) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let directory = store.clone();
+    let transfer = std::thread::spawn(move || {
+        chrono_worktree::TemporaryHost::register_copy_with_observer(
+            &directory,
+            "test-allocation",
+            &source,
+            &destination,
+            None,
+            "actual first copy",
+            |phase| {
+                if phase == "copy-original-entered" {
+                    entered.send(()).unwrap();
+                    released.recv().unwrap();
+                }
+            },
+        )
+    });
+    observed.recv().unwrap();
+    let second = allocation.path().join("second-source");
+    fs::write(&second, b"1234").unwrap();
+    let result = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        &second,
+        &allocation.path().join("second-copy"),
+        None,
+        "actual second copy",
+    );
+    release.send(()).unwrap();
+    let original = transfer.join().unwrap().unwrap();
+    assert!(result.unwrap_err().contains("before writing"));
+    assert_eq!(fs::read(original).unwrap(), b"12345");
+}
+
+#[test]
+fn capacity_capture_count_cannot_be_bypassed_by_new_capture_names() {
+    let h = capacity_host(|capacity| capacity["max_captures"] = value!(1));
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "native-")
+            .unwrap();
+    let make_command = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+        command.arg("ordinary");
+        command
+    };
+    let first = allocation.capture_output(&mut make_command()).unwrap();
+    assert_eq!(first.status.code(), Some(0));
+    assert_eq!(first.stdout, b"ordinary-work");
+    let error = allocation.capture_output(&mut make_command()).unwrap_err();
+    assert!(error.contains("before spawn"), "{error}");
+    let captures = allocation
+        .path()
+        .join(".chrono-harness/state/command-captures");
+    assert_eq!(fs::read_dir(captures).unwrap().count(), 1);
+}
+
+#[test]
+fn capacity_pending_capture_input_keeps_its_reservation_before_io_or_join() {
+    let h = capacity_host(|_| {});
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "pending-input-",
+    )
+    .unwrap();
+    // A published capture intent can precede its input write or survive an
+    // interrupted writer. The next capture must consume that durable byte
+    // reservation even when no bytes or joined result are available yet.
+    let record_path = producer_record_path(&store, allocation.path());
+    let mut record = json(&fs::read(&record_path).unwrap()).unwrap();
+    record["object"]["captures"] = value!({
+        ".chrono-harness/state/command-captures/pending": {
+            "outcome":"not-established", "membership":"actual native capture producer",
+            "reserved_input_bytes":40
+        }
+    });
+    fs::write(&record_path, serde_json::to_vec(&record).unwrap()).unwrap();
+    let before = fs::read(&record_path).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command.arg("noop");
+    allocation.bind_command(&mut command).unwrap();
+    let result = chrono_worktree::TemporaryHost::capture_bound_input(
+        allocation.path(),
+        &mut command,
+        &[0; 25],
+    );
+    assert!(
+        result.is_err(),
+        "40 reserved + 25 new bytes must exceed the 64 byte capture budget"
+    );
+    assert!(result.unwrap_err().contains("before spawn"));
+    assert_eq!(fs::read(record_path).unwrap(), before);
+    assert!(
+        !allocation
+            .path()
+            .join(".chrono-harness/state/command-captures")
+            .exists()
+    );
+    let mut boundary = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    boundary.arg("noop");
+    allocation.bind_command(&mut boundary).unwrap();
+    let result = chrono_worktree::TemporaryHost::capture_bound_input(
+        allocation.path(),
+        &mut boundary,
+        &[0; 24],
+    )
+    .unwrap();
+    assert_eq!(result.status.code(), Some(0));
+    let usage = allocation.checkpoint().unwrap();
+    assert_eq!(usage["capture_reserved_input_bytes"], 64);
+    assert_eq!(usage["capture_accounted_bytes"], 64);
+    assert_eq!(usage["capture_logical_bytes"], 24);
+}
+
+#[test]
+fn capacity_filesystem_refusal_survives_fresh_allocation_ids() {
+    let h = capacity_host(|capacity| capacity["min_available_bytes"] = value!(u64::MAX - 1));
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    for prefix in ["first-", "new-id-"] {
+        let error =
+            chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, prefix)
+                .err()
+                .unwrap();
+        assert!(error.contains("production refused"), "{error}");
+    }
+    assert!(
+        !store.join("objects.json").exists(),
+        "refusal must precede allocation birth"
+    );
+}
+
+#[test]
+fn capacity_bounded_recovery_advances_past_active_and_corrupt_siblings() {
+    let h = capacity_host(|capacity| capacity["max_records_per_round"] = value!(1));
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocations = Vec::new();
+    for prefix in ["active-", "eligible-a-", "eligible-b-"] {
+        let allocation =
+            chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, prefix)
+                .unwrap();
+        fs::create_dir(allocation.path().join("cache 空白")).unwrap();
+        fs::write(allocation.path().join("cache 空白/generated"), b"123").unwrap();
+        allocations.push(allocation);
+    }
+    let active = allocations.remove(0);
+    let eligible = allocations
+        .iter()
+        .map(|a| a.path().join("cache 空白"))
+        .collect::<Vec<_>>();
+    drop(allocations);
+    fs::create_dir_all(store.join("producer-records/0")).unwrap();
+    fs::write(
+        store.join("producer-records/0/corrupt.json"),
+        b"original damaged registration",
+    )
+    .unwrap();
+    let mut live = Vec::new();
+    for _ in 0..6 {
+        live.push(
+            chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "entry-")
+                .unwrap(),
+        );
+    }
+    assert!(eligible.iter().all(|p| !p.exists()));
+    assert!(active.path().join("cache 空白/generated").is_file());
+    assert_eq!(
+        fs::read(store.join("producer-records/0/corrupt.json")).unwrap(),
+        b"original damaged registration"
+    );
+}
+
+#[test]
+fn capacity_normal_success_and_failure_recover_only_declared_operation_producers() {
+    for mode in ["noop", "rebuild-error"] {
+        let h = host_mode(mode);
+        let path = h.root.join(".chrono-harness/cleanup.json");
+        let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+        policy["retained_producers"][0]["operations"] = value!(["use.consumer"]);
+        policy["retained_producers"].as_array_mut().unwrap().push(value!({"id":"unrelated",
+            "directory":".chrono-harness/state/unrelated fixtures/","temporary":true,"generated_outputs":["cache 空白/"]}));
+        fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        commit(&h.root);
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        let mut caches = Vec::new();
+        for producer in ["test-allocation", "unrelated"] {
+            let (store, outputs) =
+                chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, producer)
+                    .unwrap();
+            let allocation =
+                chrono_worktree::TemporaryHost::allocate(&store, producer, &outputs, "pending-")
+                    .unwrap();
+            let cache = allocation.path().join("cache 空白");
+            fs::create_dir(&cache).unwrap();
+            fs::write(cache.join("generated"), b"generated").unwrap();
+            caches.push(cache);
+            drop(allocation);
+        }
+        let (code, report, error) = h.auto(
+            "use",
+            &[
+                "--path",
+                h.root.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
+        );
+        assert_eq!(code, if mode == "noop" { 0 } else { 2 }, "{report} {error}");
+        assert!(
+            !caches[0].exists(),
+            "registered producer was not recovered: {report}"
+        );
+        assert!(caches[1].exists(), "unrelated producer was swept");
+        assert_eq!(
+            report["related_producer_recovery"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            report["post_use_cleanup"]["related_producer_recovery"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        if mode == "rebuild-error" {
+            assert_eq!(report["managed_process"]["exit_code"], 23);
+            assert_eq!(report["managed_process"]["stderr"], "original-error");
+            assert_eq!(report["status"], "failed");
+        }
+    }
+}
+
 fn host() -> Host {
     host_mode("noop")
 }
@@ -13,6 +419,10 @@ fn host_mode(mode: &str) -> Host {
         "fixture_bodies":true,
         "generated_outputs":["cache 空白/"]}]);
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    fs::write(h.root.join(".chrono-harness/retention.json"), serde_json::to_vec(&value!({"schema":"chrono-output-retention/v2",
+        "producers":{"fixture-retirement":[".chrono-harness/state/"],"lifecycle-original":[".chrono-harness/state/worktrees/"]},
+        "keep_seconds":0,"metadata_keep_seconds":0,"max_related_outputs":512,"max_summaries":16,
+        "max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000})).unwrap()).unwrap();
     commit(&h.root);
     h
 }
@@ -1113,4 +1523,494 @@ fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams
     let joined = json(&fs::read(capture.join("result.json")).unwrap()).unwrap();
     assert_eq!(joined["exit_code"], 2);
     assert_eq!(joined["joined"], true);
+}
+
+#[test]
+fn capacity_fresh_allocation_cannot_escape_protected_excess() {
+    let h = capacity_host(|_| {});
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut first =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "overflow-")
+            .unwrap();
+    let cache = first.path().join("cache 空白");
+    fs::create_dir(&cache).unwrap();
+    fs::write(cache.join("generated"), b"123456789").unwrap();
+    let diagnostic =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", first.path()).unwrap();
+    diagnostic
+        .acquire("reader", "reads actual overflow original")
+        .unwrap();
+    assert!(first.checkpoint().unwrap_err().contains("capacity unmet"));
+    first.finish().unwrap();
+    let result =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "fresh-");
+    assert!(
+        result.is_err(),
+        "a fresh allocation evaded unresolved excess"
+    );
+    assert!(cache.exists());
+    diagnostic.release("reader", "original consumed").unwrap();
+    let next =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "released-")
+            .unwrap();
+    assert!(!cache.exists());
+    assert!(next.path().exists());
+}
+
+#[test]
+fn capacity_recovery_progresses_beyond_one_snapshot() {
+    let h = capacity_host(|c| {
+        c["max_record_snapshot"] = value!(4);
+    });
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut live = vec![];
+    for _ in 0..9 {
+        live.push(
+            chrono_worktree::TemporaryHost::allocate(
+                &store,
+                "test-allocation",
+                &outputs,
+                "snapshot-",
+            )
+            .expect("total history must not be a snapshot admission ceiling"),
+        );
+    }
+    let mut caches = vec![];
+    for allocation in &live {
+        let cache = allocation.path().join("cache 空白");
+        fs::create_dir(&cache).unwrap();
+        fs::write(cache.join("generated"), b"123").unwrap();
+        caches.push(cache);
+    }
+    drop(live);
+    for _ in 0..20 {
+        let mut next = chrono_worktree::TemporaryHost::allocate(
+            &store,
+            "test-allocation",
+            &outputs,
+            "reentry-",
+        )
+        .unwrap();
+        next.finish().unwrap();
+        if caches.iter().all(|p| !p.exists()) {
+            break;
+        }
+    }
+    assert!(caches.iter().all(|p| !p.exists()));
+}
+
+#[test]
+fn capacity_shared_original_retires_only_after_both_actual_consumers_release() {
+    let h = capacity_host(|_| {});
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let source = h.root.join("actual-copy-input");
+    fs::write(&source, b"shared").unwrap();
+    let mut first =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "first-")
+            .unwrap();
+    let mut second =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "second-")
+            .unwrap();
+    let mut originals = vec![];
+    for host in [&first, &second] {
+        let destination = host.path().join("copied.bin");
+        originals.push(
+            chrono_worktree::TemporaryHost::register_copy(
+                &store,
+                "test-allocation",
+                &source,
+                &destination,
+                None,
+                "actual shared original consumer",
+            )
+            .unwrap(),
+        );
+        fs::copy(&source, &destination).unwrap();
+    }
+    assert_eq!(originals[0], originals[1]);
+    let unique = first.path().join("unique-source.rs");
+    fs::write(&unique, b"unique source").unwrap();
+    let report = first.finish().unwrap();
+    assert!(
+        originals[0].is_file(),
+        "first release destroyed second consumer input: {report}"
+    );
+    assert_eq!(fs::read(&unique).unwrap(), b"unique source");
+    let report = second.finish().unwrap();
+    assert!(
+        !originals[0].exists(),
+        "released shared original was not retired: {report}"
+    );
+    assert_eq!(fs::read(&source).unwrap(), b"shared");
+    assert_eq!(fs::read(&unique).unwrap(), b"unique source");
+}
+
+#[test]
+fn capacity_native_failure_originals_and_metadata_retire_after_diagnostic_release() {
+    let h = capacity_host(|c| c["max_capture_bytes"] = value!(4096));
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut host = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "failed-original-",
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command.arg("capture-once");
+    let output = host.capture_output(&mut command).unwrap();
+    drop(command);
+    assert_eq!(output.status.code(), Some(7));
+    let capture = capture_directory(host.path());
+    let result = json(&fs::read(capture.join("result.json")).unwrap()).unwrap();
+    assert_eq!(result["exit_code"], 7);
+    let diagnostic =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", host.path()).unwrap();
+    diagnostic
+        .acquire("reader", "reads failure original")
+        .unwrap();
+    let record = producer_record_path(&store, host.path());
+    let metadata = store.join(format!(
+        "producer-metadata/{}",
+        sha256(host.path().file_name().unwrap().as_encoded_bytes())
+    ));
+    host.finish().unwrap();
+    assert_eq!(
+        fs::read(capture.join("stdout.bytes")).unwrap(),
+        output.stdout
+    );
+    assert_eq!(
+        fs::read(capture.join("stderr.bytes")).unwrap(),
+        output.stderr
+    );
+    diagnostic
+        .release(
+            "reader",
+            "actual consumer inspected original failed result and streams",
+        )
+        .unwrap();
+    let mut next = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "after-release-",
+    )
+    .unwrap();
+    next.finish().unwrap();
+    assert!(!capture.exists(), "released native originals accumulated");
+    assert!(!metadata.exists(), "released producer receipts accumulated");
+    assert!(
+        !record.exists(),
+        "released allocation registration accumulated"
+    );
+    assert_eq!(
+        result["exit_code"], 7,
+        "retirement changed original outcome"
+    );
+    assert!(
+        !host.path().exists(),
+        "source-free native container skeleton accumulated"
+    );
+}
+
+#[test]
+fn capacity_metadata_refuses_before_publication_and_keeps_original_references() {
+    let h = capacity_host(|c| c["max_metadata_bytes_per_round"] = value!(8192));
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut host =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "metadata-")
+            .unwrap();
+    let artifact =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", host.path()).unwrap();
+    artifact.acquire("actual-reader", "reads original").unwrap();
+    let before = fs::read(producer_record_path(&store, host.path())).unwrap();
+    let metadata = store.join(format!(
+        "producer-metadata/{}",
+        sha256(host.path().file_name().unwrap().as_encoded_bytes())
+    ));
+    let before_count = fs::read_dir(&metadata).unwrap().count();
+    let error = artifact
+        .acquire("oversize-reader", &"x".repeat(8192))
+        .unwrap_err();
+    assert!(error.contains("metadata byte capacity"), "{error}");
+    assert_eq!(
+        fs::read(producer_record_path(&store, host.path())).unwrap(),
+        before
+    );
+    assert_eq!(fs::read_dir(&metadata).unwrap().count(), before_count);
+    artifact
+        .release("actual-reader", "original consumed")
+        .unwrap();
+    host.finish().unwrap();
+    assert!(
+        !metadata.exists(),
+        "ordinary finish did not retire released metadata"
+    );
+}
+
+#[test]
+fn capacity_interrupted_copy_claim_retires_without_inventing_original_bytes() {
+    let h = capacity_host(|_| {});
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut host = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "pending-original-",
+    )
+    .unwrap();
+    let source = h.root.join("actual-copy-source");
+    fs::write(&source, b"pending").unwrap();
+    let digest = sha256(b"pending");
+    let original = store.join(format!("body-inputs/{digest}.bin"));
+    let claims = store.join(format!("body-input-claims/{digest}"));
+    let interrupted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        chrono_worktree::TemporaryHost::register_copy_with_observer(
+            &store,
+            "test-allocation",
+            &source,
+            &host.path().join("copy"),
+            None,
+            "actual pending copy",
+            |stage| {
+                if stage == "copy-original-entered" {
+                    panic!("controlled original publication interruption");
+                }
+            },
+        )
+    }));
+    assert!(interrupted.is_err());
+    assert!(!original.exists());
+    assert_eq!(fs::read_dir(&claims).unwrap().count(), 1);
+    let record = producer_record_path(&store, host.path());
+    let state = json(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(state["object"]["copy_intents"]["copy"], 7);
+    assert!(state["object"]["original_release"].is_null());
+    host.finish().unwrap();
+    assert!(!original.exists(), "recovery invented original bytes");
+    assert!(!claims.exists(), "released pending-copy claims accumulated");
+    assert!(
+        !record.exists(),
+        "released pending registration accumulated"
+    );
+    assert_eq!(fs::read(source).unwrap(), b"pending");
+}
+
+#[test]
+fn capacity_interrupted_native_originals_require_exact_custodian_release() {
+    let h = capacity_host(|c| c["max_capture_bytes"] = value!(4096));
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "interrupted-original-",
+    )
+    .unwrap();
+    let root = allocation.path().to_owned();
+    let artifact =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    fs::write(root.join("unique-source.rs"), b"preserve unique source").unwrap();
+    artifact
+        .acquire("diagnostic", "needs original partial streams")
+        .unwrap();
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command
+        .args([
+            "--exact",
+            "temporary::capture_interruption_helper",
+            "--nocapture",
+        ])
+        .env("CHRONO_CAPTURE_ROOT", &root);
+    allocation.bind_command(&mut command).unwrap();
+    let output = command.output().unwrap();
+    assert!(!output.status.success());
+    drop(command);
+    drop(allocation);
+    let capture = capture_directory(&root);
+    let partial = fs::read(capture.join("stdout.bytes")).unwrap();
+    assert_eq!(partial, b"\xffpartial stdout\0\n");
+    assert!(!capture.join("result.json").exists());
+    let mut next = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "ordinary-reentry-",
+    )
+    .unwrap();
+    next.finish().unwrap();
+    assert_eq!(fs::read(capture.join("stdout.bytes")).unwrap(), partial);
+    let state = producer_state(&store);
+    let object = state["objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == root.file_name().unwrap().to_str().unwrap())
+        .unwrap();
+    let plan = value!({"schema":"chrono-fixture-body-custody/v1","head":git(&h.root,&["rev-parse","HEAD"]),
+        "current_consumers_released":true,"reason":"actual interruption custodian joined the helper and inspected original streams; outcome remains unknown",
+        "objects":[{"producer":"test-allocation","allocation":object["path"],"identity":object["identity"],"intent":object["intent"],"members":[],"release_originals":true}]});
+    let path = ".chrono-harness/state/original-custody.json";
+    fs::write(h.root.join(path), serde_json::to_vec(&plan).unwrap()).unwrap();
+    let migrate = || {
+        h.auto(
+            "migrate",
+            &["--path", h.root.to_str().unwrap(), "--adopt-fixtures", path],
+        )
+    };
+    let (code, report, error) = migrate();
+    assert_eq!(code, 2, "{report} {error}");
+    assert!(capture.is_dir(), "unreleased diagnostic was bypassed");
+    artifact
+        .release("diagnostic", "original partial streams inspected")
+        .unwrap();
+    let (code, report, error) = migrate();
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(
+        !capture.join("result.json").exists(),
+        "migration invented a join"
+    );
+    let mut next = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "released-reentry-",
+    )
+    .unwrap();
+    next.finish().unwrap();
+    assert!(
+        !capture.exists(),
+        "released interrupted originals accumulated"
+    );
+    assert!(root.is_dir(), "retirement removed unclassified source root");
+}
+
+#[test]
+fn capacity_layout_context_and_pending_cursor_migrate_without_resetting_outcomes() {
+    let h = capacity_host(|_| {});
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "old-layout-",
+    )
+    .unwrap();
+    let root = allocation.path().to_owned();
+    let mut command = Command::new(root.join("missing-program"));
+    assert!(allocation.capture_output(&mut command).is_err());
+    drop(command);
+    let original = fs::read(producer_record_path(&store, &root)).unwrap();
+    let mut record = json(&original).unwrap();
+    let mut owner = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    owner.as_object_mut().unwrap().remove("record_layout");
+    let old_owner = serde_json::to_vec(&owner).unwrap();
+    record["owner_sha256"] = value!(sha256(&old_owner));
+    let old_record = serde_json::to_vec(&record).unwrap();
+    let flat = store.join(format!(
+        "producer-records/{}.json",
+        sha256(root.file_name().unwrap().as_encoded_bytes())
+    ));
+    fs::write(&flat, &old_record).unwrap();
+    fs::remove_file(producer_record_path(&store, &root)).unwrap();
+    fs::write(store.join("objects.json"), &old_owner).unwrap();
+    let candidate = git(&h.root, &["rev-parse", "HEAD"]);
+    let error = chrono_worktree::RetainedArtifact::partition_with_observer(
+        &store,
+        "test-allocation",
+        candidate.trim(),
+        |_| Ok(()),
+    )
+    .unwrap_err();
+    assert!(error.contains("active/unknown"), "{error}");
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), old_owner);
+    drop(allocation);
+    let error = chrono_worktree::RetainedArtifact::partition_with_observer(
+        &store,
+        "test-allocation",
+        candidate.trim(),
+        |stage| {
+            assert_eq!(stage, "layout-owner-activated");
+            Err("controlled interruption after layout activation".into())
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("controlled interruption"));
+    assert!(flat.exists());
+    assert!(store.join("producer-layout-pending.json").exists());
+    let context_path = store.join("producer-context.json");
+    let mut context = json(&fs::read(&context_path).unwrap()).unwrap();
+    context["policy_sha256"] = value!("old-preserved-binding");
+    let old_context = serde_json::to_vec(&context).unwrap();
+    fs::write(&context_path, &old_context).unwrap();
+    let cursor_path = store.join("recovery-state/cursor.json");
+    fs::create_dir_all(cursor_path.parent().unwrap()).unwrap();
+    let old_cursor =
+        serde_json::to_vec(&value!([root.file_name().unwrap().to_str().unwrap()])).unwrap();
+    fs::write(&cursor_path, &old_cursor).unwrap();
+    let (code, report, error) = h.auto(
+        "migrate",
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--partition-producer",
+            "test-allocation",
+        ],
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(!flat.exists());
+    assert!(!store.join("producer-layout-pending.json").exists());
+    assert_eq!(
+        fs::read(store.join(format!(
+            "producer-context-source-{}.json",
+            sha256(&old_context)
+        )))
+        .unwrap(),
+        old_context
+    );
+    assert_eq!(
+        fs::read(store.join(format!(
+            "producer-recovery-source-{}.json",
+            sha256(&old_cursor)
+        )))
+        .unwrap(),
+        old_cursor
+    );
+    let migrated = json(&fs::read(producer_record_path(&store, &root)).unwrap()).unwrap();
+    assert_eq!(
+        migrated["object"], record["object"],
+        "migration changed original status or reservations"
+    );
+    let mut next = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "after-migration-",
+    )
+    .unwrap();
+    next.finish().unwrap();
+    let capture = capture_directory(&root);
+    assert!(!capture.join("result.json").exists());
+    assert!(
+        capture.join("intent.json").exists(),
+        "unknown original was discarded"
+    );
 }

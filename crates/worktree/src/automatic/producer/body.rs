@@ -8,7 +8,7 @@ pub(super) struct Body {
     intent: Receipt,
     original: String,
     sha256: String,
-    length: u64,
+    pub(super) length: u64,
     git_root: Option<String>,
     #[serde(default)]
     leases: Vec<CacheLease>,
@@ -86,19 +86,96 @@ fn input(path: &Path) -> Result<(String, u64), String> {
     Ok((digest, m.len()))
 }
 
+fn publish_claim(
+    directory: &Path,
+    allocation: &str,
+    allocation_identity: &str,
+    producer: &str,
+    digest: &str,
+    length: u64,
+) -> Result<(), String> {
+    let claims = no_symlink_parents(directory, &format!("body-input-claims/{digest}"))?;
+    fs::create_dir_all(&claims).map_err(|e| e.to_string())?;
+    let claim_guard = DirectoryGate::acquire(
+        &claims,
+        std::time::Instant::now(),
+        std::time::Duration::from_secs(30),
+        &mut |_| {},
+    )?;
+    let name = format!("body-inputs/{digest}.bin");
+    let claim = value!({"schema":"chrono-fixture-input-claim/v1","producer":producer,
+        "allocation":allocation,"identity":allocation_identity,"sha256":digest,"length":length});
+    claim_guard.stable()?;
+    let claim_path =
+        no_symlink_parents(&claims, &format!("{}.json", sha256(allocation.as_bytes())))?;
+    match fs::read(&claim_path) {
+        Ok(bytes) if json(&bytes)? == claim => (),
+        Ok(_) => return Err("shared copied-input claim differs; preserve original".into()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            write_json(&claim_path, &claim, true)?;
+        }
+        Err(e) => return Err(e.to_string()),
+    }
+    if let Some(context) = Context::for_allocation(&directory.join(allocation))? {
+        if let Some(inventory) =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(&context.root)?
+        {
+            let path = directory.join(&name);
+            let relative = path
+                .strip_prefix(&context.root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("original UTF-8")?;
+            let _read =
+                chrono_harness::retained_artifacts::retention::read_guard(&context.root, relative)?;
+            if inventory.enrolled(relative)? {
+                inventory.reference_paths(
+                    &format!("fixture-input:{}:{digest}", sha256(allocation.as_bytes())),
+                    &[relative.into()],
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn original(
     directory: &Path,
     source: &Path,
+    reserved: Option<u64>,
     observer: &mut impl FnMut(&str),
 ) -> Result<(String, String, u64, String), String> {
     let (digest, length) = input(source)?;
+    if reserved.is_some_and(|bound| length != bound) {
+        return Err(
+            "copied input length changed after capacity reservation; preserve intent".into(),
+        );
+    }
+    let claims = no_symlink_parents(directory, &format!("body-input-claims/{digest}"))?;
+    fs::create_dir_all(&claims).map_err(|e| e.to_string())?;
+    let mut claim_guard = None;
     let name = format!("body-inputs/{digest}.bin");
     let path = no_symlink_parents(directory, &name)?;
     fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     if !path.exists() {
         let temporary =
             tempfile::NamedTempFile::new_in(path.parent().unwrap()).map_err(|e| e.to_string())?;
-        fs::copy(source, temporary.path()).map_err(|e| e.to_string())?;
+        use std::io::Read;
+        let mut reader = fs::File::open(source).map_err(|e| e.to_string())?;
+        let mut writer = temporary.as_file();
+        let copied = std::io::copy(&mut (&mut reader).take(length), &mut writer)
+            .map_err(|e| e.to_string())?;
+        let mut extra = [0];
+        if copied != length || reader.read(&mut extra).map_err(|e| e.to_string())? != 0 {
+            return Err("copied input changed during bounded custody transfer".into());
+        }
+        fs::set_permissions(
+            temporary.path(),
+            fs::metadata(source)
+                .map_err(|e| e.to_string())?
+                .permissions(),
+        )
+        .map_err(|e| e.to_string())?;
         if input(source)? != (digest.clone(), length)
             || input(temporary.path())? != (digest.clone(), length)
         {
@@ -106,6 +183,12 @@ fn original(
         }
         temporary.as_file().sync_all().map_err(|e| e.to_string())?;
         observer("copy-original-publish");
+        claim_guard = Some(DirectoryGate::acquire(
+            &claims,
+            std::time::Instant::now(),
+            std::time::Duration::from_secs(30),
+            &mut |_| {},
+        )?);
         match temporary.persist_noclobber(&path) {
             Ok(_) => (),
             // Another protected copy can publish the same content-addressed
@@ -114,6 +197,16 @@ fn original(
             Err(error) => return Err(error.to_string()),
         }
     }
+    let claim_guard = match claim_guard {
+        Some(guard) => guard,
+        None => DirectoryGate::acquire(
+            &claims,
+            std::time::Instant::now(),
+            std::time::Duration::from_secs(30),
+            &mut |_| {},
+        )?,
+    };
+    claim_guard.stable()?;
     let identity = fingerprint(&path)?;
     if input(&path)? != (digest.clone(), length) || fingerprint(&path)? != identity {
         return Err("retained copied-input original differs; preserve bodies".into());
@@ -122,7 +215,7 @@ fn original(
 }
 
 fn register(
-    store: Store,
+    mut store: Store,
     i: usize,
     member: &str,
     source: &Path,
@@ -139,7 +232,21 @@ fn register(
         return Err("copied body requires real producer provenance".into());
     }
     let object = &store.state.objects[i];
+    if object.original_release.is_some() || object.retiring {
+        return Err("fixture original lifetime released; copy refused".into());
+    }
     store.stable(object)?;
+    let context = Context::for_allocation(&store.directory.join(&object.path))?;
+    let reserved = if let Some(context) = context
+        .as_ref()
+        .filter(|_| !object.bodies.contains_key(member))
+    {
+        let length = fs::metadata(source).map_err(|e| e.to_string())?.len();
+        context.copy_admission(object, member, length)?;
+        Some(length)
+    } else {
+        None
+    };
     if object
         .cache_lease
         .as_ref()
@@ -189,9 +296,28 @@ fn register(
     // Allocation ownership protects the copy, while unrelated allocations and
     // references must remain able to use the shared registry during file IO.
     lease.stable()?;
+    let (shared_digest, shared_length) = input(source)?;
+    Arc::make_mut(&mut store.state.objects[i])
+        .shared_originals
+        .insert(shared_digest.clone(), shared_length);
+    if let Some(length) = reserved {
+        Arc::make_mut(&mut store.state.objects[i])
+            .copy_intents
+            .insert(member.into(), length);
+    }
+    store.save(i)?;
+    publish_claim(
+        &directory,
+        &allocation,
+        &allocation_identity,
+        &producer,
+        &shared_digest,
+        shared_length,
+    )?;
     drop(store);
     observer("copy-original-entered");
-    let (name, digest, length, original_identity) = original(&directory, source, &mut observer)?;
+    let (name, digest, length, original_identity) =
+        original(&directory, source, reserved, &mut observer)?;
     observer("copy-original-prepared");
     lease.stable()?;
     let mut store = Store::open(&directory, &producer, false)?;
@@ -214,6 +340,9 @@ fn register(
         return Err("copy allocation binding changed during original custody transfer".into());
     }
     store.stable(object)?;
+    if let Some(context) = &context {
+        context.copy_admission(object, member, length)?;
+    }
     if require_released && object.consumers.values().any(|c| !c.released) {
         return Err("fixture allocation has an unreleased diagnostic consumer".into());
     }
@@ -255,6 +384,9 @@ fn register(
             nested_consumers,
         },
     );
+    Arc::make_mut(&mut store.state.objects[i])
+        .copy_intents
+        .remove(member);
     lease.stable()?;
     store.save(i)?;
     Ok(store.directory.join(name))
@@ -469,6 +601,8 @@ struct Selection {
     identity: String,
     intent: Receipt,
     members: Vec<Member>,
+    #[serde(default)]
+    release_originals: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -515,7 +649,7 @@ impl Manager {
         for selected in plan.objects {
             let outcome = (|| -> Result<(), String> {
                 if !seen.insert((selected.producer.clone(), selected.allocation.clone()))
-                    || selected.members.is_empty()
+                    || (selected.members.is_empty() && !selected.release_originals)
                 {
                     return Err("duplicate or empty fixture custody selection".into());
                 }
@@ -622,6 +756,25 @@ impl Manager {
                         true,
                         |_| {},
                     )?;
+                }
+                if selected.release_originals {
+                    self.stable(r)?;
+                    lease.stable()?;
+                    let mut store = Store::open(&directory, &selected.producer, false)?;
+                    store.load(&selected.allocation)?;
+                    let object = &store.state.objects[0];
+                    store.stable(object)?;
+                    if object.identity != selected.identity
+                        || value!(object.intent) != value!(selected.intent)
+                        || object.consumers.values().any(|c| !c.released)
+                    {
+                        return Err("original release binding or consumers changed".into());
+                    }
+                    Arc::make_mut(&mut store.state.objects[0]).original_release = Some(format!(
+                        "current custodian released exact originals: {}; custody {}",
+                        plan.reason, custody.path
+                    ));
+                    store.save(0)?;
                 }
                 Ok(())
             })();
@@ -787,7 +940,15 @@ pub(super) fn drain(
             let effect = value!({"schema":"chrono-fixture-body-disposal-intent/v1", "allocation":object.path,
                 "identity":object.identity,"member":member,"member_identity":before_id,"body_intent":body.intent,
                 "footprint_before":footprint, "physical_release_bytes":Value::Null});
-            let intent = Store::receipt_in(directory, "fixture-body-disposal-intent", &effect)?;
+            let intent = Store::receipt_for(
+                directory,
+                object
+                    .metadata_directory
+                    .as_ref()
+                    .map(|_| object.path.as_str()),
+                "fixture-body-disposal-intent",
+                &effect,
+            )?;
             let mut result = value!({"path":member,"intent":intent,"footprint_before":footprint,"status":"failed","original":body.original,"physical_release_bytes":Value::Null});
             let report_root = body
                 .git_root
@@ -853,8 +1014,12 @@ pub(super) fn drain(
                 Ok(()) => result["error"] = value!("removed member absence unverified"),
                 Err(e) => result["error"] = value!(e.to_string()),
             }
-            result["receipt"] = value!(Store::receipt_in(
+            result["receipt"] = value!(Store::receipt_for(
                 directory,
+                object
+                    .metadata_directory
+                    .as_ref()
+                    .map(|_| object.path.as_str()),
                 "fixture-body-disposal-result",
                 &result
             )?);
@@ -910,4 +1075,82 @@ pub(super) fn fingerprint(path: &Path) -> Result<String, String> {
         let _ = m;
         Err("copied-input recovery needs kernel ownership".into())
     }
+}
+
+pub(super) fn release_original(
+    inputs: &PolicyInputs,
+    r: &mut Runner,
+    directory: &Path,
+    object: &Object,
+    digest: &str,
+    length: u64,
+    lease: &Lease,
+) -> Result<(), String> {
+    let claims = no_symlink_parents(directory, &format!("body-input-claims/{digest}"))?;
+    let original = no_symlink_parents(directory, &format!("body-inputs/{digest}.bin"))?;
+    if !claims.exists() {
+        return match fs::symlink_metadata(&original) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+            Ok(_) => Err("shared original claim namespace unknown; preserve bytes".into()),
+        };
+    }
+    let guard = DirectoryGate::acquire(
+        &claims,
+        std::time::Instant::now(),
+        std::time::Duration::from_secs(30),
+        &mut |_| {},
+    )?;
+    let original_present = match fs::symlink_metadata(&original) {
+        Ok(_) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(e.to_string()),
+    };
+    let path = no_symlink_parents(&claims, &format!("{}.json", sha256(object.path.as_bytes())))?;
+    let expected = value!({"schema":"chrono-fixture-input-claim/v1","producer":inputs.policy.retained_producers.iter().find(|p|p.directory(&inputs.policy.coordinator_root).ok().as_deref()==Some(directory)).ok_or("original producer missing")?.id,
+        "allocation":object.path,"identity":object.identity,"sha256":digest,"length":length});
+    if path.exists() {
+        let bytes = fs::read(&path).map_err(|e| e.to_string())?;
+        if json(&bytes)? != expected {
+            return Err("original claim identity differs; preserve original".into());
+        }
+        if original_present && input(&original)? != (digest.into(), length) {
+            return Err("shared original content differs; preserve original".into());
+        }
+        lease.stable()?;
+        guard.stable()?;
+        inputs.stable(r)?;
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(
+        &inputs.policy.coordinator_root,
+    )?
+    .ok_or("shared original retention not adopted")?;
+    inventory.reference(
+        &format!("fixture-input:{}:{digest}", sha256(object.path.as_bytes())),
+        &[],
+    )?;
+    if fs::read_dir(&claims)
+        .map_err(|e| e.to_string())?
+        .next()
+        .is_some()
+    {
+        return Ok(());
+    }
+    let relative = original
+        .strip_prefix(&inputs.policy.coordinator_root)
+        .map_err(|e| e.to_string())?
+        .to_str()
+        .ok_or("shared original UTF-8")?;
+    lease.stable()?;
+    guard.stable()?;
+    inputs.stable(r)?;
+    if original_present && !inventory.enrolled(relative)? {
+        let publication=chrono_harness::retained_artifacts::retention::Inventory::adopted(&inputs.policy.coordinator_root)?.unwrap()
+            .begin("fixture-retirement",relative,value!({"original_consumer_release":object.original_release,"historical_outcome":"unchanged"}))?;
+        publication.complete(value!({"original_consumer_release":object.original_release,"historical_outcome":"unchanged"}))?;
+    }
+    guard.stable()?;
+    fs::remove_dir(&claims).map_err(|e| e.to_string())?;
+    Ok(())
 }

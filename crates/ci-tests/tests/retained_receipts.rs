@@ -40,22 +40,28 @@ fn registry(directory: &Path) -> Value {
     let mut owner: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(owner["schema"], "chrono-retained-producer/v2");
     let mut objects = vec![];
-    for entry in fs::read_dir(directory.join("producer-records")).unwrap() {
-        let record: Value =
-            serde_json::from_slice(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
-        assert_eq!(record["schema"], "chrono-retained-producer-object/v1");
-        assert_eq!(record["owner_sha256"], chrono_harness::sha256(&bytes));
-        objects.push(record["object"].clone());
+    for bucket in 0..16 {
+        let Ok(entries) = fs::read_dir(directory.join(format!("producer-records/{bucket:x}")))
+        else {
+            continue;
+        };
+        for entry in entries {
+            let record: Value =
+                serde_json::from_slice(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
+            assert_eq!(record["schema"], "chrono-retained-producer-object/v1");
+            assert_eq!(record["owner_sha256"], chrono_harness::sha256(&bytes));
+            objects.push(record["object"].clone());
+        }
     }
     objects.sort_by(|a, b| a["path"].as_str().unwrap().cmp(b["path"].as_str().unwrap()));
     owner["objects"] = json!(objects);
     owner
 }
 fn object_record(directory: &Path, allocation: &Path) -> PathBuf {
-    directory.join("producer-records").join(format!(
-        "{}.json",
-        chrono_harness::sha256(allocation.file_name().unwrap().as_encoded_bytes())
-    ))
+    {
+        let digest = chrono_harness::sha256(allocation.file_name().unwrap().as_encoded_bytes());
+        directory.join(format!("producer-records/{}/{}.json", &digest[..1], digest))
+    }
 }
 
 pub(super) struct Owner {
@@ -717,9 +723,29 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
 #[test]
 fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation() {
     let owner = Owner::new();
-    let directory = owner.root.join(".chrono-harness/state/registry-decoding");
+    let policy_path = owner.root.join(".chrono-harness/cleanup.json");
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["retained_producers"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id":"strict-fixture", "directory":".chrono-harness/state/registry-decoding/",
+            "temporary":true, "fixture_bodies":true, "generated_outputs":[]
+        }));
+    fs::write(policy_path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+    git(&owner.root, &["add", "."]);
+    git(
+        &owner.root,
+        &["commit", "-qm", "declare strict temporary fixture owner"],
+    );
+    let (directory, outputs) = chrono_worktree::TemporaryHost::registered_store(
+        &owner.root,
+        ".chrono-harness/worktree.json",
+        "strict-fixture",
+    )
+    .unwrap();
     let allocation =
-        chrono_worktree::TemporaryHost::allocate(&directory, "strict-fixture", &[], "first-")
+        chrono_worktree::TemporaryHost::allocate(&directory, "strict-fixture", &outputs, "first-")
             .unwrap();
     let source = owner.root.join("copied-source");
     fs::write(&source, b"required original input").unwrap();
@@ -812,7 +838,7 @@ fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation
     // an independent allocation publishes only its own registration.
     fs::write(&path, serde_json::to_vec_pretty(record).unwrap()).unwrap();
     let second =
-        chrono_worktree::TemporaryHost::allocate(&directory, "strict-fixture", &[], "second-")
+        chrono_worktree::TemporaryHost::allocate(&directory, "strict-fixture", &outputs, "second-")
             .unwrap();
     let current = registry(&directory);
     assert_eq!(current["objects"].as_array().unwrap().len(), 2);

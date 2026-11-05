@@ -580,6 +580,33 @@ actual ordinary-entry/no-finish reclamation, measured eligible savings and real
 host adoption remain unfinished; this specification carry-forward changes no
 cleanup policy or installed behavior.
 
+The disk-capacity candidate supplies allocation admission/checkpoints, durable
+per-object excess obligations that fresh allocation IDs cannot bypass, prospective
+copy/native-input reservations, finite capture/metadata admission, and bounded
+partitioned ordinary recovery beyond a single snapshot. Explicit fixture finish
+and failed-command post-use recovery use the existing producer owner. Actual
+consumer release retires shared copied originals only after their last claim,
+and native originals plus producer receipts/registrations through the existing
+output-retention owner. Interrupted originals preserve their missing results;
+the exact custodian entry can release them without inventing completion. Explicit
+layout/context/cursor migration retains old bytes and pending addresses. The host
+policy selects finite values, retirement scopes and actual operation edges;
+[the worktree owner](worktree.md#prospective-fixture-custody-and-inventory-observations)
+documents the enforcement and overshoot boundaries. These changes are uncommitted
+candidate behavior, not installed-host evidence. Local registered
+`test.worktree.capacity` passed 32 tests (207 filtered) in 187.07 test seconds /
+194.21 total seconds; `worktree.inventory` accounted for 239 tests across the
+233 core / 6 adoption groups without executing those groups. The registered
+candidate CLI build, four affected formatting checks and both changed consumer
+test-project compile checks passed. Original results and the source/executable
+binding belong to the I2 implementation handoff; these local observations do not
+certify the uncommitted FILEMAP DELTA.
+Exact historical migrations/cleanup, canonical committed checks, compatible
+coordinator/binary adoption and actual ordinary host verification remain required.
+Protected/unknown consumers remain protected and capacity unmet is observable;
+external builders can overshoot between checkpoints by an unknown amount. The
+full §10.1 target remains open.
+
 Portable original-evidence coverage adds the published v2 codec/marker, Git
 observations, full predecessor/report representation, shared original-stream
 accounting at projects and workflow consumers, retained process launch/streams and
