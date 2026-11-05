@@ -17,6 +17,71 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn built_inventory_is_ordered_unique_and_preserves_every_supplied_name() {
+    let input: Vec<&str> = vec!["根", "b", "", "aa", "a", "b", "根", "a"];
+    let names = policy::name_inventory(&input);
+    let valid = policy::valid_names(&names);
+    assert(valid);
+    assert(policy::name_members(names@) == policy::name_members(input@));
+    assert(input@[0].spec_bytes() == "根".spec_bytes());
+    assert(policy::name_members(names@).contains("根".spec_bytes()));
+    assert(input@[1].spec_bytes() == "b".spec_bytes());
+    assert(policy::name_members(names@).contains("b".spec_bytes()));
+    assert(input@[2].spec_bytes() == "".spec_bytes());
+    assert(policy::name_members(names@).contains("".spec_bytes()));
+    let found = policy::name_index(&names, "根");
+    assert(found.is_some());
+    let found = policy::name_index(&names, "b");
+    assert(found.is_some());
+    let found = policy::name_index(&names, "");
+    assert(found.is_some());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_construction_handles_empty_and_repeated_singleton_inputs() {
+    let empty: Vec<&str> = vec![];
+    let names = policy::name_inventory(&empty);
+    assert(names.len() == 0);
+    let repeated: Vec<&str> = vec!["根", "根", "根"];
+    assert(policy::name_members(repeated@) =~= Set::<Seq<u8>>::empty().insert("根".spec_bytes()));
+    let names = policy::name_inventory(&repeated);
+    assert(names.len() == 1);
+    assert(policy::name_members(names@).contains(names@[0].spec_bytes()));
+    assert(names@[0].spec_bytes() == "根".spec_bytes());
+    let found = policy::name_index(&names, "根");
+    assert(found == Some(0usize));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn descending_duplicate_input_has_exact_ascending_slots() {
+    proof {
+        reveal_strlit("a");
+        reveal_strlit("b");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let input: Vec<&str> = vec!["b", "a", "b"];
+    assert(input@[0].spec_bytes() == seq![98u8]);
+    assert(input@[1].spec_bytes() == seq![97u8]);
+    assert(input@[2].spec_bytes() == seq![98u8]);
+    assert(policy::name_members(input@) =~= set![seq![97u8], seq![98u8]]);
+    let names = policy::name_inventory(&input);
+    assert(names.len() == 2);
+    assert(policy::name_members(names@).contains(names@[0].spec_bytes()));
+    assert(policy::name_members(names@).contains(names@[1].spec_bytes()));
+    assert(!policy::byte_lt(seq![98u8], seq![97u8]));
+    assert(!policy::byte_lt(seq![97u8], seq![97u8]));
+    assert(!policy::byte_lt(seq![98u8], seq![98u8]));
+    assert(names@[0].spec_bytes() == seq![97u8]);
+    assert(names@[1].spec_bytes() == seq![98u8]);
+    let found = policy::name_index(&names, "a");
+    assert(found == Some(0usize));
+    let found = policy::name_index(&names, "b");
+    assert(found == Some(1usize));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn byte_order_handles_empty_prefixes_and_the_full_byte_range() {
     let empty: Vec<u8> = vec![];
     let zero: Vec<u8> = vec![0];

@@ -96,18 +96,33 @@ adjacent inventory checks to every ordered pair. `valid_names` accepts exactly
 strictly increasing UTF-8 name inventories, rejecting duplicates and descending
 names. `name_index` proves binary-search bounds and termination: a returned index
 names exactly the supplied bytes, and absence means every inventory name differs.
-The production closure validates its inventory once and uses this lookup for
-every destination and seed, replacing the separate name-to-index BTreeMap. No
-fallback index is introduced. Inventory construction and proof that all supplied
-edge/seed names are present remain adapter obligations. Independent boundary
+The production closure uses this lookup for every destination and seed,
+replacing the separate name-to-index BTreeMap. No fallback index is introduced.
+Independent boundary
 proofs cover empty/singleton inventories, duplicate/descending names, prefixes,
 Unicode, absent names and byte values spanning the complete u8 range.
 
+The same source's `name_inventory` constructs the inventory by recursive merge
+and deduplication. Its contract proves strict byte order, exactly the supplied
+byte-name set, and a length equal to that set's cardinality. Merge admits each
+next value only after all preceding output values and consumes equal names from
+both sides together. Bounds, integer safety and termination are proved. The
+actual closure supplies its collected edge/seed names to this constructor,
+replacing BTreeSet name sorting/deduplication and the subsequent validation scan.
+Extracting those names from typed edges/seeds remains an adapter obligation;
+every name actually supplied to the constructor is preserved. Independent
+examples cover empty and repeated-singleton inputs, descending duplicates with
+exact expected slots, and a mixed prefix/Unicode inventory.
+
 This reuses the registered graph proof roots and the matching vstd string/UTF-8
-interface. It adds no external assumption, dependency or operation. The admission
-scan compares adjacent names once; lookup halves its candidate interval on each
-iteration and compares the supplied byte slices. The extra scan and removal of
-the index map have not been measured as total runtime/build/storage savings.
+interface. It adds no external assumption, dependency or operation. The matching
+vstd has no ready-made string-sort contract, so this source implements the
+standard merge algorithm using its existing proved comparator. For N supplied
+name references, construction uses O(N log N) complete-byte comparisons and O(N)
+reference storage, with O(log N) recursive depth. The flat input and temporary
+merge buffers add storage relative to constructing the previous tree directly.
+Lookup halves its candidate interval on each iteration. Total runtime, build,
+CI and storage costs remain unmeasured; no saving is claimed.
 
 The same source owns indexed graph validation and
 per-root FIFO traversal. `valid_indices` accepts exactly graphs whose destination
@@ -134,10 +149,10 @@ work. This adds ghost specifications and proof bookkeeping, with the same
 executable traversal and no new trusted interface. Additional proof/compiler
 cost remains unmeasured.
 
-The actual `graph::closure` builds a sorted node inventory and adjacency slots
-from its existing ordered typed edges, then calls this source for each seed.
+The actual `graph::closure` calls the proved name-inventory constructor and builds
+adjacency slots from its existing ordered typed edges, then calls the traversal for each seed.
 It uses returned indices to construct the existing reached causes, predecessor
-maps and traversed typed edges. Inventory construction, the remaining adapter,
+maps and traversed typed edges. Extraction of supplied names, the remaining adapter,
 union, seed production, serialization,
 test selection and the correspondence between typed-edge order and indexed
 slots remain unproved;

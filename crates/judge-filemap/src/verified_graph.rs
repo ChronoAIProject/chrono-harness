@@ -85,6 +85,197 @@ pub open spec fn ordered_names(names: Seq<&str>) -> bool {
         ==> byte_lt(#[trigger] names[i].spec_bytes(), #[trigger] names[j].spec_bytes())
 }
 
+/// Identity is the complete byte value, independently of string references.
+pub open spec fn name_members(names: Seq<&str>) -> Set<Seq<u8>> {
+    Set::new(|key: Seq<u8>| exists|i: int| 0 <= i < names.len()
+        && (#[trigger] names[i].spec_bytes()) == key)
+}
+
+proof fn name_members_push(names: Seq<&str>, next: &str)
+    ensures name_members(names.push(next)) == name_members(names).insert(next.spec_bytes()),
+{
+    assert forall|key: Seq<u8>| name_members(names.push(next)).contains(key)
+        == name_members(names).insert(next.spec_bytes()).contains(key) by {
+        if name_members(names.push(next)).contains(key) {
+            let i = choose|i: int| 0 <= i < names.push(next).len()
+                && names.push(next)[i].spec_bytes() == key;
+            if i < names.len() { assert(name_members(names).contains(key)); }
+        }
+        if name_members(names).contains(key) {
+            let i = choose|i: int| 0 <= i < names.len() && names[i].spec_bytes() == key;
+            assert(names.push(next)[i].spec_bytes() == key);
+        }
+        if key == next.spec_bytes() {
+            assert(names.push(next)[names.len() as int].spec_bytes() == key);
+        }
+    }
+}
+
+proof fn name_members_concat(left: Seq<&str>, right: Seq<&str>)
+    ensures name_members(left + right) == name_members(left) + name_members(right),
+{
+    assert forall|key: Seq<u8>| name_members(left + right).contains(key)
+        == (name_members(left) + name_members(right)).contains(key) by {
+        if name_members(left + right).contains(key) {
+            let i = choose|i: int| 0 <= i < (left + right).len()
+                && (left + right)[i].spec_bytes() == key;
+            if i < left.len() { assert(name_members(left).contains(key)); }
+            else {
+                assert(right[i - left.len()].spec_bytes() == key);
+                assert(name_members(right).contains(key));
+            }
+        }
+        if name_members(left).contains(key) {
+            let i = choose|i: int| 0 <= i < left.len() && left[i].spec_bytes() == key;
+            assert((left + right)[i].spec_bytes() == key);
+        }
+        if name_members(right).contains(key) {
+            let i = choose|i: int| 0 <= i < right.len() && right[i].spec_bytes() == key;
+            assert((left + right)[left.len() + i].spec_bytes() == key);
+        }
+    }
+}
+
+proof fn name_members_step(names: Seq<&str>, end: int)
+    requires 0 <= end < names.len(),
+    ensures name_members(names.take(end + 1))
+        == name_members(names.take(end)).insert(names[end].spec_bytes()),
+{
+    assert(names.take(end + 1) =~= names.take(end).push(names[end]));
+    name_members_push(names.take(end), names[end]);
+}
+
+proof fn ordered_name_count(names: Seq<&str>)
+    requires ordered_names(names),
+    ensures name_members(names).finite(), name_members(names).len() == names.len(),
+    decreases names.len(),
+{
+    if names.len() == 0 {
+        assert(name_members(names) =~= Set::<Seq<u8>>::empty());
+    } else {
+        let prefix = names.drop_last();
+        let last = names.last();
+        assert(ordered_names(prefix));
+        ordered_name_count(prefix);
+        assert(!name_members(prefix).contains(last.spec_bytes())) by {
+            if name_members(prefix).contains(last.spec_bytes()) {
+                let i = choose|i: int| 0 <= i < prefix.len()
+                    && prefix[i].spec_bytes() == last.spec_bytes();
+                byte_lt_strict(names[i].spec_bytes(), names[names.len() - 1].spec_bytes());
+            }
+        }
+        name_members_push(prefix, last);
+        assert(names =~= prefix.push(last));
+    }
+}
+
+/// Merge two exact inventories, retaining one representative of equal byte values.
+fn merge_names<'a>(left: &[&'a str], right: &[&'a str]) -> (out: Vec<&'a str>)
+    requires ordered_names(left@), ordered_names(right@),
+        left.len() + right.len() <= usize::MAX,
+    ensures ordered_names(out@),
+        name_members(out@) == name_members(left@) + name_members(right@),
+        out.len() <= left.len() + right.len(),
+{
+    let mut out: Vec<&str> = Vec::new();
+    let mut i: usize = 0;
+    let mut j: usize = 0;
+    while i < left.len() || j < right.len()
+        invariant i <= left.len(), j <= right.len(),
+            left.len() + right.len() <= usize::MAX,
+            ordered_names(left@), ordered_names(right@), ordered_names(out@),
+            out.len() <= i + j,
+            name_members(out@) == name_members(left@.take(i as int)) + name_members(right@.take(j as int)),
+            forall|a: int, b: int| 0 <= a < out.len() && i <= b < left.len()
+                ==> byte_lt(#[trigger] out@[a].spec_bytes(), #[trigger] left@[b].spec_bytes()),
+            forall|a: int, b: int| 0 <= a < out.len() && j <= b < right.len()
+                ==> byte_lt(#[trigger] out@[a].spec_bytes(), #[trigger] right@[b].spec_bytes()),
+        decreases (left.len() - i) + (right.len() - j),
+    {
+        let ghost old_i = i as int;
+        let ghost old_j = j as int;
+        let ghost old_out = out@;
+        let order = if i == left.len() { 1i8 }
+            else if j == right.len() { -1i8 }
+            else { compare_bytes(left[i].as_bytes(), right[j].as_bytes()) };
+        let next: &str;
+        if order <= 0 {
+            next = left[i];
+            i += 1;
+            if order == 0 { j += 1; }
+            proof {
+                assert forall|k: int| j <= k < right.len()
+                    implies byte_lt(next.spec_bytes(), #[trigger] right@[k].spec_bytes()) by {
+                    if order == 0 {
+                        assert(next.spec_bytes() == right@[old_j].spec_bytes());
+                    } else if old_j < k {
+                        byte_lt_transitive(next.spec_bytes(), right@[old_j].spec_bytes(), right@[k].spec_bytes());
+                    }
+                }
+                name_members_step(left@, old_i);
+                if order == 0 { name_members_step(right@, old_j); }
+            }
+        } else {
+            next = right[j];
+            j += 1;
+            proof {
+                assert forall|k: int| i <= k < left.len()
+                    implies byte_lt(next.spec_bytes(), #[trigger] left@[k].spec_bytes()) by {
+                    if old_i < k {
+                        byte_lt_transitive(next.spec_bytes(), left@[old_i].spec_bytes(), left@[k].spec_bytes());
+                    }
+                }
+                name_members_step(right@, old_j);
+            }
+        }
+        proof {
+            assert forall|k: int| 0 <= k < old_out.len()
+                implies byte_lt(#[trigger] old_out[k].spec_bytes(), next.spec_bytes()) by {}
+            assert forall|k: int| i <= k < left.len()
+                implies byte_lt(next.spec_bytes(), #[trigger] left@[k].spec_bytes()) by {}
+            assert forall|k: int| j <= k < right.len()
+                implies byte_lt(next.spec_bytes(), #[trigger] right@[k].spec_bytes()) by {}
+            name_members_push(old_out, next);
+            assert(name_members(left@.take(i as int)) + name_members(right@.take(j as int))
+                =~= name_members(old_out).insert(next.spec_bytes()));
+        }
+        out.push(next);
+    }
+    proof {
+        assert(left@.take(i as int) =~= left@);
+        assert(right@.take(j as int) =~= right@);
+    }
+    out
+}
+
+/// Produce exactly the supplied names using divide-and-conquer merge and deduplication.
+pub fn name_inventory<'a>(names: &[&'a str]) -> (out: Vec<&'a str>)
+    ensures ordered_names(out@), name_members(out@) == name_members(names@),
+        out.len() <= names.len(), name_members(names@).finite(),
+        out.len() == name_members(names@).len(),
+    decreases names.len(),
+{
+    let out = if names.len() <= 1 {
+        let mut out = Vec::new();
+        if names.len() == 1 { out.push(names[0]); }
+        assert(out@ =~= names@);
+        out
+    } else {
+        let mid = names.len() / 2;
+        let (a, b) = names.split_at(mid);
+        let left = name_inventory(a);
+        let right = name_inventory(b);
+        let out = merge_names(&left, &right);
+        proof {
+            assert(names@ =~= a@ + b@);
+            name_members_concat(a@, b@);
+        }
+        out
+    };
+    proof { ordered_name_count(out@); }
+    out
+}
+
 /// Check the supplied inventory, including uniqueness, without trusting its producer.
 pub fn valid_names(names: &[&str]) -> (valid: bool)
     ensures valid == ordered_names(names@),

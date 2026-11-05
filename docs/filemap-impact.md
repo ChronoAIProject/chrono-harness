@@ -28,24 +28,30 @@ The dependency direction is `judge-ci → judge-filemap → judge-mixed → judg
 The closure adapter calls the executable Verus FIFO owner in
 `crates/judge-filemap/src/verified_graph.rs`. It indexes the explicit node names
 and preserves each existing sorted typed-edge adjacency slot. Its Verus byte
-comparator, strict name-inventory validator and exact binary lookup replace the
-separate name-to-index map. The validator checks all adjacent names; proved
-strictness/transitivity establish the complete ordered, unique inventory.
+comparator and exact binary lookup replace the separate name-to-index map.
+The proved merge constructor replaces BTreeSet name sorting/deduplication: its
+output is strictly ordered, has exactly the supplied byte-name set and has length
+equal to that set's cardinality. A separate validator retains exact admission of
+untrusted inventories, using strictness/transitivity across adjacent names.
 Lookup returns only a byte-identical name slot, or proves absence. Empty,
 duplicate/descending, prefix-related, Unicode and missing-name boundaries are
-verified independently. Names and destination indices are each validated once
-before all per-seed searches. The core proves exact reachability, real
+verified independently, including exact construction from descending duplicates.
+Destination indices are validated once before all per-seed searches. The core
+proves exact reachability, real
 predecessor edges, acyclic predecessor distances and minimum hop counts, including
 zero-length root paths. Its complete result also equals the in-source `fifo`
 contract: queue order and first adjacency slots fix every predecessor, and later
 discoveries cannot overwrite one. Independent exact inventories verify parallel
 slots, reordered ties, longer alternatives and cycle returns. The adapter still
-owns name-inventory construction and name presence, edge kinds, cause merging and the mapping from sorted typed edges to
+owns extraction of the supplied edge/seed names, edge kinds, cause merging and
+the mapping from sorted typed edges to
 indexed slots; these and union/test selection remain unmet Verus
 obligations. The independent test project checks the actual adapter's ties,
 parallel typed edges, cycles, Unicode and duplicate seed IDs. Two registered
-proof operations verify the source and independent boundary examples. Dense
-per-seed arrays cost O(V) initialization and memory; traversal visits each reached
+proof operations verify the source and independent boundary examples. Name
+construction uses O(N log N) complete-byte comparisons and O(N) reference
+storage for N supplied names. Dense per-seed arrays cost O(V) initialization and
+memory; traversal visits each reached
 edge once. Total runtime/build/storage costs and sparse-closure regression costs
 remain unmeasured; this is a proof migration, without a performance-gain claim.
 

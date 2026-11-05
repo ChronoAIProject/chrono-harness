@@ -72,14 +72,12 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
     for e in edges {
         adjacency.entry(&e.edge.from).or_default().insert(&e.edge);
     }
-    let nodes: Vec<&str> = edges
+    let supplied_names: Vec<&str> = edges
         .iter()
         .flat_map(|e| [e.edge.from.as_str(), e.edge.to.as_str()])
         .chain(seeds.iter().map(|s| s.node.as_str()))
-        .collect::<BTreeSet<_>>()
-        .into_iter()
         .collect();
-    assert!(crate::verified_graph::valid_names(&nodes));
+    let nodes = crate::verified_graph::name_inventory(&supplied_names);
     let edge_rows: Vec<Vec<&Edge>> = nodes
         .iter()
         .map(|node| adjacency.get(node).into_iter().flatten().copied().collect())
