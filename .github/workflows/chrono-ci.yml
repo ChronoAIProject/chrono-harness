@@ -300,6 +300,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/cache/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-cache-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -463,6 +471,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/ci/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -590,6 +606,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/diagnostics/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-diagnostics-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -717,6 +741,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/distribution/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-distribution-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -780,6 +812,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-host-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/host-bootstrap/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-host-bootstrap-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -979,6 +1019,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/inputs/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-inputs-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -1106,6 +1154,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-instructions-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/instructions/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-instructions-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -1314,6 +1370,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-cargo-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-cargo/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-cargo-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -1450,6 +1514,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-ci/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-ci-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -1604,6 +1676,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-cost-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-cost/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-cost-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -1767,6 +1847,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-filemap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-filemap/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-filemap-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -1930,6 +2018,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-mixed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-mixed/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-mixed-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -2111,6 +2207,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-projects-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-projects/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-projects-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -2247,6 +2351,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-registration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-registration/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-registration-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -2374,6 +2486,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-routes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-routes/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-routes-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -2591,6 +2711,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-workflow-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-workflow/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-workflow-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -2800,6 +2928,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-workflow-short-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-workflow-short/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-workflow-short-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -3009,6 +3145,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-workflow-units-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/judge-workflow-units/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-workflow-units-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -3072,6 +3216,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-release-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/release-build/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-release-build-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -3174,6 +3326,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-release-build-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/release-build-integration/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-release-build-integration-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -3301,6 +3461,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-runner-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/runner/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-runner-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -3364,6 +3532,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-workflow-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/workflow-inventory/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-workflow-inventory-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -3509,6 +3685,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-worktree-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/worktree/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-worktree-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -3646,6 +3830,14 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-worktree-adoption-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/units/worktree-adoption/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed job diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-worktree-adoption-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
