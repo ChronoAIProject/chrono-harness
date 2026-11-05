@@ -8,7 +8,7 @@ use chrono_judge_registration::execution::Method;
 use chrono_judge_routes::{Execution, Receipt};
 use std::io::Read;
 
-fn read(
+pub(super) fn read(
     root: &Path,
     path: &str,
     policy: &Policy,
@@ -44,9 +44,7 @@ fn read(
 }
 
 fn digest(s: &str) -> bool {
-    s.len() == 64
-        && s.bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    verus_policy::sources::valid_sha256_text(s.as_bytes())
 }
 
 fn process(p: &ProcessResult) -> Result<(), String> {
@@ -68,7 +66,9 @@ pub struct UnitOriginals {
     pub report: Value,
     pub request: Request,
     pub producer: ProcessResult,
-    pub retained_report_path: Option<String>,
+    pub retained_report: Option<chrono_harness::prepared::Original>,
+    pub compiler_originals: Vec<chrono_harness::prepared::Original>,
+    pub(super) compiler_bytes: BTreeMap<(String, String), Vec<u8>>,
 }
 
 pub fn unit_originals(
@@ -103,7 +103,7 @@ pub fn unit_originals(
         .transpose()
         .map_err(|e| e.to_string())?
         .unwrap_or_default();
-    let mut retained_report_path = None;
+    let mut retained_report = None;
     let (report, mut remaining) = if chrono_harness::units::reference_publication(config)? {
         let reference: chrono_harness::units::ReportReference =
             serde_json::from_value(published).map_err(|e| e.to_string())?;
@@ -125,10 +125,16 @@ pub fn unit_originals(
         if original["retained_report"] != reference.original.path {
             return Err(format!("original report path mismatch: {}", unit));
         }
-        retained_report_path = Some(path);
+        retained_report = Some(chrono_harness::prepared::Original {
+            path,
+            sha256: reference.original.sha256,
+        });
         (original, limits.report_bytes - raw.len() as u64)
     } else {
-        (published, 0)
+        if bytes.len() as u64 > limits.report_bytes {
+            return Err("unit report exceeds report_bytes".into());
+        }
+        (published, limits.report_bytes - bytes.len() as u64)
     };
     if report["schema"] != report_schema || report.get("transport_failure").is_some() {
         return Err(format!("unit transport failed: {}", unit));
@@ -166,16 +172,50 @@ pub fn unit_originals(
     } else {
         serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?
     };
+    process(&producer)?;
+    let response = json(&producer.stdout_bytes)?;
+    let mut compiler_originals = Vec::new();
+    let mut compiler_bytes = BTreeMap::new();
+    for artifact in super::verus::compiler_artifacts(&response["evidence"])? {
+        let raw = read(&artifact.original, remaining)?;
+        if !verus_policy::sources::admit_artifact(
+            sha256(&raw).as_bytes(),
+            artifact.original.sha256.as_bytes(),
+            raw.len() as u64,
+            artifact.byte_length,
+            remaining,
+        ) {
+            return Err(format!(
+                "E_VERUS_ARTIFACT: compiler original digest/length/budget mismatch: {}",
+                artifact.original.path
+            ));
+        }
+        remaining -= raw.len() as u64;
+        compiler_bytes.insert(
+            (
+                artifact.original.path.clone(),
+                artifact.original.sha256.clone(),
+            ),
+            raw,
+        );
+        compiler_originals.push(chrono_harness::prepared::Original {
+            path: chrono_harness::prepared::original_path(&artifact.original, transport)?,
+            sha256: artifact.original.sha256,
+        });
+    }
     Ok(UnitOriginals {
         report,
         request: original,
         producer,
-        retained_report_path,
+        retained_report,
+        compiler_originals,
+        compiler_bytes,
     })
 }
 
 pub(super) fn collect(
     req: &Request,
+    reader: &Reader,
     manifest: &str,
     config: &CheckConfig,
     snapshot: &Snapshot,
@@ -183,7 +223,7 @@ pub(super) fn collect(
     methods: &BTreeMap<String, Vec<Method>>,
     declarations: &Value,
     environment_policy: &Value,
-) -> Result<Response, String> {
+) -> Result<(Response, Vec<verus::CollectedAdmission>), String> {
     let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(&req.host_root)?;
     let p = &snapshot.policy;
     let units = p
@@ -235,6 +275,8 @@ pub(super) fn collect(
     }];
     let mut verified = vec![];
     let mut retained_originals = Vec::new();
+    let mut collected_executions = Vec::new();
+    let mut compiler_admissions = Vec::new();
     let retained_streams = chrono_harness::units::stream_publication(config);
     for input in &inputs.reports {
         let bytes = read(
@@ -271,7 +313,15 @@ pub(super) fn collect(
                 )
             },
         )?;
-        retained_originals.extend(originals.retained_report_path);
+        let report_reference = originals.retained_report.clone().unwrap_or_else(|| {
+            chrono_harness::prepared::Original {
+                path: input.path.clone(),
+                sha256: input.sha256.clone(),
+            }
+        });
+        retained_originals.extend(originals.retained_report.map(|o| o.path));
+        retained_originals.extend(originals.compiler_originals.into_iter().map(|o| o.path));
+        let compiler_bytes = originals.compiler_bytes;
         let report = originals.report;
         let original = originals.request;
         let producer = originals.producer;
@@ -290,7 +340,6 @@ pub(super) fn collect(
                 return Err("original preparation differs from collected unit".into());
             }
         }
-        process(&producer)?;
         let decoded = json(&producer.stdout_bytes)?;
         let response_value = if retained_streams {
             decoded.clone()
@@ -489,21 +538,33 @@ pub(super) fn collect(
                 return Err("unit operation original evidence failed or disagrees".into());
             }
         }
-        let expected_results: BTreeSet<_> = std::iter::once("ci.inventory".to_owned())
-            .chain(expected_ops)
-            .chain(not_required.iter().cloned())
-            .collect();
+        compiler_admissions.extend(verus::readmit_collected(
+            req,
+            reader,
+            snapshot,
+            e,
+            &compiler_bytes,
+            input.artifacts.as_ref(),
+        )?);
+        let actual_results = response.results.iter().map(|r| r.id.as_str()).collect();
+        let operation_ids = expected_ops.iter().map(String::as_str).collect();
+        let not_required_ids = not_required.iter().map(String::as_str).collect();
         // Successful replacement markers are not emitted by the scoped producer.
         if !response
             .results
             .iter()
             .any(|r| r.id == "ci.inventory" && r.status == Status::Passed && r.exit_code.is_none())
-            || response
-                .results
-                .iter()
-                .map(|r| r.id.clone())
-                .collect::<BTreeSet<_>>()
-                != expected_results
+            || !verus_policy::matches_result_ids(
+                &actual_results,
+                &operation_ids,
+                &not_required_ids,
+                p.verus.is_some(),
+                response
+                    .results
+                    .iter()
+                    .find(|r| r.id == "ci.verus-coverage")
+                    .map(|r| (r.status == Status::Passed, r.exit_code)),
+            )
             || response
                 .results
                 .iter()
@@ -511,6 +572,17 @@ pub(super) fn collect(
         {
             return Err("unit result coverage differs from plan".into());
         }
+        let rows: Vec<_> = executed
+            .iter()
+            .enumerate()
+            .map(|(index, row)| {
+                object!({"operation":row["operation"],"receipt_digest":row["receipt"]["digest"],
+                "response_pointer":format!("/evidence/executed/{index}")})
+            })
+            .collect();
+        collected_executions.push(object!({"unit":input.unit,
+            "report":report_reference,
+            "response_source":"original judge stdout","rows":rows}));
         verified.push(object!({"unit":input.unit,"path":input.path,"sha256":input.sha256,"runner_sha256":input.runner_sha256,"judge_sha256":input.judge_sha256,"plan":plan.identity,"status":"verified"}));
         results.push(CheckResult {
             id: format!("ci.unit.{}", input.unit),
@@ -521,20 +593,24 @@ pub(super) fn collect(
         });
     }
     let failed = results.iter().any(|r| r.status == Status::Failed);
-    Ok(Response {
-        protocol: units::scope_protocol(req).into(),
-        request_id: req.request_id.clone(),
-        status: if failed {
-            Status::Failed
-        } else {
-            Status::Passed
-        },
-        results,
-        evidence: object!({"scope":config.schema,"execution_scope":req.scope,"base":req.base,"candidate":req.candidate,
+    Ok((
+        Response {
+            protocol: units::scope_protocol(req).into(),
+            request_id: req.request_id.clone(),
+            status: if failed {
+                Status::Failed
+            } else {
+                Status::Passed
+            },
+            results,
+            evidence: object!({"scope":config.schema,"execution_scope":req.scope,"base":req.base,"candidate":req.candidate,
             "global_selected":selected,"required_units":required,"manifest_sha256":sha256(&manifest_bytes),"reports":verified,
             "collection_limits":limits,"retained_originals":retained_originals,
+            "collected_executions":collected_executions,
             "executed":[],"acceptance":"global collection; no business operations executed",
             "input_closure":"incomplete: report identity pins are caller supplied; build provenance and external input closure are not certified",
             "parity":"unestablished"}),
-    })
+        },
+        compiler_admissions,
+    ))
 }

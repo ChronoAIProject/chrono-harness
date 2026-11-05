@@ -1,0 +1,13 @@
+{
+  "schema": "chrono-verus/v1",
+  "tool": "verus",
+  "external_interfaces": {
+    "operating-system": "Filesystem and stream bytes, clocks, environment, process and kernel resource observations are supplied by the registered OS interfaces. Every repository decision using them must be verified.",
+    "git": "The registered Git executable implements its documented object and command interfaces. Snapshot eligibility, identity comparisons, branch policy and lifecycle decisions remain repository proof obligations.",
+    "cargo-rustc-verus-z3": "The pinned Cargo/Rust compiler and Verus/Z3 toolchain implement their documented translation, erasure and verification interfaces. All repository build selection and proof-result decisions remain proof obligations.",
+    "library-interfaces": "Pinned third-party library interfaces are external assumptions only where explicitly used. Repository parsing policy, state transitions and error handling remain proof obligations; this list grants no external_body exception to repository functions.",
+    "verus-vstd-and-macros": "The matching pinned Verus standard-library interface specifications and macro erasure implement the documented Rust primitive/container semantics. This trusts external library contracts; it does not exempt repository callers or their invariants."
+  },
+  "version": "0.2026.04.24.f8e1704",
+  "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+}

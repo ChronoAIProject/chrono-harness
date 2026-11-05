@@ -13,6 +13,7 @@ chrono-harness = { path = "../runner", features = ["retention-test"] }
 
 [dev-dependencies]
 tempfile = "3"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 
 [[test]]
 name = "cli_contract"

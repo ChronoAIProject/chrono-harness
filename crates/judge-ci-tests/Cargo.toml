@@ -13,6 +13,7 @@ serde_json = "1"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 
 [dev-dependencies]
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 tempfile = "3"
 
 [[test]]
@@ -25,5 +26,11 @@ opt-level = 3
 [[bin]]
 name = "chrono-test-ci-diagnostics"
 path = "tests/support/diagnostics_child.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-verus-interface"
+path = "tests/support/verus_interface.rs"
 test = false
 bench = false

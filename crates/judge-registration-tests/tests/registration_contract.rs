@@ -12,6 +12,32 @@ mod consumption;
 mod support;
 
 #[test]
+fn verus_file_roles_reject_ambiguous_or_invalid_proof_registration() {
+    use chrono_judge_registration::Registrations;
+    let values = support::values();
+    for declaration in [
+        json!({"kind":"data","roots":[]}),
+        json!({"kind":"program","roots":[]}),
+        json!({"kind":"specification","roots":["proof.rs"]}),
+    ] {
+        let mut candidate = values.clone();
+        candidate.get_mut(support::FM).unwrap()["files"][0]["verification"] = declaration;
+        Registrations::load(&candidate, support::CONFIG).unwrap();
+    }
+    for declaration in [
+        json!({"kind":"unknown","roots":[]}),
+        json!({"kind":"data","roots":["proof.rs"]}),
+        json!({"kind":"program","roots":["../proof.rs"]}),
+        json!({"kind":"program","roots":["proof.rs","proof.rs"]}),
+        json!({"kind":"program","roots":[],"passed":true}),
+    ] {
+        let mut candidate = values.clone();
+        candidate.get_mut(support::FM).unwrap()["files"][0]["verification"] = declaration;
+        assert!(Registrations::load(&candidate, support::CONFIG).is_err());
+    }
+}
+
+#[test]
 fn schema_evolution_registers_conversion_tools_only_for_actual_data_conversion() {
     use chrono_judge_registration::Registrations;
     let mut values = support::values();

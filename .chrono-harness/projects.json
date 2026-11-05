@@ -148,6 +148,35 @@
             "--manifest-path",
             "crates/runner/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.runner",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/runner/Cargo.toml"
+          ]
+        },
+        "verify_identifiers": {
+          "operation": "verify.runner-identifiers",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-identifiers.rlib,dep-info=.chrono-harness/state/verify.runner-identifiers.rlib.d",
+            "crates/runner/src/verified_identifiers.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-identifiers.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -287,6 +316,35 @@
             "crates/runner-tests/Cargo.toml",
             "--test",
             "retention"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml"
+          ]
+        },
+        "verify_identifiers": {
+          "operation": "verify.runner-identifiers-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-identifiers-tests.rlib,dep-info=.chrono-harness/state/verify.runner-identifiers-tests.rlib.d",
+            "crates/runner-tests/tests/verified_identifiers.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-identifiers-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },
@@ -584,6 +642,35 @@
             "--manifest-path",
             "crates/judge-ci/Cargo.toml"
           ]
+        },
+        "verify_policy": {
+          "operation": "verify.judge-ci-policy",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.judge-ci-policy.rlib,dep-info=.chrono-harness/state/verify.judge-ci-policy.rlib.d",
+            "crates/judge-ci/src/verus_policy.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-ci-policy.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-ci/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -711,6 +798,35 @@
             "--test",
             "behavior",
             "retirement"
+          ]
+        },
+        "verify_policy_tests": {
+          "operation": "verify.judge-ci-policy-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.judge-ci-policy-tests.rlib,dep-info=.chrono-harness/state/verify.judge-ci-policy-tests.rlib.d",
+            "crates/judge-ci-tests/tests/verus_policy.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-ci-policy-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml"
           ]
         }
       },
@@ -846,6 +962,17 @@
             "--config",
             ".chrono-harness/ci/release.json"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.ci",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/ci/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -948,6 +1075,17 @@
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1035,6 +1173,17 @@
           "tool": "cargo",
           "argv": [
             "fmt",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-registration/Cargo.toml"
           ]
@@ -1140,6 +1289,17 @@
             "--manifest-path",
             "crates/judge-registration-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1218,6 +1378,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-filemap/Cargo.toml"
           ]
@@ -1335,6 +1506,17 @@
             "--manifest-path",
             "crates/judge-filemap-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1413,6 +1595,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-routes/Cargo.toml"
           ]
@@ -1509,6 +1702,17 @@
             "--manifest-path",
             "crates/judge-routes-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1596,6 +1800,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-projects/Cargo.toml"
           ]
@@ -1713,6 +1928,17 @@
             "--manifest-path",
             "crates/judge-projects-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1790,6 +2016,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-cost/Cargo.toml"
           ]
@@ -1886,6 +2123,17 @@
             "--manifest-path",
             "crates/judge-cost-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-cost",
@@ -1964,6 +2212,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-mixed/Cargo.toml"
           ]
@@ -2060,6 +2319,17 @@
             "--manifest-path",
             "crates/judge-mixed-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-mixed",
@@ -2147,6 +2417,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-workflow/Cargo.toml"
           ]
@@ -2355,6 +2636,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-workflow-tests/Cargo.toml"
           ]
@@ -2572,6 +2864,17 @@
             "--output",
             ".chrono-harness/state/diagnostics-native/observation.json"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.inputs",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
         }
       },
       "test_project": "inputs-tests",
@@ -2686,6 +2989,17 @@
             "--manifest-path",
             "crates/inputs-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "inputs",
@@ -2764,6 +3078,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.distribution",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/distribution/Cargo.toml"
           ]
@@ -2860,6 +3185,17 @@
             "--manifest-path",
             "crates/distribution-tests/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "distribution",
@@ -2938,6 +3274,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-cargo/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-cargo",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/judge-cargo/Cargo.toml"
           ]
@@ -3089,6 +3436,17 @@
             "isolated_guard_within_joinable_observation_window",
             "--nocapture"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-cargo",
@@ -3176,6 +3534,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.worktree",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/worktree/Cargo.toml"
           ]
@@ -3348,6 +3717,17 @@
             "crates/worktree-tests/Cargo.toml",
             "--package",
             "chrono-worktree-tests"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
           ]
         }
       },
@@ -3671,6 +4051,17 @@
             "--manifest-path",
             "crates/cache/Cargo.toml"
           ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.cache",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
         }
       },
       "test_project": "cache-tests",
@@ -3761,6 +4152,17 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        },
+        "inputs_resolve": {
+          "operation": "inputs.resolve.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--workspace",
+            "--offline",
             "--manifest-path",
             "crates/cache-tests/Cargo.toml"
           ]

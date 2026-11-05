@@ -1,5 +1,7 @@
 # chrono-harness
 
+All repository SPECs and program logic are required to use Verus; full migration remains incomplete. See [the Verus contract](docs/verus.md) and [coverage](docs/spec-coverage.md).
+
 用 Rust 构建的、以显式登记和 DELTA 判官为核心的 harness，附独立的宿主指令生成器。
 
 **已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed、workflow 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**

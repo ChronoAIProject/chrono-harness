@@ -53,7 +53,7 @@
     "tool": "python3",
     "script": ".chrono-harness/ci/bootstrap.py"
   },
-  "rust_incremental": true,
+  "rust_incremental": false,
   "require_tool_bindings": true,
   "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
   "owner_upgrade": ".chrono-harness/ci/bootstrap-owner-upgrade.json",
