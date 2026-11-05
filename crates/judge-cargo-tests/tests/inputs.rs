@@ -512,6 +512,72 @@ fn guarded_registry_and_transitive_inputs_execute_real_cargo_test() {
 }
 
 #[test]
+fn runtime_producers_do_not_pull_their_build_inputs_into_a_cargo_consumer() {
+    for relationship in ["runtime-input", "build-input", "compile"] {
+        let mut f = Fixture::new();
+        let projects = f.values.get_mut(PROJECTS).unwrap();
+        for (id, kind, pair) in [
+            ("producer", "production", "producer-tests"),
+            ("producer-tests", "test", "producer"),
+        ] {
+            projects["owners"].as_array_mut().unwrap().push(id.into());
+            let mut row = json!({
+                "id":id,"kind":kind,
+                "actions":{"inspect":{"operation":format!("inspect.{id}"),
+                    "tool":"cargo","argv":["--version"]}}
+            });
+            row[if kind == "production" {
+                "test_project"
+            } else {
+                "tests_for"
+            }] = pair.into();
+            projects["projects"].as_array_mut().unwrap().push(row);
+        }
+        let path = ".chrono-harness/state/producer-build-input";
+        write(&f.root(), path, "changed");
+        f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({
+                "id":"producer-build","location":path,"sha256":sha256(b"expected")
+            }));
+        let filemap = f.values.get_mut(FM).unwrap();
+        filemap["test_costs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"test":"producer-tests","cost":"unknown"}));
+        let edges = filemap["project_edges"].as_array_mut().unwrap();
+        edges.push(edge(
+            "input:producer-build",
+            "runtime-input",
+            "project:producer",
+        ));
+        edges.push(edge("project:producer", relationship, "project:t"));
+        f.save();
+        let (code, report, stderr) = f.call();
+        if relationship == "compile" {
+            assert_ne!(code, 0, "{report} {stderr}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("input identity changed"),
+                "{report} {stderr}"
+            );
+            assert!(report["metadata"].is_null() && report["operation"].is_null());
+        } else {
+            assert_eq!(code, 0, "{relationship}: {report} {stderr}");
+            assert_eq!(report["metadata"]["exit_code"], 0);
+            assert_eq!(report["operation"]["exit_code"], 0);
+            assert_eq!(
+                fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+                b"ran"
+            );
+        }
+    }
+}
+
+#[test]
 fn registered_named_suites_filters_and_libtest_tails_preserve_real_listings_and_assertions() {
     let mut f = Fixture::new();
     write(
