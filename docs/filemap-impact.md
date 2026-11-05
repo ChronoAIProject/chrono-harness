@@ -50,6 +50,23 @@ Verus examples; runtime JSON tests cover owned/text and wrong-type inputs.
 Further Verus cases check full-field precedence, empty/prefix/NUL/Unicode names,
 cloning and exact empty/deduplicated row slots. Runtime cases compare all 196
 pairs of an independent 14-edge inventory and check full Edge JSON transport.
+The same Verus root owns the actual Origin/UnionEdge types and the production
+two-endpoint typed union. It extracts each existing endpoint BTreeSet through
+the supported ordered iterator contract, then uses a two-cursor merge. Output
+keys use complete from bytes, kind rank and complete to bytes. The proof fixes
+strict output order, exact endpoint key union, no duplicates, distinct-key
+cardinality and exact base-only/candidate-only/both origins, including empty
+endpoints and independently constructed equal bytes. Both clones preserve fields.
+Independent Verus examples require exact slots and all three origins; a wrong
+base-only label for a shared key fails the head-selection postcondition. Runtime
+cases check a separate full-field inventory and flattened JSON transport/errors.
+The JSON/debug adapters remain unproved. The pinned vstd has no contract for the
+previous union iterator, so this reuses supported iterators and the proved Edge
+comparator, adding no assumption, dependency or operation. For B and C endpoint
+members, the merge makes O(B + C) complete-key comparisons and retains O(B + C)
+temporary references. The temporary inventories
+add storage compared with streaming union; per-output endpoint searches are
+removed. Total measured cost remains unknown, without a savings claim.
 The proved merge constructor replaces BTreeSet name sorting/deduplication: its
 output is strictly ordered, has exactly the supplied byte-name set and has length
 equal to that set's cardinality. A separate validator retains exact admission of
@@ -75,7 +92,7 @@ discoveries cannot overwrite one. Independent exact inventories verify parallel
 slots, reordered ties, longer alternatives and cycle returns. The adapter still
 owns extraction of the supplied edge/seed names, source-name grouping and
 construction of typed rows in node order, plus cause merging;
-these and union/test selection remain unmet Verus
+these and test selection remain unmet Verus
 obligations. The independent test project checks the actual adapter's ties,
 parallel typed edges, cycles, Unicode and duplicate seed IDs. Two registered
 proof operations verify the source and independent boundary examples. Name

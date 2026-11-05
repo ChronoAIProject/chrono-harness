@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use crate::verified_graph::{Edge, EdgeKind};
+pub use crate::verified_graph::{Edge, EdgeKind, Origin, UnionEdge, union};
 
 impl std::fmt::Debug for EdgeKind {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -63,18 +63,57 @@ impl<'de> Deserialize<'de> for Edge {
         EdgeFields::deserialize(deserializer)
     }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Origin {
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Origin", rename_all = "lowercase")]
+enum OriginFields {
     Base,
     Candidate,
     Both,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UnionEdge {
+impl Serialize for Origin {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        OriginFields::serialize(self, serializer)
+    }
+}
+impl<'de> Deserialize<'de> for Origin {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        OriginFields::deserialize(deserializer)
+    }
+}
+impl std::fmt::Debug for Origin {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Base => "Base",
+            Self::Candidate => "Candidate",
+            Self::Both => "Both",
+        })
+    }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "UnionEdge", rename = "UnionEdge")]
+struct UnionEdgeFields {
     #[serde(flatten)]
-    pub edge: Edge,
-    pub origin: Origin,
+    edge: Edge,
+    origin: Origin,
+}
+impl Serialize for UnionEdge {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        UnionEdgeFields::serialize(self, serializer)
+    }
+}
+impl<'de> Deserialize<'de> for UnionEdge {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        UnionEdgeFields::deserialize(deserializer)
+    }
+}
+impl std::fmt::Debug for UnionEdge {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("UnionEdge")
+            .field("edge", &self.edge)
+            .field("origin", &self.origin)
+            .finish()
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Seed {
@@ -95,18 +134,6 @@ pub struct Closure {
     pub predecessors: BTreeMap<String, BTreeMap<String, Option<Edge>>>,
     /// All traversed edges and contributing seeds, including alternate paths and cycle edges.
     pub traversed: Vec<TraversedEdge>,
-}
-pub fn union(base: &BTreeSet<Edge>, candidate: &BTreeSet<Edge>) -> Vec<UnionEdge> {
-    base.union(candidate)
-        .map(|edge| UnionEdge {
-            edge: edge.clone(),
-            origin: match (base.contains(edge), candidate.contains(edge)) {
-                (true, true) => Origin::Both,
-                (true, false) => Origin::Base,
-                _ => Origin::Candidate,
-            },
-        })
-        .collect()
 }
 pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
     let mut out = Closure {

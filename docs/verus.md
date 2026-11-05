@@ -101,7 +101,7 @@ five complete byte names, returning that variant. No case folding, trimming,
 prefix acceptance or alias is present. Serde adapters in `graph.rs` delegate
 JSON string serialization/parsing to these functions and reject nonstrings.
 Those adapters and diagnostic formatting remain unproved in their empty-root
-owner; complete projection from typed rows to indexed slots remains outstanding.
+owner; source grouping and construction of rows in node order remain outstanding.
 Independent Verus examples check all 25 kind pairs, exact names and roundtrips,
 and noncanonical boundaries. Runtime tests additionally exercise both owned
 JSON values and text, escaped strings and wrong JSON types. An always-Equal
@@ -131,7 +131,35 @@ Runtime consumer cases require all 196 pairs of a separately declared 14-edge
 inventory and exercise JSON field transport/errors. JSON/diagnostic adapter
 implementations remain outside the proof root with their obligation retained.
 Grouping typed rows by source name, name/seed extraction and the remaining
-closure/union/selection logic still require proof.
+closure/selection logic still require proof.
+
+The same root now owns the actual `Origin` and `UnionEdge` types and the production
+two-endpoint typed `union`. Origin equality preserves variant identity, and both
+types' explicit clones preserve their fields. Each endpoint's existing BTreeSet
+is extracted through the supported ordered iterator contract. The standard
+two-cursor merge proves strict complete from/kind/to order, exact union of both
+byte-key sets, no duplicate keys and length equal to the distinct-key cardinality.
+Each output's origin is exactly base-only, candidate-only or present at both
+endpoints. Array bounds and termination are proved. No repository function or
+new interface is trusted.
+
+Independent Verus examples specify empty and one-sided inputs, repeated insertion,
+equal bytes from independent edge constructions, Unicode/NUL names, cloning and
+the exact sorted slots of all three origins. A mutation that labels a shared key
+as base-only is rejected by the head-selection postcondition; the correct source
+is restored by digest before validation. Runtime consumer cases independently
+specify a mixed full-field inventory, exact origins, flattened JSON roundtrips,
+invalid origin/field rejection and debug formatting. Those JSON/debug adapters
+remain unproved in `graph.rs`; its whole-file gap remains.
+
+The pinned vstd does not specify the previous BTreeSet union iterator. This
+implementation reuses its supported endpoint iterators and the already proved
+Edge comparator, without another dependency or proof operation. For B and C
+endpoint members, it traverses O(B + C) references and uses O(B + C) temporary
+reference storage before cloning the unique output. Compared with the previous
+streaming union this adds those temporary inventories and removes per-output
+endpoint membership searches. Total runtime/build/CI/storage cost is unmeasured;
+no saving is claimed. All other migration gaps remain enforced.
 
 The same source also owns exact name lookup. Its byte
 comparator proves lexicographic order over complete slices, including empty and
@@ -237,7 +265,7 @@ with name rows projected from its existing ordered typed edges, then calls the
 traversal for each seed.
 It uses returned indices to construct the existing reached causes, predecessor
 maps and traversed typed edges. Extraction of supplied names/rows, the remaining
-adapter, union, seed production, serialization,
+adapter, seed production, serialization,
 test selection and the correspondence between typed-edge order and indexed
 slots remain unproved;
 the adapter's empty-root obligation is retained. Independent Verus examples cover

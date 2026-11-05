@@ -205,7 +205,54 @@ pub struct Edge {
     pub to: String,
 }
 
+#[derive(Copy)]
+pub enum Origin {
+    Base,
+    Candidate,
+    Both,
+}
+
+impl Clone for Origin {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    { *self }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for Origin {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { *self == *other }
+}
+
+impl PartialEq for Origin {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == (*self == *other),
+    {
+        match (self, other) {
+            (Self::Base, Self::Base) | (Self::Candidate, Self::Candidate)
+                | (Self::Both, Self::Both) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Origin {}
+
+pub struct UnionEdge {
+    pub edge: Edge,
+    pub origin: Origin,
+}
+
+impl Clone for UnionEdge {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    { Self { edge: self.edge.clone(), origin: self.origin } }
+}
+
 impl Edge {
+    pub open spec fn key(&self) -> (Seq<u8>, u8, Seq<u8>) {
+        (self.from_bytes(), self.kind.rank_spec(), self.to_bytes())
+    }
     pub open spec fn from_bytes(&self) -> Seq<u8> {
         vstd::utf8::encode_utf8(self.from@)
     }
@@ -508,6 +555,370 @@ pub fn edge_inventory<'a>(edges: &BTreeSet<&'a Edge>) -> (out: Vec<&'a Edge>)
             Some(edge) => { out.push(*edge); },
         }
     }
+}
+
+#[cfg(verus_keep_ghost)]
+pub type EdgeKey = (Seq<u8>, u8, Seq<u8>);
+
+pub open spec fn reference_edge_keys(edges: Seq<&Edge>) -> Seq<EdgeKey> {
+    edges.map_values(|edge: &Edge| edge.key())
+}
+
+pub open spec fn union_edge_keys(edges: Seq<UnionEdge>) -> Seq<EdgeKey> {
+    edges.map_values(|edge: UnionEdge| edge.edge.key())
+}
+
+#[verifier::opaque]
+pub open spec fn ordered_edges(edges: Seq<&Edge>) -> bool {
+    forall|i: int, j: int| 0 <= i < j < edges.len()
+        ==> (#[trigger] edges[i]).order_spec(#[trigger] edges[j]) == Ordering::Less
+}
+
+#[verifier::opaque]
+pub open spec fn ordered_union(edges: Seq<UnionEdge>) -> bool {
+    forall|i: int, j: int| 0 <= i < j < edges.len()
+        ==> (#[trigger] edges[i]).edge.order_spec(&(#[trigger] edges[j]).edge) == Ordering::Less
+}
+
+pub open spec fn exact_origin(origin: Origin, in_base: bool, in_candidate: bool) -> bool {
+    match origin {
+        Origin::Base => in_base && !in_candidate,
+        Origin::Candidate => !in_base && in_candidate,
+        Origin::Both => in_base && in_candidate,
+    }
+}
+
+fn owned_edge_inventory<'a>(edges: &'a BTreeSet<Edge>) -> (out: Vec<&'a Edge>)
+    ensures out.len() == edges@.len(), ordered_edges(out@),
+        reference_edge_keys(out@).to_set() == edges@.map(|edge: Edge| edge.key()),
+{
+    proof { edge_obeys_cmp(); reveal(ordered_edges); }
+    let mut iter = edges.iter();
+    let ghost contents = iter@.1;
+    proof {
+        use vstd::std_specs::cmp::OrdSpec;
+        broadcast use vstd::std_specs::btree::axiom_increasing_seq_meaning;
+        assert forall|i: int, j: int| 0 <= i < j < contents.len()
+            implies #[trigger] contents[i].order_spec(&contents[j]) == Ordering::Less by {
+            assert(contents[i].cmp_spec(&contents[j]) == Ordering::Less);
+        }
+        contents.unique_seq_to_set();
+    }
+    let mut out: Vec<&Edge> = Vec::with_capacity(edges.len());
+    loop
+        invariant iter@.1 == contents, 0 <= iter@.0 <= contents.len(),
+            out.len() == iter@.0,
+            forall|i: int| 0 <= i < out.len() ==> *(#[trigger] out@[i]) == contents[i],
+            contents.to_set() == edges@, contents.len() == edges@.len(),
+            forall|i: int, j: int| 0 <= i < j < contents.len()
+                ==> #[trigger] contents[i].order_spec(&contents[j]) == Ordering::Less,
+        decreases contents.len() - iter@.0,
+    {
+        match iter.next() {
+            None => {
+                proof {
+                    reveal(ordered_edges);
+                    contents.lemma_to_set_map_commutes(|edge: Edge| edge.key());
+                    assert(reference_edge_keys(out@) =~= contents.map_values(|edge: Edge| edge.key()));
+                    assert forall|i: int, j: int| 0 <= i < j < out.len()
+                        implies (#[trigger] out@[i]).order_spec(#[trigger] out@[j]) == Ordering::Less by {
+                        assert(*out@[i] == contents[i]);
+                        assert(*out@[j] == contents[j]);
+                        assert(contents[i].order_spec(&contents[j]) == Ordering::Less);
+                    }
+                }
+                return out;
+            },
+            Some(edge) => { out.push(edge); },
+        }
+    }
+}
+
+proof fn less_keys_differ(a: &Edge, b: &Edge)
+    requires a.order_spec(b) == Ordering::Less,
+    ensures a.key() != b.key(),
+{
+    edge_kind_order_laws(a.kind, b.kind, b.kind);
+    if a.key() == b.key() {
+        if byte_lt(a.from_bytes(), b.from_bytes()) {
+            byte_lt_strict(a.from_bytes(), b.from_bytes());
+        }
+        if byte_lt(a.to_bytes(), b.to_bytes()) {
+            byte_lt_strict(a.to_bytes(), b.to_bytes());
+        }
+    }
+}
+
+proof fn selected_before_tail(edges: Seq<&Edge>, at: int, edge: &Edge, take: bool)
+    requires ordered_edges(edges), 0 <= at <= edges.len(),
+        take ==> at < edges.len() && edge.same(edges[at]),
+        !take && at < edges.len() ==> edge.order_spec(edges[at]) == Ordering::Less,
+    ensures forall|j: int| at + (if take { 1int } else { 0int }) <= j < edges.len()
+        ==> edge.order_spec(#[trigger] edges[j]) == Ordering::Less,
+{
+    reveal(ordered_edges);
+    assert forall|j: int| at + (if take { 1int } else { 0int }) <= j < edges.len()
+        implies edge.order_spec(#[trigger] edges[j]) == Ordering::Less by {
+        if j > at {
+            assert(edges[at].order_spec(edges[j]) == Ordering::Less);
+            if !take { edge_order_laws(edge, edges[at], edges[j]); }
+        }
+    }
+}
+
+proof fn excluded_key(edges: Seq<&Edge>, at: int, out: Seq<UnionEdge>, edge: &Edge)
+    requires 0 <= at <= edges.len(),
+        reference_edge_keys(edges.take(at)).to_set().subset_of(union_edge_keys(out).to_set()),
+        forall|i: int| 0 <= i < out.len()
+            ==> (#[trigger] out[i]).edge.order_spec(edge) == Ordering::Less,
+        forall|j: int| at <= j < edges.len()
+            ==> edge.order_spec(#[trigger] edges[j]) == Ordering::Less,
+    ensures !reference_edge_keys(edges).to_set().contains(edge.key()),
+{
+    assert forall|j: int| 0 <= j < edges.len()
+        implies (#[trigger] edges[j]).key() != edge.key() by {
+        if j >= at { less_keys_differ(edge, edges[j]); }
+        else {
+            assert(reference_edge_keys(edges.take(at))[j] == edges[j].key());
+            assert(reference_edge_keys(edges.take(at)).to_set().contains(edges[j].key()));
+            assert(union_edge_keys(out).to_set().contains(edges[j].key()));
+            let i = choose|i: int| 0 <= i < out.len() && out[i].edge.key() == edges[j].key();
+            less_keys_differ(&out[i].edge, edge);
+        }
+    }
+    if reference_edge_keys(edges).to_set().contains(edge.key()) {
+        let j = choose|j: int| 0 <= j < edges.len() && reference_edge_keys(edges)[j] == edge.key();
+        assert(edges[j].key() == edge.key());
+    }
+}
+
+proof fn ordered_union_push(out: Seq<UnionEdge>, next: UnionEdge)
+    requires ordered_union(out),
+        forall|i: int| 0 <= i < out.len()
+            ==> (#[trigger] out[i]).edge.order_spec(&next.edge) == Ordering::Less,
+    ensures ordered_union(out.push(next)),
+{
+    reveal(ordered_union);
+}
+
+#[verifier::opaque]
+pub closed spec fn union_origins(out: Seq<UnionEdge>, base: Seq<&Edge>, candidate: Seq<&Edge>) -> bool {
+    forall|i: int| 0 <= i < out.len() ==> exact_origin((#[trigger] out[i]).origin,
+        reference_edge_keys(base).to_set().contains(out[i].edge.key()),
+        reference_edge_keys(candidate).to_set().contains(out[i].edge.key()))
+}
+
+#[verifier::opaque]
+closed spec fn union_prefix(out: Seq<UnionEdge>, base: Seq<&Edge>, candidate: Seq<&Edge>, bi: int, ci: int) -> bool {
+    union_edge_keys(out).to_set() == reference_edge_keys(base.take(bi)).to_set()
+        + reference_edge_keys(candidate.take(ci)).to_set()
+}
+
+#[verifier::opaque]
+closed spec fn before_rest(out: Seq<UnionEdge>, edges: Seq<&Edge>, at: int) -> bool {
+    forall|i: int, j: int| 0 <= i < out.len() && at <= j < edges.len()
+        ==> (#[trigger] out[i]).edge.order_spec(#[trigger] edges[j]) == Ordering::Less
+}
+
+#[verifier::opaque]
+closed spec fn merge_state(out: Seq<UnionEdge>, base: Seq<&Edge>, candidate: Seq<&Edge>, bi: int, ci: int) -> bool {
+    ordered_union(out) && union_origins(out, base, candidate)
+        && union_prefix(out, base, candidate, bi, ci)
+        && before_rest(out, base, bi) && before_rest(out, candidate, ci)
+}
+
+spec fn head_choice(base: Seq<&Edge>, candidate: Seq<&Edge>, bi: int, ci: int,
+    edge: &Edge, origin: Origin, tb: bool, tc: bool) -> bool {
+    (tb || tc) && exact_origin(origin, tb, tc)
+        && (tb ==> bi < base.len() && edge.same(base[bi]))
+        && (tc ==> ci < candidate.len() && edge.same(candidate[ci]))
+        && (!tb && bi < base.len() ==> edge.order_spec(base[bi]) == Ordering::Less)
+        && (!tc && ci < candidate.len() ==> edge.order_spec(candidate[ci]) == Ordering::Less)
+}
+
+fn union_head<'a>(base: &[&'a Edge], candidate: &[&'a Edge], bi: usize, ci: usize)
+    -> (choice: (&'a Edge, Origin, bool, bool))
+    requires bi <= base.len(), ci <= candidate.len(), bi < base.len() || ci < candidate.len(),
+    ensures head_choice(base@, candidate@, bi as int, ci as int, choice.0, choice.1, choice.2, choice.3),
+{
+    if bi == base.len() { (candidate[ci], Origin::Candidate, false, true) }
+    else if ci == candidate.len() { (base[bi], Origin::Base, true, false) }
+    else {
+        match base[bi].compare(candidate[ci]) {
+            Ordering::Less => (base[bi], Origin::Base, true, false),
+            Ordering::Greater => {
+                proof { edge_order_laws(base@[bi as int], candidate@[ci as int], candidate@[ci as int]); }
+                (candidate[ci], Origin::Candidate, false, true)
+            },
+            Ordering::Equal => (base[bi], Origin::Both, true, true),
+        }
+    }
+}
+
+proof fn merge_order_step(out: Seq<UnionEdge>, base: Seq<&Edge>, candidate: Seq<&Edge>,
+    bi: int, ci: int, next: UnionEdge, tb: bool, tc: bool)
+    requires 0 <= bi <= base.len(), 0 <= ci <= candidate.len(),
+        ordered_edges(base), ordered_edges(candidate), ordered_union(out),
+        before_rest(out, base, bi), before_rest(out, candidate, ci),
+        head_choice(base, candidate, bi, ci, &next.edge, next.origin, tb, tc),
+    ensures ordered_union(out.push(next)),
+        before_rest(out.push(next), base, bi + (if tb { 1int } else { 0int })),
+        before_rest(out.push(next), candidate, ci + (if tc { 1int } else { 0int })),
+{
+    reveal(before_rest);
+    selected_before_tail(base, bi, &next.edge, tb);
+    selected_before_tail(candidate, ci, &next.edge, tc);
+    assert forall|i: int| 0 <= i < out.len()
+        implies (#[trigger] out[i]).edge.order_spec(&next.edge) == Ordering::Less by {
+        if tb { assert(out[i].edge.order_spec(base[bi]) == Ordering::Less); }
+        else { assert(out[i].edge.order_spec(candidate[ci]) == Ordering::Less); }
+    }
+    ordered_union_push(out, next);
+}
+
+proof fn merge_members_step(out: Seq<UnionEdge>, base: Seq<&Edge>, candidate: Seq<&Edge>,
+    bi: int, ci: int, next: UnionEdge, tb: bool, tc: bool)
+    requires 0 <= bi <= base.len(), 0 <= ci <= candidate.len(),
+        union_prefix(out, base, candidate, bi, ci),
+        head_choice(base, candidate, bi, ci, &next.edge, next.origin, tb, tc),
+    ensures union_prefix(out.push(next), base, candidate,
+        bi + (if tb { 1int } else { 0int }), ci + (if tc { 1int } else { 0int })),
+{
+    reveal(union_prefix);
+    if tb {
+        assert(reference_edge_keys(base.take(bi + 1)) =~= reference_edge_keys(base.take(bi)).push(next.edge.key()));
+        reference_edge_keys(base.take(bi)).lemma_push_to_set_commute(next.edge.key());
+    }
+    if tc {
+        assert(reference_edge_keys(candidate.take(ci + 1)) =~= reference_edge_keys(candidate.take(ci)).push(next.edge.key()));
+        reference_edge_keys(candidate.take(ci)).lemma_push_to_set_commute(next.edge.key());
+    }
+    out.lemma_push_map_commute(|edge: UnionEdge| edge.edge.key(), next);
+    assert(union_edge_keys(out.push(next)) =~= union_edge_keys(out).push(next.edge.key()));
+    union_edge_keys(out).lemma_push_to_set_commute(next.edge.key());
+    assert(union_edge_keys(out.push(next)).to_set()
+        =~= union_edge_keys(out).to_set().insert(next.edge.key()));
+    assert((reference_edge_keys(base.take(bi + (if tb { 1int } else { 0int }))).to_set()
+        + reference_edge_keys(candidate.take(ci + (if tc { 1int } else { 0int }))).to_set())
+        =~= union_edge_keys(out).to_set().insert(next.edge.key()));
+}
+
+proof fn merge_origins_step(out: Seq<UnionEdge>, base: Seq<&Edge>, candidate: Seq<&Edge>,
+    bi: int, ci: int, next: UnionEdge, tb: bool, tc: bool)
+    requires 0 <= bi <= base.len(), 0 <= ci <= candidate.len(),
+        ordered_edges(base), ordered_edges(candidate),
+        union_origins(out, base, candidate), union_prefix(out, base, candidate, bi, ci),
+        before_rest(out, base, bi), before_rest(out, candidate, ci),
+        head_choice(base, candidate, bi, ci, &next.edge, next.origin, tb, tc),
+    ensures union_origins(out.push(next), base, candidate),
+{
+    reveal(union_origins); reveal(union_prefix); reveal(before_rest);
+    assert forall|i: int| 0 <= i < out.len()
+        implies (#[trigger] out[i]).edge.order_spec(&next.edge) == Ordering::Less by {
+        if tb { assert(out[i].edge.order_spec(base[bi]) == Ordering::Less); }
+        else { assert(out[i].edge.order_spec(candidate[ci]) == Ordering::Less); }
+    }
+    if !tb {
+        selected_before_tail(base, bi, &next.edge, false);
+        excluded_key(base, bi, out, &next.edge);
+    } else {
+        assert(reference_edge_keys(base)[bi] == next.edge.key());
+        assert(reference_edge_keys(base).to_set().contains(next.edge.key()));
+    }
+    if !tc {
+        selected_before_tail(candidate, ci, &next.edge, false);
+        excluded_key(candidate, ci, out, &next.edge);
+    } else {
+        assert(reference_edge_keys(candidate)[ci] == next.edge.key());
+        assert(reference_edge_keys(candidate).to_set().contains(next.edge.key()));
+    }
+}
+
+proof fn merge_step(out: Seq<UnionEdge>, base: Seq<&Edge>, candidate: Seq<&Edge>,
+    bi: int, ci: int, next: UnionEdge, tb: bool, tc: bool)
+    requires 0 <= bi <= base.len(), 0 <= ci <= candidate.len(),
+        ordered_edges(base), ordered_edges(candidate), merge_state(out, base, candidate, bi, ci),
+        head_choice(base, candidate, bi, ci, &next.edge, next.origin, tb, tc),
+    ensures merge_state(out.push(next), base, candidate,
+        bi + (if tb { 1int } else { 0int }), ci + (if tc { 1int } else { 0int })),
+{
+    reveal(merge_state);
+    merge_order_step(out, base, candidate, bi, ci, next, tb, tc);
+    merge_members_step(out, base, candidate, bi, ci, next, tb, tc);
+    merge_origins_step(out, base, candidate, bi, ci, next, tb, tc);
+}
+
+/// Merge existing ordered inventories and retain exact endpoint provenance.
+fn merge_union(base: &[&Edge], candidate: &[&Edge]) -> (out: Vec<UnionEdge>)
+    requires ordered_edges(base@), ordered_edges(candidate@),
+    ensures ordered_union(out@), union_origins(out@, base@, candidate@),
+        union_edge_keys(out@).to_set()
+            == reference_edge_keys(base@).to_set() + reference_edge_keys(candidate@).to_set(),
+{
+    let mut out: Vec<UnionEdge> = Vec::new();
+    assert(merge_state(out@, base@, candidate@, 0, 0)) by {
+        reveal(merge_state); reveal(ordered_union); reveal(union_origins);
+        reveal(union_prefix); reveal(before_rest);
+        assert(union_edge_keys(out@) =~= Seq::<EdgeKey>::empty());
+        assert(reference_edge_keys(base@.take(0)) =~= Seq::<EdgeKey>::empty());
+        assert(reference_edge_keys(candidate@.take(0)) =~= Seq::<EdgeKey>::empty());
+        assert(Seq::<EdgeKey>::empty().to_set() =~= Set::<EdgeKey>::empty());
+        assert((Set::<EdgeKey>::empty() + Set::<EdgeKey>::empty()) =~= Set::<EdgeKey>::empty());
+    }
+    let mut bi: usize = 0;
+    let mut ci: usize = 0;
+    while bi < base.len() || ci < candidate.len()
+        invariant bi <= base.len(), ci <= candidate.len(),
+            ordered_edges(base@), ordered_edges(candidate@),
+            merge_state(out@, base@, candidate@, bi as int, ci as int),
+        decreases (base.len() - bi) + (candidate.len() - ci),
+    {
+        let (edge, origin, tb, tc) = union_head(base, candidate, bi, ci);
+        let next = UnionEdge { edge: edge.clone(), origin };
+        proof { merge_step(out@, base@, candidate@, bi as int, ci as int, next, tb, tc); }
+        if tb { bi += 1; }
+        if tc { ci += 1; }
+        out.push(next);
+    }
+    proof {
+        reveal(merge_state); reveal(union_prefix);
+        assert(base@.take(bi as int) =~= base@);
+        assert(candidate@.take(ci as int) =~= candidate@);
+    }
+    out
+}
+
+proof fn ordered_union_count(out: Seq<UnionEdge>)
+    requires ordered_union(out),
+    ensures union_edge_keys(out).no_duplicates(),
+        out.len() == union_edge_keys(out).to_set().len(),
+{
+    reveal(ordered_union);
+    let keys = union_edge_keys(out);
+    assert forall|i: int, j: int| 0 <= i < keys.len() && 0 <= j < keys.len() && i != j
+        implies (#[trigger] keys[i]) != (#[trigger] keys[j]) by {
+        if i < j { less_keys_differ(&out[i].edge, &out[j].edge); }
+        else { less_keys_differ(&out[j].edge, &out[i].edge); }
+    }
+    keys.unique_seq_to_set();
+}
+
+/// Exact typed union: one strictly ordered edge per full key, with both endpoint origins.
+pub fn union(base: &BTreeSet<Edge>, candidate: &BTreeSet<Edge>) -> (out: Vec<UnionEdge>)
+    ensures ordered_union(out@),
+        union_edge_keys(out@).no_duplicates(),
+        out.len() == (base@.map(|edge: Edge| edge.key()) + candidate@.map(|edge: Edge| edge.key())).len(),
+        union_edge_keys(out@).to_set() == base@.map(|edge: Edge| edge.key())
+            + candidate@.map(|edge: Edge| edge.key()),
+        forall|i: int| 0 <= i < out.len() ==> exact_origin((#[trigger] out@[i]).origin,
+            base@.map(|edge: Edge| edge.key()).contains(out@[i].edge.key()),
+            candidate@.map(|edge: Edge| edge.key()).contains(out@[i].edge.key())),
+{
+    let before = owned_edge_inventory(base);
+    let after = owned_edge_inventory(candidate);
+    let out = merge_union(&before, &after);
+    proof { reveal(union_origins); ordered_union_count(out@); }
+    out
 }
 
 /// -1, 0 and 1 denote less, byte-identical and greater respectively.

@@ -39,6 +39,105 @@ fn edge_before(a: &policy::Edge, b: &policy::Edge)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn typed_union_preserves_empty_and_single_endpoint_boundaries() {
+    use std::collections::BTreeSet;
+    proof {
+        policy::edge_obeys_cmp();
+        broadcast use vstd::set::Set::lemma_set_map_insert_commute;
+    }
+    let empty: BTreeSet<policy::Edge> = BTreeSet::new();
+    proof {
+        assert(empty@.map(|e: policy::Edge| e.key()) =~= Set::<policy::EdgeKey>::empty());
+        assert((empty@.map(|e: policy::Edge| e.key()) + empty@.map(|e: policy::Edge| e.key())) =~= Set::<policy::EdgeKey>::empty());
+    }
+    let out = policy::union(&empty, &empty);
+    assert(out.len() == 0);
+    let item = edge("根\0", policy::EdgeKind::JudgeTrigger, "");
+    let same_bytes = edge("根\0", policy::EdgeKind::JudgeTrigger, "");
+    let mut base = BTreeSet::new();
+    base.insert(item.clone());
+    base.insert(item.clone());
+    assert(base@ == Set::<policy::Edge>::empty().insert(item));
+    let mut candidate = BTreeSet::new();
+    candidate.insert(same_bytes.clone());
+    assert(candidate@ == Set::<policy::Edge>::empty().insert(same_bytes));
+    proof {
+        assert(base@.map(|e: policy::Edge| e.key()) =~= Set::<policy::EdgeKey>::empty().insert(item.key()));
+        assert(candidate@.map(|e: policy::Edge| e.key()) =~= Set::<policy::EdgeKey>::empty().insert(item.key()));
+        assert((base@.map(|e: policy::Edge| e.key()) + empty@.map(|e: policy::Edge| e.key())) =~= Set::<policy::EdgeKey>::empty().insert(item.key()));
+        assert((empty@.map(|e: policy::Edge| e.key()) + candidate@.map(|e: policy::Edge| e.key())) =~= Set::<policy::EdgeKey>::empty().insert(item.key()));
+        assert((base@.map(|e: policy::Edge| e.key()) + candidate@.map(|e: policy::Edge| e.key())) =~= Set::<policy::EdgeKey>::empty().insert(item.key()));
+        assert(Set::<policy::EdgeKey>::empty().insert(item.key()).len() == 1);
+    }
+    let out = policy::union(&base, &empty);
+    assert(out.len() == 1);
+    assert(policy::union_edge_keys(out@).to_set().contains(out@[0].edge.key()));
+    assert(out[0].edge.key() == item.key());
+    assert(out[0].origin == policy::Origin::Base);
+    let out = policy::union(&empty, &candidate);
+    assert(out.len() == 1);
+    assert(policy::union_edge_keys(out@).to_set().contains(out@[0].edge.key()));
+    assert(out[0].edge.key() == item.key());
+    assert(out[0].origin == policy::Origin::Candidate);
+    let out = policy::union(&base, &candidate);
+    assert(out.len() == 1);
+    assert(policy::union_edge_keys(out@).to_set().contains(out@[0].edge.key()));
+    assert(out[0].edge.key() == item.key());
+    assert(out[0].origin == policy::Origin::Both);
+    let cloned = out[0].clone();
+    assert(cloned.edge.key() == item.key() && cloned.origin == policy::Origin::Both);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn typed_union_has_exact_sorted_slots_and_all_three_origins() {
+    use std::collections::BTreeSet;
+    use policy::EdgeKind::*;
+    proof {
+        policy::edge_obeys_cmp();
+        broadcast use vstd::set::Set::lemma_set_map_insert_commute;
+    }
+    let first = edge("", Compile, "根\0");
+    let shared = edge("", BuildInput, "根\0");
+    let last = edge("", RuntimeInput, "根\0");
+    let mut base = BTreeSet::new();
+    base.insert(shared.clone());
+    base.insert(first.clone());
+    assert(base@ == Set::<policy::Edge>::empty().insert(shared).insert(first));
+    let mut candidate = BTreeSet::new();
+    candidate.insert(last.clone());
+    candidate.insert(shared.clone());
+    candidate.insert(last.clone());
+    assert(candidate@ == Set::<policy::Edge>::empty().insert(last).insert(shared));
+    proof {
+        assert(base@.map(|e: policy::Edge| e.key()) =~= Set::<policy::EdgeKey>::empty().insert(first.key()).insert(shared.key()));
+        assert(candidate@.map(|e: policy::Edge| e.key()) =~= Set::<policy::EdgeKey>::empty().insert(shared.key()).insert(last.key()));
+        assert((base@.map(|e: policy::Edge| e.key()) + candidate@.map(|e: policy::Edge| e.key()))
+            =~= Set::<policy::EdgeKey>::empty().insert(first.key()).insert(shared.key()).insert(last.key()));
+        assert(Set::<policy::EdgeKey>::empty().insert(first.key()).insert(shared.key()).insert(last.key()).len() == 3);
+    }
+    let out = policy::union(&base, &candidate);
+    assert(out.len() == 3);
+    proof {
+        reveal(policy::ordered_union);
+        assert forall|i: int| 0 <= i < out.len() implies
+            (#[trigger] out@[i]).edge.key() == first.key()
+                || out@[i].edge.key() == shared.key() || out@[i].edge.key() == last.key() by {
+            assert(policy::union_edge_keys(out@).to_set().contains(out@[i].edge.key()));
+        }
+        policy::edge_order_laws(&out@[0].edge, &out@[1].edge, &out@[2].edge);
+        policy::edge_order_laws(&out@[1].edge, &out@[2].edge, &out@[2].edge);
+        assert(out@[0].edge.kind.rank_spec() < out@[1].edge.kind.rank_spec());
+        assert(out@[1].edge.kind.rank_spec() < out@[2].edge.kind.rank_spec());
+    }
+    assert(out[0].edge.key() == first.key());
+    assert(out[1].edge.key() == shared.key());
+    assert(out[2].edge.key() == last.key());
+    assert(out[0].origin == policy::Origin::Base);
+    assert(out[1].origin == policy::Origin::Both);
+    assert(out[2].origin == policy::Origin::Candidate);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn typed_edge_indices_preserve_parallel_slots_cycles_and_duplicate_roots() {
     use policy::EdgeKind::*;
     proof {
@@ -546,6 +645,7 @@ fn byte_order_handles_empty_prefixes_and_the_full_byte_range() {
     let highest: Vec<u8> = vec![255];
     let order = policy::compare_bytes(&empty, &empty);
     assert(order == 0);
+    assert(!policy::byte_lt(zero@, empty@));
     let order = policy::compare_bytes(&empty, &zero);
     assert(order == -1);
     let order = policy::compare_bytes(&zero, &prefix);

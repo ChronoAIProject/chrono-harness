@@ -569,6 +569,78 @@ fn edge_json_adapters_preserve_fields_and_report_invalid_inputs() {
 }
 
 #[test]
+fn typed_union_preserves_full_order_exact_origins_and_flat_json_transport() {
+    let expected = [
+        ("", EdgeKind::JudgeTrigger, "根", Origin::Candidate),
+        ("a", EdgeKind::Compile, "", Origin::Base),
+        ("a", EdgeKind::Compile, "a\0", Origin::Both),
+        ("a", EdgeKind::Compile, "aa", Origin::Candidate),
+        ("a", EdgeKind::BuildInput, "", Origin::Base),
+        ("a", EdgeKind::JudgeTrigger, "根", Origin::Both),
+        ("é", EdgeKind::Compile, "", Origin::Candidate),
+        ("根", EdgeKind::Compile, "", Origin::Base),
+    ];
+    let mut base = BTreeSet::new();
+    let mut candidate = BTreeSet::new();
+    for (from, kind, to, origin) in expected.into_iter().rev() {
+        let edge = Edge {
+            from: from.into(),
+            kind,
+            to: to.into(),
+        };
+        if origin != Origin::Candidate {
+            base.insert(edge.clone());
+            base.insert(edge.clone());
+        }
+        if origin != Origin::Base {
+            candidate.insert(edge.clone());
+            candidate.insert(edge);
+        }
+    }
+    let out = graph::union(&base, &candidate);
+    assert_eq!(out.len(), expected.len());
+    for (entry, (from, kind, to, origin)) in out.iter().zip(expected) {
+        assert_eq!(
+            (
+                &*entry.edge.from,
+                entry.edge.kind,
+                &*entry.edge.to,
+                entry.origin
+            ),
+            (from, kind, to, origin)
+        );
+        let wire_origin = match origin {
+            Origin::Base => "base",
+            Origin::Candidate => "candidate",
+            Origin::Both => "both",
+        };
+        let value = json!({"from": from, "kind": kind, "to": to, "origin": wire_origin});
+        assert_eq!(serde_json::to_value(entry).unwrap(), value);
+        for decoded in [
+            serde_json::from_value::<graph::UnionEdge>(value.clone()).unwrap(),
+            serde_json::from_str::<graph::UnionEdge>(&value.to_string()).unwrap(),
+            entry.clone(),
+        ] {
+            assert_eq!(decoded.edge, entry.edge);
+            assert_eq!(decoded.origin, origin);
+        }
+        assert_eq!(
+            format!("{entry:?}"),
+            format!("UnionEdge {{ edge: {:?}, origin: {origin:?} }}", entry.edge)
+        );
+    }
+    for value in [
+        json!({"from":"a","kind":"compile","to":"b"}),
+        json!({"from":"a","kind":"compile","to":"b","origin":"Both"}),
+        json!({"from":"a","kind":"compile","to":"b","origin":null}),
+        json!({"from":"a","kind":"compile","origin":"both"}),
+    ] {
+        assert!(serde_json::from_value::<graph::UnionEdge>(value.clone()).is_err());
+        assert!(serde_json::from_str::<graph::UnionEdge>(&value.to_string()).is_err());
+    }
+}
+
+#[test]
 fn indexed_closure_preserves_shortest_ties_edge_kinds_and_seed_identity() {
     let rows = [
         ("根", EdgeKind::RuntimeInput, "a"),
