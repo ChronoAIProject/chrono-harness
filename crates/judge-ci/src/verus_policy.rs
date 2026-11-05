@@ -20,6 +20,110 @@ pub fn equal_text(actual: &str, expected: &str) -> (equal: bool)
     equal
 }
 
+/// Selection is supplied by the explicit execution-plan owner. This predicate
+/// checks that declaration; it never selects or launches a verification route.
+pub struct RootRoute<'a> {
+    pub root: &'a str,
+    pub operation: &'a str,
+    pub globally_selected: bool,
+    pub locally_required: bool,
+}
+
+pub struct RootProof {
+    pub operation: String,
+    pub admitted: bool,
+}
+
+pub open spec fn unique_root_route(routes: Seq<RootRoute>, root: Seq<char>, index: int) -> bool {
+    0 <= index < routes.len() && routes[index].root@ == root
+        && forall|j: int| 0 <= j < routes.len() && (#[trigger] routes[j]).root@ == root
+            ==> j == index
+}
+
+pub fn find_root_route(routes: &Vec<RootRoute>, root: &str) -> (found: Option<usize>)
+    ensures
+        found.is_some() ==> unique_root_route(routes@, root@, found.unwrap() as int),
+        found.is_none() <==> !(exists|i: int| unique_root_route(routes@, root@, i)),
+{
+    let mut found: Option<usize> = None;
+    let mut i = 0;
+    while i < routes.len()
+        invariant
+            0 <= i <= routes.len(),
+            match found {
+                Some(index) => 0 <= index < i && routes[index as int].root@ == root@
+                    && forall|j: int| 0 <= j < i && (#[trigger] routes[j]).root@ == root@
+                        ==> j == index,
+                None => forall|j: int| 0 <= j < i ==> (#[trigger] routes[j]).root@ != root@,
+            },
+        decreases routes.len() - i,
+    {
+        if equal_text(routes[i].root, root) {
+            if let Some(previous) = found {
+                assert(previous < i);
+                assert forall|j: int| unique_root_route(routes@, root@, j) implies false by {
+                    assert(j == previous);
+                    assert(j == i);
+                }
+                return None;
+            }
+            found = Some(i);
+        }
+        i += 1;
+    }
+    if found.is_none() {
+        assert forall|j: int| unique_root_route(routes@, root@, j) implies false by { }
+    }
+    found
+}
+
+pub open spec fn root_proofs_admitted(proofs: Seq<RootProof>, operation: Seq<char>) -> bool {
+    (exists|i: int| 0 <= i < proofs.len() && (#[trigger] proofs[i]).operation@ == operation)
+        && (forall|i: int| 0 <= i < proofs.len() && (#[trigger] proofs[i]).operation@ == operation
+            ==> proofs[i].admitted)
+}
+
+pub fn admits_root_proofs(proofs: &Vec<RootProof>, operation: &str) -> (accepted: bool)
+    ensures accepted <==> root_proofs_admitted(proofs@, operation@),
+{
+    let mut found = false;
+    let mut i = 0;
+    while i < proofs.len()
+        invariant
+            0 <= i <= proofs.len(),
+            found <==> (exists|j: int| 0 <= j < i && (#[trigger] proofs[j]).operation@ == operation@),
+            forall|j: int| 0 <= j < i && (#[trigger] proofs[j]).operation@ == operation@
+                ==> proofs[j].admitted,
+        decreases proofs.len() - i,
+    {
+        if equal_text(proofs[i].operation.as_str(), operation) {
+            if !proofs[i].admitted { return false; }
+            found = true;
+        }
+        i += 1;
+    }
+    found
+}
+
+pub open spec fn root_delta_covered(routes: Seq<RootRoute>, proofs: Seq<RootProof>, root: Seq<char>) -> bool {
+    exists|i: int| #[trigger] unique_root_route(routes, root, i)
+        && routes[i].globally_selected
+        && (!routes[i].locally_required || root_proofs_admitted(proofs, routes[i].operation@))
+}
+
+/// Unit results may defer a globally selected root to its assigned unit. The
+/// aggregate supplies the global scope as its local obligation and needs proof.
+pub fn covers_root_delta(routes: &Vec<RootRoute>, proofs: &Vec<RootProof>, root: &str) -> (covered: bool)
+    ensures covered <==> root_delta_covered(routes@, proofs@, root@),
+{
+    let index = match find_root_route(routes, root) {
+        Some(index) => index,
+        None => { return false; },
+    };
+    let route = &routes[index];
+    route.globally_selected && (!route.locally_required || admits_root_proofs(proofs, route.operation))
+}
+
 pub open spec fn text_member(values: Seq<&str>, target: Seq<char>) -> bool {
     exists|i: int| 0 <= i < values.len() && (#[trigger] values[i])@ == target
 }

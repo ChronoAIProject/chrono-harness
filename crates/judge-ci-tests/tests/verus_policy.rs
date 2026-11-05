@@ -12,6 +12,84 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn root_delta_requires_global_selection_and_the_locally_owned_proof() {
+    proof { reveal_strlit("root"); reveal_strlit("verify.root"); }
+    let none: Vec<policy::RootProof> = Vec::new();
+    let unselected = vec![policy::RootRoute {
+        root: "root", operation: "verify.root", globally_selected: false, locally_required: false,
+    }];
+    let deferred = vec![policy::RootRoute {
+        root: "root", operation: "verify.root", globally_selected: true, locally_required: false,
+    }];
+    let required = vec![policy::RootRoute {
+        root: "root", operation: "verify.root", globally_selected: true, locally_required: true,
+    }];
+    assert(policy::unique_root_route(deferred@, "root"@, 0));
+    assert(policy::unique_root_route(required@, "root"@, 0));
+    let missing_selection = policy::covers_root_delta(&unselected, &none, "root");
+    let other_unit = policy::covers_root_delta(&deferred, &none, "root");
+    let missing_proof = policy::covers_root_delta(&required, &none, "root");
+    let proof = vec![policy::RootProof { operation: "verify.root".to_owned(), admitted: true }];
+    assert(policy::root_proofs_admitted(proof@, "verify.root"@));
+    let complete = policy::covers_root_delta(&required, &proof, "root");
+    assert(!missing_selection && other_unit && !missing_proof && complete);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn root_routes_reject_absence_and_ambiguity_even_with_successful_proofs() {
+    proof { reveal_strlit("root"); reveal_strlit("verify.root"); }
+    let no_routes: Vec<policy::RootRoute> = Vec::new();
+    let proofs = vec![policy::RootProof { operation: "verify.root".to_owned(), admitted: true }];
+    let absent = policy::covers_root_delta(&no_routes, &proofs, "root");
+    let ambiguous = vec![
+        policy::RootRoute { root: "root", operation: "verify.root", globally_selected: true, locally_required: true },
+        policy::RootRoute { root: "root", operation: "verify.root", globally_selected: true, locally_required: true },
+    ];
+    let rejected = policy::covers_root_delta(&ambiguous, &proofs, "root");
+    assert(!absent && !rejected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn root_proofs_require_exact_operation_and_preserve_shared_original_failures() {
+    proof { reveal_strlit("verify.root"); reveal_strlit("other"); }
+    assert("verify.root"@.len() != "other"@.len());
+    let unrelated = vec![policy::RootProof { operation: "other".to_owned(), admitted: true }];
+    let absent = policy::admits_root_proofs(&unrelated, "verify.root");
+    let shared = vec![
+        policy::RootProof { operation: "verify.root".to_owned(), admitted: true },
+        policy::RootProof { operation: "other".to_owned(), admitted: false },
+        policy::RootProof { operation: "verify.root".to_owned(), admitted: true },
+    ];
+    let accepted = policy::admits_root_proofs(&shared, "verify.root");
+    let mixed = vec![
+        policy::RootProof { operation: "verify.root".to_owned(), admitted: true },
+        policy::RootProof { operation: "verify.root".to_owned(), admitted: false },
+    ];
+    let failure = policy::admits_root_proofs(&mixed, "verify.root");
+    assert(!absent && accepted && !failure);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn root_identity_uses_unicode_value_and_accepts_proof_outside_route_order() {
+    proof { reveal_strlit("根"); reveal_strlit("检查"); reveal_strlit("other"); }
+    assert("根"@.len() != "other"@.len());
+    let owned = "根".to_owned();
+    let routes = vec![
+        policy::RootRoute { root: "other", operation: "other", globally_selected: false, locally_required: false },
+        policy::RootRoute { root: owned.as_str(), operation: "检查", globally_selected: true, locally_required: true },
+    ];
+    let proofs = vec![
+        policy::RootProof { operation: "检查".to_owned(), admitted: true },
+        policy::RootProof { operation: "other".to_owned(), admitted: false },
+    ];
+    assert(policy::unique_root_route(routes@, "根"@, 1));
+    assert(policy::root_proofs_admitted(proofs@, "检查"@));
+    let accepted = policy::covers_root_delta(&routes, &proofs, "根");
+    let other = policy::covers_root_delta(&routes, &proofs, "other");
+    assert(accepted && !other);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn observation_identity_binds_candidate_root_and_both_artifact_labels() {
     let candidate = [97u8];
     let root = [98u8];

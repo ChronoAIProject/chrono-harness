@@ -1671,7 +1671,17 @@ fn evaluate(
         response.evidence["selection_explanation"] = selection_explanation;
         response.evidence["removed"] = object!(removed);
         response.evidence["retirement_context"] = retirement_context;
-        verus::apply(req, reader, &p, &new, &mut response, compiler_admissions)?;
+        verus::apply(
+            req,
+            reader,
+            &p,
+            &new,
+            &paths,
+            &global_selected,
+            &global_selected,
+            &mut response,
+            compiler_admissions,
+        )?;
         return Ok(response);
     }
     if let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope {
@@ -1802,6 +1812,16 @@ fn evaluate(
         evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"retirement_context":retirement_context,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
-    verus::apply(req, reader, &p, &new, &mut response, Vec::new())?;
+    verus::apply(
+        req,
+        reader,
+        &p,
+        &new,
+        &paths,
+        &selected,
+        &global_selected,
+        &mut response,
+        Vec::new(),
+    )?;
     Ok(response)
 }

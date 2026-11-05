@@ -4,7 +4,7 @@ use super::{Policy, Snapshot, at, verus_policy};
 use chrono_harness::{CheckResult, Request, Response, Status, facts::Reader, json};
 use serde::{Deserialize, Serialize};
 use serde_json::json as object;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -394,6 +394,9 @@ pub(super) fn apply(
     reader: &Reader,
     policy: &Policy,
     snapshot: &Snapshot,
+    changed: &BTreeSet<String>,
+    selected: &BTreeSet<String>,
+    global_selected: &BTreeSet<String>,
     response: &mut Response,
     collected: Vec<CollectedAdmission>,
 ) -> Result<(), String> {
@@ -402,8 +405,13 @@ pub(super) fn apply(
     };
     let mut ledger = verus_policy::Ledger::new();
     let mut compiler_evidence = Vec::new();
+    let mut proofs = Vec::new();
     for admission in collected {
         let operation = admission.operation;
+        proofs.push(verus_policy::RootProof {
+            operation: operation.clone(),
+            admitted: true,
+        });
         ledger.record(format!("operation:{operation}:compiler-proof"), true);
         ledger.record(format!("operation:{operation}:compiler-sources"), true);
         compiler_evidence.push(object!({"operation":operation,"compiler_accepted":true,
@@ -446,12 +454,16 @@ pub(super) fn apply(
             format!("operation:{operation}:compiler-sources"),
             sources.is_ok(),
         );
+        proofs.push(verus_policy::RootProof {
+            operation: operation.into(),
+            admitted: compiler_accepted && sources.is_ok(),
+        });
         compiler_evidence.push(object!({"operation":operation,"compiler_accepted":compiler_accepted,
             "compiler_error":accepted.err(),"sources":sources.as_ref().ok(),"source_error":sources.as_ref().err()}));
     }
     // Roots are bound to exact registered invocations. Original execution and
     // receipt checking remain the projects owner's responsibility.
-    let roots: BTreeMap<_, _> = snapshot
+    let roots: Vec<_> = snapshot
         .operations
         .iter()
         .filter_map(|(operation, (_, tool, argv))| {
@@ -466,9 +478,26 @@ pub(super) fn apply(
                 .plans
                 .values()
                 .any(|plan| plan.operations.contains(operation));
-            planned.then_some((root.clone(), operation.clone()))
+            planned.then_some(verus_policy::RootRoute {
+                root,
+                operation,
+                globally_selected: snapshot.plans.iter().any(|(test, plan)| {
+                    global_selected.contains(test) && plan.operations.contains(operation)
+                }),
+                locally_required: snapshot.plans.iter().any(|(test, plan)| {
+                    selected.contains(test) && plan.operations.contains(operation)
+                }),
+            })
         })
         .collect();
+    for route in &roots {
+        if route.locally_required {
+            ledger.record(
+                format!("root:{}:selected-proof", route.root),
+                verus_policy::covers_root_delta(&roots, &proofs, route.root),
+            );
+        }
+    }
     for (id, unit) in &snapshot.projects {
         ledger.record(
             format!("unit:{id}:language=verus"),
@@ -480,7 +509,7 @@ pub(super) fn apply(
                 actions.values().any(|action| {
                     action["operation"]
                         .as_str()
-                        .is_some_and(|op| roots.values().any(|value| value == op))
+                        .is_some_and(|op| roots.iter().any(|route| route.operation == op))
                 })
             }),
         );
@@ -503,11 +532,22 @@ pub(super) fn apply(
                     !declared.is_empty()
                         && declared.iter().all(|root| {
                             root.as_str().is_some_and(|root| {
-                                roots.contains_key(root) && snapshot.files.contains_key(root)
+                                verus_policy::find_root_route(&roots, root).is_some()
+                                    && snapshot.files.contains_key(root)
                             })
                         })
                 }),
             );
+            for root in verification["roots"].as_array().into_iter().flatten() {
+                if let Some(root) = root.as_str() {
+                    if changed.contains(path) || changed.contains(root) {
+                        ledger.record(
+                            format!("file:{path}:root:{root}:delta-proof"),
+                            verus_policy::covers_root_delta(&roots, &proofs, root),
+                        );
+                    }
+                }
+            }
         }
     }
     ledger.record("specifications:nonempty".into(), specifications > 0);
@@ -520,7 +560,7 @@ pub(super) fn apply(
         "missing":coverage.missing,
         "compiler_evidence":compiler_evidence,
         "external_interfaces":requirements.external_interfaces,
-        "assurance":"declarations and admitted original compiler results/artifacts with fixed candidate source comparison; adapter proofs and complete root proof evidence remain required"
+        "assurance":"declarations, unique canonical root routes and admitted original proofs for affected and selected roots; adapter proofs, full SPEC correspondence and complete repository migration remain required"
     });
     let artifacts = compiler_artifacts(&response.evidence)?;
     let retained = response
@@ -544,7 +584,7 @@ pub(super) fn apply(
             Status::Failed
         },
         cause: if complete {
-            "Verus declarations and canonical verification routes cover the inventory".into()
+            "Verus declarations and original proof evidence cover the explicit DELTA roots".into()
         } else {
             format!(
                 "E_VERUS_COVERAGE: {} unmet obligations; first: {}",

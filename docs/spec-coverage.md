@@ -2,6 +2,13 @@
 
 The current contract requires every repository SPEC and all repository decision/state logic to use Verus. Explicit external interfaces alone may be trusted. Migration is incomplete; ordinary Rust/Python tests and historical Lean models do not satisfy this obligation. The canonical coverage gate must fail while obligations remain. See [Verus ownership](verus.md).
 
+The proved admission owner additionally binds affected roots to unique registered
+routes, global explicit DELTA selection and the original proofs required by each
+unit or collection. Missing consumer edges and ambiguous root operations fail;
+split units keep their own proof obligations and collection joins their originals.
+This remains a partial migration: selection construction, the adapter, complete
+SPEC correspondence and unchanged-root proof reuse still require verification.
+
 This is a maintained coverage map, not a run log or a second policy. Full SPEC remains the objective. `implemented` means the named contract has a real producer and behavior test; it does not mean this host is activated or delivered. `partial` retains the uncovered obligation. All full host registries remain proposed, with incomplete input closure and missing executable bindings. Registration/filemap success on a bounded host is not seven-judge success. Local checks do not certify native CI or landing.
 
 Ordinary full-check acceptance means the DELTA satisfies the active registered contract. `declared-complete` is the trusted AI's accountable declaration of the host-defined governance/input scope; judges verify declared references, identities, snapshots and observed operations. Current registration emits `completeness_proven:false`, which does not prevent ordinary acceptance after the required registration and selected checks pass. Known missing inputs, unresolved required dependencies, missing bindings/snapshots and drift still fail; real toolchain/SDK/configuration obligations remain. A universal hidden-input-absence proof or VM is not an ordinary acceptance requirement.

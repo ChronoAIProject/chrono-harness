@@ -100,6 +100,86 @@ fn changed_verus_specification_requires_its_proof_in_the_explicit_delta_closure(
 }
 
 #[test]
+fn verus_root_proofs_follow_assigned_units_and_join_only_at_collection() {
+    let h = verus_report_host();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        let action = v["projects"][0]["actions"]["verify"].take();
+        v["projects"][0]["actions"] = json!({"execute":action});
+    });
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"from":"project:lib","kind":"test-execution","to":"test:lib"}));
+    });
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["bindings"] = json!({
+            "test:suite":["verify.doc.txt"],"test:lib":["verify.src.txt"]
+        });
+        v["policy"]["units"]["beta"] = json!({
+            "tests":["test:lib"],"report_path":".chrono-harness/state/beta/check.json"
+        });
+    });
+    let base = h.commit();
+    h.write("src.txt", "both explicitly related proof consumers\n");
+    let candidate = h.commit();
+    let mut references = Vec::new();
+    for (unit, operation) in [("alpha", "verify.doc.txt"), ("beta", "verify.src.txt")] {
+        let reference = write_report(&h, &base, &candidate, unit);
+        let original = h.read(reference["path"].as_str().unwrap());
+        assert_eq!(original["response"]["status"], "passed", "{original:#}");
+        assert_eq!(
+            original["response"]["evidence"]["operations"],
+            json!([operation])
+        );
+        assert_eq!(
+            original["response"]["evidence"]["verus"]["compiler_evidence"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        references.push(reference);
+    }
+    let combined = collect(&h, &base, &candidate, json!(references));
+    pass(&combined);
+    assert_eq!(combined.evidence["executed"], json!([]));
+    assert_eq!(
+        combined.evidence["verus"]["compiler_evidence"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn verus_root_declarations_reject_ambiguous_operations_after_independent_execution() {
+    let h = verus_report_host();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        let mut other = v["projects"][0]["actions"]["verify"].clone();
+        other["operation"] = json!("verify.other");
+        let output = ".chrono-harness/state/other.rlib";
+        other["argv"][7] = json!(format!("--emit=link={output},dep-info={output}.d"));
+        other["argv"][10] = json!(output);
+        v["projects"][0]["actions"]["verify_other"] = other;
+    });
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["bindings"]["test:suite"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("verify.other"));
+    });
+    let base = h.commit();
+    h.write("src.txt", "ambiguous proof owner\n");
+    let candidate = h.commit();
+    let response = unit(&h, &base, &candidate, "alpha");
+    fail(&response, "file:src.txt:verification-roots");
+    fail(&response, "root:src.txt:selected-proof");
+    assert_eq!(response.evidence["executed"].as_array().unwrap().len(), 3);
+}
+
+#[test]
 fn collected_verus_sources_readmit_original_bytes_and_reject_rehashed_semantic_changes() {
     let h = verus_report_host();
     let base = h.head();

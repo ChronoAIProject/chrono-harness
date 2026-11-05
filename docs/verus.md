@@ -18,7 +18,7 @@ external. Pure roots use Verus's `--no-cheating` and
 FILEMAP owns each file's `verification: {kind, roots}`. The three explicit roles
 are `program`, `specification`, and `data`; the executor never infers them from
 names or source scans. Program/specification roots must be nonempty, registered
-files and exact registered Verus invocations included in execution plans. Empty
+files, uniquely bound to exact registered Verus invocations included in execution plans. Empty
 roots retain a concrete migration gap. Every project/script, including tests,
 must declare `language: verus` and a verification action. Changing a label does
 not establish a proof or source correspondence.
@@ -106,6 +106,29 @@ the already acquired original dependency bytes and fixed Git candidate blobs,
 without depending on local compiler output paths or executing the compiler.
 Accepted compiler/source rows enter the collection's coverage ledger. Native and
 complete proof evidence for every declared root remain outstanding.
+
+The same executable Verus owner now proves unique root-route lookup and DELTA
+root coverage. A changed program/specification file, or a changed root it claims,
+requires that unique route in the global explicit execution closure. Every
+locally selected root additionally needs an admitted original compiler result and
+candidate-source comparison. A unit may defer a globally selected root assigned
+elsewhere; collection uses the global obligation and consumes the verified unit
+originals. Multiple successful originals for a shared operation are allowed; a
+rejected original cannot be hidden by another success. Missing and ambiguous
+routes, missing global selection and absent or rejected required proof fail.
+Unrelated proof failures retain their own original findings. Identity is text
+value, including Unicode, rather than string reference identity.
+
+**Product and coverage policy change together:** declaring a root no longer
+satisfies affected-root coverage without its explicit selected proof consumer.
+This gate reports the missing relationship and does not select extra tests or
+infer dependencies. Dedicated behavior cases exercise the missing-edge failure,
+explicit repair, split unit proofs, collection and ambiguous registration. A
+pre-change canonical run observed the missing-edge case wrongly pass. The same
+registered commands remain current. Additional comparisons are bounded by the
+registered roots and proof observations; total runtime/storage cost is unmeasured.
+This predicate does not prove selection-input construction, JSON decoding, the
+remaining adapter, complete SPEC correspondence or unchanged-root proof reuse.
 
 This collection change retains the existing report budget and artifact reader.
 Its additional work compares the acquired dependency bytes with the required
