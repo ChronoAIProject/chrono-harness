@@ -1,12 +1,10 @@
-# Registered worktree creation
+# 按登记创建和维护工作树
 
-`chrono-worktree` is an independent Rust producer with its own `worktree-tests`
-project. It creates a new feature or integration worktree from a freshly fetched,
-explicit remote target. It does not select projects from directory names, run a
-language restore, reset existing branches, open PRs or claim a governance verdict.
+`chrono-worktree` 是独立 Rust 程序，有专属 `worktree-tests` 项目。它从刚获取的明确远端目标创建 feature 或 integration 工作树。工作树是同一 Git 仓库的独立检出目录；下文 OID 指完整 Git 对象标识。
 
-The host registers `.chrono-harness/worktree.json` in FILEMAP. The original
-`chrono-worktree-config/v1` shape is:
+程序不从目录名选项目，不恢复语言依赖，不重置旧分支，不开 PR，也不作治理判断。
+
+宿主将 `.chrono-harness/worktree.json` 登记到 FILEMAP。原 `chrono-worktree-config/v1` 形状如下：
 
 ```json
 {
@@ -24,23 +22,13 @@ The host registers `.chrono-harness/worktree.json` in FILEMAP. The original
 }
 ```
 
-The five host registries remain the authority for target branch, feature and
-integration prefixes, FILEMAP membership and artifact ownership. The producer
-reuses their existing strict loader. A successful load or creation is not full
-reference admission, complete input certification, freshness certification or
-activation. Workflow's normal judge still evaluates delivery context and DELTA.
+目标分支、feature／integration 前缀、FILEMAP 成员及产物所有权仍以五份宿主登记为准，程序复用已有严格加载器。加载或创建成功不证明完整引用准入、输入完整、新鲜度或启用治理；交付上下文和 DELTA 仍由普通 workflow 判官判断。
 
-`host_config` accepts the same stable registered `chrono-git-configs/v1` or v2 platform
-entry as other full consumers, as well as a direct configuration. The shared
-registry snapshot reader selects the direct full-v3 target separately from each
-fixed source and fetched commit. Their effective configuration and workflow paths
-may differ. Missing platform entries, missing targets and unsupported selected
-policies fail without a fallback. All acquisition still uses the worktree policy's
-bound Git runner, declared environment and process limits; host configurations
-remain data and never select historical executable judges.
+`host_config` 可为直接配置，也可为与其他完整消费者相同的稳定 `chrono-git-configs/v1`／v2 平台入口。共享登记快照读取器分别从固定来源和获取提交选择直接 full-v3 目标；有效配置／workflow 路径可不同。平台项／目标缺失或所选政策不支持就失败，不回退。
 
-Install `chrono-worktree` from the pinned public beta.8 release through the host’s
-registered installer (the product repository can also bootstrap its candidate):
+全部获取仍使用工作树政策绑定 Git、声明环境和进程限制。宿主配置只是数据，不会选择历史判官执行物。
+
+从宿主登记安装器安装固定公开 beta.8 的 `chrono-worktree`；产品仓库也可 bootstrap 候选。创建命令为：
 
 ```sh
 .chrono-harness/bin/chrono-worktree start \
@@ -48,178 +36,71 @@ registered installer (the product repository can also bootstrap its candidate):
   --kind integration --name task --path ../new-task-checkout
 ```
 
-All five arguments are required; unknown, repeated or empty arguments fail.
-The destination is explicit, its parent must exist, and it must not exist or be
-nested within an existing registered worktree. Paths are relative to the supplied
-host root, not the caller's working directory. Spaces and UTF-8 names are literal
-arguments. This version supports the tested Unix Git interface.
+五个参数都必需，未知、重复、空参数失败。目标须明确，其父目录须存在，目标本身不得存在或嵌套于已有登记工作树。路径相对 `host-root`，不相对调用者 cwd；空格／UTF-8 名称按字面参数处理。此版本支持已测试的 Unix Git 接口。
 
-The producer resolves the configured Git executable once for observation and
-binds its actual bytes for every Git operation. Optional expected digest and
-version values reject mismatches; a null value makes no expected-identity claim.
-Only the declared environment is inherited, and explicit values override it.
+## Git 身份与固定输入
 
-The adopted `chrono-worktree-config/v3` retains v2's required `check_inputs`
-and adds a nonempty `git.identities` array. Each row declares `sha256` and
-`expected_version` for the same `git.program`. The primary digest/version stay
-required, all digests must be valid and unique across the primary and alternatives,
-and versions must be nonempty. V1/v2 reject `identities`, including null. Before
-any version probe the producer reads the resolved program's bytes and selects
-the primary or exact registered alternative; no match refuses admission. The
-selected version and digest are then checked by the existing process owner.
-The receipt retains the actual selected tool and original full policy digest.
-This changes neither committed source/fetched/coordinator equality nor v2
-automatic-cleanup ownership. Older binaries reject the versioned policy.
+程序只解析配置 Git 一次，观察并绑定实际字节，之后每次 Git 操作都使用它。可选预期摘要／版本不符就拒绝；null 不作预期身份保证。只继承声明环境，明确值覆盖继承值。
 
-This host preserves the original primary identity and separately registers the
-measured macOS 27 identity, aligned with the [Git facts selector](git-facts.md#exact-host-executable-selection).
-Native macOS-26 acceptance and actual coordinator cutover remain caller-owned.
+当前采用 `chrono-worktree-config/v3`，保留 v2 必需 `check_inputs`，新增非空 `git.identities`。每行给同一个 `git.program` 声明 `sha256`／`expected_version`。主摘要／版本仍必需，主项和备选摘要均有效且唯一，版本非空。v1／v2 拒绝 identities，包括 null。
 
-For untracked inventories, the producer explicitly disables Git global literal,
-glob, noglob and case-folding pathspec modes in that child environment. The
-exclusion arguments themselves are literal and case-sensitive; each process
-records its actual environment, including these scoped overrides.
-Git repository-redirection variables are rejected. Git configuration, credential
-helpers and hooks are not certified as a complete input closure. No global
-configuration is edited, and new branches explicitly disable automatic tracking.
+版本探测前先读解析后程序字节，精确选择主项或登记备选，无匹配就拒绝准入。之后由已有进程所有者核所选版本／摘要。回执保留真实工具和原完整政策摘要，不改变源码／获取端／协调者的已提交政策相等要求，也不改 v2 自动清理所有权。旧二进制拒绝该版本政策。
 
-The local policy must match the source commit. The producer reads the declared
-workflow target, fetches that exact remote branch into a unique temporary ref,
-records its commit and tree, then deletes only that temporary ref using its
-observed OID. It reads the fetched registries and requires the policy bytes and
-target branch to remain compatible before creating anything. Remote movement
-after the fetch is not claimed absent; the receipt identifies the observed tip.
-An advanced source checkout or unrelated dirty source files are not reset.
-The source registrations are acquired once before fetch and reused for policy
-checks and their digest. Both registry digests cover the complete parsed snapshot,
-including the stable selector entry and its effective target when selected;
-original bytes and failures remain in the fixed Git process observations.
-Receipt and intent `config_path`/`config_sha256` continue to identify the worktree
-policy itself. Reconstruction and maintenance, including recovery, rebind and
-cleanup, use the same snapshot acquisition helper.
+本宿主保留原主身份，另登记实测 macOS 27 身份，与 [Git 事实选择器](git-facts.md#exact-host-executable-selection)一致。原生 macOS-26 验收和真实协调者切换仍归调用方。
 
-Resolved registry lists use the runner's shared bounded Git batch acquisition.
-Metadata fixes each blob identity and size; content requests are partitioned under
-the existing output limit and validated against that metadata. Small lists or
-insufficient framing space retain direct reads. Original process bytes and exits
-remain in the report on malformed or failed batches, before checkout effects.
-Only fully validated immutable bytes enter the operation-local cache; live HEAD,
-checkout, policy, attachment and ownership observations remain fresh.
+读取未跟踪清单时，子进程环境明确关闭 Git 全局 literal／glob／noglob／大小写折叠 pathspec 模式，排除参数自身是区分大小写的字面值。原进程记录这些范围内覆盖。拒绝仓库重定向变量，不证明 Git 配置、凭据 helper、hook 输入完整。不改全局配置，新分支明确关闭自动 tracking。
 
-For an explicitly named immutable input larger than the ordinary diagnostic
-bound, v1/v2 policies may additionally declare `immutable_input_limits`, a map
-from exact repository-relative paths to positive byte limits of at most
-67,108,864 bytes. An omitted map preserves the original transport contract.
-This host declares `.chrono-harness/config.json` at 2,097,152 bytes while keeping
-`output_limit_bytes` at 1,048,576. These declarations grant acquisition capacity;
-they do not register files, outputs, consumers or cleanup eligibility.
+本地政策须匹配源码提交。程序读取 workflow 目标，将该精确远端分支 fetch 到唯一临时 ref，记录 commit／tree，再用观察 OID 只删该 ref。创建前读取获取端登记，要求政策字节及目标分支兼容。不保证 fetch 后远端不再移动，回执只固定观察顶端。不重置已前进源码检出或无关脏文件。
 
-The existing blob owner first acquires fixed-commit object metadata under the
-ordinary output/time limits. Oversized inputs are refused before acquiring their
-content. For an admitted blob, only stdout uses its exact observed length
-(one byte for an empty blob); stderr and other Git commands retain the ordinary
-limit. The data command addresses the observed object OID, and Rust validates
-its complete Git blob hash and length. Both original processes, bytes, digests,
-exits and any partial failure remain in the report; the data process also records
-its stdout and stderr transport bounds. Failed or mismatched bytes never enter
-the immutable cache. The process owner and lease handoff remain unchanged.
+源码登记在 fetch 前获取一次，复用于政策检查及摘要。两端登记摘要覆盖完整解析快照，含稳定选择器及有效目标；原字节和失败保留在固定 Git 进程观察。回执／intent 的 `config_path`／`config_sha256` 继续指工作树政策。重建、恢复、rebind、清理都共用该快照获取模块。
 
-This is a mixed product/policy adoption. Install the compatible binary before
-committing this field in host policies; older strict decoders reject it. A larger
-input allowance does not waive committed policy equality, live checkout checks,
-artifact registration or migration. Complete input transport does not establish
-full input closure or deterministic parity.
+### 有限读取与复用
 
-The Rust acquisition regression accepts an optional read-only
-`CHRONO_IMMUTABLE_INPUT_FIXTURE` to verify the original large host input, checking
-its fixed length and SHA-256 before use. Without that explicitly registered test
-input it exercises the same capacity boundary with synthetic bytes. This does
-not change the production input or its expected identity.
+登记列表使用 runner 共享、有上限的 Git batch 获取。metadata 固定 blob 身份／大小，内容请求按原输出上限分批并与 metadata 核对。小列表或框架空间不足时仍直接读。batch 错误／失败在检出效果前保留原进程字节和退出。只有完整验证的不可变字节进入单次操作缓存；HEAD、检出、政策、附件、所有权仍实时观察。
 
-Coordinator maintenance may acquire an existing enrollment with this data
-contract while preserving that target's committed configuration and HEAD. Its
-unchanged target policy inputs must still match the enrollment's current binding,
-and its cleanup policy hash must match the coordinator's policy. Changing only
-the coordinator's transport declaration does not authorize changing an enrollment
-or rewriting a previous attempt. If a pending cache attempt binds the old
-coordinator configuration, its existing reconciliation checks still apply.
+为超过普通诊断上限的明确不可变输入，v1／v2 政策还可声明 `immutable_input_limits`：精确仓库相对路径 → 正字节上限，最多 67,108,864。省略保留原传输合同。本仓为 `.chrono-harness/config.json` 声明 2,097,152 字节，`output_limit_bytes` 仍 1,048,576。这只增加获取容量，不登记文件、输出、消费者或删除资格。
 
-Successfully parsed trees at fixed OIDs share their original acquisition within
-one operation and root. Cleanup reuses that immutable tree across its guards;
-the index, physical source, policies, locks and usage checks retain their live
-reads. Failed or malformed trees never enter the cache, and a later operation
-acquires its own evidence.
+blob 模块先在原时间／输出上限内获取固定提交对象 metadata。过大输入在读内容前拒绝。允许读取时，只有 stdout 上限改为精确实测长度，空 blob 用一字节；stderr 和其他 Git 命令不变。数据命令点名观察 OID，Rust 核完整 Git blob hash 和长度。
 
-Live checkout identity reads its root, common repository, metadata directory,
-HEAD and full branch name in one bounded Git process. Maintenance consumes that
-same observation for branch and attachment checks, alongside fresh inventory,
-physical identities, policy bytes and coordinator checks. Every disposal guard
-acquires a new observation; none is reused across deletion effects. Malformed
-fields, mismatched identities and failed Git processes still preserve pending
-work and the original failure evidence.
+两进程、字节、摘要、退出及部分失败都保留，数据进程另记 stdout／stderr 传输上限。失败／不符字节不进缓存，进程所有权和租约交接不变。
 
-Local check preparation compares the index and physical files with its fixed
-candidate both before and after fetching the base. Its final live HEAD check
-does not select a different snapshot for the following file comparison. A clean
-replacement commit cannot validate the original candidate; untracked-file
-checks remain live. These observations do not form an atomic Git transaction.
+**产品与政策曾同步采用：**政策提交该字段前先装兼容工具，旧严格解码器会拒绝。增大输入容量不豁免已提交政策相等、实时检出检查、产物登记或迁移。传输完整不证明输入完整或同判。
 
-Creation uses a new branch and a worktree lock tied to this invocation. Actual
-Git inventory, HEAD, branch, root and checkout cleanliness are checked before
-unlocking it. The producer reuses registration's artifact classifier: declared
-untracked artifact paths are allowed and preserved. Tracked changes are always
-checked separately, including beneath artifact roots. One untracked-file inventory
-includes ignored and nonignored files, independent of changes to ignore rules.
-It excludes only explicitly registered artifact directories before returning paths;
-large build outputs therefore do not consume the path observation bound.
-Remaining paths use the original registration classifier.
-Unknown neighbors, literal or case lookalikes, and a file or symlink in place of a
-registered directory remain errors. The output bound is unchanged. Existing paths and branches
-are preserved. A failing checkout hook,
-timeout, changed identity or dirty new checkout fails creation and preserves the
-new branch/worktree for recovery. There is no automatic deletion or success
-inference from a partially completed Git command. A failed fetch may retain its
-named temporary ref; inspect the report before recovery.
+Rust 获取回归可读明确登记的只读 `CHRONO_IMMUTABLE_INPUT_FIXTURE`，使用前核固定长度／SHA-256；未提供时用合成字节测同一容量边界，不改生产输入或预期。
 
-Each observed attempt writes a unique `chrono-worktree-report/v1` JSON file under
-the configured state directory and returns the same JSON on stdout. It contains
-source identity, observed base/tree, branch/destination, start time, configuration
-digest, inherited/effective environment, Git version observation and actual
-subprocess argv, bytes, hashes, exits and bound failures. Failures before tool
-observation/configuration acceptance return a nonzero diagnostic without inventing
-a process receipt. After observation, `status` is `created` or `failed` and the
-CLI exits 0 or 2 respectively. `governance` remains `not-evaluated` and `parity`
-remains `unestablished`. The partial `context` is an input for later work, not a
-complete check context or integration certificate.
+协调维护可用此数据合同读取已有登记项，同时保留目标已提交配置／HEAD。目标原政策输入须仍匹配登记绑定，cleanup hash 须匹配协调者。只改协调者传输声明，不授权改目标或重写旧尝试；pending 缓存尝试若绑定旧协调配置，仍须按原规则协调。
 
-New reports and their matching CLI stdout use compact JSON with one trailing
-newline. Historical originals retain their representation and byte identity.
-Complete process captures, their byte arrays, hashes, exit codes and bounds
-remain present. This avoids indentation expansion of captured Git bytes in
-bounded lifecycle consumers while preserving exact stored/stdout equality.
+固定 OID 树成功解析后，在同一操作／根内共用原获取。清理各保护复用不可变树，索引、物理源码、政策、锁、使用状态仍实时读取；失败／错误树不进缓存，下一操作重新取证。
 
-The dedicated tests use real bare remotes, advanced remote commits, arbitrary
-host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and
-remote policy drift, missing remotes, tool mismatch and real checkout hooks. The
-adopted policy has an actual subprocess consumer. The host registers both the
-binary and dedicated test plan. Public beta.8 includes this tool for macOS arm64
-and Linux x86_64; its native release recipe passed all 49 dedicated worktree tests
-on each platform. The four [example hosts](examples.md) explicitly adopt the tool
-and policy; no host-language or directory inference supplies their registrations.
+实时检出身份在一次有限 Git 进程读取根、共同仓库、metadata 目录、HEAD、完整分支名。维护结合新 inventory、物理身份、政策和协调者检查使用它。每个处置保护重新观察，不跨删除效果复用。字段错误、身份不符、Git 失败都保留 pending 工作及原失败。
 
-Registered maintenance below adds recovery of reconciled checkouts and explicit
-cleanup. AI semantic reconciliation, PR provider
-operations, merge and actual landing orchestration remain unfinished. Subsequent governance
-checks continue to use the same registered `chrono-harness check` command locally
-and in CI. This increment changes product and adopted policy together; validation
-scope expands by the new project/test pair and bootstrap/release registrations.
-Declared costs remain unknown, and no acknowledgement or human approval is added.
+本地准备在 fetch base 前后，都将索引和物理文件与固定候选比较。最后 HEAD 观察不能为之后文件比较换快照；干净的替换提交不能替原候选过验，未跟踪检查保持实时。这不是原子 Git 事务。
 
+## 创建结果与失败保护
 
-## Explicit reconstruction
+创建使用新分支及本次调用拥有的 worktree 锁，解锁前核真实 Git inventory、HEAD、分支、根、干净状态。复用 registration 产物分类器，允许并保留声明未跟踪产物；已跟踪修改单独检查，产物根下也不例外。
 
-Use the same host policy and an explicit run-local plan under the host's registered
-untracked `.chrono-harness/state/` artifacts:
+一次未跟踪清单同时含 ignored／非 ignored 文件，不依赖 ignore 规则变化；返回前只排除明确产物目录，避免大构建输出耗尽路径观察上限。其余路径用原分类器。未知邻居、字面／大小写近似项、用文件或链接冒充登记目录都错误，上限不变。
+
+已有路径／分支保留。hook 失败、超时、身份变化、新检出脏都会使创建失败，保留新分支／工作树供恢复；不自动删除，不从部分 Git 完成推断成功。fetch 失败可能留下具名临时 ref，恢复前须看报告。
+
+每次已观察尝试在配置 state 目录写唯一 `chrono-worktree-report/v1`，stdout 返回相同 JSON，包含源码身份、基线／tree、分支／目标、开始时间、配置摘要、继承／有效环境、Git 版本及真实子进程 argv、字节、摘要、退出、限制失败。
+
+工具观察／配置接纳前失败，非零诊断且不编造进程回执；观察后 status 为 `created` 或 `failed`，分别退出 0、2。`governance: not-evaluated`、`parity: unestablished`，部分 context 只是后续输入，不是完整检查上下文或集成凭据。
+
+新报告和对应 stdout 用紧凑 JSON，末尾一个换行；历史原件保留原表示和字节。完整进程捕获、字节数组、摘要、退出、上限仍在，避免缩进放大 Git 字节，同时保持存储／stdout 完全一致。
+
+专属测试使用真实 bare remote、前进远端、任意布局、空格／Unicode 路径、脏／锁工作树、两端政策变化、remote 缺失、工具不符、真实 hook。采用政策有真实子进程消费者，宿主明确登记二进制及测试计划。
+
+公开 beta.8 含 macOS arm64、Linux x86_64 工具，原生发布每平台通过全部 49 项 worktree 测试。四个[示例宿主](examples.md)明确采用工具／政策，不靠语言或目录推断。
+
+下文增加恢复及明确清理。AI 语义协调、PR provider 操作、合并／落地编排仍未完成。后续治理仍用本地／CI 同一 `chrono-harness check`。此增量曾同改产品和采用政策，验证增加新项目／测试对及 bootstrap／发布登记；成本未知，不增加确认或人审。
+
+<a id="explicit-reconstruction"></a>
+
+## 明确重建工作树
+
+沿用同一宿主政策，在登记未跟踪 `.chrono-harness/state/` 产物下提供本次计划：
 
 ```sh
 .chrono-harness/bin/chrono-worktree reconstruct \
@@ -228,9 +109,7 @@ untracked `.chrono-harness/state/` artifacts:
   --plan .chrono-harness/state/reconstruction.json
 ```
 
-The strict `chrono-worktree-reconstruction/v1` plan names fixed full commit IDs
-and the complete original net DELTA. Renames are deletion plus addition. Example
-shape (replace endpoint placeholders with actual full commit IDs):
+严格 `chrono-worktree-reconstruction/v1` 点名完整固定提交和原完整净 DELTA，改名按删加。下列占位符须换真实完整 OID：
 
 ```json
 {
@@ -244,42 +123,19 @@ shape (replace endpoint placeholders with actual full commit IDs):
 }
 ```
 
-Every changed path must appear exactly once, with no unrelated entries. Retirement
-requires a nonempty reason. The AI chooses continued necessity; the tool checks
-coverage and applies the chosen changes without inferring language or test scope.
-The old base must be a Git ancestor of the source candidate; the latter must equal
-source HEAD. Source work must be committed and clean except declared artifacts.
-The plan itself must have a registered artifact owner. Existing policy-adoption
-requirements still apply before creating the new worktree.
+每个变更路径恰好一次，无无关项；retire 必须有非空理由。AI 判断是否仍需保留，工具只核覆盖并应用选择，不推断语言／选测。旧 base 须为候选祖先，候选等于源码 HEAD；源码须已提交、除声明产物外干净。计划自身须有产物所有者，创建前仍须满足政策采用要求。
 
-The producer extracts the original binary/full-index patch with literal paths,
-no rename heuristic, external diff or text conversion. It reuses `start` to fetch
-the target and create a new branch; it never merges the old branch. Git applies
-the selected patch with `--3way --index`. Raw diff and apply process results are
-retained, including the patch input hash. Output bounds fail before creation if
-the patch cannot be retained. Empty or retired-only DELTAs do not run apply.
+程序以字面路径、无改名猜测／外部 diff／文本转换，提取原 binary／full-index patch，再复用 start 获取目标、创建新分支，不合并旧分支。Git 用 `--3way --index` 应用所选 patch，保留原 diff／apply 及补丁输入摘要。补丁不能在上限内保留时，创建前失败；空或全退役 DELTA 不 apply。
 
-A successful result has `status: reconstructed`, exit 0, the new target parent,
-actual staged path set and `reconstruction.index_tree`; the partial context's
-`candidate` is null because the staged changes are not a new commit. No source
-worktree or branch is deleted. Failure is exit 2; conflicts, original process
-failure and the invocation lock are preserved for AI reconciliation. Source
-mutation or a changed destination identity also fails without deleting work.
+成功为 `status: reconstructed`、退出 0，含新目标 parent、实际暂存路径集及 `reconstruction.index_tree`。暂存尚未提交，所以部分 context 的 candidate 为 null。不删原工作树／分支。
 
-After success, the AI reviews the staged result, reconciles semantic changes and
-registrations, commits it, and runs the same registered canonical check with new
-evidence. A reconstruction result is neither a freshness verdict nor a check or
-integration certificate. The workflow judge continues to own freshness policy;
-Git/config/hook closure, automatic conflict resolution and provider orchestration
-remain outside this producer's current guarantee. The separate maintenance
-operations below validate recovery and explicit saved-work cleanup.
+失败退出 2，保留冲突、原进程失败、调用锁供 AI 协调。源码修改或目标身份变化也失败，不删工作。成功后 AI 审读暂存、协调语义／登记、提交，再用新证据跑标准检查。重建不证明新鲜度、检查或集成；新鲜度归 workflow，Git／config／hook 输入完整、自动解冲突、provider 编排仍不保证。恢复及保存工作清理见下文。
 
-## Registered recovery and cleanup
+<a id="registered-recovery-and-cleanup"></a>
 
-The same committed `.chrono-harness/worktree.json` supplies the Git binary,
-process limits and report location for maintenance. These operations consume
-explicit plans under a registered `.chrono-harness/state/` artifact directory;
-no branch age, directory name or host language selects work. The commands are:
+## 登记式恢复与清理
+
+维护沿用已提交 `.chrono-harness/worktree.json` 的 Git、进程限制和报告位置，计划放登记 `.chrono-harness/state/`。不按分支年龄、目录名、语言选工作：
 
 ```sh
 .chrono-harness/bin/chrono-worktree recover \
@@ -290,8 +146,7 @@ no branch age, directory name or host language selects work. The commands are:
   --plan .chrono-harness/state/cleanup.json
 ```
 
-Recovery completes a caller's reconciliation of an existing failed `start`,
-`reconstruct` or `cleanup` checkout. Its strict `chrono-worktree-maintenance/v1` plan is:
+recover 完成调用方对失败 start／reconstruct／cleanup 检出的协调。严格计划为：
 
 ```json
 {
@@ -306,20 +161,11 @@ Recovery completes a caller's reconciliation of an existing failed `start`,
 }
 ```
 
-The original report must identify this source, the current committed policy, a
-failed creation/reconstruction/cleanup, the exact destination/branch and its owned lock.
-The caller explicitly supplies the reconciled HEAD and index tree. An owned lock
-left by failed cleanup can be recovered before retrying disposal. Recovery
-requires the original fetched base to remain an ancestor, a resolved index,
-no unstaged changes or unregistered files, and the same physical Git repository.
-It rechecks identity before releasing that lock. Committed reconciliation is
-allowed; staged work remains staged. The new report retains the original bytes,
-digest and failure, and reports `recovered`; it does not rerun hooks, turn the
-original failure into success, or issue a check/integration certificate. The
-caller commits any remaining staged work and runs the canonical check.
+原报告须绑定本源码、当前已提交政策、失败创建／重建／清理、精确目标／分支及自有锁。调用方明确给出解决后的 HEAD／index tree，失败清理留下的自有锁也可先恢复再重试。
 
-Cleanup names one exact worktree and a separate local branch that preserves its
-committed work. All fields below are required; substitute actual paths and OIDs:
+要求原获取 base 仍为祖先、索引已解决、无未暂存修改／未登记文件、同一物理 Git 仓库。解锁前复核身份。允许已提交协调，暂存仍保留暂存。新报告保留原字节、摘要、失败，状态 `recovered`，不重跑 hook、不改旧失败为成功、不发检查／集成凭据。调用方提交剩余暂存后跑标准检查。
+
+cleanup 点名精确工作树，以及另一个保留其提交的本地分支。以下字段全必需，须换真实路径／OID：
 
 ```json
 {
@@ -337,50 +183,21 @@ committed work. All fields below are required; substitute actual paths and OIDs:
 }
 ```
 
-`retention: ancestor` proves the expected HEAD is an ancestor of the fixed
-retained commit. `same-tree` supports squash delivery by requiring exact tree
-equality. Both retain a named local branch at the declared commit; neither
-certifies a remote merge, tests, or semantic equivalence of different trees.
-The work branch must match an explicitly registered feature/integration prefix.
-Main/source, locked, nested, foreign, mismatched, dirty or unknown worktrees fail.
-Every disposable directory must be an untracked artifact declared in both the
-source and target HEAD registries. Unlisted artifacts also prevent deletion;
-registration alone is not permission to discard them. Tracked changes under an
-artifact path remain errors. Cleanup uses the existing bounded literal inventory
-queries, so registered build output does not require listing every cache file.
+`retention: ancestor` 证明 HEAD 是固定 retained commit 祖先；`same-tree` 用精确树相等支持 squash 交付。两者都保留位于声明提交的具名本地分支，不证明远端合并、测试或不同树语义等价。
 
-The producer checks the exact checkout, HEAD, branch and preservation reference,
-acquires an invocation lock, rechecks, releases only that lock, rechecks saved work and contents, then removes
-the worktree. It verifies path/inventory absence before any optional branch deletion.
-Branch removal uses the expected OID and checks that no registered worktree still
-uses it. Failures retain actual process results and explicit partial effects;
-there is no rollback claim. `worktree_removal` and `branch_removal` distinguish
-`not-attempted`, `attempted-unverified`, `verified-absent` and `already-absent`;
-a branch kept by the plan is `not-requested`. The `*_removed` booleans are true
-only after this invocation's removal and absence checks succeed. False does not
-prove that a failed Git operation had no effect; inspect the explicit state and
-original process evidence. `allow_absent_worktree: true` explicitly permits a
-retry after partial removal, including a remaining branch. Already absent work
-is observed as absent and is not reported as a new removal. The retained branch
-must still match. Configuration, hooks and concurrent filesystem writers are not
-an atomic transaction; these checks do not claim exclusion of all concurrent
-mutations.
+工作分支须匹配明确 feature／integration 前缀。主／源码工作树、带锁、嵌套、外来、身份不符、脏或未知目标都失败。每个可丢目录须是源码／目标 HEAD 两端登记的未跟踪产物；未列产物也阻止删除，登记本身不授权丢弃。产物路径下已跟踪变化仍错误。清理使用有限字面清单查询，不逐个列构建缓存文件。
 
-Maintenance operations return the ordinary stored/stdout report with actual process
-bytes, `governance: not-evaluated` and `parity: unestablished`; success exits 0,
-failure exits 2. They preserve source work. Interrupted owned checkouts with a
-retained intent use the separate contract below. Damaged/missing Git metadata and lost old receipts use the separate explicit
-metadata-rebind contract below; no automatic metadata deletion or
-semantic reconciliation is provided. PR/merge/landing producers remain pending.
-These commands are included in the public beta.8 release and installed through
-the same pinned host distribution entry.
+程序核精确检出、HEAD、分支、保留 ref，取得调用锁再核，只释放自有锁，再核保存工作／内容后移除工作树。可选删分支前先验证路径／inventory 缺失；按预期 OID 删分支，核无登记工作树仍使用它。
 
+失败保留实际进程及明确部分效果，不承诺回滚。`worktree_removal`、`branch_removal` 区分 `not-attempted`、`attempted-unverified`、`verified-absent`、`already-absent`，计划保留分支为 `not-requested`。只有本次移除且核缺失后，`*_removed` 才 true。false 不证明失败 Git 无效果，应读状态和原进程。
 
-### Temporary fetch-ref cleanup
+`allow_absent_worktree: true` 明确允许部分移除后重试，含剩余分支；已缺失只报告观察，不算新移除，保留分支仍须匹配。配置、hook、并发文件写入不是原子事务，不宣称排除一切并发变化。
 
-A failed fetch or temporary-ref deletion can retain a ref without creating a
-worktree. With the original failed report available, use the same maintenance
-entry configuration and a `cleanup-fetch` plan:
+维护返回同一存储／stdout 报告及原进程字节，`governance: not-evaluated`、`parity: unestablished`；成功 0、失败 2，保全源码。中断且有 intent 走下文独立合同；metadata 损坏／缺失、旧回执丢失走明确 rebind，不自动删 metadata 或解语义。PR／合并／落地生产者未完成。上述命令从公开 beta.8 随固定宿主安装入口提供。
+
+### 清理临时 fetch ref
+
+fetch 或临时 ref 删除失败，可能留 ref 而未建工作树。原失败报告存在时，沿同一维护配置用 `cleanup-fetch`：
 
 ```sh
 .chrono-harness/bin/chrono-worktree cleanup-fetch \
@@ -403,45 +220,17 @@ entry configuration and a `cleanup-fetch` plan:
 }
 ```
 
-The original report must bind this source/configuration and a failed `start` or
-`reconstruct` invocation whose temporary ref was not reported removed. Its
-`fetch_ref` must equal `refs/chrono-harness/fetch/` plus its invocation token.
-If it recorded a base, that base must match the plan's `head`. The exact expected
-commit must be an ancestor of the explicitly named local retention branch at
-`retained_commit`. A symbolic temporary ref, changed OID or moved retention
-branch fails. No worktree, other ref or remote branch is removed.
+原报告须绑定本源码／配置和失败 start／reconstruct，且未报告临时 ref 已移除。`fetch_ref` 须为 `refs/chrono-harness/fetch/` 加调用 token；若有 base，须等于计划 head。预期提交须为明确本地保留分支 retained_commit 的祖先。符号 ref、OID 变化、保留分支移动均失败。不删工作树、其他 ref 或远端分支。
 
-The producer rechecks retention and original report bytes, deletes with the
-expected OID, and observes ref absence. Original failure bytes remain intact.
-`fetch_ref_removal` uses `not-attempted`, `attempted-unverified`, `verified-absent`
-and `already-absent`; `fetch_ref_removed` is true only after this invocation's
-removal and absence check. A failed command can have changed the ref. Set
-`allow_absent_ref: true` only for an explicit absence-tolerant retry; retention
-must still hold. This does not reconstruct a missing/interrupted original report
-or make concurrent ref/configuration writers atomic. It exits and reports through
-the same maintenance contract above and is included in public beta.8.
+程序复核保留及原报告，按预期 OID 删除，观察缺失，原失败字节不变。`fetch_ref_removal` 使用同样四状态；`fetch_ref_removed` 只在本次删并核缺失后 true。失败命令可能已改 ref。只有明确允许缺失重试才设 `allow_absent_ref: true`，保留条件仍须成立。不重建缺失／中断报告，不保证并发 ref／配置原子性。退出／报告沿用维护合同，公开 beta.8 已含此入口。
 
-## Interrupted checkout recovery
+## 恢复中断的检出操作
 
-Public beta.8 also provides `recover-interrupted`, installed through the host’s
-pinned distribution lock. Before `start`/`reconstruct`
-creates a checkout, and before `cleanup` acquires its checkout lock, the producer
-publishes a `chrono-worktree-recovery-intent/v1` file next to the result path,
-with the suffix `.intent.json`. It writes and syncs a temporary file, then
-publishes without replacing an existing path. Publication failure prevents that
-subsequent checkout/lock operation. Earlier preparation, including fetching,
-can already have occurred.
+公开 beta.8 还提供 `recover-interrupted`，沿宿主固定分发锁安装。start／reconstruct 创建检出前、cleanup 取得检出锁前，先在结果旁发布后缀 `.intent.json` 的 `chrono-worktree-recovery-intent/v1`。先写并同步临时文件，再以不覆盖已有路径的方式发布；失败就不执行之后检出／加锁，但更早的 fetch 等准备可能已发生。
 
-The intent retains source/configuration/registry identity, selected base,
-destination, branch, invocation lock reason and final-result path. It contains
-no outcome or fabricated process exit. A completed result references its path
-and digest. If the process stops before final publication, the caller can select
-the corresponding explicit intent using the observed invocation/lock identity;
-the tool does not scan for or guess an owner. Keep this file and any incomplete
-result until recovery is complete. Its presence does not prove that the original
-invocation stopped: the AI caller must establish that before starting recovery.
+intent 保留源码／配置／登记身份、所选 base、目标、分支、调用锁理由和最终结果路径，没有结果或虚构退出。完整结果引用其路径／摘要。最终发布前进程停止时，调用方可按观察到的调用／锁身份明确选 intent；工具不扫描或猜所有者。
 
-Use the same registered policy and an explicit state plan:
+恢复完成前保留 intent 和不完整结果。intent 存在不证明旧调用已停止，AI 调用方必须先确认这一点。
 
 ```sh
 .chrono-harness/bin/chrono-worktree recover-interrupted \
@@ -463,50 +252,19 @@ Use the same registered policy and an explicit state plan:
 }
 ```
 
-When an empty or truncated result file exists, use
-`"result": {"presence": "present", "sha256": "ACTUAL_RESULT_SHA256"}`.
-Missing and empty are different observations. The `absent` variant accepts no
-payload fields; `present` requires its string `sha256`. Unknown fields, missing or
-unknown presence tags and invalid payload types fail plan parsing before Git
-observation or report creation. The reader rejects changed
-presence/bytes, nonregular or linked inputs, mismatched intent/configuration,
-and an original JSON result that declares a terminal worktree outcome. Use the
-ordinary maintenance contract for such a retained result; do not remove it to
-make this path eligible.
+空或截断结果文件存在时，用 `"result": {"presence": "present", "sha256": "ACTUAL_RESULT_SHA256"}`。缺失与空不同。absent 不接受内容字段，present 要求字符串 sha256。未知字段、presence 缺失／未知、内容类型错误，在 Git 观察／报告创建前就解析失败。
 
-Recovery reuses the original `recover` checks for actual checkout, common
-repository, branch, owned lock, base ancestry, reconciled HEAD/index, unstaged
-changes and declared artifacts. It rechecks the selected evidence before and
-after releasing the lock. The new report retains the original intent and any
-result bytes, sets `original_outcome: unknown`, and reports only the current
-recovery outcome. It neither completes the interrupted command nor restores a
-lost original index. Staged work still needs a candidate commit and the canonical
-check. If cleanup already removed the checkout, use its explicit absence-tolerant
-cleanup plan instead of claiming a recovered checkout.
+读取器拒绝存在状态／字节变化、非普通或链接输入、intent／配置不符，以及已声明工作树终态的原 JSON 结果。已保留终态须用普通维护，不能删它来满足此入口条件。
 
-Real Git tests terminate the CLI after checkout creation, patch application and
-cleanup locking. They also cover absent/empty/truncated results, terminal-result
-refusal, identity drift and occupied intent paths. These are bounded process
-interruption checks, without a power-loss or concurrent-writer transaction
-guarantee. Interrupted fetches use the separate intent below. Missing intent,
-metadata rebind and PR/merge orchestration remain outside
-this contract. No governance or local/CI parity guarantee is added.
+恢复复用原 recover 对真实检出、共同仓库、分支、自有锁、base 祖先、解决后 HEAD／index、未暂存修改、声明产物的检查。解锁前后复核所选证据，新报告保留原 intent／结果字节，写 `original_outcome: unknown`，只报告本次恢复结果。不补完中断命令、不恢复丢失原索引。暂存仍须提交并标准检查。
 
-## Interrupted fetch cleanup
+cleanup 已删检出时，使用明确允许缺失的 cleanup 计划，不能声称恢复检出。真实 Git 测试在创建、补丁应用、清理锁定后终止 CLI，覆盖缺失／空／截断、终态拒绝、身份变化、intent 路径被占。这是有限进程中断验证，不保证断电或并发事务。fetch 中断见下文；intent 缺失、metadata rebind、PR／合并编排不属此合同，也不增加治理／同判保证。
 
-Public beta.8 also provides `cleanup-fetch-interrupted`. Before `start` or `reconstruct` runs Git fetch, it validates the source
-policy/report artifact registrations and publishes an immutable
-`chrono-worktree-fetch-intent/v1` at `REPORT_PATH.fetch-intent.json`. It uses the
-same synced, no-clobber publication as checkout recovery. Publication failure
-prevents fetch. The completed result references this intent separately from any
-later checkout intent.
+## 清理中断的 fetch
 
-The fetch intent binds the source commit and registry digest, source/configuration
-identity, remote, target ref, invocation token, exact temporary fetch ref and final
-result path. It has no fetched base or outcome: neither exists as an observed fact
-at publication time. A stopped invocation can leave a ref or already have removed
-it while its final report is still absent, empty or incomplete. The caller must
-establish that the original invocation has stopped before cleanup.
+公开 beta.8 的 `cleanup-fetch-interrupted` 使用独立 intent。start／reconstruct fetch 前先核源码政策／报告产物登记，在 `REPORT_PATH.fetch-intent.json` 发布不可变 `chrono-worktree-fetch-intent/v1`，沿用同步、不覆盖发布，失败阻止 fetch。完整结果分别引用它和后续检出 intent。
+
+fetch intent 绑定源码提交／登记摘要、源码／配置身份、remote、target ref、调用 token、精确临时 ref、最终结果路径。发布时还没有观察到 fetch base 或结果，因此不写。停止的调用可能留 ref，也可能已删 ref，但最终报告仍缺失／空／不完整。调用方必须先确认旧调用停止。
 
 ```sh
 .chrono-harness/bin/chrono-worktree cleanup-fetch-interrupted \
@@ -530,41 +288,21 @@ establish that the original invocation has stopped before cleanup.
 }
 ```
 
-The strict `result` variants are the same as checkout interruption recovery;
-use `{"presence":"absent"}` only when the original result is absent. A retained
-terminal result is refused and must use ordinary receipt maintenance. No intent
-or owner is discovered from a directory or ref prefix.
+result 严格形式与检出中断恢复相同，只有实测缺失才用 `{"presence":"absent"}`。保留终态拒绝此入口，须用普通回执维护。不按目录／ref 前缀发现 intent 或所有者。
 
-The entry reuses ordinary `cleanup-fetch`: it requires a direct temporary ref,
-the explicitly expected current OID, and a separate local branch retaining that
-commit; deletion uses the expected OID and verifies absence. Only an explicit
-`allow_absent_ref: true` accepts an already absent ref. It retains original intent
-and result bytes, rechecks them before disposal and after final retention checks,
-and reports `original_outcome: unknown`. A post-effect failure retains the actual
-removal state and process results; it does not roll back or fabricate the original
-fetch outcome. It neither unlocks nor removes any checkout that the original
-invocation might have created later.
+复用普通 cleanup-fetch：要求直接临时 ref、明确当前预期 OID、另一个保留该提交的本地分支，按预期 OID 删并核缺失。只有明确 `allow_absent_ref: true` 才接受已缺失。
 
-Real CLI tests cover process termination after fetch and after ref removal,
-start/reconstruct consumers, absent/empty/truncated results, explicit retry,
-identity/retention drift, symbolic refs, terminal reports, occupied publication
-paths and evidence changed during deletion. Missing both usable receipt and
-intent and PR/merge orchestration remain
-outside this contract. These observations do not make concurrent writers atomic,
-provide power-loss durability, or certify governance and local/CI parity.
+保留原 intent／结果字节，在处置前和最终保留检查后复核，报告 `original_outcome: unknown`。效果后失败保留真实删除状态和进程，不回滚或编造原 fetch 结果，也不解锁／删除原调用后来可能创建的检出。
 
+真实 CLI 测试覆盖 fetch 后／ref 删除后终止、start／reconstruct、缺失／空／截断、明确重试、身份／保留变化、符号 ref、终态、发布路径占用、删除期间证据变化。可用回执和 intent 都缺失、PR／合并编排仍不支持。不保证并发原子、断电持久、治理或同判。
 
-## Remote branch retirement
+<a id="remote-branch-retirement"></a>
 
-The beta.10 public macOS binary retired the product release branch and each of
-the four example adoption branches after verified landing. Original process
-bytes, expected branch/target identities, leased deletion and observed absence
-were checked. Dedicated worktree tests also ran in both native release jobs;
-see [release evidence](distribution.md) and [example adoption](examples.md).
+## 退役远端工作分支
 
-Public beta.10 provides `cleanup-remote`. It uses
-an explicit plan and the same registered worktree configuration and process
-reporting as local maintenance:
+公开 beta.10 macOS 二进制在落地已验后，退役产品发布分支及四个示例采用分支，核原进程字节、预期分支／目标、lease 删除和实测缺失。两个原生发布 job 也运行专属 worktree 测试，见[发布证据](distribution.md)、[示例采用](examples.md)。
+
+`cleanup-remote` 从 beta.10 提供，沿同一登记配置／进程报告，使用明确计划：
 
 ```sh
 .chrono-harness/bin/chrono-worktree cleanup-remote \
@@ -586,64 +324,32 @@ reporting as local maintenance:
 }
 ```
 
-The source registries must declare the work branch prefix and target branch;
-`retained_ref` must be that distinct target. The configured remote must resolve
-to exactly one push URL matching the plan. Both remote refs are observed at that
-URL, without consulting remote-tracking refs. The target must match the fixed
-retained commit locally and remotely. Existing saved-work checks require either
-`ancestor` or `same-tree` retention. Objects must already exist locally; this entry
-does not infer or fetch missing history, a landing, PR status or tests.
+源码登记须声明工作前缀和目标分支，retained_ref 必须是另一个目标分支。配置 remote 须解析出唯一 push URL，且与计划相等。两远端 ref 都在该 URL 实测，不读 remote-tracking ref。目标在本地／远端均须等于固定 retained commit，满足 ancestor 或 same-tree 保留。
 
-The push names only that URL and full branch ref, disables following tags and
-submodule pushes, and requires `--force-with-lease=REF:EXPECTED_OID`. A changed
-branch is preserved by Git's lease. Local worktrees, local branches, other remote
-refs and Git configuration are not disposal targets. The plan and committed
-policy bytes, endpoint and saved work are checked around the operation. Symbolic,
-unexpected, duplicate or malformed remote ref advertisements fail.
+对象须已在本地，此入口不猜或 fetch 缺历史，不推断落地、PR 状态或测试。push 只点名该 URL 和完整分支 ref，关闭跟随 tag 和 submodule push，要求 `--force-with-lease=REF:EXPECTED_OID`；分支已变时 Git lease 保留它。本地工作树／分支、其他远端 ref、Git 配置不作处置目标。
 
-Success requires a successful push followed by observed branch absence and
-matching retention/plan/endpoint checks. The report uses `remote_branch_removal`
-with `not-attempted`, `attempted-unverified`, `verified-absent` or `already-absent`.
-`remote_branch_removed` is true only for this invocation's verified removal. A
-failed command may already have deleted the branch; its original bytes and exit
-remain in the failed report. An explicit `allow_absent_ref: true` retry validates
-retention and absence without rewriting the original result. Reports keep
-`governance: not-evaluated` and `parity: unestablished`.
+操作前后核计划／已提交政策、端点和保存工作；符号、意外、重复、格式错误的远端 ref 宣告失败。成功要求 push 成功、实测分支缺失、保留／计划／端点复核都通过。
 
-The lease protects the disposal ref's expected OID. Target/URL observations and
-local checks are not an atomic transaction with the remote server, do not prevent
-all concurrent writers or transient changes, and do not close Git configuration,
-hook, transport, credential or OS inputs. If the target changes during a push,
-the final observation can fail after deletion. An interrupted attempt has unknown
-outcome and can use an explicit absence-tolerant plan after the caller establishes
-it has stopped. No remote recovery intent, server lock, PR authorization or merge
-certificate is inferred. Credentials may still be required by the configured
-transport; do not put secret-bearing URLs in a retained plan/report.
+报告 `remote_branch_removal` 四状态与本地同义，`remote_branch_removed` 只对本次核实删除为 true。失败命令可能已删分支，原字节／退出仍保留。明确允许缺失重试时重新核保留和缺失，不重写旧结果；治理／同判仍未建立。
 
-Real bare-remote consumers cover unchanged local dirty work, explicit endpoint
-selection despite configured push refspecs, squash retention and absence retries,
-endpoint/branch/retention rejection, symbolic refs, concurrent branch updates,
-original failure after deletion, and target/plan changes after deletion.
+lease 只保护被删 ref 的预期 OID。目标／URL 观察和本地检查不与服务器构成原子事务，不排除全部并发／瞬时变化，也不补齐 Git config、hook、transport、credential、OS 输入。目标在 push 中变化，可能删除后最终检查失败。
 
-## Explicit metadata rebind
+中断结果未知，调用方确认已停止后可用允许缺失计划；不推断远端恢复 intent、服务器锁、PR 授权或合并凭据。配置传输仍可能需凭据，不把含秘密 URL 写入保留计划／报告。
 
-Public beta.11 includes `inspect-rebind` and `rebind`.
-They recover a linked checkout's Git attachment when its metadata is missing or
-unusable, including loss of all old operation receipts. The AI supplies the
-existing branch, exact current commit, desired index tree and each path. The old
-index and original operation outcome are never inferred. A healthy attachment
-uses ordinary maintenance.
+真实 bare remote 消费者覆盖保全本地脏工作、无视配置 push refspec 而明确选端点、squash 保留／缺失重试、端点／分支／保留拒绝、符号 ref、并发分支更新、删除后原失败、删除后目标／计划变化。
 
-Both commands use the registered worktree policy and the maintenance plan:
+<a id="explicit-metadata-rebind"></a>
+
+## 明确重建 Git 元数据关联
+
+公开 beta.11 提供 `inspect-rebind`、`rebind`，在 linked 检出 metadata 缺失或不可用时修复 Git 关联，包括旧回执全丢。AI 提供已有分支、精确当前提交、希望采用的 index tree 和每个路径，不推断旧索引／原操作结果。健康关联使用普通维护。
 
 ```sh
 chrono-worktree inspect-rebind --host-root ROOT --config .chrono-harness/worktree.json --plan .chrono-harness/state/rebind-inspection.json
 chrono-worktree rebind --host-root ROOT --config .chrono-harness/worktree.json --plan .chrono-harness/state/rebind-plan.json
 ```
 
-The inspection plan is explicit data; OIDs below must be replaced with actual
-commit/tree identities. `index_tree` declares the index to install, which can
-represent chosen staged work and may differ from HEAD.
+检查计划是明确数据，OID 换真实 commit／tree；index_tree 声明要安装的索引，可表示所选暂存工作，不必等于 HEAD。
 
 ```json
 {
@@ -662,66 +368,31 @@ represent chosen staged work and may differ from HEAD.
 }
 ```
 
-Inspection reports `observed` and a `proposed_plan` with `operation: rebind` and
-observed `expected` identities. Save that exact proposed plan in registered state
-before executing it. `expected` contains nullable gitfile identity
-(`sha256`, `size`, permission `mode`), nullable metadata digest and the visible
-subtree digest. The report retains the scope entries with raw path bytes, regular
-file content hashes/sizes/modes and literal symlink targets. Only the target root
-`.git` is excluded from visible work. This filesystem observation verifies an
-explicit preservation scope; it never enrolls files or derives test dependencies.
-Inspection writes its state report but does not change the selected checkout.
+inspect 报 `observed` 和 `operation: rebind` 的 `proposed_plan`，含实测 expected 身份。执行前将精确 proposed_plan 存到登记 state。expected 含可空 gitfile 身份（sha256、size、权限 mode）、可空 metadata 摘要、可见子树摘要。报告保留范围项原路径字节、普通文件内容摘要／大小／mode、字面链接目标；只排除目标根 `.git`。
 
-The target must be a physical directory outside the source/common Git directory
-and other checkouts. The branch must use a registered work prefix, exist at the
-declared HEAD and not belong to another checkout. The original metadata member is
-explicitly selected under the same common repository's `worktrees` directory;
-that parent may itself be absent. A usable old gitfile pointer and metadata
-backlink must agree with the selected target/member. Relative pointers are
-resolved lexically from the containing directory; symlink aliases are not treated
-as equivalent physical ownership. If metadata exists, at least one usable link
-must identify it. Missing old receipts do not authorize another checkout's
-metadata. Root `.git` directories/symlinks and special files in the preservation
-scope are rejected.
+此文件系统观察只核明确保全范围，不登记文件或推断测试依赖。inspect 写状态报告，不改目标检出。
 
-Backup must be an absent path under registered `.chrono-harness/state/` with
-existing physical parents. Donor must be an absent directory with an existing
-parent and must not overlap protected paths. Choose a donor basename that is not
-a prefix of `metadata_id`, so Git cannot reuse the old allocation. Before effects,
-execution rechecks source/configuration/branch/plan and observed identities and
-publishes immutable `chrono-worktree-rebind-intent/v1` containing the exact plan
-hash and expected-input digest. It copies the old gitfile bytes/mode, renames
-remaining metadata into `backup/metadata`, then creates a locked detached donor
-with `--no-checkout`. It sets the declared branch and index, publishes the donor
-pointer, runs Git repair, verifies attachment, removes the empty donor and
-releases the lock. No checkout/reset writes the original working files. Final
-success also rechecks the visible subtree and preserved backup.
+目标须是物理目录，在源码／共同 Git 目录及其他检出外。分支使用登记工作前缀，在声明 HEAD 存在，不能归其他检出。旧 metadata 成员由同一共同仓库 `worktrees` 下明确选择，父目录自身可缺失。
 
-`rebound` means the declared attachment/index are verified and the observed work
-was preserved. It reports `index_origin: explicit-plan`,
-`original_outcome: unknown`, `governance: not-evaluated` and
-`parity: unestablished`; staged or unstaged work remains the caller's responsibility
-before canonical checks. It does not certify historical-index recovery, full
-input closure or a checked candidate.
+可用旧 gitfile 指针和 metadata backlink 须与所选目标／成员一致。相对指针按所在目录词法解析，不把符号链接别名视为同一物理所有权。metadata 存在时，至少一条可用链接须识别它。旧回执丢失不授权其他检出 metadata。拒绝根 `.git` 目录／链接及保全范围内特殊文件。
 
-An ordinary failure retains phase, original process bytes/exit, immutable intent,
-backup and partial effects. Never rerun blindly over a nonempty backup/donor.
-Once Git repair has attached the destination and its original ownership lock is
-still present, existing receipt-bound `recover` can release it after explicit AI
-reconciliation; the original failed report, backup and any remaining donor stay
-untouched. `resume-rebind` below also handles pre-attachment failures and missing
-results using the original intent and plan. The AI must first establish that the
-old process stopped and reconcile conflicts in the retained evidence. Backup uses same-filesystem
-rename; cross-device failure is reported without deleting old metadata. There is
-no concurrent-writer isolation or crash/power-loss atomicity guarantee, and the
-observed identity does not preserve timestamps, ACLs, xattrs or hardlink topology.
+backup 须是登记 `.chrono-harness/state/` 下尚不存在的路径，物理父目录已存在。donor 为父目录已存在的新目录，不重叠保护路径；其 basename 不能是 metadata_id 前缀，避免 Git 复用旧分配。
 
-### Continue an interrupted or failed rebind
+执行前复核源码／配置／分支／计划和实测身份，发布不可变 `chrono-worktree-rebind-intent/v1`，含精确计划 hash、预期输入摘要。复制旧 gitfile 字节／mode，把残留 metadata rename 到 `backup/metadata`，创建 locked detached donor，使用 `--no-checkout`。
 
-The source adds `resume-rebind`; public beta.15 includes it. It consumes
-an existing `chrono-worktree-rebind-intent/v1` and the exact original rebind plan
-at the intent's `plan_path`. The continuation plan must use its own registered
-state path. No new index, backup, donor or ownership choice is inferred.
+之后设声明分支／索引、发布 donor 指针、Git repair、核关联、删空 donor、解锁，不通过 checkout／reset 写原工作文件。最终还核可见子树和保留备份。
+
+`rebound` 只表示声明关联／索引已核且观察工作保全，报告 `index_origin: explicit-plan`、`original_outcome: unknown`、`governance: not-evaluated`、`parity: unestablished`。暂存／未暂存仍由调用方在标准检查前处理。不证明历史索引恢复、输入完整或候选通过。
+
+普通失败保留阶段、原进程／退出、不可变 intent、backup、部分效果；不要对非空 backup／donor 盲重跑。Git repair 已附着目标且原锁仍在时，可由 AI 协调后用回执绑定 recover 解锁，保留失败报告、backup、剩余 donor。下文 resume-rebind 还支持附着前失败和结果缺失。
+
+AI 须先确认旧进程停止，协调证据冲突。backup rename 要同文件系统，跨设备失败不删旧 metadata。不保证并发隔离／崩溃／断电原子性；身份观察不保留时间戳、ACL、xattr、硬链接结构。
+
+<a id="continue-an-interrupted-or-failed-rebind"></a>
+
+### 继续中断或失败的 rebind
+
+`resume-rebind` 从公开 beta.15 提供，消费已有 `chrono-worktree-rebind-intent/v1` 及其 plan_path 的精确原计划。继续计划须有自己的登记 state 路径，不猜新索引、backup、donor 或所有权。
 
 ```sh
 chrono-worktree resume-rebind --host-root ROOT --config .chrono-harness/worktree.json --plan .chrono-harness/state/resume-rebind.json
@@ -740,130 +411,64 @@ chrono-worktree resume-rebind --host-root ROOT --config .chrono-harness/worktree
 }
 ```
 
-Use `result: {"presence": "absent"}` only for an observed missing result. Empty
-and partial result bytes use the present form. A complete original failed rebind
-must match its intent; it remains `original_outcome: failed`. Missing/partial
-results remain `original_outcome: unknown`. A completed successful result is
-refused. The original intent, plan, result and preserved metadata remain unchanged;
-the new report retains their input identities and original process evidence.
+只有实测结果缺失才用 `result: {"presence": "absent"}`，空／部分字节用 present。完整原失败须匹配 intent，保留 `original_outcome: failed`；缺失／部分为 unknown，已完成成功拒绝。原 intent、plan、result、metadata 不改，新报告保留输入身份及原进程。
 
-Initial and resumed rebind share the same preservation/attachment code. It checks
-source commit, registry, policy, plan bytes, branch HEAD and explicit index tree;
-visible file bytes/modes/literal links must still match the original observation.
-It completes missing pointer preservation or metadata relocation, reuses only the
-original locked donor, installs an absent index from the declared tree, attaches
-the target, removes the empty donor and releases its own lock. Existing indices
-must already match; no index or visible work is overwritten to force agreement.
-An already attached, unlocked destination is accepted only with the exact branch,
-index and original backup and an absent donor. Continuation may itself be retried
-against the unchanged original intent and result after its prior process stops.
+初次／继续共用保全和附着代码，核源码提交、登记、政策、计划字节、分支 HEAD、明确 index tree；可见文件字节／mode／字面链接仍须匹配原观察。
 
-Conflicting backups, changed visible work, donor files, another lock/branch,
-metadata belonging elsewhere, stale plan/result/configuration and ambiguous
-allocation are preserved and rejected before continuation effects. Interrupted
-Git `index.lock`/`HEAD.lock`, incomplete donor metadata, partial temporary files
-or a partially written old backup need explicit AI reconciliation; the tool does
-not discard those bytes or guess their meaning. Saved pointer publication now
-uses an atomic file replacement. Backup relocation still requires the same
-filesystem. Neither the intent nor this command proves the prior process stopped,
-concurrent-writer exclusion, power-loss atomicity or historical-index recovery.
+完成缺少的指针保留或 metadata 迁移，只复用原 locked donor，从声明树安装缺失索引、附着目标、删空 donor、释放自有锁。已有索引必须已匹配，不覆盖索引／可见工作强行凑一致。
 
-Real CLI tests terminate the producer before preservation and around donor
-creation, branch/index preparation, pointer attachment, repair and unlock. They
-also cover absent/partial/failed results, repeated continuation interruption,
-changed identities and completed-result refusal. `rebound` verifies the current
-attachment and preservation only; it is not a candidate check or governance pass.
+目标已附着且解锁时，只有精确分支／索引／原 backup、donor 缺失才接受。继续调用自身中断后，确认其进程停止，可对未改原 intent／result 再试。
 
-### Exact physical snapshot before release or deletion
+冲突 backup、可见工作变化、donor 文件、其他锁／分支、外来 metadata、过时计划／结果／配置、分配歧义，都保留并在继续效果前拒绝。中断留下的 `index.lock`／`HEAD.lock`、不完整 donor metadata、临时文件、写了一半的旧 backup，须 AI 明确协调，工具不丢字节或猜含义。
 
-The source checkout guard now reuses the runner's literal file/index comparison
-([contract](git-facts.md#literal-checkout-identity)). Creation, reconstruction,
-reconciled recovery and cleanup reject bytes, link representation and owner
-execute changes even when Git configuration reports a clean working tree.
-Cleanup preserves such unsaved work; recovery keeps its lock until the actual
-files match the explicitly supplied index tree. The existing artifact exclusion
-and saved-commit checks still apply. This change is distributed in beta.11 and
-does not claim complete Git configuration closure or concurrent deletion safety.
+保留指针发布使用原子文件替换，backup 迁移仍须同文件系统。intent 或命令不证明旧进程停止、并发排除、断电原子或历史索引恢复。
 
-## Declared artifact disposal before checkout removal
+真实 CLI 测试在保全前和 donor 创建、分支／索引准备、指针附着、repair、解锁周围终止生产者，覆盖缺失／部分／失败结果、重复中断、身份变化和完成结果拒绝。rebound 只核当前关联与保全，不是候选检查或治理通过。
 
-Source `cleanup` now separates explicitly selected generated output directories
-from the bounded Git checkout-removal process. Before deleting any selected
-directory, it verifies every entry is an untracked artifact in both endpoint
-registries, contains no tracked candidate path, and is absent or a physical
-directory without symlink ancestors. Existing saved-work, branch, checkout,
-unknown-file and nested-worktree checks still apply. Disposal runs under the
-owned worktree lock; literal checkout and retention are checked again before
-unlock and Git removal. The plan never discovers disposable directories.
+### 释放或删除前核真实文件
 
-`artifact_disposals` records each attempted path with `already-absent`,
-`attempted-unverified`, or `verified-absent`. The filesystem phase is within the
-caller’s host job lifecycle and has no Git subprocess deadline. A filesystem
-failure may partially delete the authorized artifacts while retaining the lock;
-resolve the cause and use existing receipt/intent recovery before explicit retry.
-A later Git failure retains the original process bytes and the completed artifact
-effects. Neither failure is rewritten as successful checkout removal.
+源码检出保护复用 runner [字面文件／索引比较](git-facts.md#literal-checkout-identity)。创建、重建、协调恢复、清理都拒绝字节、链接表示、所有者执行位变化，即使 Git 配置报告干净。
 
-This addresses generated build outputs consuming the Git-removal deadline and
-leaving a partially deleted checkout. It does not make concurrent changes or
-power loss atomic, recover a checkout already partially deleted by an older
-Git-removal attempt, or guarantee a deadline for arbitrary tracked source volume.
-The change is newer than beta.11. Dedicated real-Git consumers verify removal
-ordering independently of elapsed time, tracked-content rejection before any
-disposal, internal-symlink target preservation and a later Git failure/retry.
+清理保全未保存工作，恢复保留锁直到真实文件匹配明确 index tree。原产物排除、已保存提交检查继续适用。此变化从 beta.11 分发，不证明 Git 配置完整或并发删除安全。
 
-The beta.11 anonymous macOS binaries were installed in a clone of the upgraded
-public mixed host and its owned checkout. With the old receipts removed and
-the index damaged, explicit inspect/rebind preserved staged and unstaged work,
-raw binary bytes, executable mode, literal symlink, selected index and original
-metadata. The original outcome stayed unknown. Retained work was committed
-before registered cleanup verified checkout/branch removal. This does not cover
-interrupted rebind continuation; see [example adoption](examples.md).
+<a id="declared-artifact-disposal-before-checkout-removal"></a>
 
-## Opt-in automatic lifecycle cleanup
+## 先处置声明产物，再移除检出
 
-The source adds `automatic_cleanup` to the existing v1/v2 worktree configuration.
-Its value is one tracked, FILEMAP-registered policy path under `.chrono-harness/`.
-Omitting it retains the existing explicit maintenance behavior. There is no daemon,
-periodic idle trigger, age expiry, sibling-directory inventory or language inference.
-The main host invokes its registered `.chrono-harness/bin/chrono-worktree`; deploy
-the candidate binary before using its newly adopted configuration.
+cleanup 把明确生成目录处置与有限时 Git 检出移除分开。删任何目录前先核全部所选项：两端登记未跟踪产物、不含候选已跟踪路径、缺失或无符号链接祖先的物理目录。原保存工作、分支、检出、未知文件、嵌套工作树检查继续适用。
 
-The adopted main-host configuration selects `.chrono-harness/cleanup.json`. Its
-v2 policy retains these v1 fields:
+处置在自有 worktree 锁下运行，解锁／Git 移除前再核字面检出和保留。计划不发现可删目录。`artifact_disposals` 逐项记 `already-absent`、`attempted-unverified`、`verified-absent`。
 
-| Field | Contract |
+文件系统阶段归调用方宿主 job 生命周期，不继承 Git 子进程期限。失败可能已部分删除授权产物但保留锁；解决原因后，用已有回执／intent 恢复，再明确重试。之后 Git 失败仍保留原进程及已完成产物效果，均不改写为检出移除成功。
+
+这解决构建输出耗尽 Git 移除期限、留下部分删除检出的问题，不保证并发／断电原子，不恢复旧 Git 移除已部分删的检出，也不保证任意已跟踪源码量的删除时限。此变化晚于 beta.11。专属真实 Git 消费者不靠耗时而核删除顺序、处置前拒绝已跟踪内容、保全内部链接目标、后续 Git 失败及重试。
+
+公开 beta.11 匿名 macOS 二进制曾安装到升级混合宿主克隆及其自有检出。旧回执移除、索引损坏后，明确 inspect／rebind 保全暂存／未暂存、原二进制字节、执行位、字面链接、所选索引、原 metadata，原结果仍未知。保留工作提交后，登记 cleanup 核检出／分支移除。此证据不含中断 rebind 继续，见[示例采用](examples.md)。
+
+<a id="opt-in-automatic-lifecycle-cleanup"></a>
+
+## 按需采用自动生命周期清理
+
+源码在原 v1／v2 工作树配置增加 `automatic_cleanup`，值为 `.chrono-harness/` 下已跟踪、FILEMAP 登记的政策路径。省略仍走明确维护。不提供 daemon、定期空闲触发、年龄到期、兄弟目录扫描或语言推断。主宿主调用登记 `.chrono-harness/bin/chrono-worktree`，使用新配置前先部署兼容候选工具。
+
+本仓选 `.chrono-harness/cleanup.json`，其 v2 保留这些 v1 字段：
+
+| 字段 | 要求 |
 | --- | --- |
-| `coordinator_root` | An exact absolute physical Git checkout root, or the explicit `git-main-worktree` selector delegated to the existing Git owner inventory. It must survive disposal and belong to the same common repository. |
-| `state_directory` | A registered untracked directory under the coordinator's `.chrono-harness/state/`. |
-| `retained_ref`, `retention` | One direct local branch and existing `ancestor` or exact `same-tree` semantics. |
-| `remove_branch` | Explicit choice; main host keeps branches. |
-| `allow_evidence_disposal` | Whether the terminal owner may additionally select evidence disposal. Main host disables it. |
-| `artifacts` | Exact `config.artifacts` directory paths, each with `dispose`, `retain`, or `evidence-retain`. No kind-name or layout interpretation. Omitted paths remain retained. |
+| `coordinator_root` | 精确绝对物理 Git 检出根，或交给已有 Git inventory 的明确 `git-main-worktree` 选择器；协调者须在处置后存活，属于同一共同仓库 |
+| `state_directory` | 协调者 `.chrono-harness/state/` 下登记未跟踪目录 |
+| `retained_ref`、`retention` | 一个直接本地分支，使用原 ancestor 或精确 same-tree 保留含义 |
+| `remove_branch` | 明确选择；本仓保留分支 |
+| `allow_evidence_disposal` | 是否允许终态所有者另选证据处置；本仓禁用 |
+| `artifacts` | 精确 config.artifacts 目录，各选 dispose／retain／evidence-retain，不按 kind 名或布局解释；未列路径继续保留 |
 
-Policy/configuration bytes must match committed inputs at the invoking host and
-coordinator. Selected artifacts must be untracked declarations at both disposal
-endpoints. Main-host adoption individually selects the current registered build
-outputs and cache. It retains `.chrono-harness/bin/` and evidence in
-`.chrono-harness/state/`; its ordinary finish therefore reclaims caches and retains
-the checkout. Settling that evidence for whole-checkout removal requires an
-explicit policy change by its owner, followed by enrollment migration; changing a
-policy does not silently reinterpret existing enrollments.
+调用宿主／协调者政策和配置字节须匹配已提交输入，所选产物须在处置两端登记为未跟踪。本仓逐项选择当前构建输出／cache，保留 bin 和 state 证据，因此普通 finish 回收缓存、保留检出。整检出移除前，证据所有者须明确改政策并迁移登记项；改政策不会静默重释旧项。
 
-Successful `start` and `reconstruct` automatically enroll their exact linked
-checkout attachment and retain the producer's birth observation at the surviving
-coordinator. Failed creation, missing state and unknown ownership remain protected.
-For v2, persisted enrollment with unsealed birth evidence is reconciled at a normal
-entry after admission/attachment exclusion and original policy validation. The
-original missing or partial outcome stays unknown; recovery does not claim an
-original successful birth or terminal handoff. Before creation, both entries
-validate policy/identity and maintain only the addressed target. Cross-target
-drain belongs to explicit `maintain`; unrelated worktrees and fixture producers
-are not creation prerequisites. Target identity and target-state publication
-failures still block that target.
+成功 start／reconstruct 自动登记精确 linked 物理关联，在存活协调者保留 birth 观察。创建失败、状态缺失、所有权未知都受保护。v2 已登记但 birth 未封存时，普通入口先完成准入／关联排除、核原政策，再协调；原结果缺失／部分仍未知，不追认成功创建或终态交接。
 
-The fixed lifecycle commands default to `--host-root .` and
-`--config .chrono-harness/worktree.json`:
+创建前两入口核政策／身份，只维护点名目标；跨目标清理由明确 maintain 负责，无关工作树／fixture 不作为创建前置。目标身份或状态发布失败仍阻断目标。
+
+固定命令默认 `--host-root .`、`--config .chrono-harness/worktree.json`：
 
 ```sh
 chrono-worktree use --path /exact/worktree --operation test.example
@@ -873,798 +478,318 @@ chrono-worktree import --path /exact/existing-worktree
 chrono-worktree migrate --path /exact/enrolled-worktree
 ```
 
-`use` consumes exactly one registered project/script operation and its tool,
-argv, environment and process bounds. It records managed use under the target's
-metadata lease used by finish/disposal, invokes the existing bounded process
-owner, preserves original process bytes and exit, and releases use after the child
-has joined. A nonzero child exit is reported as failure even when use was safely
-released. Lifecycle results publish at the surviving coordinator even when the
-wrapper was invoked from the disposable checkout, so release leaves no result
-writer there. Admission/release wait within the registered process bound when
-another owned gate is busy; an interrupted gate is preserved, never expired.
-Active use blocks finish. Terminated wrappers, missing results and
-unknown ownership retain the use record; they are never expired by age. The
-existing process owner terminates lingering descendants within its owned process
-group; detached/background writers escaping that ownership are unsupported and
-must be joined by the caller. Git locks provide additional checks, not this use
-protocol.
-
-`finish` is the caller's explicit terminal handoff after joining all owned jobs
-and establishing completion/landing. The runtime observes the enrolled physical
-attachment, current HEAD/branch and allowed retained ref, publishes an immutable
-terminal receipt, and immediately invokes the same drain. It does not create a
-source-HEAD retention ref or determine PR/merge success. `--retained-commit OID`
-optionally verifies a caller's actual squash-landing pin before the reference can
-move; the observed OID is always fixed in the receipt. A later changed ref is a
-visible failure, never a replacement landing guess.
-
-`--artifacts-only` requests cache disposal with checkout/refs retained. Default
-unsettled `evidence-retain`, unretained commits, dirty source or other retained
-artifacts also produce an explicit preserved reason and permit disposal only of
-selected quiescent outputs. These successful cache-only entries become `retained`
-and are not rescanned on every later start. A subsequent explicit finish may settle
-evidence using `--dispose-evidence` only when policy allows it; the prior terminal
-receipt stays in history. New managed use is refused after terminal handoff.
-When finish runs from the enrolled checkout itself, the drain excludes that source;
-a later explicit coordinator `maintain` performs disposal.
-
-Whole-checkout removal delegates to existing `Cleanup`, including literal
-cleanliness, two-endpoint artifact whitelist, exact retention, physical identity,
-worktree/Git locks, nested checkout checks and optional expected-OID branch removal.
-The shared artifact phase also protects staged source inside artifact prefixes,
-rejects symlink roots/ancestors and unlinks internal symlinks without following
-external targets. Automatic reports measure literal entry lengths before disposal
-and verified zero afterward; these are logical bytes, not allocated-block savings.
-Legacy explicit maintenance keeps its report shape.
-
-The optional v2 `main_cache_only: true` enrolls the physical Git main checkout
-through the same owner on explicit `import`, ordinary `use`, canonical `check`, and adopted
-`bootstrap`. Explicit main import establishes current cache custody without
-executing a managed command or claiming prior production. A subsequent `finish`
-acquires the existing exclusive enrollment lease and retains its actual main-cache
-release, including when no outputs have been produced. Hosts without this option
-retain linked-worktree-only import. Its enrollment, use intents, shared kernel lease, original process
-result, release, and cache attempts use the existing lifecycle state. Main finish
-releases caches and stays active; it never authorizes checkout, branch, index,
-source, bin, evidence, or commit deletion. Evidence-disposal and landing-pin flags
-are refused for main. Pre-existing registered outputs without adopted consumer
-release remain explicitly protected historical objects. Enrollment owns the
-absent, individually registered outputs before managed production starts; this
-is not a migration of the current host's historical targets or producers.
-
-For historical outputs, the same owner accepts an explicit current-custody
-transition through `migrate --path /exact/main --adopt-cache STATE_PATH`.
-The strict `chrono-main-cache-custody/v1` declaration under registered host state
-contains `path` (the physical main checkout), its full current `head`, exact
-`artifacts` paths, `current_consumers_released: true`, and a nonempty `reason`.
-The current operator must actually join or exclude prior unmanaged consumers and
-state its present custody decision. This is an engineering transition, not an
-assertion that a past producer finished, succeeded, sealed, or released anything.
-Only the active adopted main enrollment and registered `dispose` outputs qualify;
-source/index paths, bin/evidence, unknown paths and live adopted consumers refuse
-adoption. Unselected historical objects stay protected without vetoing selected
-eligible siblings.
-
-Admission and the original exclusive enrollment lease protect this transition.
-Its separate immutable receipt preserves the raw declaration and original
-attachment, records the ownership delta, and keeps historical producer outcome
-`unknown`. Historical producer and disposal outcomes are preserved. The existing
-`reconcile_uses` may append interrupted-use history and remove stale use tokens;
-mutable enrollment/uses are not guaranteed byte-identical. A
-published receipt without a ledger update can be retried with the same binding;
-repeat adoption of managed paths adds no history and performs no disposal. The
-existing pending cache generation and ordinary drain reclaim the newly managed
-outputs after exclusion, without setting finish or adding a cleaner. Subsequent
-bootstrap/check/use share the same leases and interrupted-use recovery. Deploy
-the compatible owner before adopting; old readers reject the new nonempty
-`main_cache_adoptions` ledger field.
-
-Main re-entry drains released pending cache generations before starting a
-new consumer. A linked checkout being entered stays excluded until its new
-consumer has acquired protection; another ordinary entry can recover that
-checkout after release. Installation, tests, cache saving, and other registered operations
-must run under that same use protection. Actual shared descriptors protect live
-descendants and overlapping consumers. No post-check Cargo clean is added.
-The disposal owner rechecks HEAD, physical attachment, policy, and the live index
-before each removal. Logical lengths and allocated blocks (`st_blocks * 512`,
-including directory blocks) are reported separately. Physical release is unknown;
-allocation differences do not establish filesystem savings. Failed removal
-retains the original error and observed remaining objects, and retries preserve
-the original attempt.
-
-Each worktree owns `enrollments/SHA256(absolute-path)/ledger.json` and its
-identity-bound `metadata.lease` under the declared cleanup state directory.
-The record contains only successive physical attachments of that exact address.
-Ordinary updates never rewrite another worktree's record. Cleanup keeps this
-local metadata exclusion and the target's exclusive enrollment capability through
-its physical effect and original-result publication. There is no aggregate
-`ledger.json`, global admission lease, or release/reload merge around independent
-IO. An unrelated owner's busy or damaged record is preserved and reported;
-it does not refuse a valid target's admission. Explicit maintenance still reports
-these failures and continues available independent owners.
-
-Ordinary start/reconstruct/use/check/bootstrap/finish entries maintain only the
-addressed worktree. They do not sweep independent worktrees or fixture producers
-as an admission prerequisite, and diagnostic inventory is limited to their actual
-source/destination addresses. The registered explicit `maintain` command visits
-the declared enrollment and producer owners independently; it is not a prerequisite
-for unrelated work. This removes an ever-growing cross-worktree sweep from normal
-entry and leaves failed/missing results in their responsible owner's record.
-
-The immutable `namespace.json` binds the physical Git owner and the executable's
-`deployment.lease`; it has no mutable membership list. Ordinary owners share that
-lease. Only replacement of the executable common to these enrollments takes it
-exclusively and excludes every actual affected enrollment before publishing.
-This protects the real shared executable without serializing ordinary updates.
-Deployment validates the coordinator's current policy and cache ownership. Other
-excluded enrollments bind their physical attachment, HEAD and original lease;
-their independent policy changes do not block executable publication. Their next
-ordinary use still validates policy/configuration and requires explicit adoption
-where needed. Deployment leaves those policies and enrollment records unchanged.
-Maintenance enumerates only the declared enrollment namespace and validates each
-record's explicit address. Unknown data never authorizes disposal. Aggregate
-state is refused on ordinary entry; this implementation has no compatibility
-reader or fallback. A current custodian must preserve and partition active state
-under the original exclusions before switching executable generations.
-
-**Product and host adoption change together:** enrollment storage and its current
-consumer/test bindings change in this candidate; the host's registered lifecycle
-and bootstrap commands, retention windows and disposal authority remain the same.
-The affected core, evidence-custody, policy-migration and owner-deployment behavior
-must pass their registered checks. Build, migration and total runtime costs are
-unmeasured until those actual results are available.
-
-The optional v2 `retained_producers` lists exact producer IDs, evidence directories,
-and generated output paths relative to each explicitly registered receipt.
-The adopted `ci-command-result` family belongs to
-`ci-tests::behavior::retain_command_result`. The Rust `RetainedArtifact` interface
-admits the exact preserved object and publishes its intent. The adopted wrapper
-first copies original stdout, stderr, binding, configuration and state, then calls
-`begin` and seals generated directory identities and original stream/binding
-digests. Interruption or admission failure before `begin` leaves an unregistered
-copy protected as unknown evidence; an admitted but unsealed receipt also remains
-protected. The interface records consumers
-with independent explicit acquire/release receipts. Dropping a handle or losing
-a process never releases a receipt. The existing drain reads only producer-written registrations in that family's
-explicit `producer-records/` namespace. Each entry declares its exact artifact,
-owner and references; artifact directories are never searched for membership.
-
-Publication resolves the selected producer through `RetainedArtifact::registered_store`,
-using the same committed worktree configuration, cleanup policy, registration,
-and physical Git main coordinator checks as drain. Resolution reads these policy
-inputs without acquiring maintenance admission or initializing its owner/ledger;
-an active maintenance lease therefore does not block the declaration lookup.
-The final HEAD/configuration/policy stability check still applies. Actual
-publication and disposal retain their own registry and ownership gates.
-The default wrapper supplies
-its producer checkout separately from the command's fixture root, so a linked
-producer publishes below the main coordinator's declared evidence directory.
-`CHRONO_CI_TEST_RECEIPTS` may select only that exact physical store; undeclared,
-overlapping, mismatched, or symlink destinations refuse publication and remain
-protected. Store resolution does not release consumers or grant main checkout
-or branch deletion authority. Earlier linked stores have no adopted forwarding
-route and remain protected unknown evidence.
-
-This host admits only the two copied independent Cargo outputs at
-`original-state/cargo/producer/target/` and `original-state/cargo/tests/target/`,
-and the producer additionally requires their exact source artifact declarations.
-The selected expected-exit assertion publishes release after consuming the
-original result. An unexpected exit, incomplete publication, or active diagnostic
-reference retains the copies. After all references explicitly release, the owner
-may reclaim those generated copies; stdout, stderr, binding, configuration,
-source, recovery originals, and other state remain evidence. Existing callers
-without an expected-exit contract retain an unreleased reference. Unknown legacy
-receipts and every unregistered object stay protected; `.chrono-harness/state/`
-does not become disposable. Compatible committed policy and binary deployment,
-real-host migration, native CI cache-save participation, and full SPEC adoption
-remain outside this implementation's verification.
-
-The coordinator ledger records original identity, terminal receipts and attempted
-report paths before effects. Failed results retain their original bytes/digests and
-partial effects. A normal retry can reconcile only its recorded owned lock and
-exact unchanged checkout, then use existing absence-tolerant cleanup. Missing or
-interrupted results, changed attachment/HEAD/policy/ref, another lock or damaged
-source are preserved for explicit reconciliation. Retrying never overwrites an
-original failure. Storage failure, unregistered concurrent writers and power loss
-are not transactional guarantees; stale admission/use records currently require
-caller reconciliation after joining their original jobs.
-
-`import` enrolls one explicitly named existing linked worktree, validates its
-current registration/attachment and binds its existing policy inputs (including
-explicit absence). It can import a legacy checkout without editing that checkout
-or pretending it adopted the new automatic policy. Disposal paths must already
-be declared at both endpoints. Its observation is `import`, with no historical
-birth claim. It does not enumerate old hosts. Caller-owned Git/GitHub,
-publication, immediate existing-host reclamation and evidence settlement remain
-outside this producer. This repository's worktree fixtures select their Git
-executable from `.chrono-harness/tests/worktree-tools.json` for each explicitly
-registered OS/architecture. The fixture then records its real executable identity
-and version through the existing binding checks; the product's host Git policy
-remains independent. Missing test-platform registration fails without a PATH
-fallback. Local real-Git fixtures exercise full checkout removal;
-actual main-host finish/landing is the caller's acceptance event after adoption.
-
-### Explicit policy migration
-
-`migrate --path /exact/enrolled-worktree` adopts the coordinator's current,
-committed cleanup policy and worktree configuration for one existing v2 kernel
-enrollment. Run it from the surviving coordinator after committing matching
-inputs in the target. It requires the original admission and exclusive enrollment
-leases, the same physical Git attachment, validated birth evidence, no foreign
-Git locks, and artifact registration at both endpoints. Policy input addresses,
-coordinator, state directory and ownership protocol stay fixed; relocating those
-identities is outside this transition. Legacy or missing kernel ownership and
-pending terminal disposal remain protected. Policy changes do not migrate entries
-implicitly.
-
-When two endpoints have different host configurations, preserve each host's
-registered sources and inputs. The migration comparison covers the explicitly
-bound cleanup policy and worktree configuration; it does not require copying the
-coordinator's complete host configuration. Every artifact selected by the adopted
-cleanup policy must already be registered at both endpoints. If one endpoint has
-no real producer for a selected output, do not invent that registration: choose an
-explicit policy limited to supported outputs, or leave that enrollment on its
-protected binding until its owning adoption is complete. This command has no
-per-enrollment policy override and never changes Git itself. Preserve original
-commits and outcomes when the caller creates compatible adoption commits.
-
-The original enrollment, birth policy hash, birth receipt, uses and prior cleanup
-attempts retain their identities. A separate immutable transition records old and
-new input bindings, retained original bytes and observed commits. The ledger
-appends its receipt only after checking the new bindings again. Normal use,
-cleanup and finish validate this chain and use its final binding. A missing or
-changed receipt or retained input refuses subsequent use/disposal. Deploy a
-compatible lifecycle binary before adopting a transition; older readers reject
-the new nonempty migration field instead of interpreting it as an old binding.
-
-Migration performs no disposal, Git update or terminal handoff. It preserves
-source, outputs and task status. Active entries begin a new cache generation;
-retained entries remain retained and need a new explicit finish before further
-terminal disposal. Quiescent interrupted uses retain their reconciliation records.
-A repeated request with unchanged policy bindings adds no history. An immutable
-transition published before interrupted ledger adoption is reused on retry; its
-existence alone does not claim successful adoption. Unknown or unsealed birth
-outcomes must be reconciled under their original policy before migration.
-
-### Kernel ownership and unfinished cache recovery (v2)
-
-The v2 candidate uses `chrono-worktree-automatic-cleanup/v2` with the existing
-policy fields and a new registered state directory. The host source selects
-`.chrono-harness/state/automatic-cleanup-v2/`. Caller cutover must seed the
-compatible coordinator binary and exclude incompatible producers; v1 gates,
-tokens and unknown records are never retrospectively treated as kernel leases.
-
-The caller owns staged validation and coordinator cutover. First validate the
-exact committed candidate in an independent, clean Git main clone using the
-registered bootstrap and short check commands. The current scoped local producer
-has `full_context: None`; this route needs no synthetic linked origin receipt.
-Main-only bootstrap may seed a missing owner binary. This is candidate validation,
-not acceptance of the surviving coordinator or of full/native obligations.
-
-The same staged main-clone path is the host admission adaptation when the
-surviving coordinator's committed Git pin cannot execute on a newly supported
-host. Use a fresh latest-dev integration branch in that independent main clone;
-register the exact additional identity at the existing Git/worktree owners, then
-commit the clean candidate before the registered bootstrap and short check.
-An owner binary seeded solely for a pre-repair failure probe in this disposable
-validation clone may be preserved outside its install destination after all its
-tasks join, allowing the same main-only bootstrap to seed the candidate owner.
-Verify that binary's identity and absence of consumers before moving it. This
-does not permit replacing an active or foreign coordinator, changing expected
-digests during validation, synthesizing linked receipts, or skipping policy
-equality. The caller must still observe native macOS-26 Git identity and exact
-candidate checks, then deploy matching committed policies and participation
-before creating the three real linked worktrees through ordinary `start`.
-
-For actual cutover, join/exclude incompatible producers, retain the v1 state,
-and install the compatible binary in the surviving main coordinator. Commit and
-deploy the matching v2 worktree policy, cleanup policy, selected host configuration
-and participation declarations there before starting v2 linked work. Only then
-use ordinary `start`/`reconstruct` for automatic v2 enrollment and the unchanged
-public bootstrap/check commands in a fresh linked checkout. Working and committed
-coordinator policy/config bytes must agree with the invoking checkout; upgrading
-only the binary or only a linked policy intentionally refuses before build or
-cleanup. Never convert v1 tokens to leases. The real coordinator transition and
-its retained evidence remain caller-owned acceptance.
-
-Each addressed enrollment has its own stable identity-bound metadata flock inode.
-Each physical attachment generation has one stable SH/EX use/disposal lease. Normal use acquires SH before intent/spawn
-and holds it across result publication; admission is released before business
-execution. Git mutation children inherit admission. Cleanup holds admission and
-nonblocking EX, preserving live holders. Last close releases ownership; no
-`LOCK_UN` is issued on a shared inherited open description. Missing/replaced
-identities, policy drift and foreign Git locks preserve work. Birth holds its
-attachment lease through enrollment and receipt sealing. If that producer is
-interrupted, normal use/maintain/finish can publish an immutable identity-bound
-reconciliation under EX. Repeated interruption after reconciliation publication
-reuses its original bytes before attaching the pointer to the ledger. Recovery
-retains the original report and any unreferenced sealed receipt as input evidence;
-it leaves `sealed_receipt` absent and records `original_outcome: not-established`.
-
-Cleanup refusals are scoped to their enrollment. Ordinary start/reconstruct/use/check
-and bootstrap do not attempt unrelated enrollment or fixture-producer cleanup.
-Target admission/ownership failures and target state publication errors still block.
-Explicit `maintain` retains unrelated failures in `drain`, immutable failed receipts
-and `cleanup_failures`, continues independent enrollments, and returns failure while
-any attempted cleanup fails; it never discards an earlier receipt.
-
-Automatic lifecycle reports preserve prior inputs through
-`chrono-worktree-retained-input/v1` references. Each reference carries the physical
-coordinator `source_root`, relative state `path`, `sha256`, `byte_length`, and
-`format` (`receipt` or opaque `bytes`). Completed immutable receipts are referenced
-in place. Partial or unsealed bytes are published once under the coordinator's
-registered state directory; their missing/unknown outcome is not upgraded to
-success. Existing originals are never rewritten. Retrying an unchanged operation
-does not embed the previous report's bytes or parsed history.
-
-The reference-bearing fields are `terminal_input`, `prior_report.input`,
-`prior_cache_attempt.intent_input`, `prior_cache_attempt.result.input`,
-`original_report.result.input`, `unreferenced_original_receipt.input`,
-`original_result.input`, and `drain[].input`. Current drain rows retain the exact
-child report through that descriptor and the existing `receipt`, with the child's
-`status` and `error` available in the parent. They do not embed the child's parsed
-report. Consumers needing cleanup effects or original process observations read
-the addressed child and verify its length and digest; canonical check and bootstrap
-continue to consume the unchanged parent `managed_process` streams and status.
-Receipt consumption checks these explicit references transitively,
-deduplicating reads within the check. Missing, changed, incorrectly bound or
-symlinked inputs refuse cleanup; an opaque partial result is preserved without
-requiring valid JSON. Historical inline drain reports are rejected. Explicit
-maintenance outside automatic lifecycle retains its existing report shape.
-This bounds historical embedding, not the number or total size of necessary
-original observations; retention and disposal remain governed by host policy.
-Only current `drain[].input` descriptors participate in reference verification.
-The stdout protocol bound is unchanged. Parent publication still fails on its own
-IO or transport errors, and a retained child failure remains a cleanup failure.
-
-Later addressed start/reconstruct and managed admission, or explicit cross-target
-`maintain`, can dispose unfinished quiescent caches, including a successful use
-with no orphan token. EX permits
-orphan-use reconciliation as result-unavailable while retaining original result
-bytes. Cache disposal keeps `status: active`, `terminal: null`, checkout, refs,
-dirty/staged source, unretained commits, bin and evidence. It selects only
-`dispose` paths registered at both endpoints, rejects tracked/index paths and
-symlink ancestors, and creates no persistent owned Git worktree lock. A successful
-pass clears its pending generation; later use rearms it. Admitted consumption
-after any published cache attempt also opens a new generation, even if the prior
-attempt was interrupted or failed. It retains the old intent/result unchanged and
-permits current HEAD/registry bindings for rebuilding and later reclamation. Cache-specific immutable
-intent binds attachment, lease, HEAD, policies, registries, paths and generation
-before effects. Missing/failed results retry idempotently under reacquired
-exclusion with unchanged bindings and a new real receipt; originals stay intact.
-
-The optional canonical config declaration is:
-`"participation":{"operation":"worktree.check","tool":"chrono-worktree","argv":["check"]}`.
-The public spellings remain `check`, `check --unit ID`, and `check --collect`.
-Participation forwards original stdout, stderr and exit, including successful
-warnings and nonzero diagnostics. The owner separately marks a completed command
-failure; transport, ownership and result-publication failures remain lifecycle
-errors with their original report reference. The CLI's string result preserves
-UTF-8 console bytes; owner process reports retain the original byte arrays.
-The worktree owner admits the existing runner before acquisition and forwards its
-original console/exit. Bootstrap separately declares `entrypoint` tool/script and
-`participation` coordinator/program/Git/config. Standalone bootstrap delegates to
-the registered deployed coordinator binary before build effects, including fresh
-linked checkouts with no local bin. Missing ownership fails explicitly.
-
-The existing engine transfers explicit opaque descriptors using CLOEXEC owner
-copies and inheritable child copies in pre-exec. `CHRONO_PROCESS_FDS` survives
-nested-runner cleared environments. The three registered Python consumers use
-`process_fds.py` and explicit `pass_fds`. These are tested routes, not universal
-inheritance. The real Cargo test regression verifies distinct launcher and native
-child identities, kills the Cargo and managed wrappers, and checks that the live
-child retains the lease until it completes. Cargo run may exec-replace its own
-process; killing that PID does not demonstrate surviving-child behavior. Do not
-infer child exit from a PID or parent disappearance. Committed composition and
-supported native platforms remain required before complete adoption.
-
-Whole-checkout finish/retention and legacy owned-lock recovery retain their
-contracts. There is no daemon, global process/filesystem inventory, age expiry,
-idle scheduler or power-loss transaction claim. Caller-owned committed canonical
-checks, supported native platforms, accepted process-engine composition and main
-host deployment/cutover remain acceptance work.
-
-A Git main checkout with no deployed owner may seed its own bootstrap tools: it
-cannot enroll as a disposable linked attachment. A linked checkout without the
-registered coordinator owner fails before build effects. This keeps clean native
-CI bootstrap possible without changing workflow topology or authorizing unsafe
-linked-checkout fallback.
-
-### Current custody of exact evidence aliases
-
-`chrono-worktree retire-evidence --host-root ROOT --config POLICY --plan STATE_PATH`
-is the maintenance owner's finite file transition. It consumes a
-`chrono-worktree-maintenance/v1` plan with `operation: "retire-evidence"`, exact
-`head`, and `custody` using `chrono-evidence-custody/v1`. Custody declares the
-physical `root`, full `branch` ref, `current_consumers_released: true`, engineering
-`reason`, an `authority` original (`path`, SHA256, `length`), and exact `objects`.
-Each object has an `original` identity, a distinct retained `survivor` path,
-producer `owner`, and release `reason`. Equal bytes verify preservation; the
-current custodian's explicit release supplies disposition authority. The caller
-joins or excludes prior unregistered consumers and ends copied-path assertion or
-manifest replay before declaring release. Historical manifests remain original
-evidence; this transition does not claim that retired paths remain replayable.
-
-The `exclusion` declares the existing `coordinator_root`, tracked `config_path`
-and adopted `state_directory`. The command reads their current committed kernel
-policy as data and holds the existing admission and enrollment leases. It checks
-one current active enrollment, its physical attachment, outstanding use tokens,
-foreign Git locks and clean fixed checkout. It does not drain other entries,
-migrate old source policy, update Git, release the checkout or fabricate a past
-producer seal. A historical host can invoke the candidate binary with its own
-unchanged committed worktree policy and artifact registrations.
-
-Only explicitly listed untracked regular members under registered evidence
-state are eligible. Source/index paths, selected survivors, the authority and
-attempt inputs/outputs refuse retirement. Each alias and survivor is streamed
-against its declared identity, including stable physical file identity, just
-before unlinking. Independent identity/preservation failures leave that alias
-and continue other eligible objects. The attempt's separate `effects.jsonl`
-journal syncs its declaration reference and each pre-effect intent/result;
-reports contain counts and references, never preceding report bodies. Repeating
-the same finite plan rechecks survivors and records absent aliases as observed
-absence, without inventing which interrupted attempt removed them. Original
-failures, enrollment, source and refs remain unchanged. Exit 0 means this exact
-finite disposition completed; unresolved members or binding failures exit 2.
-The `removed` count includes only fully verified completions. A post-unlink
-verification failure can increment `failed` after an effect recorded by its
-pre-effect intent; zero `removed` does not prove no unlink occurred. The exact
-referenced custody declaration and authority remain required retained inputs;
-reports do not guarantee a self-contained or independently immutable declaration
-copy. Logical removal counts do not establish physical shared-volume disk release.
-
-Worktree test fixture retention remains explicitly requested by
-`CHRONO_WORKTREE_TEST_RECEIPTS` or panic. Successful default fixtures do not copy
-all state. Retained fixture assertions and failure diagnosis remain consumers
-until their current custodian explicitly ends those copied-path obligations.
-
-### Local initial input preparation
-
-The registered `check-inputs` action supports config schema4's optional separate
-`canonical_check.initial_profile`. It binds both profile digests to committed
-HEAD and records physical commit parents through the existing observed Git owner.
-A genuine parentless candidate prepares standalone inventory with no base, fetch,
-origin or full context. Nonroots retain the registered target fetch and ordinary
-DELTA/context contract. Missing targets and shallow histories do not become roots.
-The bare runner entry validates the original preparation before the existing
-initial judge runs; the producer itself never publishes inventory success.
-
-CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式平台 Git 输入；不把源宿主已部署的 Git 摘要／版本当作原生 fixture 的政策，也不改源宿主绑定。原错误与 passing control 均由实际命令产生。worktree 的未保留 commit-tree fixture 显式提供作者姓名／邮箱。
-
-真实 Cargo retained-rebuild handshake 位于冷构建之后；该 fixture 等待现役 managed process 的实际结果，沿用其原登记的 30 秒进程上限，不用另一个 10 秒 readiness 时钟杀死编译过程。普通 participating check 的本地输入准备也等待现役有界生产者的实际结果，不以另一个 readiness 时钟提前杀死它；其它 readiness 等待仍为 10 秒。缺 marker 时消费并保留真实退出与过程原件，退出前未完成则仍不产生成功；专属负例用缺失 manifest 检查失败和加入子进程。原生旧失败只留下空 outer 流与 use intent，不能据此断定具体编译阶段或停滞原因；支持平台的修复后原生验证仍待调用方执行。
-
-
-### Prospective fixture custody and inventory observations
-
-**Product and host policy change:** the candidate adds `TemporaryHost` to the
-existing retained producer owner and five finite fixture producers in
-cleanup.json. Binary and committed coordinator/producer policy must be deployed
-together. The current Git configuration v2 identity selection and worktree v3
-identity declarations keep their meanings; unknown identities still fail before
-execution. Historical stores and unestablished release migrations stay protected.
-Implementation, verification, storage and migration costs remain unknown.
-
-`TemporaryHost::registered_store` uses the same read-only committed policy and
-Git main coordinator resolution as `RetainedArtifact`, and additionally requires
-the selected producer's prospective temporary adoption. Allocation publishes an intent before
-fixture output production, listing exact generated directories and their declared
-Git source roots. Dropping the handle makes no task-completion or producer-success
-claim. Ordinary reentry can recover eligible outputs after the final supported
-holder and explicit diagnostic consumer release, without a remembered finish.
-Missing allocations/leases, unknown objects, partial copies and changed identities
-preserve their original outcomes; independently eligible siblings can progress.
-Inventory itself never enrolls or removes a Git attachment.
-
-Selected native adapters configure argv/environment before a single
-`bind_command`, forwarding existing kernel capabilities to actual native/Cargo
-children. Commands retain their owned descriptor copies across scope release and
-thread handoff; rebinding fails. `capture_output` binds an unbound command;
-`capture_bound_output` captures an already bound route. Both retain intent and raw
-stdout/stderr files before spawn. `capture_bound_input` also retains the original
-stdin bytes and supplies those exact bytes and EOF. Only a real wait publishes a
-joined exit. Spawn failure and interruption preserve empty/partial originals
-without a fabricated result. These captures never enter generated membership.
-
-`register_copy` retains a verified source original and records the exact future
-destination before the real copy. `relocate_copies` carries only enrolled members
-before the actual within-allocation rename. Copy preparation holds the allocation
-lease while hashing, copying and syncing outside its allocation metadata transaction.
-Publication reopens only its current registration, checks the immutable namespace,
-allocation and intent bindings, and preserves intervening allocations,
-body registrations and diagnostic references. Concurrent copies may retain one
-content-addressed original only after verifying the published winner's bytes;
-its physical fingerprint must remain unchanged through registration. Current
-custodian adoption uses the same owner with exclusive allocation custody and
-released-consumer checks. These checks preserve the existing admission bound and
-default test concurrency; the exact holder behind earlier registry timeouts
-remains unknown. `fixture_bodies` explicitly opts into
-member recovery. Git identity/objects, committed/index source, original captures
-and unknown members remain protected; only an explicitly enrolled copied hook
-leaf may be a member inside Git metadata. Source/index and physical identities
-are rechecked before each effect. Copied members and their retained originals
-have distinct lifetimes. Final-original retention/publication and the compatible
-shared-effect composition are separate work; this API does not release originals.
-
-Each allocation owns one current `producer-records/` registration. Its immutable
-`objects.json` namespace identity contains no object list or mutable outcomes.
-Ordinary admission reads that small identity and only the addressed allocation's
-registration. Allocation, copied-body and diagnostic-reference updates hold an
-identity-bound directory lock for that allocation; unrelated allocations do not
-share a mutation lock, decoded cache or catalogue rewrite. Initial namespace
-creation alone excludes competing births. Current stores create no
-`registry.lease`.
-
-Cleanup enumerates the explicitly declared registration namespace, validates each
-entry's strict schema, owner digest and canonical address, then checks its actual
-allocation and use leases. This reads producer declarations rather than scanning
-artifact trees or deriving ownership from file names. A malformed registration
-retains its error and originals while independent registrations remain eligible.
-Publication stages outside the registration namespace and atomically replaces
-only its owned record. There is no global decoded snapshot or mutable membership
-index. Original source, consumer, nested-custody and disposal checks still apply;
-performance and complete finite metadata retention require actual acceptance.
-
-An ordinary drain attempts allocation metadata exclusion without waiting. An
-allocation being updated remains protected with its original state, while
-independent registrations continue. The thirty-second producer admission bound
-still applies to actual publication and reference updates for that allocation.
-Explicit retained-producer maintenance keeps only the invoking enrollment's
-metadata exclusion. Independent enrollments have separate records and locks; no
-release/reload merge is needed around physical IO. Actual regression and
-coordinator/native acceptance are required; the report publication owner still
-has its own separate concurrency limitations.
-
-`migrate --path COORDINATOR --partition-producer ID` is the sole explicit data
-cutover for an adopted retained producer. It consumes the exact v1 bytes under
-that producer's original exclusive lease, retains those original bytes and an
-independent migration receipt, writes the per-object registrations and atomically
-activates the immutable current owner. Outcomes and consumers are copied without
-release or disposal. Interrupted staging can reuse an identity-bound namespace;
-unknown metadata births remain protected. Old writers reject the activated strict
-shape. Ordinary runtime has no historical decoder or format fallback. Deployment,
-joining or excluding old writers, real-host migration and full SPEC acceptance
-remain caller obligations; changing source alone does not establish cutover.
-
-Copied-body admission runs once in the shared effect owner's immediate
-pre-unlink callback. It verifies current member content and identity, retained
-original identity, live Git source/index, coordinator policy/HEAD, allocation,
-consumer leases and final-original exclusion there; the effect owner rechecks
-physical identity before unlinking. Intent publication precedes that admission,
-so a refused member retains its intent and failed result. The native migration
-timeout reached this owner after its nested CI command joined and left 254
-completed body-disposal results. Removing duplicate pre-intent reads preserves
-the existing 900-second operation limit. The local source/index regression first
-observed three reads for two checked members and now observes two; seven
-body-custody tests pass, including content drift of unchanged length. This does
-not establish native end-to-end timing or complete SPEC acceptance.
-
-After a joined managed `use`, `check` or `bootstrap` command succeeds, the owner
-runs its addressed worktree drain before returning. Fixture-producer maintenance
-is an explicit `maintain` activity and does not precede unrelated operations. The
-separate `post_use_cleanup` report retains this pass without replacing admission's
-drain or the original managed process and use receipt. The invoking source and
-target keep their existing exclusion and live leases; producer recovery still
-requires exact membership, original bytes and released holders and consumers.
-Failed commands retain their original failure and skip this post-success pass,
-preserving partial diagnostics. Cleanup does not release original evidence or
-declare lifecycle completion. Native artifact size and collection-time savings
-require observation of the resulting candidate.
-
-Each pass lists producer cleanup originals in `producer_drains`, with exact
-`receipt` and `chrono-worktree-retained-input/v1` identity references. Consumers
-verify the referenced bytes and read `producer_objects` from that producer's
-original; parent reports do not copy those rows. Lifecycle publication registers
-the admission and post-use receipt dependencies with the adopted retention owner,
-so a current parent consumer retains its producer originals. Releasing that
-consumer allows explicit bounded maintenance to reclaim the unrooted closure;
-historical references alone do not keep it alive. Original status, error and
-process evidence remain in each producer report. Other duplicated report content,
-physical savings and complete SPEC §10.1 acceptance remain unverified.
-
-Ordinary linked lifecycle, creation and reconstruction calls also protect the
-coordinator's report family until their parent report is published, including
-calls without `--report-consumer`. Protection addresses only the reports and
-their declared dependencies; it does not sweep either checkout's unrelated
-outputs. Publication creates no persistent consumer root, so later explicit
-maintenance can reclaim unrooted reports. Ordinary reentry preserves them.
-
-`migrate --path WORKTREE --adopt-fixtures STATE_PATH` consumes a finite
-`chrono-fixture-body-custody/v1` declaration through the existing migration owner.
-It binds current HEAD, allocation/intent/physical identity, exact member bytes,
-recipe and Git root, plus any nested registry/lease references and actual current
-consumer release. It preserves historical producer outcomes and does no disposal.
-Nested diagnostic references must release as well as their actual holders before
-an enclosing member may be reclaimed. No scan supplies membership or roots.
-
-The real worktree Cargo/hook/full-native fixtures, CI short/full fixtures and
-shared projects Host use this owner. The shared Host's registered FILEMAP, inputs,
-Cargo and workflow consumers each depend on the same worktree library. Workflow
-native tools and historical migration have distinct finite producer declarations;
-source, external inputs, manifests/locks and offline originals remain retained.
-Copy/hard-link/native capture adapters keep their real operations. Panics and
-requested diagnostics acquire persistent `fixture-diagnostic` references before
-allocation custody releases; their actual diagnostic custodian releases them
-through `RetainedArtifact` after consuming originals. No scope-wide TMPDIR or
-parallel registry/cleanup service is introduced.
-
-The shared drain also publishes `worktree_inventory` from Git's explicit owner
-inventory: current HEAD/branch, locked/prunable observations, physical attachment,
-current enrollment match and preservation reason. An inventory process failure
-is fatal before effects/admission; an unreadable row remains a diagnostic blocked
-observation. Ledgerless, changed and disposed-path-reuse attachments are never
-enrolled by observation. Mutable HEAD is separate from birth attachment identity.
-These rows never authorize disposal; existing effect guards acquire fresh facts.
-
-The five shared test owners register `lock.<owner>` at their own
-`update_lockfile` action. It delegates to Cargo's offline update of that exact
-local test package, preserving independent manifests/lockfiles/targets. Local
-canonical verification, compatible real coordinator deployment, exact native
-collection, independent review, historical migrations and landing are separate
-acceptance obligations; source adaptation alone establishes none of them.
-
-## Protected ordinary bootstrap owner construction
-
-The public bootstrap-core entry selects `.chrono-harness/ci/bootstrap-owner-upgrade.json`
-with `chrono-bootstrap-owner-upgrade/v1`. Its only inputs are `selected_original`
-(the ordinary bootstrap report) and `stage_config` (the current construction
-profile). The selected executable comes from the existing participation program.
-There is no fixed historical issuer, external startup bundle or executable-hash
-admission list. Missing Git-main tools retain the existing seed behavior; linked
-missing or incompatible coordinators refuse before construction.
-
-Before construction, the candidate qualifies the installed owner from its actual
-retained producer. For an ordinary installed owner, it reads the original clean
-bootstrap report and the producer's fixed commit/tree and registrations as data,
-then checks execution, retained streams, every installed payload and the selected
-owner's physical identity. The producer must belong to this physical host and
-uniquely install the selected destination. A changed live candidate never replaces
-that producer's configuration or facts.
-
-If exclusive publication succeeded but subsequent core installation failed, the
-installed owner's producer is its retained stage and adoption. Qualification
-checks that fixed source, toolchain execution and streams, staged and previous
-inode identities, publication intent/result and original Rust adoption receipt.
-It neither executes a historical bootstrap nor rewrites the old core report.
-Missing, changed, incomplete or unproduced originals refuse before native effects.
-
-The candidate copies the qualified installed bytes into a retained construction
-attempt under `.chrono-harness/state/bootstrap-owner-upgrade/`, together with the
-producer report, qualification and current upgrade declaration. It rechecks the
-original digest, executable identity and copied bytes before launching the owner.
-The existing `migrate` and `bootstrap` commands carry the original
-admission/enrollment protection. The internal stage profile builds `build.worktree`
-and retains its distinct executable under `.chrono-harness/bin/owner-stages/`.
-A construction failure never requests deployment. The original construction
-command and children join before the staged executable requests EX.
-
-The core profile explicitly lists `reuse_owner_operations` for the owner's fetch
-and build. After current-candidate deployment, core consumes those original
-operation records and streams and uses the retained staged executable as its
-installation input. It validates the current adoption, source, declarations,
-toolchain and observed environment before reuse. The original PID, exit and
-stream descriptors remain intact, with `reused_from` naming the stage report;
-core does not claim a second execution. A first seed or separately owned linked
-tool still runs its declared construction.
-
-Product and host policy change together: this removes the duplicate owner build
-from an adopted main's core execution and prevents a scratch rebuild from
-replacing its deployed bytes. The registered bootstrap tests exercise reuse,
-selection and original-binding rejection, followed by source bootstrap and
-affected canonical/native checks. Total time saved remains unmeasured.
-
-Ordinary shared bootstrap reuses identical coordinator-owner bytes; changing them
-requires the owner deployment callback. A linked checkout installs its separately
-owned local tool under existing enrollment protection. Bootstrap resolves the
-Git-main inventory before classifying the destination, rejects symlink paths and
-applies the coordinator-owner byte gate to any local hard link sharing that inode.
-Real Git worktree regressions cover first installation, local replacement,
-unchanged coordinator bytes/identity and direct/ancestor symlink and inode aliases.
-Python owns byte validation, original-inode preservation, atomic replacement and
-interrupted-publication reentry. Rust owns physical attachment, committed
-endpoints, original admission/enrollment EX and publication/adoption checks.
-
-
-The adopted core and owner-stage profiles both disable Rust incremental
-compilation. Cache reclamation between these separately protected operations can
-force a second build; macOS incremental debug maps embed randomized codegen
-object names and can then change the executable's bytes. Both profiles use the
-same declared non-incremental choice, retaining the exact publication check.
-Other compiler, linker and environment inputs still require their own bindings;
-this choice alone does not prove reproducibility. Total build/storage cost is
-unmeasured.
-
-The deployment owner produces its actual exclusion set from per-worktree records
-and Git owner inventory. Exclusive executable publication prevents new enrollment/use; deployment
-acquires original EX for every unresolved enrollment of that physical coordinator,
-including linked attachments, before any selected-byte effect. It keeps those
-capabilities through publication/adoption and rechecks admission, ledger bytes,
-inventory, attachments, coordinator policy and lease identities. It does not
-require policy adoption by excluded linked enrollments. Live descendants,
-unknown/unavailable affected attachments, missing ownership or unjoined use inputs
-refuse specifically, preserving installed bytes and originals. Disposed generations
-do not become live consumers; another physical coordinator is outside this set.
-An actually bound out-of-protocol producer still requires its identified original
-custodian's join/exclusion. Historical unknown tasks do not establish that binding.
-An immutable publication result alone proves neither adoption nor task completion.
-
-**Product and host policy change together:** the Python owner always qualifies
-and reuses the actual installed owner; core registration and FILEMAP replace the
-fixed historical supply with the current upgrade declaration. Dedicated supply
-validation and its external-bundle-only test are removed. Shared-startup validation
-keeps its actual CI consumers and tests. Python upgrade regressions exercise both
-ordinary and published producers without the unrelated transfer bundle, original
-loss/corruption, post-qualification drift and construction failure without
-publication. Native lifecycle calls alone are isolated in those Python cases;
-actual coordinator bootstrap, both-end canonical DELTA, native adoption and landing
-remain separate acceptance obligations. Hashing, retained attempt storage and
-verification costs are unmeasured; deadlines, operation bounds and exclusion remain.
-
-Construction carriers, staged candidates, preserved previous-owner inodes and
-original reports/streams belong to current engineering/PR acceptance. Retain them
-until their acceptance/debug and dependent consumers end, then use the registered
-lifecycle cleanup path. Preserve unique work and original failures; no age-only
-deletion or completion is authorized. The actual producer data remains necessary
-evidence, without creating historical format/interface compatibility obligations.
-
-Selected profiles resolve writable HOME/CARGO_HOME/TMPDIR through the existing
-bootstrap host-path owner, under this physical host's state directory. Resolution
-has no pre-grant effects; directory creation happens after ordinary participation
-or the missing-main seed path. Locked Cargo input-fetch operations populate that
-private Cargo home with explicit online selection. The macOS environment selects
-the same private homes for canonical consumers; native profiles retain their own
-registered inputs. This selection does not establish local/CI parity. Original
-received offline/missing-package failures remain evidence; product bounds remain.
-
-The native Cargo wrapper-survival regression joins its actual native child over
-a blocking socket after the existing wrapper interruption and maintenance checks.
-The child still publishes its original release/completion files, and the test
-checks both the socket response and completion file. A closed or timed-out native
-channel fails with its original IO error; file polling cannot stand in for that
-completion. Its existing ten-second completion bound is unchanged.
-
-Before signaling readiness, that native fixture binds its own stdout/stderr to
-retained original files. Cargo and the managed launcher can then exit without
-closing the native child's output destination. After both wrappers exit, the
-parent requests real progress and diagnostic writes and verifies their original
-bytes before maintenance and the existing release/join assertions. A write error
-retains its OS error and fails the regression. The completion message still
-reports the fixture function's completion; it does not independently establish
-the entire libtest process's terminal status or all caller task obligations.
-
-## Explicit lifecycle report consumers
-
-The current `finish`, `maintain`, `import` and managed lifecycle entry accepts
-`--report-consumer ID`. This names the caller's real original-consumption
-obligation, independently of cache use/release. The existing retention producer
-transfers an exact consumer root before closing its publication capability and
-returns its `chrono-retention-consumer/v1` declaration in `report_consumer`.
-It requires adopted lifecycle retention. The coordinator publishes and binds the
-actual coordinator original when invocation comes from a linked checkout.
-The report's declared recovery, fetch, cache and main-release receipts and drain
-reports are explicit retention dependencies; no JSON discovery supplies edges.
-
-The bootstrap fixture custodian uses that declaration, verifies actual producer
-paths, physical identity, bytes and typed receipt closure, and keeps it across
-maintenance, cache disposal, setup recovery, re-admission and subsequent assertions.
-Its successful assertion owner releases the exact declaration through the existing
-runner retention command with its own release receipt. A terminal assertion receipt
-binds the unchanged attempt and exact domain/owner release originals; later admission
-consumes that receipt after original consumption has ended, while another original
-assertion still requires the actual bytes. It never substitutes a report body. Failed assertions or
-unresolved custody preserve originals. The separately invoked real bootstrap
-consumer leaves caller acceptance/review protection in place for that caller's
-actual handoff. Cache disposal and source/index/live-consumer exclusions retain
-their existing owner. Neither cache release nor a saved stdout substitutes for
-an original or certifies a later release.
-
-Product/fixture change visibility: publication gains an opt-in caller consumer;
-the host's ordinary policy and zero retention window are unchanged. Validation
-uses the dedicated runner/worktree Rust suites and the registered unfiltered
-bootstrap fixture suite. A direct dirty-source engineering invocation is not
-canonical source-bound acceptance. Temporary engineering process originals for
-this finite repair are owned under
-`.chrono-harness/state/pr214-repair-engineering-20261103/` for caller inspection;
-keep failed originals until debugging and acceptance obligations finish, then
-release them to the existing lifecycle owner. Each action keeps its existing
-900-second/1-MiB bounds; no retry or test-thread override is part of the method.
-Build/CI/storage cost beyond these actual observations remains unknown.
+### use 与 finish
+
+use 只消费一项已登记项目／脚本操作，沿用 tool、argv、环境、进程限制。在与 finish／处置共用的目标 metadata 租约下记受管使用，调用已有有限进程模块，保留原字节／退出，子进程等待结束后释放使用。子进程非零仍失败，即使用途已安全释放。
+
+生命周期结果在存活协调者发布；即使 wrapper 从待处置检出调用，释放后也无结果写入者留在那里。其他自有 gate 忙时，准入／释放在登记进程上限内等待；中断 gate 保留，不按时间过期。
+
+活 use 阻止 finish。wrapper 终止、结果缺失、所有权未知保留使用记录，不按年龄清除。已有进程模块终止自有进程组内残留后代；逃出所有权的 detached／后台写入不支持，调用方须等待。Git 锁是额外检查，不替代 use。
+
+finish 是调用方等待全部自有 job、确认完成／落地后的明确终态交接。运行时观察登记物理关联、当前 HEAD／分支、允许保留 ref，发布不可变终态回执，立即执行同一清理。不创建源码 HEAD 保留 ref，不判断 PR／合并成功。
+
+可选 `--retained-commit OID` 在 ref 移动前核调用方真实 squash 落地身份；观察 OID 总会固定到回执。后续 ref 变化明确失败，不猜替代落地。
+
+`--artifacts-only` 只请求清缓存，保留检出／ref。未解决 evidence-retain、未保留提交、脏源码或其他保留产物，也会给出明确保留理由，只允许处置所选、无活消费者的输出。成功缓存清理项变 `retained`，后续每次 start 不反复扫描。
+
+后续明确 finish 只有政策允许时可用 `--dispose-evidence` 解决证据，旧终态回执留历史。终态交接后拒绝新 use。finish 若从被登记检出自身运行，清理排除该源码，之后从协调者明确 maintain 才处置。
+
+整检出移除委托已有 Cleanup，含字面干净检查、两端产物白名单、精确保留、物理身份、worktree／Git 锁、嵌套检查、可选预期 OID 删分支。共享产物阶段还保护产物前缀内暂存源码，拒绝符号链接根／祖先，内部链接只删链接、不跟目标。
+
+自动报告记录处置前字面项长度及之后核实零字节，这是逻辑字节，不是分配块节省。旧明确维护保留原报告形状。
+
+### 主检出只清缓存
+
+可选 v2 `main_cache_only: true` 通过同一所有者，在明确 import、普通 use、标准 check、已采用 bootstrap 为物理 Git main 登记。main import 只建立当前缓存保管，不执行受管命令或宣称历史生产。之后 finish 取得原独占登记租约，保留真实主缓存释放，包括尚无输出时。未选此项仍只允许 linked import。
+
+登记、use intent、共享内核租约、原进程结果、释放、缓存尝试都使用已有状态。main finish 释放缓存并保持 active，绝不授权删检出、分支、索引、源码、bin、证据或提交；拒绝证据处置／落地 pin 标志。
+
+已有登记输出若没有已采用消费者释放，仍明确作为历史对象保护。在受管生产前，登记可取得逐项声明的缺失输出所有权；这不迁移当前宿主历史 target／生产者。
+
+历史输出可由同一所有者明确接管当前保管：`migrate --path /exact/main --adopt-cache STATE_PATH`。登记状态下严格 `chrono-main-cache-custody/v1` 声明含物理 main path、完整当前 head、精确 artifacts、`current_consumers_released: true`、非空 reason。
+
+当前操作者须真实等待或排除旧未受管消费者，再声明当前保管决定。这是工程切换，不声称过去生产者已完成、成功、封存或释放。只有 active 已采用 main 项及登记 dispose 输出可接管；源码／index、bin／证据、未知路径、活的已采用消费者都拒绝。未选历史对象继续保护，不否决合格兄弟项。
+
+切换由准入和原独占登记租约保护，独立不可变回执保留原声明／关联、记录所有权变化，历史生产结果仍 unknown。历史生产／处置结果保留。已有 reconcile_uses 可追加中断历史、去掉失效 use token，因此可变登记／uses 不保证逐字不变。
+
+回执发布但账本未更新，可按同绑定重试。重复接管已受管路径不增历史、不处置。原 pending 缓存代际和普通清理在排除后回收新受管输出，不设 finish、不加清理器。后续 bootstrap／check／use 共用租约及中断恢复。采用前部署兼容所有者；旧读取器拒绝非空 `main_cache_adoptions`。
+
+### 各地址独立维护
+
+main 再进入时，先清已释放的 pending 缓存代际，再启新消费者。正在进入的 linked 检出保持排除，直到新消费者取得保护；释放后其他普通入口可恢复该检出。安装、测试、缓存保存和其他登记操作都须持同一 use 保护，真实共享描述符保护活后代及重叠消费者。不增加检查后 Cargo clean。
+
+每次删除前，处置模块重新核 HEAD、物理关联、政策、实时索引。分别报告逻辑长度和分配块（`st_blocks * 512`，含目录块），物理释放未知，块差不证明文件系统节省。失败保留原错误和实测残留，重试保留原尝试。
+
+每个工作树在 cleanup 状态目录拥有 `enrollments/SHA256(absolute-path)/ledger.json` 和绑定身份的 `metadata.lease`，只记录该精确地址历次物理关联。普通更新不写其他工作树记录。清理一直持本地 metadata 排除和目标独占能力，贯穿物理效果及原结果发布。
+
+没有总 ledger.json、全局准入租约或围绕独立 IO 的释放／重载合并。无关所有者忙／损坏只保留并报告，不拒绝有效目标；明确 maintain 报失败并继续独立可用项。
+
+普通 start／reconstruct／use／check／bootstrap／finish 只维护目标，诊断 inventory 限实际来源／目标，不先扫独立工作树或 fixture。明确 maintain 分别访问声明登记和生产者，不是无关工作前置。这去掉普通入口随工作树数量增长的遍历，失败／缺结果留在责任所有者记录。
+
+不可变 `namespace.json` 绑定物理 Git 所有者和执行物 `deployment.lease`，无可变成员表。普通所有者共享该租约；只有替换共用执行物时才独占，并在发布前排除真实受影响项，保护共享工具而不串行普通更新。
+
+部署核协调者当前政策／缓存所有权，其他被排除项绑定物理关联、HEAD、原租约。各自独立政策改变不阻止工具发布，但下一次普通 use 仍核政策／配置，需要时明确采用。部署不改它们的政策／账本。
+
+维护只枚举声明登记 namespace，并核各明确地址；未知数据不授权处置。普通入口拒绝旧总状态，无兼容读取或回退。当前保管者须在原排除下保留、拆分活状态，再切换工具代际。
+
+**产品与宿主采用曾同步修改：**登记存储及现役消费／测试绑定迁移，原生命周期／bootstrap 命令、保留窗口、处置权限不变。受影响核心、证据保管、政策迁移、所有者部署行为须过登记检查；真实结果前构建／迁移／总运行成本未测。
+
+### 保留生产者与明确释放
+
+可选 v2 `retained_producers` 点名精确生产者 ID、证据目录，以及相对每份明确回执的生成输出。已采用 `ci-command-result` 归 `ci-tests::behavior::retain_command_result`。
+
+Rust `RetainedArtifact` 接纳精确保留对象并发布 intent。采用 wrapper 先复制原 stdout、stderr、binding、configuration、state，再 begin，封存生成目录身份及原流／binding 摘要。begin 前中断或准入失败留下的未登记副本作为未知证据保护；已准入未封存回执也保护。
+
+消费者各有独立明确 acquire／release 回执，丢 handle 或进程消失不释放。已有清理只读该家族明确 `producer-records/` 下生产者写的登记，每项声明精确 artifact、owner、引用，不扫产物目录发现成员。
+
+发布通过 `RetainedArtifact::registered_store` 解析生产者，与清理共用已提交 worktree 配置、cleanup 政策、登记和物理 Git main 协调者检查。声明查找只读政策，不取得维护准入、不初始化账本，因此活维护租约不阻止查找。最终 HEAD／配置／政策稳定检查仍适用，实际发布／处置各有原登记和所有权保护。
+
+默认 wrapper 将生产检出与命令 fixture 根分开传，所以 linked 生产者在 main 协调者声明目录下发布。`CHRONO_CI_TEST_RECEIPTS` 只能选该精确物理存储；未声明、重叠、不匹配、符号链接位置拒绝发布且保留。解析存储不释放消费者，也不授权删 main／分支。旧 linked 存储没有已采用转发路径，继续作未知证据保护。
+
+本宿主只接纳两个复制的独立 Cargo 输出 `original-state/cargo/producer/target/`、`original-state/cargo/tests/target/`，生产者还要求精确源码产物声明。所选 expected-exit 断言消费原结果后发布 release；意外退出、发布不完整、活诊断引用都保留副本。
+
+全部引用明确释放后，所有者可回收生成副本；stdout、stderr、binding、配置、源码、恢复原件、其他 state 仍是证据。无 expected-exit 合同的旧调用方保留未释放引用。未知旧回执及未登记对象全部保护，整个 state 不因此可删。
+
+兼容已提交政策／工具部署、真实宿主迁移、原生 CI 缓存保存参与、完整 SPEC 采用仍不在本实现验证内。
+
+协调账本在效果前记录原身份、终态回执、尝试报告路径。失败保留原字节／摘要及部分效果。普通重试只可在精确未变检出协调记录自有锁，再走允许缺失的 cleanup。
+
+结果缺失／中断、关联／HEAD／政策／ref 变化、其他锁或源码损坏，均保留供明确协调。重试不覆盖原失败。存储失败、未登记并发写入、断电不保证事务；失效准入／use 记录须调用方等待原 job 后协调，v2 内核恢复的明确范围见后文。
+
+import 为一个明确已有 linked 工作树登记，核当前登记／关联并绑定原政策输入，含明确缺失。可导入旧检出而不编辑它，也不假装它采用新自动政策。处置路径须已在两端声明。观察为 import，不声称历史 birth，不枚举旧宿主。
+
+调用方 Git／GitHub、发布、立即回收旧宿主、证据结算仍不属本生产者。worktree fixture 从 `.chrono-harness/tests/worktree-tools.json` 按明确 OS／架构选 Git，再通过原绑定记录真实身份／版本；产品宿主 Git 政策独立。测试平台缺登记失败，不回退 PATH。
+
+本地真实 Git fixture 覆盖整检出移除；真实 main finish／落地仍是调用方采用后的验收事件。
+
+### 明确迁移政策
+
+`migrate --path /exact/enrolled-worktree` 为一个已有 v2 内核登记项采用协调者当前已提交 cleanup 政策／worktree 配置。目标提交匹配输入后，从存活协调者运行。要求原准入及独占登记租约、同一物理 Git 关联、已核 birth 证据、无外来 Git 锁、两端产物登记。
+
+政策输入地址、协调者、状态目录、所有权协议保持固定，不支持在此迁移它们。旧版／缺内核所有权、待终态处置保持保护，政策改变不隐含迁移。
+
+两端宿主配置不同时，各自保留登记来源／输入。迁移只比较明确绑定 cleanup 政策和 worktree 配置，不要求复制协调者整份宿主配置。采用政策所选每个产物须两端已登记。
+
+某端没有真实生产者时，不造登记；应明确选只覆盖支持输出的政策，或让该项保留原受保护绑定直到其采用完成。此命令无单项政策覆盖，也不改 Git。调用方创建兼容采用提交时须保留原提交／结果。
+
+原登记、birth policy hash、birth receipt、uses、旧清理尝试保留身份。独立不可变迁移记录旧新绑定、原字节、观察提交，再次核新绑定后才向账本追加回执。普通 use／cleanup／finish 核整条链，使用最后绑定；回执或原输入缺失／改变，拒绝后续 use／处置。
+
+采用前部署兼容工具，旧读取器拒绝新增非空 migration 字段，不误作旧绑定。迁移不处置、不更新 Git、不作终态交接，保留源码、输出、任务状态。
+
+active 项开新缓存代际，retained 项仍 retained，后续终态处置需新明确 finish。已静止中断 use 保留协调记录。绑定未变重复请求不增历史；迁移已发布但账本未采用时，重试复用原件，其存在不证明采用成功。unknown／未封存 birth 须先按原政策协调，再迁移。
+
+<a id="kernel-ownership-and-unfinished-cache-recovery-v2"></a>
+
+### v2 内核所有权与未完成缓存恢复
+
+v2 使用 `chrono-worktree-automatic-cleanup/v2`，保留原政策字段，另登记新状态目录。本仓选择 `.chrono-harness/state/automatic-cleanup-v2/`。切换时调用方须部署兼容协调者并排除不兼容生产者，不能把 v1 gate、token 或未知记录追认为内核租约。
+
+#### 先在独立主克隆验证，再切协调者
+
+调用方负责分阶段验证和切换。先在独立、干净 Git main clone 用正式 bootstrap／短检查验证精确已提交候选。当前 scoped 本地生产者为 `full_context: None`，无需伪造 linked origin 回执。main-only bootstrap 可初始化缺失所有者工具；这只验候选，不验存活协调者或完整／原生义务。
+
+存活协调者固定 Git 不能在新支持宿主运行时，也只用这一登记适配路径：独立 main clone 从最新 dev 建 fresh integration，在原 Git／worktree 所有者登记精确新增身份，提交干净候选后运行正式 bootstrap／短检查。
+
+若仅为修复前失败探测在此临时克隆初始化过所有者二进制，须先等待全部自有任务，核工具身份及无消费者，再保留到安装位置外，让同一 main-only bootstrap 初始化候选所有者。
+
+这不允许替换活的／外来协调者、验证中改预期摘要、伪造 linked 回执或跳过政策相等。仍须观察原生 macOS-26 Git 身份、验精确候选，再部署匹配的已提交政策／参与声明，之后通过普通 start 创建三份真实 linked 工作树。
+
+真实切换时，等待／排除不兼容生产者、保留 v1 状态，在存活 main 协调者装兼容工具，提交并部署匹配 v2 worktree／cleanup 政策、所选宿主配置和 participation，再开始 v2 linked 工作。
+
+之后才通过普通 start／reconstruct 自动登记 v2，并在新 linked 检出用原公开 bootstrap／check。协调者工作文件和已提交政策／配置须与调用检出一致；只升工具或只改 linked 政策，故意在构建／清理前拒绝。不把 v1 token 转租约。真实协调切换及原证据仍由调用方验收。
+
+#### 内核租约如何保护消费者
+
+每个点名登记项有稳定、绑定身份的 metadata flock inode；每代物理关联有稳定共享／独占（SH／EX）使用／处置租约。普通 use 在 intent／spawn 前取 SH，持有到结果发布；业务执行前释放准入，Git 修改子进程继承准入。
+
+清理持准入并尝试非阻塞 EX，有活持有者就保全。最后一次 close 才释放所有权，不对共享继承 open description 发 `LOCK_UN`。身份缺失／替换、政策变化、外来 Git 锁都保全工作。
+
+birth 在登记和回执封存期间持关联租约。生产者中断后，普通 use／maintain／finish 可在 EX 下发布不可变、身份绑定协调。发布后再次中断，先复用原字节，再把指针接到账本。恢复保留原报告及未引用封存回执为证据，`sealed_receipt` 仍缺失，写 `original_outcome: not-established`。
+
+清理拒绝只影响自身登记项。普通 start／reconstruct／use／check／bootstrap 不尝试无关项或 fixture 清理，目标准入／所有权／状态发布失败仍阻断。明确 maintain 在 drain、不可变失败回执、cleanup_failures 保留无关失败，继续独立项；只要本轮尝试有失败仍非零，不丢旧回执。
+
+#### 用引用保留原结果
+
+自动生命周期用 `chrono-worktree-retained-input/v1` 引用旧输入，包含物理协调者 `source_root`、相对 state `path`、sha256、byte_length、format（receipt 或不透明 bytes）。完整不可变回执原位引用；部分／未封存字节在登记 state 发布一次，不把缺失／未知升级为成功，不改旧原件。未变操作重试不内嵌旧报告字节或解析历史。
+
+引用字段为 `terminal_input`、`prior_report.input`、`prior_cache_attempt.intent_input`、`prior_cache_attempt.result.input`、`original_report.result.input`、`unreferenced_original_receipt.input`、`original_result.input`、`drain[].input`。
+
+当前 drain 行用描述符及原 receipt 保留精确子报告，父报告可见子 status／error，不内嵌解析后的整报告。要读处置效果或原进程，消费者寻址子报告并核长度／摘要。标准 check／bootstrap 仍消费原父 `managed_process` 流和状态。
+
+回执消费按明确引用传递核验，同次检查去重读取。原件缺失、变化、错绑或符号链接拒绝清理；不透明部分结果可保留，不要求有效 JSON。拒绝历史内联 drain，自动生命周期外的明确维护保留原报告形状。
+
+这限制历史重复内嵌，不限制必要原观察数量／总体积，保留和处置仍归政策。只有当前 `drain[].input` 描述符参与引用核验。stdout 协议上限不变，父发布仍可能因自身 IO／传输失败，保留子失败仍是清理失败。
+
+#### 任务未 finish 时回收缓存
+
+后续点名 start／reconstruct、受管准入或明确跨目标 maintain，可处置未完成但已无活消费者的缓存，包括成功 use 且无孤儿 token 的情况。EX 允许把孤儿 use 协调为 result-unavailable，同时保留原结果字节。
+
+缓存处置仍保持 `status: active`、`terminal: null`，保留检出、ref、脏／暂存源码、未保留提交、bin、证据。只选两端登记 dispose，拒绝已跟踪／index 路径和符号链接祖先，不创建持久自有 Git worktree 锁。
+
+成功一轮清 pending 代际，后续 use 重新启用。任何已发布缓存尝试后再准入消费，也开新代际，即使旧尝试中断／失败，仍保留旧 intent／result，允许当前 HEAD／登记绑定用于重建和再回收。
+
+效果前，不可变缓存 intent 绑定关联、租约、HEAD、政策、登记、路径、代际。结果缺失／失败可在重新排除、绑定未变时幂等重试，生成新真实回执，原件保持。
+
+可选标准配置声明为 `"participation":{"operation":"worktree.check","tool":"chrono-worktree","argv":["check"]}`。公开命令仍 check、check --unit ID、check --collect。参与路径转发原 stdout／stderr／退出，含成功警告和非零诊断。所有者另标已完成命令失败；传输、所有权、结果发布失败仍是生命周期错误，带原报告引用。
+
+CLI 字符串保留 UTF-8 控制台字节，所有者报告保留原字节数组。worktree 所有者在获取前准入原 runner，再转发原控制台／退出。bootstrap 另声明 entrypoint tool／script 和 participation coordinator／program／Git／config；独立 bootstrap 在构建效果前委托已部署协调工具，新 linked 无本地 bin 也如此。所有权缺失明确失败。
+
+引擎以 CLOEXEC 所有者副本及 pre-exec 可继承子副本传明确不透明描述符。`CHRONO_PROCESS_FDS` 穿过嵌套 runner 的清空环境，三个登记 Python 消费者用 `process_fds.py`、明确 pass_fds。这些是已测路径，不是通用继承保证。
+
+真实 Cargo 回归区分 launcher 和原生 child，杀 Cargo／受管 wrapper，核活 child 继续持租约直到完成。Cargo run 可能 exec 替换自己，杀同 PID 不证明子进程仍存活。不能由 PID 或父消失推断子退出。完整采用仍须已提交组合及支持原生平台。
+
+整检出 finish／保留和旧自有锁恢复合同不变。不提供 daemon、全局进程／文件扫描、年龄过期、空闲调度或断电事务。调用方已提交标准检查、支持原生平台、进程模块组合验收、main 部署／切换仍为必需。
+
+没有已部署所有者的 Git main 可初始化自身 bootstrap 工具，不能作为可丢 linked 关联登记。linked 缺协调所有者就在构建前失败；这样干净原生 CI 可 bootstrap，而不改工作流拓扑或允许不安全 linked 回退。
+
+### 明确处置证据副本的当前保管
+
+`chrono-worktree retire-evidence --host-root ROOT --config POLICY --plan STATE_PATH` 是维护模块的有限文件切换。计划为 `chrono-worktree-maintenance/v1`，含 `operation: "retire-evidence"`、精确 head、schema `chrono-evidence-custody/v1` 的 custody。
+
+custody 声明物理 root、完整 branch ref、`current_consumers_released: true`、工程 reason、authority 原件（path／SHA256／length）及精确 objects。各对象含 original 身份、独立 survivor 保留路径、生产 owner、释放 reason。相等字节证明内容保留，当前保管者明确释放才提供处置权限。
+
+声明前，调用方须等待／排除旧未登记消费者，结束副本路径断言或 manifest 重放。历史 manifest 仍是原证据，此切换不声称已退役路径仍能重放。
+
+exclusion 声明已有 coordinator_root、已跟踪 config_path、已采用 state_directory。命令将当前已提交内核政策作数据读取，持原准入／登记租约，核一个当前 active 项、物理关联、未释放 use token、外来 Git 锁及干净固定检出。不清其他项、不迁移旧源码政策、不改 Git、不释放检出、不造历史 seal。历史宿主可用候选工具及自身未改已提交政策／产物登记调用。
+
+只有明确列出的登记 evidence state 下未跟踪普通文件可处置。源码／index、所选 survivor、authority、尝试输入／输出都拒绝退役。unlink 前流式核别名和 survivor 的声明身份，含稳定物理文件身份。独立身份／保留失败保全该文件，其他合格对象继续。
+
+独立 `effects.jsonl` 同步声明引用及每次效果前 intent／result，报告只含计数／引用，不复制旧正文。重复同一有限计划复核 survivor，将已缺别名记实测缺失，不猜哪个中断尝试删除。原失败、登记、源码、ref 不变。
+
+退出 0 只表示精确有限处置完成，未解决成员／绑定失败退出 2。removed 只计完整核实完成。unlink 后核验失败可在效果已发生后增加 failed；removed 为零不证明没删。精确 custody 声明和 authority 仍须保留，报告不保证自含或独立不可变声明副本。逻辑删除计数不证明共享卷物理空间释放。
+
+worktree fixture 只在 `CHRONO_WORKTREE_TEST_RECEIPTS` 明确请求或 panic 时保留；默认成功不复制全部 state。副本断言／失败诊断仍是消费者，直到当前保管者明确结束路径义务。
+
+### 准备本地初始输入
+
+登记 check-inputs action 支持 schema4 独立可选 `canonical_check.initial_profile`，将两个 profile 摘要绑定已提交 HEAD，经已有 Git 观察记录物理父提交。真正无父候选准备独立清单，无 base、fetch、origin、full context；非根保留目标 fetch 和普通 DELTA／上下文。目标缺失、浅历史不变成根。
+
+裸 runner 入口先核原准备，再运行已有初始判官，生产者自身不发布清单成功。
+
+CI 复制宿主断言复用专属测试独立 receipt 所有者及明确平台 Git 输入，不把源码宿主已部署 Git 摘要／版本当 fixture 政策，不改源码绑定。原错误和成功对照均由真实命令产生，未保留 commit-tree fixture 明确提供作者名／邮箱。
+
+真实 Cargo 保留重建的握手在冷构建后发生，等待现役受管进程真实结果，沿用原 30 秒进程上限，不另用十秒就绪时钟杀编译。普通参与式 check 的本地输入准备也等原有限生产者结果，不另提前杀它；其他就绪等待仍十秒。
+
+缺 marker 时消费、保留真实退出和进程原件，退出前没完成就不产生成功。专属负例用缺失 manifest 核失败并等待子进程。旧原生失败只留下空外层流和 use intent，不能据此判断编译阶段或停滞原因；修复后的支持平台原生验证仍归调用方。
+
+### 在生成前登记 fixture 的保管范围
+
+**产品与宿主政策曾同步修改：**已有保留生产者模块增加 `TemporaryHost`，cleanup.json 增加五个有限 fixture 生产者。工具及协调者／生产者已提交政策须一起部署。Git 配置 v2 身份选择、worktree v3 身份声明含义不变，未知身份仍在执行前失败。历史存储和未确认释放迁移保持保护；实现、验证、存储、迁移成本未知。
+
+`TemporaryHost::registered_store` 与 RetainedArtifact 共用只读已提交政策／Git main 协调者解析，另要求所选生产者明确采用生成前临时保管。分配在产物生成前发布 intent，列精确生成目录和声明 Git 源码根。
+
+丢 handle 不表示任务完成或生产成功。最后一个受支持持有者及明确诊断消费者释放后，普通重入可恢复合格输出，不依赖记得 finish。分配／租约缺失、未知对象、部分复制、身份变化保留原结果，独立合格兄弟可继续。inventory 不登记／移除 Git 关联。
+
+原生适配器在唯一 `bind_command` 前设 argv／环境，将已有内核能力传给真实原生／Cargo 子进程。命令跨范围释放／线程交接保留自有描述符副本，禁止重绑。
+
+`capture_output` 绑定尚未绑定命令，`capture_bound_output` 捕获已绑定路径，两者在 spawn 前保留 intent 和原 stdout／stderr 文件。`capture_bound_input` 另保留 stdin 原字节并提供相同字节及 EOF。只有真实 wait 才发布已等待退出；spawn 失败／中断保留空／部分原件，不造结果。这些捕获不进入生成成员集合。
+
+`register_copy` 在真实复制前保留验证后的源码原件、登记精确未来目标；`relocate_copies` 在分配内真实 rename 前只迁已登记成员。复制准备在持 allocation 租约时计算摘要、复制、同步，不占 allocation metadata 事务。
+
+发布只重开当前登记，核不可变 namespace、allocation、intent 绑定，保留期间新增分配、body 登记、诊断引用。并发复制只有核已发布胜出者字节后才共用内容寻址原件，其物理指纹直到登记都须不变。当前保管采用沿用同一所有者、独占 allocation 和消费者已释放检查。
+
+原准入上限及默认测试并发不变，早期登记超时的确切持有者仍未知。`fixture_bodies` 明确采用成员恢复。Git 身份／对象、已提交／index 源码、原捕获及未知成员保护；Git metadata 内只允许明确登记的复制 hook 叶文件成为成员。每次效果前核源码／index 和物理身份。
+
+复制成员与原件生命周期独立，最终原件保留／发布及兼容共享效果组合另行完成，此 API 不释放原件。
+
+每个 allocation 拥有一份当前 `producer-records/` 登记。不可变 `objects.json` 只含 namespace 身份，无对象表或可变结果。普通准入读小身份和点名 allocation 记录。allocation、复制内容、诊断引用更新持该 allocation 身份绑定目录锁，无关分配不共享修改锁、解码缓存或目录表重写。只有初始 namespace 创建排除并发创建，当前存储不建 registry.lease。
+
+清理枚举明确登记 namespace，核各严格 schema、owner 摘要、规范地址，再核真实 allocation／use 租约。这读生产者声明，不扫产物树或按文件名猜所有权。错误登记保留错误／原件，独立项可继续。发布在登记 namespace 外准备，再原子替换自身记录，无全局解码快照或可变成员索引。
+
+原源码、消费者、嵌套保管、处置检查仍适用，性能和完整有限 metadata 保留仍需实际验收。普通清理不阻塞地尝试 allocation metadata 排除；正在更新者保持保护及原状态，独立项继续。真实发布／引用更新仍受三十秒生产准入限制。
+
+明确 retained-producer 维护只持调用登记的 metadata 排除；独立项各有记录／锁，不为物理 IO 作释放／重载合并。实际回归、协调者／原生验收仍必需，报告发布模块另有自身并发限制。
+
+`migrate --path COORDINATOR --partition-producer ID` 是已采用保留生产者唯一数据切换入口。在原生产者独占租约下消费精确 v1 字节，保留原件及独立迁移回执，写逐对象登记，原子启用不可变当前所有者。只复制结果／消费者，不释放／处置。
+
+中断准备可复用绑定身份 namespace，未知 metadata 创建保持保护。旧写入者拒绝启用后的严格形状，普通运行无历史解码／格式回退。部署、等待／排除旧写入者、真实迁移、完整 SPEC 验收归调用方，仅改源码不表示已切换。
+
+#### 复制内容的删除与原件引用
+
+复制内容准入只在共享效果模块的紧邻 unlink 前回调执行一次，核当前成员内容／身份、保留原件身份、实时 Git source／index、协调政策／HEAD、allocation、消费者租约、最终原件排除，再由效果模块复核物理身份后删。
+
+intent 先于准入，因此拒绝成员仍有 intent／失败结果。原生迁移超时在嵌套 CI 命令已等待结束后到达该模块，留下 254 个完成 body-disposal 结果。去掉 intent 前重复读取，保留原 900 秒上限。
+
+本地 source／index 回归从两成员三次读取变为两次，七项 body-custody 测试通过，含同长度内容漂移；不证明原生端到端耗时或完整 SPEC。
+
+受管 use／check／bootstrap 命令真实等待成功后，所有者返回前清理点名工作树。fixture 生产者维护只属明确 maintain，不先于无关操作。独立 `post_use_cleanup` 保留本轮，不替换准入 drain、原进程或 use 回执。
+
+调用源码／目标沿用排除和活租约，生产者恢复仍须精确成员、原字节、持有者／消费者释放。失败命令保留原失败、跳过成功后清理，保留部分诊断。清理不释放原证据或宣称生命周期完成；原生产物体积／汇总耗时收益须观察候选。
+
+每轮在 `producer_drains` 列清理原件，含精确 receipt 和 `chrono-worktree-retained-input/v1` 引用。消费者核引用字节，从原生产报告读 `producer_objects`，父报告不复制行。
+
+生命周期发布向已有 retention 所有者登记准入／post-use 依赖，让当前父消费者保留生产原件。释放后，明确有限维护可回收无根引用范围；仅历史引用不永久保活。各原报告保留状态、错误、进程。其他重复内容、物理收益、完整 SPEC §10.1 仍未验证。
+
+普通 linked 生命周期、创建、重建也保护协调者报告家族直到父报告发布，包括未给 `--report-consumer` 的调用。只保护报告和明确依赖，不遍历两检出无关输出。发布不建持久消费者根，后续明确维护可回收无根报告，普通重入保留它们。
+
+`migrate --path WORKTREE --adopt-fixtures STATE_PATH` 通过已有迁移模块消费有限 `chrono-fixture-body-custody/v1`，绑定当前 HEAD、allocation／intent／物理身份、精确成员字节、配方、Git 根、嵌套 registry／lease 引用及真实当前消费者释放。保留历史结果，不处置。
+
+外层成员回收前，嵌套诊断引用及真实持有者也须释放。不扫描成员或根。真实 worktree Cargo／hook／full-native、CI short／full fixture 和共享 projects Host 使用此模块。共享 Host 的 FILEMAP、inputs、Cargo、workflow 消费者都依赖同一 worktree 库。
+
+workflow 原生工具、历史迁移各有有限声明，源码、外部输入、manifest／lock、离线原件仍保留。复制／硬链接／原生捕获适配器保持真实操作。panic／明确请求诊断在 allocation 保管释放前取得持久 `fixture-diagnostic` 引用，真实诊断保管者消费后经 RetainedArtifact 释放，不加整范围 TMPDIR 或并行登记／清理服务。
+
+共享 drain 还从 Git 明确 inventory 发布 `worktree_inventory`：当前 HEAD／分支、locked／prunable、物理关联、当前登记匹配和保留理由。inventory 进程失败在效果／准入前致命；不可读行只是被阻断诊断。没有账本、已变化、处置路径被复用的关联，不靠观察登记。
+
+可变 HEAD 与 birth 关联身份分开。这些行不授权处置，效果保护仍取新事实。五个共享测试所有者在各自 update_lockfile 登记 `lock.<owner>`，委托 Cargo 对精确本地测试包 offline update，保留独立 manifest／lock／target。
+
+本地标准验证、真实兼容协调者部署、精确原生汇总、独立审读、历史迁移、落地都须分别验收，源码适配本身不证明任何一项。
+
+## 受保护地构建普通 bootstrap 所有者
+
+公开 bootstrap-core 选择 `.chrono-harness/ci/bootstrap-owner-upgrade.json`，使用 `chrono-bootstrap-owner-upgrade/v1`。仅输入 selected_original（普通 bootstrap 报告）和 stage_config（当前构建 profile）；执行物来自已有 participation program，不用固定历史签发者、外部启动包或执行物 hash 准入表。
+
+Git main 工具缺失保留原 seed 行为；linked 缺协调者或不兼容，在构建前拒绝。
+
+构建前，候选从真实保留生产者核已安装所有者资格。普通安装读取原干净 bootstrap 报告及生产者固定 commit／tree／登记为数据，核执行、原流、全部安装内容、所选工具物理身份。生产者须属于本物理宿主且唯一安装该目标，变化的现用候选不能替换原生产者配置／事实。
+
+独占发布成功而后续 core 安装失败时，已安装所有者的生产者是保留 stage／adoption。核固定源码、工具链执行／流、stage／旧 inode、发布 intent／result、原 Rust adoption 回执，不执行历史 bootstrap、不改旧 core 报告。原件缺失、改变、不完整、未生产都在原生效果前拒绝。
+
+候选把合格已安装字节复制到 `.chrono-harness/state/bootstrap-owner-upgrade/` 的保留构建尝试，附生产报告、资格确认、当前升级声明。启动前复核原摘要、执行身份、副本字节。已有 migrate／bootstrap 携原准入／登记保护。
+
+内部 stage profile 构建 build.worktree，把独立执行物留在 `.chrono-harness/bin/owner-stages/`。构建失败不请求部署，原命令／后代全部等待结束后，stage 才请求 EX。
+
+core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候选部署后，core 消费原操作记录／流，以保留 stage 工具作为安装输入。复用前核当前 adoption、源码、声明、工具链、实测环境。原 PID／退出／流描述符不改，`reused_from` 点名 stage 报告，不假称第二次执行。首次 seed 或独立所有 linked 工具仍运行声明构建。
+
+**产品与宿主政策曾同步修改：**去掉已采用 main 的重复 owner 构建，避免临时重建替换部署字节。登记 bootstrap 测试覆盖复用、选择、原绑定拒绝，再验源码 bootstrap 及受影响标准／原生范围；总节时未测。
+
+普通共享 bootstrap 复用相同协调者字节，改变须走 owner 部署回调。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
+
+真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。Python 负责字节验证、原 inode 保全、原子替换、中断发布重入；Rust 负责物理关联、已提交端点、原准入／登记 EX、发布／采用检查。
+
+采用的 core 与 owner-stage profile 都关闭 Rust 增量编译。两次独立保护操作之间回收缓存可能迫使第二次构建；macOS 增量调试映射含随机 codegen 对象名，可能改变执行物字节。两个 profile 使用同一明确的非增量选择，保留精确发布检查。编译器、链接器及环境的其他输入仍须各自绑定，仅此选择不证明可复现；总构建／存储成本未测。
+
+部署从逐工作树记录和 Git inventory 产生真实排除集合。独占发布阻止新登记／use，在改所选字节前，为该物理协调者每个未解决登记（含 linked）取得原 EX，贯穿发布／采用，并复核准入、账本字节、inventory、关联、协调政策、租约身份。
+
+被排除 linked 无需先采用政策。活后代、未知／不可用受影响关联、缺所有权、未等待 use 输入都具体拒绝，保留安装字节／原件。已处置代际不变活消费者，另一物理协调者不在集合。真正绑定的协议外生产者仍须其原保管者等待／排除，未知历史任务不能证明该绑定。不可变发布结果不独自证明采用或任务完成。
+
+**产品与宿主政策曾同步修改：**Python 总是确认并复用真实已安装所有者，core／FILEMAP 用当前升级声明替代固定历史供应，移除专属供应验证及只用外部包测试。共享 startup 保留真实 CI 消费者及测试。
+
+Python 升级回归不依赖无关传递包，覆盖普通／已发布生产者、原件丢失／损坏、资格确认后变化、构建失败不发布。仅原生生命周期调用在这些 Python 用例中隔离；真实协调 bootstrap、两端标准 DELTA、原生采用、落地另验。摘要、尝试存储、验证成本未测，原期限／操作上限／排除不变。
+
+构建载体、stage 候选、保留旧 owner inode、原报告／流用于当前工程／PR 验收。待验收／调试和依赖消费结束，走登记生命周期回收；保全独有工作和失败原件，不按年龄删或宣称完成。真实生产者数据仍是必要证据，不构成历史格式／接口兼容义务。
+
+所选 profile 通过原 bootstrap 宿主路径模块解析可写 HOME／CARGO_HOME／TMPDIR，位置归当前登记。解析在取得授权前无效果，普通参与或 main 缺工具 seed 后才建目录。锁定 Cargo fetch 明确允许在线，填所选私有 home。macOS 环境为标准消费者选同一私有 home，原生 profile 保留自己的输入；这不证明同判。原离线／缺包失败仍保留，产品限制不变。
+
+### 原生子进程的输出与完成
+
+Cargo wrapper 存活回归在原 wrapper 中断和维护检查后，用阻塞 socket 等真实原生 child。child 仍发布原释放／完成文件，测试同时核 socket 响应和完成文件。关闭／超时通道以原 IO 失败，不能文件轮询代替完成，原十秒完成上限不变。
+
+发就绪前，fixture 将自身 stdout／stderr 绑定保留原文件，使 Cargo／受管 launcher 退出后目的仍可用。两 wrapper 退出后，父请求真实进度／诊断写入，在维护及释放／等待断言前核原字节。写错误保留 OS 错误并使回归失败。
+
+完成消息只表示 fixture 函数完成，不独立证明整 libtest 进程终态或全部调用方义务完成。
+
+## 明确登记生命周期报告消费者
+
+当前 finish、maintain、import、受管入口接受 `--report-consumer ID`，点名调用方真实原件消费义务，独立于缓存 use／release。已有 retention 生产者在关闭发布能力前传精确消费者根，在 report_consumer 返回 `chrono-retention-consumer/v1` 声明，要求已采用生命周期保留。
+
+从 linked 调用时，协调者发布并绑定真实协调原件。报告声明的 recovery、fetch、cache、main-release、drain 是明确保留依赖，不从 JSON 发现边。
+
+bootstrap fixture 保管者消费该声明，核真实生产路径、物理身份、字节、类型化回执依赖范围，在维护、缓存处置、准备恢复、再次准入、后续断言期间保持保护。
+
+成功断言所有者通过已有 runner retention 命令及自身 release 回执，释放精确声明。终态断言回执绑定未改尝试和精确领域／所有者释放原件；原消费结束后，之后准入消费该回执，其他原件断言仍须真实字节，不用报告正文替代。断言失败或保管未解决保留原件。
+
+独立真实 bootstrap 消费者保留调用方验收／审读保护，直到真实交接。缓存处置、源码／index／活消费者排除归原所有者；缓存释放或存下 stdout 不代替原件，也不证明之后已释放。
+
+**产品／fixture 同改说明：**发布新增可选调用方消费者，本仓普通政策和零保留窗口不变。验证使用专属 runner／worktree Rust 及登记未过滤 bootstrap 测试。直接脏源码工程调用不是标准源码绑定验收。
+
+本次有限修复的临时进程原件归 `.chrono-harness/state/pr214-repair-engineering-20261103/`，供调用方查看。失败原件保留到调试／验收结束，再释放给已有生命周期所有者。各 action 保留原 900 秒／1 MiB，不重试、不改测试线程；超出这些实际观察的构建／CI／存储成本未知。

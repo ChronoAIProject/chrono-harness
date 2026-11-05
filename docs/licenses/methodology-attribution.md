@@ -1,13 +1,13 @@
-# Derived instruction text: attribution and modifications
+# 派生指令的来源、修改与许可
 
-**The migrated instruction text is modified, generalized and translated. It is not an unchanged copy of the source guide.** Original work: Copyright 2026 The Omega Institute, licensed under the Apache License, Version 2.0. The [exact source license](trureturing-Apache-2.0.txt) is retained here, including its copyright notice.
+**本仓的指令经过修改、泛化和翻译，并非原指南的原样副本。** 原作版权为 Copyright 2026 The Omega Institute，采用 Apache License 2.0。[许可全文](trureturing-Apache-2.0.txt)提供中文译文，并完整保留原文和版权声明。
 
-Source: [trureturing CLAUDE.md at 55f7968bb03b1422298d80fc65ac5291db9ad682](https://github.com/the-omega-institute/trureturing/blob/55f7968bb03b1422298d80fc65ac5291db9ad682/CLAUDE.md). The source pin and each clause’s disposition are in the optional [clause map](../methodology-clause-map.md). No root NOTICE file was present at that pinned commit. Source repositories and global configuration were not modified.
+来源为 [trureturing 在固定提交中的 CLAUDE.md](https://github.com/the-omega-institute/trureturing/blob/55f7968bb03b1422298d80fc65ac5291db9ad682/CLAUDE.md)。固定提交和每条要求的处理方式见[逐条处理表](../methodology-clause-map.md)。该提交的根目录没有 NOTICE 文件；本次迁移未修改来源仓库或全局配置。
 
-This attribution applies to the derived rule text in `assets/instructions/catalog.json`, the explicitly adopted `.chrono-harness/instructions/catalog.json`, and their generated Chinese root, English guide and recurring-failure skill. Their frames carry a modification and copyright notice. User-origin product principles are identified separately in the [migration explanation](../methodology-extraction.md).
+本说明适用于 `assets/instructions/catalog.json`、本仓明确采用的 `.chrono-harness/instructions/catalog.json` 中的派生规则，以及由它们生成的根指南、完整方法指南和重复故障诊断技能。生成文件的说明包含修改和版权声明。用户提出的产品原则在[迁移说明](../methodology-extraction.md)中另行标明。
 
-The modifications remove project identities, mathematical admission and governance regimes, source-specific tools and quotas; split shared duties into reusable bilingual leaves; and adapt them to the current user’s autonomous, explicitly registered host model. Exclusions and retained limits are listed per obligation. The authors supplied the English text; the generator performs no translation.
+修改移除了原项目身份、数学准入和治理制度、专用工具及配额，将共同要求拆成可复用的中英文规则，再适配到当前用户要求的自主工作、明确登记模式。每条要求保留或排除的范围均有记录。英文文本由作者提供，生成器不做翻译。
 
-Keep this license and attribution with redistribution of these derived instruction assets, generated guides or binaries containing them. The copied-binary examples test operation without a checkout; they do not remove accompanying license obligations. No LICENSE or license metadata for chrono-harness as a whole was observed when this migration was prepared. These notices do not license or relicense the entire project, its Rust implementation, other host content or third-party packages.
+分发这些派生指令资产、生成指南，或内含这些内容的二进制时，须随附许可与来源说明。复制二进制后无需源码即可运行的测试，不免除随附许可义务。准备迁移时未发现 chrono-harness 整仓的 LICENSE 或许可元数据；这里的声明不给整个项目、Rust 实现、其他宿主内容或第三方包授予或更换许可。
 
-This is optional legal and provenance documentation, not a host policy source or runtime input. Nothing here asserts machine-proven semantic equivalence or implemented general enforcement.
+这是供选择阅读的法律与来源资料，不是宿主政策源或运行输入，也不声称机器已证明翻译含义等价或已实施通用规则检查。

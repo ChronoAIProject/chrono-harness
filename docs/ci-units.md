@@ -1,156 +1,54 @@
-# Independent CI units
+# 独立 CI 单元
 
-`chrono-ci-check/v3` explicitly assigns every registered test plan to one unit.
-`chrono-github-units/v1` (scoped) and `/v2` (full) accept an explicit optional
-`job_gating` registration. The current product host adopts it: one detector,
-independent conditional unit jobs, and an always-run aggregate in one parent
-workflow. Each unit retains its own checkout, name, runner, bootstrap, timeout,
-context, upload and job rerun. Host languages and layouts remain opaque.
+`chrono-ci-check/v3` 明确把每个登记测试计划分配给一个单元。按范围 `chrono-github-units/v1` 和完整 `/v2` 可明确选择 `job_gating`。本产品宿主已采用：一个父工作流内运行一个检测 job、按需运行的独立单元 job、始终运行的汇总。各单元仍有独立检出、名称、runner、bootstrap、超时、上下文、上传和重跑；产品不解释宿主语言或布局。
 
-The product host registers an explicit inventory of conditional units. Its existing
-workflow test project has three explicitly registered test groups, assigned to
-the units `judge-workflow` (core),
-`judge-workflow-units` (direct full-unit tests), and `judge-workflow-short`
-(full short-command tests). Registered actions select each group's members;
-the inventory guard verifies their coverage without inferring dependencies.
-Together, the groups cover the two original test binaries and preserve their
-fixtures, profiles and business limits. `actions.execute` and its original
-`test.judge-workflow-tests` operation remain unfiltered for release. The legacy
-test identity binds a distinct filtered core action through `test_groups`.
+## 本仓如何划分测试
 
-Each group retains the registered build prerequisites and runs the host-owned
-`.chrono-harness/ci/workflow-inventory.py` guard. Its explicit config binds the
-original action, group map, Cargo tool and binary lists. Real unfiltered, ignored
-and filtered libtest listings must form nonempty disjoint exact coverage;
-failed listings retain their original exit and output. The guard compares current
-sets rather than fixing the test count forever. The migration's historical name
-baseline remains a separate implementation observation. Shared prerequisites and inventory
-operations are explicitly assigned to all three units. Each has a distinct context
-and check report; the existing detector and always-run aggregate remain the native
-entry and sole required branch-protection check. The grouping has no native timing
-or activation acceptance until the caller runs the committed candidate there.
+本仓 workflow 专属测试项目明确登记三组，分别分配给 `judge-workflow`（核心）、`judge-workflow-units`（直接完整单元测试）、`judge-workflow-short`（完整短命令测试）。action 明确选择成员，清单保护核覆盖范围，不推断依赖。三组合计覆盖原两个测试二进制，保留 fixture、profile 和业务限制。发布仍使用不带过滤的 `actions.execute`／原 `test.judge-workflow-tests`，旧测试身份通过 `test_groups` 绑定独立的核心过滤 action。
 
-The worktree test project has separate `worktree` and `worktree-adoption` units.
-Its adoption action explicitly names six host-entry integration tests for the
-participating check, detached Python consumer, short check, registered Python
-consumers, native Cargo child and standalone bootstrap. The core action excludes
-those same names. Both retain their original test IDs, assertions, deadlines and
-default libtest threads. The unfiltered action remains the release verifier.
-`worktree.inventory` uses the same independent Python inventory owner with
-`.chrono-harness/ci/worktree-inventory.json` to require nonempty, disjoint,
-complete coverage of the current unfiltered test list. Both groups retain the
-same build prerequisites and declare their shared target and inventory resource;
-their local operations cannot write that target concurrently. Independent native
-jobs retain separate checkouts, reports and reruns. This grouping does not certify
-that every host can satisfy a timing bound under arbitrary external load.
+各组保留构建前置，并运行宿主 `.chrono-harness/ci/workflow-inventory.py`。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤、ignored、过滤后的 libtest 清单须非空、互不相交、合计精确覆盖；列举失败保留原退出和输出。保护程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。
 
-The projects test project uses the single `judge-projects` unit and its original
-unfiltered `execute` action. The fixed historical-host decoder and migration tests
-are retired, so the former `judge-projects-migration` unit and two-group inventory
-are removed. The current `consumer`, `execution` and `languages` binaries retain
-their assertions, default libtest concurrency and registered 900-second operation
-bound. New test binaries are included by the unfiltered action. CI and release
-both consume that same action; historical assertions are explicitly retired,
-without a claim that the remaining tests establish their old behavior.
+共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
 
-The CI, projects, workflow and worktree test operations no longer share a
-suite-wide fixture-producer claim. Each retained fixture allocation owns its
-registration and exclusion; ordinary commands do not drain unrelated allocations.
-The workflow/worktree inventory operations and exact output namespaces retain
-their actual conflict claims under the existing cap of two operations. Explicit
-maintenance preserves busy independent objects and continues available siblings.
-Cross-invocation callers still own checkout and output isolation. Total elapsed,
-storage and CI costs remain unmeasured.
+worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名六项宿主入口集成测试：参与式检查、脱离父进程的 Python 消费者、短检查、登记 Python 消费者、原生 Cargo 子进程、独立 bootstrap。核心组排除同样六个名称。两组保留原测试 ID、断言、期限、默认 libtest 线程，发布仍用原未过滤 action。
 
-Providers without `job_gating` retain their original separate-workflow behavior
-and evidence contracts. Installing a new binary or running init does not opt
-an existing host in. This source correction has no published release or native
-Actions verification claim; earlier beta.12–19 evidence keeps its original scope.
+`worktree.inventory` 用同一独立 Python 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
 
-The repository's schema4 contract uses fixed `check`, `check --unit ID`, and
-value-less `check --collect`. Bare check keeps global DELTA execution. The local
-worktree producer freezes registered remote target/HEAD endpoints; the existing
-CI owner creates the collection manifest from explicit unit report paths and
-independently observed runner/judge pins. Local collection asks the adjudicator's
-shared inventory/assignment owner for DELTA-required units and reads only those
-registered paths. An absent or stale unrelated report is not supplied; required
-missing, stale or failed reports still fail. Empty DELTA requires no reports.
-Missing units are never executed by
-collection. Prior producer observations remain retained while declared current
-outputs are replaced; no crash/concurrent transaction guarantee is established.
-Provider v4 puts event preparation and native gathering inside the same short
-command. Older hosts/examples below retain their registered explicit v3 forms.
-Full independent short scopes use registered full-v3/v4 execution units and the same seven-judge DAG.
+projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。固定历史宿主解码器／迁移测试已退役，原 `judge-projects-migration` 和双组清单移除。当前 `consumer`、`execution`、`languages` 二进制保留断言、默认并发及 900 秒上限，新测试二进制由未过滤 action 纳入。CI／发布消费同一 action；旧断言明确退役，不能拿剩余测试证明旧行为。
 
-Short preparation binds the selected native provider source bytes and its
-`artifact_directory`. Each unit retains context, payload, producer evidence,
-acquisition receipts and immutable check reports beneath its own selected root;
-collection also retains original gather/manifest evidence in its root. Originals
-are addressed by path and SHA-256 and reused, rather than copied inline into every
-receipt. Mutable current outputs remain projections. Provider/upload mismatches,
-missing originals and changed original bytes fail. The upload step keeps its
-selected directory; it need not upload unrelated units.
+CI、projects、workflow、worktree 测试不再共用整套 fixture 生产者 claim。每个保留 fixture 分配拥有自己的登记和排除，普通命令不排空无关分配。workflow／worktree 清单操作及精确输出空间继续声明真实冲突，在原 cap=2 下调度。显式维护保留忙碌对象，继续可用兄弟对象；跨调用的检出／输出隔离仍归调用方。总耗时、存储、CI 成本未测。
 
-Native gather adds an `artifacts` object to each short report manifest input:
-`source_directory` is the producing unit's selected upload root and `directory`
-is its explicit downloaded root. The collector resolves original relative paths
-through that binding, preserving the observed producing checkout/executable
-identities. No directory discovery or recursive evidence inference is used.
-Historical explicit reports retain their existing manifest contract.
+未选 `job_gating` 的 provider 保留原独立工作流及证据合同。安装二进制或 init 不自动采用。此源码修正不宣称已公开发布或通过真实 Actions；早期 beta.12–19 证据保留原范围。
 
-Full-v3/v4 hosts use the same explicit unit map and selector suffix through the
-native seven-judge entry. Their unit report manifests may use
-`chrono-full-collection/v1` (or the compatible `chrono-ci-collection/v1` shape)
-with `unit`, `path`, and `sha256`, optional explicit executable pins and native `artifacts` mappings; runner and seven-judge pins are derived
-from the fixed candidate registry and bound invocation. The full collector
-retains a reconstructible sealed request template, exact process/response bytes,
-and addressed original context/input/evidence bytes. It validates every imported
-judge and receipt against the current declaration contract, without launching
-business tools or their version commands. Original unit roots and business
-executables may be unavailable. The completed collector report retains the
-original evidence closure for subsequent integration certificate consumption.
-Both integration and delivery contexts support contribution-only units without
-requiring a prior completed certificate; only collection resolves global
-completion. Full-v3 report bounds apply to report JSON and the manifest;
-external retained blobs stream under their declared upload roots, including the
-full nested collector closure. Legacy inline originals remain supported.
-Missing, replaced, failed, stale or contradictory evidence rejects.
-Ordinary unscoped full check retains local blob references and validates their
-identities by streaming; the portable unit/report bounds do not limit those input
-files. Provider generation and artifact gathering remain owned by `chrono-ci`;
-actual native full host activation remains pending.
+## 短命令与单元输入
 
-Full short preparation preserves the exact local context through collection.
-Local manifest production asks the shared FILEMAP/routes obligation owners for
-required units and binds all seven judge executables. Registration consumes the
-explicit original report inputs for any historical conversion before the final
-required-unit manifest is published; it does not rerun the decoder. Original short acquisition
-receipts and addressed bytes are retained in full portable evidence.
+本仓 schema4 使用固定 `check`、`check --unit ID`、无值 `check --collect`。裸 check 执行全局 DELTA。本地 worktree 生产者固定登记远端 target／HEAD，CI 所有者用明确报告路径和独立观察的 runner／judge 身份产生汇总清单。
 
-Local scoped preparation reuses an existing context only when its endpoints,
-origin role, birth association and retained-input reference still match the
-current producer facts and a fresh producer observation still satisfies the
-workflow-owned age predicate. While valid, its original `observed_at` stays pinned
-so independent reports bind one exact context. After expiry the same commands
-retain the original and publish a new immutable observation; old contributions
-cannot complete the new context and workflow rejects the stale branch. A bare
-check produces a fresh observation. This refresh does not reconstruct the branch.
+本地汇总向判官共享清单／分配模块查询 DELTA 必需单元，只读这些登记路径。不提供无关缺失／过时报表；必需报告缺失、过时或失败仍失败。空 DELTA 不需报告。汇总不补跑单元。旧生产观察保留，当前声明输出可替换，但不保证崩溃／并发事务。provider v4 将事件准备和原生收集放进同一短命令，下文旧宿主／示例保留登记的明确 v3 写法。完整独立短范围使用 full-v3／v4 单元和同一七判官 DAG。
 
-Registration/input owns the file-input projection used by live unit validation,
-`chrono-inputs capture --unit ID` and collection comparison. It uses the unit's
-explicit registered plans and operation owners, FILEMAP prerequisites and closure
-bindings, including shared operations and governance consumers. Structural and
-reference checks remain global. A missing unrelated SDK need not be retained or
-read live for that unit; selected/shared/governance omissions, drift, malformed
-snapshots and unknown inputs fail. Collection validates original per-unit blobs
-and compares each unit's effective projection against current obligations without
-launching business operations or their version tools. Original complete snapshots
-remain supported. Native Go/TS execution and full host activation remain unverified.
+短准备绑定所选原生 provider 源码字节及 `artifact_directory`。各单元在自己上传根下保留上下文、载荷、生产者证据、获取回执、不可变报告；汇总在自己的根保留 gather／manifest 原件。原件按路径及 SHA-256 寻址、复用，不在每份回执内重复正文。当前可变输出只是结果视图；provider／上传不符、原件缺失或变化均失败。上传只需所选目录，不需无关单元。
 
-`chrono-github-units/v2` connects full scopes to the existing automatic push/PR
-provider. V1 remains scoped and rejects the new field. V2 keeps the existing
-collection, units and gather contracts, requires collection schema
-`chrono-github-ci/v4`, and adds one explicit mapping:
+原生收集为短报告清单每项增加 `artifacts`：`source_directory` 为生产单元上传根，`directory` 为明确下载根。汇总用这个绑定解析原相对路径，保留所观察的生产检出／执行物身份，不发现目录或递归猜证据。历史明确报告保留原清单合同。
+
+### 完整单元的离线证据
+
+full-v3／v4 宿主通过原生七判官入口使用同一明确单元表和选择器后缀。清单可为 `chrono-full-collection/v1`，或兼容的 `chrono-ci-collection/v1` 形状，包含 `unit`、`path`、`sha256`，可选明确执行物身份及原生 `artifacts` 映射。runner 和七判官身份从固定候选登记及绑定调用取得。
+
+完整汇总保留可重建的封存请求模板、精确进程／响应，以及按地址引用的原上下文／输入／证据字节。它按当前声明合同核每个导入判官和回执，不启动业务工具或其版本命令，原单元根和业务执行物可以已不可用。完成报告保留原证据依赖范围，供后续集成凭据消费。
+
+integration、delivery 上下文都支持只提供贡献的单元，无需先有完成凭据；全局完成只由汇总判定。full-v3 报告上限约束报告 JSON 和 manifest，外部保留数据按上传根流式处理，含嵌套完整汇总证据。旧内联原件仍支持。原件缺失、替换、失败、过时或矛盾均拒绝。
+
+普通不分单元的完整检查保留本地数据引用，流式核身份；可传输单元／报告上限不限制这些输入文件。provider 生成和产物获取仍归 `chrono-ci`，真实完整宿主启用尚待完成。
+
+完整短准备经过汇总仍保留精确本地上下文。本地 manifest 生产者向 FILEMAP／routes 义务模块查询必需单元，绑定七判官执行物。最终 manifest 发布前，registration 为历史转换消费明确原报告输入，不重跑解码器。原短获取回执和寻址字节留在完整可传输证据中。
+
+本地按范围准备只在端点、origin 角色、birth 关联、保留输入引用仍匹配当前生产事实，且新观察仍满足 workflow 年龄条件时复用上下文。有效期间固定原 `observed_at`，让独立报告绑定同一上下文。到期后，同命令保留原件，发布新不可变观察；旧贡献不能完成新上下文，workflow 拒绝过时分支。裸 check 产生新观察，不重建分支。
+
+registration／input 统一负责真实单元验证、`chrono-inputs capture --unit ID`、汇总比较的文件输入投影。它使用单元明确计划、操作所有者、FILEMAP 前置和绑定依赖范围，含共享操作及治理消费者。结构／引用仍全局检查。无关 SDK 缺失不要求该单元保留或读取；所选／共享／治理缺项、漂移、错误快照、未知输入仍失败。
+
+汇总核原单元数据，将各单元有效投影与当前义务比较，不启动业务或版本工具。完整原快照仍支持。原生 Go／TS 执行及完整宿主启用尚未验证。
+
+`chrono-github-units/v2` 将完整范围接到已有自动 push／PR provider。v1 仍按范围，拒绝新增字段。v2 保留汇总、单元、gather 合同，要求 collection schema `chrono-github-ci/v4`，增加一个明确映射：
 
 ```json
 "full_contexts": {
@@ -162,28 +60,15 @@ collection, units and gather contracts, requires collection schema
 }
 ```
 
-Unit keys must equal the full profile and workflow keys exactly. Each mapped file
-is a separate input beneath its selected upload directory. The existing bootstrap
-supplies exact schema2 context and retained inputs. Preparation compares its
-base/candidate with actual event endpoints. Gathering compares full context
-digests and all seven judge pins, retains workflow/attempt evidence, and writes
-`chrono-full-collection/v1` with explicit source/download upload mappings. Failed
-runs remain failures with downloaded originals retained. Each workflow builds and
-retries independently; collection runs no business or business version commands.
-The single registered CI producer `--config` selects this map for all short
-invocations. No role, birth time, certificate or layout is inferred.
+单元键须与 full profile／工作流完全一致，每个映射文件是所选上传目录下的独立输入。已有 bootstrap 提供精确 schema2 上下文及保留输入，准备核 base／candidate 匹配真实事件端点。
 
-The product host uses scoped V1 with explicit job gating. Clean-candidate admission,
-actual native full adoption, public binary publication and full SPEC acceptance
-remain separate obligations.
+收集核完整上下文摘要、七判官身份，保留 workflow／attempt 证据，写 `chrono-full-collection/v1` 和明确来源／下载根映射。失败运行仍失败，下载原件保留。各工作流独立构建／重试，汇总不运行业务或版本命令。唯一登记 CI 生产者的 `--config` 为所有短调用选择该映射，不推断角色、创建时间、凭据或布局。
 
-## Optional native provisioning extension
+本产品宿主当前采用按范围 v1 和明确 job gating。干净候选准入、真实原生完整采用、公开二进制发布及完整 SPEC 验收仍各自处理。
 
-Full units/v2 using the conditional parent can explicitly select `native_adoption` with schema
-`chrono-native-adoption/v1`. Omitting it preserves existing generation and
-projection behavior. A compatible released generator is required before adoption.
-The product owns the embedded `assets/ci/native.py` template and owned output
-updates. The host owns these extension values and its registered operations:
+## 可选的原生输入准备扩展
+
+使用条件父工作流的 full units/v2 可明确选择 schema `chrono-native-adoption/v1` 的 `native_adoption`，省略保留原生成行为。采用前须安装兼容发布生成器。产品拥有嵌入模板 `assets/ci/native.py` 及其输出更新，宿主拥有以下扩展值和登记操作：
 
 ```json
 "native_adoption": {
@@ -202,103 +87,45 @@ updates. The host owns these extension values and its registered operations:
 }
 ```
 
-Before the candidate commit the caller tracks and registers unchanged original
-successful `start`/`reconstruct` report bytes as `lineage`. The native consumer
-checks their digest, original branch/fork/time and event association; it does not
-read destination origin or manufacture historical birth. `prepare-endpoints`
-exposes the existing full-policy event preparation before full-context loading.
-Detection delegates it, observes one actual UTC time, retains the
-authentic event/payload/revision/repository records and publishes schema2 context.
-The detector imports original base governance observations from the explicitly
-addressed `composition_sources` snapshots or endpoint pairs, then captures current
-candidate governance inputs through `chrono-inputs capture-governance`. The inputs
-owner validates fixed endpoint/configuration, presence and streamed blob identities,
-and retains source bytes and a provenance receipt in the seed closure. A base
-snapshot can be captured before the candidate exists; its digest can then be bound
-in the provider without a circular candidate identity. This supports an H0-to-H1
-change at the same input location. Missing, corrupt or misbound originals and
-drifted current governance inputs fail.
-This does not claim a past business execution. Generation uploads the seed before
-dependent jobs start. Units and the later aggregate acquire the unique original
-detector run/production-attempt/digest-bound seed without polling, retaining its
-original bytes and producer closure. Missing, ambiguous or misbound acquisition fails. Transport checks observation
-ordering. The CI producer records a genuine current observation separately from
-the original context; the workflow judge alone applies the unchanged registered
-age bound for both consumer and certificate producer. Local preparation uses the
-same separate current-observation contract when it reuses a retained context.
-Original context digests and successful reports remain unchanged. Acquisition jobs
-have `actions: read`; the generated acquisition steps receive the actual
-`CHRONO_WORKFLOW_REVISION`. Bootstrap receives the host's registered argv. A hook
-that needs that revision must explicitly include the argv prefix
-`["env", "CHRONO_WORKFLOW_REVISION=${{ github.workflow_sha }}", ...]` in its bootstrap
-registration; generation preserves this host choice.
+候选提交前，调用方将未改的成功 start／reconstruct 原报告作为 `lineage` 跟踪并登记。原生消费者核摘要、原分支／分叉／时间和事件关联，不读取目标 origin 或编造历史 birth。`prepare-endpoints` 在加载完整上下文前暴露原完整政策事件准备。detector 委托它，观察一次真实 UTC，保留真实事件／载荷／revision／仓库记录，发布 schema2 上下文。
 
-Register the adapter as the sole `canonical_check.inputs.ci` action using an
-existing interpreter tool, with argv `[adapter_path, "forward", "--config",
-PROVIDER_PATH]`. Exactly one provider `--config` pair binds the selected upload
-contract. Remove acquisition-only `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`,
-`CHRONO_WORKFLOW_REVISION` and `GITHUB_REPOSITORY` from business inherit; retain
-`CHRONO_CHECK_SOURCE`, actual business variables and the existing credential
-contract. Forwarding reads authentic retained acquisition records and passes their
-actual named-env values to `chrono-ci check-inputs`. An internal CI bridge delegates
-bounded child execution to the existing Rust transport and retains child stdin,
-stdout, stderr, executable identity and process result. It is needed because
-acquisition event fields and credentials are outside business inheritance; the
-adapter does not contain a second subprocess runner. The outer producer
-receipt continues to describe its actual environment. Collection forwards gather
-then invokes the inputs owner's composition before returning to full execution.
-The original detector governance pair and selected unit contributions supply
-collection inputs. `composition_sources` supplies original base snapshots or pairs
-to seed preparation. Collection consumes their validated governance projection
-from the transported seed, whose provenance retains the source bytes; the detector's
-original source paths need not remain live in other checkouts.
-FILEMAP/routes remains the DELTA selection owner; registration projects its
-selected units through both endpoint assignments to check collection coverage.
-Unselected units need neither SDK snapshots nor synthetic reports. Collection
-performs no SDK installation or business probe.
+检测器从明确寻址的 `composition_sources` 快照或端点对导入原基线治理观察，再用 `chrono-inputs capture-governance` 采集当前候选治理输入。输入模块核固定端点／配置、存在状态、流式数据身份，在种子证据内保留来源字节和出处回执。基线快照可在候选存在前采集，再把摘要绑定到 provider，避免候选身份循环。这支持同位置 H0→H1 变化；原件缺失／损坏／错绑或当前治理输入变化都失败，不证明过去业务执行过。
 
-Optional `integration_evidence_path` selects original transported certificate
-bytes for delivery publication; their actual SHA-256 becomes the context binding.
-Missing bytes leave the original null value for the workflow's impact decision.
-An optional declared `integration_evidence` digest must match supplied bytes.
-Optional `integration_transport: {source_directory, directory}` binds the
-producer's original upload root to its delivery download root, including the
-finalized report and nested blobs. The host bootstrap acquires that explicit
-completed certificate/report closure; this extension does not add a scheduler.
-Workflow retains all nine certificate bindings and requires the matching
-finalized producer when impact selects integration. Ordinary feature preparation
-can carry null evidence; only the existing workflow decides whether it suffices.
+种子在依赖 job 启动前上传。单元和之后汇总不轮询地取得唯一原 detector run／生产 attempt／摘要绑定种子，保留原字节及生产者依赖证据。获取缺失、歧义或错绑失败，传输核观察顺序。
 
-Register lineage, adapter, interpreter, inputs binary, bootstrap inputs, provider
-and composition originals in the host FILEMAP/input/dependency declarations, and
-use disjoint seed/unit/collector/download roots. Existing owned output preflight
-preserves customized host source and refuses unowned overwrites. Main and examples
-are not activated by these source contracts; public release and real native
-push/PR/dev adoption remain caller-owned.
+CI 生产者另记真实当前观察，不改原上下文；只有 workflow 判官应用未改的年龄上限，同时约束消费者和凭据生产者。本地复用上下文时同样保留独立当前观察，原上下文摘要、成功报告不变。获取 job 有 `actions: read`，生成步骤收到实际 `CHRONO_WORKFLOW_REVISION`。
 
-## Conditional jobs and the required aggregate
+bootstrap 接收宿主登记 argv。hook 如需该 revision，须明确在 bootstrap 登记 argv 前缀 `["env", "CHRONO_WORKFLOW_REVISION=${{ github.workflow_sha }}", ...]`，生成器保留这个宿主选择。
 
-The parent workflow replaces superseded runs of the same pull request through
-native workflow concurrency. Its group binds the workflow path, event and PR
-number; events without a PR use their unique run ID. Push runs therefore retain
-their separate complete before/after obligations instead of losing queued
-DELTAs. Unit jobs remain independently scheduled inside each parent.
+用已有解释器工具将适配器登记为唯一 `canonical_check.inputs.ci`，argv 为 `[adapter_path, "forward", "--config", PROVIDER_PATH]`，恰好一个 provider `--config` 对绑定所选上传合同。
 
-This host runs development-branch checks through pull requests to `dev`, and
-checks landed changes on pushes to `dev`. An integration branch is verified by
-its PR run; it does not also launch the same unit suite on every branch push.
-Hosts continue to own their explicit trigger branches.
+从业务继承移除只用于获取的 `GITHUB_EVENT_NAME`、`GITHUB_EVENT_PATH`、`CHRONO_WORKFLOW_REVISION`、`GITHUB_REPOSITORY`，保留 `CHRONO_CHECK_SOURCE`、实际业务变量和已有凭据合同。转发读取真实保留获取记录，将实际具名环境值交给 `chrono-ci check-inputs`。
 
-The smallest projection is one parent at `collection.workflow_path`. Require only
-its aggregate job (`collection.name`, currently **chrono / collection** in this
-host) in branch protection. The generator never mutates branch protection.
-`detect` publishes one Boolean output per registered unit. Each independent unit
-has `needs: detect` and a job-level `if` on its Boolean; an irrelevant job allocates
-no runner and executes no bootstrap or SDK setup. `aggregate` has `if: always()`
-and needs the detector and every unit. No workflow-level `paths` or `paths-ignore`
-is emitted. No matrix fail-fast couples unit failures.
+内部 CI bridge 把有限子进程执行委托给已有 Rust 传输，保留 stdin／stdout／stderr、执行物身份和进程结果。它用于处理不在业务继承内的事件字段及凭据；适配器没有第二套子进程 runner。外层生产回执仍记录自身真实环境。
 
-The host adds just this optional provider block, with its own tool acquisition:
+汇总先转发 gather，再调用输入模块组合，之后才返回完整执行。原 detector 治理对和所选单元贡献提供汇总输入。`composition_sources` 给种子准备提供原基线快照／对；汇总从传递种子消费已验证治理投影，出处中保留来源字节，因此其他检出不必仍有 detector 原路径。
+
+FILEMAP／routes 继续负责 DELTA 选择；registration 按两端分配投影所选单元，核汇总覆盖。不选单元无需 SDK 快照或合成报告，汇总不装 SDK 或探测业务。
+
+可选 `integration_evidence_path` 选择传输的原凭据字节用于 delivery，其实际 SHA-256 成为上下文绑定。缺字节保留原 null，由 workflow 按影响判断是否足够。声明可选 `integration_evidence` 摘要时须与实际字节匹配。
+
+可选 `integration_transport: {source_directory, directory}` 将生产原上传根连到交付下载根，含最终报告及嵌套数据。宿主 bootstrap 获取明确完成的凭据／报告依赖证据，扩展不加调度器。workflow 保留九项凭据绑定，影响选中 integration 时要求匹配的最终生产者。普通 feature 准备可带 null，仍由 workflow 决定是否足够。
+
+lineage、适配器、解释器、inputs 二进制、bootstrap 输入、provider、组合原件都须登记到宿主 FILEMAP／输入／依赖。种子、单元、汇总、下载根互不重叠。已有输出预检保留宿主定制，拒绝无所有权覆盖。这些源码合同不自动启用主仓或示例；公开发布及真实 push／PR／dev 采用仍归调用方。
+
+<a id="conditional-jobs-and-the-required-aggregate"></a>
+
+## 条件 job 与唯一必需汇总
+
+父工作流用原生 concurrency 替换同一 PR 的旧运行。组名绑定工作流路径、事件、PR 号；非 PR 事件用唯一 run ID，所以 push 的各次完整 before／after 不会因取消排队而丢失。父工作流内各单元独立调度。
+
+本宿主通过指向 dev 的 PR 检查开发分支，通过 dev push 检查落地变更。integration 由其 PR 验证，不再为每次分支 push 重跑同一套。各宿主继续拥有明确触发分支。
+
+最小生成结果是 `collection.workflow_path` 的单个父工作流。分支保护只要求汇总 job，即 `collection.name`，本仓当前为 **chrono / collection**；生成器不改分支保护。
+
+`detect` 为每个登记单元输出布尔值。单元 `needs: detect`，在 job 层 `if` 判断该值；无关 job 不分配 runner，也不 bootstrap 或准备 SDK。`aggregate` 使用 `if: always()`，依赖 detector 和全部单元。不生成工作流级 `paths`／`paths-ignore`，也不用 matrix fail-fast 联动单元失败。
+
+宿主增加以下可选 provider 块，自行登记工具获取：
 
 ```json
 "job_gating": {
@@ -312,214 +139,83 @@ The host adds just this optional provider block, with its own tool acquisition:
 }
 ```
 
-This form requires collection provider v4. The generated internal `chrono-ci
-detect --host-root . --config SOURCE --github-output "$GITHUB_OUTPUT"` command
-reads the event and native bindings itself; it adds no daily flags or manual
-preparation. All actual checks remain `chrono-harness check`, `check --unit ID`,
-and `check --collect`. Short collection owns both native transport/status rejection
-and the existing final judge admission. A successful GitHub status alone cannot
-supply a successful original report. No synthetic reports are made for skipped
-units. Empty DELTA still reaches structural/global checks with an empty manifest
-and zero business operations.
+此形式要求 collection provider v4。内部生成命令 `chrono-ci detect --host-root . --config SOURCE --github-output "$GITHUB_OUTPUT"` 自读事件及原生绑定，不加日常标志或手动准备。实际检查仍为 `chrono-harness check`、`check --unit ID`、`check --collect`。
 
-Scoped detection and local collection share judge-ci's inventory, two-endpoint
-impact and `units::required` owner. Scheduling skips checkout-materialization
-admission, while actual checks still enforce their clean candidate and canonical
-entry contracts. Registration's scheduling entry shares historical profile
-matching and rejects decoder-dependent history before acquiring an interpreter
-or executing conversion; actual check/collection conversion admission is preserved.
-Detection reads complete Git trees and registered registry blobs;
-it does not execute business tests or business version probes. Only declared
-product-source inputs need materialization for a source bootstrap. The sparse
-paths above are this Rust product host's choices; a released-binary consumer can
-materialize just its host registration/installer/workflow paths. The detector
-never discovers host SDKs, imports, directories or language boundaries.
+短汇总同时负责原生传输／状态拒绝和最终判官准入。GitHub 状态成功不能代替成功原报告；不为跳过单元造报告。空 DELTA 仍用空清单执行结构／全局检查，业务操作为零。
 
-This host's detector produces the registered core startup tools for the unit and
-collection jobs. Its cache preparation builds `chrono-cache`; its bootstrap calls
-the existing core profile once and publishes its declared installed tools. The
-current core profile declares six tools, adding the Cargo guard and input producer
-needed by canonical inventory. The qualified source51 native startup retains its
-original five executable payloads; it is not evidence for this changed profile. Consumer
-jobs validate and install the selected profiles. Their registered
-`bootstrap-unit.json` preparation verifies the imported core profile as its
-prerequisite, then invokes `host.bootstrap-verus` to acquire and checksum the
-complete pinned Verus package. The package's non-executable libraries and vstd
-resources are acquired through this existing bootstrap composition; the shared
-executable transport format is unchanged. Details and outstanding acceptance
-are owned by [Verus deployment](verus.md). The diagnostics unit uses the registered
-`host.bootstrap-diagnostics-guard` preparation: it first verifies the imported
-core profile as an explicit bootstrap `prerequisites` operation, runs the existing `build.judge-cargo` operation, then delegates
-`host.bootstrap-diagnostics-inputs` and installs that candidate's
-`chrono-judge-cargo`, and also delegates to that same Verus acquisition profile.
-Guard and observer source builds explicitly select the
-ordinary native Cargo home with acquisition allowed for their own locked
-manifests. The ordinary native check config retains dev's ordinary environment;
-only the existing guarded diagnostics action selects the separate diagnostics
-config and its private offline home. The delegated producer builds its candidate
-observer and retains the bounded native source/tool/configuration observations and four
-directory originals under `.chrono-harness/state/diagnostics-native/`, within the
-existing unit artifact directory. A later guarded-build refusal preserves these
-originals through the existing always-run upload. This preparation neither adopts
-observed hashes nor makes the guarded check pass. Its separate
-`diagnostics-guard-bootstrap.json` report retains the clean source identity,
-original operation streams and installed digest; the imported core report and
-`startup-install.json` remain the source-bound import evidence. A failed core
-verification or guard build stops preparation before the canonical check.
-Prerequisites run with the caller environment, before the enclosing profile
-creates its selected homes or probes/provisions its build toolchain. Shared
-verification therefore independently resolves the current core selection, as
-installation did; the later guard selection cannot replace it. Exact local
-path/hash/version equality, inherited compiler/wrapper conflicts and declared
-producer-to-consumer relocation keep their existing meanings. Prerequisites use
-explicit configured tools and appear before ordinary operations in the same
-original report; a prerequisite failure retains its real streams and exit and
-prevents later build/input/install effects.
+### detector 读取范围
 
-Product and host-policy change warning: bootstrap gains this optional explicit
-phase and shared report validation binds its full ordered sequence; this host
-moves only diagnostics core verification into that phase. Previously all guard
-operations inherited the already selected guard toolchain. Python composition
-regressions cover the installation transition, unchanged core selection across
-distinct build domains, and genuine local drift before dependent effects. The
-same registered canonical/native checks remain required; fixture observations
-do not establish native acceptance. Runtime/build/CI/storage cost is unmeasured,
-and existing operation/time/output bounds remain in force.
-This source build serves diagnostics only; the detector and other consumers
-still transfer the same cache/core profiles. Native build/IO/time costs for the
-additional diagnostics preparation remain unmeasured. Canonical checks and
-business build plans keep their registered entries. Local and release bootstraps
-keep their registered source builds. This preparation supplies the executable;
-native guarded policy/input binding and actual native execution remain separate
-acceptance obligations.
+按范围检测和本地汇总共用 judge-ci 的清单、两端影响和 `units::required`。调度不检查检出文件是否已完整准备，真实检查仍要求干净候选和标准入口。registration 调度入口共用历史 profile 匹配，在获取解释器或执行转换前拒绝依赖解码器的历史；真实检查／汇总保留转换准入。
 
-Optional `job_gating.startup` uses schema `chrono-shared-startup/v1`. It declares a
-literal host `directory`, artifact name, pinned `download_action`, and `consumers`
-keyed by explicit job IDs. Each consumer supplies nonempty `need`, `output_use` and
-literal `install` argv. The existing detector bootstrap is the sole producer and
-writes an opaque `binding` to `GITHUB_OUTPUT`; no additional job is generated.
-The provider uploads the declared directory before detection, and carries the
-producer binding and actual upload artifact ID as detector outputs. Consumers
-download that ID, including when only failed jobs are rerun in a later attempt.
-Empty artifact IDs cannot trigger download-all. The installer must reject a missing
-binding or missing transfer; it has no success exemption. Transfer directories must
-not overlap evidence roots, preventing binaries from being copied into every
-ordinary evidence archive. Unlisted consumers and configurations without startup
-keep their existing behavior. Hosts own compatibility and install checks; the
-provider infers no language, layout or platform compatibility.
+检测读取完整 Git 树和登记 blob，不执行业务测试或版本探测。源码 bootstrap 只需准备声明的产品源码输入。上文稀疏路径是本 Rust 产品宿主选择；发布二进制消费者可只准备宿主登记／安装器／工作流路径。detector 不发现 SDK、import、目录或语言边界。
 
-This host also keeps the bootstrap's writable toolchain homes in its existing
-`.chrono-harness/cache/` artifact root. They are reconstructable execution inputs,
-not members of the uploaded `.chrono-harness/state/` evidence root. Their original
-identity and producer receipts remain in state. Shared-startup provenance validates
-the same declared cache locations; it does not require transporting compiler files
-to collect the original report. See the [host bootstrap boundary](ci.md#this-repository).
+### 共享 startup 与 diagnostics 准备
 
-The host Python implementation binds a clean primary source commit/tree, platform,
-configuration/profile bytes, original bootstrap reports, and file digests, sizes
-and executable modes. It validates the complete transfer before replacing tools,
-restores executable modes lost by artifact transport, and retains exact producer
-reports beside explicit import provenance. Installation is not a local build.
-Point-of-use verification rejects installed drift. Missing/changed bindings,
-source/config/platform mismatches, symlinks, damaged payloads and failed publication
-stop the job. This covers registered startup outputs, not complete compiler/SDK
-input closure, adversarial attestation, linked-worktree ownership or power-loss
-atomicity across all installed files. Native transfer and rerun acceptance remain
-separate from fixture validation. Startup upload/download/install steps have
-explicit resource categories; their observed costs count toward evaluating reuse.
+本仓 detector 为单元／汇总生产登记核心启动工具。缓存准备构建 `chrono-cache`，bootstrap 调已有 core profile 一次，发布声明安装工具。当前 core 声明六项工具，增加标准清单需要的 Cargo 保护程序和输入生产者；合格 source51 原生 startup 只有原五项执行物，不证明新 profile。
 
-PR endpoints are event base/head. Default push endpoints are the complete event
-before/after, including multiple commits. Explicit `push_baselines` and branch
-creation rules keep their existing meanings; the detector observes a configured
-remote baseline once and its fixed output supplies the dependent jobs. Acquisition
-starts with blobless depth-two checkout/fetch where sufficient and explicitly
-fetches missing endpoint OIDs using `--depth=2 --filter=blob:none`. Depth two is
-not a general history guarantee. Full unit/aggregate jobs retain their existing
-complete history acquisition, with blob filtering, for the branch/fork judge;
-their detector still reads exact endpoint trees from shallow acquisition.
-Missing/unobtainable endpoints, parented initial
-baseline creation, deletion without a candidate, and malformed registrations fail;
-there is no HEAD^, merge-base or select-all fallback. Rename is the deleted and
-added registered endpoint paths, preserving both dependency closures.
+消费者验证并安装所选 profile。登记的 `bootstrap-unit.json` 准备先以前置验证导入 core，再调用 `host.bootstrap-verus`，获取并校验完整的固定 Verus 包。包内非执行物库和 vstd 资源通过这个已有 bootstrap 组合获取，共享执行物传输格式不变。部署要求和剩余验收归 [Verus 所有者](verus.md)。diagnostics 使用 `host.bootstrap-diagnostics-guard`：先以 bootstrap `prerequisites` 明确验证导入 core，再运行已有 `build.judge-cargo`，委托 `host.bootstrap-diagnostics-inputs` 并安装候选 `chrono-judge-cargo`，也委托同一 Verus 获取 profile。
 
-The changed-file count comes from complete Git trees before selection. There is
-no file-count gate or truncation.
-GitHub documents that native workflow path filtering
-has a [3000-file limit](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons),
-the [PR files API](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files)
-returns at most 3,000, and the
-[compare API](https://docs.github.com/en/rest/commits/commits#compare-two-commits)
-returns at most 300 changed files for the comparison. None supplies this detector's
-file list or defines a universal runtime cap.
+保护／观察器源码构建明确选普通原生 Cargo home，允许为各自锁定 manifest 获取输入。普通检查配置保留 dev 环境，只有原受保护 diagnostics action 选独立配置及私有离线 home。委托生产者构建候选观察器，在单元原上传目录下 `.chrono-harness/state/diagnostics-native/` 保留有限源码／工具／配置观察及四份目录原件。
 
-The Rust provider rejects failed/cancelled/missing detection and every selected
-unit whose result is failure, cancelled, missing or unexpectedly skipped. A skip
-is accepted only for a detector-declared nonrequired unit. Gather validates the
-exact parent run/repository/current attempt/event/workflow source, then reads its
-paginated job history after dependencies have completed. It never polls separate
-workflows or waits for its own parent to finish. Independent retries retain the
-original detector and successful prerequisite attempts. Nonrequired skips are
-bound by `needs` and need neither job execution metadata nor artifacts. Each selected unit must have a successful latest API status in the same parent
-run. Its generated `production` output addresses the actual original artifact,
-context digest, report digest and producing attempt. API job identities and
-`run_attempt` can describe carried work and never manufacture artifact names.
-Gather checks the original context/run/attempt/job and both digests against that
-output. A later failed/skipped execution cannot be replaced
-by an older success. Parent-attempt drift and mismatched/missing artifacts fail.
-Original process bytes, source SHA/revision, event/endpoints, report digests,
-executable pins and upload/source-directory mappings remain bound and judged.
+后续受保护构建拒绝时，已有 always 上传仍保留这些原件；准备不把观察摘要改成预期，也不使保护自动通过。独立 `diagnostics-guard-bootstrap.json` 记录干净源码身份、原操作流和安装摘要；导入 core 报告和 `startup-install.json` 继续作为绑定源码的导入证据。core 验证或保护程序构建失败，都在标准检查前停止。
 
-Scoped providers register `CHRONO_CI_DETECTION`, `CHRONO_CI_NEEDS`,
-`GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT` and `GITHUB_JOB` in the producer environment.
-The optional full native adapter instead records their actual acquisition values
-and forwards them outside business inheritance, preserving differences between
-independent jobs. The generated aggregate supplies its exact `needs` object; the
-provider owns the acceptance predicate in Rust. YAML and bootstrap Python contain
-no second whitelist or status/selection algorithm.
+前置操作用调用方环境，在外层 profile 创建所选 home、探测／准备构建工具链前运行。因此共享验证与安装一样独立解析当前 core 选择，后面的保护工具链不能替换它。精确本地路径／摘要／版本、继承编译器／包装器冲突、声明的生产到消费迁移保持原义。
 
-New v4 unit initialization chooses the conditional parent when no existing
-provider has adopted a topology. Existing explicit legacy provider meanings and
-customization remain preserved.
+前置使用明确配置工具，在同一原报告中先于普通操作。失败保留真实流及退出，阻止后续构建／输入／安装效果。
 
-Full-v2 scheduling reuses pure FILEMAP declaration impact, fixed semantic-document
-reads, routes `global_selection`/assignment validation and `units::required` before
-SDK snapshots exist. It does not provide a schema2 full context, original birth
-receipt, input snapshots, streamed artifacts or historical conversion observations.
-Final full collection still validates actual effective inputs and seven-judge
-originals. An external-input change that introduces additional final obligations
-rejects missing evidence; declaration scheduling does not claim those snapshots
-are known. Historical registries needing a decoder fail with a named scheduling
-boundary instead of executing historical code or guessing. Actual full native
-context/snapshot provisioning and activation remain a separate caller handoff.
+**产品与宿主政策曾同步修改：**bootstrap 新增这个可选明确阶段，共享报告验证绑定完整有序序列；本宿主只把 diagnostics core 验证移入该阶段。此前所有保护操作继承已选保护工具链。Python 组合回归覆盖安装切换、不同构建范围下 core 选择不变，以及真实本地变化在依赖效果前拒绝。
 
-Ordinary `init`, `generate` and `verify` own only the outputs rendered by the
-current provider. They preflight those outputs, preserve host source data and
-reject unowned collisions. Verification reports current projection drift without
-repairing it. They do not derive another topology, inspect its old workflow files
-or retire them.
+登记标准／原生检查仍必需，fixture 观察不证明原生验收。运行／构建／CI／存储成本未测，原操作／时间／输出上限不变。此源码构建只服务 diagnostics，其他消费者仍传递原 cache／core profile。本地／发布 bootstrap 保留登记源码构建，标准入口及业务构建计划不变。准备只提供执行物；原生保护政策／输入绑定和真实执行仍须分别验收。
 
-Topology changes use the existing explicit `migrate` operation with the exact
-previous provider snapshot and the next provider source. It verifies previous
-projections and new collisions before writes, preserves customized settings and
-retires only outputs owned by that previous snapshot. Update the host's FILEMAP
-and explicit consumers with the transition. With `job_gating`, preparation and
-source checks bind `collection.workflow_path`; the separately declared unit
-addresses do not grant ordinary generation ownership of inactive workflows.
-The gather wait/poll settings retain their separate-workflow meaning and are
-unused by this nonpolling parent transport.
+可选 `job_gating.startup` 使用 `chrono-shared-startup/v1`，声明字面宿主 `directory`、产物名、固定 `download_action`，以及按明确 job ID 索引的 `consumers`。每个消费者有非空 `need`、`output_use`、字面 `install` argv。已有 detector bootstrap 是唯一生产者，向 `GITHUB_OUTPUT` 写不透明 `binding`，不加 job。
 
-This removes duplicate transition logic and the extra old-topology render and
-file reads on ordinary generation. Runtime and CI savings remain unmeasured.
+provider 在检测前上传声明目录，将生产 binding 和真实上传 artifact ID 作为 detector 输出。消费者按该 ID 下载，包括后续 attempt 只重跑失败 job 时；空 ID 不能触发下载全部。安装器须拒绝 binding 或传递文件缺失，无成功豁免。
 
-The [copyable conditional host](../examples/ci-host-job-gating/README.md) uses
-installed tools and the fixed short commands. The old ci-host bundle and released
-Go/TS/mix providers retain their historical forms until explicitly migrated by
-the caller after public binaries are available.
+传递目录不能重叠证据根，避免每份普通证据归档都复制二进制。未列消费者或未采用 startup 的配置保留原行为。兼容性／安装检查由宿主负责，provider 不推断语言、布局或平台兼容。
 
-## Assignment and execution
+本仓 bootstrap 可写工具链 home 也在已有 `.chrono-harness/cache/` 产物根，是可重建执行输入，不属于上传的 `.chrono-harness/state/`。原身份及生产回执留在 state。共享来源验证同一缓存位置，不要求为汇总报告传递编译器文件，见[bootstrap 边界](ci.md#this-repository)。
 
-Keep the existing scoped check fields and use `schema: chrono-ci-check/v3`.
-Add the following explicit policy fields:
+宿主 Python 实现绑定干净主源码 commit／tree、平台、配置／profile 字节、原 bootstrap 报告、文件摘要／大小／执行模式。替换工具前验证整份传递，恢复传输丢失的执行位，在明确导入来源旁保留精确生产报告。安装不是本地构建；使用时验证拒绝已安装内容变化。
+
+绑定缺失／改变、源码／配置／平台不符、符号链接、内容损坏或发布失败都会停止 job。这只覆盖登记启动输出，不证明编译器／SDK 输入完整、对抗性认证、linked 所有权或多文件断电原子性。真实传递／重跑验收与 fixture 验证分开。上传／下载／安装有明确资源类别，实测成本计入复用评估。
+
+### 端点、状态与原生产身份
+
+PR 用事件 base／head，默认 push 用完整 before／after，含多提交。明确 `push_baselines` 和创建规则保持原义；detector 只观察一次配置远端基线，将固定输出交依赖 job。
+
+足够时获取从不含 blob 的 depth-two checkout／fetch 开始，缺端点 OID 明确用 `--depth=2 --filter=blob:none` fetch。深度二不保证任意历史。full 单元／汇总为分支／分叉判官保留完整历史获取并过滤 blob，detector 仍从浅获取读精确端点树。
+
+端点缺失／不可得、有父首次基线、删除但无候选、登记错误都失败，不用 HEAD^、merge-base 或全选回退。改名视为两端已登记路径的删除／新增，保留两边依赖范围。变更文件数在选择前从完整 Git 树取得，不设数量门或截断。
+
+GitHub [原生路径过滤](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons)文档有 3000 文件上限，[PR files API](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files)最多 3,000，[compare API](https://docs.github.com/en/rest/commits/commits#compare-two-commits)最多 300。detector 不从它们取文件列表，这些也不是通用运行上限。
+
+Rust provider 拒绝检测失败／取消／缺失，以及任一选中单元失败、取消、缺失或意外跳过。只有 detector 声明非必需的跳过可接受。gather 核精确父 run／仓库／当前 attempt／事件／工作流源码，依赖完成后分页读 job 历史，不轮询其他工作流，也不等自己的父运行结束。
+
+独立重试保留原 detector 及成功前置 attempt。非必需跳过由 `needs` 绑定，无需 job 执行 metadata 或产物。每个选中单元须在同一父 run 有成功的最新 API 状态；生成 `production` 输出寻址真实原 artifact、上下文摘要、报告摘要及生产 attempt。
+
+API job 身份和 `run_attempt` 可能描述沿用工作，不能据此造产物名。gather 将原 context／run／attempt／job 和两个摘要与 production 输出核对。后续失败／跳过不能用早先成功替代；父 attempt 漂移、产物不符／缺失均失败。原进程字节、源码 SHA／revision、事件／端点、报告摘要、执行物身份及上传／来源根映射继续绑定并判断。
+
+按范围 provider 在生产环境登记 `CHRONO_CI_DETECTION`、`CHRONO_CI_NEEDS`、`GITHUB_RUN_ID`、`GITHUB_RUN_ATTEMPT`、`GITHUB_JOB`。可选完整原生适配器则记录真实获取值，在业务继承外转发，保留独立 job 差异。生成汇总传精确 `needs` 对象，Rust provider 独自拥有接受条件，YAML／bootstrap Python 没有第二套白名单或选择算法。
+
+### 拓扑迁移
+
+新 v4 单元初始化在没有已采用拓扑时选择条件父工作流；已有明确旧 provider 含义及定制保留。
+
+full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语义文档读取、routes `global_selection`／分配验证及 `units::required`。它不提供 schema2 完整上下文、原 birth 回执、输入快照、流式产物或历史转换观察。最终完整汇总仍核真实有效输入和七判官原件。
+
+外部输入变化若带来额外最终义务，缺证据会拒绝；声明调度不声称已知这些快照。需解码器的历史登记报具体调度边界，不执行历史代码或猜测。真实完整原生上下文／快照准备和启用仍交调用方。
+
+普通 `init`／`generate`／`verify` 只拥有当前 provider 输出，先核这些输出、保留宿主来源、拒绝无所有权冲突。verify 报漂移不修复；它们不推导其他拓扑、检查或退役旧工作流。
+
+拓扑变更用已有明确 `migrate`，提供精确旧 provider 快照和新来源。写入前核旧生成结果／新冲突，保留定制，只退役旧快照拥有的输出，同时更新宿主 FILEMAP 和明确消费者。
+
+采用 `job_gating` 时，准备／源码检查绑定 `collection.workflow_path`，单独声明的单元地址不使普通生成器拥有未启用工作流。gather wait／poll 设置保留独立工作流含义，此父工作流传输不轮询，不用它们。
+
+这样去掉重复迁移逻辑，以及普通生成时额外渲染／读取旧拓扑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。旧 ci-host 和已发布 Go／TS／mix provider 在公开二进制可用、调用方明确迁移前保留历史形式。
+
+## 分配与执行
+
+保留原 scoped 字段，设 `schema: chrono-ci-check/v3`，增加明确政策：
 
 ```json
 {
@@ -539,29 +235,13 @@ Add the following explicit policy fields:
 }
 ```
 
-Assignments must cover the complete candidate plan registry exactly once.
-Unknown tests, missing assignments, duplicate assignments, report collisions
-and undeclared shared operations fail before business execution. The example
-shared operation is valid only when both registered complete plans contain it.
-Use `{}` when no operation is shared across units. Sharing means executing the
-declared prerequisite in each isolated checkout; it does not transfer artifacts
-or create an implicit dependency between workflows. Cross-workflow artifact
-dependencies are not implemented by this version.
+分配须恰好覆盖完整候选计划登记一次。未知测试、漏分、重复、报告冲突、共享操作未声明都在业务前失败。示例共享操作只有在两个登记完整计划都含它时才有效；无共享用 `{}`。共享表示各隔离检出执行声明前置，不传产物，也不隐含工作流依赖，此版本不实现跨工作流产物依赖。
 
-Both endpoint registries still determine DELTA impact, including removed edges,
-operations and test replacements. Changes to unit assignment select the affected
-plans. The judge validates the complete selected operation graph before filtering
-to a requested unit, so a contradictory global operation order cannot be hidden
-by that filter. Each unit executes its selected complete plans through the
-existing routes/projects engine. Replacement success belongs to the unit owning
-the replacement plan; collection requires that unit's successful evidence.
+两端登记仍决定 DELTA，含删边、操作变化、测试替换；单元分配变化选中受影响计划。按请求单元过滤前，判官核完整所选操作图，不能用过滤藏全局顺序冲突。每单元通过已有 routes／projects 引擎执行所选完整计划。替换成功由拥有替换计划的单元负责，汇总要求该单元成功证据。
 
-Input projection follows the candidate unit's declared plans even when that
-unit ID is new or renamed. At the base endpoint it also retains any historical
-plans assigned to that ID, using the same declared input closure for both
-assignments. An unrelated unit's business inputs are not a fallback requirement.
+即使单元 ID 新增或改名，输入投影也按候选单元明确计划；基线还保留原先分给该 ID 的历史计划，两种分配使用同一声明输入范围。不要求无关单元业务输入作为回退。
 
-Use the same command locally and in the generated unit workflow:
+旧明确宿主的本地与生成单元工作流使用同命令：
 
 ```sh
 .chrono-harness/bin/chrono-harness check \
@@ -569,22 +249,15 @@ Use the same command locally and in the generated unit workflow:
   --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID --unit service
 ```
 
-The optional `--unit` and `--collect` selectors require v3 and are mutually
-exclusive. Their transport is `chrono-ci-judge/v2`; old calls retain v1. A v3
-call without either selector remains the global scoped check. Where the host
-uses `registration_config`, a scoped invocation must match its registered
-canonical command with exactly the chosen selector appended. Initial mode uses
-`--initial` without `--base` and still requires a parentless candidate.
+`--unit`／`--collect` 可选、互斥、要求 v3，传输为 `chrono-ci-judge/v2`，旧调用保留 v1。不带选择器的 v3 仍是全局 scoped。宿主使用 `registration_config` 时，调用须与登记标准命令完全匹配，只追加所选后缀。initial 用 `--initial`、不带 `--base`，仍要求无父候选。
 
-Unit evidence separates `selected`, `global_selected`, `assigned_elsewhere`,
-`required_units` and `not_required`. A successful unit never certifies global
-completion, and obligations assigned elsewhere are never labeled not-required.
-Run concurrent units in separate checkouts: this version does not provide shared
-checkout artifact locking.
+证据区分 `selected`、`global_selected`、`assigned_elsewhere`、`required_units`、`not_required`。单元成功不证明全局完成，分给别处的义务不能标不需要。并发单元使用不同检出，此版本不提供共享检出产物锁。
 
-## Offline collection
+<a id="offline-collection"></a>
 
-Supply a manifest beneath registered `.chrono-harness/state/`:
+## 离线汇总
+
+在登记 `.chrono-harness/state/` 下提供清单：
 
 ```json
 {
@@ -601,9 +274,7 @@ Supply a manifest beneath registered `.chrono-harness/state/`:
 }
 ```
 
-Digest fields contain full lowercase SHA-256 values. Include every required
-unit exactly once. Reports from registered units without DELTA are optional;
-when supplied they are validated too. Use:
+摘要须是完整小写 SHA-256。必需单元恰好各一次；登记但无 DELTA 的单元可不提供，提供也须核验。旧明确宿主运行：
 
 ```sh
 .chrono-harness/bin/chrono-harness check \
@@ -612,97 +283,41 @@ when supplied they are validated too. Use:
   --collect .chrono-harness/state/collection/manifest.json
 ```
 
-The collector recomputes the current global obligations and verifies report
-digests, endpoint/profile/selector bindings, expected executable pins, original
-judge output, plan identities and exact candidate operations/order/bounds. It
-checks original process bytes and receipts using the shared receipt verifier.
-Missing or duplicate evidence, stale bindings, edited output and unsuccessful
-units cannot pass. It executes no business test operations. An empty DELTA can
-be collected with an explicitly empty report list.
+汇总重算当前全局义务，核报告摘要、端点／profile／选择器、预期执行物身份、原 judge 输出、计划身份及精确候选操作／顺序／上限。用共享回执验证器核原进程字节和回执。缺失／重复证据、过时绑定、改写输出、失败单元不能通过。不执行业务测试；空 DELTA 可明确传空 reports。
 
-Current scoped execution evidence declares
-`execution_evidence_schema: "chrono-ci-executions/v2"`. Each executed row owns one
-receipt, whose process uses the existing lossless `chrono-retained-process`
-encoding; the duplicate row-level process and text/byte aliases are absent.
-Collection expands and checks the original stream digests before comparing the
-unchanged receipt digest, method, plan and outcome. Only the current evidence
-schema is accepted; active producers and consumers migrate together. Missing or
-unknown schemas, duplicate process views, missing encodings, corrupted streams
-and changed receipt digests fail. No execution or output bound increases.
-Product and host input policy change together in this candidate: the report
-producer/collector and their Rust/Python consumers migrate, while local diagnostics
-selects verified package locations in its current private home. Existing FILEMAP
-edges carry their applicable checks; broader build, CI and storage costs remain
-unmeasured beyond the bounded observation below.
+### 执行证据与控制台
 
-The regression preserves 80,005 stdout bytes (including invalid UTF-8 and NUL)
-and 20 stderr bytes through production and offline collection. Its former inline
-response exceeded the existing 1 MiB fixture transport bound. The single encoded
-receipt produced a 17,619-byte response and completed production plus collection
-in about 1.12 seconds on this local host; that finite observation is not a native
-CI or whole-workflow cost claim. The large-original console regression retains
-its greater-than-1-MiB original-file obligation using a deterministic native
-binary stream, with exact size/digest assertions and unchanged no-extra-work
-and immutable-original checks.
+当前 scoped 执行声明 `execution_evidence_schema: "chrono-ci-executions/v2"`。每条执行拥有一份回执，进程沿用无损 `chrono-retained-process` 编码，去掉重复行级进程及文本／字节别名。汇总先展开并核原流摘要，再比较原回执摘要、方法、计划、结果。
 
-Scoped v3 reports use compact JSON so retained byte arrays do not acquire one
-indented line per byte. The parsed report, original process bytes and their hashes
-are unchanged. Short calls (`check`, `check --unit ID`, `check --collect`) print
-the original status and exit code, bounded identifying diagnostics and the exact
-immutable original report path. Omitted diagnostic rows or text are explicitly
-marked; consumers read the complete report at its existing published path.
-Legacy explicit `--config` calls keep stdout identical to the stored JSON.
-Historical reports keep their original bytes and hashes, including pretty-printed
-reports. Projection runs after publication and executes no business operations.
-Producer failures and version mismatches refer to retained original acquisition
-or probe evidence. Execution errors before completed publication refer to a
-retained original error, not a completed report; retention failures preserve the
-original failure and explain the write failure without claiming an artifact.
-Early configuration/selection errors keep their existing `E_CHECK` diagnostics.
+只接受当前证据 schema，现役生产／消费一起迁移。schema 缺失／未知、重复进程视图、编码缺失、流损坏或回执摘要变化均失败，不增加执行／输出上限。
 
-Scoped v3 hosts can adopt `policy.report_publication: "retained-reference/v1"`
-to keep one complete immutable check report. The registered fixed report path
-then contains only `{"schema":"chrono-check-reference/v1","original":{"path":...,"sha256":...}}`.
-The short console still points directly to the complete original; the reference
-contains no verdict. Local and native manifests bind the reference's exact bytes.
-Collection reads the original through the existing declared artifact transport,
-verifies its digest and retained path, and applies every existing report, process,
-plan and executable check. It does not follow reference chains. Missing, changed,
-symlinked, undeclared or oversized originals fail; neither a small reference nor
-a successful download replaces the original evidence. Both the reference and
-original are subject to the registered report read limit separately.
+这曾同时改变产品和宿主输入政策：报告生产／汇总及 Rust／Python 消费者迁移，本机 diagnostics 选择当前私有 home 中已核包位置。已有 FILEMAP 边选择适用检查，除下述有限观察外，较广构建／CI／存储成本未测。
 
-Adoption requires matching runner and collector binaries and the prepared short
-check entry; explicit endpoint calls fail before business execution. Old profiles,
-including scoped v3 hosts omitting this field, keep complete fixed-path reports.
-Unknown values, explicit null and adoption in scoped v1/v2 are rejected. Consumers
-that read a fixed path must understand the reference before a host adopts it.
-Upload the registered artifact directory containing both reference and original;
-do not upload only the small reference. This reduces duplicate check-report
-publication; it does not deduplicate other acquisition, process or gather evidence.
+回归在生产和离线汇总中保留 80,005 字节 stdout（含无效 UTF-8、NUL）和 20 字节 stderr。旧内联响应超过原 1 MiB fixture 传输上限；单份编码回执响应为 17,619 字节，本机生产加汇总约 1.12 秒。这不是原生 CI 或完整工作流成本结论。
 
-With explicit `retained-reference/v2`, the fixed reference format stays the same,
-but its original uses `chrono-check-report/v2`. The original preserves request,
-runner identity, process metadata, exit status, failure and retained path. The
-judge's exact stdout and stderr bytes are retained separately through the existing
-original mechanism; `judge.stdout_original` and `judge.stderr_original` each hold
-`{path, sha256}`. The report has no separate `response` or inline judge `stdout`,
-`stderr`, `stdout_bytes`, `stderr_bytes`. Collection verifies both stream hashes
-against their references and process metadata, restores transient process views,
-and decodes the response from original stdout. Existing protocol, executable,
-plan, receipt and verdict checks still apply. Business and transport failures keep
-their original status and bytes; the bounded console points to the report.
+大型原件控制台回归仍要求超过 1 MiB 的原文件，使用确定性原生二进制流，精确断言大小／摘要，保持不加额外工作及原件不可变检查。
 
-For v2, `report_bytes` covers the combined bytes of original report metadata,
-stdout and stderr for each unit. The fixed reference has its own bound of the
-same size. Collection resolves every original through the declared transport;
-missing or damaged streams cannot fall back to producer-local copies. Upload the
-whole registered artifact directory and upgrade all actual readers before
-adoption. Inline stream views are rejected; consumers must use verified original bytes. This storage contract does not deduplicate business receipts
-inside judge output or other acquisition evidence. V1 and omitted policy keep
-their existing formats.
+scoped v3 报告用紧凑 JSON，避免字节数组每字节缩进一行；解析内容、原进程字节／摘要不变。短调用 `check`、`check --unit ID`、`check --collect` 输出原状态／退出、有限身份诊断、精确不可变报告路径，明确标注省略的诊断行／文本。消费者从已有路径读完整报告。
 
-Hosts may declare independent collection read limits in their check policy:
+旧明确 `--config` 调用保留 stdout 与存储 JSON 完全一致。历史报告保留原字节／摘要，包括缩进版本。控制台展示在发布后进行，不运行业务。生产失败／版本不符指向保留获取或探测原件；完成发布前的执行错误指向保留原错误，不冒充完整报告。保留失败同时保留原失败、说明写入错误，不声称产物存在。早期配置／选择错误仍用原 `E_CHECK`。
+
+### 原报告引用格式
+
+scoped v3 可采用 `policy.report_publication: "retained-reference/v1"`，只保留一份完整不可变报告。固定报告路径仅写 `{"schema":"chrono-check-reference/v1","original":{"path":...,"sha256":...}}`，不含结论；短控制台直接指完整原件。本地／原生 manifest 绑定引用精确字节。
+
+汇总经声明产物传输读原件，核摘要／保留路径，继续全部报告、进程、计划、执行物检查，不跟随引用链。原件缺失、改变、符号链接、未声明或过大都失败，小引用／成功下载不能替代证据。引用和原件各自受登记报告读取上限约束。
+
+采用须匹配 runner／collector 二进制及准备后的短入口，明确端点调用在业务前失败。旧 profile（含省略字段的 scoped v3）仍在固定路径写完整报告。未知值、null、scoped v1／v2 采用都拒绝。固定路径读取器须先支持引用，再采用。上传整个登记目录，含引用和原件，不能只上传小引用。它只减少重复发布报告，不去重其他获取、进程或 gather 证据。
+
+明确选 `retained-reference/v2` 时，固定引用格式不变，原件变为 `chrono-check-report/v2`，保留请求、runner 身份、进程 metadata、退出、失败、保留路径。judge 精确 stdout／stderr 另按原件机制保存，`judge.stdout_original`／`judge.stderr_original` 各含 `{path, sha256}`。
+
+报告不再有独立 `response` 或内联 judge `stdout`、`stderr`、`stdout_bytes`、`stderr_bytes`。汇总将两流摘要与引用／进程 metadata 核对，临时恢复进程视图，从原 stdout 解码响应。原协议、执行物、计划、回执、结论检查都保留。业务／传输失败保留原状态和字节，有限控制台指向报告。
+
+v2 的 `report_bytes` 约束每单元原报告 metadata 加 stdout／stderr 总字节，固定引用另受同大小上限。全部原件经声明传输解析，流缺失／损坏不能回退生产者本地副本。上传整目录，采用前升级全部实际读取器。拒绝内联流视图，只消费已核原字节。此存储合同不去重 judge 输出内业务回执或其他获取证据，v1／省略政策保留原格式。
+
+### 读取上限与身份
+
+宿主可独立声明汇总读取上限：
 
 ```json
 "collection_limits": {
@@ -711,179 +326,77 @@ Hosts may declare independent collection read limits in their check policy:
 }
 ```
 
-Both values are positive byte counts below the platform's `usize::MAX`;
-an omitted object preserves the existing
-64 MiB limit (per file, or the v2 original-and-stream total described above).
-A supplied object requires both fields and accepts no
-unknown fields or explicit `null`. It is a scoped-v3 extension; older binaries reject the new field,
-so install a release containing it before adopting the policy. Each original unit
-report is read and verified separately. The limit applies to its actual serialized
-bytes, not its compressed download or parsed payload; it is distinct from the
-judge process stdout limit. Equality is accepted; overflow fails with the path,
-limit name and observed byte count before parsing that input. A bounded reader
-also stops a file growing beyond its configured limit. Limits are host resource
-policy, not an assertion that the host has enough memory or that inputs are
-complete. Adjust them from measured original reports; do not rewrite old evidence
-to make its digest or size fit. Collection still verifies every required report
-and never reruns business operations.
+两值须为正字节数，小于平台 `usize::MAX`。省略对象保留 64 MiB，按文件或上述 v2 原件加流总量计。提供对象就须同时有两字段，不接受未知字段／null。它是 scoped v3 扩展，旧二进制拒绝，采用前先装支持版本。
 
-The reports must already match the candidate and configuration being collected.
-Changing limits changes that configuration's identity; it does not authorize
-reuse of reports bound to the previous configuration. Produce matching reports
-for the new candidate while retaining the original results separately.
+每份原单元报告单独读验，上限按真实序列化字节，不按压缩下载或解析内容，也区别于 judge stdout 上限。等于可接受，超过时在解析前报路径、上限名和实测字节。有限读取器也阻止文件读取期间增长超限。
 
-Executable pins are explicit caller inputs. Collection binds reports to those
-pins; it does not independently prove how the executables were built or certify
-their external input closure. Original tool observations can come from different
-roots and platforms. That fact does not establish environmental equivalence.
+上限是资源政策，不保证内存足够或输入完整。按实测原报告调整，不改旧证据以凑摘要／大小。汇总仍核全部必需报告，不补跑业务。报告须匹配当前候选及配置；改上限也改配置身份，不能沿用旧配置报告，应为新候选产生匹配报告，另保留旧结果。
 
-## GitHub projection and transport
+执行物身份是调用方明确输入，汇总只核报告绑定，不独立证明构建来源或外部输入完整。工具原观察可来自不同根／平台，这不证明环境等价。
 
-Put a `chrono-github-units/v1` source under `.chrono-harness/ci/`. It contains:
+<a id="github-projection-and-transport"></a>
 
-- `collection`: an existing `chrono-github-ci/v1` or v3 provider configuration
-  describing the common events, actions, runner, generator and check profile,
-  and the collection workflow's path/name/bootstrap/runner/artifacts.
-- `units`: a map with exactly the same IDs as the check profile. Each value
-  declares `workflow_path`, `name`, `runs_on`, `timeout_minutes`, `bootstrap`,
-  `context_path` and `artifact_directory`.
-- `gather`: the GitHub CLI `program`, `inherit_environment`,
-  `credential_environment`, literal `environment`, process `timeout_seconds`,
-  `output_limit_bytes`, overall `wait_seconds`, `poll_seconds`, and explicit
-  `manifest_path`, `download_directory`, `report_path`.
+## GitHub 生成与传输
 
-Optional `gather.download_retry` explicitly declares `max_attempts` (1–10),
-`delay_seconds` (1–60, less than `timeout_seconds`), and a nonempty, duplicate-free
-`http_statuses` list of HTTP error codes (400–599). Omission preserves one download
-attempt and the existing destination layout; null and unknown fields fail.
-For example, a host can select three attempts, a two-second delay and statuses
-`[429, 500, 502, 503, 504]`. This policy applies to unit artifacts and shared native
-seeds, without changing API query handling or rerunning any business unit.
+在 `.chrono-harness/ci/` 放 `chrono-github-units/v1` 来源：
 
-With `job_gating`, optional `gather.resource_observation` declares an exact
-`step_categories` map from GitHub step names to host category names. Empty names,
-control characters and the reserved category `unclassified` are rejected.
-Unknown step names remain `unclassified`; the provider does not infer language,
-dependencies, necessity or categories from command text. Omission preserves the
-existing gather output. The host can update this map without changing Rust.
+| 部分 | 声明内容 |
+| --- | --- |
+| `collection` | 已有 `chrono-github-ci/v1` 或 v3 provider，含共同事件、action、runner、generator、检查 profile，以及汇总的路径／名称／bootstrap／runner／产物 |
+| `units` | 键与检查 profile 完全相同；每项声明 `workflow_path`、`name`、`runs_on`、`timeout_minutes`、`bootstrap`、`context_path`、`artifact_directory` |
+| `gather` | GitHub CLI `program`、`inherit_environment`、`credential_environment`、字面 `environment`、进程 `timeout_seconds`／`output_limit_bytes`、总体 `wait_seconds`／`poll_seconds`，以及明确 `manifest_path`／`download_directory`／`report_path` |
 
-The existing paginated jobs response supplies `resources` in the original gather
-report (`chrono-ci-resources/v1`); no extra request, runner or business execution
-is added. It binds the response's process index/digest, candidate, run and observed
-attempt, and counts each identical job ID once across pages. Conflicting copies
-and invalid identities are excluded with explicit issues. Totals and comparisons
-use only the current attempt's API job view. `excluded_prior_attempts` lists older
-job IDs and attempts; the original source response retains their full rows,
-including failures. GitHub may copy successful jobs into a new attempt with new
-IDs and unchanged execution timestamps. The current view may therefore include
-carried results; it is neither distinct execution history nor the cost of rerunning
-the current attempt. The observer does not infer execution identity from matching
-names or timestamps and does not add historical rows to the current view.
+### 可选下载重试
 
-`known_step_seconds` sums only completed, non-skipped steps with valid ordered
-timestamps. It is null when nothing was measured. Each step retains its category,
-timestamps and measured/unknown/skipped state. Categories and jobs have separate
-totals; unclassified steps, missing steps, conflicting rows and unfinished jobs
-remain visible. `observed` means the returned rows have usable classified data,
-not that the entire workflow or its resource use is known. `partial` reports
-incomplete observations. A gather attempt that never acquired jobs reports
-`unavailable`; failures before gather have no fresh gather report.
+`gather.download_retry` 明确声明 `max_attempts`（1–10）、`delay_seconds`（1–60，且小于 timeout_seconds）、非空无重复 `http_statuses`（400–599）。省略保留一次下载和原目标布局，null／未知字段失败。例如可选三次、间隔两秒、状态 `[429, 500, 502, 503, 504]`。
 
-These seconds are neither billing minutes nor parallel workflow wall time or
-CPU time. Queue time, peak memory, disk bytes, work after the snapshot and the
-compile/test split inside a canonical check remain unmeasured. Collection is
-still running when it observes itself. Native failure, transport acceptance and
-the final judge keep their existing rules; resource observations cannot turn a
-failed check green or prove that a successful dependency is necessary.
+政策用于单元产物和共享原生种子，不改 API 查询处理，不重跑业务单元。只有进程非零、没有进程上限失败、stderr 恰有一个无歧义且在白名单中的 `HTTP nnn:`，才允许重试。全部尝试／延迟共用原下载期限，每条输出流共用原字节上限。预算耗尽、未列／歧义状态、超时、输出溢出都停止。
 
-Optional `comparisons` registers warning rules keyed by a host-owned ID. Each
-rule names distinct registered `category` and `reference_category`, a positive
-finite `factor`, and nonnegative integer `minimum_seconds`. For each completed
-observed job, a warning is produced when the category's measured seconds are at
-least the minimum and strictly greater than `factor * reference_seconds`.
-Equal values stay within the threshold; a measured zero reference is usable.
-The host adopts `bootstrap-vs-check` with factor 1 and a 60-second minimum to
-expose startup work that exceeds the same job's canonical check.
+每次配置尝试写独立 `attempt-N` 目录，保留原进程、部分文件及实际 retry／completed／failed 行为，恢复成功也不删失败原件。只有成功目录提供报告输入，固定 artifact 身份、摘要、工作流源码、run／attempt 和最终判官检查继续适用。恢复耗尽不发布可接受 manifest，不能使失败单元通过。
 
-Only the two explicitly named categories participate. Missing categories,
-unknown timestamps and unfinished jobs produce `unavailable` with a reason;
-skipped jobs are `not-applicable`. Other categories cannot silently substitute
-for a missing reference. Completed failed jobs retain their measured cost.
-Deduplicated job identity and attempt remain attached to every comparison, and
-the Actions summary lists `W_CI_RESOURCE_COMPARISON` findings with their measured
-values. These are host policy warnings, not proof that the work is redundant or
-that an optimization saved resources. They neither change admission nor add
-requests, jobs or executions. Omission preserves the existing report format.
+单元产物沿用登记 `gh run download`。原生父工作流先核唯一未过期产物的名称、ID、归档端点、run、候选源码，再获取原上传目录。汇总仍核固定 producer／run／attempt／context、报告引用、原报告和 stdout／stderr 摘要、工作流源码及最终运行观察。下载不是业务通过结论。
 
-Optional `summary_environment` names an explicitly inherited variable containing
-an existing appendable summary file. The host adopts `GITHUB_STEP_SUMMARY` in its
-input environment to show the same category totals and unknowns on the Actions
-page. Missing or unwritable summary sinks are reported as unavailable in the
-original report and do not replace the admission verdict. This presentation
-uses the same check invocation and adds no workflow step.
+每个单元产物的同一期限从 metadata 前开始，覆盖下载、延迟、语义核验、工作流源码及最终运行观察；全部获取进程共用 stdout／stderr 额度。本宿主保留每产物 60 秒、每流 8 MiB，报告读取上限不变，共享种子沿用原下载预算。超时不可重试，失败原件保留，不发布可接受清单。
 
-Retries require a nonzero process exit, no process-bound failure, and one
-unambiguous `HTTP nnn:` status in the registered CLI's stderr that appears in
-the whitelist. All attempts and delays share the original download deadline;
-each output stream shares its original byte limit. An exhausted budget,
-unlisted or ambiguous status, timeout or output overflow stops acquisition.
-Each configured attempt writes a separate `attempt-N` directory. Original
-process evidence, partial files and the actual retry/completed/failed action
-remain available, including after successful recovery. Only the successful
-directory supplies report inputs; fixed artifact identity, digests, workflow
-source, run/attempt and final judge checks still apply. Exhausted recovery
-produces no accepted manifest and cannot make a failed unit pass.
+**产品与政策曾同步退役：**逐成员 HTTP range 读取器、Python 测试／fixture、两个平台发布 job。完整产物下载已服务当前汇总，不再需要第二套传输。Rust 回归继续覆盖报告／流损坏、原生产身份、重试恢复、累计时间及双流预算拒绝。
 
-Unit artifacts use the existing registered `gh run download` command. The
-native parent first verifies the unique unexpired artifact's name, ID, archive
-endpoint, run and candidate source, then acquires its original uploaded directory.
-The collector still verifies fixed producer/run/attempt/context identities,
-report references, original report and stdout/stderr digests, workflow source and
-the final run observation. A download is not a passing business verdict.
+删除 range 传输减少 helper 进程，完整耗时、网络／存储成本、原生交付仍须候选执行后测量。完整上传原件和原保留／确认要求仍为必需。
 
-One unit-artifact deadline begins before metadata and covers download attempts,
-retry delays, semantic checks, workflow source and the final run observation.
-Every acquisition process consumes the same stdout and stderr allowances.
-The host retains 60 seconds and 8 MiB per stream for each unit artifact; report
-read bounds are unchanged. Shared seed downloads retain their existing download
-budgets. No timeout is retryable, and failed originals remain retained without
-publishing an accepted manifest. Existing HTTP retry policy applies to downloads.
+### 缩小成功报告的上传范围
 
-**Product and policy change together:** the dedicated per-member HTTP range
-reader, its Python test/fixture and two platform release jobs retire jointly.
-They add a second transport implementation without a necessary current consumer;
-whole-artifact download already serves the current collector. Rust collection
-regressions retain report/stream corruption, original producer identity, retry
-recovery, cumulative time and both stream-budget rejection checks. Removing range
-transport reduces helper processes; complete wall time, network/storage cost and
-native delivery remain unmeasured until candidate execution. Full uploaded
-originals and their existing retention/acknowledgement remain required.
+本宿主现在上传各单元已有 `.chrono-harness/state/units/<id>/` 报告根。短准备已在该根保留报告、上下文、获取、原 stdout／stderr。成功汇总不消费临时测试宿主或其复制执行物。
 
-The host now uploads each unit's existing `.chrono-harness/state/units/<id>/`
-report root. Short preparation already retains the report, context, acquisition
-and original stdout/stderr under that selected root. Successful collection does
-not consume the temporary test hosts or their copied executables. In native run
-`42004257959`, those CI fixtures occupied 1,566,217,208 of 1,567,248,867 compressed
-member bytes; the entire ZIP was 1,575,243,167 bytes and timed out during download.
-These are observations of that one artifact, not an end-to-end saving claim.
+原生 run `42004257959` 的 CI fixture 占压缩成员 1,567,248,867 字节中的 1,566,217,208；整个 ZIP 为 1,575,243,167 字节，下载超时。这只描述一份产物，不是全流程节省结论。
 
-Optional `failure_artifact_directory` preserves the wider diagnostic owner when
-a job fails. It uses the same pinned upload action with `failure()` and a distinct
-`diagnostics-` artifact prefix. The host selects `.chrono-harness/state/`, retaining
-failed fixture originals without sending successful fixture bodies to collection.
-The ordinary report upload and delivery acknowledgement keep their own artifact
-and mapping. Equal directories need no duplicate diagnostic upload. No new
-downloader, packaging command, permission or timeout allowance is introduced.
-Native report-root consumption and the failure-only upload remain separate
-validation obligations; the latter is not established by a successful job.
+可选 `failure_artifact_directory` 在 job 失败时保留更广诊断目录，用同一固定上传 action、`failure()` 和独立 `diagnostics-` 产物前缀。本仓选 `.chrono-harness/state/`，保留失败 fixture 原件，不向成功汇总传其正文。普通报告上传及交付确认保留自己的产物／映射；目录相同时不重复上传。
 
-The bootstrap list is a literal argv. Register only the tools each unit needs;
-the generator never infers packages, language setup or build dependencies. Each
-unit's report and context must be inside its uploaded artifact directory.
-Workflow paths and names must be unique. The entire output set is preflighted
-before generation; unowned files are not overwritten. Filesystem failures are
-reported without claiming a multi-file transaction. Removed workflow paths must
-be explicitly retired by the host alongside their registrations.
+不加下载器、打包命令、权限或超时预算。原生报告根消费与仅失败上传须分别验证，成功 job 不能证明后者。
+
+### 资源观察
+
+采用 `job_gating` 时，`gather.resource_observation` 可明确登记 GitHub 步骤名到宿主类别名的 `step_categories`。拒绝空名、控制字符、保留名 `unclassified`；未知步骤仍属 unclassified，不从命令猜语言、依赖、必要性或类别。省略保留原 gather 输出，宿主可不改 Rust 地更新映射。
+
+已有分页 jobs 响应在原 gather 报告提供 `resources`（`chrono-ci-resources/v1`），不加请求、runner 或业务执行。它绑定响应进程索引／摘要、candidate、run、观察 attempt，跨页同 job ID 只计一次；冲突副本、无效身份明确列问题并排除。
+
+总计／比较只用当前 attempt API job 视图。`excluded_prior_attempts` 列旧 job ID／attempt，原响应保留其完整行和失败。GitHub 可能给沿用成功 job 分配新 ID，但保留原时间。因此当前视图可能含沿用结果，不是独立执行历史，也不是本次重跑成本。观察器不靠名称／时间猜执行身份，不把历史行加进当前视图。
+
+`known_step_seconds` 只加总已完成、非跳过、时间有效有序的步骤，没有测量则 null。每步骤保留类别、时间及 measured／unknown／skipped。类别和 job 各自汇总，未分类、缺步骤、冲突、未结束保持可见。
+
+`observed` 只表示返回行有可用分类数据，不表示完整工作流资源已知；`partial` 表示不完整。gather 没取得 jobs 则 `unavailable`；gather 前失败没有新报告。
+
+这些秒数不是计费分钟、并行工作流墙钟或 CPU 时间。排队、峰值内存、磁盘字节、快照后操作及标准检查内部编译／测试分摊都未测。汇总观察自身时仍在运行。原生失败、传输准入、最终判断规则不变，资源观察不能将失败变绿，也不能证明成功依赖必要。
+
+可选 `comparisons` 按宿主 ID 登记警告，点名两个不同登记类别 `category`／`reference_category`、正有限 `factor`、非负整数 `minimum_seconds`。已完成且可观察的 job，当前类别秒数达到最小值且严格大于 `factor * reference_seconds` 时告警；相等不告警，实测参考为零仍有效。
+
+本宿主选 `bootstrap-vs-check`，factor 1、最小 60 秒，用来显示启动超过同 job 标准检查的情况。只有点名两类别参与；缺类别、未知时间、未结束记 `unavailable` 并说明，跳过 job 为 `not-applicable`，其他类别不得代替参考。完成但失败的 job 仍保留成本。
+
+每次比较附去重 job 身份及 attempt，Actions 摘要显示 `W_CI_RESOURCE_COMPARISON` 和实测值。警告只是宿主政策，不证明冗余或优化收益，不改准入、不加请求／job／执行。省略保留原格式。
+
+可选 `summary_environment` 点名明确继承的环境变量，值为已有可追加摘要文件。本仓在输入环境采用 `GITHUB_STEP_SUMMARY`，向 Actions 页面展示同一类别总计和未知项。目的缺失／不可写在原报告记 unavailable，不替代准入结论。展示沿用同一次检查，不加工作流步骤。
+
+### 配置、凭据与独立工作流
+
+bootstrap 列表为字面 argv，只登记单元所需工具，生成器不推断包、语言准备或构建依赖。报告／上下文须在本单元上传目录，工作流路径和名称唯一。生成前预检全部输出，不覆盖无所有权文件。文件系统失败如实报告，不声称多文件事务。移除路径须由宿主与登记一起明确退役。
 
 ```sh
 chrono-ci init --host-root . --config /path/to/units.json
@@ -891,97 +404,45 @@ chrono-ci generate --host-root . --config .chrono-harness/ci/units.json
 chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
 
-`init` uses `.chrono-harness/ci/units.json` and preserves an existing host source.
-It needs an already registered v3 check profile; it does not invent assignments.
-Existing single-workflow, full-context and release provider schemas keep their
-semantics and projections.
+init 使用 `.chrono-harness/ci/units.json`，保留已有来源；要求已登记 v3 检查 profile，不造分配。已有单工作流、完整上下文、发布 provider 保留原含义和输出。
 
-On push and pull_request events, preparation binds the generated provider,
-workflow and profile to the candidate and records the exact canonical argv and
-pre-execution runner/judge identities. The collection workflow has `actions:
-read`; its separate gathering step alone receives `GH_TOKEN`. Declare
-credential environment keys explicitly so transport reports omit their values.
-The report retains original nonsecret process bytes, exit/failure and an identity
-of the actual environment. Never pass credentials as literal transport values.
+push／pull_request 准备将生成 provider、工作流、profile 绑定候选，记录精确标准 argv 和执行前 runner／judge 身份。汇总工作流有 `actions: read`，独立 gather 步骤才收到 `GH_TOKEN`。凭据环境键须明确声明，传输报告省略其值，保留非秘密进程原字节、退出／失败和真实环境身份。不得把凭据作为字面传输值。
 
-Gathering waits within declared bounds for each workflow's run at the candidate
-and event, pins its actual attempt, downloads the attempt-specific artifact,
-checks matching fixed contexts and the actual workflow source bytes, and checks
-the attempt again. Missing, ambiguous, changed or failed runs fail collection.
-Original downloaded reports remain available. The resulting manifest is
-`gathered-unjudged` until the same canonical `check --collect` succeeds. Unit
-failure does not cancel unrelated unit workflows; retrying a unit does not
-rerun them. Retry collection afterward to gather the new pinned attempt.
+独立工作流 gather 在登记上限内等待 candidate／event 的每个运行，固定实际 attempt，下载对应产物，核固定上下文和真实工作流源码，再复核 attempt。运行缺失、歧义、变化或失败都使汇总失败，下载原报告保留。manifest 在同一标准 `check --collect` 成功前为 `gathered-unjudged`。
 
-Automatic collection currently covers push and pull_request events. Individual
-unit workflows also accept explicit manual inputs; manual combinations use
-explicit manifests and the local collection command. The collection workflow
-does not expose an unsupported manual trigger. Existing collection outputs are
-not overwritten by a retry; native retries use fresh checkouts. Workflow-source
-and endpoint mismatches remain errors, including when a moving integration base
-changes while separate workflows prepare their inputs.
+单元失败不取消无关工作流，重试单元不重跑其他单元，之后重试汇总收集新固定 attempt。自动汇总当前支持 push／pull_request；单元还支持明确手动输入，手动组合用明确 manifest 和本地汇总命令。汇总不暴露不支持的手动触发。
 
-Source behavior tests include actual candidate binaries in independently cloned
-hosts, concurrent execution, offline collection, and synthetic GitHub transport
-responses. The public Go, TypeScript and mixed [example hosts](examples.md) use
-independent native workflows. Their local/integration/PR/dev reports were checked,
-as were actual cancellation with selective retry, business failure with another
-unit passing, and restoration with zero selected business operations. Initial
-inventory remains a separate contract. The product host registers sixteen units,
-one per complete test plan, and a collector in `.chrono-harness/ci/units.json`.
-Its current core bootstrap explicitly builds runner, judge-ci, ci, worktree,
-judge-cargo and inputs; each selected plan
-keeps its complete existing build/check/test operations. Shared operations are
-listed in the check profile and repeat only in isolated checkouts. The default
-full bootstrap remains available when its existing configuration is selected.
+重试不覆盖已有汇总输出，原生重试用新检出。工作流源码／端点不符仍错误，包括移动 integration 基线在不同工作流准备期间变化。
 
-The CI generator consumer also executes the generated unit workflow's actual
-`chrono-ci prepare` CLI against a committed push event, checks the
-candidate-bound workflow source and context, then invokes the recorded local
-`chrono-harness check` argv and reads the retained unit report. It checks the
-literal generated command shape and the selected operation in
-`crates/ci-tests/tests/units.rs`, so a projection change cannot silently diverge
-from the local command. Live push and pull-request dispatches for the public
-Go, TypeScript and mixed hosts, including their collection and every declared
-unit, are recorded in [native adoption evidence](native-ci-adoption.md).
-That closes generated-unit adoption for this bounded profile. Complete
-effective-input closure, `chrono-github-ci/v3` host adoption, deterministic
-parity and full host activation remain separate obligations.
+源码行为测试用独立克隆宿主中的真实候选二进制，覆盖并发、离线汇总、合成 GitHub 响应。公开 Go／TS／mix [示例](examples.md)使用独立原生工作流，已核本地／integration／PR／dev、真实取消及选择性重试、业务失败同时其他单元通过、恢复后零业务选择。首次清单仍是独立合同。
 
-## Host customization and updates
+本产品宿主当前在 `.chrono-harness/ci/units.json` 登记 24 个条件单元及汇总；早期独立工作流阶段为十六单元。当前 core bootstrap 明确构建 runner、judge-ci、ci、worktree、judge-cargo、inputs。各所选计划保留完整构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。选原配置仍可用默认 full bootstrap。
 
-Use the host's registered source paths. The table identifies which declaration
-owns each customization; the generator requires no business directory layout
-or language convention.
+CI 生成器消费者还在已提交 push 事件上执行生成单元的真实 `chrono-ci prepare` CLI，核绑定候选的工作流源码／上下文，再调用所记录本地 `chrono-harness check` argv，读原报告。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
 
-| Change | Host-owned source | Apply |
+Go／TS／mix 的真实 push／PR、汇总及全部单元见[原生采用证据](native-ci-adoption.md)，完成的是该有限 profile 的生成单元采用。有效输入完整、各 provider 版本宿主采用、确定同判及完整启用仍分别验收。
+
+<a id="host-customization-and-updates"></a>
+
+## 宿主定制与更新
+
+使用宿主登记来源路径。各类定制的所有者如下，不要求业务目录或语言惯例：
+
+| 修改 | 宿主来源 | 应用方式 |
 | --- | --- | --- |
-| Commands, tests or dependencies | Project/script actions and FILEMAP edges/plans | Update declarations and run the canonical DELTA check |
-| Unit boundaries or shared operations | Check profile `policy.units` / `policy.shared_operations`, plus provider `units` | Keep each complete test plan assigned once; regenerate owned workflows |
-| SDKs, runner image, timeout or startup | Provider `bootstrap`, `runs_on`, `timeout_minutes` and explicitly registered bootstrap data | Generate, verify, then check the changed native event |
-| Workflow paths or removed units | Previous and next provider sources | Use `migrate` below to verify ownership and retire obsolete outputs |
-| Harness version | Public distribution pin and selected tool list | Adopt the new pinned release; keep the host's CI and SDK sources |
+| 命令、测试、依赖 | 项目／脚本 action，FILEMAP 边／计划 | 更新声明，运行标准 DELTA 检查 |
+| 单元边界、共享操作 | 检查 profile 的 `policy.units`／`policy.shared_operations`，provider `units` | 每完整计划只分一次，重新生成拥有的工作流 |
+| SDK、runner 镜像、超时、启动 | provider `bootstrap`／`runs_on`／`timeout_minutes` 及明确 bootstrap 数据 | generate、verify，再验证改变的真实事件 |
+| 工作流路径、移除单元 | 旧新 provider 来源 | 用下文 migrate 核所有权、退役旧输出 |
+| harness 版本 | 公开分发锁和所选工具表 | 采用新固定版本，保留宿主 CI／SDK 来源 |
 
-The [Go, TS and mixed examples](examples.md) demonstrate the last row by changing
-only their distribution lock and README. None requires editing Rust or adding a
-language-specific case to the generator. Schema/behavior changes still need an
-explicit migration; a version bump does not certify compatibility on its own.
+[Go／TS／mix 示例](examples.md)仅改分发锁和 README 演示最后一行，无需改 Rust 或给生成器加语言分支。schema／行为变化仍须明确迁移，版本号增加不自动证明兼容。
 
-The host owns the provider JSON, check profile, unit assignments and bootstrap
-commands. Customize these explicit sources; generated workflows are projections.
-A unit can call any registered script or plugin through its literal bootstrap
-argv and complete test plan. Unrelated host workflows can coexist. The generator
-never selects a language, SDK, directory layout or dependency on the host's behalf.
+宿主拥有 provider JSON、检查 profile、分配和 bootstrap；改这些来源，工作流只是生成结果。单元可通过字面 bootstrap argv、完整计划调用登记脚本／插件，无关工作流可并存。生成器不替宿主选择语言、SDK、布局或依赖。
 
-`init` preserves an existing host source byte for byte, including custom runner,
-timeout, bootstrap arguments, context and artifact settings. Supplied defaults do
-not replace it. After installing a pinned newer binary, use the same `generate`
-and `verify` commands on that source. Verification of projections is separate from
-the actual canonical checks and native event validation.
+init 逐字保留已有来源，含 runner、超时、bootstrap 参数、上下文、产物设置，传入默认值不替换它。安装固定新版本后，对同一来源 generate／verify；生成验证与真实标准检查／原生事件验收分开。
 
-Public beta.13 provides `chrono-ci migrate` for an explicit projection transition.
-Prepare the new check profile, assignments and provider source, then migrate the
-verified old owned workflow:
+公开 beta.13 提供 `chrono-ci migrate`。先准备新 profile、分配、provider，再迁移已验证旧工作流：
 
 ```sh
 chrono-ci migrate --host-root . \
@@ -989,21 +450,11 @@ chrono-ci migrate --host-root . \
   --config .chrono-harness/ci/units.json
 ```
 
-This accepts a scoped v1 or units provider as the previous source and an explicitly
-configured units provider as the destination. It verifies every old generated file
-and every new output collision before writing. It preserves the destination JSON
-exactly, writes the new projections, removes only obsolete previous workflows and
-retires the distinct previous source only when its bytes match the explicit input.
-A host-edited old projection or colliding new file fails before any write. Unrelated
-files are preserved. Initial inventory cannot transition into unit collection.
-The same owner supports the separate inventory-preserving standalone v4 transition
-described in [CI](ci.md#standalone-initial-host-transition); full-governance and
-release-provider transitions remain rejected.
+旧来源可为 scoped v1 或 units，目标须明确配置 units。写入前验证全部旧生成文件及新冲突，精确保留目标 JSON，写新输出，只删过时旧工作流；旧来源地址不同且字节匹配明确输入时才退役它。旧生成结果被手改或新路径冲突，均在写入前失败；无关文件保留。
 
-For an update at the same source path, retain the previous source bytes before
-editing (a run-local file belongs beneath `.chrono-harness/state/`). Supply its
-original source address explicitly so embedded workflow commands remain bound to
-the correct source:
+初始清单不能迁入单元汇总。同一所有者支持[独立 v4 保留清单迁移](ci.md#standalone-initial-host-transition)，仍拒绝完整治理和发布 provider 迁移。
+
+同址更新须在编辑前保留旧来源（运行临时文件放 `.chrono-harness/state/`），明确提供原地址，保持嵌入工作流命令绑定：
 
 ```sh
 chrono-ci migrate --host-root . \
@@ -1012,37 +463,14 @@ chrono-ci migrate --host-root . \
   --config .chrono-harness/ci/units.json
 ```
 
-This also retires explicitly removed or renamed workflow paths. It leaves the
-new source and retained prior-input file untouched. The JSON result lists written
-and retired paths and input hashes. Update FILEMAP and any explicit consumers for
-those paths, then run the canonical DELTA checks. Migration does not infer or edit
-the host's registration policy, and its success does not certify governance or CI.
-Filesystem failure reports completed changes; there is no cross-file transaction
-or concurrent-writer isolation. Preserve the original result and reconcile the
-reported paths before retrying; once migrated, ordinary generation is idempotent.
+这也退役明确删除／改名的工作流路径，保留新来源和旧输入文件。JSON 列写入／退役路径和输入摘要。同步 FILEMAP／明确消费者，运行标准 DELTA。迁移不推断／编辑登记政策，成功不证明治理或 CI。文件系统失败报告已完成变化，无跨文件事务／并发隔离；保留原结果，协调报告路径后再重试。完成迁移后普通生成幂等。
 
-Gather preserves downloaded report bytes without replacing report files with
-hard links. The current host uses `retained-reference/v2`: the selected reference
-points to the original report and streams, avoiding duplicate report bodies at
-publication. Failed downloads, native failures, original context/preparation and
-transport evidence remain retained in their separate acquisition attempts.
+gather 保留下载报告原字节，不用硬链接替换报告。本仓采用 `retained-reference/v2`，引用原报告和流，发布时避免重复正文。失败下载、原生失败、原 context／preparation／transport 证据仍各留在获取尝试。
 
-The current scoped check profile also adopts the
-[CI execution progress diagnostics](diagnostics.md#scoped-ci-execution-progress-adoption)
-on the existing retained judge stderr stream. Collection of a complete unit and
-post-upload acknowledgement still require their original final reports; progress
-records never satisfy or waive those contracts. For a failed/incomplete unit,
-retain its producer launch and actual judge stream originals before expecting a
-final aggregate, and associate request/candidate/profile, plan/operation and
-PID/ownership identities from those records. Native validation of this adoption
-still requires the committed candidate and declared DELTA units; a focused Rust
-fixture does not establish a repaired native timeout or merge/landing.
+当前 profile 在原保留 judge stderr 采用 [CI 进度诊断](diagnostics.md#scoped-ci-execution-progress-adoption)。完整单元汇总和上传后确认仍要求原最终报告，进度记录不能满足或豁免。单元失败／不完整时，先保留生产启动、实际 judge 流，再期待最终汇总；从原件关联 request／candidate／profile、plan／operation、PID／所有权。
 
-Input-production failure can leave an acquisition original without producing the
-final check report slot. A successful upload exports the available evidence; it
-does not create that report or establish a passing check. Delivery refusal now
-names the exact unavailable report or unverifiable original and retains exit 2,
-original outcomes and delivery roots. It does not release another consumer or
-acknowledge unproduced evidence. `test.runner.retention-delivery` is the registered
-Rust feedback operation for missing slots/originals, pointer digest drift and
-failed-outcome acknowledgement; canonical selection retains the full DELTA plan.
+此采用的原生验证仍需已提交候选和登记 DELTA 单元；局部 Rust fixture 不证明原生超时已修复或已合并落地。
+
+输入生产失败可能只留下获取原件，没有最终报告文件。上传成功只导出已有证据，不造报告或通过结果。交付拒绝明确点名缺报告或无法核的原件，保留退出 2、原 outcome 和 delivery 根，不释放其他消费者或确认未生产证据。
+
+`test.runner.retention-delivery` 是登记 Rust 快速反馈操作，覆盖报告位置／原件缺失、引用摘要变化、失败 outcome 确认；标准选测仍保留完整 DELTA 计划。

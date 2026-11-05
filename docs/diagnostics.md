@@ -1,395 +1,135 @@
-# Structured diagnostics
+# 结构化日志与错误
 
-`chrono-diagnostics` owns the Rust `chrono-log/v1` and `chrono-error/v1`
-records. It is an independent library with a dedicated `diagnostics-tests`
-project and no dependency on the runner, host layout or Git. The host explicitly
-registers its build, test plan, inputs, outputs and CI unit.
+`chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner、宿主目录或 Git。宿主明确登记它的构建、测试计划、输入、输出和 CI 单元。
 
-## Error values and records
+## 保留原错误及其原因
 
-`RecordedError` connects a concrete Rust error to the record supplied by its
-owner. `Failure::wrap` retains that original value as `Error::source` and adds a
-domain code, message and named context. `Failure::new` represents a direct domain
-rejection with no invented source. `with_related` attaches secondary failures,
-such as cleanup or publication failures, without replacing the primary cause.
+`RecordedError` 把具体 Rust 错误与其负责人提供的记录关联。`Failure::wrap` 将原值保留为 `Error::source`，再附领域错误码、消息和具名上下文；`Failure::new` 表示直接拒绝，不编造底层原因。`with_related` 附上清理、发布等次要失败，不替换主要原因。
 
-`ErrorRecord` is a versioned tree. Each node contains its type, stable code,
-original message, context and source. Native codes, obtained traceback text and
-related failures have separate fields. The owner supplies these details; the
-library does not recover types, codes or causes by parsing messages.
-`NativeIoError` adopts the original `std::io::Error`, retains its kind, message
-and available OS code, and exposes the unchanged native value through its source
-and accessors. A custom IO payload remains typed in memory; without its own
-recording adapter, its wire cause is explicitly `custom_source: not_recorded`.
-This adapter does not serialize arbitrary custom cause chains or obtain a stack.
-Other native upstream errors still require an explicit owner adapter.
+`ErrorRecord` 是带版本的树，每个节点保留类型、稳定错误码、原消息、上下文和原因。原生错误码、实际取得的回溯文本和相关失败另有字段，由错误负责人明确提供；库不解析消息来猜类型、错误码或因果。
 
-`ReceivedError` imports a record while preserving its source chain. Importing
-does not claim that the receiving process executed the original operation.
-Unknown schema versions and fields are rejected. This record is independent of
-the strict judge v1 protocol; adding it to a judge request or response requires
-that protocol's explicit evolution.
+`NativeIoError` 接管原 `std::io::Error`，保留种类、消息和可用 OS 错误码，通过 source 和访问器暴露未改变的原值。自定义 IO 内容在内存中仍保留类型；没有专属记录适配器时，传输记录明确写 `custom_source: not_recorded`。它不序列化任意自定义原因链，也不采集调用栈。其他上游原生错误仍须负责人提供适配器。
 
-## Logging and context
+`ReceivedError` 导入记录并保留原因链，但不声称接收进程执行过原操作。未知格式版本和字段会被拒绝。这套记录独立于严格的 judge v1 协议；要加进检查请求或响应，须明确更新相应协议。
 
-`Logger` installs a scoped `tracing` dispatcher with an explicit producer, level
-and `Write` sink. `Logger::stderr` selects stderr and info. Each event produces
-one UTF-8 JSON line with an actual UTC RFC3339 timestamp. The layer preserves
-typed fields and merges context from enclosing spans, with nearer spans taking
-precedence. Events without an explicit `event_id` use `tracing.external`.
+## 日志和上下文
 
-`logging::failure` emits an error record at error level. `record_error` supports
-other levels, including a recovery event which retains the original exception.
-Successful handling does not rewrite or erase an earlier error. Level filtering
-does not change a judge's verdict.
+`Logger` 建立限定范围的 `tracing` 分发器，明确设置生产者、级别和 `Write` 目的。`Logger::stderr` 选择标准错误和 info。每个事件输出一行 UTF-8 JSON，时间为实际 UTC RFC3339。记录保留有类型字段，并合入外层 span 上下文，较近层优先。未指定 `event_id` 时使用 `tracing.external`。
 
-The caller keeps the logger alive, explicitly transfers `dispatch()` and the
-parent span to child work, joins that work and inspects `finish()`. The library
-does not infer thread ancestry or subprocess context. It does not rewrite child
-stdout/stderr or use stderr content as a success criterion.
+`logging::failure` 以 error 级别写错误记录；`record_error` 支持其他级别，包括保留原异常的恢复事件。处理成功不能改写或抹掉旧错误，级别过滤也不改变检查结论。
 
-Serialization, formatting and sink errors remain typed failures. A failed write
-retains its native IO error and attempted record bytes. After an IO failure,
-further writes are blocked with a reference to that failure; a partially written
-record is not retried. Repeated `finish()` calls cannot erase the failure. The
-caller remains responsible for publishing failures through its declared evidence
-or emergency output boundary.
+调用方负责保持 logger 存活，向子任务明确传递 `dispatch()` 和父 span，等待任务结束，再检查 `finish()`。库不推断线程父子关系或子进程上下文，不改写子进程 stdout／stderr，也不凭 stderr 内容判成功。
 
-`LogFailure` implements `RecordedError`, including shared retained failures, so
-a boundary can attach the actual logging exception as a related error. Native IO
-recording uses the same diagnostics owner as `NativeIoError`; attempted bytes and
-the producer's explicit write/flush phase remain available for event publication
-and final flushing. Recording adds no successful publication
-claim.
+序列化、格式化和写入失败都保留为有类型错误。写入失败时保留原 IO 错误和尝试写出的记录字节；之后禁止继续写，返回对原失败的引用，不重放部分记录。重复 `finish()` 不能抹掉失败。调用方仍负责通过登记证据或应急输出入口发布失败。
 
-## Adoption boundary
+`LogFailure` 实现 `RecordedError`，包括共享的保留失败，因此外层可以把真实日志异常作为相关错误附上。原生 IO 记录与 `NativeIoError` 共用实现，尝试字节和明确的 write／flush 阶段继续可用；记录错误不代表错误已经成功发布。
 
-The runner's invalid UTF-8 argument path uses the shared logger, emits no stdout
-and exits with status 2. All post-dispatch `CliOutput` consumers now use the
-runner-owned publication boundary. Both existing channels are attempted and flushed
-independently. Successful publication preserves the bytes and operation exit
-status. A write or flush failure exits 2, retains the original typed IO value,
-stream, phase, acknowledged byte count and original operation outcome, and keeps
-the other channel's failure separately. No whole payload is replayed.
+## runner 的输出处理范围
 
-On the supported Unix platforms, the actual CLI supplies the same runner-owned
-`NativeOutput` adapter for stdout and stderr. It writes through the supplied live
-handle with the native write interface, preserving native errors rather than
-using Rust stdio's successful acknowledgement of EBADF. An open read-only output
-descriptor therefore fails publication even though it is not a closed socket.
-The adapter neither duplicates nor closes borrowed stdio descriptors. It has no
-userspace buffer, so flush is a no-op, as for the native stdio backend; it makes
-no fsync or durable-storage claim. Existing publication policy handles short
-writes and Interrupted errors. Non-Unix builds retain the previous standard
-output adapters; native error transparency there has not been verified.
+runner 的无效 UTF-8 参数路径使用共享 logger，不写 stdout，退出 2。命令分发后的全部 `CliOutput` 消费者使用 runner 统一发布逻辑，两个原输出通道分别尝试写入和刷新。成功时保留原字节与操作退出码；write 或 flush 失败时退出 2，保留原有类型 IO 值、通道、阶段、已确认字节数和原操作结果，并另存另一通道失败，不重放完整内容。
 
-The boundary attempts one `runner.output_publication_failed` event through the
-existing stderr logger. It adds a newline only when necessary to frame the event
-after already accepted stderr bytes; diagnostic bytes never enter stdout.
-Logger serialization and finish failures become related typed failures in the
-returned error. If stderr is unavailable or a diagnostic is only partially
-written, the boundary cannot promise durable retention and does not retry the
-whole record. A logged publication failure records the operation's exit status;
-it does not reconstruct a business cause from existing free-form stderr.
+支持的 Unix 平台实际 CLI 对 stdout、stderr 使用同一个 runner `NativeOutput` 适配器。它通过传入的真实句柄直接原生写入，避免 Rust 标准 IO 将 EBADF 当作成功确认。即使描述符未关闭，只读输出描述符也会失败。
 
-The dedicated Rust tests cover error wrapping/import, native and custom IO value
-retention, source and related-error preservation, UTF-8 JSON lines, level
-filtering, explicit thread context transfer, recovery and failed sinks. Runner
-owner tests cover independent output attempts, both failures, partial write and
-flush boundaries, recoverable interrupted writes, actual zero writes with native
-`WriteZero` errors and acknowledged-byte counts, healthy bytes/status, diagnostic
-framing and an unavailable diagnostic sink. Existing help/domain outputs supply
-the empty-channel cases: healthy binary publication and direct empty-channel
-flush-failure observations, without adding a new output producer. An actual
-runner binary regression also covers help/version,
-domain failure, broken-pipe stdout rejection and both unavailable
-descriptors, detecting a main that still uses the former publication path.
-The read-only stdout regression runs a successful nonempty help command and
-requires exit 2 with exactly one framed stderr event carrying native EBADF.
-Failure evidence retains the original argv, executable digest, descriptor
-scenario, raw streams and exit. Direct tests exercise the same native adapter
-with each read-only channel and their combination, including primary, secondary
-output and diagnostic IO causes and the independent available channel.
+适配器不复制或关闭借用的标准 IO 描述符，没有用户缓冲，所以 flush 与原生标准 IO 后端一样不做事，不承诺 fsync 或持久存储。已有发布逻辑处理短写和 Interrupted。非 Unix 继续使用原标准输出适配器，尚未验证同样的原生错误透明性。
 
-Product and registration changes are coupled in this increment: FILEMAP lists
-`runner/src/publication.rs` as a runner compile input and explicitly records the
-runner binary as a runtime input of runner-tests. The existing runner and
-diagnostics execution plans remain the direct check owners. Canonical validation
-uses the declared two-end DELTA closure, which may be broad; no local selection
-or verification-cost reduction is claimed. Marginal build, CI and storage cost
-remain unmeasured.
+发布失败时，通过现有 stderr logger 尝试一次 `runner.output_publication_failed` 事件。只有已确认 stderr 内容需要分行时才加换行，诊断不进入 stdout。日志序列化和 finish 失败作为相关有类型错误返回。stderr 不可用或诊断只写一部分时，不能承诺持久保存，也不重放整条。日志记录原操作退出状态，不从自由格式 stderr 重建业务原因。
 
-## Judge invocation diagnostics
+专属 Rust 测试覆盖错误包装／导入、原生和自定义 IO 值、原因及相关错误、UTF-8 JSON 行、级别过滤、明确线程上下文传递、恢复和失败输出目的。runner 测试还覆盖两个通道独立尝试、双失败、部分写入／刷新、可恢复中断写、真实零写及 `WriteZero`、确认字节数、健康字节／状态、诊断分行和目的不可用。
 
-Full judge invocations now retain a typed process setup cause through the wire
-owner. Executable reads, cwd acquisition, descriptor transfer, process ownership
-setup and spawn keep their original native IO values in the live Rust source
-chain, including the available errno. A digest mismatch is a direct domain
-rejection. The compatibility `transport_failure` string remains present.
+已有 help／领域输出提供空通道样本，无需新增输出生产者。真实 runner 二进制回归覆盖 help／version、领域失败、stdout 断管拒绝和双描述符不可用，以检测 main 是否仍走旧发布路径。只读 stdout 回归运行成功且非空的 help，要求退出 2，stderr 恰好一条正确分行、携带原生 EBADF 的事件。失败证据保留原参数、可执行摘要、描述符场景、原输出和退出。直接测试还逐个或同时使用只读通道，核对主／次输出及诊断 IO 原因，以及仍可用的独立通道。
 
-Each new full failure row additionally carries `transport_diagnostic`, an
-explicit `chrono-runner-transport-failure/v1` record containing a
-`chrono-error/v1` error. It binds the sealed request ID, judge ID,
-`operation: judge.invoke` and whether an actual child was started. Unstarted
-rows keep `process: null` and `exit_code: null`; no streams, PID or child exit
-are invented. Spawn failures separately retain private pre-exec diagnostic
-availability and raw stage/reason/errno, plus shared observer counters and
-available receive errno with `attributed_to_child: false`. Shared observations
-are never promoted to a child-specific cause.
+这次产品和登记一起修改：FILEMAP 将 `runner/src/publication.rs` 登记为 runner 编译输入，并将 runner 二进制明确列为 runner-tests 运行输入。原 runner、diagnostics 计划仍负责直接检查。标准验证按两端明确变更依赖选测，范围可能较广；不声称降低本地选测或验证成本。额外构建、CI 和存储成本未测。
 
-Started processes preserve their original bytes, digests, PID and terminal
-result. New process `failure_record` fields keep stream read/publication and
-launch-publication IO causes; secondary evidence and ownership cleanup failures
-remain related errors. The live process also retains its typed cause until the
-transport boundary. Historical process records without this optional field and
-full rows without the extension remain readable. Strict decoders reject unknown
-diagnostic/error schemas and fields; the full audit checks invocation context
-and the relationship to the retained process cause. Judge-v1 requests and
-responses remain strict and do not acquire a new error field.
+## 调用检查程序时的诊断
 
-Late full-report publication attempts both existing destinations. Failure returns
-`E_REPORT_EVIDENCE` with the explicit
-`chrono-full-report-publication-failure/v1` record, the unchanged attempted
-report and only the writes that actually succeeded. An original judge transport
-failure remains the source; failed report writes are related native IO errors.
-The boundary does not claim durable retention when both destinations fail.
+完整检查调用现在通过协议模块保留有类型的进程准备原因。读取可执行文件、取得 cwd、传递描述符、准备所有权和启动失败，都在 Rust 实时原因链保留原 IO 值及可用 errno。摘要不符则是直接领域拒绝。兼容用的 `transport_failure` 字符串仍保留。
 
-Rust behavior regressions exercise real missing executables, permission-denied
-spawn, digest rejection, native source downcasts, serialized version/context
-mutations, actual full reports with both stored copies, healthy execution,
-blocked dependents, binary protocol-failure streams and real file-size-limited
-secondary stream publication errors. Existing ownership exhaustion regressions
-continue checking original pre-exec errors and fork allocation boundaries.
+新增完整失败记录的 `transport_diagnostic` 使用 `chrono-runner-transport-failure/v1`，内部为 `chrono-error/v1`。它绑定封存请求 ID、检查 ID、`operation: judge.invoke` 和是否实际启动子进程。未启动时 `process: null`、`exit_code: null`，不编造输出、PID 或退出。
 
-**Product and host registration change:** the existing runner-tests project adds
-`test.runner.diagnostics`, a protected feedback operation over its Rust
-diagnostics cases. It uses the existing cargo tool, project inputs and isolated
-target. It supplements the current full runner test operation; canonical local
-and CI checks still select the declared two-end DELTA closure. No FILEMAP edge
-changes are needed because all changed units and consumers are already explicit.
-Full build/check, remote CI and storage costs remain unmeasured; focused local
-elapsed observations belong to the implementation handoff.
+启动失败另保留私有 exec 前诊断是否可用、原 stage／reason／errno、共享观察器计数及可用接收 errno，标为 `attributed_to_child: false`。共享观察不能升级为某个子进程的确切原因。
 
-This increment does not complete SPEC §7.1 or §7.2. Other runner domain paths and
-other programs retain their existing diagnostics. General native-error adapters,
-typed errors throughout the existing products, a common emergency publication
-entry, registered formatting/sink choices, persisted record references,
-subprocess context transfer and non-Rust adapters remain required. Failed
-diagnostic publication must not be reported as successful evidence retention.
+已启动进程保留原字节、摘要、PID 和终态。新增 `failure_record` 保存流读取／发布和启动发布的 IO 原因，次要证据及所有权清理失败作为相关错误。实时进程保留有类型原因直到传输层。历史缺少可选字段的进程和完整记录仍可读取。严格解码器拒绝未知诊断／错误格式和字段；完整自检核调用上下文及其与保留进程原因的关系。judge v1 请求和响应仍严格，不新增错误字段。
 
+后期完整报告发布会尝试两个原目的。失败返回 `E_REPORT_EVIDENCE`，携带 `chrono-full-report-publication-failure/v1`、未修改的尝试报告及实际成功的写入。原检查传输失败仍是 source，报告写入失败为相关原生 IO 错误。两个目的都失败时不能声称已持久保留。
 
-The existing macos-26 path was observed at production `72b1d08` in run
-`39690377913/1` and scenario `c515cd05` in run `39695762671/1`. Both canonical
-runner originals record 166 passing tests and one existing ignored test across
-six binaries, including the three `prelaunch_diagnostics_*` regressions and
-`execution_self_diagnostic_rejects_mutated_prelaunch_error_records`. Current
-startup imports, installed tool identities, original unit process streams and
-passing collection are retained. This is bounded Darwin test/consumer evidence;
-it does not establish general persisted diagnostic publication or Linux behavior.
+Rust 回归使用真实缺失可执行文件、权限拒绝、摘要拒绝、原生 source 类型还原、序列化版本／上下文变异、双存储完整报告、健康执行、依赖阻断、二进制协议失败输出，以及真实文件大小限制导致的次要流发布失败。已有所有权耗尽回归继续核原 exec 前错误和 fork 分配限制。
 
-For native candidate acceptance, the existing macos-26 `unit_runner` path must
-execute the canonical runner unit after current shared-startup install/verify.
-Retain actual full invocation regression outputs, original process/stream/error
-records, current binary/source binding and the original unit/collection artifact
-production identities. Linux process/descriptor/pre-exec coverage still requires
-the registered Linux native verification path; local Darwin results do not
-establish Linux errno or ownership behavior. A successful native business check
-without these retained originals is insufficient for the corresponding evidence
-claim. The [shared-startup handoff](filemap-impact.md#bounded-internal-causal-consumption)
-owns the existing source/artifact/run/attempt predicates; no new workflow or
-alternate diagnostic test recipe is introduced.
+**产品与宿主登记曾同步修改：**runner-tests 增加 `test.runner.diagnostics`，使用已有 cargo、项目输入和独立构建目录，对 Rust 诊断用例提供受保护快速反馈。它补充而不替代完整 runner 操作；标准本地／CI 仍按两端变更范围选择检查。已有明确单元和消费者不需要再改 FILEMAP 边。完整构建／检查、远端 CI 和存储成本未测；局部耗时观察归实现交接证据。
 
-## Scoped CI execution progress adoption
+这还没完成 SPEC §7.1／§7.2。其他 runner 领域路径和程序保留原诊断。通用原生错误适配器、全产品有类型错误、统一应急发布、登记格式／目的选择、持久记录引用、子进程上下文传递和非 Rust 适配仍待完成。诊断发布失败不能算证据已保存。
 
-The current host's existing `.chrono-harness/ci/check.json` selects
-`policy.execution_diagnostics: "chrono-log-stderr/v1"`. This adopts the existing
-`Logger` at info level with the CI judge as producer and stderr as its sink.
-Unknown values reject. Omitting the choice leaves the library caller's existing
-scoped dispatcher alone. This is configuration of the single canonical check,
-not another runner, process observer, acquisition path or check entry.
+macos-26 的已有观察来自生产 `72b1d08` 的运行 `39690377913/1` 和场景 `c515cd05` 的运行 `39695762671/1`。两份标准 runner 原报告在六个二进制中记录 166 项通过、1 项已有忽略，包括三个 `prelaunch_diagnostics_*` 和 `execution_self_diagnostic_rejects_mutated_prelaunch_error_records`。当前启动导入、安装工具身份、单元原进程输出和成功汇总均保留。这只证明有限 Darwin 测试／消费，不证明通用持久诊断发布或 Linux 行为。
 
-The judge first decodes the request and verifies the profile bytes against its
-request digest, then scopes logging across inventory, operation/tool preparation,
-execution and the post-execution snapshot. These phases include engine calls
-outside operation execution. Records carry the request ID, fixed candidate/base,
-profile digest and judge PID. These are request identities, not a claim that
-input admission has passed. Projects adds the validated plan identity and
-operation identity, explicitly transfers the dispatcher and parent span to each
-owned worker, and records scheduler waits with their running operation IDs.
-Worker results and the subsequent scoped-worker join remain distinct events.
+候选真实 CI 验收须在当前共享启动安装／验证后，由已有 macos-26 `unit_runner` 运行标准 runner 单元。保留实际完整调用回归输出、原进程／输出流／错误记录、当前二进制／源码绑定，以及原单元／汇总产物生产身份。Linux 的进程、描述符、exec 前覆盖仍须登记的 Linux 真实验证，不能从本地 Darwin 外推 errno 或所有权行为。业务检查成功却没这些原件，不足以支撑对应证据结论。源／产物／run／attempt 条件归[共享启动交接](filemap-impact.md#bounded-internal-causal-consumption)，不新增工作流或替代诊断测试入口。
 
-The existing process engine emits its actual launch argv once, executable and
-input/environment digests, cwd, PID pair and unchanged bounds. Its existing
-ownership owner records that launch's slot/generation/parent slot (4096 is the
-root parent sentinel). Subsequent records identify entry into the monitor,
-stream-reader start barrier, descendant drain, any required child join,
-stream/writer joins, scoped-worker joins, scope exit and
-the existing kernel-observer join. A process result event follows the return of
-owned work and stream-retention completion and carries original exit/failure,
-stream lengths and digests. It contains no stream body. No extra status probe,
-process discovery, timer, thread, descriptor or wake channel is added. A stage
-record describes an observed boundary; it does not certify successful operation,
-child terminal state, a completed check, successful original publication or a
-causal explanation for an ensuing timeout. Only the existing result and kernel
-ownership contracts establish those facts.
+<a id="scoped-ci-execution-progress-adoption"></a>
 
-Normal `info` output reports domain activity and outcomes through the existing
-projects operation, CI evaluation and migration phase events. The shared process
-engine's preparing, actual launch and completed-result events are `debug`, along
-with reader barriers, monitor and ownership waits, joins and scope bookkeeping.
-Selecting `debug` or `trace` exposes the real process facts and enclosing span
-context for every command, including nested maintenance. This shared level rule
-does not depend on a command or phase list. Original process receipts and launch
-descriptors retain argv, cwd, PID, bounds, digests, raw streams, exit status and
-typed failure chains at either level. A library return still leaves error
-handling and publication with the responsible domain boundary.
+## 本仓如何记录 CI 执行进度
 
-Each logger record uses the existing synchronous JSONL write/flush path. The
-runner's already selected `retained-reference/v2` producer writes the judge's
-actual stderr to its existing retained stream while the judge is running; it
-does not wait for the final check report. These remain stream originals, with the
-same retention/collection and protected-source/consumer rules. There is no
-second diagnostic store, copied-body original, new producer acknowledgement or
-relaxation for a missing final report. An unavailable sink is not repaired by
-replaying the log. On normal return, `finish()` failures append a failing
-`ci.execution-diagnostics` result and typed `chrono-error/v1` records to the
-existing response without discarding operation receipts or their failures. An
-abruptly terminated judge cannot publish that final response; any unavailable
-record remains unavailable. Native stderr uses the existing runner `NativeOutput`
-adapter on Unix; other platforms retain their standard stderr adapter.
+当前 `.chrono-harness/ci/check.json` 选择 `policy.execution_diagnostics: "chrono-log-stderr/v1"`，使用已有 `Logger`，以 CI 检查程序为生产者、stderr 为目的、info 为级别。未知值被拒绝；省略时不干扰库调用者原有的限定范围分发器。这只是同一标准检查的配置，不增加 runner、进程观察器、获取路径或检查入口。
 
-**Product and host policy change together:** runner process/ownership boundaries,
-projects worker context, and CI judge adoption change together with the selected
-profile. FILEMAP declares the two Rust fixture sources and the direct diagnostics
-compile dependency. Current registered lockfiles add direct dependencies on the
-already locked `tracing`/`chrono-diagnostics` libraries; no external package or
-version is introduced. The dedicated CI Rust project has one registered focused
-feedback operation, `test.ci.execution-diagnostics`, over the current v3 unit path with retained-reference/v2 and real shared execution.
-It checks exact failing-operation bytes/exits and request/plan/launch
-association, a real enclosing timeout with original streams before a final
-aggregate, and logging IO failure alongside the original business failure.
-It also checks healthy verdicts, selected/omitted/unknown configuration, actual
-DEBUG success/failure processes and equality of slot, generation and parent slot
-with the original timeout ownership snapshot. INFO coverage requires operation
-context and results while rejecting process detail events. DEBUG coverage uses
-the existing caller-scoped Logger with real shared-engine invocations; no new
-logging policy or API is introduced.
-Its Rust subprocess fixture is built by that project's existing Cargo test
-operation. Canonical verification still uses the full declared DELTA closure;
-this focused feedback does not establish committed canonical or native acceptance.
+程序先解码请求并按请求摘要验证配置字节，再对清单、操作／工具准备、执行、执行后快照启用日志，包含业务执行之外的引擎调用。记录携带请求 ID、固定候选／基线、配置摘要和检查进程 PID。这些是请求身份，不代表输入已经通过检查。
 
-Normal progress output scales with domain operations and phases. DEBUG output
-also scales with process invocations and launch argv size, not elapsed wait time
-or captured stdout/stderr size. Identity context repeats
-per record; request bodies, environment values and stream bodies are not copied.
-The existing judge stream/output/report bounds remain in force, including failure
-on overflow. Additional per-record serialization, synchronous writes, retained
-stderr and uploaded bytes are new costs; whole-host/native/CI cost is unmeasured.
-Feedback timing and byte observations belong to the worker handoff, not a claim
-of timeout improvement. General subprocess propagation to independently launched
-programs and broader SPEC §7.1/§7.2 adoption remain incomplete.
+projects 增加已验证计划和操作身份，把分发器及父 span 明确交给各自工作者，记录调度等待及正在运行的操作 ID。工作者结果与之后等待该工作者结束是不同事件。
 
-This adoption addresses the attribution gap in the fixed failed native execution
-`41315147398/1` at candidate `1b762bc47641aca69bc34fe7820b29ca9f06f0a3`.
-Its participation original still records timeout at 2400 seconds; the last
-recorded child being terminal does not identify its argv or explain why enclosing
-launchers remained incomplete. The historical root cause remains unresolved.
-The missing final unit report and resulting post-upload acknowledgement refusal
-remain real failures. This change neither fixes that timeout speculatively nor
-permits releasing originals when final publication is absent.
+进程引擎只在实际启动时记录一次原参数，并记录可执行／输入／环境摘要、cwd、两个 PID 和原限制。所有权模块记录启动位置、代次、父位置，4096 为根父哨兵。后续记录注明进入监控、流读取线程开始屏障、后代排空、必要子进程等待、流／写入者等待、工作者等待、范围退出及原内核观察器结束。进程结果事件在自有工作和流保留完成后发出，带原退出／失败、流长度和摘要，不带流正文。
 
-Scoped Logger registration also covers unrelated uninstrumented first use of
-shared callsites. The locked tracing-core 0.1.36 single-dispatch fast path can
-cache `never` from that unrelated thread. Logger keeps two registrations of its
-same subscriber alive so registration consults live subscribers; the calling
-thread's scoped dispatch still owns delivery. No global dispatcher is installed.
-Fresh-process Rust coverage orders zero/one/multiple logger and lifetime cases,
-requires enclosing request/operation context and explicit thread transfer, and
-retains INFO acceptance, DEBUG filtering and sink-failure checks. Both CI
-diagnostic fixtures publish request/business evidence and raw sink originals
-before assertions and retain their temporary host on assertion failure.
+这里不新增状态探测、进程发现、计时器、线程、描述符或唤醒通道。阶段记录只说明实际到达该位置，不证明操作成功、子进程终止、整项检查完成、原件发布成功，也不解释后续超时原因。这些事实仍由原结果和内核所有权要求确定。
 
-The existing projects migration consumer scopes Logger to its current operation
-preparation/execution, workflow generation/verification and inner owner handoff.
-Fixture preparation and registry validation publish phase boundaries without
-repeating their Git operation records. Operation logs retain actual argv/PID and
-ownership slot/generation through the existing runner. Native fixture capture
-adds its original capture address, argv/PID and entered child wait, actual join
-and return boundaries; its spawn/wait/stream/result behavior is unchanged. Rows
-write synchronously to the test's original stderr before a final libtest result.
-An entered boundary is diagnostic evidence, not a terminal result or explanation
-of the historical timeout. No new observer, deadline or polling channel is added.
+### info 和 debug 各写什么
 
-**Product and registration changes together:** migration-tests directly names
-the existing diagnostics/tracing dependencies, and the native fixture capture
-owner directly names already locked tracing. Current dependent lockfiles and
-the diagnostics compile edge are migrated. These rows add serialization, writes
-and retained stderr; total native storage and validation cost remains unmeasured.
-The original eight migration members, operation limits and default concurrency
-remain required by the current canonical plan.
+正常 `info` 通过已有 projects 操作、CI 求值和迁移事件报告领域活动及结果。共享引擎的准备、实际启动、完成结果，以及读取屏障、监控／所有权等待、线程等待和范围记账都为 `debug`。选 `debug` 或 `trace` 后可看到每条命令的真实进程事实和外层 span，包括嵌套维护。级别规则不依赖命令或阶段白名单。
 
-The process-level repair changes product event semantics and its dedicated Rust
-test registration together: the CI test owner directly names the already locked
-`chrono-diagnostics` and `tracing` libraries and FILEMAP declares that compile
-edge. Previously every engine invocation emitted three INFO detail records; now
-those records require DEBUG while domain INFO and original evidence remain
-available. This intentionally replaces the failed per-process INFO contract.
-Focused real INFO/DEBUG, sink, prelaunch and publication regressions plus one
-complete eight-test migration under its original 900-second/1-MiB bounds are the
-engineering validation cost. Timings and original captures belong to the finite
-PR214 acceptance handoff; canonical/native validation, delivery and complete SPEC
-adoption remain caller-owned obligations. No general fit guarantee is made for
-arbitrary business output.
+无论日志级别，原进程回执和启动描述符都保留 argv、cwd、PID、限制、摘要、原输出、退出和有类型失败链。库返回后仍由相应领域负责处理及发布错误。
 
-### Admitted execution interruption fixture
+每条日志使用已有同步 JSONL 写入／刷新。runner 已选择的 `retained-reference/v2` 在检查程序运行期间，将实际 stderr 写入原有保留流，不等最终报告。它仍是流原件，沿用原保留／汇总、源码保护和消费者要求；没有第二日志存储、复制正文原件、新确认协议，也不放宽最终报告缺失要求。目的不可用时不重放日志修复。
 
-The incomplete-execution fixture now obtains `PreparedExecution` from the CI
-owner's `prepare_execution`. It admits the actual scoped request, both endpoint
-inventories, selection and routes/tool preparation before the short monitor.
-Ordinary CI evaluation and this API share the same plan preparation and execution
-functions; execution delegates to the existing projects scheduler. The transported
-request/plan binding is checked before execution and supplies actual request,
-candidate, config, plan and operation logging context. This is a phase API for the
-current diagnostics consumer, not a final check response or acceptance entry.
-It adds no dependency, engine, deadline policy or alternate business recipe.
+正常返回时，`finish()` 失败在原响应追加失败的 `ci.execution-diagnostics` 结果及有类型 `chrono-error/v1`，不丢弃操作回执或失败。突然终止的检查程序不能发布最终响应，不可用记录仍不可用。Unix stderr 使用已有 `NativeOutput`，其他平台保持标准适配器。
 
-The native fixture executes that actual admitted plan under the existing
-one-second/65536-byte engine monitor. The registered operation keeps its existing
-3-second/4096-byte bounds. Its native socket sends its actual PID before blocking;
-the test receives these readiness bytes on a single blocking native socket before
-the one-second interruption, keeps that socket live until engine join, and requires
-DEBUG launch/ownership records, original
-launch identity, exact original streams, real timeout and monitor-end
-slot/generation/parent-slot equality. That snapshot must identify the operation
-and its launcher as nonterminal. No final check response may be published.
-A second case holds the real version-admission call for over one second on that
-socket before preparation completes. Its elapsed/read-error original distinguishes
-admission from the subsequent short execution monitor. Default concurrency and
-enclosing registered limits remain unchanged. This separates an interrupted check's
-registered execution phase from admission; it does not assert that whole-check
-admission fits inside one second. Missing readiness remains failure with retained
-originals.
+### 产品和登记的共同变动
 
-The finite engineering run exposed an invalid absence assertion after real
-readiness: the runner cooperatively cancels and joins nested engines before killing the enclosing
-process. Projects can therefore publish a genuine error operation completion
-during shutdown. The fixture now checks any such event against the exact request,
-candidate, configuration, plan and operation, requires its error status and real
-receipt, and checks any process completion against the launched child, enclosing
-cancellation and original stream digests. Absence after cancellation is not an
-execution invariant. The monitor snapshot, timeout and empty final response
-remain independent assertions; shutdown and deadline policy are unchanged.
-Failed fixtures retain their original streams, launch, request, prepared plan,
-readiness and engine result.
-The optional `CHRONO_CI_TEST_RECEIPTS` destination retains these same originals
-after passing assertions for the finite caller evidence consumer; its descriptor
-states the caller's debugging/acceptance release obligation.
+runner 进程／所有权记录、projects 工作者上下文和 CI 采用与所选配置一起调整。FILEMAP 明确登记两份 Rust 样本源及 diagnostics 直接编译依赖；锁文件直接引用已锁定的 `tracing`／`chrono-diagnostics`，不引入新外部包或版本。
 
-Product/fixture change visibility: CI factors the existing preparation/execution
-boundaries into the above API to serve this consumer. Existing successful/failed
-whole-check tests still exercise CI aggregation and post-snapshot validation.
-Verification uses unfiltered `test.judge-ci-tests` with existing Rust methods and
-recorded environment. Direct engineering action receipts do not establish
-canonical outer-engine or source binding. Canonical candidate bootstrap/check and
-native acceptance remain separate caller obligations; costs outside the observed
-suite are unknown.
+专属 CI Rust 项目登记 `test.ci.execution-diagnostics` 快速反馈，使用当前 v3 单元、retained-reference/v2 和真实共享执行，核对：失败操作的精确字节／退出、请求／计划／启动对应；最终汇总前发生外层真实超时时的原输出；日志 IO 失败与原业务失败同时保留；健康结果；配置选中／省略／未知值；真实 DEBUG 成功／失败进程；以及原超时快照中的位置、代次、父位置一致。
+
+INFO 测试要求操作上下文和结果，并拒绝进程细节事件。DEBUG 测试用已有调用者范围的 Logger 实际调用共享引擎，不新增日志政策或 API。Rust 子进程样本由项目已有 Cargo 测试操作构建。标准验证仍选完整登记的变更影响范围，局部快速反馈不能证明已提交候选的标准或真实 CI 验收。
+
+正常输出量随领域操作和阶段数增长，DEBUG 还随进程调用和参数大小增长，不随等待时长或采集流大小增长。身份上下文每条重复，但不复制请求正文、环境值或流正文。原检查程序的流／输出／报告上限继续有效，超限仍失败。
+
+逐条序列化、同步写入、保留 stderr 和上传字节都是新增成本；完整宿主／真实 CI 成本未测。快速反馈耗时和字节观察归工作者交接，不能据此宣称改善超时。独立启动程序的通用子进程上下文传递，以及更广 SPEC §7.1／§7.2 采用仍未完成。
+
+### 历史失败保留原结论
+
+此次日志补上固定失败运行 `41315147398/1`、候选 `1b762bc47641aca69bc34fe7820b29ca9f06f0a3` 的归因信息缺口。其原参与报告仍记录 2400 秒超时；最后记录的子进程已终止，既不能确定其参数，也不能解释外层为何未结束。历史根因仍未解决。最终单元报告缺失和后续上传确认拒绝都是真实失败。本次不猜测修复那个超时，也不允许在最终发布缺失时释放原件。
+
+限定范围 Logger 还处理共享调用点先被无日志线程使用的情况。锁定的 tracing-core 0.1.36 单分发器快速路径可能从无关线程缓存 `never`。Logger 保持同一 subscriber 的两个登记存活，让登记阶段查询活跃订阅者；真正投递仍归调用线程的限定范围分发器，不安装全局 dispatcher。
+
+新进程 Rust 测试按零／一／多个 logger 及生命周期排序，要求外层请求／操作上下文和明确线程传递，保留 INFO 接受、DEBUG 过滤及目的失败检查。两份 CI 诊断样本在断言前发布请求／业务证据与原始日志目的输出，断言失败时保留临时宿主。
+
+已有 projects 迁移消费者在操作准备／执行、工作流生成／验证、内部所有者交接范围使用 Logger。样本准备和登记验证只发布阶段位置，不重复 Git 操作记录。操作日志通过已有 runner 保留实际参数／PID 和位置／代次。原生样本采集增加原采集地址、参数／PID、开始等待、实际等待结束及返回位置，不改变启动／等待／输出／结果行为。
+
+记录在最终 libtest 结果前同步写入测试原 stderr。到达某处是诊断证据，不是终态或历史超时解释，不增加观察器、期限或轮询通道。
+
+**产品与登记曾同步修改：**migration-tests 直接声明已有 diagnostics／tracing，原生样本采集模块直接声明已锁定 tracing，并迁移依赖锁文件和编译边。新增序列化、写入、stderr 保留成本，总真实 CI 存储和验证成本未测。原八个迁移成员、操作限制和默认并发仍是当前标准计划的必需内容。
+
+后续进程级修复又同步改变事件含义和专属 Rust 测试登记：CI 测试负责人直接声明已锁定库，FILEMAP 列编译边。原先每次引擎调用发三条 INFO 细节，现在这些要求 DEBUG，领域 INFO 和原证据仍可用，明确替代原先失败的逐进程 INFO 要求。
+
+工程验证包括真实 INFO／DEBUG、目的、启动前和发布回归，以及一轮完整八项迁移，保持原 900 秒／1 MiB 限制。耗时与原采集归有限 PR214 验收交接；标准／真实 CI、交付和完整 SPEC 采用仍归调用方。不保证任意业务输出都能装进现有限额。
+
+### 在检查准入后中断执行的测试
+
+未完成执行样本先通过 CI 的 `prepare_execution` 取得 `PreparedExecution`，完成真实按范围请求、两端清单、选测和 routes／工具准备，再启动短监控。普通 CI 求值和该 API 共用计划准备／执行逻辑，由已有 projects 调度器执行。执行前核对传来的请求／计划绑定，用真实请求、候选、配置、计划、操作作为日志上下文。
+
+这是服务当前诊断消费者的分阶段 API，不是最终检查响应或验收入口，不增加依赖、引擎、期限政策或替代业务配方。
+
+原生样本在已有一秒／65536 字节引擎监控下执行实际通过准入的计划，登记操作仍限三秒／4096 字节。原生 socket 先发实际 PID 再阻塞；测试在一秒中断前，从唯一阻塞 socket 收到就绪字节，保持 socket 到引擎结束。
+
+测试要求 DEBUG 启动／所有权记录、原启动身份、精确原输出、真实超时，以及监控结束位置／代次／父位置相符。快照必须指出操作及其启动器尚未终止，不得发布最终检查响应。另一用例在准备完成前，通过同一 socket 把真实版本准入调用保持一秒以上，用原耗时／读取错误区分准入和后续短监控。
+
+默认并发和外层登记限制不变。这区分了中断检查的执行与准入阶段，不声称整项准入应在一秒内完成。没有就绪证据仍失败并保留原件。
+
+有限工程运行发现，就绪后要求“不能有操作完成事件”的断言不成立：runner 会在杀外层前协作取消并等待嵌套引擎，所以 projects 在退出清理中可能发布真实的错误操作完成。样本现在核对这种事件的精确请求、候选、配置、计划和操作，要求 error 状态及真实回执；若有进程完成事件，还核对实际子进程、外层取消和原流摘要。
+
+取消后没有完成事件不是执行不变量。监控快照、超时和最终响应为空仍分别断言，停止和期限政策不变。失败样本保留原输出、启动记录、请求、准备计划、就绪和引擎结果。可选 `CHRONO_CI_TEST_RECEIPTS` 目的在通过后也为有限调用方证据消费者保留同一原件，其描述符写明调试／验收后的释放责任。
+
+这里的产品／样本共同变动是把已有准备和执行阶段整理成上述 API，服务实际消费者。原整项成功／失败测试继续覆盖 CI 汇总和执行后快照验证。验证使用未过滤 `test.judge-ci-tests`、既有 Rust 方法和登记环境。直接工程回执不能证明标准外层引擎或源码绑定，候选标准 bootstrap／check 和真实 CI 验收仍须另行完成；未观察的其他成本未知。

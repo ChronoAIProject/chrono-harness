@@ -1,116 +1,66 @@
-# Workflow verdicts and integration evidence
+# 工作流检查与集成证据
 
-`chrono-judge-workflow` owns branch freshness, explicit retirement/migration and
-integration certification. It is a separate production project with a dedicated
-test project. Configure it after every other judge; it consumes registration's
-interpreted endpoints, FILEMAP selection, routes' plan, projects' actual results,
-costs and runner process observations. It reuses the existing executor and receipt
-comparison. The judge does not create worktrees, PRs or merges. The separate
-[worktree producer](worktree.md) now creates fresh registered worktrees and
-retains actual Git observations. Explicit reconstruction plans now stage selected old changes on a freshly fetched target. AI reconciliation, recovery, PR/merge and
-landing orchestration remain caller-owned pending their producers.
+`chrono-judge-workflow` 检查分支是否过旧、移除和迁移是否有明确登记，以及集成结果是否有效。它是独立生产项目，有自己的测试项目。配置时把它放在其他检查程序之后：它读取 registration 解释的两端登记、FILEMAP 选测结果、routes 计划、projects 实际执行结果、成本，以及 runner 的进程记录。执行器和回执比较逻辑沿用已有实现。
 
-Use the same registered `chrono-harness check` invocation locally and in CI.
-Workflow requires context schema 2, with all existing context fields plus
-`run_kind: "integration" | "delivery"`. Registration still reads context v1 for
-bounded consumers without this judge. An integration run requires the registered
-integration prefix. Delivery from an integration-named branch still consumes
-completed evidence; its name cannot turn delivery into an integration run.
+这个程序不创建工作树、PR 或合并。[工作树工具](worktree.md)负责创建新的已登记工作树、保存实际 Git 观察，并按明确的重建计划把旧改动暂存到新抓取的目标上。AI 如何协调冲突、恢复工作、提 PR、合并和核对落地，仍由调用方负责，相关自动编排尚未实现。
 
-Freshness uses fixed candidate/dev/fork objects and explicit UTC timestamps.
-`base` must equal `dev_tip`; fork must be a common ancestor. Behind counts commits
-reachable from dev but not fork. Age is observed time minus declared branch start,
-never the wall clock or a commit date. Strict excess of either registered limit
-returns `E_BRANCH_STALE`; equality passes. Missing objects, shallow boundaries
-beyond the proven fork, invalid branch names and negative ages fail explicitly.
-The caller supplies source-branch context for the dev landing commit.
+## 输入和分支检查
 
-An integration run executes selected tests before publishing the registered
-state certificate. Its nine mandatory bindings are:
+本地和 CI 使用同一条登记的 `chrono-harness check` 命令。workflow 要求 context schema 2，在已有字段之外增加 `run_kind: "integration" | "delivery"`。不使用这个检查程序的有限范围消费者，仍可由 registration 读取 context v1。
 
-| Field | Evidence |
+集成运行必须使用登记的 integration 分支前缀。分支名带 integration 的交付运行，仍须提供已经完成的集成证据，不能只凭名字算作集成运行。
+
+分支检查使用固定的 candidate、dev、fork Git 对象和明确的 UTC 时间。`base` 必须等于 `dev_tip`，fork 必须是共同祖先。落后提交数是 dev 可达、fork 不可达的提交数；分支年龄是观察时间减去声明的分支开始时间，不使用当前时钟或提交日期。
+
+任一数值严格超过登记上限时返回 `E_BRANCH_STALE`，刚好等于上限时通过。缺少对象、浅克隆边界超出已证明的 fork、分支名无效或年龄为负都会失败。检查 dev 落地提交时，调用方须提供来源分支上下文。
+
+## 集成证据包含什么
+
+集成运行先执行选中的测试，再发布登记状态的证明文件。文件必须绑定以下九项；表中第一行合列了两项：
+
+| 字段 | 对应证据 |
 | --- | --- |
-| `base`, `candidate_tree` | Fixed Git endpoints |
-| `registry_digest` | Original endpoint registry bytes |
-| `executables` | Actual runner and all configured judge paths/digests |
-| `tools` | Resolved paths, bytes and observed version results |
-| `environment` | Effective values, including empty values |
-| `effective_inputs` | Validated endpoint input identities, including explicit v2 file presence/absence |
-| `required_tests` | Old/new obligations, selected plans, methods and bounds |
-| `results_digest` | Original successful execution results |
+| `base`、`candidate_tree` | 固定的 Git 基线和候选文件树 |
+| `registry_digest` | 各端原始登记字节的摘要 |
+| `executables` | 实际 runner 和全部已配置检查程序的路径、摘要 |
+| `tools` | 解析后的工具路径、文件字节和实际版本探测结果 |
+| `environment` | 实际生效的环境值，包括空值 |
+| `effective_inputs` | 已核验的两端输入身份，包括 v2 明确记录的文件存在／缺失状态 |
+| `required_tests` | 旧、新测试要求，选中的计划、方法和限制 |
+| `results_digest` | 原始成功执行结果的摘要 |
 
-The certificate retains producer context, plan, results, inputs and preceding
-judge observations. Runner retains each completed full report at a unique
-`.chrono-harness/state/run-<identity>.json`, also publishes the latest report at
-`report.json`, and transports the retained path to judges. Observations bind the
-actual judge request digest to process stdin; configured metadata is not execution.
+证明文件保留生产程序的上下文、计划、结果、输入和前置检查观察。runner 将每份完成的完整报告保存在独立的 `.chrono-harness/state/run-<identity>.json`，同时把最新报告发布为 `report.json`，再把保留路径传给检查程序。进程记录把实际检查请求的摘要绑定到标准输入；仅有配置元数据不算执行过。
 
-Delivery supplies the certificate byte digest in `integration_evidence` and
-transports its matching retained report into the consumer's state directory.
-The report must be finalized successfully and contain the workflow response
-publishing that exact certificate digest. A certificate left by an incomplete or
-failed run is insufficient. Every required process/receipt must match its plan;
-configured-but-unexecuted judges cannot be certified. Producer freshness is also
-checked at the delivery observation time.
+## 交付时怎么核对
 
-Candidate commit metadata may differ when base, tree and other bindings match.
-Comparison normalizes declared host paths and candidate commit identity only;
-environment values remain exact. Original evidence is preserved. Delivery still
-runs its selected tests; certificate consumption is not a test cache. Rule/product
-changes retain mixed's warning and costs, without acknowledgement or human gates.
+交付通过 `integration_evidence` 提供证明文件原始字节的摘要，并把匹配的保留报告送入消费者的状态目录。报告必须已经成功结束，其中 workflow 响应必须发布完全相同的证明摘要。未完成或失败运行留下的文件不够。每个必需进程和回执都要与计划吻合，配置过却没执行的检查程序不能获得证明。交付观察时还要核对证据生产分支是否过旧。
 
-Retirement requires explicit declarations. A replacement test must actually pass;
-null retirement requires removal of its paired producer and a matching producer
-declaration. Removed judges need declarations, never execution of old binaries.
-Historical test aliases may be repaired by naming every old definition and a
-unique replacement, including the same surviving alias. Old costs and definitions
-remain visible. Routes/projects defer changed historical methods when the
-configured downstream migration validator consumes their results. A replacement
-runs its current registered plan; surviving current tests may evolve their
-methods. Removed operations do not become permanent compatibility obligations.
-Routes, scoped CI and workflow share the registration owner's structural retirement
-check. Actual current replacement execution remains required separately.
+基线、文件树和其他绑定相同时，候选提交的元数据可以不同。比较只标准化登记的宿主路径和候选提交身份，环境值仍须精确匹配；原始证据保留。交付依然运行本次选中的测试，集成证明不是测试缓存。规则与产品一起修改时，仍保留 mixed 的警告和成本，不增加确认或人工审批。
 
-Historical profiles in workflow v2/v3 can explicitly register optional
-`method_replacements`. Each row contains `from`, `to`, and a nonempty `reason`;
-both methods contain exact `owner`, `operation`, `tool`, and literal `argv`.
-`from` must match one original legacy action; `to` must match the unique current
-method. Both retain the same operation ID. An owner change requires the existing
-profile's explicit identity mapping. Duplicate, unchanged, stale, unused and
-unbound replacements fail. Omission retains strict tool/argv preservation for
-standalone consumers. Original legacy definitions, plans and costs stay intact;
-this declaration does not certify semantic equivalence or test success. Existing
-execution and workflow validation still own those verdicts. Public beta.15
-includes this extension; earlier readers reject the new field.
+## 移除测试或检查程序
 
-Schema changes are compared using original versions before decoding. Every changed
-version pair requires one explicit transition with mappings and a reason. Evolving
-the current contract needs no historical compatibility or synthetic converter.
-Only actual retained-data conversion declares the optional `script` and `test`
-together. FILEMAP selects that declared test; workflow verifies the retained
-conversion and passing test against the transition and mappings. Missing either
-member, missing actual execution and unrelated passing tests fail. An actual
-conversion cannot use a transition that omits its pair.
+移除必须明确登记。替代测试必须实际通过；若不设替代项，必须一并移除配对的生产者，并提供匹配的生产者移除声明。移除检查程序也需要声明，不能执行旧二进制来作判断。
 
-**Product and host contract change together:** current-only transitions no longer
-require conversion tools. Existing actual data conversions retain their evidence
-requirements. Registration, FILEMAP and the seven-judge consumer are validated;
-broader build/CI/storage costs remain unknown. This host's fixed
-`chrono-ci-check/v1` plus FILEMAP v1 decoder and its historical profile are retired;
-current host checks consume current plans directly. The generic conversion
-interfaces retain self-contained fixtures for actual retained-data conversion.
-Workflow v3 allows
-explicit `from_versions`/`to_versions` profile selection across all five registries,
-including config v1→v2; it runs the registered candidate script and requires its
-dedicated data-conversion test. Ambiguous matches fail, unmatched profiles never
-certify a transition, and each changed version pair still requires a migration
-declaration. Historical config must retain its original interpretation and snapshot
-binding. See [execution](execution.md) for the v2 decoder input; no migration or
-dependency is discovered automatically.
+旧测试别名有歧义时，可以列出全部旧定义，并指定唯一替代项；替代项可以沿用仍存的别名。旧成本和定义继续可见。配置了后续迁移验证程序、且它会消费结果时，routes／projects 把已变化的历史方法交给该程序核对。替代项运行当前登记的计划；仍在使用的测试允许更新方法，已删除操作不会成为永久兼容义务。
 
-Bounded fixtures exercise the complete seven-judge chain. This host remains
-proposed with incomplete Cargo/SDK input closure and bindings; native CI still
-uses its documented scoped adapter. Certificates explicitly report
-`input_completeness_proven: false` in workflow verdicts. Full activation, complete
-inputs, deterministic parity and complete AI reconciliation/PR/landing orchestration remain
-separate unfinished obligations. Worktree creation alone does not discharge them.
+routes、按范围检查的 CI 和 workflow 共用 registration 的移除结构检查。但结构合格仍不能替代当前替代测试的实际成功执行。
+
+workflow v2／v3 的历史解释配置可以登记可选的 `method_replacements`。每条包含 `from`、`to` 和非空 `reason`；前后方法都必须列精确的 `owner`、`operation`、`tool` 和原样 `argv`。`from` 匹配一条原始旧 action，`to` 匹配唯一当前方法，两者保留同一 operation ID。负责人改变时，还需要该解释配置已有的明确身份映射。
+
+重复、没有实际变化、过时、未使用或没有绑定的替换声明都会失败。省略该项时，独立消费者继续严格保留 tool／argv。旧定义、计划和成本保持原样。这种声明不能证明含义等价或测试通过，仍由执行和 workflow 验证判断。公开 beta.15 已包含这个扩展，旧版本读取器会拒绝新字段。
+
+## 格式迁移
+
+解码前先比较原始格式版本。每组变化的版本都需要一条明确的迁移声明，包含映射和原因。只更新当前规则时，不要求兼容旧版本，也不要求编造转换程序。
+
+确实需要转换保留数据时，才同时登记可选的 `script` 和 `test`。FILEMAP 选择该测试，workflow 按迁移声明和映射核对保留的转换结果与成功测试。缺少任一项、没有实际执行，或拿无关测试通过来代替，都会失败。实际发生的数据转换不能使用未登记这对字段的迁移声明。
+
+**产品与本仓规则曾同步调整：**只更新当前格式的迁移不再强制配转换工具，实际数据转换仍保留证据要求。registration、FILEMAP 和七个检查程序的真实调用链已有验证；更广的构建、CI、存储成本未知。本仓固定的 `chrono-ci-check/v1` 加 FILEMAP v1 解码器及其历史解释配置已移除，当前检查直接使用当前计划。通用转换接口仍用自包含测试样本验证实际保留数据转换。
+
+workflow v3 可通过 `from_versions`／`to_versions` 在五份登记之间选择明确的历史解释配置，包括 config v1→v2。它运行已登记的候选转换脚本，并要求专属数据转换测试。匹配有歧义时失败，未匹配的配置不能证明迁移完成，每组变化的版本仍各需迁移声明。旧 config 必须保留原解释和快照绑定。v2 解码器输入见[执行说明](execution.md)，程序不自动发现迁移或依赖。
+
+## 已验证范围和剩余工作
+
+有限测试样本覆盖完整七程序调用链。本仓仍为 `proposed`，Cargo／SDK 的完整输入和绑定尚未齐全，真实 CI 仍使用文档注明的按范围适配器。workflow 结果中的证明明确报告 `input_completeness_proven: false`。
+
+全面启用、输入齐全、本地与 CI 确定同判，以及 AI 协调、PR、合并落地的完整自动编排仍未完成。创建工作树本身不能完成这些要求。

@@ -1,102 +1,48 @@
-# Registered Git facts
+# 使用已登记的 Git 核对事实
 
-Public beta.11 includes the previously released full-v3/scoped-v2/provider-v3 Git binding. The literal
-checkout identity change below is included in beta.11.
+公开 beta.11 包含此前 full v3／scoped v2／provider v3 的 Git 绑定，也包含下文按实际文件核对工作树的改动。
 
-Full config v3 (and short-command config v4) requires `facts_git: {"tool": "git", "input": "git-executable"}`.
-Both IDs are explicit: `tools` supplies `program`, `resolution: "PATH-once"`,
-`version_argv` and a nonempty `expected_version`; `environment.inputs` supplies
-`location`, `presence: "present"` and the expected SHA-256. The two paths must
-resolve to the same executable. Register the input's actual consumers with
-FILEMAP edges; this link does not infer test dependencies.
+完整 config v3 及短命令 config v4 要求 `facts_git: {"tool": "git", "input": "git-executable"}`。两个 ID 都须明确登记：`tools` 提供 `program`、`resolution: "PATH-once"`、`version_argv` 和非空 `expected_version`；`environment.inputs` 提供 `location`、`presence: "present"` 和预期 SHA-256。两条路径必须解析到同一可执行文件。实际消费者另以 FILEMAP 边登记，这个绑定本身不推断测试依赖。
 
-The runner reads the selected candidate config before acquiring Git facts, checks
-the declared digest before running even the version command, then checks the
-config's original bytes against the fixed candidate blob using that Git. The
-candidate binding reads both endpoints, including historical schema inputs. Full
-registration, FILEMAP, routes, projects, cost, mixed, workflow and the optional
-Cargo judge use the request-bound reader. Initial inventory and `chrono-inputs
-capture` also use the candidate config binding. No baseline binary executes.
+## 先核对工具，再运行 Git
 
-The process environment contains only the declared inherited and configured
-values. An absent inherited variable remains absent; configured values override
-inheritance. Bare tool names require a declared PATH, including an explicitly
-empty PATH. An unrelated ambient Git cannot supply facts. GIT_DIR, GIT_WORK_TREE
-and GIT_INDEX_FILE are rejected when explicitly supplied because they redirect
-the checkout. Existing no-replace-objects/no-optional-locks arguments remain.
-Git's `-C` argument uses the bound canonical checkout path. Caller-relative host
-roots are checked against that binding before invocation, avoiding a second
-relative-path interpretation after the process changes its working directory.
+runner 获取 Git 事实前先读所选候选配置，在版本探测之前就核摘要，再用已绑定 Git 将配置原字节与固定候选 blob 比较。候选工具读取两端，包括历史格式数据；不执行基线二进制。
 
-Each Git invocation uses the configured protocol timeout and output bound. The
-reader checks the config bytes, selected path and executable/input digest before
-and after the invocation. `git_facts` in full/initial reports and full judge
-outputs records the binding, environment and actual processes. Raw stdout/stderr
-bytes, their digests, exit codes and truncation/timeout failures remain available.
-Early failures use `E_GIT_FACTS` with compact JSON observations when a binding was
-constructed; they do not invent a completed report or an unstarted process.
-Consumers reject missing/mismatched binding observations before invoking Git.
-Process bounds apply per invocation; accumulated report storage is not a total
-run memory/disk quota.
+完整 registration、FILEMAP、routes、projects、cost、mixed、workflow 和可选 Cargo 检查都使用请求绑定的读取器。初始清单和 `chrono-inputs capture` 也使用候选配置绑定。
 
-`Reader::observation()` now emits `chrono-git-facts/v2` for bound readers.
-Its process rows use `chrono-retained-process/v2` (or the bounded lossless v1
-fallback); decode rows with `full::expand_process` before deserializing
-`ProcessResult`. Historical `chrono-git-facts/v1` contained inline process rows.
-Request-bound readers explicitly require facts v2 and reject v1, missing and
-unknown schema identities before any Git invocation. The binding, environment,
-guard and selector checks still apply. Legacy unbound observations remain null.
-Historical inline and encoded process data remain decodable, but v1 request
-compatibility is version-gated, not demonstrated or silently converted. Coupled
-producers and consumers must use the same facts schema; host rollout and release
-acceptance remain caller-owned.
+进程环境只含明确继承和配置的值。未继承到的变量保持缺失，配置值覆盖继承。裸工具名须登记 PATH，包括明确为空的 PATH，环境中其他 Git 不能代替它提供事实。显式提供 `GIT_DIR`、`GIT_WORK_TREE`、`GIT_INDEX_FILE` 会因重定向工作树而被拒绝；原 no-replace-objects／no-optional-locks 参数保留。
 
-A bound Reader reuses successful blob bytes for the same full immutable OID and
-exact requested path only after that Reader's existing `verify_oid` has observed
-the exact requested commit identity and a valid full tree OID. Reads before this
-observation stay fresh; reuse adds no eligibility subprocess, and callers do not
-invoke `verify_oid` just to enable it. Each reused read still checks
-the canonical root and rechecks selector, config, executable and declared inputs
-before and after returning bytes. Reuse points to the original successful process
-receipt; it adds no invented invocation or replayed observation. New Readers
-acquire their own evidence. Mutable refs, HEAD, index, checkout and untracked
-facts, legacy unbound reads, failures and missing objects are never cached.
-Registry snapshots and config verification share this acquisition owner while
-keeping their existing parsing, endpoint and acceptance checks.
-Successfully parsed tree inventories use the same Reader-local eligibility and
-guards, retaining their original process bytes. Repeated physical checkout checks
-reuse that fixed tree but read the current index and working files anew. Malformed
-trees and post-process input drift do not create reusable tree entries.
-The bound Reader and worktree producer share one registry batch transport and
-framing validator. Each supplies its own bounded Git invocation and retains its
-original process receipts. Resolved registry paths and a verified immutable
-snapshot's literal blob paths use this transport; it does not infer dependencies.
-Snapshot export keeps its byte, symlink, read-only file and destination checks,
-and rechecks bound inputs when consuming each original blob range. Unverified
-endpoints and legacy readers retain individual reads. Batch
-metadata determines bounded content partitions, with direct reads for small
-lists or frames exceeding the batch budget. Successful cache entries retain
-their original source coordinates; malformed, failed and drifted acquisitions
-cannot populate the cache.
-The existing bounded `rev-parse --verify OID^{commit}` and tree observations retain
-their original receipts and return contracts. A hex-shaped ref resolving to a
-different object is read freshly; invalid, missing, malformed or failed identity
-observations cannot enable reuse. Event commit-availability and fetch probes
-retain their existing owner and original batch-check semantics.
+Git `-C` 使用绑定的标准工作树路径。相对调用方的宿主根先与此绑定核对，避免进程改变工作目录后再作另一遍相对解析。
 
-Config v3 preserves v2 external-input presence and snapshot semantics:
-`chrono-input-snapshot/v2` and the existing effective-input schema stay unchanged for
-direct policies. A strict one-level platform-map entry uses versioned
-`chrono-input-snapshot/v3`, adding the original entry path, effective target path and
-`chrono-registry-selection/v1` structural selector binding while retaining selector
-and target bytes separately.
-Capture publishes an input snapshot, not a Git-process report or a governance
-verdict. Config v1/v2 reject `facts_git`, including null, and keep their prior Git
-behavior. Cross-version full governance still needs the explicit workflow
-migration and compatibility evidence required by SPEC; accepting the schema is
-not evidence that a host completed that migration.
+每次调用遵守配置的协议时限和输出上限；调用前后核配置字节、所选路径和可执行／输入摘要。完整／初始报告及完整检查输出的 `git_facts` 记录绑定、环境和实际进程，保留原 stdout／stderr、摘要、退出和截断／超时失败。
 
-The unchanged full local/CI command is:
+早期失败用 `E_GIT_FACTS`；已构造绑定时附紧凑 JSON 观察，不编造完成报告或未启动进程。消费者在调用 Git 前拒绝缺失／不符绑定。限制针对每次调用，累计报告存储不等于整次运行内存／磁盘配额。
+
+绑定 Reader 的 `Reader::observation()` 输出 `chrono-git-facts/v2`。进程记录使用 `chrono-retained-process/v2`，或有界无损 v1 回退；反序列化 `ProcessResult` 前须用 `full::expand_process` 展开。历史 `chrono-git-facts/v1` 内嵌进程记录。
+
+请求绑定读取器明确要求 facts v2，在任何 Git 调用前拒绝 v1、缺失或未知版本。绑定、环境、保护和选择器核对不变，未绑定的旧观察仍为 `null`。历史内嵌或编码进程数据可以解码，但 v1 请求兼容须按版本明确处理，不会静默转换。耦合生产者／消费者要用同 facts 格式，宿主部署和发布验收归调用方。
+
+## 只复用已验证的不可变数据
+
+绑定 Reader 只有在已有 `verify_oid` 确认完整提交身份和有效完整 tree OID 后，才复用同一完整不可变 OID、同一精确请求路径的成功 blob 字节。此前读取仍重新取得。复用不增加资格探测进程，调用方也不专为启用缓存调用 `verify_oid`。
+
+每次复用仍核标准根，返回前后重核 selector、config、可执行和声明输入。记录指向原成功进程回执，不编造调用或重放观察。新 Reader 自行取得证据。可变 ref、HEAD、索引、工作树、未跟踪事实、旧未绑定读取、失败和缺对象永不缓存。登记快照和配置核验共用采集模块，但各自解析、端点和准入检查不变。
+
+成功解析的文件树清单使用同一 Reader 内资格和保护，保留原进程字节。重复物理工作树检查可复用固定树，但重新读取当前索引和文件。畸形树、进程后输入漂移不能形成缓存。
+
+绑定 Reader 与工作树工具共用登记批量传输及分帧验证，各自提供有界 Git 调用并保存原回执。已解析登记路径和已验证不可变快照的字面 blob 路径使用它，不推导依赖。快照导出保留字节、符号链接、只读文件和目的检查，消费每段原 blob 时重核绑定输入。
+
+未验证端点和旧读取器保持逐项读取。批量元数据决定有界内容分组，小列表或帧超过批量预算时直接读取。成功缓存保留原来源坐标；畸形、失败或漂移获取不能写入缓存。
+
+原有界 `rev-parse --verify OID^{commit}` 和树观察保留回执及返回要求。外形像十六进制、实际却指向另一对象的 ref 每次重读；身份无效、缺失、畸形或探测失败不能启用复用。事件提交可用性和 fetch 探测仍归原负责人，保留原 batch-check 语义。
+
+## 快照和标准命令
+
+config v3 保留 v2 外部输入存在／缺失及快照含义。直接政策的 `chrono-input-snapshot/v2` 和既有效输入格式不变。严格一层平台选择器使用 `chrono-input-snapshot/v3`，增加原入口路径、实际目标路径和 `chrono-registry-selection/v1` 结构绑定，分别保留选择器与目标字节。
+
+capture 发布输入快照，不发布 Git 进程报告或完整检查结论。config v1／v2 拒绝 `facts_git`，包括 `null`，保留原 Git 行为。跨版本完整检查仍须 SPEC 要求的明确工作流迁移与兼容证据，能解析格式不代表宿主完成迁移。
+
+完整本地／CI 的原命令不变：
 
 ```sh
 chrono-harness check --config .chrono-harness/config.json \
@@ -104,41 +50,21 @@ chrono-harness check --config .chrono-harness/config.json \
   --context .chrono-harness/state/context.json
 ```
 
-The entry path in this command is also the stable path for a native selector.
-Full and initial loaders retain that entry identity while using the selected direct
-policy, and reject an argv that names the target directly. Fixed snapshots preserve
-each endpoint's original selector and policy bytes under their real paths. The v2
-immutable-data binding below keeps executable opening with the candidate.
+这里的配置入口也是原生选择器的稳定路径。完整和初始加载器保留入口身份，使用选中的直接政策，拒绝直接把目标路径写入参数。固定快照按真实路径保留各端原选择器和政策字节；下文 v2 不可变数据绑定仍只打开候选可执行文件。
 
-Scoped `chrono-ci-check/v2` explicitly selects this reader through
-`policy.facts_config`, independently of optional full `registration_config`.
-Both endpoint snapshots, original parents, index and dirty checks, registry
-interpretation and post-execution checks share that reader. Structured
-`evidence.git_facts` retains successful and failed process observations, including
-version-binding failures. The scoped v1 contract remains unchanged and rejects
-the new field even when null. Selection and operation environments keep their
-scoped semantics; the binding does not silently activate full governance.
-See [the scoped contract](ci.md#configuration-and-selection-contract).
+scoped `chrono-ci-check/v2` 通过 `policy.facts_config` 明确选择读取器，与可选完整 `registration_config` 独立。两端快照、原父提交、索引／未提交检查、登记解释和执行后检查共用它。`evidence.git_facts` 保留成功及失败进程，包括版本绑定失败。scoped v1 不变，拒绝新字段即使为 `null`；选测和操作环境保留自身含义，不因绑定而全面启用检查，见[按范围检查要求](ci.md#configuration-and-selection-contract)。
 
-CI provider v3 explicitly selects this reader through `facts_config`
-for event acquisition; see [the event contract](ci.md#registered-event-git). The
-product repository uses independent-unit scoped v3 CI with schema4-bound Git
-facts, and retains proposed full registries. Version 3/4 binding does not establish full governance,
-Git configuration or delegated dependency closure, deterministic-input parity,
-or freedom from transient concurrent replacement. Hosts must explicitly register
-Git configuration, executable interpreters/libraries, OS and other actual inputs
-where required; the reader performs no dependency discovery.
+CI provider v3 的事件获取也通过 `facts_config` 明确选择，见[事件说明](ci.md#registered-event-git)。本产品仓库使用独立单元 scoped v3 CI、schema4 绑定 Git，完整登记仍为 proposed。
 
-Dedicated regressions exercise chosen Git paths with spaces and Unicode, ambient
-shadowing, full/initial consumers, seven-judge integration and delivery, invalid
-references, request/environment substitutions, wrong digest/version, persistent
-byte drift, original binary output/exit, output bounds and timeout. These are
-bounded implementation checks, not a Lean refinement proof or independent review.
+v3／v4 绑定不能证明完整检查、Git 配置及委托依赖齐全、确定同判，或不存在瞬时并发替换。所需 Git 配置、解释器／库、OS 等实际输入仍须宿主明确登记，读取器不自动发现依赖。
 
-## Explicit platform configurations
+专属回归覆盖含空格／Unicode Git 路径、环境同名工具遮蔽、完整／初始消费者、七程序集成／交付、无效引用、请求／环境替换、错误摘要／版本、持续字节漂移、原二进制输出／退出、输出上限和超时。这些是有限实现检查，不是 Lean 精化证明或独立评审。
 
-A scoped check or provider-v3 `facts_config` may name a separate, registered
-selector instead of a direct full-v3 or schema4 Git policy:
+<a id="explicit-platform-configurations"></a>
+
+## 明确登记各平台配置
+
+按范围检查或 provider v3 的 `facts_config` 可指向独立、已登记选择器，替代直接 full v3／schema4 政策：
 
 ```json
 {
@@ -150,108 +76,43 @@ selector instead of a direct full-v3 or schema4 Git policy:
 }
 ```
 
-Keys use the executing binary's Rust `OS-ARCH` constants. The host explicitly owns
-every mapping and policy, including each platform's executable path, digest,
-version, environment and guarded files. The reader does not discover installed
-tools, infer host language or layout, generate declarations, or fall back for an
-unregistered platform. Both selector and target paths must be literal relative
-paths under `.chrono-harness/`; symlinks and nested selectors are rejected. Only
-the selected policy is read on this machine; every map entry is syntax-checked.
-Selected policies must use full-v3 Git binding, with no legacy fallback.
-The full CLI accepts absolute selector paths and paths relative to another caller
-cwd, but preserves the supplied host-relative entry for the shared no-symlink
-check before launching Git. Direct configuration path normalization is unchanged.
+键使用当前二进制的 Rust `OS-ARCH` 常量。宿主负责每条映射和政策，包括平台可执行路径、摘要、版本、环境和保护文件。读取器不发现已安装工具、不猜语言或布局、不生成声明；未登记平台不能回退。
 
-The reader binds both original files to the fixed candidate and rechecks their
-bytes before and after every Git invocation, including the version probe. A
-post-process mutation retains the original child output and exit. Reports add
-`git_facts.selection`, containing the selector path/digest, actual platform and
-selected policy path; `git_facts.config_path` and `config_sha256` continue to name
-the selected full-v3 policy. Request consumers reject substituted or missing
-selection observations. Direct policy files keep their prior report shape and
-semantics. Register the selector, policies and their actual FILEMAP dependencies
-explicitly; selection does not create dependency edges.
+选择器和目标须为 `.chrono-harness/` 下的字面相对路径，拒绝链接和嵌套选择器。所有映射都检查语法，本机只读所选政策；目标须采用 full v3 Git 绑定，不回退旧模式。完整 CLI 可接收绝对选择器或相对其他 cwd 的路径，但启动 Git 前保留宿主相对入口，用于共用的无符号链接检查；直接配置路径标准化不变。
 
-This extension keeps the canonical command and entry path identical across
-registered native platforms. The same selector contract is now consumed by the
-full runner root, initial host profile, input capture, scoped optional registration
-and full-CI check configuration. Different selected policies are different inputs,
-so it does not establish cross-platform verdict parity. It does not certify complete
-effective-input closure, adopt native full dispatch in this host, or claim full host
-activation. Go PR #18 adopts public beta.18 with successful local
-macOS checks and native Linux push/PR units and collection, preserving independent
-workflows and explicit SDK configuration; see [native adoption](native-ci-adoption.md#native-git-policy-adoption)
-for exact candidates, events and limits.
+读取器把两份原文件绑定到固定候选，在版本探测及每次 Git 调用前后重核字节。进程后变化保留原输出和退出。报告增加 `git_facts.selection`，含选择器路径／摘要、实际平台和所选政策路径；`git_facts.config_path`、`config_sha256` 仍指所选 full v3 政策。请求消费者拒绝替换或缺失选择观察。直接政策保持原报告格式和含义。
 
-## Exact host executable selection
+选择器、政策及实际 FILEMAP 依赖都要登记，选择配置不自动产生边。同一选择器现由完整 runner 根入口、初始配置、输入采集、按范围可选 registration 和完整 CI 配置消费，保持各已登记平台的命令与入口一致。
 
-`chrono-git-configs/v3` extends the one-level selector for hosts that share an
-OS/architecture but ship different executable bytes. Each platform declares an
-absolute `program` and a nonempty `configurations` array of
-`{"sha256":"<registered digest>","path":".chrono-harness/<direct policy>.json","registry_path":".chrono-harness/<registered data policy>.json"}`.
-Digests and target paths must be valid and unique within that platform. Every
-target remains a direct full-v3 or schema4 policy; nested selectors and fallback
-entries fail. Each `registry_path` must name a target registered on that platform.
-Different current executable identities may explicitly share that fixed data path.
+不同所选政策就是不同输入，不能证明跨平台同判、输入齐全、本仓真实完整工作流采用或全面启用。Go PR #18 已用 beta.18 完成本地 macOS 和真实 Linux push／PR 单元及汇总，保留独立工作流和 SDK 配置；精确候选、事件和限制见[真实 CI 采用](native-ci-adoption.md#native-git-policy-adoption)。
 
-Selection reads only the declared executable's bytes, without executing it.
-Exactly the registered digest selects a target. The selected policy's Git tool
-program, present input location and expected digest must agree literally with
-that selection before the usual bound reader executes its version probe. Unknown
-bytes fail with the observed path/digest; observations never become expected
-values during validation. Subsequent reader guards still bind the executable,
-selector, selected policy and fixed candidate. The selection observation also
-retains `registry_path`; request consumers reject its substitution. Snapshot
-paths identify the endpoint's selected direct policy, while retained selector
-bytes define its decision rule.
+<a id="exact-host-executable-selection"></a>
 
-Request-bound immutable snapshots first use an endpoint's registration for the
-candidate's actual executable digest. If that digest is absent from the fixed
-endpoint, only the candidate's explicit `registry_path` is eligible. The endpoint
-must register that path and its own matching tool/input digest. Reading the
-baseline therefore does not open or require its executable, or require its
-selector to register the current executable. Missing paths, inconsistent bindings
-and ambiguous targets fail; no alternative policy is guessed. Snapshot identity
-is reconstructed from the single captured target and original selector, without
-reading today's Git. Fixed endpoint v2 bytes remain data, not an execution path.
-Candidate opening and every subsequent acquisition retain the actual executable,
-selector, configuration and input guards. A policy path relocation requires an
-explicit endpoint declaration.
+## 按本机可执行文件的精确身份选择
 
-This repository binds its two current native CI images through
-`.chrono-harness/git/pinned-macos.json` and `git/macos-26.json`, both explicitly
-using the former as their fixed data path, and the measured local macOS 27.0.1
-(26A434), arm64 executable through `git/macos-27.json`. Cache artifact registration
-and release staging consume the pinned native policy's artifact metadata
-independently of executable selection.
+`chrono-git-configs/v3` 扩展一层选择器，处理同 OS／架构但可执行字节不同的宿主。每个平台声明绝对 `program` 和非空 `configurations`，每项为 `{"sha256":"<登记摘要>","path":".chrono-harness/<直接政策>.json","registry_path":".chrono-harness/<登记数据政策>.json"}`。摘要和目标路径须有效且在平台内唯一，目标仍是直接 full v3 或 schema4 政策，拒绝嵌套或回退项。`registry_path` 必须是该平台注册目标；不同当前可执行身份可明确共用同一固定数据路径。
 
-The macos-26 instructions job in run `41927937485`, attempt 1, observed
-`61e77a2d557f8677a9da3b403c054c8b6e2d2ba5f6389bce100b55b65977df2e`
-on macOS 26.7.2 (25G332), runner image `20261102.0473.1`.
-Run `41941690768`, attempt 1, subsequently observed
-`b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9`
-in the same runner queue. Both are current environments. The host registers
-separate complete native and diagnostics policies, and admits both in worktree
-v3. Their declared version expectation remains
-`git version 2.50.1 (Apple Git-155)`; that version and full native acceptance
-require the candidate's actual bound probe, rather than inference from the
-runner label. Unknown bytes still fail.
+选择只读声明可执行文件的字节，不运行它。摘要精确匹配才选目标；所选政策的 Git 程序、present 输入位置和预期摘要须与选择逐字一致，之后才运行通常的版本探测。未知字节失败并报告观察路径／摘要，不能在验证中把观察值写成预期值。
 
-This changes product snapshot interpretation and host policy together. Local
-macOS-27 retains its separate exact declaration. Validation uses ordinary source
-bootstrap, canonical DELTA and native check; total extra cost is unmeasured.
-Dedicated Rust tests cover both current identity choices against a fixed baseline
-without its executable, fixed/request bindings, drift, unknown bytes,
-malformed/ambiguous declarations and target binding disagreement. Opening a
-candidate reads the declared executable once per selector resolution; fixed
-endpoint interpretation uses explicit identities/paths and retained data only.
-Total validation/storage costs remain unmeasured. Independent fixture consumers
-read the preserved pinned policy as data and bind their own tools; that does not
-admit its Git on the fixture platform or establish native acceptance.
+后续保护仍绑定可执行、选择器、政策和固定候选。选择观察另存 `registry_path`，消费者拒绝替换。快照路径标识该端所选直接政策，保留的选择器字节定义选择规则。
 
-## Guarding declared Git inputs
+请求绑定的不可变快照先查固定端点是否登记候选实际可执行摘要；若没有，只允许使用候选明确给出的 `registry_path`。该端必须登记此路径及自身匹配的工具／输入摘要。因此读基线不打开或要求基线可执行，也不要求旧选择器登记当前可执行。
 
-Config v3 can opt into a versioned guard without changing old snapshots:
+路径缺失、绑定不一致或目标歧义时失败，不猜其他政策。快照身份由单个采集目标和原选择器重建，不读取今天的 Git。固定端点 v2 字节只作数据，不作执行路径。打开候选及后续每次获取仍核实际可执行、选择器、配置和输入；政策移动须在各端明确登记。
+
+本仓通过 `.chrono-harness/git/pinned-macos.json` 和 `git/macos-26.json` 绑定两个当前真实 CI 镜像，两者明确以前者作固定数据路径；实测本机 macOS 27.0.1（26A434）、arm64 则用 `git/macos-27.json`。缓存产物登记和发布暂存独立读取固定原生政策的产物元数据，不由可执行选择推导。
+
+macos-26 instructions 作业 `41927937485/1` 在 macOS 26.7.2（25G332）、镜像 `20261102.0473.1` 观察到摘要 `61e77a2d557f8677a9da3b403c054c8b6e2d2ba5f6389bce100b55b65977df2e`；随后同队列的 `41941690768/1` 观察到 `b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9`。两者都是当前环境。
+
+宿主为两者登记独立完整原生及 diagnostics 政策，并在 worktree v3 接受。声明版本仍为 `git version 2.50.1 (Apple Git-155)`；版本与完整原生验收须以候选实际绑定探测为准，不能从 runner 标签推断。未知字节仍失败。
+
+这里产品快照解释和宿主政策一起变化，本机 macOS 27 保留独立精确声明。验证用普通源码 bootstrap、标准变更检查及真实 CI，总新增成本未测。Rust 专属测试覆盖无基线可执行情况下两个当前身份选择、固定／请求绑定、漂移、未知字节、畸形／歧义声明及目标绑定不符。
+
+每次解析选择器只读一次候选程序，固定端点解释只用明确身份／路径和保留数据。总验证／存储成本未测。独立样本把固定政策作为数据并绑定自己的工具，不代表该平台允许执行政策里的 Git，也不代表真实 CI 验收。
+
+## 保护明确登记的 Git 输入
+
+config v3 可选择带版本的保护，不改旧快照：
 
 ```json
 "facts_git": {
@@ -264,152 +125,67 @@ Config v3 can opt into a versioned guard without changing old snapshots:
 }
 ```
 
-Each nonempty, unique ID must name exactly one `environment.inputs` file. Present
-files need a SHA-256; absent files must explicitly declare absence without a
-digest. The host chooses configuration, includes, interpreters, libraries or
-other files that must remain bound during Git acquisition. Declare their actual
-locations and FILEMAP consumers. In a worktree, `.git` may be a pointer file;
-this guard does not infer the administrative directory or expand include paths.
+各 ID 须非空、唯一，且恰好引用一个 `environment.inputs` 文件。存在文件要有 SHA-256；缺失文件须明确声明 absent 且不带摘要。宿主自行选择 Git 获取期间必须绑定的配置、include、解释器、库或其他文件，并登记实际位置和 FILEMAP 消费者。工作树的 `.git` 可能只是指针文件，保护逻辑不猜管理目录或展开 include 路径。
 
-The reader checks these files before the first version probe and before and after
-every subsequent Git process, including reads and provider fetches through the
-same reader. A mismatch prevents the next process from starting. A mismatch after
-execution fails the call while preserving the process's original bytes, exit and
-bounds. Directories, symlinks and IO errors are not absence. The regular-file and
-absence observer is shared with snapshot capture and registration validation.
+读取器在首次版本探测前，以及后续每次 Git 进程前后核对这些文件，包括通过同一读取器进行的 provider fetch。启动前不符则不启动；执行后不符则整次调用失败，但保留原进程字节、退出和限制。目录、符号链接和 IO 错误不能当作缺失。普通文件／缺失观察与快照采集、registration 验证共用。
 
-`git_facts.inputs` retains the initial verified states under
-`chrono-git-inputs-result/v1`. Downstream request consumers require the identical
-observation. Omitting `guard` preserves the prior v3 behavior and report shape;
-older binaries reject the unknown extension. Full/initial real consumers cover
-adoption with unchanged historical config bytes and rejection before Git starts.
-Runner tests additionally cover missing/duplicate references, absence, unsupported
-file types, per-call drift and a mutating child whose failed receipt is retained.
+`git_facts.inputs` 以 `chrono-git-inputs-result/v1` 保留首次验证状态，后续请求消费者要求观察完全相同。省略 `guard` 保留原 v3 行为和报告格式，旧程序拒绝未知扩展。真实完整／初始消费者测试覆盖旧配置字节未变时采用，以及 Git 启动前拒绝。runner 另测引用缺失／重复、缺失状态、不支持类型、逐调用漂移和会修改输入的子进程，保留失败回执。
 
-These checks enforce the specified file boundary. They do not enumerate all Git
-configuration, delegated programs, OS or network inputs, establish complete input
-closure, or detect a concurrent change restored between observations. Reports
-therefore retain `completeness_proven: false` and `input_closure_complete: false`.
-Input snapshots and the unchanged canonical check command keep their existing
-contracts. This extension is distributed in public beta.16.
+这只执行所选文件范围的要求，不枚举全部 Git 配置、委托程序、OS 或网络输入，不证明输入齐全，也不检测两次观察间改后又恢复的并发变化。因此报告仍为 `completeness_proven: false`、`input_closure_complete: false`，快照及标准命令要求不变。公开 beta.16 已分发此扩展。
 
-## Public binary consumption
+<a id="public-binary-consumption"></a>
 
-Public beta.16 was installed anonymously on macOS arm64 into a local clone of the
-[Go host](https://github.com/ChronoAIProject/chrono-harness-examples-go) at base
-`2d3bfb3d8cea0d9c0add957cca20ad4335d6601c`. The consumer explicitly adopted a separate
-full-v3 facts configuration, the actual local Git executable digest/version,
-`.git/config` content identity and `.git/config.worktree` absence. The existing
-scoped-v3 profile selected that facts configuration; all declarations stayed under
-`.chrono-harness/`, and the original historical configuration bytes were retained.
+## 公开二进制的实际使用记录
 
-The installed public binaries ran the host's unchanged canonical command shape:
+公开 beta.16 曾在 macOS arm64 上匿名下载安装到[Go 示例仓库](https://github.com/ChronoAIProject/chrono-harness-examples-go)的本地克隆，基线为 `2d3bfb3d8cea0d9c0add957cca20ad4335d6601c`。消费者明确采用独立 full v3 facts 配置，登记实际本机 Git 摘要／版本、`.git/config` 内容身份及 `.git/config.worktree` 缺失。
+
+已有 scoped v3 配置选择这份 facts 政策；所有声明仍在 `.chrono-harness/`，原历史配置字节保留。安装后的公开工具运行原有标准命令：
 
 ```sh
 .chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json \
   --base BASE_OID --candidate CANDIDATE_OID --unit rates
 ```
 
-The `rates` unit executed `build.rates` and `test.rates`; the `harness` unit
-executed `ci.verify` and `test.bootstrap`, including the installed instruction
-producer. Changing the registered Git config or creating the declared-absent
-worktree config failed with no business operations executed. Restoring the inputs
-restored acceptance. All six installed tools retained their public manifest
-identities. This is local public-binary consumption with a locally declared Git;
-it does not adopt that machine-specific configuration in the remote example or
-establish native provider-v3 adoption, complete input closure or parity.
+`rates` 执行 `build.rates`、`test.rates`；`harness` 执行 `ci.verify`、`test.bootstrap`，包括已安装的指令生成器。修改登记 Git 配置、或创建原声明缺失的 worktree 配置，都会在业务操作前失败；恢复输入后通过。六个工具保持公开清单身份。
 
-Git process observations can materially increase the transport size. This real
-consumer's original 8,388,608-byte judge output limit failed with
-`process output limit exceeded`. A direct `chrono-judge-ci` invocation using that
-failed report's exact `request` exited 0 and produced a 9,735,075-byte response;
-9,685,756 bytes of that response were Git observations from 25
-processes, retaining 2,056,371 original stdout bytes plus the protocol's text and
-byte representations. The host then explicitly registered a 16,777,216-byte
-judge output limit and passed the canonical checks and drift/recovery cases.
-These are measurements for that host and invocation, not a universal capacity
-recommendation. Declare a suitable bound from actual report sizes; per-Git-process
-bounds and complete-input obligations retain their existing meanings.
+这只是使用本地登记 Git 的公开二进制消费，没有把机器专属配置采用到远端示例，也不证明真实 provider v3 采用、输入齐全或同判。
 
-## Registered artifact inventory
+Git 进程观察可能显著增大传输体积。该消费者最初的 8,388,608 字节检查输出限制因 `process output limit exceeded` 失败。用失败报告的精确 `request` 直接调用 `chrono-judge-ci`，退出 0，响应为 9,735,075 字节；其中 25 个 Git 进程观察占 9,685,756 字节，保留 2,056,371 原 stdout 字节及协议中的文本、字节表示。
 
-During snapshot acquisition, Git omits the untracked contents of explicitly
-registered artifact directories from inventory output. In the recorded beta.18 Go consumer,
-each of two untracked inventories emitted 1,007,609 bytes under a 1,048,576-byte
-per-process bound, mostly for allowed SDK/state outputs. Filtering that output
-in the caller made those paths consume the input acquisition budget.
+之后宿主明确登记 16,777,216 字节检查输出上限，标准检查和漂移／恢复用例通过。这是该宿主和调用的实测，不是通用容量建议。上限应依据实际报告大小登记，单次 Git 进程限制和完整输入义务不变。
 
-Full, initial and scoped acquisition, registration rechecks, project execution
-guards and migration decoding now use the shared literal exclusion builder.
-Worktree inventories reuse it too. Each exclusion is a top-level, case-sensitive
-literal directory prefix from the caller's declarations; no artifact ownership,
-host layout or dependency is discovered. Noncanonical spellings such as repeated
-slashes or dot components contribute no exclusion and retain the caller's
-original path classification. A trailing slash keeps a file or symlink replacing
-the declared directory visible. Tracked bytes and index entries are checked
-separately; ignored neighbors and undeclared paths remain visible.
+<a id="registered-artifact-inventory"></a>
 
-Inventory commands override `GIT_LITERAL_PATHSPECS`, `GIT_GLOB_PATHSPECS`,
-`GIT_NOGLOB_PATHSPECS` and `GIT_ICASE_PATHSPECS` to `0`, so host settings cannot
-reinterpret explicit pathspec syntax. Bound readers record the effective
-per-process environment and original streams and retain their before/after
-configuration guards. Other Git calls keep their registered environment.
-The raw `Reader::checkout` and `facts::checkout` APIs still return full inventory;
-callers select exclusions explicitly.
+## 在清单中排除明确登记的产物目录
 
-Migration decoding may create declared artifacts without changing candidate
-inputs. Its before/after comparison still rejects new undeclared files and
-tracked input mutations before business operations. This does not supply a
-concurrent-write sandbox, complete input closure or a larger output bound.
-Public [beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19)
-distributes this change; beta.18 retains the original enumeration. The fixed-source
-native recipe verifies the relevant full/initial/scoped and migration consumers
-on macOS arm64 and Linux x86_64; [release evidence](distribution.md) records the
-actual scope and original packages.
+快照获取时，Git 不输出明确登记产物目录里的未跟踪内容。此前 beta.18 Go 消费者的两次未跟踪清单各输出 1,007,609 字节，接近单进程 1,048,576 上限，主要是允许存在的 SDK／状态输出。到调用方再过滤，会让这些路径先占满输入采集预算。
 
-## Literal checkout identity
+完整、初始、按范围采集、registration 复核、项目执行保护和迁移解码，现在共用字面排除参数生成逻辑，工作树清单也复用它。每个排除项只来自调用方明确声明的根层、区分大小写目录前缀，不发现产物归属、宿主布局或依赖。
 
-A configured Git diff can hide raw differences: `core.filemode=false` ignores
-executable changes, text attributes normalize line endings, `core.symlinks=false`
-accepts a link represented by a regular file, and clean filters can turn changed
-physical bytes into an unchanged blob. Running a diff can also execute a filter.
-The checkout reader now compares literal files against the fixed Git tree, and
-separately compares every index stage/mode/OID with that tree. Opposite index and
-working-file changes cannot cancel. It does not run working-tree diff, clean or
-textconv filters for this comparison.
+重复斜杠或点路径段等非标准拼写不形成排除，保留调用方原路径分类。末尾斜杠让替代目录的普通文件或符号链接仍可见。已跟踪字节和索引另行核对，被忽略的相邻路径和未声明路径仍可见。
 
-The shared runner implementation consumes the existing explicit tree/index
-inventories. It streams regular bytes through RustCrypto SHA-1 or SHA-256 with the
-Git blob header, checks regular-file versus literal-symlink type and Git's owner
-execute bit, and hashes the symlink target bytes without following it. Missing or
-mismatched files are changed inputs. A directory alias cannot make an observed
-file match a different physical parent. Files are opened without following the
-final symlink or blocking on a substituted FIFO; IO and malformed inventory
-errors fail. This is a Git object identity check, not a new cryptographic trust
-claim. It does not inspect dependencies, register policy or select tests.
+清单命令将 `GIT_LITERAL_PATHSPECS`、`GIT_GLOB_PATHSPECS`、`GIT_NOGLOB_PATHSPECS`、`GIT_ICASE_PATHSPECS` 覆盖为 `0`，避免宿主设置改变明确 pathspec 含义。绑定读取器记录每进程实际环境和原输出，保留前后配置保护；其他 Git 调用保持登记环境。原始 `Reader::checkout`、`facts::checkout` 仍返回完整清单，排除由调用方明确选择。
 
-Full and initial consumers use the shared checkout reader; scoped CI uses its
-tracked comparison before and after selected operations. Worktree creation and
-cleanup compare against HEAD; reconstruction and reconciled recovery compare
-against the explicitly chosen staged tree. They use the existing registered Git
-process runner for inventories and preserve the original operation reports and
-partial work. Rebind remains a separate preservation contract and does not
-require its intentionally dirty work to match the new index.
+迁移解码可创建已声明产物，不改变候选输入；前后比较仍在业务前拒绝新未声明文件和已跟踪输入修改。这不提供并发写入沙箱、不补齐完整输入，也不增大输出上限。
 
-Configuration that produces CRLF/filtered files or regular-file symlink emulation
-must be changed by the host to materialize the registered exact snapshot. The
-checker does not silently normalize those files. Permissions outside Git's
-executable class, timestamps, ACLs, xattrs and hardlink topology are not Git tree
-identity; no concurrent-writer or crash-atomic snapshot is claimed. Supported
-entries remain regular files and literal symlinks with UTF-8 registered paths;
-Gitlinks and special files are not accepted as matching regular source files.
-Complete Git configuration, delegated executable, OS, compiler/SDK input closure
-and full host activation remain separate unfinished obligations. The source
-change is distributed in beta.11.
+公开 [beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19) 分发此变化，beta.18 仍保留原枚举。固定源码原生配方在 macOS arm64、Linux x86_64 验证相关完整／初始／按范围／迁移消费者，实际范围和原包见[发布证据](distribution.md)。
 
-The beta.11 public macOS runner/scoped judge and worktree binary were consumed
-in an actual upgraded mixed-host clone. With local `core.filemode=false`, Git
-reported no changed path for an executable-bit change; the canonical check and
-registered cleanup both rejected it, preserving the checkout. Restoring the
-mode restored acceptance. This is a bounded public-binary consumer, not input
-closure or deterministic-parity certification.
+<a id="literal-checkout-identity"></a>
+
+## 按实际文件核对工作树
+
+配置过的 Git diff 可能隐藏真实差异：`core.filemode=false` 忽略可执行位，文本属性标准化换行，`core.symlinks=false` 接受普通文件模拟链接，clean 过滤器把不同物理字节转换成相同 blob。执行 diff 还可能运行过滤器。
+
+工作树读取器现在直接比较实际文件和固定 Git 文件树，并另行比较每个索引 stage／mode／OID。相反的索引与工作文件修改不能互相抵消。该比较不运行工作树 diff、clean 或 textconv 过滤器。
+
+共用 runner 实现读取已有明确树／索引清单，将普通文件字节加 Git blob 头，通过 RustCrypto SHA-1 或 SHA-256 流式求摘要；同时核普通文件／真实符号链接类型和 Git 所有者执行位。符号链接只对目标字节求摘要，不跟随目标。文件缺失或不符就是输入变化，目录别名不能使文件冒充另一物理父目录。
+
+打开文件不跟随末尾链接，也不因替换成 FIFO 而阻塞。IO 或清单畸形会失败。这是 Git 对象身份检查，不是新的密码学信任保证，不检查依赖、登记政策或选择测试。
+
+完整和初始消费者共用工作树读取器，按范围 CI 在操作前后比较已跟踪内容。工作树创建／清理对照 HEAD；重建和协调后的恢复对照明确选定暂存树。清单使用已有登记 Git 执行器，保留原操作报告和部分工作。rebind 有独立保全要求，不要求有意保留的未提交工作与新索引一致。
+
+会生成 CRLF、过滤后文件或普通文件模拟链接的配置，须由宿主改成能产出精确登记快照的设置，检查器不静默标准化文件。Git 执行位之外的权限、时间戳、ACL、扩展属性和硬链接结构不属于 Git 树身份；不承诺并发写入或崩溃下原子快照。
+
+支持条目仍是普通文件和真实符号链接，登记路径须 UTF-8。Gitlink 和特殊文件不能冒充普通源码。完整 Git 配置、委托程序、OS、编译器／SDK 输入和宿主全面启用仍有独立未完成事项。此源码变化已随 beta.11 分发。
+
+beta.11 的公开 macOS runner、按范围检查程序及工作树工具，曾用于真实升级后的混合宿主克隆。在本地 `core.filemode=false` 下修改执行位，Git 报告无路径变化，但标准检查和登记清理都拒绝并保留工作树；恢复模式后通过。这是有限的公开二进制消费证据，不证明输入完整或确定同判。
