@@ -4,6 +4,8 @@
 
 `chrono-cache plan --host-root H --config .chrono-harness/cache.json --consumer ID` 为一个明确登记的消费者准备键。它是 provider 内部入口；日常检查仍使用 `chrono-harness check`。
 
+<a id="bounded-native-acceptance"></a>
+
 ## 真实 CI 已验证的范围
 
 本宿主的 `cache` 单元已有真实 GitHub Actions 消费者。[运行 37627480033](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033) 首次为冷运行：`check.cache`、`check.cache-tests` 都未命中，继续执行原 bootstrap 和标准检查，并完成原生保存。后一次重跑观察到平台缓存可见性延迟，再次保存；这只是当次观察，不能推广为通用缓存行为。
@@ -188,6 +190,8 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `check.*`。detector 兼容输入不含自身 bootstrap 不消费的检查政策。导入 startup 验证不是编译生产者，不能取得 `save_after_bootstrap` 资格。各消费者证据保留原生产报告和明确导入来源；startup 二进制不进入证据上传。传输成本单独测量，绑定源码的产物不证明构建输入来源完整。
 
 发布验证在 Cargo test destination 消费 `chrono-cache` 资产；bootstrap 安装的传输执行物仍归 bootstrap。发布配方不再把资产放到同一 bin 路径。Python 发布集成回归覆盖真实 CLI 的 plan／recover／staging／report，以及 inode、摘要保留；本地证据不证明原生缓存后端或外层工作流成功。详见[发布说明](release-ci.md)。
+
+<a id="retired-remote-acceptance-controls"></a>
 
 ## 已退役的远端验收控制
 
