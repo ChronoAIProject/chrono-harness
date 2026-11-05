@@ -148,10 +148,8 @@ fn actual_semantic_change_runs_additional_declared_suite_with_one_shared_prerequ
     h.values.get_mut(WORKFLOW).unwrap()["integration"]["tests"] = json!(["extra-tests"]);
     h.save();
     h.base = h.candidate.clone();
-    h.values.get_mut(PROJECTS).unwrap()["scripts"][0]["actions"]["execute"]["argv"] = json!([
-        "-B",
-        "p/prepare-changed.py"
-    ]);
+    h.values.get_mut(PROJECTS).unwrap()["scripts"][0]["actions"]["execute"]["argv"] =
+        json!(["-B", "p/prepare-changed.py"]);
     h.save();
     let (code, r) = h.run(|_| {});
     assert_eq!(code, 0, "{}", r["findings"]);
