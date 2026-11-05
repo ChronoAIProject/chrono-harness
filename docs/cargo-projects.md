@@ -446,8 +446,16 @@ The host registers one proposed `guard.check.runner` consumer. Its ordinary
 macOS 27 policy selects the registered read-only Rust toolchain and the current
 checkout's `.chrono-harness/cache/bootstrap-owner-tooling/cargo` configuration
 locations, matching the current bootstrap. Its package vector includes the
-runner's direct `tracing` dependency from its current manifest. Expected file
-digests remain unchanged. The separate isolated provisioning proposal still
+runner's direct `tracing` dependency from its current manifest. The committed
+`local-rust-build.json` selects the original 101 non-`share/` file rows and 12
+directory rows for this Cargo `check` consumer. Cargo, compiler, backend, target
+libraries and installation metadata retain their original byte identities and
+exact directory children. The root still binds the `share` child name; its
+documentation, manual and completion contents are outside this build inventory.
+This removes 52,036 file and 1,455 directory rows from repeated guard validation,
+without changing the guard's before/after checks or claiming complete inputs.
+SDK and Xcode inventories retain their existing scope. Runtime, CI and storage
+savings require comparable consumer measurements. The separate isolated provisioning proposal still
 requires its own selected-home and participant reconciliation. Its
 generic behavior cases stay in the dedicated Rust owner tests. Cargo guarding is
 optional: the 95 current methods corresponding to PR163 retain 94 direct Cargo
