@@ -12,6 +12,9 @@ use std::path::Path;
 mod collect;
 pub use collect::{UnitOriginals, unit_originals};
 mod units;
+mod verus;
+#[allow(unexpected_cfgs)]
+pub mod verus_policy;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum ExecutionDiagnostics {
@@ -38,6 +41,8 @@ impl Default for CollectionLimits {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verus: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_diagnostics: Option<ExecutionDiagnostics>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -106,21 +111,13 @@ fn strings(v: &Value) -> Result<Vec<String>, String> {
         .collect()
 }
 fn id(s: &str) -> Result<(), String> {
-    if s.is_empty()
-        || !s
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
-    {
+    if !verus_policy::valid_id(s.as_bytes()) {
         return Err(format!("invalid ID {s:?}"));
     }
     Ok(())
 }
 pub fn full_oid(s: &str) -> Result<(), String> {
-    if !matches!(s.len(), 40 | 64)
-        || s.bytes()
-            .any(|b| !b.is_ascii_digit() && !(b'a'..=b'f').contains(&b))
-        || s.bytes().all(|b| b == b'0')
-    {
+    if !verus_policy::valid_oid(s.as_bytes()) {
         return Err(format!("expected full nonzero lowercase OID: {s}"));
     }
     Ok(())
@@ -1230,6 +1227,15 @@ fn inventory_profile(
         Some(snapshot(reader, root, base, op)?)
     };
     let new = snapshot(reader, root, &req.candidate, p.clone())?;
+    if old
+        .as_ref()
+        .is_some_and(|previous| previous.policy.verus.is_some())
+        && p.verus.is_none()
+    {
+        return Err(
+            "E_VERUS_RETIRED: the adopted Verus requirement cannot be silently removed".into(),
+        );
+    }
     let (paths, mut selected, mut selection_explanation, affected) = ci_impact(old.as_ref(), &new);
     let consumption = chrono_judge_registration::consumption::check_scoped(
         reader,
@@ -1664,6 +1670,7 @@ fn evaluate(
         response.evidence["selection_explanation"] = selection_explanation;
         response.evidence["removed"] = object!(removed);
         response.evidence["retirement_context"] = retirement_context;
+        verus::apply(req, reader, &p, &new, &mut response)?;
         return Ok(response);
     }
     if let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope {
@@ -1794,5 +1801,6 @@ fn evaluate(
         evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"retirement_context":retirement_context,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
+    verus::apply(req, reader, &p, &new, &mut response)?;
     Ok(response)
 }

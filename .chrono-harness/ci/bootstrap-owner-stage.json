@@ -18,7 +18,7 @@
     "tool": "python3",
     "script": ".chrono-harness/ci/bootstrap.py"
   },
-  "rust_incremental": true,
+  "rust_incremental": false,
   "require_tool_bindings": true,
   "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
   "report_path": ".chrono-harness/state/bootstrap-owner-stage.json",

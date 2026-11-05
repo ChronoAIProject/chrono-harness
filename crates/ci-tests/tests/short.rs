@@ -31,6 +31,13 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
             Ok(bytes)
         })
         .unwrap();
+    assert_eq!(
+        complete.retained_report,
+        Some(prepared::Original {
+            path: reference["original"]["path"].as_str().unwrap().into(),
+            sha256: sha256(&raw),
+        })
+    );
 
     // This is a typed stream address outside the prior fixed-reader census.
     // No collector or transport path list changes to consume it.
@@ -53,6 +60,24 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
     let canonical = stream_report(&h.root, ".chrono-harness/state/check.json", &after);
     assert_eq!(canonical["response"]["status"], "passed");
     assert_eq!(canonical["response"]["evidence"]["executed"], json!([]));
+    let executions = canonical["response"]["evidence"]["collected_executions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["unit"] == "alpha")
+        .unwrap();
+    assert_eq!(
+        executions["report"],
+        json!({"path":report_path,"sha256":sha256(&bytes)})
+    );
+    let original_response: Value = serde_json::from_slice(&complete.producer.stdout_bytes).unwrap();
+    for row in executions["rows"].as_array().unwrap() {
+        let original = original_response
+            .pointer(row["response_pointer"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(row["operation"], original["operation"]);
+        assert_eq!(row["receipt_digest"], original["receipt"]["digest"]);
+    }
     assert_eq!(
         fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap(),
         calls

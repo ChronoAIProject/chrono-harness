@@ -553,6 +553,65 @@ fn collection_verifies_complete_reports_without_executing_tests() {
     assert_eq!(h.calls(), 1);
 }
 
+#[test]
+fn collection_retains_validated_unit_execution_rows_without_reexecution() {
+    let h = report_host();
+    let b = h.head();
+    h.write("src.txt", "two");
+    let c = h.commit();
+    let input = write_report(&h, &b, &c, "alpha");
+    let original = h.read(input["path"].as_str().unwrap());
+    let rows = original["response"]["evidence"]["executed"].clone();
+    let r = collect(&h, &b, &c, json!([input.clone()]));
+    pass(&r);
+    assert_eq!(r.evidence["executed"], json!([]));
+    assert_eq!(
+        r.evidence["collected_executions"],
+        json!([{"unit":"alpha",
+            "report":{"path":input["path"],"sha256":input["sha256"]},
+            "response_source":"original judge stdout",
+            "rows":[{"operation":"test.suite",
+                "receipt_digest":rows[0]["receipt"]["digest"],
+                "response_pointer":"/evidence/executed/0"}]}])
+    );
+    let reference = &r.evidence["collected_executions"][0];
+    let retained = h.read(reference["report"]["path"].as_str().unwrap());
+    assert_eq!(
+        retained["response"]
+            .pointer(reference["rows"][0]["response_pointer"].as_str().unwrap())
+            .unwrap(),
+        &rows[0]
+    );
+    assert_eq!(h.calls(), 1);
+}
+
+#[test]
+fn collection_rejects_duplicate_result_identities_even_with_matching_report_digests() {
+    let h = report_host();
+    let b = h.head();
+    h.write("src.txt", "two");
+    let c = h.commit();
+    let mut input = write_report(&h, &b, &c, "alpha");
+    let path = input["path"].as_str().unwrap().to_owned();
+    let mut report = h.read(&path);
+    let duplicate = report["response"]["results"][0].clone();
+    report["response"]["results"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate);
+    let stdout = serde_json::to_vec(&report["response"]).unwrap();
+    report["judge"]["stdout_bytes"] = json!(stdout);
+    report["judge"]["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+    report["judge"]["stdout_sha256"] = json!(sha256(&stdout));
+    h.json(&path, &report);
+    input["sha256"] = json!(sha256(&fs::read(h.root().join(&path)).unwrap()));
+    fail(
+        &collect(&h, &b, &c, json!([input])),
+        "invalid/duplicate judge result",
+    );
+    assert_eq!(h.calls(), 1);
+}
+
 fn pad_report(h: &Host, mut report: Value, length: usize) -> Value {
     let path = h.root().join(report["path"].as_str().unwrap());
     let mut bytes = fs::read(&path).unwrap();
