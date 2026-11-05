@@ -102,15 +102,30 @@ walk's hop count and are realized by finite predecessor paths. Those strictly
 decreasing parent distances exclude cycles. Array bounds and loop/recursive
 termination are checked as part of the same whole-crate root.
 
+The same source's `fifo` contract fixes the entire distance, predecessor-slot
+and queue result. It starts with only the root discovered, processes queued
+nodes in FIFO order and visits each supplied adjacency row in slot order.
+`discovery` assigns a parent and appends its target only when that target is
+unseen; later parallel, equal-length, longer or cycle edges cannot replace it.
+The executable loops prove exact equality with this contract in addition to
+the independent reachability/shortest-distance properties. The reference's node
+bound is justified by the proved unique queue bound; it does not drop queued
+work. This adds ghost specifications and proof bookkeeping, with the same
+executable traversal and no new trusted interface. Additional proof/compiler
+cost remains unmeasured.
+
 The actual `graph::closure` builds a sorted node inventory and adjacency slots
 from its existing ordered typed edges, then calls this source for each seed.
 It uses returned indices to construct the existing reached causes, predecessor
 maps and traversed typed edges. The adapter, union, seed production, serialization,
-test selection and complete deterministic tie correspondence remain unproved;
+test selection and the correspondence between typed-edge order and indexed
+slots remain unproved;
 the adapter's empty-root obligation is retained. Independent Verus examples cover
 empty graphs, invalid roots/destinations, self cycles, disconnected nodes, diamonds
 and parallel edges. Expected shortest distances use independently supplied paths
-and distance potentials. Runtime adapter regressions additionally require stable
+and distance potentials. Further verified examples require exact constant
+predecessor/queue inventories for reordered equal-length paths, first parallel
+slots, direct edges followed by longer paths and cycle returns. Runtime adapter regressions additionally require stable
 edge-kind/lexical ties, Unicode identities, merged causes and existing duplicate
 seed-ID behavior. Cargo runs the production source but does not replace proof.
 

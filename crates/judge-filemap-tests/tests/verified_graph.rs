@@ -94,8 +94,77 @@ fn diamond_cycle_and_parallel_edges() {
     assert(search.distances[3] == 2);
     assert(search.order@.contains(0) && search.order@.contains(1)
         && search.order@.contains(2) && search.order@.contains(3));
-    // Exact tie-breaking is checked through the actual typed adapter's tests;
-    // the proof contract here requires a real shortest predecessor edge.
+    // Separate examples below require the complete first-discovery result.
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn fifo_first_discovery_preserves_the_first_parallel_slot() {
+    let g: Vec<Vec<usize>> = vec![vec![2, 1, 2], vec![3], vec![3], vec![0]];
+    let valid = policy::valid_indices(&g);
+    assert(valid);
+    let result = policy::breadth_first(&g, 0);
+    assert(result.is_some());
+    let search = result.unwrap();
+    proof {
+        assert(policy::fifo(g@, 0) == (
+            seq![0usize, 1, 1, 2],
+            seq![None, Some((0usize, 1usize)), Some((0usize, 0usize)), Some((2usize, 0usize))],
+            seq![0usize, 2, 1, 3],
+        )) by {
+            reveal_with_fuel(policy::fifo_nodes, 5);
+            reveal_with_fuel(policy::ordered_slots, 5);
+        }
+    }
+    assert(search.parents[2] == Some((0usize, 0usize)));
+    assert(search.parents[1] == Some((0usize, 1usize)));
+    assert(search.parents[3] == Some((2usize, 0usize)));
+    assert(search.order@ == seq![0usize, 2, 1, 3]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn reversed_adjacency_changes_the_equal_length_parent() {
+    let g: Vec<Vec<usize>> = vec![vec![1, 2, 1], vec![3], vec![3], vec![0]];
+    let valid = policy::valid_indices(&g);
+    assert(valid);
+    let result = policy::breadth_first(&g, 0);
+    assert(result.is_some());
+    let search = result.unwrap();
+    proof {
+        assert(policy::fifo(g@, 0) == (
+            seq![0usize, 1, 1, 2],
+            seq![None, Some((0usize, 0usize)), Some((0usize, 1usize)), Some((1usize, 0usize))],
+            seq![0usize, 1, 2, 3],
+        )) by {
+            reveal_with_fuel(policy::fifo_nodes, 5);
+            reveal_with_fuel(policy::ordered_slots, 5);
+        }
+    }
+    assert(search.parents[3] == Some((1usize, 0usize)));
+    assert(search.parents[0].is_none());
+    assert(search.order@ == seq![0usize, 1, 2, 3]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn later_longer_paths_do_not_replace_a_direct_parent() {
+    let g: Vec<Vec<usize>> = vec![vec![1, 3], vec![2], vec![3], vec![0]];
+    let valid = policy::valid_indices(&g);
+    assert(valid);
+    let result = policy::breadth_first(&g, 0);
+    assert(result.is_some());
+    let search = result.unwrap();
+    proof {
+        assert(policy::fifo(g@, 0) == (
+            seq![0usize, 1, 2, 1],
+            seq![None, Some((0usize, 0usize)), Some((1usize, 0usize)), Some((0usize, 1usize))],
+            seq![0usize, 1, 3, 2],
+        )) by {
+            reveal_with_fuel(policy::fifo_nodes, 5);
+            reveal_with_fuel(policy::ordered_slots, 5);
+        }
+    }
+    assert(search.distances[3] == 1);
+    assert(search.parents[3] == Some((0usize, 1usize)));
+    assert(search.parents[0].is_none());
 }
 
 }

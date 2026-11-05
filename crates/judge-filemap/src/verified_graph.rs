@@ -14,6 +14,82 @@ pub struct Search {
     pub order: Vec<usize>,
 }
 
+/// First discovery owns a node permanently. Slots are examined in their supplied
+/// order; previously seen targets leave all three state sequences unchanged.
+pub open spec fn discovery(
+    g: Seq<Vec<usize>>, node: usize, slot: int,
+    d: Seq<usize>, p: Seq<Option<(usize, usize)>>, q: Seq<usize>,
+) -> (Seq<usize>, Seq<Option<(usize, usize)>>, Seq<usize>) {
+    if node < g.len() && 0 <= slot < g[node as int].len() && node < d.len() {
+        let target = g[node as int]@[slot];
+        if target < d.len() && target < p.len() && d[target as int] == g.len()
+            && d[node as int] < usize::MAX
+        {
+            (d.update(target as int, (d[node as int] + 1) as usize),
+                p.update(target as int, Some((node, slot as usize))), q.push(target))
+        } else { (d, p, q) }
+    } else { (d, p, q) }
+}
+
+#[verifier::opaque]
+pub open spec fn ordered_slots(
+    g: Seq<Vec<usize>>, node: usize, slot: int,
+    d: Seq<usize>, p: Seq<Option<(usize, usize)>>, q: Seq<usize>,
+) -> (Seq<usize>, Seq<Option<(usize, usize)>>, Seq<usize>)
+    decreases if node < g.len() { g[node as int].len() - slot } else { 0 },
+{
+    if node < g.len() && 0 <= slot < g[node as int].len() {
+        let next = discovery(g, node, slot, d, p, q);
+        ordered_slots(g, node, slot + 1, next.0, next.1, next.2)
+    } else { (d, p, q) }
+}
+
+#[verifier::opaque]
+pub open spec fn fifo_nodes(
+    g: Seq<Vec<usize>>, front: int,
+    d: Seq<usize>, p: Seq<Option<(usize, usize)>>, q: Seq<usize>,
+) -> (Seq<usize>, Seq<Option<(usize, usize)>>, Seq<usize>)
+    decreases g.len() - front,
+{
+    if 0 <= front < g.len() && front < q.len() {
+        let next = ordered_slots(g, q[front], 0, d, p, q);
+        fifo_nodes(g, front + 1, next.0, next.1, next.2)
+    } else { (d, p, q) }
+}
+
+/// Only the seed is discovered initially; every other distance is the sentinel.
+pub open spec fn initial_state(n: nat, root: usize)
+    -> (Seq<usize>, Seq<Option<(usize, usize)>>, Seq<usize>)
+{
+    (Seq::new(n, |i: int| if i == root { 0usize } else { n as usize }),
+        Seq::new(n, |i: int| None), seq![root])
+}
+
+/// A deterministic reference contract: FIFO nodes, ordered adjacency slots and
+/// immutable first predecessors. The bound is the number of distinct nodes;
+/// the executable traversal separately proves it never leaves queued work out.
+pub open spec fn fifo(g: Seq<Vec<usize>>, root: usize)
+    -> (Seq<usize>, Seq<Option<(usize, usize)>>, Seq<usize>)
+{
+    if root < g.len() && g.len() <= usize::MAX {
+        let start = initial_state(g.len(), root);
+        fifo_nodes(g, 0, start.0, start.1, start.2)
+    } else { (Seq::empty(), Seq::empty(), Seq::empty()) }
+}
+
+proof fn ordered_slot_step(
+    g: Seq<Vec<usize>>, node: usize, slot: int,
+    d: Seq<usize>, p: Seq<Option<(usize, usize)>>, q: Seq<usize>,
+)
+    requires node < g.len(), 0 <= slot < g[node as int].len(),
+    ensures ordered_slots(g, node, slot, d, p, q) == {
+        let next = discovery(g, node, slot, d, p, q);
+        ordered_slots(g, node, slot + 1, next.0, next.1, next.2)
+    },
+{
+    reveal(ordered_slots);
+}
+
 pub open spec fn valid_graph(g: Seq<Vec<usize>>) -> bool {
     forall|u: int, k: int| 0 <= u < g.len() && 0 <= k < g[u].len()
         ==> (#[trigger] g[u]@[k]) < g.len()
@@ -175,17 +251,19 @@ pub fn valid_indices(g: &[Vec<usize>]) -> (valid: bool)
 
 /// One adjacency transition, separated from loop bookkeeping for local proofs.
 fn expand_edge(
-    g: &[Vec<usize>], root: usize, d: &mut Vec<usize>,
+    g: &[Vec<usize>], _root: usize, d: &mut Vec<usize>,
     p: &mut Vec<Option<(usize, usize)>>, q: &mut Vec<usize>, front: usize, slot: usize,
 )
     requires
-        valid_graph(g@), queue_state(g@, root, old(d)@, old(p)@, old(q)@),
+        valid_graph(g@), queue_state(g@, _root, old(d)@, old(p)@, old(q)@),
         front < old(q).len(), slot < g[old(q)@[front as int] as int].len(),
         forall|i: int| 0 <= i < old(q).len()
             ==> old(d)@[#[trigger] old(q)@[i] as int] <= old(d)@[old(q)@[front as int] as int] + 1,
         processed(g@, old(d)@, old(q)@, front as int, slot as int),
     ensures
-        queue_state(g@, root, d@, p@, q@), q.len() <= g.len(), front < q.len(),
+        queue_state(g@, _root, d@, p@, q@), q.len() <= g.len(), front < q.len(),
+        (d@, p@, q@) == discovery(g@, old(q)@[front as int], slot as int,
+            old(d)@, old(p)@, old(q)@),
         q@[front as int] == old(q)@[front as int],
         forall|i: int| 0 <= i < q.len()
             ==> d@[#[trigger] q@[i] as int] <= d@[q@[front as int] as int] + 1,
@@ -208,7 +286,7 @@ fn expand_edge(
         q.push(v);
         proof {
             assert(q@.no_duplicates());
-            assert(tree(g@, root, d@, p@));
+            assert(tree(g@, _root, d@, p@));
             assert forall|i: int| 0 <= i < q.len() implies (
                 (#[trigger] q[i]) < n && d[q[i] as int] < n && d[q[i] as int] <= i
             ) by {
@@ -246,6 +324,10 @@ pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
     ensures
         result.is_some() == (root < g.len()),
         result.is_some() ==> complete(g@, root, result.unwrap()),
+        result.is_some() ==> {
+            let search = result.unwrap();
+            (search.distances@, search.parents@, search.order@) == fifo(g@, root)
+        },
 {
     reveal(complete);
     let n = g.len();
@@ -283,6 +365,13 @@ pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
         assert forall|i: int, j: int| 0 <= i <= j < q.len()
             implies d[#[trigger] q[i] as int] <= d[#[trigger] q[j] as int] by {}
         assert(queue_state(g@, root, d@, p@, q@));
+        assert(g@.len() == n && g@.len() <= usize::MAX);
+        let start = initial_state(g@.len(), root);
+        assert(d@ =~= start.0);
+        assert(p@ =~= start.1);
+        assert(q@ == start.2);
+        reveal(fifo);
+        assert(fifo_nodes(g@, 0, d@, p@, q@) == fifo(g@, root));
     }
     let mut front = 0;
     while front < q.len()
@@ -292,9 +381,16 @@ pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
             front < q.len() ==> (forall|i: int| 0 <= i < q.len()
                 ==> d[#[trigger] q[i] as int] <= d[q[front as int] as int] + 1),
             processed(g@, d@, q@, front as int, 0),
+            fifo_nodes(g@, front as int, d@, p@, q@) == fifo(g@, root),
         decreases n - front,
     {
         let node = q[front];
+        let ghost row_result = ordered_slots(g@, node, 0, d@, p@, q@);
+        proof {
+            reveal(fifo_nodes);
+            assert(fifo_nodes(g@, front as int + 1, row_result.0, row_result.1, row_result.2)
+                == fifo(g@, root));
+        }
         let mut slot = 0;
         while slot < g[node].len()
             invariant
@@ -304,14 +400,24 @@ pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
                 forall|i: int| 0 <= i < q.len()
                     ==> d[#[trigger] q[i] as int] <= d[node as int] + 1,
                 processed(g@, d@, q@, front as int, slot as int),
+                ordered_slots(g@, node, slot as int, d@, p@, q@) == row_result,
+                fifo_nodes(g@, front as int + 1, row_result.0, row_result.1, row_result.2)
+                    == fifo(g@, root),
             decreases g[node as int].len() - slot,
         {
+            proof { ordered_slot_step(g@, node, slot as int, d@, p@, q@); }
             expand_edge(g, root, &mut d, &mut p, &mut q, front, slot);
             slot += 1;
+        }
+        proof {
+            reveal(ordered_slots);
+            assert((d@, p@, q@) == row_result);
         }
         front += 1;
     }
     proof {
+        reveal(fifo_nodes);
+        assert((d@, p@, q@) == fifo(g@, root));
         assert(closed(g@, d@)) by {
             assert forall|u: int, k: int| 0 <= u < n && d[u] < n && 0 <= k < g[u].len()
                 implies {

@@ -30,8 +30,12 @@ The closure adapter calls the executable Verus FIFO owner in
 and preserves each existing sorted typed-edge adjacency slot. One validation
 precedes all per-seed searches. The core proves exact reachability, real
 predecessor edges, acyclic predecessor distances and minimum hop counts, including
-zero-length root paths. The adapter still owns names, edge kinds, cause merging
-and stable tie correspondence; these and union/test selection remain unmet Verus
+zero-length root paths. Its complete result also equals the in-source `fifo`
+contract: queue order and first adjacency slots fix every predecessor, and later
+discoveries cannot overwrite one. Independent exact inventories verify parallel
+slots, reordered ties, longer alternatives and cycle returns. The adapter still
+owns names, edge kinds, cause merging and the mapping from sorted typed edges to
+indexed slots; these and union/test selection remain unmet Verus
 obligations. The independent test project checks the actual adapter's ties,
 parallel typed edges, cycles, Unicode and duplicate seed IDs. Two registered
 proof operations verify the source and independent boundary examples. Dense
