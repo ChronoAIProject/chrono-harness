@@ -5,6 +5,10 @@ fn fixture() -> (Host, PathBuf, Value) {
     h.kernel_cleanup();
     let target = h.parent.join("historical evidence");
     assert_eq!(h.invoke("integration", "historical-evidence", &target).0, 0);
+    let plan = custody_plan(&h, &target);
+    (h, target, plan)
+}
+fn custody_plan(h: &Host, target: &Path) -> Value {
     let dir = target.join(".chrono-harness/state/custody");
     fs::create_dir_all(&dir).unwrap();
     fs::write(
@@ -23,15 +27,14 @@ fn fixture() -> (Host, PathBuf, Value) {
             "owner":"explicit-test-producer","reason":"copied path assertions ended; original diagnosis continues"}));
     }
     let authority = fs::read(dir.join("authority")).unwrap();
-    let plan = value!({"schema":"chrono-worktree-maintenance/v1","operation":"retire-evidence",
+    value!({"schema":"chrono-worktree-maintenance/v1","operation":"retire-evidence",
         "head":git(&target,&["rev-parse","HEAD"]).trim(),
         "custody":{"schema":"chrono-evidence-custody/v1","root":target,
             "branch":git(&target,&["symbolic-ref","HEAD"]).trim(),
             "current_consumers_released":true,"reason":"joined finite historical consumption; current custody",
             "authority":{"path":".chrono-harness/state/custody/authority","sha256":sha256(&authority),"length":authority.len()},
             "exclusion":{"coordinator_root":h.root,"config_path":POLICY,"state_directory":".chrono-harness/state/automatic-cleanup/"},
-            "objects":objects}});
-    (h, target, plan)
+            "objects":objects}})
 }
 fn retire(target: &Path, plan: &Value) -> (i32, Value) {
     let path = ".chrono-harness/state/custody/plan.json";
@@ -52,6 +55,53 @@ fn retire(target: &Path, plan: &Value) -> (i32, Value) {
         .unwrap();
     let report = json(&out.stdout).unwrap_or(Value::Null);
     (out.status.code().unwrap_or(-1), report)
+}
+#[test]
+fn main_custody_checks_the_current_full_branch_lock_before_retiring_aliases() {
+    for switch in [false, true] {
+        let h = bounded_cleanup::main_host_mode("rebuild-evidence");
+        let (code, imported, error) = h.auto("import", &[]);
+        assert_eq!(code, 0, "{imported} {error}");
+        assert_eq!(h.ledger()["entries"][0]["branch"], "refs/heads/dev");
+        if switch {
+            git(&h.root, &["checkout", "-qb", "integration/main-evidence"]);
+        }
+        let plan = custody_plan(&h, &h.root);
+        let branch = git(&h.root, &["symbolic-ref", "HEAD"]);
+        let lock = h.root.join(".git").join(format!("{}.lock", branch.trim()));
+        fs::write(&lock, "owned test branch lock").unwrap();
+        let (code, blocked) = retire(&h.root, &plan);
+        assert_eq!(code, 2, "{blocked}");
+        assert!(blocked["error"].as_str().unwrap().contains("Git lock"));
+        assert!(
+            h.root
+                .join(".chrono-harness/state/custody/first-copy")
+                .exists()
+        );
+        fs::remove_file(lock).unwrap();
+        let enrollment = h.ledger();
+        let refs = git(&h.root, &["show-ref"]);
+        let (code, retired) = retire(&h.root, &plan);
+        assert_eq!(code, 0, "{retired}");
+        assert_eq!(retired["evidence_retirement"]["removed"], 3);
+        assert_eq!(h.ledger(), enrollment);
+        assert_eq!(git(&h.root, &["show-ref"]), refs);
+        for id in ["first", "second", "third"] {
+            assert!(
+                !h.root
+                    .join(format!(".chrono-harness/state/custody/{id}-copy"))
+                    .exists()
+            );
+            assert_eq!(
+                fs::read_to_string(
+                    h.root
+                        .join(format!(".chrono-harness/state/custody/{id}-original"))
+                )
+                .unwrap(),
+                format!("original {id} failure evidence\n")
+            );
+        }
+    }
 }
 #[test]
 fn released_aliases_retire_without_rewriting_outcomes_source_or_enrollment() {
