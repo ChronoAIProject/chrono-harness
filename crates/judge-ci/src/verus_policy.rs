@@ -144,6 +144,106 @@ pub fn find_root_route(routes: &Vec<RootRoute>, root: &str) -> (found: Option<us
     found
 }
 
+pub open spec fn declared_root_valid(
+    root: Option<&str>, registered: Seq<&str>, routes: Seq<RootRoute>,
+) -> bool {
+    root.is_some() && text_member(registered, root.unwrap()@)
+        && exists|i: int| unique_root_route(routes, root.unwrap()@, i)
+}
+
+pub open spec fn declared_roots_valid(
+    roots: Option<&Vec<Option<&str>>>, registered: Seq<&str>, routes: Seq<RootRoute>,
+) -> bool {
+    roots.is_some() && roots.unwrap().len() > 0
+        && forall|i: int| 0 <= i < roots.unwrap().len()
+            ==> declared_root_valid(#[trigger] roots.unwrap()[i], registered, routes)
+}
+
+/// A root declaration does not establish either a registered source file or a
+/// unique verifier route. Both must be supplied by the explicit inventories.
+pub fn admit_declared_roots(
+    declaration: Option<&Vec<Option<&str>>>, registered: &Vec<&str>, routes: &Vec<RootRoute>,
+) -> (valid: bool)
+    ensures valid <==> declared_roots_valid(declaration, registered@, routes@),
+{
+    let roots = match declaration {
+        Some(roots) => roots,
+        None => { return false; },
+    };
+    if roots.len() == 0 { return false; }
+    let mut i = 0;
+    while i < roots.len()
+        invariant
+            0 <= i <= roots.len(),
+            declaration == Some(roots),
+            forall|j: int| 0 <= j < i
+                ==> declared_root_valid(#[trigger] roots[j], registered@, routes@),
+        decreases roots.len() - i,
+    {
+        let root = match roots[i] {
+            Some(root) => root,
+            None => {
+                assert(!declared_root_valid(roots@[i as int], registered@, routes@));
+                return false;
+            },
+        };
+        if !contains_text(registered, root) || find_root_route(routes, root).is_none() {
+            assert(!declared_root_valid(roots@[i as int], registered@, routes@));
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn unit_has_verifier(
+    operations: Seq<Option<&str>>, routes: Seq<RootRoute>,
+) -> bool {
+    exists|i: int, j: int| 0 <= i < operations.len() && 0 <= j < routes.len()
+        && (#[trigger] operations[i]).is_some()
+        && operations[i].unwrap()@ == (#[trigger] routes[j]).operation@
+}
+
+/// Only an operation in this unit's explicit action inventory can establish
+/// its verifier. A different unit's action or a root filename is insufficient.
+pub fn admits_unit_verifier(
+    operations: &Vec<Option<&str>>, routes: &Vec<RootRoute>,
+) -> (valid: bool)
+    ensures valid <==> unit_has_verifier(operations@, routes@),
+{
+    let mut i = 0;
+    while i < operations.len()
+        invariant
+            0 <= i <= operations.len(),
+            forall|k: int, j: int| 0 <= k < i && 0 <= j < routes.len()
+                && (#[trigger] operations[k]).is_some()
+                ==> operations[k].unwrap()@ != (#[trigger] routes[j]).operation@,
+        decreases operations.len() - i,
+    {
+        if let Some(operation) = operations[i] {
+            let mut j = 0;
+            while j < routes.len()
+                invariant
+                    0 <= i < operations.len(),
+                    operations@[i as int] == Some(operation),
+                    0 <= j <= routes.len(),
+                    forall|k: int| 0 <= k < j
+                        ==> operation@ != (#[trigger] routes[k]).operation@,
+                decreases routes.len() - j,
+            {
+                if equal_text(operation, routes[j].operation) {
+                    assert(operations@[i as int].is_some());
+                    assert(operations@[i as int].unwrap()@ == routes@[j as int].operation@);
+                    return true;
+                }
+                j += 1;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 pub open spec fn root_proofs_admitted(proofs: Seq<RootProof>, operation: Seq<char>) -> bool {
     (exists|i: int| 0 <= i < proofs.len() && (#[trigger] proofs[i]).operation@ == operation)
         && (forall|i: int| 0 <= i < proofs.len() && (#[trigger] proofs[i]).operation@ == operation
@@ -710,6 +810,22 @@ pub open spec fn rejected_identities(entries: Seq<Obligation>) -> Seq<String>
     }
 }
 
+proof fn rejected_empty_iff_all_accepted(entries: Seq<Obligation>)
+    ensures
+        rejected_identities(entries).len() == 0 <==>
+            (forall|i: int| 0 <= i < entries.len() ==> #[trigger] entries[i].accepted),
+    decreases entries.len(),
+{
+    if entries.len() > 0 {
+        let earlier = entries.drop_last();
+        rejected_empty_iff_all_accepted(earlier);
+        if entries.last().accepted {
+            assert forall|i: int| 0 <= i < entries.len() implies #[trigger] entries[i].accepted
+                <==> (i == entries.len() - 1 || earlier[i].accepted) by { }
+        }
+    }
+}
+
 pub struct Coverage {
     pub obligations: usize,
     pub complete: bool,
@@ -771,9 +887,6 @@ impl Ledger {
             invariant
                 0 <= i <= self.entries.len(),
                 missing@ == rejected_identities(self.entries@.take(i as int)),
-                missing.len() == 0 <==> (
-                    forall|j: int| 0 <= j < i ==> #[trigger] self.entries[j].accepted
-                ),
             decreases self.entries.len() - i,
         {
             if !self.entries[i].accepted {
@@ -787,6 +900,7 @@ impl Ledger {
             i += 1;
         }
         assert(self.entries@.take(i as int) =~= self.entries@);
+        proof { rejected_empty_iff_all_accepted(self.view()); }
         let complete = self.entries.len() > 0 && missing.len() == 0;
         Coverage { obligations: self.entries.len(), complete, missing }
     }

@@ -12,6 +12,85 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn root_declarations_reject_missing_empty_and_malformed_lists() {
+    proof { reveal_strlit("root"); reveal_strlit("verify.root"); }
+    let registered = vec!["root"];
+    let routes = vec![policy::RootRoute {
+        root: "root", operation: "verify.root", globally_selected: false, locally_required: false,
+    }];
+    let empty: Vec<Option<&str>> = Vec::new();
+    let malformed = vec![Some("root"), None];
+    let missing = policy::admit_declared_roots(None, &registered, &routes);
+    let empty_result = policy::admit_declared_roots(Some(&empty), &registered, &routes);
+    let malformed_result = policy::admit_declared_roots(Some(&malformed), &registered, &routes);
+    assert(!missing && !empty_result && !malformed_result);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn declared_roots_require_both_registered_files_and_unique_routes() {
+    proof { reveal_strlit("root"); reveal_strlit("verify.root"); }
+    let declared = vec![Some("root")];
+    let registered = vec!["root"];
+    let no_files: Vec<&str> = Vec::new();
+    let no_routes: Vec<policy::RootRoute> = Vec::new();
+    let routes = vec![policy::RootRoute {
+        root: "root", operation: "verify.root", globally_selected: false, locally_required: false,
+    }];
+    let ambiguous = vec![
+        policy::RootRoute { root: "root", operation: "verify.root", globally_selected: false, locally_required: false },
+        policy::RootRoute { root: "root", operation: "verify.root", globally_selected: true, locally_required: true },
+    ];
+    let no_file = policy::admit_declared_roots(Some(&declared), &no_files, &routes);
+    let no_route = policy::admit_declared_roots(Some(&declared), &registered, &no_routes);
+    let multiple = policy::admit_declared_roots(Some(&declared), &registered, &ambiguous);
+    assert(!no_file && !no_route && !multiple);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn root_declaration_membership_uses_unicode_values_and_allows_duplicate_mentions() {
+    proof { reveal_strlit("证明根"); reveal_strlit("操作"); }
+    let root = "证明根".to_owned();
+    let declared = vec![Some(root.as_str()), Some("证明根")];
+    let registered = vec!["证明根", root.as_str()];
+    let routes = vec![policy::RootRoute {
+        root: "证明根", operation: "操作", globally_selected: false, locally_required: false,
+    }];
+    assert(policy::unique_root_route(routes@, "证明根"@, 0));
+    assert(policy::text_member(registered@, "证明根"@));
+    assert forall|i: int| 0 <= i < declared.len()
+        implies policy::declared_root_valid(#[trigger] declared@[i], registered@, routes@) by {
+        assert(i == 0 || i == 1);
+        assert(declared@[i].unwrap()@ == "证明根"@);
+    }
+    let valid = policy::admit_declared_roots(Some(&declared), &registered, &routes);
+    assert(valid);
+    // Declaration validity does not claim DELTA execution or proof admission.
+    let no_proofs: Vec<policy::RootProof> = Vec::new();
+    let covered = policy::covers_root_delta(&routes, &no_proofs, "证明根");
+    assert(!covered);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unit_verifiers_require_the_units_own_action_operation() {
+    proof { reveal_strlit("root"); reveal_strlit("操作"); reveal_strlit("other"); }
+    let routes = vec![policy::RootRoute {
+        root: "root", operation: "操作", globally_selected: true, locally_required: true,
+    }];
+    let empty: Vec<Option<&str>> = Vec::new();
+    let unrelated = vec![None, Some("root"), Some("other")];
+    let operation = "操作".to_owned();
+    let own = vec![None, Some(operation.as_str()), Some("操作")];
+    let no_routes: Vec<policy::RootRoute> = Vec::new();
+    assert("root"@.len() != "操作"@.len());
+    assert("other"@.len() != "操作"@.len());
+    let absent = policy::admits_unit_verifier(&empty, &routes);
+    let wrong = policy::admits_unit_verifier(&unrelated, &routes);
+    let unregistered = policy::admits_unit_verifier(&own, &no_routes);
+    let valid = policy::admits_unit_verifier(&own, &routes);
+    assert(!absent && !wrong && !unregistered && valid);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn root_plan_binding_requires_registered_operations_without_inferring_selection() {
     proof { reveal_strlit("test:root"); reveal_strlit("verify.root"); reveal_strlit("root"); }
     let empty: Vec<&str> = Vec::new();

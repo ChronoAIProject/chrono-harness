@@ -133,6 +133,20 @@ Decoding and constructing these input inventories, canonical-route filtering and
 the rest of the adapter remain migration obligations. Additional total runtime
 and allocation costs have not been measured.
 
+Root declarations and unit verifier membership now use the same proved owner.
+A declaration must supply a nonempty list with every entry a text value naming
+both an explicitly registered file and exactly one canonical root route. Repeated
+mentions of a valid root remain valid; ambiguous routes fail even when their
+selection flags differ. A unit has a verifier exactly when one of its own action
+operations matches a registered route operation. Missing or malformed action
+operations cannot establish membership, and a root filename cannot substitute
+for an operation. Independent verified examples cover absent/empty/malformed
+lists, each missing inventory, ambiguity, Unicode value identity, duplicates and
+unrelated actions. Declaration validity does not establish selected execution or
+proof admission. The adapter calls these implementations after borrowing the
+explicit JSON inventories; that conversion and the remaining adapter still have
+no complete proof. No FILEMAP gap is cleared by these partial migrations.
+
 **Product and coverage policy change together:** declaring a root no longer
 satisfies affected-root coverage without its explicit selected proof consumer.
 This gate reports the missing relationship and does not select extra tests or

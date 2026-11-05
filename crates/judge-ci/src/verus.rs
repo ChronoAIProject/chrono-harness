@@ -495,20 +495,21 @@ pub(super) fn apply(
             );
         }
     }
+    let registered_files = snapshot.files.keys().map(String::as_str).collect();
     for (id, unit) in &snapshot.projects {
         ledger.record(
             format!("unit:{id}:language=verus"),
             unit["language"] == "verus",
         );
+        let operations = unit["actions"]
+            .as_object()
+            .into_iter()
+            .flat_map(|actions| actions.values())
+            .map(|action| action["operation"].as_str())
+            .collect();
         ledger.record(
             format!("unit:{id}:registered-verifier"),
-            unit["actions"].as_object().is_some_and(|actions| {
-                actions.values().any(|action| {
-                    action["operation"]
-                        .as_str()
-                        .is_some_and(|op| roots.iter().any(|route| route.operation == op))
-                })
-            }),
+            verus_policy::admits_unit_verifier(&operations, &roots),
         );
     }
     let mut specifications = 0;
@@ -523,17 +524,12 @@ pub(super) fn apply(
             specifications += 1;
         }
         if matches!(kind, Some("program" | "specification")) {
+            let declared = verification["roots"]
+                .as_array()
+                .map(|roots| roots.iter().map(serde_json::Value::as_str).collect());
             ledger.record(
                 format!("file:{path}:verification-roots"),
-                verification["roots"].as_array().is_some_and(|declared| {
-                    !declared.is_empty()
-                        && declared.iter().all(|root| {
-                            root.as_str().is_some_and(|root| {
-                                verus_policy::find_root_route(&roots, root).is_some()
-                                    && snapshot.files.contains_key(root)
-                            })
-                        })
-                }),
+                verus_policy::admit_declared_roots(declared.as_ref(), &registered_files, &roots),
             );
             for root in verification["roots"].as_array().into_iter().flatten() {
                 if let Some(root) = root.as_str() {
