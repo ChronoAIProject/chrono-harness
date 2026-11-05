@@ -1,6 +1,10 @@
 use chrono_ci::{generate, init, release};
 use serde_json::{Value, json};
-use std::{fs, path::Path, process::Command};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 fn config() -> Value {
     json!({
@@ -34,6 +38,15 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .output()
         .unwrap()
 }
+fn recording_program(root: &Path) -> PathBuf {
+    let program = root.join("$CHRONO_BASE");
+    std::os::unix::fs::symlink(
+        fs::canonicalize(env!("CARGO_BIN_EXE_chrono-ci-test-transport")).unwrap(),
+        &program,
+    )
+    .unwrap();
+    program
+}
 fn script(rendered: &str) -> String {
     rendered
         .split("        run: |\n")
@@ -53,8 +66,7 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
         .tempdir()
         .unwrap();
     let root = d.path();
-    let program = root.join("literal command.py");
-    fs::write(&program, "import json,sys\nfrom pathlib import Path\nPath('args.json').write_text(json.dumps(sys.argv[1:]))\nprint('original failure',file=sys.stderr)\nsys.exit(17)\n").unwrap();
+    let program = recording_program(root);
     let args = [
         "",
         "space value",
@@ -64,7 +76,7 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
         "$(touch bad2)",
     ];
     let mut c = config();
-    c["jobs"][0]["command"] = json!(["/usr/bin/python3", program.to_str().unwrap()]);
+    c["jobs"][0]["command"] = json!([program]);
     c["jobs"][0]["command"]
         .as_array_mut()
         .unwrap()
@@ -88,6 +100,7 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
     let workflow = fs::read_to_string(root.join(".github/workflows/package.yml")).unwrap();
     let run = Command::new("/bin/bash")
         .args(["-e", "-c", &script(&workflow)])
+        .env("CHRONO_TEST_RECORDING", "release")
         .current_dir(root)
         .output()
         .unwrap();
@@ -322,6 +335,12 @@ fn shared_downloads_preserve_each_jobs_expanded_dependencies_and_destinations() 
             "${{ needs.native.outputs.artifact_id }}"
         );
         assert_eq!(downloads[0]["with"]["path"], job.downloads[0].directory);
+        assert_eq!(
+            downloads[0]["uses"],
+            c.download_artifact_action.as_deref().unwrap()
+        );
+        assert!(downloads[0]["with"].get("name").is_none());
+        assert!(downloads[0]["with"].get("pattern").is_none());
         assert_eq!(downloads[0]["with"]["merge-multiple"], true);
         assert_eq!(
             downloads[0]["if"],
@@ -382,22 +401,15 @@ fn release_units_reject_undeclared_edges_cycles_and_overlapping_downloads() {
 }
 
 #[test]
-fn release_units_cli_runs_non_rust_literal_command_and_writes_original_dependency_data() {
+fn release_units_cli_runs_literal_command_and_writes_original_dependency_data() {
     let d = tempfile::Builder::new()
         .prefix("units host λ ")
         .tempdir()
         .unwrap();
     let root = d.path();
-    let program = root.join("consumer command.py");
-    fs::write(&program,"import json,sys\nfrom pathlib import Path\nPath('args.json').write_text(json.dumps(sys.argv[1:]))\nsys.stderr.buffer.write(b'original failure\\xff')\nsys.exit(17)\n").unwrap();
+    let program = recording_program(root);
     let mut c = units_config();
-    c["jobs"][1]["command"] = json!([
-        "/usr/bin/python3",
-        program.to_str().unwrap(),
-        "$HOME",
-        "$(touch wrong)",
-        "space value"
-    ]);
+    c["jobs"][1]["command"] = json!([program, "$HOME", "$(touch wrong)", "space value"]);
     c["jobs"][1]["dependency_metadata"] = json!("metadata with spaces/current.json");
     write(root, "source.json", &c);
     assert!(init(root, &root.join("source.json")).unwrap());
@@ -411,6 +423,7 @@ fn release_units_cli_runs_non_rust_literal_command_and_writes_original_dependenc
     let original = r#"{"native":{"result":"failure","outputs":{"artifact_id":"123","attempt":"1","run_id":"45"}}}"#;
     let result = Command::new("/bin/bash")
         .args(["-e", "-c", &command])
+        .env("CHRONO_TEST_RECORDING", "release-units")
         .env("CHRONO_RELEASE_DEPENDENCIES", original)
         .current_dir(root)
         .output()
@@ -477,49 +490,4 @@ fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
             assert_eq!(fs::read(&workflow).unwrap(), rendered, "{key}");
         }
     }
-}
-
-#[test]
-fn release_single_id_download_extracts_receipt_at_the_registered_root() {
-    let c: release::Config = serde_json::from_value(units_config()).unwrap();
-    let yaml = release::render(&c).unwrap();
-    let d = tempfile::tempdir().unwrap();
-    let workflow = d.path().join("workflow.yml");
-    fs::write(&workflow, yaml).unwrap();
-    // This models the exact pinned action's extraction contract, including its
-    // default-false negative control. A single artifact ID is NOT a name download.
-    // https://github.com/actions/download-artifact/blob/d3f86a106a0bac45b974a628896c90dbdf5c8093/src/download-artifact.ts
-    let out = Command::new("/usr/bin/python3")
-        .args(["-c", r#"
-import io, pathlib, sys, zipfile
-root = pathlib.Path(sys.argv[1]); workflow = (root/'workflow.yml').read_text()
-step = workflow.split('      - name: Download selected original artifact from native\n')[1].split('      - name:')[0]
-assert 'uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093' in step
-inputs = dict(line.strip().split(': ', 1) for line in step.splitlines() if line.startswith('          '))
-assert inputs['artifact-ids'] == '${{ needs.native.outputs.artifact_id }}'
-assert 'name' not in inputs and 'pattern' not in inputs
-registered = root / inputs['path'].strip('"')
-artifact_name = 'native-output-123-2'
-archive = io.BytesIO()
-with zipfile.ZipFile(archive, 'w') as z: z.writestr('receipt.json', b'original receipt bytes')
-def extract(inputs, resolved_path):
-    # Pinned action: isSingleArtifactDownload = !!inputs.name; merge default false.
-    target = resolved_path if inputs.get('name') or inputs.get('merge-multiple', 'false') == 'true' else resolved_path / artifact_name
-    with zipfile.ZipFile(archive) as z: z.extractall(target)
-    return target
-negative = root/'default-control'
-assert extract({'artifact-ids': '567'}, negative) == negative/artifact_name
-assert not (negative/'receipt.json').exists()
-assert (negative/artifact_name/'receipt.json').read_bytes() == b'original receipt bytes'
-extract(inputs, registered)
-assert (registered/'receipt.json').read_bytes() == b'original receipt bytes'
-assert not (registered/artifact_name).exists()
-"#, d.path().to_str().unwrap()])
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
 }
