@@ -995,6 +995,11 @@ The immutable `namespace.json` binds the physical Git owner and the executable's
 lease. Only replacement of the executable common to these enrollments takes it
 exclusively and excludes every actual affected enrollment before publishing.
 This protects the real shared executable without serializing ordinary updates.
+Deployment validates the coordinator's current policy and cache ownership. Other
+excluded enrollments bind their physical attachment, HEAD and original lease;
+their independent policy changes do not block executable publication. Their next
+ordinary use still validates policy/configuration and requires explicit adoption
+where needed. Deployment leaves those policies and enrollment records unchanged.
 Maintenance enumerates only the declared enrollment namespace and validates each
 record's explicit address. Unknown data never authorizes disposal. Aggregate
 state is refused on ordinary entry; this implementation has no compatibility
@@ -1557,12 +1562,13 @@ Python owns byte validation, original-inode preservation, atomic replacement and
 interrupted-publication reentry. Rust owns physical attachment, committed
 endpoints, original admission/enrollment EX and publication/adoption checks.
 
-The deployment owner produces its actual exclusion set from the coordinator
-ledger and Git owner inventory. Admission prevents new enrollment/use; deployment
+The deployment owner produces its actual exclusion set from per-worktree records
+and Git owner inventory. Exclusive executable publication prevents new enrollment/use; deployment
 acquires original EX for every unresolved enrollment of that physical coordinator,
 including linked attachments, before any selected-byte effect. It keeps those
 capabilities through publication/adoption and rechecks admission, ledger bytes,
-inventory, attachments, committed endpoints and lease identities. Live descendants,
+inventory, attachments, coordinator policy and lease identities. It does not
+require policy adoption by excluded linked enrollments. Live descendants,
 unknown/unavailable affected attachments, missing ownership or unjoined use inputs
 refuse specifically, preserving installed bytes and originals. Disposed generations
 do not become live consumers; another physical coordinator is outside this set.

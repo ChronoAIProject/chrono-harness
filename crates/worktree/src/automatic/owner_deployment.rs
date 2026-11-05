@@ -116,7 +116,13 @@ impl Manager {
             for (entry, head, lease) in &exclusions {
                 lease.stable()?;
                 self.birth_ready(entry)?;
-                self.check_entry(r, entry, head, None)?;
+                if entry.path == root {
+                    self.check_entry(r, entry, head, None)?;
+                } else {
+                    // Publication excludes these consumers without using their
+                    // caches or adopting their independently owned policies.
+                    self.check_attachment(r, entry, head, None)?;
+                }
             }
             Ok(())
         };
