@@ -148,8 +148,20 @@ fn native_seed_api(parent: &Path, args: &[std::ffi::OsString]) -> ExitCode {
             .unwrap();
     } else if endpoint.contains("/artifacts?") {
         let artifact = json!({"name":format!("chrono-context-{}-1", run["id"]), "expired":false});
+        let mut artifacts = vec![artifact.clone()];
+        if let Some(units) = data["units"].as_object() {
+            for (index, (unit, observation)) in units.iter().enumerate() {
+                let id = 300 + index;
+                let attempt = observation.get("attempt").cloned().unwrap_or(json!(1));
+                artifacts.push(json!({"id":id,
+                    "name":format!("chrono-unit-{unit}-{}-{attempt}", run["id"]),
+                    "expired":false,
+                    "archive_download_url":format!("https://api.github.com/repos/fixture/native/actions/artifacts/{id}/zip"),
+                    "workflow_run":{"id":run["id"],"head_sha":run["head_sha"]}}));
+            }
+        }
         emit(
-            &json!([{"artifacts":if case == "missing" {vec![]} else {vec![artifact.clone()]}},
+            &json!([{"artifacts":if case == "missing" {vec![]} else {artifacts}},
             {"artifacts":if case == "ambiguous" {vec![artifact]} else {vec![]}}]),
         );
     } else if endpoint.contains("/jobs?") {

@@ -1,6 +1,5 @@
 //! GitHub transports fixed unit artifacts; the scoped judge decides their acceptance.
 use super::*;
-mod typed;
 use chrono_harness::{CommandSpec, ProcessResult, file_identity, run_process_observed_for, sha256};
 use std::{
     collections::BTreeMap,
@@ -87,6 +86,22 @@ fn share_report_alias(
     ))
 }
 
+struct AcquisitionBudget {
+    deadline: Instant,
+    stdout_remaining: usize,
+    stderr_remaining: usize,
+}
+
+impl AcquisitionBudget {
+    fn remaining(&self) -> Result<Duration, String> {
+        let remaining = self.deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err("artifact acquisition cumulative deadline exhausted".into());
+        }
+        Ok(remaining)
+    }
+}
+
 struct Transport<'a> {
     root: &'a Path,
     config: &'a units::Gather,
@@ -98,6 +113,7 @@ struct Transport<'a> {
     shared_report_aliases: Vec<Value>,
     acquisition_path: Option<String>,
     downloads: Option<chrono_harness::retained_artifacts::retention::Publication>,
+    acquisition: Option<AcquisitionBudget>,
 }
 
 impl<'a> Transport<'a> {
@@ -124,6 +140,7 @@ impl<'a> Transport<'a> {
             shared_report_aliases: vec![],
             acquisition_path: None,
             downloads: None,
+            acquisition: None,
             resources: c
                 .resource_observation
                 .as_ref()
@@ -151,28 +168,25 @@ impl<'a> Transport<'a> {
         remaining: Duration,
         output_limit: usize,
     ) -> Result<ProcessResult, String> {
-        let executable = self.executable.clone();
-        let digest = self.digest.clone();
-        self.process_program(&executable, &digest, args, &[], remaining, output_limit)
-    }
-
-    fn process_program(
-        &mut self,
-        executable: &str,
-        digest: &str,
-        args: &[String],
-        stdin: &[u8],
-        remaining: Duration,
-        output_limit: usize,
-    ) -> Result<ProcessResult, String> {
+        let (remaining, output_limit) = if let Some(budget) = &self.acquisition {
+            let limit = output_limit
+                .min(budget.stdout_remaining)
+                .min(budget.stderr_remaining);
+            if limit == 0 {
+                return Err("artifact acquisition cumulative stream limit exhausted".into());
+            }
+            (remaining.min(budget.remaining()?), limit)
+        } else {
+            (remaining, output_limit)
+        };
         let spec = CommandSpec {
-            program: executable.into(),
+            program: self.executable.clone(),
             args: args.to_vec(),
             env: self.environment.clone(),
             timeout_seconds: self.config.timeout_seconds,
             output_limit_bytes: output_limit,
         };
-        let p = run_process_observed_for(self.root, &spec, stdin, digest, remaining)?;
+        let p = run_process_observed_for(self.root, &spec, &[], &self.digest, remaining)?;
         // Credentials are explicitly omitted, while the original nonsecret process bytes and environment digest remain.
         let env: BTreeMap<_, _> = p
             .environment
@@ -183,7 +197,64 @@ impl<'a> Transport<'a> {
             "environment":env,"omitted_credentials":self.config.credential_environment,"original_environment_digest":p.environment_digest,
             "stdin_sha256":p.stdin_sha256,"stdout_bytes":p.stdout_bytes,"stderr_bytes":p.stderr_bytes,
             "stdout_sha256":p.stdout_sha256,"stderr_sha256":p.stderr_sha256,"exit_code":p.exit_code,"failure":p.failure}));
+        if let Some(budget) = &mut self.acquisition {
+            budget.stdout_remaining = budget.stdout_remaining.saturating_sub(p.stdout_bytes.len());
+            budget.stderr_remaining = budget.stderr_remaining.saturating_sub(p.stderr_bytes.len());
+            budget.remaining()?;
+        }
         Ok(p)
+    }
+
+    fn begin_artifact(&mut self) -> Result<(), String> {
+        self.acquisition = Some(AcquisitionBudget {
+            deadline: Instant::now()
+                .checked_add(Duration::from_secs(self.config.timeout_seconds))
+                .ok_or("artifact acquisition deadline overflow")?,
+            stdout_remaining: self.config.output_limit_bytes,
+            stderr_remaining: self.config.output_limit_bytes,
+        });
+        Ok(())
+    }
+
+    fn artifact_metadata(
+        &mut self,
+        run: u64,
+        repository: &str,
+        name: &str,
+        candidate: &str,
+    ) -> Result<(), String> {
+        let pages = self.api(
+            &format!("repos/{repository}/actions/runs/{run}/artifacts?per_page=100"),
+            true,
+        )?;
+        let mut found = Vec::new();
+        for page in pages.as_array().ok_or("artifact metadata pages missing")? {
+            for artifact in page["artifacts"]
+                .as_array()
+                .ok_or("artifact metadata list missing")?
+            {
+                if artifact["name"] == name {
+                    found.push(artifact);
+                }
+            }
+        }
+        if found.len() != 1
+            || found[0]["expired"] != false
+            || found[0]["workflow_run"]["id"] != run
+            || found[0]["workflow_run"]["head_sha"] != candidate
+        {
+            return Err("artifact missing/ambiguous/expired or run/source binding differs".into());
+        }
+        let id = found[0]["id"]
+            .as_u64()
+            .filter(|n| *n > 0)
+            .ok_or("artifact ID missing")?;
+        if found[0]["archive_download_url"]
+            != format!("https://api.github.com/repos/{repository}/actions/artifacts/{id}/zip")
+        {
+            return Err("artifact archive endpoint differs from selected ID".into());
+        }
+        Ok(())
     }
 
     fn download(
@@ -193,9 +264,13 @@ impl<'a> Transport<'a> {
         artifact: &str,
         directory: &str,
     ) -> Result<String, String> {
-        let deadline = Instant::now()
-            .checked_add(Duration::from_secs(self.config.timeout_seconds))
-            .ok_or("artifact download deadline overflow")?;
+        let deadline = if let Some(budget) = &self.acquisition {
+            budget.deadline
+        } else {
+            Instant::now()
+                .checked_add(Duration::from_secs(self.config.timeout_seconds))
+                .ok_or("artifact download deadline overflow")?
+        };
         let absolute = no_symlink_parents(self.root, directory)?;
         if absolute.exists() {
             return Err("artifact download destination exists; retain original acquisition".into());
@@ -552,18 +627,10 @@ fn inner(
     if context["canonical_argv"] != json!(canonical) {
         return Err("collection command context mismatch".into());
     }
-    let typed_profile = if c.gather.typed_acquisition.is_some() {
+    let stream_profile = if c.schema == units::SCHEMA {
         let profile =
             chrono_harness::load_config(&no_symlink_parents(root, &c.collection.check_config)?)?;
-        if !chrono_harness::units::reference_publication(&profile)?
-            || !chrono_harness::units::stream_publication(&profile)
-        {
-            return Err(
-                "typed acquisition supports the adopted retained-reference/v2 collector only"
-                    .into(),
-            );
-        }
-        Some(profile)
+        chrono_harness::units::stream_publication(&profile).then_some(profile)
     } else {
         None
     };
@@ -682,23 +749,11 @@ fn inner(
         } else {
             format!("chrono-unit-{unit}-{id}-{attempt}")
         };
-        let mut typed = if typed_profile.is_some() {
-            Some(typed::Artifact::new(
-                transport,
-                id,
-                repository,
-                &artifact,
-                &destination,
-                candidate,
-            )?)
-        } else {
-            None
-        };
-        let destination = if let Some(acquisition) = &typed {
-            acquisition.directory.clone()
-        } else {
-            transport.download(id, repository, &artifact, &destination)?
-        };
+        transport.begin_artifact()?;
+        if c.job_gating.is_some() {
+            transport.artifact_metadata(id, repository, &artifact, candidate)?;
+        }
+        let destination = transport.download(id, repository, &artifact, &destination)?;
         let downloaded = |input: &str| -> Result<String, String> {
             let relative = input
                 .strip_prefix(&w.artifact_directory)
@@ -706,57 +761,6 @@ fn inner(
             relative_path(relative)?;
             Ok(format!("{destination}/{relative}"))
         };
-        if let (Some(acquisition), Some(profile)) = (typed.as_mut(), typed_profile.as_ref()) {
-            let context_member = w
-                .context_path
-                .strip_prefix(&w.artifact_directory)
-                .ok_or("typed context outside uploaded root")?;
-            acquisition.member(
-                transport,
-                context_member,
-                Some(
-                    run["production"]["context_sha256"]
-                        .as_str()
-                        .ok_or("original context identity missing")?,
-                ),
-                64 * 1024 * 1024,
-            )?;
-            let report_member = registered[&unit]
-                .report_path
-                .strip_prefix(&w.artifact_directory)
-                .ok_or("typed report outside uploaded root")?;
-            let limits: chrono_judge_ci::CollectionLimits = profile
-                .policy
-                .get("collection_limits")
-                .cloned()
-                .map(serde_json::from_value)
-                .transpose()
-                .map_err(|e| e.to_string())?
-                .unwrap_or_default();
-            let bytes = acquisition.member(
-                transport,
-                report_member,
-                Some(
-                    run["production"]["report_sha256"]
-                        .as_str()
-                        .ok_or("original report identity missing")?,
-                ),
-                limits.report_bytes,
-            )?;
-            let mapping = chrono_harness::prepared::ArtifactTransport {
-                source_directory: w.artifact_directory.clone(),
-                directory: format!("{destination}/"),
-            };
-            chrono_judge_ci::unit_originals(
-                root,
-                profile,
-                &unit,
-                &bytes,
-                Some(&mapping),
-                |original, limit| acquisition.original(transport, original, &mapping, limit),
-            )?;
-            acquisition.finish()?;
-        }
         if c.job_gating.is_some() {
             if run["production"]["context_sha256"]
                 != file_identity(&no_symlink_parents(root, &downloaded(&w.context_path)?)?)?.0
@@ -771,6 +775,41 @@ fn inner(
                     "unit {unit} artifact differs from original production output"
                 ));
             }
+        }
+        if let Some(profile) = &stream_profile {
+            let limits: chrono_judge_ci::CollectionLimits = profile
+                .policy
+                .get("collection_limits")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            let bytes = chrono_harness::units::read_bounded(
+                root,
+                &downloaded(&registered[&unit].report_path)?,
+                limits.report_bytes,
+            )?;
+            let mapping = chrono_harness::prepared::ArtifactTransport {
+                source_directory: w.artifact_directory.clone(),
+                directory: format!("{destination}/"),
+            };
+            chrono_judge_ci::unit_originals(
+                root,
+                profile,
+                &unit,
+                &bytes,
+                Some(&mapping),
+                |original, limit| {
+                    let path = chrono_harness::prepared::original_path(original, Some(&mapping))?;
+                    chrono_harness::units::read_bounded(root, &path, limit)
+                },
+            )?;
+            transport
+                .acquisition
+                .as_ref()
+                .ok_or("artifact budget missing")?
+                .remaining()?;
         }
         let unit_context: Value = decode(
             &fs::read(no_symlink_parents(root, &downloaded(&w.context_path)?)?)
@@ -849,11 +888,7 @@ fn inner(
             "--header".into(),
             "Accept: application/vnd.github.raw".into(),
         ];
-        let source = if let Some(acquisition) = typed.as_mut() {
-            acquisition.run(transport, &source_args)?
-        } else {
-            transport.run(&source_args)?
-        };
+        let source = transport.run(&source_args)?;
         if source != fs::read(root.join(workflow_path)).map_err(|e| e.to_string())? {
             return Err(format!("unit {unit} executed a different workflow source"));
         }
@@ -881,11 +916,7 @@ fn inner(
         }
         reports.push(input);
         let endpoint = format!("repos/{repository}/actions/runs/{id}");
-        let fresh = if let Some(acquisition) = typed.as_mut() {
-            decode(&acquisition.run(transport, &["api".into(), endpoint])?)?
-        } else {
-            transport.api(&endpoint, false)?
-        };
+        let fresh = transport.api(&endpoint, false)?;
         if c.job_gating.is_some() {
             let d =
                 serde_json::from_value(context["detection"].clone()).map_err(|e| e.to_string())?;
@@ -908,9 +939,12 @@ fn inner(
                 return Err("unit run changed while collecting original evidence".into());
             }
         }
-        if let Some(acquisition) = &typed {
-            acquisition.finish()?;
-        }
+        transport
+            .acquisition
+            .as_ref()
+            .ok_or("artifact budget missing")?
+            .remaining()?;
+        transport.acquisition = None;
         identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"job_id":run["unit_job_id"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
     }
     if identities.iter().any(|i| i["conclusion"] != "success") {

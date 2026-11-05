@@ -118,6 +118,48 @@ fn generator_projects_independent_workflows_with_exact_scoped_commands() {
 }
 
 #[test]
+fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
+    let mut raw = config_value();
+    raw["collection"]["schema"] = json!("chrono-github-ci/v4");
+    raw["collection"]["facts_config"] = json!(".chrono-harness/config.json");
+    raw["collection"]["failure_artifact_directory"] = json!(".chrono-harness/state/");
+    let mut extra = raw["units"]["alpha"].clone();
+    extra["workflow_path"] = json!(".github/workflows/alpha-diagnostics.yml");
+    extra["name"] = json!("alpha diagnostics check");
+    raw["units"]["alpha-diagnostics"] = extra;
+    for id in ["alpha", "beta", "alpha-diagnostics"] {
+        raw["units"][id]["artifact_directory"] = json!(format!(".chrono-harness/state/{id}/"));
+        raw["units"][id]["context_path"] =
+            json!(format!(".chrono-harness/state/{id}/context.json"));
+    }
+    raw["job_gating"] = json!({"schema":"chrono-job-gating/v1","detector":{
+        "runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["host-tools-only"],
+        "sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}});
+    let configured: chrono_ci::units::Config = serde_json::from_value(raw).unwrap();
+    chrono_ci::units::validate(&configured).unwrap();
+    let outputs = chrono_ci::units::render(&configured, ".chrono-harness/ci/units.json").unwrap();
+    let parent: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(&outputs[".github/workflows/collection.yml"]).unwrap();
+    let mut names = std::collections::BTreeSet::new();
+    let mut diagnostics = 0;
+    for job in parent["jobs"].as_mapping().unwrap().values() {
+        for step in job["steps"].as_sequence().unwrap() {
+            if step["name"] == "Preserve failed job diagnostics" {
+                diagnostics += 1;
+            }
+            if step["uses"] == configured.collection.upload_artifact_action.as_str() {
+                let name = step["with"]["name"].as_str().unwrap();
+                assert!(
+                    names.insert(name),
+                    "two jobs upload the same artifact: {name}"
+                );
+            }
+        }
+    }
+    assert_eq!(diagnostics, configured.units.len());
+}
+
+#[test]
 fn generated_unit_workflow_cli_adoption_uses_the_local_canonical_command() {
     let (host, base, candidate) = consumer();
     let root = host.path();
