@@ -392,7 +392,8 @@ impl Context {
             chrono_harness::retained_artifacts::retention::Inventory::adopted(&self.root)?;
         let mut retirements = vec![];
         for row in report["producer_objects"].as_array().into_iter().flatten() {
-            let Some(paths) = row["original_retirement"]["retention_paths"].as_array() else {
+            let retirement = row.get("original_retirement").unwrap_or(row);
+            let Some(paths) = retirement["retention_paths"].as_array() else {
                 continue;
             };
             let paths = paths

@@ -685,9 +685,18 @@ retention owner, within its unchanged budgets. Other declared retirement effects
 reference the continuation record, which remains rooted while enrollment/link
 publication is incomplete. Thus partial disposal retains its ordinary reentry
 path. Existing original-release assertions and a bounded partial-disposal
-regression cover this relationship. Corrected CI migration and final
-clean-candidate canonical results remain to be established before this scope can
-be called verified.
+regression cover this relationship. The corrected installed owner migrated all
+1,418 CI objects in 6.84 seconds, preserving reservations and historical outcomes.
+The original open-file failure remains evidence. The canonical bare check first
+refused a newly fetched dev inventory; I4 integrated that frozen landed revision
+without changing unrelated upstream source. Its next run reached business
+execution but exhausted the unchanged 2400-second participation deadline before
+worktree inventory/core/adoption completed. The original producer logged 75
+completed operation statuses, including failures, but final receipts were not
+published before cancellation; those events do not establish a canonical pass.
+The existing registered unit and collection modes can retain complete originals
+per unit while covering the same full two-endpoint DELTA under unchanged bounds.
+Final unit/collection and ordinary-host acceptance remain open.
 
 The adopted ordinary bootstrap reclaimed five registered target directories:
 3,475,018,109 logical bytes before, zero after. The later ordinary formatting

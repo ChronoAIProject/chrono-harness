@@ -999,7 +999,10 @@ metadata EX gate per existing allocation, briefly excludes cache consumers and
 then publishes context/cursor under those retained gates. It preserves the old
 context bytes and original registrations, refuses live consumers and does not
 raise descriptor limits. A real CI producer migration exhausted descriptors
-before this change; its original partial partition result remains evidence.
+before this change; its original partial partition result remains evidence. The
+corrected installed owner subsequently migrated all 1,418 CI objects. Fresh and
+resumed retirements both forward their exact declared paths to retention; bounded
+partial disposal keeps its continuation record until physical effects finish.
 See the coverage table for current check and actual-host acceptance gaps.
 
 The fixed lifecycle commands default to `--host-root .` and
