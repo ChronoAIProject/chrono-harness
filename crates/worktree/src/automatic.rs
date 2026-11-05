@@ -141,12 +141,17 @@ impl EvidenceExclusion {
             );
         }
         let observed = r.checkout_identity(target)?;
+        let branch = if e.cache_only {
+            observed.branch.clone()
+        } else {
+            format!("refs/heads/{}", e.branch)
+        };
         for lock in [
             observed.metadata.join("index.lock"),
             observed.metadata.join("HEAD.lock"),
             common.join("packed-refs.lock"),
             common.join("config.lock"),
-            common.join(format!("refs/heads/{}.lock", e.branch)),
+            common.join(format!("{branch}.lock")),
         ] {
             match fs::symlink_metadata(lock) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
@@ -160,7 +165,7 @@ impl EvidenceExclusion {
             attachment(r, target)?
         };
         if actual != e.attachment
-            || observed.branch != format!("refs/heads/{}", e.branch)
+            || observed.branch != branch
             || absolute(&observed.common, false)? != common
         {
             return Err("evidence enrollment attachment changed".into());
