@@ -137,6 +137,38 @@ fn owner_deployment_retains_original_ex_through_publication_and_adoption() {
         0,
         "same original publication is recoverable"
     );
+
+    let (h, exe, path, sha) = fixture();
+    let target = linked(&h);
+    let policy_path = target.join(POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["timeout_seconds"] = value!(policy["timeout_seconds"].as_u64().unwrap() + 1);
+    let policy_bytes = serde_json::to_vec_pretty(&policy).unwrap();
+    fs::write(&policy_path, &policy_bytes).unwrap();
+    commit(&target);
+    let before = h.ledger();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(
+        code, 0,
+        "excluded linked consumers do not couple deployment to their policy: {report} {error}"
+    );
+    assert_eq!(h.ledger(), before, "deployment does not adopt linked policy");
+    assert_eq!(fs::read(&policy_path).unwrap(), policy_bytes);
+    let (code, report, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report.to_string().contains("policy/configuration"),
+        "{report}"
+    );
+    assert!(report.get("managed_process").is_none());
 }
 fn inherited_holder(h: &Host, entry: &Value) -> std::process::Child {
     let lease = chrono_harness::ownership::Lease::acquire(
