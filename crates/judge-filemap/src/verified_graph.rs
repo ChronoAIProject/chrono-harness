@@ -2,7 +2,7 @@
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 use core::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
@@ -1251,6 +1251,177 @@ pub fn name_index(names: &[&str], key: &str) -> (found: Option<usize>)
         }
     }
     None
+}
+
+/// Complete typed keys belonging to one source, independent of input order/origin.
+pub open spec fn source_edge_keys(edges: Seq<UnionEdge>, source: Seq<u8>) -> Set<EdgeKey> {
+    union_edge_keys(edges).to_set().filter(|key: EdgeKey| key.0 == source)
+}
+
+pub open spec fn source_names_present(names: Seq<&str>, edges: Seq<UnionEdge>) -> bool {
+    forall|i: int| 0 <= i < edges.len()
+        ==> name_members(names).contains((#[trigger] edges[i]).edge.from_bytes())
+}
+
+#[verifier::opaque]
+pub open spec fn source_row_matches(row: Seq<&Edge>, edges: Seq<UnionEdge>, source: Seq<u8>) -> bool {
+    ordered_edges(row)
+        && reference_edge_keys(row).to_set() == source_edge_keys(edges, source)
+        && reference_edge_keys(row).no_duplicates()
+        && row.len() == source_edge_keys(edges, source).len()
+}
+
+spec fn bucket_keys(buckets: Map<usize, BTreeSet<&Edge>>, at: usize) -> Set<EdgeKey> {
+    if buckets.contains_key(at) { buckets[at]@.map(|edge: &Edge| edge.key()) }
+    else { Set::empty() }
+}
+
+proof fn source_keys_push(edges: Seq<UnionEdge>, next: UnionEdge, source: Seq<u8>)
+    ensures source_edge_keys(edges.push(next), source)
+        == if next.edge.from_bytes() == source {
+            source_edge_keys(edges, source).insert(next.edge.key())
+        } else { source_edge_keys(edges, source) },
+{
+    assert(union_edge_keys(edges.push(next)) =~= union_edge_keys(edges).push(next.edge.key()));
+    union_edge_keys(edges).lemma_push_to_set_commute(next.edge.key());
+    assert(union_edge_keys(edges).push(next.edge.key()).to_set()
+        =~= union_edge_keys(edges).to_set().insert(next.edge.key()));
+    assert(source_edge_keys(edges.push(next), source) =~= if next.edge.from_bytes() == source {
+        source_edge_keys(edges, source).insert(next.edge.key())
+    } else { source_edge_keys(edges, source) });
+}
+
+proof fn ordered_reference_count(row: Seq<&Edge>)
+    requires ordered_edges(row),
+    ensures reference_edge_keys(row).no_duplicates(),
+        reference_edge_keys(row).to_set().len() == row.len(),
+{
+    reveal(ordered_edges);
+    assert forall|i: int, j: int| 0 <= i < j < row.len()
+        implies reference_edge_keys(row)[i] != reference_edge_keys(row)[j] by {
+        less_keys_differ(row[i], row[j]);
+    }
+    reference_edge_keys(row).unique_seq_to_set();
+}
+
+/// Group arbitrary supplied edges into exact sorted rows in the supplied node order.
+pub fn source_rows<'a>(names: &[&str], edges: &'a [UnionEdge]) -> (out: Option<Vec<Vec<&'a Edge>>>)
+    requires ordered_names(names@),
+    ensures out.is_some() == source_names_present(names@, edges@),
+        match out {
+            Some(rows) => rows.len() == names.len()
+                && forall|i: int| 0 <= i < rows.len()
+                    ==> source_row_matches(#[trigger] rows[i]@, edges@, names@[i].spec_bytes()),
+            None => true,
+        },
+{
+    proof {
+        edge_obeys_cmp();
+        broadcast use vstd::laws_cmp::group_laws_cmp;
+        assert(vstd::laws_cmp::obeys_cmp::<usize>());
+        broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+        assert(vstd::laws_cmp::obeys_cmp::<&Edge>());
+    }
+    broadcast use vstd::std_specs::btree::axiom_maps_deref_key_to_value;
+    broadcast use vstd::std_specs::btree::axiom_contains_deref_key;
+    broadcast use vstd::std_specs::btree::axiom_deref_key_removed;
+    let mut buckets: BTreeMap<usize, BTreeSet<&Edge>> = BTreeMap::new();
+    let mut end: usize = 0;
+    while end < edges.len()
+        invariant end <= edges.len(), ordered_names(names@),
+            vstd::laws_cmp::obeys_cmp::<usize>(), vstd::laws_cmp::obeys_cmp::<&Edge>(),
+            source_names_present(names@, edges@.take(end as int)),
+            forall|i: usize| i < names.len() ==> bucket_keys(buckets@, i)
+                == source_edge_keys(edges@.take(end as int), #[trigger] names@[i as int].spec_bytes()),
+        decreases edges.len() - end,
+    {
+        let edge = &edges[end].edge;
+        let at = match name_index(names, edge.from.as_str()) {
+            Some(at) => at,
+            None => {
+                proof {
+                    assert(!name_members(names@).contains(edge.from_bytes()));
+                    assert(!source_names_present(names@, edges@));
+                }
+                return None;
+            },
+        };
+        let ghost old_buckets = buckets@;
+        let mut row = match buckets.remove(&at) {
+            Some(row) => row,
+            None => BTreeSet::new(),
+        };
+        assert(row@.map(|edge: &Edge| edge.key()) == bucket_keys(old_buckets, at));
+        let ghost old_row = row@;
+        row.insert(edge);
+        proof {
+            old_row.lemma_set_map_insert_commute(edge, |edge: &Edge| edge.key());
+            assert(row@ == old_row.insert(edge));
+            assert(row@.map(|edge: &Edge| edge.key())
+                == bucket_keys(old_buckets, at).insert(edge.key()));
+        }
+        buckets.insert(at, row);
+        proof {
+            assert(edges@.take(end as int + 1) =~= edges@.take(end as int).push(edges@[end as int]));
+            assert(name_members(names@).contains(edge.from_bytes()));
+            assert forall|i: usize| i < names.len() implies bucket_keys(buckets@, i)
+                == source_edge_keys(edges@.take(end as int + 1), #[trigger] names@[i as int].spec_bytes()) by {
+                source_keys_push(edges@.take(end as int), edges@[end as int], names@[i as int].spec_bytes());
+                if i != at {
+                    if i < at {
+                        byte_lt_strict(names@[i as int].spec_bytes(), names@[at as int].spec_bytes());
+                    } else {
+                        byte_lt_strict(names@[at as int].spec_bytes(), names@[i as int].spec_bytes());
+                    }
+                    assert(names@[i as int].spec_bytes() != edge.from_bytes());
+                }
+            }
+        }
+        end += 1;
+    }
+    assert(edges@.take(end as int) =~= edges@);
+    let mut rows: Vec<Vec<&Edge>> = Vec::with_capacity(names.len());
+    let mut at: usize = 0;
+    while at < names.len()
+        invariant at <= names.len(), rows.len() == at,
+            vstd::laws_cmp::obeys_cmp::<usize>(),
+            source_names_present(names@, edges@),
+            forall|i: usize| i < names.len() ==> bucket_keys(buckets@, i)
+                == source_edge_keys(edges@, #[trigger] names@[i as int].spec_bytes()),
+            forall|i: int| 0 <= i < rows.len()
+                ==> source_row_matches(#[trigger] rows@[i]@, edges@, names@[i].spec_bytes()),
+        decreases names.len() - at,
+    {
+        let row = match buckets.get(&at) {
+            Some(bucket) => {
+                let row = edge_inventory(bucket);
+                proof {
+                    reveal(ordered_edges);
+                    assert(ordered_edges(row@));
+                    row@.lemma_to_set_map_commutes(|edge: &Edge| edge.key());
+                    assert(reference_edge_keys(row@).to_set() == bucket_keys(buckets@, at));
+                }
+                row
+            },
+            None => {
+                let row: Vec<&Edge> = Vec::new();
+                proof {
+                    reveal(ordered_edges);
+                    assert(reference_edge_keys(row@).to_set() =~= Set::<EdgeKey>::empty());
+                    assert(reference_edge_keys(row@).to_set() == bucket_keys(buckets@, at));
+                }
+                row
+            },
+        };
+        proof {
+            ordered_reference_count(row@);
+            reveal(source_row_matches);
+            assert(source_row_matches(row@, edges@, names@[at as int].spec_bytes()));
+        }
+        rows.push(row);
+        at += 1;
+    }
+    Some(rows)
 }
 
 pub open spec fn row_names_present(names: Seq<&str>, keys: Seq<&str>) -> bool {

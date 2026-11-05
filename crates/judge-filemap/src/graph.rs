@@ -141,23 +141,14 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
         predecessors: BTreeMap::new(),
         traversed: vec![],
     };
-    let mut adjacency: BTreeMap<&str, BTreeSet<&Edge>> = BTreeMap::new();
-    for e in edges {
-        adjacency.entry(&e.edge.from).or_default().insert(&e.edge);
-    }
     let supplied_names: Vec<&str> = edges
         .iter()
         .flat_map(|e| [e.edge.from.as_str(), e.edge.to.as_str()])
         .chain(seeds.iter().map(|s| s.node.as_str()))
         .collect();
     let nodes = crate::verified_graph::name_inventory(&supplied_names);
-    let edge_rows: Vec<Vec<&Edge>> = nodes
-        .iter()
-        .map(|node| match adjacency.get(node) {
-            Some(row) => crate::verified_graph::edge_inventory(row),
-            None => vec![],
-        })
-        .collect();
+    let edge_rows = crate::verified_graph::source_rows(&nodes, edges)
+        .expect("edge sources belong to the explicit node inventory");
     let indices = {
         let seed_names: Vec<&str> = seeds.iter().map(|seed| seed.node.as_str()).collect();
         crate::verified_graph::index_edges(&nodes, &edge_rows, &seed_names)

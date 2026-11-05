@@ -896,4 +896,125 @@ fn later_longer_paths_do_not_replace_a_direct_parent() {
     assert(search.parents[0].is_none());
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn source_rows_cover_empty_isolated_unicode_and_missing_source_boundaries() {
+    proof {
+        reveal(policy::source_row_matches);
+        reveal_strlit("孤"); reveal_strlit("根\0");
+        assert(vstd::utf8::encode_scalar(23396) == seq![229u8, 173, 164]) by (compute);
+        assert(vstd::utf8::encode_scalar(26681) == seq![230u8, 160, 185]) by (compute);
+        assert(vstd::utf8::encode_scalar(0) == seq![0u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let none: Vec<&str> = vec![];
+    let empty: Vec<policy::UnionEdge> = vec![];
+    let result = policy::source_rows(&none, &empty);
+    assert(result.is_some());
+    let rows = result.unwrap();
+    assert(rows.len() == 0);
+    let isolated: Vec<&str> = vec!["孤"];
+    let rows = policy::source_rows(&isolated, &empty).unwrap();
+    assert(rows.len() == 1);
+    proof {
+        assert(policy::source_edge_keys(empty@, "孤".spec_bytes()) =~= Set::<policy::EdgeKey>::empty());
+    }
+    assert(rows[0].len() == 0);
+    let names: Vec<&str> = vec!["根\0"];
+    let item = edge("根\0", policy::EdgeKind::Compile, "target need not be present");
+    let edges = vec![policy::UnionEdge { edge: item.clone(), origin: policy::Origin::Both }];
+    proof {
+        assert(policy::name_members(names@).contains(item.from_bytes()));
+        assert(policy::union_edge_keys(edges@) =~= seq![item.key()]);
+        Seq::<policy::EdgeKey>::empty().lemma_push_to_set_commute(item.key());
+        assert(Seq::<policy::EdgeKey>::empty().to_set() =~= Set::<policy::EdgeKey>::empty());
+        assert(policy::union_edge_keys(edges@).to_set() =~= Set::<policy::EdgeKey>::empty().insert(item.key()));
+        assert(policy::source_edge_keys(edges@, "根\0".spec_bytes())
+            =~= Set::<policy::EdgeKey>::empty().insert(item.key()));
+    }
+    let rows = policy::source_rows(&names, &edges).unwrap();
+    assert(rows.len() == 1 && rows[0].len() == 1);
+    proof {
+        assert(policy::reference_edge_keys(rows@[0]@)[0] == rows@[0]@[0].key());
+        assert(policy::reference_edge_keys(rows@[0]@).to_set().contains(rows@[0]@[0].key()));
+    }
+    assert(rows[0][0].key() == item.key());
+    let rejected = policy::source_rows(&none, &edges);
+    assert(rejected.is_none());
+    let rejected = policy::source_rows(&isolated, &edges);
+    assert(rejected.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn source_rows_group_unsorted_duplicate_edges_into_exact_typed_slots() {
+    use policy::EdgeKind::*;
+    proof {
+        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("c"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let names: Vec<&str> = vec!["a", "b", "c"];
+    proof {
+        assert forall|i: int, j: int| 0 <= i < j < names.len()
+            implies policy::byte_lt(#[trigger] names@[i].spec_bytes(), #[trigger] names@[j].spec_bytes()) by {
+            assert(policy::byte_prefix(names@[i].spec_bytes(), names@[j].spec_bytes(), 0));
+        }
+    }
+    let first = edge("a", Compile, "b");
+    let next = edge("a", Compile, "c");
+    let parallel = edge("a", RuntimeInput, "b");
+    let cycle = edge("c", JudgeTrigger, "a");
+    let duplicate = edge("a", Compile, "b");
+    let edges = vec![
+        policy::UnionEdge { edge: cycle.clone(), origin: policy::Origin::Base },
+        policy::UnionEdge { edge: parallel.clone(), origin: policy::Origin::Both },
+        policy::UnionEdge { edge: next.clone(), origin: policy::Origin::Candidate },
+        policy::UnionEdge { edge: first.clone(), origin: policy::Origin::Base },
+        policy::UnionEdge { edge: duplicate, origin: policy::Origin::Candidate },
+    ];
+    proof {
+        assert(policy::name_members(names@).contains("a".spec_bytes()));
+        assert(policy::name_members(names@).contains("c".spec_bytes()));
+        assert forall|i: int| 0 <= i < edges.len() implies
+            policy::name_members(names@).contains((#[trigger] edges@[i]).edge.from_bytes()) by {
+            assert(edges@[i].edge.from_bytes() == "a".spec_bytes()
+                || edges@[i].edge.from_bytes() == "c".spec_bytes());
+        }
+        assert(policy::union_edge_keys(edges@) =~= seq![cycle.key(), parallel.key(), next.key(), first.key(), first.key()]);
+        assert(policy::union_edge_keys(edges@).to_set() =~=
+            Set::<policy::EdgeKey>::empty().insert(cycle.key()).insert(parallel.key()).insert(next.key()).insert(first.key()));
+        assert(policy::source_edge_keys(edges@, "a".spec_bytes()) =~=
+            Set::<policy::EdgeKey>::empty().insert(first.key()).insert(next.key()).insert(parallel.key()));
+        assert(policy::source_edge_keys(edges@, "b".spec_bytes()) =~= Set::<policy::EdgeKey>::empty());
+        assert(policy::source_edge_keys(edges@, "c".spec_bytes()) =~=
+            Set::<policy::EdgeKey>::empty().insert(cycle.key()));
+        assert(Set::<policy::EdgeKey>::empty().insert(first.key()).insert(next.key()).insert(parallel.key()).len() == 3);
+    }
+    let rows = policy::source_rows(&names, &edges).unwrap();
+    assert(rows.len() == 3);
+    proof { reveal(policy::source_row_matches); }
+    assert(rows[0].len() == 3 && rows[1].len() == 0 && rows[2].len() == 1);
+    proof {
+        reveal(policy::ordered_edges);
+        assert forall|i: int| 0 <= i < rows@[0].len() implies
+            (#[trigger] rows@[0]@[i]).key() == first.key()
+                || rows@[0]@[i].key() == next.key() || rows@[0]@[i].key() == parallel.key() by {
+            assert(policy::reference_edge_keys(rows@[0]@)[i] == rows@[0]@[i].key());
+            assert(policy::reference_edge_keys(rows@[0]@).to_set().contains(rows@[0]@[i].key()));
+        }
+        assert(rows@[0]@[0].order_spec(rows@[0]@[1]) == core::cmp::Ordering::Less);
+        assert(rows@[0]@[1].order_spec(rows@[0]@[2]) == core::cmp::Ordering::Less);
+        policy::edge_order_laws(rows@[0]@[0], rows@[0]@[1], rows@[0]@[2]);
+        policy::edge_order_laws(rows@[0]@[1], rows@[0]@[2], rows@[0]@[2]);
+        assert(policy::reference_edge_keys(rows@[2]@)[0] == rows@[2]@[0].key());
+        assert(policy::reference_edge_keys(rows@[2]@).to_set().contains(rows@[2]@[0].key()));
+    }
+    assert(rows[0][0].key() == first.key());
+    assert(rows[0][1].key() == next.key());
+    assert(rows[0][2].key() == parallel.key());
+    assert(rows[2][0].key() == cycle.key());
+}
+
+
 }

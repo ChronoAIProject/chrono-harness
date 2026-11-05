@@ -101,7 +101,7 @@ five complete byte names, returning that variant. No case folding, trimming,
 prefix acceptance or alias is present. Serde adapters in `graph.rs` delegate
 JSON string serialization/parsing to these functions and reject nonstrings.
 Those adapters and diagnostic formatting remain unproved in their empty-root
-owner; source grouping and construction of rows in node order remain outstanding.
+owner; input name/seed extraction and the remaining closure composition still require proof.
 Independent Verus examples check all 25 kind pairs, exact names and roundtrips,
 and noncanonical boundaries. Runtime tests additionally exercise both owned
 JSON values and text, escaped strings and wrong JSON types. An always-Equal
@@ -130,8 +130,7 @@ NUL-containing names, Unicode, cloning, empty rows and duplicate insertions.
 Runtime consumer cases require all 196 pairs of a separately declared 14-edge
 inventory and exercise JSON field transport/errors. JSON/diagnostic adapter
 implementations remain outside the proof root with their obligation retained.
-Grouping typed rows by source name, name/seed extraction and the remaining
-closure/selection logic still require proof.
+Name/seed extraction and the remaining closure/selection logic still require proof.
 
 The same root now owns the actual `Origin` and `UnionEdge` types and the production
 two-endpoint typed `union`. Origin equality preserves variant identity, and both
@@ -222,8 +221,8 @@ proves that every returned slot indexes that exact edge destination. Duplicate
 targets, empty rows and duplicate roots preserve their supplied positions;
 failure means exactly a row-count mismatch or a missing target/root name. The
 actual closure calls this implementation, replacing its unproved iterator-based
-target-name projection. Source-name grouping and construction of the typed rows
-in node order remain adapter obligations.
+target-name projection. Source grouping and row construction use the proved
+`source_rows` owner below; name/seed extraction and adapter composition remain obligations.
 
 Independent Verus examples require exact indices for parallel targets, cycles,
 reordered slots, empty/Unicode names, empty rows and duplicate roots. Missing
@@ -234,6 +233,34 @@ This reuses both registered graph proof operations, adds no trusted interface or
 dependency and retains the existing O(V + E + S) temporary reference storage.
 Projection reserves each existing row length. Complete measured costs remain
 unknown. No whole-file migration obligation is cleared by these partial proofs.
+
+The same owner now defines and implements `source_rows`, grouping arbitrary
+supplied UnionEdges by their complete source-name bytes in a strictly ordered
+name inventory. A successful result has exactly one row per supplied node, with
+strict full-field order, no duplicate keys, exact source-filtered key membership
+and length equal to the distinct-key count. Input order, duplicate equal keys
+and endpoint origins do not change those row contracts. Empty/isolated rows and
+Unicode/NUL names are covered. The result is absent exactly when a source name
+is missing; target-name admission remains the subsequent index owner's job.
+The actual closure calls this function, replacing its independent string-map
+entry grouping and row collection. Name/seed extraction, the surrounding adapter
+and the graph's whole-file obligation remain unproved.
+
+The implementation reuses exact name lookup and the supported standard integer
+BTreeMap remove/insert/get and BTreeSet contracts. The pinned vstd lacks the
+previous string-map entry contract, so no repository shim or alternative Cargo
+execution path is introduced. Each input edge adds one binary source-name lookup
+and integer-map remove/insert, plus the existing ordered-row insertion; output
+uses one map lookup per supplied node and the proved row inventory. Storage is
+O(V + E) references for V nodes and E supplied edges; total measured runtime,
+build, proof and storage costs are unknown, without a savings claim. Both
+existing whole-crate proof operations and unchanged verification flags suffice.
+Independent examples require exact sorted typed slots from unordered duplicate
+inputs, separate equal byte constructions, empty/isolated rows, Unicode/NUL,
+missing sources and an allowed missing target. A mutation grouping by destination
+instead of source fails the source-admission assertions; correct source bytes are
+restored by SHA-256 before canonical validation. Existing runtime closure cases
+consume the same implementation for typed ties, cycles and merged causes.
 
 The same source owns indexed graph validation and
 per-root FIFO traversal. `valid_indices` accepts exactly graphs whose destination
@@ -260,14 +287,12 @@ work. This adds ghost specifications and proof bookkeeping, with the same
 executable traversal and no new trusted interface. Additional proof/compiler
 cost remains unmeasured.
 
-The actual `graph::closure` calls the proved name-inventory and index constructors
-with name rows projected from its existing ordered typed edges, then calls the
-traversal for each seed.
+The actual `graph::closure` calls the proved name-inventory, source-row and index
+constructors, then calls the traversal for each seed.
 It uses returned indices to construct the existing reached causes, predecessor
-maps and traversed typed edges. Extraction of supplied names/rows, the remaining
-adapter, seed production, serialization,
-test selection and the correspondence between typed-edge order and indexed
-slots remain unproved;
+maps and traversed typed edges. Extraction of supplied edge/seed names, the
+remaining adapter composition, seed production, serialization and test selection
+remain unproved;
 the adapter's empty-root obligation is retained. Independent Verus examples cover
 empty graphs, invalid roots/destinations, self cycles, disconnected nodes, diamonds
 and parallel edges. Expected shortest distances use independently supplied paths
