@@ -28,6 +28,7 @@ mod short_console;
 pub mod units;
 #[allow(unexpected_cfgs)]
 pub mod verified_identifiers;
+pub use verus_builtin_macros::verus;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]

@@ -404,6 +404,11 @@
           "evidence": {
             "test": "test:host-bootstrap-tests",
             "operation": "host.bootstrap-real-consumer"
+          },
+          "preparation": {
+            "operation": "host.bootstrap-unit",
+            "config": ".chrono-harness/ci/bootstrap-unit.json",
+            "verifier": "host.bootstrap-shared-verify-core"
           }
         }
       ]

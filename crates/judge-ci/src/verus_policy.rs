@@ -12,20 +12,9 @@ pub mod sources;
 pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 pub use chrono_harness::verified_identifiers as identifiers;
-pub use identifiers::{valid_id, valid_oid};
+pub use identifiers::{equal_bytes, equal_text, valid_id, valid_oid};
 
 verus! {
-
-pub fn equal_text(actual: &str, expected: &str) -> (equal: bool)
-    ensures equal <==> actual@ == expected@,
-{
-    let equal = equal_bytes(actual.as_bytes(), expected.as_bytes());
-    proof {
-        vstd::utf8::encode_utf8_decode_utf8(actual@);
-        vstd::utf8::encode_utf8_decode_utf8(expected@);
-    }
-    equal
-}
 
 /// The execution-plan owner supplies only its explicit test/operation inventory.
 pub struct RootPlan<'a> {
@@ -911,29 +900,6 @@ impl Ledger {
         let complete = self.entries.len() > 0 && missing.len() == 0;
         Coverage { obligations: self.entries.len(), complete, missing }
     }
-}
-
-pub fn equal_bytes(actual: &[u8], expected: &[u8]) -> (equal: bool)
-    ensures equal <==> actual@ == expected@,
-{
-    if actual.len() != expected.len() {
-        return false;
-    }
-    let mut i = 0;
-    while i < actual.len()
-        invariant
-            actual.len() == expected.len(),
-            0 <= i <= actual.len(),
-            forall|j: int| 0 <= j < i ==> actual[j] == expected[j],
-        decreases actual.len() - i,
-    {
-        if actual[i] != expected[i] {
-            return false;
-        }
-        i += 1;
-    }
-    assert(actual@ =~= expected@);
-    true
 }
 
 /// External JSON decoding supplies optional typed fields. Missing/wrongly

@@ -35,6 +35,27 @@ documents, and operation/test identities resolve through projects and execution
 plans. Unknown versions/fields, duplicate chains and empty identities fail.
 This contract currently covers internal shared-startup unit consumption only.
 
+A chain may explicitly declare `preparation: {operation, config, verifier}` when
+its unit invokes a composed bootstrap profile. The current unit argv must equal
+the registered preparation operation and exactly invoke that profile's declared
+entrypoint at the host root. The profile must use `chrono-bootstrap/v1`, with the
+named verifier as its sole prerequisite. The verifier's registered command still
+must select a built profile imported by this consumer. Moving verification into
+ordinary operations, omitting or duplicating it, or changing the script, config
+or invocation fails. The explicit preparation path and both operation owners
+participate in endpoint DELTA impact. This is configuration consistency; the
+existing real consumer remains required to establish actual execution.
+
+Product and host policy change together: runner startup now adopts this explicit
+composition for Verus package acquisition after core verification. Its exact
+preparation predicate is executable Verus in registration's
+`verified_consumption.rs`, with separately verified boundary examples. Text/byte
+identity comparisons share the runner's proved implementation with the CI judge.
+The surrounding JSON/registration adapter remains an unmet proof obligation.
+Two whole-crate proof operations join the registration test plan; runtime and
+total validation/storage costs remain unmeasured. Existing producer, caller,
+source/output, profile and real-consumer evidence requirements remain enforced.
+
 The host adopts `runner-startup`: the existing detector production operation →
 `host.bootstrap-shared-install-unit_runner` → installed runner/core tools →
 current runner unit check. Need and output-use text remain in the selected units

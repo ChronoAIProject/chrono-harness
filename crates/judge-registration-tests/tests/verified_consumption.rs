@@ -1,0 +1,46 @@
+//! Boundary proofs exercise the same executable preparation predicate.
+#![allow(unexpected_cfgs)]
+#[path = "../../judge-registration/src/verified_consumption.rs"]
+mod policy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn preparation_requires_exact_command_and_prerequisite() {
+    let command = vec!["python", "bootstrap", ".", "profile"];
+    let prerequisites = vec!["verify"];
+    let accepted = policy::matches_preparation(&command, "python", "bootstrap", "profile",
+        "chrono-bootstrap/v1", &prerequisites, "verify");
+    assert(accepted);
+    let missing: Vec<&str> = Vec::new();
+    let absent = policy::matches_preparation(&command, "python", "bootstrap", "profile",
+        "chrono-bootstrap/v1", &missing, "verify");
+    assert(!absent);
+    let duplicate = vec!["verify", "verify"];
+    let duplicated = policy::matches_preparation(&command, "python", "bootstrap", "profile",
+        "chrono-bootstrap/v1", &duplicate, "verify");
+    assert(!duplicated);
+    let wrong = policy::matches_preparation(&command, "python", "bootstrap", "profile",
+        "chrono-bootstrap/v1", &prerequisites, "other");
+    assert(!wrong);
+    let changed = policy::matches_preparation(&command, "python", "bootstrap", "other",
+        "chrono-bootstrap/v1", &prerequisites, "verify");
+    assert(!changed);
+    let schema = policy::matches_preparation(&command, "python", "bootstrap", "profile",
+        "other", &prerequisites, "verify");
+    assert(!schema);
+    let root = vec!["python", "bootstrap", "other", "profile"];
+    let wrong_root = policy::matches_preparation(&root, "python", "bootstrap", "profile",
+        "chrono-bootstrap/v1", &prerequisites, "verify");
+    assert(!wrong_root);
+    let extra = vec!["python", "bootstrap", ".", "profile", "extra"];
+    let extra_arg = policy::matches_preparation(&extra, "python", "bootstrap", "profile",
+        "chrono-bootstrap/v1", &prerequisites, "verify");
+    assert(!extra_arg);
+}
+
+}

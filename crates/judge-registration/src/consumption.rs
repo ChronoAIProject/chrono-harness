@@ -24,7 +24,16 @@ pub struct Chain {
     pub consumer: String,
     pub producer: String,
     pub caller: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preparation: Option<Preparation>,
     pub evidence: Evidence,
+}
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Preparation {
+    pub operation: String,
+    pub config: String,
+    pub verifier: String,
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -59,6 +68,17 @@ pub fn contract(value: Option<&Value>) -> Result<BTreeMap<String, Chain>, String
             relative_path(path)?;
             if !path.starts_with(".chrono-harness/") {
                 return Err("E_CONSUMPTION_SCHEMA: host path required".into());
+            }
+        }
+        if let Some(p) = &chain.preparation {
+            for id in [&p.operation, &p.verifier] {
+                if id.is_empty() {
+                    return Err("E_CONSUMPTION_SCHEMA: empty preparation operation".into());
+                }
+            }
+            relative_path(&p.config)?;
+            if !p.config.starts_with(".chrono-harness/") {
+                return Err("E_CONSUMPTION_SCHEMA: host preparation path required".into());
             }
         }
         if !chain.evidence.test.starts_with("test:") || chain.evidence.test.len() == 5 {
@@ -105,6 +125,9 @@ impl Endpoint {
     fn paths(&self, c: &Chain) -> BTreeSet<String> {
         let mut paths = self.config_paths.clone();
         paths.extend([c.units.clone(), c.startup.clone()]);
+        if let Some(p) = &c.preparation {
+            paths.insert(p.config.clone());
+        }
         if let Some(u) = self.documents.get(&c.units) {
             if let Some(p) = u["collection"]["check_config"].as_str() {
                 paths.insert(p.into());
@@ -130,6 +153,9 @@ impl Endpoint {
             c.caller.clone(),
             c.evidence.operation.clone(),
         ]);
+        if let Some(p) = &c.preparation {
+            operations.extend([p.operation.clone(), p.verifier.clone()]);
+        }
         for path in self.paths(c) {
             if let Some(v) = self.documents.get(&path) {
                 operations.extend(
@@ -290,7 +316,38 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
         .ok_or("missing consumer profiles")?;
     let check_path = nonempty(&units["collection"]["check_config"])?;
     let check = s.document(check_path)?;
-    let verify = argv(&units["units"][unit]["bootstrap"])?;
+    let mut verify = argv(&units["units"][unit]["bootstrap"])?;
+    if let Some(p) = &c.preparation {
+        let config = s.document(&p.config)?;
+        let entrypoint = nonempty(&config["entrypoint"]["tool"])?;
+        let tools: Vec<_> = s.config["tools"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|t| t["id"] == entrypoint)
+            .collect();
+        let [tool] = tools.as_slice() else {
+            return Err("missing/ambiguous preparation tool".into());
+        };
+        if command(&p.operation)? != verify {
+            return Err("unit preparation invocation mismatch".into());
+        }
+        let prerequisites = argv(&config["prerequisites"])?;
+        if !crate::verified_consumption::matches_preparation(
+            &verify.iter().map(String::as_str).collect(),
+            nonempty(&tool["program"])?,
+            nonempty(&config["entrypoint"]["script"])?,
+            &p.config,
+            nonempty(&config["schema"])?,
+            &prerequisites.iter().map(String::as_str).collect(),
+            &p.verifier,
+        ) {
+            return Err(
+                "unit preparation must invoke its declared verification prerequisite".into(),
+            );
+        }
+        verify = command(&p.verifier)?;
+    }
     if verify.len() != 6
         || verify[..4] != produce[..4]
         || verify[4] != "verify"

@@ -6,6 +6,42 @@ use vstd::prelude::*;
 
 verus! {
 
+pub fn equal_text(actual: &str, expected: &str) -> (equal: bool)
+    ensures equal <==> actual@ == expected@,
+{
+    let equal = equal_bytes(actual.as_bytes(), expected.as_bytes());
+    proof {
+        vstd::utf8::encode_utf8_decode_utf8(actual@);
+        vstd::utf8::encode_utf8_decode_utf8(expected@);
+    }
+    equal
+}
+
+pub fn equal_bytes(actual: &[u8], expected: &[u8]) -> (equal: bool)
+    ensures equal <==> actual@ == expected@,
+{
+    if actual.len() != expected.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < actual.len()
+        invariant
+            actual.len() == expected.len(),
+            0 <= i <= actual.len(),
+            forall|j: int| 0 <= j < i ==> actual[j] == expected[j],
+        decreases actual.len() - i,
+    {
+        if actual[i] != expected[i] {
+            return false;
+        }
+        i += 1;
+    }
+    assert(actual@ =~= expected@);
+    true
+}
+
+
+
 #[verifier::inline]
 pub open spec fn oid_byte(byte: u8) -> bool {
     48 <= byte <= 57 || 97 <= byte <= 102

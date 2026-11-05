@@ -307,6 +307,15 @@ bootstrap producer retains the original streams and exit for each operation and
 stops on failure. This adds registration data, without another installer program
 or changes to bootstrap's still-unproved decisions.
 
+Registration's `verified_consumption.rs` proves the exact command/schema and
+single verification prerequisite predicate used to admit composed unit startup.
+Its separately verified boundary examples reject missing/duplicate verification,
+changed schema/config/root and extra arguments. The caller also binds the
+registered preparation operation and retains all original direct profile checks.
+The explicit composition input and DELTA behavior are described by the
+[consumption owner](filemap-impact.md#bounded-internal-causal-consumption).
+This predicate does not prove the surrounding registration decoder or bootstrap.
+
 Shared startup continues to transfer the six core executable payloads. Unit
 preparation first verifies that original core profile, then delegates to the same
 Verus acquisition profile; diagnostics delegates after its existing guard/input

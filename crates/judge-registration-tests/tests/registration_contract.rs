@@ -1926,3 +1926,6 @@ fn configuration_edges_select_exact_policy_without_changing_shared_graph() {
     legacy["schema_version"] = json!(1);
     assert!(select_filemap(&legacy, Some(".chrono-harness/a.json")).is_err());
 }
+
+#[path = "verified_consumption.rs"]
+mod verified_consumption;
