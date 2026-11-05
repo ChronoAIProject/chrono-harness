@@ -1087,8 +1087,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         }
     }
     let cargo_home = h.root().join(".chrono-harness/state/cargo-home");
-    h.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_HOME"] =
-        json!(cargo_home);
+    h.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_HOME"] = json!(cargo_home);
     h.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTUP_TOOLCHAIN"] =
         json!("1.95.0");
     let argv = json!(["test", "--locked", "--manifest-path", "t/Cargo.toml"]);
