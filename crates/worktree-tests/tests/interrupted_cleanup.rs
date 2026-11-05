@@ -399,6 +399,41 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
 
 #[test]
 fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
+    fn reclaim_reports(root: &Path, paths: &[String], mut round: Value) {
+        let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
+            .unwrap()
+            .unwrap();
+        let mut rounds = Vec::new();
+        // Real maintenance has a wall deadline, including under concurrent tests.
+        // Exercise its bounded continuation instead of demanding one-round disposal.
+        for attempt in 0..8 {
+            assert!(
+                round["accounting_errors"].as_array().unwrap().is_empty(),
+                "{round}"
+            );
+            assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+            assert!(
+                round["verified_bytes"].as_u64().unwrap() <= 1048576,
+                "{round}"
+            );
+            let complete = round["scope"]["complete"] == true;
+            rounds.push(round);
+            if paths.iter().all(|path| !root.join(path).exists()) {
+                return;
+            }
+            assert!(
+                !complete,
+                "complete maintenance left an unrooted report: {rounds:?}"
+            );
+            if attempt < 7 {
+                round = inventory.maintain().unwrap();
+            } else {
+                break;
+            }
+        }
+        panic!("bounded maintenance did not reclaim unrooted reports {paths:?}: {rounds:?}");
+    }
+
     let h = Host::new("payload");
     h.kernel_cleanup();
     let cleanup = h.root.join(AUTO_POLICY);
@@ -434,6 +469,13 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
     assert_eq!(h.invoke("feature", "unrooted-linked-report", &target).0, 0);
     let mut previous = Vec::new();
     for _ in 0..2 {
+        if !previous.is_empty() {
+            let inventory =
+                chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+                    .unwrap()
+                    .unwrap();
+            reclaim_reports(&h.root, &previous, inventory.maintain().unwrap());
+        }
         let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir(&target)
             .env_clear()
@@ -449,12 +491,6 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
         let report = json(&output.stdout).unwrap();
         assert_eq!(report["status"], "maintained");
         assert!(report.get("report_consumer").is_none());
-        for path in &previous {
-            assert!(
-                !h.root.join(path).exists(),
-                "explicit maintenance must reclaim an unrooted original"
-            );
-        }
         previous.clear();
         let path = report["report_path"].as_str().unwrap();
         assert_eq!(fs::read(h.root.join(path)).unwrap(), output.stdout);
@@ -515,19 +551,15 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
         .unwrap()
         .unwrap();
-    inventory.maintain().unwrap();
-    for path in previous {
-        assert!(
-            !h.root.join(path).exists(),
-            "publication adds no persistent consumer root"
-        );
-    }
-    chrono_harness::retained_artifacts::retention::Inventory::adopted(&target)
+    reclaim_reports(&h.root, &previous, inventory.maintain().unwrap());
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&target)
         .unwrap()
-        .unwrap()
-        .maintain()
         .unwrap();
-    assert!(!parent.exists());
+    reclaim_reports(
+        &target,
+        &[report["report_path"].as_str().unwrap().to_owned()],
+        inventory.maintain().unwrap(),
+    );
     for root in [&h.root, &target, &destination] {
         assert!(root.join("payload").exists());
     }
