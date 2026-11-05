@@ -175,6 +175,27 @@ fn retention_failure_fixture() {
     );
 }
 
+fn mutating_producer() {
+    if std::env::args().nth(1).as_deref() != Some("--version") {
+        return;
+    }
+    println!("chrono-worktree 0.1.0");
+    io::stdout().flush().unwrap();
+    // This is the test's private copy. Replacing it also works on hosts that
+    // disallow writing an executing image; the shared helper stays untouched.
+    let executable = std::env::current_exe().unwrap();
+    let mut bytes = std::fs::read(&executable).unwrap();
+    bytes.extend_from_slice(b"\n# changed after version\n");
+    let replacement = executable.with_extension("replacement");
+    std::fs::write(&replacement, bytes).unwrap();
+    std::fs::set_permissions(
+        &replacement,
+        std::fs::metadata(&executable).unwrap().permissions(),
+    )
+    .unwrap();
+    std::fs::rename(replacement, executable).unwrap();
+}
+
 fn main() {
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
@@ -189,6 +210,8 @@ fn main() {
     }
     let executable = std::env::args_os().next().unwrap();
     match Path::new(&executable).file_name().unwrap().as_bytes() {
+        b"python3" => return println!("Python shadowed"),
+        b"mutating-producer" => return mutating_producer(),
         b"fixture-producer" => return preparation_fixture(),
         b"retention-failure" => return retention_failure_fixture(),
         b"declared-git" => declared_git(),

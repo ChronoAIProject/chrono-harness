@@ -976,9 +976,11 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     tool["expected_version"] = json!(String::from_utf8(observed.stdout).unwrap().trim_end());
     let dir = tempfile::tempdir().unwrap();
     let shadow = dir.path().join("python3");
-    fs::write(&shadow, "#!/bin/sh\nprintf 'Python shadowed\\n'\nexit 0\n").unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(&shadow, fs::Permissions::from_mode(0o755)).unwrap();
+    std::os::unix::fs::symlink(
+        fs::canonicalize(env!("CARGO_BIN_EXE_chrono-ci-test-transport")).unwrap(),
+        &shadow,
+    )
+    .unwrap();
     let control = Command::new("python3")
         .env_clear()
         .env("PATH", dir.path())
