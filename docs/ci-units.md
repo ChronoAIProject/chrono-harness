@@ -821,56 +821,30 @@ directory supplies report inputs; fixed artifact identity, digests, workflow
 source, run/attempt and final judge checks still apply. Exhausted recovery
 produces no accepted manifest and cannot make a failed unit pass.
 
-The current scoped native host adopts `gather.typed_acquisition` for its
-`retained-reference/v2` reports. This is the single acquisition method for that
-adopted consumer. It qualifies the runtime script against the bytes compiled
-into the candidate `chrono-ci`, then uses the existing scoped collector's
-`unit_originals` and preparation owner's reader interface to request originals.
-Those semantic owners remain shared with offline collection: report references,
-`PreparedCheck.originals`, actual receipt results, and judge stdout/stderr/launch
-originals determine reads. Arbitrary JSON traversal, filename/path inventories
-and directory discovery never determine the input set. Unsupported domains fail;
-other provider/profile registrations keep their existing method.
+Unit artifacts use the existing registered `gh run download` command. The
+native parent first verifies the unique unexpired artifact's name, ID, archive
+endpoint, run and candidate source, then acquires its original uploaded directory.
+The collector still verifies fixed producer/run/attempt/context identities,
+report references, original report and stdout/stderr digests, workflow source and
+the final run observation. A download is not a passing business verdict.
 
-The registered Python helper receives one `chrono-artifact-member-request/v1`
-stdin object from gather and acquires only that named member through stdlib
-`zipfile` and verified HTTP byte ranges. The selected artifact ID, run, source,
-name and expiry bind its archive endpoint. ZIP central/local member mapping,
-regular-file status, length, CRC and every semantic digest remain checked.
-After admitting the uncompressed member length against the existing bound, the
-reader requests that length from `zipfile` together. This lets its compressed
-input arrive in one range instead of making a network request for every small
-decompression chunk. The same cumulative deadline applies before and after the
-read, and an extra read checks EOF; an empty original is valid at a zero-byte
-member limit. CRC and length failures remain errors.
-Ranges must be exact `206` responses with identity encoding; ignoring ranges
-fails without a whole-archive fallback. Original bytes appear at the same
-`ArtifactTransport` logical address. Complete producer uploads, source/fixture
-availability, retention expiry, protections, uploads and acknowledgement remain
-unchanged. This local input subset is never complete archive or custody
-verification, and successful acquisition is still unjudged.
+One unit-artifact deadline begins before metadata and covers download attempts,
+retry delays, semantic checks, workflow source and the final run observation.
+Every acquisition process consumes the same stdout and stderr allowances.
+The host retains 60 seconds and 8 MiB per stream for each unit artifact; report
+read bounds are unchanged. Shared seed downloads retain their existing download
+budgets. No timeout is retryable, and failed originals remain retained without
+publishing an accepted manifest. Existing HTTP retry policy applies to downloads.
 
-One artifact deadline starts before metadata/runtime qualification and covers
-all its metadata, byte acquisition, process joins, typed decoding, workflow and
-final run checks, retries and delays. The current host retains 60 seconds and
-8 MiB per process-observation stream, cumulatively across artifact processes;
-reader/report bounds are unchanged. HTTP-only retries consume one shared
-artifact retry allowance; a timeout is never retryable. Member attempts retain
-partial bytes separately from their final input addresses. Raw process outputs,
-exit/failure and helper byte/request counts remain original acquisition evidence.
-A failed attempt's unreported payload bytes and total API request count remain
-unknown. No failed acquisition publishes a new accepted report/manifest/ack.
-
-WARNING: product acquisition and host adoption change together. The former
-method downloads a whole selected unit artifact; this host now materializes the
-complete typed canonical input set while retaining full remote originals. The
-paired Python behavior plan belongs to the existing `ci` unit. Rust preparation
-and canonical collection behavior tests remain in their existing dedicated test
-projects. Measured wall time, payload, requests, processes, CPU/RSS, IO, storage
-and total cost are UNKNOWN until qualified candidate execution. A source-only
-candidate does not establish performance, native success, generated workflow
-parity or delivery. Candidate generation/verification and actual baseline-to-
-candidate checks remain required before independent review and native delivery.
+**Product and policy change together:** the dedicated per-member HTTP range
+reader, its Python test/fixture and two platform release jobs retire jointly.
+They add a second transport implementation without a necessary current consumer;
+whole-artifact download already serves the current collector. Rust collection
+regressions retain report/stream corruption, original producer identity, retry
+recovery, cumulative time and both stream-budget rejection checks. Removing range
+transport reduces helper processes; complete wall time, network/storage cost and
+native delivery remain unmeasured until candidate execution. Full uploaded
+originals and their existing retention/acknowledgement remain required.
 
 The bootstrap list is a literal argv. Register only the tools each unit needs;
 the generator never infers packages, language setup or build dependencies. Each

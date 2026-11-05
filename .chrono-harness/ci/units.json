@@ -607,10 +607,6 @@
           "minimum_seconds": 30
         }
       }
-    },
-    "typed_acquisition": {
-      "program": "/usr/bin/python3",
-      "script": ".chrono-harness/ci/artifact_members.py"
     }
   },
   "job_gating": {
