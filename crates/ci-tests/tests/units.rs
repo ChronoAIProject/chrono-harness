@@ -120,6 +120,8 @@ fn generator_projects_independent_workflows_with_exact_scoped_commands() {
 #[test]
 fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
     let mut raw = config_value();
+    raw["collection"]["schema"] = json!("chrono-github-ci/v4");
+    raw["collection"]["facts_config"] = json!(".chrono-harness/config.json");
     raw["collection"]["failure_artifact_directory"] = json!(".chrono-harness/state/");
     let mut extra = raw["units"]["alpha"].clone();
     extra["workflow_path"] = json!(".github/workflows/alpha-diagnostics.yml");
