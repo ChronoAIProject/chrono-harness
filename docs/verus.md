@@ -130,8 +130,8 @@ NUL-containing names, Unicode, cloning, empty rows and duplicate insertions.
 Runtime consumer cases require all 196 pairs of a separately declared 14-edge
 inventory and exercise JSON field transport/errors. JSON/diagnostic adapter
 implementations remain outside the proof root with their obligation retained.
-Mapping row references into target-name/index slots, name/seed extraction and the
-remaining closure/union/selection logic still require proof.
+Grouping typed rows by source name, name/seed extraction and the remaining
+closure/union/selection logic still require proof.
 
 The same source also owns exact name lookup. Its byte
 comparator proves lexicographic order over complete slices, including empty and
@@ -185,8 +185,27 @@ This adds no verification operation, dependency or trusted interface. Each
 target and seed uses one binary lookup. Projected target-name rows and seed
 references temporarily cost O(V + E + S) storage, released before traversal;
 the returned root indices retain O(S) storage. Complete runtime/build/CI/storage
-costs remain unmeasured. Extracting the supplied name rows from typed edges and
-proving their ordering correspondence remain adapter obligations.
+costs remain unmeasured.
+
+The same source's `index_edges` now consumes the actual typed edge rows. Its
+target-name projection proves exact row/slot dimensions and complete destination
+bytes at every position. It calls the existing `index_names` constructor and
+proves that every returned slot indexes that exact edge destination. Duplicate
+targets, empty rows and duplicate roots preserve their supplied positions;
+failure means exactly a row-count mismatch or a missing target/root name. The
+actual closure calls this implementation, replacing its unproved iterator-based
+target-name projection. Source-name grouping and construction of the typed rows
+in node order remain adapter obligations.
+
+Independent Verus examples require exact indices for parallel targets, cycles,
+reordered slots, empty/Unicode names, empty rows and duplicate roots. Missing
+targets/roots, too few/many rows and the empty graph have explicit outcomes.
+Projecting the source field instead of the destination field is rejected by the
+target-slot loop invariant; the correct source is restored before validation.
+This reuses both registered graph proof operations, adds no trusted interface or
+dependency and retains the existing O(V + E + S) temporary reference storage.
+Projection reserves each existing row length. Complete measured costs remain
+unknown. No whole-file migration obligation is cleared by these partial proofs.
 
 The same source owns indexed graph validation and
 per-root FIFO traversal. `valid_indices` accepts exactly graphs whose destination

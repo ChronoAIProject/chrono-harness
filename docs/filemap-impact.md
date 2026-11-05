@@ -43,8 +43,8 @@ the full vstd comparison laws. Each actual adjacency row is now extracted by
 strict full-field order through the existing vstd BTreeSet iterator contract.
 The returned O(E_row) reference vector replaces the previous collected vector;
 no additional sorting, trusted interface, dependency or proof operation is used.
-JSON/diagnostic adapters and complete target-name/index-slot projection remain
-unproved. No ignored derived comparison is counted as a proof.
+JSON/diagnostic adapters and source-name grouping remain unproved. No ignored
+derived comparison is counted as a proof.
 All 25 kind pairs and name success/rejection boundaries have independent
 Verus examples; runtime JSON tests cover owned/text and wrong-type inputs.
 Further Verus cases check full-field precedence, empty/prefix/NUL/Unicode names,
@@ -61,7 +61,11 @@ The same owner's `index_names` constructs all destination and seed indices from
 the supplied name rows. It proves row/slot dimensions and exact byte identity at
 every position, with all target/root indices in range. Duplicate targets and
 roots retain their positions. It rejects exactly mismatched row counts or a
-missing target/root name. The actual closure uses these indices for every seed,
+missing target/root name. The same root's `index_edges` consumes the actual typed
+rows, proves its destination-name projection and connects each returned index to
+the exact complete destination bytes of that supplied edge slot. It preserves
+empty rows, parallel targets and repeated roots, with the same precise rejection
+conditions. The actual closure calls this implementation for every seed,
 replacing its independent mapping loops and subsequent destination-validation
 scan. The core proves exact reachability, real predecessor edges, acyclic
 predecessor distances and minimum hop counts, including
@@ -69,8 +73,8 @@ zero-length root paths. Its complete result also equals the in-source `fifo`
 contract: queue order and first adjacency slots fix every predecessor, and later
 discoveries cannot overwrite one. Independent exact inventories verify parallel
 slots, reordered ties, longer alternatives and cycle returns. The adapter still
-owns extraction of the supplied edge/seed names and target-name rows,
-cause merging and the mapping from sorted typed edges to indexed slots;
+owns extraction of the supplied edge/seed names, source-name grouping and
+construction of typed rows in node order, plus cause merging;
 these and union/test selection remain unmet Verus
 obligations. The independent test project checks the actual adapter's ties,
 parallel typed edges, cycles, Unicode and duplicate seed IDs. Two registered

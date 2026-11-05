@@ -371,9 +371,13 @@ proof fn byte_trichotomy(a: Seq<u8>, b: Seq<u8>)
         let y = b.subrange(1, b.len() as int);
         byte_trichotomy(x, y);
         if x == y {
+            assert(a.len() == b.len());
             assert(a =~= b) by {
                 assert forall|j: int| 0 <= j < a.len() implies a[j] == b[j] by {
-                    if j > 0 { assert(x[j - 1] == y[j - 1]); }
+                    if j > 0 {
+                        assert(a[j] == x[j - 1]);
+                        assert(b[j] == y[j - 1]);
+                    }
                 }
             }
         } else if byte_lt(x, y) {
@@ -491,7 +495,6 @@ pub fn edge_inventory<'a>(edges: &BTreeSet<&'a Edge>) -> (out: Vec<&'a Edge>)
             out@ == contents.take(iter@.0),
             contents.to_set() == edges@,
             contents.no_duplicates(),
-            vstd::std_specs::btree::increasing_seq(contents),
             contents.len() == edges@.len(),
             forall|i: int, j: int| 0 <= i < j < contents.len()
                 ==> (#[trigger] contents[i]).order_spec(#[trigger] contents[j]) == Ordering::Less,
@@ -946,6 +949,116 @@ pub fn index_names(names: &[&str], rows: &[Vec<&str>], roots: &[&str]) -> (out: 
         },
         None => None,
     }
+}
+
+pub open spec fn edge_names_present(
+    names: Seq<&str>, rows: Seq<Vec<&Edge>>, roots: Seq<&str>,
+) -> bool {
+    rows.len() == names.len()
+        && (forall|row: int, slot: int| 0 <= row < rows.len() && 0 <= slot < rows[row].len()
+            ==> name_members(names).contains(#[trigger] rows[row]@[slot].to_bytes()))
+        && row_names_present(names, roots)
+}
+
+pub open spec fn edge_indices_match(
+    names: Seq<&str>, edges: Seq<&Edge>, indices: Seq<usize>,
+) -> bool {
+    indices.len() == edges.len()
+        && forall|slot: int| 0 <= slot < edges.len() ==> {
+            let index = #[trigger] indices[slot];
+            index < names.len() && names[index as int].spec_bytes() == edges[slot].to_bytes()
+        }
+}
+
+fn target_name_rows<'a>(rows: &[Vec<&'a Edge>]) -> (out: Vec<Vec<&'a str>>)
+    ensures out.len() == rows.len(),
+        forall|row: int| 0 <= row < rows.len() ==> {
+            let names = #[trigger] out@[row];
+            names.len() == rows@[row].len()
+                && forall|slot: int| 0 <= slot < names.len()
+                    ==> (#[trigger] names@[slot]).spec_bytes() == rows@[row]@[slot].to_bytes()
+        },
+{
+    let mut out: Vec<Vec<&str>> = Vec::with_capacity(rows.len());
+    let mut row: usize = 0;
+    while row < rows.len()
+        invariant row <= rows.len(), out.len() == row,
+            forall|r: int| 0 <= r < row ==> {
+                let names = #[trigger] out@[r];
+                names.len() == rows@[r].len()
+                    && forall|slot: int| 0 <= slot < names.len()
+                        ==> (#[trigger] names@[slot]).spec_bytes() == rows@[r]@[slot].to_bytes()
+            },
+        decreases rows.len() - row,
+    {
+        let edges = &rows[row];
+        let mut names: Vec<&str> = Vec::with_capacity(edges.len());
+        let mut slot: usize = 0;
+        while slot < edges.len()
+            invariant slot <= edges.len(), names.len() == slot,
+                edges@ == rows@[row as int]@,
+                forall|s: int| 0 <= s < slot
+                    ==> (#[trigger] names@[s]).spec_bytes() == edges@[s].to_bytes(),
+            decreases edges.len() - slot,
+        {
+            names.push(edges[slot].to.as_str());
+            slot += 1;
+        }
+        out.push(names);
+        row += 1;
+    }
+    out
+}
+
+/// Map the actual typed edge rows without omitting or reordering any target slot.
+pub fn index_edges(names: &[&str], rows: &[Vec<&Edge>], roots: &[&str]) -> (out: Option<NameIndices>)
+    requires ordered_names(names@),
+    ensures out.is_some() == edge_names_present(names@, rows@, roots@),
+        match out {
+            Some(mapped) => mapped.rows.len() == rows.len() && valid_graph(mapped.rows@)
+                && (forall|row: int| 0 <= row < rows.len()
+                    ==> edge_indices_match(names@, rows@[row]@, #[trigger] mapped.rows@[row]@))
+                && name_indices_match(names@, roots@, mapped.roots@),
+            None => true,
+        },
+{
+    let targets = target_name_rows(rows);
+    proof {
+        if graph_names_present(names@, targets@, roots@) {
+            assert forall|r: int, s: int| 0 <= r < rows.len() && 0 <= s < rows@[r].len()
+                implies name_members(names@).contains(#[trigger] rows@[r]@[s].to_bytes()) by {
+                assert(row_names_present(names@, targets@[r]@));
+                assert(targets@[r]@[s].spec_bytes() == rows@[r]@[s].to_bytes());
+            }
+        }
+        if edge_names_present(names@, rows@, roots@) {
+            assert forall|r: int| 0 <= r < targets.len()
+                implies row_names_present(names@, #[trigger] targets@[r]@) by {
+                assert forall|s: int| 0 <= s < targets@[r].len()
+                    implies name_members(names@).contains(#[trigger] targets@[r]@[s].spec_bytes()) by {
+                    assert(targets@[r]@[s].spec_bytes() == rows@[r]@[s].to_bytes());
+                }
+            }
+        }
+        assert(graph_names_present(names@, targets@, roots@)
+            == edge_names_present(names@, rows@, roots@));
+    }
+    let out = index_names(names, &targets, roots);
+    proof {
+        if let Some(mapped) = &out {
+            assert forall|r: int| 0 <= r < rows.len()
+                implies edge_indices_match(names@, rows@[r]@, #[trigger] mapped.rows@[r]@) by {
+                assert(name_indices_match(names@, targets@[r]@, mapped.rows@[r]@));
+                assert forall|s: int| 0 <= s < rows@[r].len() implies {
+                    let index = #[trigger] mapped.rows@[r]@[s];
+                    index < names.len() && names@[index as int].spec_bytes() == rows@[r]@[s].to_bytes()
+                } by {
+                    assert(targets@[r]@[s].spec_bytes() == rows@[r]@[s].to_bytes());
+                }
+            }
+        }
+    }
+    out
 }
 
 pub struct Search {

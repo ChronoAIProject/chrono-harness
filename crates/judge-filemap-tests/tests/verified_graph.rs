@@ -39,6 +39,120 @@ fn edge_before(a: &policy::Edge, b: &policy::Edge)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn typed_edge_indices_preserve_parallel_slots_cycles_and_duplicate_roots() {
+    use policy::EdgeKind::*;
+    proof {
+        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("c"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let names: Vec<&str> = vec!["a", "b", "c"];
+    proof {
+        assert forall|i: int, j: int| 0 <= i < j < names.len()
+            implies policy::byte_lt(#[trigger] names@[i].spec_bytes(), #[trigger] names@[j].spec_bytes()) by {
+            assert(policy::byte_prefix(names@[i].spec_bytes(), names@[j].spec_bytes(), 0));
+        }
+    }
+    let direct = edge("a", Compile, "c");
+    let parallel_first = edge("a", TestExecution, "b");
+    let parallel_next = edge("a", RuntimeInput, "b");
+    let onward = edge("b", Compile, "c");
+    let cycle = edge("c", JudgeTrigger, "a");
+    let rows: Vec<Vec<&policy::Edge>> = vec![
+        vec![&direct, &parallel_first, &parallel_next], vec![&onward], vec![&cycle],
+    ];
+    let roots: Vec<&str> = vec!["c", "a", "b", "b"];
+    proof {
+        assert(policy::name_members(names@).contains("a".spec_bytes()));
+        assert(policy::name_members(names@).contains("b".spec_bytes()));
+        assert(policy::name_members(names@).contains("c".spec_bytes()));
+        assert forall|r: int, s: int| 0 <= r < rows.len() && 0 <= s < rows@[r].len()
+            implies policy::name_members(names@).contains(#[trigger] rows@[r]@[s].to_bytes()) by {
+            if r == 0 {
+                assert(rows@[r]@[s] == &direct || rows@[r]@[s] == &parallel_first
+                    || rows@[r]@[s] == &parallel_next);
+            } else if r == 1 { assert(rows@[r]@[s] == &onward); }
+            else { assert(rows@[r]@[s] == &cycle); }
+        }
+        assert(policy::edge_names_present(names@, rows@, roots@));
+    }
+    let result = policy::index_edges(&names, &rows, &roots);
+    assert(result.is_some());
+    let mapped = result.unwrap();
+    assert(mapped.rows.len() == 3);
+    assert(mapped.rows[0]@ == seq![2usize, 1, 1]) by {
+        assert(policy::edge_indices_match(names@, rows@[0]@, mapped.rows@[0]@));
+    }
+    assert(mapped.rows[1]@ == seq![2usize]) by {
+        assert(policy::edge_indices_match(names@, rows@[1]@, mapped.rows@[1]@));
+    }
+    assert(mapped.rows[2]@ == seq![0usize]) by {
+        assert(policy::edge_indices_match(names@, rows@[2]@, mapped.rows@[2]@));
+    }
+    assert(mapped.roots@ == seq![2usize, 0, 1, 1]) by {
+        assert(policy::name_indices_match(names@, roots@, mapped.roots@));
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn typed_edge_indices_preserve_empty_and_unicode_names_and_empty_rows() {
+    proof {
+        reveal_strlit(""); reveal_strlit("根");
+        assert(vstd::utf8::encode_scalar(26681) == seq![230u8, 160, 185]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let names: Vec<&str> = vec!["", "根"];
+    proof { assert(policy::byte_prefix(names@[0].spec_bytes(), names@[1].spec_bytes(), 0)); }
+    let to_empty = edge("根", policy::EdgeKind::RuntimeInput, "");
+    let self_loop = edge("根", policy::EdgeKind::Compile, "根");
+    let rows: Vec<Vec<&policy::Edge>> = vec![vec![], vec![&to_empty, &self_loop]];
+    let roots: Vec<&str> = vec!["根", ""];
+    let result = policy::index_edges(&names, &rows, &roots);
+    assert(result.is_some());
+    let mapped = result.unwrap();
+    assert(mapped.rows.len() == 2);
+    assert(mapped.rows[0]@ == Seq::<usize>::empty());
+    assert(mapped.rows[1]@ == seq![0usize, 1]);
+    assert(mapped.roots@ == seq![1usize, 0]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn typed_edge_indices_reject_missing_targets_roots_and_row_counts() {
+    use policy::EdgeKind::*;
+    proof {
+        reveal_strlit("a"); reveal_strlit("aa");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("aa"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let names: Vec<&str> = vec!["a"];
+    let absent = edge("a", Compile, "aa");
+    let rows: Vec<Vec<&policy::Edge>> = vec![vec![&absent]];
+    let no_roots: Vec<&str> = vec![];
+    let result = policy::index_edges(&names, &rows, &no_roots);
+    assert(result.is_none());
+    let rows: Vec<Vec<&policy::Edge>> = vec![vec![]];
+    let roots: Vec<&str> = vec!["aa"];
+    let result = policy::index_edges(&names, &rows, &roots);
+    assert(result.is_none());
+    let short: Vec<Vec<&policy::Edge>> = vec![];
+    let result = policy::index_edges(&names, &short, &no_roots);
+    assert(result.is_none());
+    let long: Vec<Vec<&policy::Edge>> = vec![vec![], vec![]];
+    let result = policy::index_edges(&names, &long, &no_roots);
+    assert(result.is_none());
+    let empty_names: Vec<&str> = vec![];
+    let result = policy::index_edges(&empty_names, &short, &no_roots);
+    assert(result.is_some());
+    let mapped = result.unwrap();
+    assert(mapped.rows.len() == 0 && mapped.roots.len() == 0);
+    let result = policy::index_edges(&empty_names, &short, &roots);
+    assert(result.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn full_edge_order_obeys_field_precedence_prefixes_and_unicode() {
     use policy::EdgeKind::*;
     proof {
