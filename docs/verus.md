@@ -124,11 +124,31 @@ merge buffers add storage relative to constructing the previous tree directly.
 Lookup halves its candidate interval on each iteration. Total runtime, build,
 CI and storage costs remain unmeasured; no saving is claimed.
 
+The same owner's `index_names` constructs adjacency and root indices from a
+supplied ordered name inventory, target-name rows and seed names. A successful
+result preserves every row, slot and root position with exactly the supplied
+name's bytes and a bounded index. Parallel targets, cycles and duplicate roots
+remain distinct positions. It returns no result exactly when the row count
+differs from the name count or any target/root name is absent. Bounds and
+termination are proved; no fallback slot or silently omitted key is possible.
+The production closure calls this constructor instead of independent target/root
+lookup loops followed by a separate destination-validation scan. Independent
+examples require exact adjacency/root indices for parallel edges, cycles, empty
+names and Unicode, plus rejection of missing targets/roots, too few/many rows
+and roots in an empty graph.
+
+This adds no verification operation, dependency or trusted interface. Each
+target and seed uses one binary lookup. Projected target-name rows and seed
+references temporarily cost O(V + E + S) storage, released before traversal;
+the returned root indices retain O(S) storage. Complete runtime/build/CI/storage
+costs remain unmeasured. Extracting the supplied name rows from typed edges and
+proving their ordering correspondence remain adapter obligations.
+
 The same source owns indexed graph validation and
 per-root FIFO traversal. `valid_indices` accepts exactly graphs whose destination
-indices are in range. The caller validates the immutable adjacency once before
-searching several roots; `breadth_first` requires that fact and rejects exactly
-out-of-range roots. Its successful result proves that the queue contains each
+indices are in range. The index constructor establishes valid immutable adjacency
+before searching several roots; `breadth_first` requires that fact and rejects
+exactly out-of-range roots. Its successful result proves that the queue contains each
 reachable node once, and contains a node exactly when a finite walk from the root
 exists. Each nonroot predecessor identifies an actual source/adjacency slot whose
 distance is one smaller. The root has zero distance and no predecessor;
@@ -149,11 +169,12 @@ work. This adds ghost specifications and proof bookkeeping, with the same
 executable traversal and no new trusted interface. Additional proof/compiler
 cost remains unmeasured.
 
-The actual `graph::closure` calls the proved name-inventory constructor and builds
-adjacency slots from its existing ordered typed edges, then calls the traversal for each seed.
+The actual `graph::closure` calls the proved name-inventory and index constructors
+with name rows projected from its existing ordered typed edges, then calls the
+traversal for each seed.
 It uses returned indices to construct the existing reached causes, predecessor
-maps and traversed typed edges. Extraction of supplied names, the remaining adapter,
-union, seed production, serialization,
+maps and traversed typed edges. Extraction of supplied names/rows, the remaining
+adapter, union, seed production, serialization,
 test selection and the correspondence between typed-edge order and indexed
 slots remain unproved;
 the adapter's empty-root obligation is retained. Independent Verus examples cover

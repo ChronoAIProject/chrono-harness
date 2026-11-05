@@ -36,16 +36,21 @@ untrusted inventories, using strictness/transitivity across adjacent names.
 Lookup returns only a byte-identical name slot, or proves absence. Empty,
 duplicate/descending, prefix-related, Unicode and missing-name boundaries are
 verified independently, including exact construction from descending duplicates.
-Destination indices are validated once before all per-seed searches. The core
-proves exact reachability, real
-predecessor edges, acyclic predecessor distances and minimum hop counts, including
+The same owner's `index_names` constructs all destination and seed indices from
+the supplied name rows. It proves row/slot dimensions and exact byte identity at
+every position, with all target/root indices in range. Duplicate targets and
+roots retain their positions. It rejects exactly mismatched row counts or a
+missing target/root name. The actual closure uses these indices for every seed,
+replacing its independent mapping loops and subsequent destination-validation
+scan. The core proves exact reachability, real predecessor edges, acyclic
+predecessor distances and minimum hop counts, including
 zero-length root paths. Its complete result also equals the in-source `fifo`
 contract: queue order and first adjacency slots fix every predecessor, and later
 discoveries cannot overwrite one. Independent exact inventories verify parallel
 slots, reordered ties, longer alternatives and cycle returns. The adapter still
-owns extraction of the supplied edge/seed names, edge kinds, cause merging and
-the mapping from sorted typed edges to
-indexed slots; these and union/test selection remain unmet Verus
+owns extraction of the supplied edge/seed names and target-name rows, edge kinds,
+cause merging and the mapping from sorted typed edges to indexed slots;
+these and union/test selection remain unmet Verus
 obligations. The independent test project checks the actual adapter's ties,
 parallel typed edges, cycles, Unicode and duplicate seed IDs. Two registered
 proof operations verify the source and independent boundary examples. Name
@@ -54,6 +59,11 @@ storage for N supplied names. Dense per-seed arrays cost O(V) initialization and
 memory; traversal visits each reached
 edge once. Total runtime/build/storage costs and sparse-closure regression costs
 remain unmeasured; this is a proof migration, without a performance-gain claim.
+Index construction performs one binary lookup per supplied target and seed.
+Its temporary target-name rows and seed references cost O(V + E + S) storage,
+released before the per-seed traversals; the returned root indices retain O(S)
+storage. The same proof roots and vstd contracts suffice, without an additional
+operation, dependency or external assumption.
 
 ## Bounded internal causal consumption
 

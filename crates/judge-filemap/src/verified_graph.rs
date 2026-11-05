@@ -371,6 +371,115 @@ pub fn name_index(names: &[&str], key: &str) -> (found: Option<usize>)
     None
 }
 
+pub open spec fn row_names_present(names: Seq<&str>, keys: Seq<&str>) -> bool {
+    forall|slot: int| 0 <= slot < keys.len()
+        ==> name_members(names).contains(#[trigger] keys[slot].spec_bytes())
+}
+
+pub open spec fn name_indices_match(names: Seq<&str>, keys: Seq<&str>, indices: Seq<usize>) -> bool {
+    indices.len() == keys.len()
+        && forall|slot: int| 0 <= slot < keys.len() ==> {
+            let index = #[trigger] indices[slot];
+            index < names.len() && names[index as int].spec_bytes() == keys[slot].spec_bytes()
+        }
+}
+
+pub open spec fn graph_names_present(
+    names: Seq<&str>, rows: Seq<Vec<&str>>, roots: Seq<&str>,
+) -> bool {
+    rows.len() == names.len()
+        && (forall|row: int| 0 <= row < rows.len()
+            ==> row_names_present(names, #[trigger] rows[row]@))
+        && row_names_present(names, roots)
+}
+
+pub struct NameIndices {
+    pub rows: Vec<Vec<usize>>,
+    pub roots: Vec<usize>,
+}
+
+fn index_name_row(names: &[&str], keys: &[&str]) -> (out: Option<Vec<usize>>)
+    requires ordered_names(names@),
+    ensures out.is_some() == row_names_present(names@, keys@),
+        match out {
+            Some(indices) => name_indices_match(names@, keys@, indices@),
+            None => true,
+        },
+{
+    let mut indices: Vec<usize> = Vec::new();
+    let mut slot: usize = 0;
+    while slot < keys.len()
+        invariant slot <= keys.len(), ordered_names(names@), indices.len() == slot,
+            name_indices_match(names@, keys@.take(slot as int), indices@),
+            row_names_present(names@, keys@.take(slot as int)),
+        decreases keys.len() - slot,
+    {
+        let index = name_index(names, keys[slot]);
+        match index {
+            Some(index) => {
+                assert(name_members(names@).contains(keys@[slot as int].spec_bytes()));
+                indices.push(index);
+            },
+            None => {
+                assert(!name_members(names@).contains(keys@[slot as int].spec_bytes()));
+                assert(!row_names_present(names@, keys@));
+                return None;
+            },
+        }
+        slot += 1;
+    }
+    assert(keys@.take(slot as int) =~= keys@);
+    Some(indices)
+}
+
+/// Preserve every supplied adjacency slot and seed position, or reject a missing name.
+pub fn index_names(names: &[&str], rows: &[Vec<&str>], roots: &[&str]) -> (out: Option<NameIndices>)
+    requires ordered_names(names@),
+    ensures
+        out.is_some() == graph_names_present(names@, rows@, roots@),
+        match out {
+            Some(mapped) => mapped.rows.len() == rows.len()
+                && valid_graph(mapped.rows@)
+                && (forall|row: int| 0 <= row < rows.len()
+                    ==> name_indices_match(names@, rows@[row]@, #[trigger] mapped.rows@[row]@))
+                && name_indices_match(names@, roots@, mapped.roots@),
+            None => true,
+        },
+{
+    if rows.len() != names.len() { return None; }
+    let mut mapped: Vec<Vec<usize>> = Vec::new();
+    let mut row: usize = 0;
+    while row < rows.len()
+        invariant row <= rows.len(), rows.len() == names.len(), ordered_names(names@),
+            mapped.len() == row,
+            forall|r: int| 0 <= r < row
+                ==> name_indices_match(names@, rows@[r]@, #[trigger] mapped@[r]@),
+            forall|r: int| 0 <= r < row ==> row_names_present(names@, #[trigger] rows@[r]@),
+        decreases rows.len() - row,
+    {
+        let indices = index_name_row(names, &rows[row]);
+        match indices {
+            Some(indices) => { mapped.push(indices); },
+            None => {
+                assert(!graph_names_present(names@, rows@, roots@));
+                return None;
+            },
+        }
+        row += 1;
+    }
+    let root_indices = index_name_row(names, roots);
+    match root_indices {
+        Some(root_indices) => {
+            assert(valid_graph(mapped@)) by {
+                assert forall|r: int, slot: int| 0 <= r < mapped.len() && 0 <= slot < mapped@[r].len()
+                    implies (#[trigger] mapped@[r]@[slot]) < mapped.len() by {}
+            }
+            Some(NameIndices { rows: mapped, roots: root_indices })
+        },
+        None => None,
+    }
+}
+
 pub struct Search {
     /// The graph size denotes an unreachable node; all other values are hop counts.
     pub distances: Vec<usize>,

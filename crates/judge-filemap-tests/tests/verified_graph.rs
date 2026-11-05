@@ -17,6 +17,79 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn named_slots_keep_parallel_edges_cycles_and_root_positions() {
+    proof {
+        reveal_strlit("");
+        reveal_strlit("a");
+        reveal_strlit("根");
+        vstd::utf8::is_ascii_chars_encode_utf8(""@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        assert(vstd::utf8::encode_scalar(26681) == seq![230u8, 160, 185]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let names: Vec<&str> = vec!["", "a", "根"];
+    assert(names@[0].spec_bytes() == Seq::<u8>::empty());
+    assert(names@[1].spec_bytes() == seq![97u8]);
+    assert(names@[2].spec_bytes() == seq![230u8, 160, 185]);
+    proof {
+        assert forall|i: int, j: int| 0 <= i < j < names.len()
+            implies policy::byte_lt(#[trigger] names@[i].spec_bytes(), #[trigger] names@[j].spec_bytes()) by {
+            assert(policy::byte_prefix(names@[i].spec_bytes(), names@[j].spec_bytes(), 0));
+        }
+    }
+    let rows: Vec<Vec<&str>> = vec![vec!["a", "a", ""], vec![""], vec![]];
+    let roots: Vec<&str> = vec!["根", "", "根"];
+    assert(policy::graph_names_present(names@, rows@, roots@));
+    let found = policy::index_names(&names, &rows, &roots);
+    assert(found.is_some());
+    let mapped = found.unwrap();
+    assert(policy::valid_graph(mapped.rows@));
+    assert(mapped.rows.len() == 3);
+    assert(mapped.rows@[0].len() == 3);
+    assert(mapped.rows@[1].len() == 1);
+    assert(mapped.rows@[2].len() == 0);
+    assert(mapped.rows@[0]@ == seq![1usize, 1, 0]);
+    assert(mapped.rows@[1]@ == seq![0usize]);
+    assert(mapped.roots.len() == 3);
+    assert(mapped.roots@ == seq![2usize, 0, 2]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn named_graph_rejects_missing_targets_roots_and_row_counts() {
+    proof {
+        reveal_strlit("a");
+        reveal_strlit("b");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let names: Vec<&str> = vec!["a"];
+    assert(names@[0].spec_bytes() == seq![97u8]);
+    let valid = policy::valid_names(&names);
+    assert(valid);
+    let no_roots: Vec<&str> = vec![];
+    let missing_target: Vec<Vec<&str>> = vec![vec!["b"]];
+    assert(missing_target@[0]@[0].spec_bytes() == seq![98u8]);
+    let found = policy::index_names(&names, &missing_target, &no_roots);
+    assert(found.is_none());
+    let rows: Vec<Vec<&str>> = vec![vec!["a"]];
+    let missing_root: Vec<&str> = vec!["b"];
+    let found = policy::index_names(&names, &rows, &missing_root);
+    assert(found.is_none());
+    let no_rows: Vec<Vec<&str>> = vec![];
+    let found = policy::index_names(&names, &no_rows, &no_roots);
+    assert(found.is_none());
+    let extra_rows: Vec<Vec<&str>> = vec![vec![], vec![]];
+    let found = policy::index_names(&names, &extra_rows, &no_roots);
+    assert(found.is_none());
+    let empty: Vec<&str> = vec![];
+    let found = policy::index_names(&empty, &no_rows, &no_roots);
+    assert(found.is_some());
+    let found = policy::index_names(&empty, &no_rows, &missing_root);
+    assert(found.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn built_inventory_is_ordered_unique_and_preserves_every_supplied_name() {
     let input: Vec<&str> = vec!["根", "b", "", "aa", "a", "b", "根", "a"];
     let names = policy::name_inventory(&input);
