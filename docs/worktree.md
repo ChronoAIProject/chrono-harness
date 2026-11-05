@@ -932,10 +932,15 @@ This is the existing migration entry with an exact owner-local adoption plan:
 
 `binding` is an object containing `path`, `branch`, `attachment`, birth
 `policy_sha256`, `observed_head`, `policy_inputs`, `original_receipt`, and
-`ownership: {path, id}` from that enrollment. The result is the original array;
-the selected row must contain exact `path`, `head`, `retained_ref` and
+`ownership: {path, id}` from that enrollment. A batch result is the original array;
+the single-checkout producer's original result object uses `result_index: 0`.
+The selected row must contain exact `path`, `head`, `retained_ref` and
 `status: "verified-absent"`. The original registration's `targets` must bind that
-path, head and `owner_git_common`. The owner verifies current physical path and
+path, head and `owner_git_common`. The single-checkout registration instead binds
+its exact `target.path` and the successful original `target.head` / `target.common`
+command observations (`exit` and literal `stdout`); failed observations and
+ambiguous target forms refuse. Neither original format is rewritten for migration.
+The owner verifies current physical path and
 original Git metadata absence, Git inventory exclusion, direct retained branch
 and exact source OID under the original enrollment's exclusive kernel lease.
 Recreated paths, active/unknown consumers, missing/changed originals and missing

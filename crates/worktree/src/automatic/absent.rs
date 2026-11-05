@@ -39,14 +39,13 @@ impl Manager {
         let original = self.receipt(&adoption.original_result)?;
         let registration = self.receipt(&adoption.original_registration)?;
         let results = json(&original)?;
-        let row = results
-            .as_array()
-            .and_then(|rows| rows.get(adoption.result_index))
-            .ok_or("external disposal result selection missing")?;
+        let row = match &results {
+            Value::Array(rows) => rows.get(adoption.result_index),
+            Value::Object(_) if adoption.result_index == 0 => Some(&results),
+            _ => None,
+        }
+        .ok_or("external disposal result selection missing")?;
         let registered = json(&registration)?;
-        let targets = registered["targets"]
-            .as_array()
-            .ok_or("external disposal registration has no explicit targets")?;
         let head = row["head"]
             .as_str()
             .ok_or("external disposal has no retained HEAD")?;
@@ -54,17 +53,45 @@ impl Manager {
             .as_str()
             .ok_or("external disposal has no retained branch")?;
         facts::full_oid(head)?;
-        if row["path"] != value!(target)
-            || row["status"] != "verified-absent"
-            || targets
+        // The actual batch and single-checkout manual producers retain distinct
+        // original formats. Decode those bytes here; never normalize the receipt.
+        let bound_targets = match (registered.get("targets"), registered.get("target")) {
+            (Some(Value::Array(targets)), None) => targets
                 .iter()
                 .filter(|t| {
                     t["path"] == value!(target)
                         && t["head"] == head
                         && t["owner_git_common"] == value!(self.inputs.common)
                 })
-                .count()
-                != 1
+                .count(),
+            (None, Some(t @ Value::Object(_))) if results.is_object() => {
+                let observed = |v: &Value, expected: &str| {
+                    v["exit"] == 0
+                        && v["stdout"]
+                            .as_str()
+                            .is_some_and(|s| s.strip_suffix('\n').unwrap_or(s) == expected)
+                };
+                usize::from(
+                    t["path"] == value!(target)
+                        && observed(&t["head"], head)
+                        && observed(
+                            &t["common"],
+                            self.inputs
+                                .common
+                                .to_str()
+                                .ok_or("Git common path is not UTF-8")?,
+                        ),
+                )
+            }
+            _ => {
+                return Err(
+                    "external disposal registration has no unambiguous explicit targets".into(),
+                );
+            }
+        };
+        if row["path"] != value!(target)
+            || row["status"] != "verified-absent"
+            || bound_targets != 1
             || !reference.starts_with("refs/heads/")
             || reference == format!("refs/heads/{}", e.branch)
         {

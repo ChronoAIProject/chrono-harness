@@ -230,6 +230,15 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
 
 #[test]
 fn external_absence_adoption_preserves_failed_and_missing_original_outcomes() {
+    external_absence_adoption(false);
+}
+
+#[test]
+fn singleton_external_absence_adoption_preserves_original_observations() {
+    external_absence_adoption(true);
+}
+
+fn external_absence_adoption(singleton: bool) {
     let h = Host::new("payload");
     h.kernel_cleanup();
     let target = h.parent.join("external-disposal");
@@ -250,10 +259,22 @@ fn external_absence_adoption_preserves_failed_and_missing_original_outcomes() {
     let before = fs::read(h.ledger_path(&target)).unwrap();
     let dir = h.root.join(".chrono-harness/state/absence");
     fs::create_dir_all(&dir).unwrap();
-    let results =
-        value!([{"path":target,"status":"verified-absent","head":head,"retained_ref":reference}]);
-    let registration =
-        value!({"targets":[{"path":target,"head":head,"owner_git_common":h.root.join(".git")}]});
+    let row =
+        value!({"path":target,"status":"verified-absent","head":head,"retained_ref":reference});
+    let (results, registration) = if singleton {
+        let mut fixture = json(include_bytes!("fixtures/external-expiry-singleton.json")).unwrap();
+        fixture["result"] = row;
+        fixture["registration"]["target"]["path"] = value!(target);
+        fixture["registration"]["target"]["head"]["stdout"] = value!(format!("{head}\n"));
+        fixture["registration"]["target"]["common"]["stdout"] =
+            value!(format!("{}\n", h.root.join(".git").display()));
+        (fixture["result"].clone(), fixture["registration"].clone())
+    } else {
+        (
+            value!([row]),
+            value!({"targets":[{"path":target,"head":head,"owner_git_common":h.root.join(".git")}]}),
+        )
+    };
     let write = |name: &str, v: &Value| {
         let bytes = serde_json::to_vec(v).unwrap();
         fs::write(dir.join(name), &bytes).unwrap();
@@ -306,6 +327,27 @@ fn external_absence_adoption_preserves_failed_and_missing_original_outcomes() {
     );
     drop(lease);
     assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before);
+    if singleton {
+        let mut changed_plan = plan.clone();
+        changed_plan["result_index"] = value!(1);
+        write("plan.json", &changed_plan);
+        assert_eq!(invoke_adoption().0, 2, "singleton has exactly one result");
+        write("plan.json", &plan);
+        let mut changed_registration = registration.clone();
+        changed_registration["target"]["head"]["exit"] = value!(1);
+        let changed_original = write("registration.json", &changed_registration);
+        changed_plan = plan.clone();
+        changed_plan["original_registration"] = changed_original;
+        write("plan.json", &changed_plan);
+        assert_eq!(
+            invoke_adoption().0,
+            2,
+            "failed original observation cannot bind source custody"
+        );
+        write("registration.json", &registration);
+        write("plan.json", &plan);
+        assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before);
+    }
     let (code, adopted, error) = h.auto(
         "migrate",
         &[
