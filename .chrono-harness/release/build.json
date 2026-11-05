@@ -613,7 +613,8 @@
       "verify_host_bootstrap_tests",
       "build_cache",
       "verify_cache_tests",
-      "verify_artifact_members_tests"
+      "verify_artifact_members_tests",
+      "verify_ci_native_adapter_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -659,7 +660,8 @@
       "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests",
       "build_cache": "linux_build_cache",
       "verify_cache_tests": "linux_verify_cache_tests",
-      "verify_artifact_members_tests": "linux_verify_artifact_members_tests"
+      "verify_artifact_members_tests": "linux_verify_artifact_members_tests",
+      "verify_ci_native_adapter_tests": "linux_verify_ci_native_adapter_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -700,7 +702,8 @@
       "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests",
       "build_cache": "macos_build_cache",
       "verify_cache_tests": "macos_verify_cache_tests",
-      "verify_artifact_members_tests": "macos_verify_artifact_members_tests"
+      "verify_artifact_members_tests": "macos_verify_artifact_members_tests",
+      "verify_ci_native_adapter_tests": "macos_verify_ci_native_adapter_tests"
     }
   },
   "unit_costs": {

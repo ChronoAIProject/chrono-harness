@@ -94,17 +94,16 @@ class NativeAdapter(unittest.TestCase):
         for prefix, timeout, expected in [("exit", 5, None),
                                            ("overflow", 5, "output bound exceeded"),
                                            ("timeout", 0.1, "timeout")]:
-            with self.subTest(outcome=prefix):
-                with self.assertRaises(ValueError) as failed:
-                    native.process(root, [program, "-B", fixture, prefix], b"", env,
-                                   DIRECTORY, prefix, timeout, 32, ["SECRET"])
-                original = str(failed.exception).split("retained at ")[1]
-                receipt = json.loads((root / original).read_bytes())
-                self.assertEqual(receipt["failure"], expected)
-                self.assertLessEqual(len((root / receipt["stdout"]["path"]).read_bytes()), 32)
-                if prefix == "exit":
-                    self.assertEqual(receipt["exit_code"], 7)
-                    self.assertEqual((root / receipt["stderr"]["path"]).read_bytes(), b"real failure")
+            with self.assertRaises(ValueError) as failed:
+                native.process(root, [program, "-B", fixture, prefix], b"", env,
+                               DIRECTORY, prefix, timeout, 32, ["SECRET"])
+            original = str(failed.exception).split("retained at ")[1]
+            receipt = json.loads((root / original).read_bytes())
+            self.assertEqual(receipt["failure"], expected)
+            self.assertLessEqual(len((root / receipt["stdout"]["path"]).read_bytes()), 32)
+            if prefix == "exit":
+                self.assertEqual(receipt["exit_code"], 7)
+                self.assertEqual((root / receipt["stderr"]["path"]).read_bytes(), b"real failure")
 
 
 if __name__ == "__main__":
