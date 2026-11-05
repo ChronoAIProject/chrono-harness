@@ -194,19 +194,27 @@ fn main() {
         b"declared-git" => declared_git(),
         b"parent-gh" => return provider::parent(&std::env::args().skip(1).collect::<Vec<_>>()),
         b"$CHRONO_BASE" => {
-            let mut stdout = io::stdout().lock();
-            for arg in std::env::args_os().skip(1) {
-                stdout.write_all(arg.as_bytes()).unwrap();
-                stdout.write_all(b"\n").unwrap();
+            let (failure, exit_code, record_json): (&[u8], i32, bool) =
+                match std::env::var("CHRONO_TEST_RECORDING").as_deref() {
+                    Ok("full") => (b"original-failure\n", 23, false),
+                    Ok("scope") => (b"\xffscope-consumer-failure", 23, false),
+                    Ok("release") => (b"original failure\n", 17, true),
+                    Ok("release-units") => (b"original failure\xff", 17, true),
+                    _ => panic!("missing recording fixture mode"),
+                };
+            if record_json {
+                let args: Vec<_> = std::env::args().skip(1).collect();
+                std::fs::write("args.json", serde_json::to_vec(&args).unwrap()).unwrap();
+            } else {
+                let mut stdout = io::stdout().lock();
+                for arg in std::env::args_os().skip(1) {
+                    stdout.write_all(arg.as_bytes()).unwrap();
+                    stdout.write_all(b"\n").unwrap();
+                }
+                stdout.flush().unwrap();
             }
-            stdout.flush().unwrap();
-            let failure: &[u8] = match std::env::var("CHRONO_TEST_RECORDING").as_deref() {
-                Ok("full") => b"original-failure\n",
-                Ok("scope") => b"\xffscope-consumer-failure",
-                _ => panic!("missing recording fixture mode"),
-            };
             io::stderr().write_all(failure).unwrap();
-            std::process::exit(23);
+            std::process::exit(exit_code);
         }
         _ => {}
     }
