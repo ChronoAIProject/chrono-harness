@@ -35,9 +35,10 @@ whole-crate result with positive proof count, zero errors and the selected Verus
 version/commit. It also compares the local compiler dependency output with
 explicit regular FILEMAP entries and immutable candidate blobs, including all
 files claiming that root. Execution identity, argv, tool binding and original
-process success remain owned by routes/projects. Collection still consumes
-original unit reports. Complete clause correspondence, collected source
-re-admission and the admission adapter's own Verus migration
+process success remain owned by routes/projects. Collection re-admits original
+compiler results and acquired dependency bytes with the same candidate-source
+comparison, after validating each original execution receipt. Complete clause
+correspondence and the admission adapter's own Verus migration
 remain required before claiming full verification. Its FILEMAP record
 deliberately has empty roots.
 
@@ -96,8 +97,23 @@ The collector also retains digest-bound report references, receipt digests and
 original-response pointers for validated unit execution rows in
 `collected_executions`, avoiding another copy of process output. Its local
 `executed` list stays empty because it
-runs no business operations. These rows are transport data; compiler/source
-re-admission from them remains incomplete.
+runs no business operations. These rows retain original execution addresses;
+adopted Verus operations additionally require exactly one compiler-evidence row
+per original operation. Missing, duplicate and extra evidence is rejected. The
+collector rechecks the original whole-crate compiler result, candidate identity,
+root, both artifact labels, source inventory and dependency checksums. It reads
+the already acquired original dependency bytes and fixed Git candidate blobs,
+without depending on local compiler output paths or executing the compiler.
+Accepted compiler/source rows enter the collection's coverage ledger. Native and
+complete proof evidence for every declared root remain outstanding.
+
+This collection change retains the existing report budget and artifact reader.
+Its additional work compares the acquired dependency bytes with the required
+fixed candidate blobs for each original proof operation; it does not select
+tests from compiler dependencies. The dedicated Rust external-interface fixture
+tests rehashed semantic mutations and missing local outputs. Its synthetic
+compiler results are test inputs, never repository proof evidence. Runtime,
+memory and storage costs beyond the bounded input sizes remain unmeasured.
 
 The registered verification operations additionally require `--compile` and
 explicit `--emit=link=OUTPUT,dep-info=OUTPUT.d`, so successful verification is followed by Rust compilation
@@ -116,8 +132,8 @@ reports. The shared typed unit reader, also used by native gather, acquires both
 originals with the existing transport mapping and shared metadata/stream/artifact
 budget. Its digest, nonempty length, expected length and remaining-budget decision
 calls the same proved Verus predicate; hashing and IO remain external interfaces.
-These changes do not yet re-admit collected source observations against candidate
-blobs or prove the decoding, capture, transport and adapter implementation.
+The collector now re-admits collected source observations against candidate
+blobs; decoding, capture, transport and adapter implementations remain unproved.
 Native and complete source-provenance acceptance remain incomplete.
 
 The same Verus owner now defines and implements dependency-list byte decoding.
@@ -160,6 +176,14 @@ including valid all-zero text. The actual collection digest predicate now calls
 this same executable source. Verified examples include short/long text, uppercase
 and the hexadecimal range boundary. Hash computation and source-byte binding
 remain separate obligations.
+
+The same source proves observation identity matching: the reported candidate and
+root must equal the fixed candidate and registered root, and the library and
+dependency labels must equal the registered output and its `.d` suffix. This
+predicate owns equality only; candidate eligibility and artifact acquisition
+remain separate checks. Verified examples include changed identities, missing
+suffixes and the empty equality boundary. Collection calls this executable
+predicate before source re-admission.
 
 The same owner now proves paired source-metadata admission. Every compiler path
 must normalize to its corresponding candidate path and match its valid SHA-256

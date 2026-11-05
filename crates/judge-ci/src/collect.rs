@@ -68,6 +68,7 @@ pub struct UnitOriginals {
     pub producer: ProcessResult,
     pub retained_report: Option<chrono_harness::prepared::Original>,
     pub compiler_originals: Vec<chrono_harness::prepared::Original>,
+    pub(super) compiler_bytes: BTreeMap<(String, String), Vec<u8>>,
 }
 
 pub fn unit_originals(
@@ -174,6 +175,7 @@ pub fn unit_originals(
     process(&producer)?;
     let response = json(&producer.stdout_bytes)?;
     let mut compiler_originals = Vec::new();
+    let mut compiler_bytes = BTreeMap::new();
     for artifact in super::verus::compiler_artifacts(&response["evidence"])? {
         let raw = read(&artifact.original, remaining)?;
         if !verus_policy::sources::admit_artifact(
@@ -189,6 +191,13 @@ pub fn unit_originals(
             ));
         }
         remaining -= raw.len() as u64;
+        compiler_bytes.insert(
+            (
+                artifact.original.path.clone(),
+                artifact.original.sha256.clone(),
+            ),
+            raw,
+        );
         compiler_originals.push(chrono_harness::prepared::Original {
             path: chrono_harness::prepared::original_path(&artifact.original, transport)?,
             sha256: artifact.original.sha256,
@@ -200,11 +209,13 @@ pub fn unit_originals(
         producer,
         retained_report,
         compiler_originals,
+        compiler_bytes,
     })
 }
 
 pub(super) fn collect(
     req: &Request,
+    reader: &Reader,
     manifest: &str,
     config: &CheckConfig,
     snapshot: &Snapshot,
@@ -212,7 +223,7 @@ pub(super) fn collect(
     methods: &BTreeMap<String, Vec<Method>>,
     declarations: &Value,
     environment_policy: &Value,
-) -> Result<Response, String> {
+) -> Result<(Response, Vec<verus::CollectedAdmission>), String> {
     let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(&req.host_root)?;
     let p = &snapshot.policy;
     let units = p
@@ -265,6 +276,7 @@ pub(super) fn collect(
     let mut verified = vec![];
     let mut retained_originals = Vec::new();
     let mut collected_executions = Vec::new();
+    let mut compiler_admissions = Vec::new();
     let retained_streams = chrono_harness::units::stream_publication(config);
     for input in &inputs.reports {
         let bytes = read(
@@ -309,6 +321,7 @@ pub(super) fn collect(
         });
         retained_originals.extend(originals.retained_report.map(|o| o.path));
         retained_originals.extend(originals.compiler_originals.into_iter().map(|o| o.path));
+        let compiler_bytes = originals.compiler_bytes;
         let report = originals.report;
         let original = originals.request;
         let producer = originals.producer;
@@ -525,6 +538,14 @@ pub(super) fn collect(
                 return Err("unit operation original evidence failed or disagrees".into());
             }
         }
+        compiler_admissions.extend(verus::readmit_collected(
+            req,
+            reader,
+            snapshot,
+            e,
+            &compiler_bytes,
+            input.artifacts.as_ref(),
+        )?);
         let actual_results = response.results.iter().map(|r| r.id.as_str()).collect();
         let operation_ids = expected_ops.iter().map(String::as_str).collect();
         let not_required_ids = not_required.iter().map(String::as_str).collect();
@@ -572,21 +593,24 @@ pub(super) fn collect(
         });
     }
     let failed = results.iter().any(|r| r.status == Status::Failed);
-    Ok(Response {
-        protocol: units::scope_protocol(req).into(),
-        request_id: req.request_id.clone(),
-        status: if failed {
-            Status::Failed
-        } else {
-            Status::Passed
-        },
-        results,
-        evidence: object!({"scope":config.schema,"execution_scope":req.scope,"base":req.base,"candidate":req.candidate,
+    Ok((
+        Response {
+            protocol: units::scope_protocol(req).into(),
+            request_id: req.request_id.clone(),
+            status: if failed {
+                Status::Failed
+            } else {
+                Status::Passed
+            },
+            results,
+            evidence: object!({"scope":config.schema,"execution_scope":req.scope,"base":req.base,"candidate":req.candidate,
             "global_selected":selected,"required_units":required,"manifest_sha256":sha256(&manifest_bytes),"reports":verified,
             "collection_limits":limits,"retained_originals":retained_originals,
             "collected_executions":collected_executions,
             "executed":[],"acceptance":"global collection; no business operations executed",
             "input_closure":"incomplete: report identity pins are caller supplied; build provenance and external input closure are not certified",
             "parity":"unestablished"}),
-    })
+        },
+        compiler_admissions,
+    ))
 }

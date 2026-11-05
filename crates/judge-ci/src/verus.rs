@@ -79,32 +79,19 @@ fn retain_compiler_artifact(
     })
 }
 
-fn compiler_sources(
+fn candidate_sources(
     req: &Request,
     reader: &Reader,
-    policy: &Policy,
     snapshot: &Snapshot,
     argv: &Vec<String>,
+    bytes: &[u8],
 ) -> Result<serde_json::Value, String> {
     use verus_policy::sources::{self, SourceBinding};
     if !verus_policy::canonical_verifier_arguments(argv) {
         return Err("E_VERUS_SOURCES: verifier arguments differ from registered route".into());
     }
     let output = &argv[10];
-    let dependency = format!("{output}.d");
-    let limit = policy
-        .collection_limits
-        .clone()
-        .unwrap_or_default()
-        .report_bytes;
-    let bytes = super::collect::read(
-        &req.host_root,
-        &dependency,
-        policy,
-        "report_bytes (compiler artifacts)",
-        limit,
-    )?;
-    let paths = sources::compiler_dependency_paths(&bytes, output.as_bytes())
+    let paths = sources::compiler_dependency_paths(bytes, output.as_bytes())
         .ok_or("E_VERUS_SOURCES: missing or invalid compiler dependency target")?;
     let mut compiled = Vec::new();
     let mut fixed = Vec::new();
@@ -151,13 +138,41 @@ fn compiler_sources(
         .map(|(path, _)| path.as_bytes().to_vec())
         .collect();
     if !sources::admit_source_metadata(&compiled, &fixed, root.as_bytes(), &claims)
-        || !sources::matches_dependency_content(&bytes, output.as_bytes(), &compiled)
+        || !sources::matches_dependency_content(bytes, output.as_bytes(), &compiled)
     {
         return Err(
             "E_VERUS_SOURCES: candidate metadata, explicit root claims or compiler checksums differ"
                 .into(),
         );
     }
+    Ok(object!(identities))
+}
+
+fn compiler_sources(
+    req: &Request,
+    reader: &Reader,
+    policy: &Policy,
+    snapshot: &Snapshot,
+    argv: &Vec<String>,
+) -> Result<serde_json::Value, String> {
+    if !verus_policy::canonical_verifier_arguments(argv) {
+        return Err("E_VERUS_SOURCES: verifier arguments differ from registered route".into());
+    }
+    let output = &argv[10];
+    let dependency = format!("{output}.d");
+    let limit = policy
+        .collection_limits
+        .clone()
+        .unwrap_or_default()
+        .report_bytes;
+    let bytes = super::collect::read(
+        &req.host_root,
+        &dependency,
+        policy,
+        "report_bytes (compiler artifacts)",
+        limit,
+    )?;
+    let identities = candidate_sources(req, reader, snapshot, argv, &bytes)?;
     let library = super::collect::read(
         &req.host_root,
         output,
@@ -169,9 +184,9 @@ fn compiler_sources(
     let library = retain_compiler_artifact(req, output, "verus-library", &library)?;
     Ok(
         object!({"schema":"chrono-verus-source-observation/v2","candidate":req.candidate,
-        "root":root,"sources":identities,
+        "root":argv[8],"sources":identities,
         "dependency":dependency,"library":library,
-        "assurance":"local source comparison and addressed compiler originals; collection source re-admission remains required"}),
+        "assurance":"local source comparison and addressed compiler originals"}),
     )
 }
 
@@ -185,15 +200,13 @@ struct Requirements {
     external_interfaces: BTreeMap<String, String>,
 }
 
-pub(super) fn apply(
+fn requirements(
     req: &Request,
     reader: &Reader,
     policy: &Policy,
-    snapshot: &Snapshot,
-    response: &mut Response,
-) -> Result<(), String> {
+) -> Result<Option<Requirements>, String> {
     let Some(path) = &policy.verus else {
-        return Ok(());
+        return Ok(None);
     };
     let required_inputs: Vec<_> = policy.required_inputs.iter().map(String::as_str).collect();
     if !verus_policy::contains_text(&required_inputs, path) {
@@ -217,8 +230,186 @@ pub(super) fn apply(
     if !verus_policy::valid_requirement_fields(&fields, &tools) {
         return Err("E_VERUS_INPUT: invalid schema, tool or explicit external interfaces".into());
     }
+    Ok(Some(requirements))
+}
+
+fn compiler_result(
+    execution: &serde_json::Value,
+    requirements: &Requirements,
+) -> Result<bool, String> {
+    let original = chrono_harness::full::expand_process(&execution["receipt"]["process"])?;
+    let bytes: Vec<u8> = serde_json::from_value(original["stdout_bytes"].clone())
+        .map_err(|e| format!("E_VERUS_RESULT: original stdout bytes: {e}"))?;
+    let proof = json(&bytes)?;
+    let result = &proof["verification-results"];
+    Ok(verus_policy::accept_compiler_result(
+        &verus_policy::CompilerResult {
+            exit_code: original["exit_code"].as_i64(),
+            success: result["success"].as_bool(),
+            encountered_error: result["encountered-error"].as_bool(),
+            encountered_vir_error: result["encountered-vir-error"].as_bool(),
+            errors: result["errors"].as_u64(),
+            verified: result["verified"].as_u64(),
+            entire_crate: result["is-verifying-entire-crate"].as_bool(),
+            version: proof["verus"]["version"].as_str().map(str::as_bytes),
+            commit: proof["verus"]["commit"].as_str().map(str::as_bytes),
+        },
+        requirements.version.as_bytes(),
+        requirements.commit.as_bytes(),
+    ))
+}
+
+/// Constructed only after original receipt and candidate-source re-admission.
+pub(super) struct CollectedAdmission {
+    operation: String,
+    sources: serde_json::Value,
+}
+
+pub(super) fn readmit_collected(
+    req: &Request,
+    reader: &Reader,
+    snapshot: &Snapshot,
+    evidence: &serde_json::Value,
+    originals: &BTreeMap<(String, String), Vec<u8>>,
+    transport: Option<&chrono_harness::prepared::ArtifactTransport>,
+) -> Result<Vec<CollectedAdmission>, String> {
+    let Some(requirements) = requirements(req, reader, &snapshot.policy)? else {
+        return Ok(Vec::new());
+    };
+    if evidence["verus"]["schema"] != "chrono-verus-coverage/v1"
+        || evidence["verus"]["complete"] != true
+    {
+        return Err("E_VERUS_COLLECTION: unit coverage observation was not admitted".into());
+    }
+    let rows = evidence["verus"]["compiler_evidence"]
+        .as_array()
+        .ok_or("E_VERUS_COLLECTION: compiler evidence missing")?;
+    let mut supplied = BTreeMap::new();
+    for row in rows {
+        let operation = row["operation"]
+            .as_str()
+            .ok_or("E_VERUS_COLLECTION: compiler operation missing")?;
+        if supplied.insert(operation, row).is_some() {
+            return Err("E_VERUS_COLLECTION: duplicate compiler evidence".into());
+        }
+    }
+    let mut admitted = Vec::new();
+    for execution in evidence["executed"]
+        .as_array()
+        .ok_or("E_VERUS_COLLECTION: original executions missing")?
+    {
+        let operation = execution["operation"]
+            .as_str()
+            .ok_or("E_VERUS_COLLECTION: original operation missing")?;
+        let Some((_, tool, argv)) = snapshot.operations.get(operation) else {
+            return Err("E_VERUS_COLLECTION: unregistered original operation".into());
+        };
+        if tool != &requirements.tool {
+            continue;
+        }
+        let row = supplied
+            .remove(operation)
+            .ok_or("E_VERUS_COLLECTION: compiler evidence does not cover original operations")?;
+        if !compiler_result(execution, &requirements)?
+            || row["compiler_accepted"] != true
+            || !row["compiler_error"].is_null()
+            || !row["source_error"].is_null()
+            || !verus_policy::canonical_verifier_arguments(argv)
+        {
+            return Err(
+                "E_VERUS_COLLECTION: original compiler result or route was not admitted".into(),
+            );
+        }
+        let mut source = row["sources"].clone();
+        if source["schema"] != "chrono-verus-source-observation/v2" {
+            return Err("E_VERUS_COLLECTION: source observation schema mismatch".into());
+        }
+        let mut dependency: CompilerArtifact = serde_json::from_value(source["dependency"].clone())
+            .map_err(|e| format!("E_VERUS_COLLECTION: dependency declaration: {e}"))?;
+        let mut library: CompilerArtifact = serde_json::from_value(source["library"].clone())
+            .map_err(|e| format!("E_VERUS_COLLECTION: library declaration: {e}"))?;
+        let candidate = source["candidate"]
+            .as_str()
+            .ok_or("E_VERUS_COLLECTION: source candidate missing")?;
+        let root = source["root"]
+            .as_str()
+            .ok_or("E_VERUS_COLLECTION: source root missing")?;
+        if !verus_policy::sources::matches_observation_identity(
+            &verus_policy::sources::ObservationIdentity {
+                candidate: candidate.as_bytes(),
+                root: root.as_bytes(),
+                dependency: dependency.path.as_bytes(),
+                library: library.path.as_bytes(),
+            },
+            req.candidate.as_bytes(),
+            argv[8].as_bytes(),
+            argv[10].as_bytes(),
+        ) {
+            return Err(
+                "E_VERUS_COLLECTION: source candidate, root or artifact path mismatch".into(),
+            );
+        }
+        let bytes = originals
+            .get(&(
+                dependency.original.path.clone(),
+                dependency.original.sha256.clone(),
+            ))
+            .ok_or("E_VERUS_COLLECTION: acquired dependency original missing")?;
+        if !originals.contains_key(&(
+            library.original.path.clone(),
+            library.original.sha256.clone(),
+        )) {
+            return Err("E_VERUS_COLLECTION: acquired library original missing".into());
+        }
+        let identities = candidate_sources(req, reader, snapshot, argv, bytes)?;
+        if source["sources"] != identities {
+            return Err(
+                "E_VERUS_COLLECTION: source inventory differs from fixed candidate bytes".into(),
+            );
+        }
+        dependency.original.path =
+            chrono_harness::prepared::original_path(&dependency.original, transport)?;
+        library.original.path =
+            chrono_harness::prepared::original_path(&library.original, transport)?;
+        source["dependency"] = object!(dependency);
+        source["library"] = object!(library);
+        source["assurance"] = object!(
+            "collected original compiler result and artifacts re-admitted against fixed candidate sources"
+        );
+        admitted.push(CollectedAdmission {
+            operation: operation.into(),
+            sources: source,
+        });
+    }
+    if !supplied.is_empty() {
+        return Err(
+            "E_VERUS_COLLECTION: extra compiler evidence without original operation".into(),
+        );
+    }
+    Ok(admitted)
+}
+
+pub(super) fn apply(
+    req: &Request,
+    reader: &Reader,
+    policy: &Policy,
+    snapshot: &Snapshot,
+    response: &mut Response,
+    collected: Vec<CollectedAdmission>,
+) -> Result<(), String> {
+    let Some(requirements) = requirements(req, reader, policy)? else {
+        return Ok(());
+    };
     let mut ledger = verus_policy::Ledger::new();
     let mut compiler_evidence = Vec::new();
+    for admission in collected {
+        let operation = admission.operation;
+        ledger.record(format!("operation:{operation}:compiler-proof"), true);
+        ledger.record(format!("operation:{operation}:compiler-sources"), true);
+        compiler_evidence.push(object!({"operation":operation,"compiler_accepted":true,
+            "compiler_error":null,"sources":admission.sources,"source_error":null,
+            "origin":"collected original unit execution"}));
+    }
     for execution in response.evidence["executed"]
         .as_array()
         .into_iter()
@@ -234,28 +425,7 @@ pub(super) fn apply(
         {
             continue;
         }
-        let accepted = (|| -> Result<bool, String> {
-            let original = chrono_harness::full::expand_process(&execution["receipt"]["process"])?;
-            let bytes: Vec<u8> = serde_json::from_value(original["stdout_bytes"].clone())
-                .map_err(|e| format!("E_VERUS_RESULT: original stdout bytes: {e}"))?;
-            let proof = json(&bytes)?;
-            let result = &proof["verification-results"];
-            Ok(verus_policy::accept_compiler_result(
-                &verus_policy::CompilerResult {
-                    exit_code: original["exit_code"].as_i64(),
-                    success: result["success"].as_bool(),
-                    encountered_error: result["encountered-error"].as_bool(),
-                    encountered_vir_error: result["encountered-vir-error"].as_bool(),
-                    errors: result["errors"].as_u64(),
-                    verified: result["verified"].as_u64(),
-                    entire_crate: result["is-verifying-entire-crate"].as_bool(),
-                    version: proof["verus"]["version"].as_str().map(str::as_bytes),
-                    commit: proof["verus"]["commit"].as_str().map(str::as_bytes),
-                },
-                requirements.version.as_bytes(),
-                requirements.commit.as_bytes(),
-            ))
-        })();
+        let accepted = compiler_result(execution, &requirements);
         let compiler_accepted = accepted.as_ref().is_ok_and(|value| *value);
         ledger.record(
             format!("operation:{operation}:compiler-proof"),
@@ -350,7 +520,7 @@ pub(super) fn apply(
         "missing":coverage.missing,
         "compiler_evidence":compiler_evidence,
         "external_interfaces":requirements.external_interfaces,
-        "assurance":"declarations, compiler results, local source comparison and addressed artifacts; adapter proofs and collection source re-admission remain required"
+        "assurance":"declarations and admitted original compiler results/artifacts with fixed candidate source comparison; adapter proofs and complete root proof evidence remain required"
     });
     let artifacts = compiler_artifacts(&response.evidence)?;
     let retained = response

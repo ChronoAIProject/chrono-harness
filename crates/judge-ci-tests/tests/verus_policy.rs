@@ -12,6 +12,36 @@ verus! {
 broadcast use vstd::string::group_string_axioms;
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn observation_identity_binds_candidate_root_and_both_artifact_labels() {
+    let candidate = [97u8];
+    let root = [98u8];
+    let output = [99u8];
+    let dependency = [99u8, 46, 100];
+    let observed = policy::sources::ObservationIdentity {
+        candidate: &candidate, root: &root, library: &output, dependency: &dependency,
+    };
+    assert(dependency@ =~= output@ + seq![46u8, 100u8]);
+    let accepted = policy::sources::matches_observation_identity(&observed, &candidate, &root, &output);
+    let changed_candidate = policy::sources::matches_observation_identity(&observed, &[100u8], &root, &output);
+    let changed_root = policy::sources::matches_observation_identity(&observed, &candidate, &[100u8], &output);
+    let changed_output = policy::sources::matches_observation_identity(&observed, &candidate, &root, &[100u8]);
+    assert(accepted && !changed_candidate && !changed_root && !changed_output);
+    let missing_suffix = policy::sources::ObservationIdentity {
+        candidate: &candidate, root: &root, library: &output, dependency: &output,
+    };
+    let rejected = policy::sources::matches_observation_identity(&missing_suffix, &candidate, &root, &output);
+    assert(!rejected);
+    let empty: [u8; 0] = [];
+    let suffix = [46u8, 100];
+    let empty_observed = policy::sources::ObservationIdentity {
+        candidate: &empty, root: &empty, library: &empty, dependency: &suffix,
+    };
+    assert(suffix@ =~= empty@ + seq![46u8, 100u8]);
+    let empty_equal = policy::sources::matches_observation_identity(&empty_observed, &empty, &empty, &empty);
+    assert(empty_equal); // Identity equality alone makes no eligibility claim.
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn result_membership_requires_inventory_operations_and_adopted_coverage() {
     proof {
         reveal_strlit("ci.inventory");

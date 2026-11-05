@@ -202,6 +202,33 @@ pub fn admit_artifact(
         && actual_length == expected_length
 }
 
+pub struct ObservationIdentity<'a> {
+    pub candidate: &'a [u8],
+    pub root: &'a [u8],
+    pub dependency: &'a [u8],
+    pub library: &'a [u8],
+}
+
+pub open spec fn observation_identity_matches(
+    observed: &ObservationIdentity, candidate: Seq<u8>, root: Seq<u8>, output: Seq<u8>,
+) -> bool {
+    observed.candidate@ == candidate && observed.root@ == root
+        && observed.library@ == output && observed.dependency@ == output + seq![46u8, 100u8]
+}
+
+/// Artifact labels and source identities must bind the same registered invocation.
+pub fn matches_observation_identity(
+    observed: &ObservationIdentity, candidate: &[u8], root: &[u8], output: &[u8],
+) -> (matched: bool)
+    ensures matched <==> observation_identity_matches(observed, candidate@, root@, output@),
+{
+    let mut dependency = Vec::new();
+    append_bytes(&mut dependency, output);
+    append_bytes(&mut dependency, &[46u8, 100u8]);
+    equal_bytes(observed.candidate, candidate) && equal_bytes(observed.root, root)
+        && equal_bytes(observed.library, output) && equal_bytes(observed.dependency, dependency.as_slice())
+}
+
 pub open spec fn prefix_at(input: Seq<u8>, start: int, prefix: Seq<u8>) -> bool {
     0 <= start <= input.len() && prefix.len() <= input.len() - start
         && input.subrange(start, start + prefix.len()) == prefix

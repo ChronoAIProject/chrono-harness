@@ -92,6 +92,7 @@ fn collected_verus_sources_readmit_original_bytes_and_reject_rehashed_semantic_c
         "duplicate",
         "extra",
         "checksum",
+        "proof",
     ] {
         let mut report = original.clone();
         let rows = &mut report["response"]["evidence"]["verus"]["compiler_evidence"];
@@ -140,13 +141,39 @@ fn collected_verus_sources_readmit_original_bytes_and_reject_rehashed_semantic_c
                 );
                 artifact["byte_length"] = json!(text.len());
             }
+            "proof" => {
+                let receipt = &mut report["response"]["evidence"]["executed"][0]["receipt"];
+                let mut process =
+                    chrono_harness::full::expand_process(&receipt["process"]).unwrap();
+                let raw: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+                let mut proof: Value = serde_json::from_slice(&raw).unwrap();
+                proof["verification-results"]["verified"] = json!(0);
+                let stdout = serde_json::to_vec(&proof).unwrap();
+                process["stdout_bytes"] = json!(stdout);
+                process["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+                process["stdout_sha256"] = json!(sha256(&stdout));
+                let mut identity = receipt.clone();
+                identity["process"] = process.clone();
+                identity.as_object_mut().unwrap().remove("digest");
+                receipt["digest"] = json!(chrono_harness::wire::digest(&identity).unwrap());
+                receipt["process"] = chrono_harness::full::compact_process(&process).unwrap();
+            }
             _ => unreachable!(),
         }
         let changed = publish(&mut report);
-        fail(
-            &collect(&h, &base, &candidate, json!([changed])),
-            "E_VERUS_",
-        );
+        let expected = match mode {
+            "candidate" | "root" | "library" | "dependency" => {
+                "source candidate, root or artifact path mismatch"
+            }
+            "inventory" => "source inventory differs from fixed candidate bytes",
+            "missing" => "compiler evidence does not cover original operations",
+            "duplicate" => "duplicate compiler evidence",
+            "extra" => "extra compiler evidence without original operation",
+            "checksum" => "compiler checksums differ",
+            "proof" => "original compiler result or route was not admitted",
+            _ => unreachable!(),
+        };
+        fail(&collect(&h, &base, &candidate, json!([changed])), expected);
     }
     h.json(path, &original);
     let accepted = collect(&h, &base, &candidate, json!([reference]));
