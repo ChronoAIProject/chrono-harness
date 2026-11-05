@@ -49,7 +49,8 @@
     "test.diagnostics-tests",
     "host.bootstrap-tests",
     "test.cache-tests",
-    "ci.artifact-member-tests"
+    "ci.artifact-member-tests",
+    "test.ci-native-adapter"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -560,6 +561,16 @@
       "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_artifact_members_tests",
       "rust_toolchain": false
+    },
+    {
+      "id": "verify_ci_native_adapter_tests",
+      "kind": "verify",
+      "operation": "test.ci-native-adapter",
+      "needs": [
+        "build_ci"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_native_adapter_tests",
+      "rust_toolchain": false
     }
   ],
   "collector": {
@@ -731,7 +742,8 @@
     "verify_host_bootstrap_tests": "unmeasured",
     "build_cache": "unmeasured",
     "verify_cache_tests": "unmeasured",
-    "verify_artifact_members_tests": "unmeasured"
+    "verify_artifact_members_tests": "unmeasured",
+    "verify_ci_native_adapter_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
@@ -753,6 +765,9 @@
     ],
     "release.tests.integration": [
       ".chrono-harness/state/release-test-failures/"
+    ],
+    "test.ci-native-adapter": [
+      ".chrono-harness/state/native-adapter-tests/"
     ]
   },
   "verification_consumers": {
@@ -779,7 +794,7 @@
       ]
     },
     "verify_runner_tests": {
-      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
+      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project\u2019s Rust fixture executables.",
       "release_assets": [
         "chrono-harness"
       ]
@@ -885,7 +900,7 @@
       ]
     },
     "verify_judge_mixed_tests": {
-      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
+      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host\u2019s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture\u2019s actual cost invocation.",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-registration",
@@ -928,6 +943,12 @@
     "verify_artifact_members_tests": {
       "need": "The ci.artifact-member-tests Python action imports the candidate artifact_members implementation and reads its declared binary fixture; it consumes no release executable.",
       "release_assets": []
+    },
+    "verify_ci_native_adapter_tests": {
+      "need": "The dedicated Python native adapter tests call the actual chrono-ci native-process bridge and check original IO, executable resolution, credential omission and bounded failure receipts. The staged chrono-ci release asset supplies that existing bridge.",
+      "release_assets": [
+        "chrono-ci"
+      ]
     }
   },
   "rust_incremental": true
