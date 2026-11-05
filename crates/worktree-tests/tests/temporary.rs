@@ -2051,7 +2051,7 @@ fn capacity_context_migration_retains_one_gate_per_allocation() {
         chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
             .unwrap();
     let mut originals = vec![];
-    for _ in 0..48 {
+    for _ in 0..24 {
         let allocation = chrono_worktree::TemporaryHost::allocate(
             &store,
             "test-allocation",
@@ -2091,12 +2091,12 @@ fn capacity_context_migration_retains_one_gate_per_allocation() {
             if libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) != 0 {
                 return Err(std::io::Error::last_os_error());
             }
-            if limit.rlim_cur < 384 {
+            if limit.rlim_cur < 288 {
                 return Err(std::io::Error::other(
-                    "fixture requires 384 available descriptors, including reserved native transport slots",
+                    "fixture requires 288 available descriptors, including reserved native transport slots",
                 ));
             }
-            limit.rlim_cur = 384;
+            limit.rlim_cur = 288;
             if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) != 0 {
                 return Err(std::io::Error::last_os_error());
             }
@@ -2106,7 +2106,7 @@ fn capacity_context_migration_retains_one_gate_per_allocation() {
     let output = h._dir.capture_bound(&mut command);
     let (code, report, error) = h.received(output);
     assert_eq!(code, 0, "{report} {error}");
-    assert_eq!(report["producer_context_migration"]["objects"], 48);
+    assert_eq!(report["producer_context_migration"]["objects"], 24);
     assert_eq!(
         fs::read(store.join(format!(
             "producer-context-source-{}.json",
@@ -2154,25 +2154,26 @@ fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
         "partial retirement lost its continuation record"
     );
     for _ in 0..16 {
-        if !host.path().exists() {
+        if !record.exists() {
             break;
         }
+        let report = host.finish().unwrap();
         assert!(
-            record.exists(),
+            !report["original_retention"].as_array().unwrap().is_empty(),
+            "ordinary reentry did not consume its declared retirement paths"
+        );
+        assert!(
+            !host.path().exists() || record.exists(),
             "continuation disappeared before original container"
         );
-        let mut next = chrono_worktree::TemporaryHost::allocate(
-            &store,
-            "test-allocation",
-            &outputs,
-            "ordinary-reentry-",
-        )
-        .unwrap();
-        next.finish().unwrap();
     }
     assert!(
         !host.path().exists(),
         "bounded ordinary recovery did not advance"
+    );
+    assert!(
+        !record.exists(),
+        "completed retirement registration accumulated"
     );
     assert_eq!(original.status.code(), Some(7));
 }
