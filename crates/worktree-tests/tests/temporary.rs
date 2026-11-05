@@ -2153,6 +2153,23 @@ fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
         record.exists(),
         "partial retirement lost its continuation record"
     );
+    let captures = host.path().join(".chrono-harness/state/command-captures");
+    let capture_count = || {
+        fs::read_dir(&captures)
+            .map(|entries| entries.count())
+            .unwrap_or(0)
+    };
+    let before = capture_count();
+    let mut refused = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    refused.arg("capture-once");
+    let error = chrono_worktree::TemporaryHost::capture_bound_input(
+        host.path(),
+        &mut refused,
+        b"released input must not be written",
+    )
+    .unwrap_err();
+    assert!(error.contains("original lifetime released"), "{error}");
+    assert_eq!(capture_count(), before, "retired capture created output");
     for _ in 0..16 {
         if !record.exists() {
             break;

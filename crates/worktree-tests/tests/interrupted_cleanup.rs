@@ -2301,13 +2301,25 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let h = Host::retained("payload");
     let allocation = h._dir.path().to_owned();
     let coordinator = source();
+    let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
+        &coordinator,
+        POLICY,
+        "worktree-test-host",
+    )
+    .unwrap();
+    // This actual observer outlives the allocation whose release it verifies.
+    let mut observer = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "worktree-test-host",
+        &outputs,
+        "native-cargo-observer-",
+    )
+    .unwrap();
     let maintain_allocation = || {
         let mut command = Command::new(coordinator.join(".chrono-harness/bin/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-        let output =
-            chrono_worktree::TemporaryHost::capture_bound_output(&allocation, &mut command)
-                .unwrap();
+        let output = observer.capture_output(&mut command).unwrap();
         let report = json(&output.stdout).unwrap();
         let failures = report["cleanup_failures"].as_array().unwrap();
         assert_eq!(
@@ -2454,6 +2466,7 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     assert_eq!(fs::read(target.join("payload")).unwrap(), original_payload);
     assert_eq!(fs::read(manifest).unwrap(), original_manifest);
     assert_eq!(fs::read(library).unwrap(), original_library);
+    observer.finish().unwrap();
 }
 
 #[test]

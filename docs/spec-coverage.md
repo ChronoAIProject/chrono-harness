@@ -691,6 +691,11 @@ Bounded disposal also requires dependency reentry to accept an identical existin
 relationship after disposal starts; it still rejects changing that relationship.
 The original canonical capacity result retained 34 passing cases and the failing
 partial-retirement case that exposed this remaining gap.
+Native capture now refuses a retiring allocation before creating input or output,
+including the static bound-capture adapter. Its native Cargo adoption observer
+has its own retained allocation so it can inspect cleanup after releasing the
+observed allocation. The earlier 5/6 adoption result and panic remain evidence;
+the additional original capacity and bootstrap disposal failures remain open.
 The original open-file failure remains evidence. The canonical bare check first
 refused a newly fetched dev inventory; I4 integrated that frozen landed revision
 without changing unrelated upstream source. Its next run reached business
