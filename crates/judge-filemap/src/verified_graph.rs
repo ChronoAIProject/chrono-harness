@@ -1,0 +1,285 @@
+//! Indexed FIFO graph traversal. The caller owns the name/edge-index adapter.
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+
+pub struct Search {
+    /// The graph size denotes an unreachable node; all other values are hop counts.
+    pub distances: Vec<usize>,
+    /// Source node and adjacency slot, preserving parallel edge identity.
+    pub parents: Vec<Option<(usize, usize)>>,
+    pub order: Vec<usize>,
+}
+
+pub open spec fn valid_graph(g: Seq<Vec<usize>>) -> bool {
+    forall|u: int, k: int| 0 <= u < g.len() && 0 <= k < g[u].len()
+        ==> (#[trigger] g[u]@[k]) < g.len()
+}
+
+pub open spec fn walk(g: Seq<Vec<usize>>, w: Seq<usize>) -> bool {
+    w.len() > 0
+        && (forall|i: int| 0 <= i < w.len() ==> (#[trigger] w[i]) < g.len())
+        && (forall|i: int| 0 <= i < w.len() - 1
+            ==> (#[trigger] g[w[i] as int])@.contains(w[i + 1]))
+}
+
+pub open spec fn tree(
+    g: Seq<Vec<usize>>, root: usize, d: Seq<usize>, p: Seq<Option<(usize, usize)>>,
+) -> bool {
+    root < g.len() && d.len() == g.len() && p.len() == g.len()
+        && d[root as int] == 0 && p[root as int].is_none()
+        && forall|v: int| 0 <= v < g.len() ==> (
+            (#[trigger] d[v]) <= g.len()
+            && (if d[v] == g.len() { p[v].is_none() }
+                else if v != root {
+                    p[v].is_some() && {
+                        let (u, k) = p[v].unwrap();
+                        u < g.len() && k < g[u as int].len() && g[u as int]@[k as int] == v
+                            && d[u as int] < d[v] && d[v] == d[u as int] + 1
+                    }
+                } else { true })
+        )
+}
+
+pub open spec fn queue_state(
+    g: Seq<Vec<usize>>, root: usize, d: Seq<usize>, p: Seq<Option<(usize, usize)>>,
+    q: Seq<usize>,
+) -> bool {
+    tree(g, root, d, p) && q.len() > 0 && q[0] == root && q.no_duplicates()
+        && (forall|i: int| 0 <= i < q.len() ==> (
+            (#[trigger] q[i]) < g.len() && d[q[i] as int] < g.len() && d[q[i] as int] <= i
+        ))
+        && (forall|v: int| 0 <= v < g.len()
+            ==> ((#[trigger] d[v]) < g.len() <==> q.contains(v as usize)))
+        && (forall|i: int, j: int| 0 <= i <= j < q.len()
+            ==> d[#[trigger] q[i] as int] <= d[#[trigger] q[j] as int])
+}
+
+pub open spec fn processed(
+    g: Seq<Vec<usize>>, d: Seq<usize>, q: Seq<usize>, front: int, slot: int,
+) -> bool {
+    forall|i: int, k: int| 0 <= i < q.len() && 0 <= k < g[q[i] as int].len()
+        && (i < front || (i == front && k < slot)) ==> {
+            let v = (#[trigger] g[q[i] as int]@[k]);
+            d[v as int] < g.len() && d[v as int] <= d[q[i] as int] + 1
+        }
+}
+
+pub proof fn bounded_queue(q: Seq<usize>, n: usize)
+    requires q.no_duplicates(), forall|i: int| 0 <= i < q.len() ==> (#[trigger] q[i]) < n,
+    ensures q.len() <= n,
+{
+    use vstd::set_lib::FiniteRange;
+    q.unique_seq_to_set();
+    vstd::set_lib::range_set_properties::<usize>(0, n);
+    assert(q.to_set().subset_of(usize::range_set(0, n))) by {
+        assert forall|v: usize| q.to_set().contains(v) implies usize::range_set(0, n).contains(v) by {
+            let i = choose|i: int| 0 <= i < q.len() && q[i] == v;
+        }
+    }
+    vstd::set_lib::lemma_len_subset(q.to_set(), usize::range_set(0, n));
+}
+
+/// A finite predecessor chain supplies an actual path of the recorded length.
+pub proof fn tree_path(
+    g: Seq<Vec<usize>>, root: usize, d: Seq<usize>, p: Seq<Option<(usize, usize)>>, v: usize,
+) -> (w: Seq<usize>)
+    requires tree(g, root, d, p), v < g.len(), d[v as int] < g.len(),
+    ensures walk(g, w), w[0] == root, w.last() == v, w.len() == d[v as int] + 1,
+    decreases d[v as int],
+{
+    if v == root {
+        seq![root]
+    } else {
+        let (u, k) = p[v as int].unwrap();
+        let prefix = tree_path(g, root, d, p, u);
+        let w = prefix.push(v);
+        assert forall|i: int| 0 <= i < w.len() - 1
+            implies (#[trigger] g[w[i] as int])@.contains(w[i + 1]) by {
+            if i == prefix.len() - 1 {
+                assert(g[u as int]@[k as int] == v);
+            }
+        }
+        w
+    }
+}
+
+pub open spec fn closed(g: Seq<Vec<usize>>, d: Seq<usize>) -> bool {
+    forall|u: int, k: int| 0 <= u < g.len() && d[u] < g.len() && 0 <= k < g[u].len()
+        ==> {
+            let v = (#[trigger] g[u]@[k]);
+            d[v as int] < g.len() && d[v as int] <= d[u] + 1
+        }
+}
+
+/// Edge closure gives reachability completeness and a lower bound for every walk.
+pub proof fn walk_bound(g: Seq<Vec<usize>>, d: Seq<usize>, root: usize, w: Seq<usize>)
+    requires valid_graph(g), d.len() == g.len(), root < g.len(), d[root as int] == 0,
+        closed(g, d), walk(g, w), w[0] == root,
+    ensures d[w.last() as int] < g.len(), d[w.last() as int] <= w.len() - 1,
+    decreases w.len(),
+{
+    if w.len() > 1 {
+        let prefix = w.drop_last();
+        assert(walk(g, prefix));
+        walk_bound(g, d, root, prefix);
+        let u = prefix.last();
+        let v = w.last();
+        let k = choose|k: int| 0 <= k < g[u as int].len() && g[u as int]@[k] == v;
+        assert(d[v as int] <= d[u as int] + 1);
+    }
+}
+
+pub open spec fn complete(g: Seq<Vec<usize>>, root: usize, s: Search) -> bool {
+    queue_state(g, root, s.distances@, s.parents@, s.order@)
+        && closed(g, s.distances@)
+        && (forall|v: usize| v < g.len() ==> (
+            s.distances@[v as int] < g.len() <==>
+                exists|w: Seq<usize>| walk(g, w) && w[0] == root && w.last() == v
+        ))
+        && (forall|w: Seq<usize>| walk(g, w) && w[0] == root
+            ==> s.distances@[w.last() as int] <= w.len() - 1)
+}
+
+/// Validate once before traversing several roots of the same immutable graph.
+pub fn valid_indices(g: &[Vec<usize>]) -> (valid: bool)
+    ensures valid == valid_graph(g@),
+{
+    let n = g.len();
+    let mut u = 0;
+    while u < n
+        invariant u <= n,
+            forall|i: int, k: int| 0 <= i < u && 0 <= k < g[i].len()
+                ==> (#[trigger] g[i]@[k]) < n,
+        decreases n - u,
+    {
+        let mut k = 0;
+        while k < g[u].len()
+            invariant u < n, k <= g[u].len(),
+                forall|i: int, j: int| 0 <= i < u && 0 <= j < g[i].len()
+                    ==> (#[trigger] g[i]@[j]) < n,
+                forall|j: int| 0 <= j < k ==> (#[trigger] g[u]@[j]) < n,
+            decreases g[u].len() - k,
+        {
+            if g[u][k] >= n { return false; }
+            k += 1;
+        }
+        u += 1;
+    }
+    true
+}
+
+/// FIFO traversal of explicitly validated immutable adjacency. The caller must
+/// establish valid_indices once; an out-of-range root is rejected here.
+pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
+    requires valid_graph(g@),
+    ensures
+        result.is_some() == (root < g.len()),
+        result.is_some() ==> complete(g@, root, result.unwrap()),
+{
+    let n = g.len();
+    if root >= n { return None; }
+    let mut d: Vec<usize> = Vec::new();
+    let mut p: Vec<Option<(usize, usize)>> = Vec::new();
+    while d.len() < n
+        invariant d.len() <= n, p.len() == d.len(),
+            forall|i: int| 0 <= i < d.len() ==> (#[trigger] d[i]) == n && p[i].is_none(),
+        decreases n - d.len(),
+    {
+        d.push(n);
+        p.push(None);
+    }
+    d.set(root, 0);
+    let mut q = Vec::new();
+    q.push(root);
+    let mut front = 0;
+    while front < q.len()
+        invariant
+            root < n, n == g.len(), valid_graph(g@),
+            queue_state(g@, root, d@, p@, q@), front <= q.len(), q.len() <= n,
+            front < q.len() ==> (forall|i: int| 0 <= i < q.len()
+                ==> d[#[trigger] q[i] as int] <= d[q[front as int] as int] + 1),
+            processed(g@, d@, q@, front as int, 0),
+        decreases n - front,
+    {
+        let node = q[front];
+        let mut slot = 0;
+        while slot < g[node].len()
+            invariant
+                root < n, n == g.len(), valid_graph(g@),
+                queue_state(g@, root, d@, p@, q@), front < q.len(), q.len() <= n,
+                node == q[front as int], slot <= g[node as int].len(),
+                forall|i: int| 0 <= i < q.len()
+                    ==> d[#[trigger] q[i] as int] <= d[node as int] + 1,
+                processed(g@, d@, q@, front as int, slot as int),
+            decreases g[node as int].len() - slot,
+        {
+            let v = g[node][slot];
+            if d[v] == n {
+                let ghost old_d = d@;
+                let ghost old_p = p@;
+                let ghost old_q = q@;
+                proof {
+                    assert(!q@.contains(v));
+                    bounded_queue(q@.push(v), n);
+                }
+                let depth = d[node] + 1;
+                d.set(v, depth);
+                p.set(v, Some((node, slot)));
+                q.push(v);
+                proof {
+                    assert(q@.no_duplicates());
+                    assert(tree(g@, root, d@, p@));
+                    assert forall|i: int| 0 <= i < q.len() implies (
+                        (#[trigger] q[i]) < n && d[q[i] as int] < n && d[q[i] as int] <= i
+                    ) by {
+                        if i < old_q.len() { assert(old_q[i] != v); }
+                    }
+                    assert forall|x: int| 0 <= x < n implies
+                        ((#[trigger] d[x]) < n <==> q@.contains(x as usize)) by {
+                        if x != v { assert(d[x] == old_d[x]); }
+                    }
+                    assert forall|i: int, j: int| 0 <= i <= j < q.len()
+                        implies d[#[trigger] q[i] as int] <= d[#[trigger] q[j] as int] by {
+                        if j < old_q.len() { assert(old_q[i] != v && old_q[j] != v); }
+                        else if i < old_q.len() { assert(old_q[i] != v); }
+                    }
+                    assert(processed(g@, d@, q@, front as int, slot as int));
+                }
+            }
+            slot += 1;
+        }
+        front += 1;
+    }
+    proof {
+        assert(closed(g@, d@)) by {
+            assert forall|u: int, k: int| 0 <= u < n && d[u] < n && 0 <= k < g[u].len()
+                implies {
+                    let v = (#[trigger] g[u]@[k]);
+                    d[v as int] < n && d[v as int] <= d[u] + 1
+                } by {
+                let i = choose|i: int| 0 <= i < q.len() && q[i] == u;
+            }
+        }
+        assert forall|v: usize| v < n implies (
+            d[v as int] < n <==> exists|w: Seq<usize>| walk(g@, w) && w[0] == root && w.last() == v
+        ) by {
+            if d[v as int] < n {
+                let w = tree_path(g@, root, d@, p@, v);
+            } else if exists|w: Seq<usize>| walk(g@, w) && w[0] == root && w.last() == v {
+                let w = choose|w: Seq<usize>| walk(g@, w) && w[0] == root && w.last() == v;
+                walk_bound(g@, d@, root, w);
+            }
+        }
+        assert forall|w: Seq<usize>| walk(g@, w) && w[0] == root
+            implies d[w.last() as int] <= w.len() - 1 by {
+            walk_bound(g@, d@, root, w);
+        }
+    }
+    Some(Search { distances: d, parents: p, order: q })
+}
+
+}

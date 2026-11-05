@@ -1,6 +1,6 @@
 //! Finite union/closure mechanics. Callers own endpoint validation, seeds and extra selections.
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -72,24 +72,46 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
     for e in edges {
         adjacency.entry(&e.edge.from).or_default().insert(&e.edge);
     }
+    let nodes: Vec<&str> = edges
+        .iter()
+        .flat_map(|e| [e.edge.from.as_str(), e.edge.to.as_str()])
+        .chain(seeds.iter().map(|s| s.node.as_str()))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let indices: BTreeMap<&str, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, name)| (*name, i))
+        .collect();
+    let edge_rows: Vec<Vec<&Edge>> = nodes
+        .iter()
+        .map(|node| adjacency.get(node).into_iter().flatten().copied().collect())
+        .collect();
+    let indexed: Vec<Vec<usize>> = edge_rows
+        .iter()
+        .map(|row| row.iter().map(|edge| indices[edge.to.as_str()]).collect())
+        .collect();
+    assert!(crate::verified_graph::valid_indices(&indexed));
     let mut traversed: BTreeMap<Edge, BTreeSet<String>> = BTreeMap::new();
     for seed in seeds {
-        let mut parents = BTreeMap::from([(seed.node.clone(), None)]);
-        let mut queue = VecDeque::from([seed.node.clone()]);
-        while let Some(node) = queue.pop_front() {
+        let search = crate::verified_graph::breadth_first(&indexed, indices[seed.node.as_str()])
+            .expect("seed index belongs to the explicit node inventory");
+        let mut parents = BTreeMap::new();
+        for node in search.order {
             out.reached
-                .entry(node.clone())
+                .entry(nodes[node].to_owned())
                 .or_default()
                 .insert(seed.id.clone());
-            for edge in adjacency.get(node.as_str()).into_iter().flatten() {
+            parents.insert(
+                nodes[node].to_owned(),
+                search.parents[node].map(|(from, slot)| edge_rows[from][slot].clone()),
+            );
+            for edge in &edge_rows[node] {
                 traversed
                     .entry((*edge).clone())
                     .or_default()
                     .insert(seed.id.clone());
-                if !parents.contains_key(&edge.to) {
-                    parents.insert(edge.to.clone(), Some((*edge).clone()));
-                    queue.push_back(edge.to.clone());
-                }
             }
         }
         out.predecessors.insert(seed.id.clone(), parents);
