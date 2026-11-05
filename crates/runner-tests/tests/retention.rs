@@ -1288,11 +1288,12 @@ fn partial_disposal_allows_only_identical_dependency_reentry() {
     for n in 0..20 {
         fs::write(h.path().join(&effect).join(n.to_string()), [7; 32]).unwrap();
     }
-    let i = inventory(h.path());
-    i.begin("fixture", &effect, json!(null))
+    inventory(h.path())
+        .begin("fixture", &effect, json!(null))
         .unwrap()
         .complete(json!({"exit":7}))
         .unwrap();
+    let i = inventory(h.path());
     i.dependencies_paths(&effect, &[original.into()]).unwrap();
     i.maintain_paths(&[effect.clone(), original.into()])
         .unwrap();
