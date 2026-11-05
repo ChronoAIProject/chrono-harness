@@ -1,0 +1,11 @@
+{
+  "result": null,
+  "registration": {
+    "owner": "caller authorized manual expiry",
+    "target": {
+      "path": null,
+      "head": {"exit": 0, "stdout": null, "stderr": ""},
+      "common": {"exit": 0, "stdout": null, "stderr": ""}
+    }
+  }
+}
