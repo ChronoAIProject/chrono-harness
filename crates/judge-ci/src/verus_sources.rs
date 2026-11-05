@@ -179,6 +179,29 @@ pub fn valid_sha256_text(bytes: &[u8]) -> (valid: bool)
     true
 }
 
+pub open spec fn artifact_admitted(
+    actual_digest: Seq<u8>, expected_digest: Seq<u8>,
+    actual_length: u64, expected_length: u64, limit: u64,
+) -> bool {
+    sha256_text(expected_digest) && actual_digest == expected_digest
+        && 0 < actual_length <= limit && actual_length == expected_length
+}
+
+/// Hash computation belongs to the explicitly trusted library interface. The
+/// repository's admission of its digest, length and remaining budget is proved.
+pub fn admit_artifact(
+    actual_digest: &[u8], expected_digest: &[u8],
+    actual_length: u64, expected_length: u64, limit: u64,
+) -> (accepted: bool)
+    ensures accepted <==> artifact_admitted(
+        actual_digest@, expected_digest@, actual_length, expected_length, limit),
+{
+    valid_sha256_text(expected_digest)
+        && equal_bytes(actual_digest, expected_digest)
+        && actual_length > 0 && actual_length <= limit
+        && actual_length == expected_length
+}
+
 pub open spec fn prefix_at(input: Seq<u8>, start: int, prefix: Seq<u8>) -> bool {
     0 <= start <= input.len() && prefix.len() <= input.len() - start
         && input.subrange(start, start + prefix.len()) == prefix

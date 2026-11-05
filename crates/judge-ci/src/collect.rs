@@ -67,6 +67,7 @@ pub struct UnitOriginals {
     pub request: Request,
     pub producer: ProcessResult,
     pub retained_report: Option<chrono_harness::prepared::Original>,
+    pub compiler_originals: Vec<chrono_harness::prepared::Original>,
 }
 
 pub fn unit_originals(
@@ -129,7 +130,10 @@ pub fn unit_originals(
         });
         (original, limits.report_bytes - raw.len() as u64)
     } else {
-        (published, 0)
+        if bytes.len() as u64 > limits.report_bytes {
+            return Err("unit report exceeds report_bytes".into());
+        }
+        (published, limits.report_bytes - bytes.len() as u64)
     };
     if report["schema"] != report_schema || report.get("transport_failure").is_some() {
         return Err(format!("unit transport failed: {}", unit));
@@ -167,11 +171,34 @@ pub fn unit_originals(
     } else {
         serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?
     };
+    let response = json(&producer.stdout_bytes)?;
+    let mut compiler_originals = Vec::new();
+    for artifact in super::verus::compiler_artifacts(&response["evidence"])? {
+        let raw = read(&artifact.original, remaining)?;
+        if !verus_policy::sources::admit_artifact(
+            sha256(&raw).as_bytes(),
+            artifact.original.sha256.as_bytes(),
+            raw.len() as u64,
+            artifact.byte_length,
+            remaining,
+        ) {
+            return Err(format!(
+                "E_VERUS_ARTIFACT: compiler original digest/length/budget mismatch: {}",
+                artifact.original.path
+            ));
+        }
+        remaining -= raw.len() as u64;
+        compiler_originals.push(chrono_harness::prepared::Original {
+            path: chrono_harness::prepared::original_path(&artifact.original, transport)?,
+            sha256: artifact.original.sha256,
+        });
+    }
     Ok(UnitOriginals {
         report,
         request: original,
         producer,
         retained_report,
+        compiler_originals,
     })
 }
 
@@ -280,6 +307,7 @@ pub(super) fn collect(
             }
         });
         retained_originals.extend(originals.retained_report.map(|o| o.path));
+        retained_originals.extend(originals.compiler_originals.into_iter().map(|o| o.path));
         let report = originals.report;
         let original = originals.request;
         let producer = originals.producer;

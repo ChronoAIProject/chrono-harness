@@ -2,9 +2,82 @@
 //! Verus migration obligation; the host cannot claim complete verification.
 use super::{Policy, Snapshot, at, verus_policy};
 use chrono_harness::{CheckResult, Request, Response, Status, facts::Reader, json};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json as object;
 use std::collections::BTreeMap;
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct CompilerArtifact {
+    path: String,
+    pub original: chrono_harness::prepared::Original,
+    pub byte_length: u64,
+}
+
+/// Typed acquisition only: proof/result/source acceptance remains separate.
+pub(super) fn compiler_artifacts(
+    evidence: &serde_json::Value,
+) -> Result<Vec<CompilerArtifact>, String> {
+    let Some(rows) = evidence
+        .get("verus")
+        .and_then(|value| value.get("compiler_evidence"))
+    else {
+        return Ok(Vec::new());
+    };
+    let rows = rows
+        .as_array()
+        .ok_or("E_VERUS_ARTIFACT: compiler evidence must be an array")?;
+    let mut artifacts = Vec::new();
+    for row in rows {
+        let Some(sources) = row.get("sources").filter(|value| !value.is_null()) else {
+            continue;
+        };
+        if sources["schema"] != "chrono-verus-source-observation/v2" {
+            return Err("E_VERUS_ARTIFACT: unsupported compiler source observation".into());
+        }
+        for name in ["dependency", "library"] {
+            artifacts.push(
+                serde_json::from_value(sources[name].clone())
+                    .map_err(|e| format!("E_VERUS_ARTIFACT: invalid {name} original: {e}"))?,
+            );
+        }
+    }
+    Ok(artifacts)
+}
+
+fn retain_compiler_artifact(
+    req: &Request,
+    path: &str,
+    prefix: &str,
+    bytes: &[u8],
+) -> Result<CompilerArtifact, String> {
+    let input = req.observations["preparation"].get("request");
+    let directory = match input {
+        Some(input) => {
+            let input: chrono_harness::prepared::InputRequest =
+                serde_json::from_value(input.clone()).map_err(|e| e.to_string())?;
+            chrono_harness::prepared::retention_directory(&input)
+        }
+        None => ".chrono-harness/state/preparation/".into(),
+    };
+    let original =
+        chrono_harness::prepared::retain_original(&req.host_root, &directory, prefix, bytes)?;
+    let length = bytes.len() as u64;
+    if !verus_policy::sources::admit_artifact(
+        chrono_harness::sha256(bytes).as_bytes(),
+        original.sha256.as_bytes(),
+        length,
+        length,
+        length,
+    ) {
+        return Err("E_VERUS_ARTIFACT: retained compiler identity mismatch".into());
+    }
+    Ok(CompilerArtifact {
+        path: path.into(),
+        original,
+        byte_length: length,
+    })
+}
 
 fn compiler_sources(
     req: &Request,
@@ -92,15 +165,13 @@ fn compiler_sources(
         "report_bytes (remaining compiler artifact budget)",
         limit - bytes.len() as u64,
     )?;
-    if library.is_empty() {
-        return Err("E_VERUS_SOURCES: compiled library is empty".into());
-    }
+    let dependency = retain_compiler_artifact(req, &dependency, "verus-dependency", &bytes)?;
+    let library = retain_compiler_artifact(req, output, "verus-library", &library)?;
     Ok(
-        object!({"schema":"chrono-verus-source-observation/v1","candidate":req.candidate,
+        object!({"schema":"chrono-verus-source-observation/v2","candidate":req.candidate,
         "root":root,"sources":identities,
-        "dependency":{"path":dependency,"sha256":chrono_harness::sha256(&bytes),"bytes":bytes},
-        "library":{"path":output,"sha256":chrono_harness::sha256(&library),"byte_length":library.len()},
-        "assurance":"local post-process source comparison; library bytes and cross-unit transport remain unretained"}),
+        "dependency":dependency,"library":library,
+        "assurance":"local source comparison and addressed compiler originals; collection source re-admission remains required"}),
     )
 }
 
@@ -279,8 +350,22 @@ pub(super) fn apply(
         "missing":coverage.missing,
         "compiler_evidence":compiler_evidence,
         "external_interfaces":requirements.external_interfaces,
-        "assurance":"declarations, compiler results and local source comparison; adapter proofs, retained libraries and cross-unit transport remain required"
+        "assurance":"declarations, compiler results, local source comparison and addressed artifacts; adapter proofs and collection source re-admission remain required"
     });
+    let artifacts = compiler_artifacts(&response.evidence)?;
+    let retained = response
+        .evidence
+        .as_object_mut()
+        .ok_or("E_VERUS_ARTIFACT: response evidence must be an object")?
+        .entry("retained_originals")
+        .or_insert_with(|| object!([]))
+        .as_array_mut()
+        .ok_or("E_VERUS_ARTIFACT: retained originals must be an array")?;
+    retained.extend(
+        artifacts
+            .into_iter()
+            .map(|artifact| object!(artifact.original.path)),
+    );
     response.results.push(CheckResult {
         id: "ci.verus-coverage".into(),
         status: if complete {

@@ -2327,25 +2327,20 @@ fn execute_check(
     } else {
         None
     };
-    let collected_originals: Vec<String> =
-        if matches!(report["request"]["scope"]["kind"].as_str(), Some("collect")) {
-            report["response"]["evidence"]["retained_originals"]
-                .as_array()
-                .map(|paths| {
-                    paths
-                        .iter()
-                        .map(|p| {
-                            p.as_str()
-                                .ok_or_else(|| "collection original path".to_owned())
-                                .map(str::to_owned)
-                        })
-                        .collect::<Result<Vec<_>, String>>()
+    let response_originals: Vec<String> = report["response"]["evidence"]["retained_originals"]
+        .as_array()
+        .map(|paths| {
+            paths
+                .iter()
+                .map(|p| {
+                    p.as_str()
+                        .ok_or_else(|| "response original path".to_owned())
+                        .map(str::to_owned)
                 })
-                .transpose()?
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+                .collect::<Result<Vec<_>, String>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
     let console = if retained_streams {
         let projection = serde_json::json!({
             "retained_report": report["retained_report"],
@@ -2384,7 +2379,7 @@ fn execute_check(
             file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
         }
         let preparation = &report["request"]["observations"]["preparation"];
-        let mut originals = collected_originals;
+        let mut originals = response_originals;
         for values in [
             &preparation["result"]["originals"],
             &preparation["receipts"],

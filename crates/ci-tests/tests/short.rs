@@ -159,6 +159,140 @@ use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
 #[test]
+fn typed_compiler_artifacts_require_original_bytes_within_the_shared_report_budget() {
+    let mut h = ShortHost::new();
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["policy"]["report_publication"] = json!("retained-reference/v2");
+    });
+    let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let config =
+        chrono_harness::load_config(&h.root.join(".chrono-harness/ci/check.json")).unwrap();
+    let slot = ".chrono-harness/state/alpha/check.json";
+    let published = fs::read(h.root.join(slot)).unwrap();
+    let complete =
+        chrono_judge_ci::unit_originals(&h.root, &config, "alpha", &published, None, |o, _| {
+            prepared::read_original(&h.root, o, None)
+        })
+        .unwrap();
+    let mut producer = complete.producer;
+    let mut response: Value = serde_json::from_slice(&producer.stdout_bytes).unwrap();
+    let mut artifacts = Vec::new();
+    // Opaque external-interface fixtures exercise transport, never proof admission.
+    for (prefix, raw) in [
+        ("compiler-dependency", b"dependency fixture\n".as_slice()),
+        ("compiler-library", &[0u8, 255, 128, 1]),
+    ] {
+        let original =
+            prepared::retain_original(&h.root, ".chrono-harness/state/preparation/", prefix, raw)
+                .unwrap();
+        artifacts.push(json!({"path":prefix,"original":original,"byte_length":raw.len()}));
+    }
+    response["evidence"]["verus"] = json!({"compiler_evidence":[{
+        "operation":"fixture.transport-only", "sources":{
+            "schema":"chrono-verus-source-observation/v2",
+            "dependency":artifacts[0], "library":artifacts[1]
+        }
+    }]});
+    producer.stdout_bytes = serde_json::to_vec(&response).unwrap();
+    producer.stdout = String::from_utf8(producer.stdout_bytes.clone()).unwrap();
+    producer.stdout_sha256 = sha256(&producer.stdout_bytes);
+    let mut report = complete.report;
+    report["judge"] = chrono_harness::scoped_report::retain_process(
+        &h.root,
+        ".chrono-harness/state/preparation/",
+        &producer,
+    )
+    .unwrap();
+    let path = ".chrono-harness/state/preparation/compiler-transport-report.json";
+    report["retained_report"] = json!(path);
+    let raw = serde_json::to_vec(&report).unwrap();
+    fs::write(h.root.join(path), &raw).unwrap();
+    let published = serde_json::to_vec(&json!({
+        "schema":"chrono-check-reference/v1",
+        "original":{"path":path,"sha256":sha256(&raw)}
+    }))
+    .unwrap();
+    let limit = raw.len() as u64
+        + producer.stdout_bytes.len() as u64
+        + producer.stderr_bytes.len() as u64
+        + artifacts
+            .iter()
+            .map(|a| a["byte_length"].as_u64().unwrap())
+            .sum::<u64>();
+    for transport in [
+        None,
+        Some(prepared::ArtifactTransport {
+            source_directory: ".chrono-harness/state/".into(),
+            directory: ".chrono-harness/state/relocated/".into(),
+        }),
+    ] {
+        let mut config = config.clone();
+        config.policy["collection_limits"] = json!({"report_bytes":limit});
+        let mut reads = std::collections::BTreeSet::new();
+        chrono_judge_ci::unit_originals(
+            &h.root,
+            &config,
+            "alpha",
+            &published,
+            transport.as_ref(),
+            |o, _| {
+                reads.insert(o.path.clone());
+                let bytes = prepared::read_original(&h.root, o, None)?;
+                if let Some(mapping) = &transport {
+                    let target = h.root.join(prepared::original_path(o, Some(mapping))?);
+                    fs::create_dir_all(target.parent().unwrap()).unwrap();
+                    fs::write(target, &bytes).unwrap();
+                }
+                prepared::read_original(&h.root, o, transport.as_ref())
+            },
+        )
+        .unwrap();
+        for artifact in &artifacts {
+            let path = artifact["original"]["path"].as_str().unwrap();
+            assert!(
+                reads.contains(path),
+                "compiler original was not acquired: {path}"
+            );
+            for corrupt in [false, true] {
+                let result = chrono_judge_ci::unit_originals(
+                    &h.root,
+                    &config,
+                    "alpha",
+                    &published,
+                    transport.as_ref(),
+                    |o, _| {
+                        if o.path == path {
+                            if corrupt {
+                                return Ok(b"altered compiler original".to_vec());
+                            }
+                            return Err("missing compiler original fixture".into());
+                        }
+                        prepared::read_original(&h.root, o, transport.as_ref())
+                    },
+                );
+                assert!(
+                    result.is_err(),
+                    "accepted missing/corrupt compiler original {path}"
+                );
+            }
+        }
+        config.policy["collection_limits"]["report_bytes"] = json!(limit - 1);
+        assert!(
+            chrono_judge_ci::unit_originals(
+                &h.root,
+                &config,
+                "alpha",
+                &published,
+                transport.as_ref(),
+                |o, _| prepared::read_original(&h.root, o, transport.as_ref()),
+            )
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn native_forwarding_resolves_declared_path_once_and_retains_real_bounded_outcomes() {
     let mut h = ShortHost::new();
     let root = h.root.clone();

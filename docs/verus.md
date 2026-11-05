@@ -36,8 +36,8 @@ version/commit. It also compares the local compiler dependency output with
 explicit regular FILEMAP entries and immutable candidate blobs, including all
 files claiming that root. Execution identity, argv, tool binding and original
 process success remain owned by routes/projects. Collection still consumes
-original unit reports. Complete clause correspondence, retained library bytes,
-independent-unit proof transport and the admission adapter's own Verus migration
+original unit reports. Complete clause correspondence, collected source
+re-admission and the admission adapter's own Verus migration
 remain required before claiming full verification. Its FILEMAP record
 deliberately has empty roots.
 
@@ -97,7 +97,7 @@ original-response pointers for validated unit execution rows in
 `collected_executions`, avoiding another copy of process output. Its local
 `executed` list stays empty because it
 runs no business operations. These rows are transport data; compiler/source
-re-admission from them and retained library transport remain incomplete.
+re-admission from them remains incomplete.
 
 The registered verification operations additionally require `--compile` and
 explicit `--emit=link=OUTPUT,dep-info=OUTPUT.d`, so successful verification is followed by Rust compilation
@@ -108,11 +108,17 @@ source checksums and unnormalized byte lengths have been compared with the
 actual source bytes. This observation does not bind a later report or candidate.
 Verification success alone is not a claim that these artifacts were produced or
 consumed. The local adapter now reads both bounded regular output files after
-the compiler result is admitted. It retains the exact dependency bytes inside
-the original response, and records the library digest and length. Library bytes
-are not yet retained, and collection does not yet transport/recheck these source
-observations. This is a local post-process observation, with no native or complete
-source-provenance claim.
+the compiler result is admitted. Both exact output byte sequences now pass to the
+existing addressed-original owner. Source observation v2 contains their original
+addresses, digests and byte lengths instead of embedding dependency bytes.
+The runner binds these explicit originals to unit reports as well as collection
+reports. The shared typed unit reader, also used by native gather, acquires both
+originals with the existing transport mapping and shared metadata/stream/artifact
+budget. Its digest, nonempty length, expected length and remaining-budget decision
+calls the same proved Verus predicate; hashing and IO remain external interfaces.
+These changes do not yet re-admit collected source observations against candidate
+blobs or prove the decoding, capture, transport and adapter implementation.
+Native and complete source-provenance acceptance remain incomplete.
 
 The same Verus owner now defines and implements dependency-list byte decoding.
 Its contract follows the pinned Rust 1.95.0
@@ -166,7 +172,7 @@ The actual adapter obtains only the needed candidate entries through explicit
 FILEMAP/tree lookups and immutable Git blobs, then calls the proved metadata and
 complete-content predicates. It does not use compiler observations to select
 checks. Dependency bytes and source observations remain in the retained original
-response; the library currently has only a bounded local digest/length observation.
+response through explicit addressed dependency and library originals.
 JSON decoding, lookup/collection construction, hashing-interface correspondence,
 artifact capture/transport and the remaining adapter decisions still require
 proof. The complete-content examples exercise an independent

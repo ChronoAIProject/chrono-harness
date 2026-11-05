@@ -858,4 +858,31 @@ fn identifier_ascii_boundaries() {
     assert(!invalid_unicode);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_artifact_identity_and_budget_boundaries() {
+    let digest = [48u8; 64];
+    let changed = [49u8; 64];
+    let invalid = [47u8; 64];
+    assert(digest@[0] == 48);
+    assert(changed@[0] == 49);
+    assert(invalid@[0] == 47);
+    let exact = policy::sources::admit_artifact(&digest, &digest, 1, 1, 1);
+    assert(exact);
+    let empty = policy::sources::admit_artifact(&digest, &digest, 0, 0, 1);
+    assert(!empty);
+    let over_budget = policy::sources::admit_artifact(&digest, &digest, 2, 2, 1);
+    assert(!over_budget);
+    let wrong_length = policy::sources::admit_artifact(&digest, &digest, 1, 2, 2);
+    assert(!wrong_length);
+    let wrong_digest = policy::sources::admit_artifact(&changed, &digest, 1, 1, 1);
+    assert(!wrong_digest);
+    let malformed = policy::sources::admit_artifact(&invalid, &invalid, 1, 1, 1);
+    assert(!malformed);
+    let maximum = policy::sources::admit_artifact(
+        &digest, &digest, 18446744073709551615u64,
+        18446744073709551615u64, 18446744073709551615u64,
+    );
+    assert(maximum);
+}
+
 }
