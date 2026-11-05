@@ -1,8 +1,23 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前实现含 v1 外部判官运输、独立 registration/filemap/routes/projects/cost/mixed/workflow 的有界合同、scoped CI 与宿主指令生成器；§14、§16 及 docs/spec-coverage.md 给出实际边界。
+当前已有 v1 外部判官传输、七个独立判官（registration／filemap／routes／projects／cost／mixed／workflow）、限定范围 CI 和宿主指令生成器。它们只实现了部分要求，实际范围见 §14、§16 和 docs/spec-coverage.md。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
+
+为便于阅读，本文沿用几个代码术语：
+
+| 术语 | 本文含义 |
+| --- | --- |
+| 宿主 | 接入并配置本工具的仓库 |
+| 判官 | 按登记规则检查输入和结果的程序 |
+| DELTA | 固定基线到候选提交的变化，含登记关系变化 |
+| 影响闭包 | 从变化出发，沿明确登记的依赖到达的全部受影响项 |
+| 输入完整 | 适用输入及其直接、间接依赖均已登记、绑定并验证 |
+| full／scoped／initial | 完整治理检查／限定范围检查／无基线的首次清单检查 |
+| 同判（parity） | 有效输入、政策、工具和环境相同，且求值确定时，得到相同裁决 |
+| fixture | 用于测试的临时宿主、工具或输入材料 |
+
+字段名、命令、错误码及用于定位实现的名称保留原样。源码存在、测试通过、原生运行、实际落地是不同结果，各自需要证据。
 
 ## 1. 目标、权限与边界
 
@@ -13,26 +28,23 @@
 固定基线的 DELTA 事实、仍有用途的历史源码和原始失败证据按当前用途保留；
 读取这些数据不要求重启旧程序，也不授予旧合同当前运行时权威。
 
-Harness 的核心是降低耦合。显式依赖和唯一归属让局部改动可用自身的输入、接口与测试理解；共享定义只归一个自然所有者，独立单元分别构建、检查和重试。
+Harness 要减少模块之间不必要的牵连。依赖明确、归属唯一后，理解局部改动只需看它自身的输入、接口和测试。共享定义由一个所有者维护，独立单元分别构建、检查和重试。
 
-Harness 的本质：每项受治理操作只提供一条当前已登记的规范路径，并用可执行判官检查其结果。
-定制在执行前通过登记选定这条路径；日常指令只呈现当前路径，不并列提供替代配方。
-AI 先把路径、归属、依赖、成本、操作及判定方式登记为白名单，再通过该方式处理任务。
-改进方法先更新登记并完成适用验证，仍保留一个正式入口；AI 自由实现产品逻辑并自主更新判官。
-默认指令按需求→审计→重构→开发组织；验证实际消费后再核 SPEC。全局考虑是先核需求、现有能力、所有权、显式依赖影响及验证／CI／存储成本，再收窄实现，不是每次全仓审计或全测。现有能力足够就复用；审计证实归属或耦合问题才先在自然所有者重构，开发只补真实消费者尚未覆盖的需要。
-缺少登记、重复入口、执行结果与登记不符必须有明确错误，不能靠“智能推断”补全。
-系统信任 AI 非恶意，处理的是遗漏、漂移、错误和演进成本；AI 自主登记、修复和推进。
-AI 在现有授权与权限内构建、测试、更新约束和重建分支，不新增或申请额外权限，也不增加人工审批、签字或确认步骤。局部依赖失败保留真实失败及恢复条件，只阻断其显式依赖闭包，独立已授权工作继续；必需验收不旁路、不伪报通过。无必要真实消费者却依赖特殊权限的功能应删除，不增加替代远端激活机制；普通必要流程沿用已有权限范围。性能以最小充分的消费者、IO、进程和按 DELTA 影响比例的验证为依据，成本未知保持未知，不抬限额或删除必要行为测试。
+Harness 的本质：每项受治理操作只提供一条当前已登记的规范路径，并用可执行判官检查其结果。定制在执行前通过登记选定这条路径；日常指令只呈现当前路径，不并列提供替代配方。AI 先把路径、归属、依赖、成本、操作及判定方式登记为白名单，再通过该方式处理任务。改进方法先更新登记并完成适用验证，仍保留一个正式入口；AI 自由实现产品逻辑并自主更新判官。默认指令按需求→审计→重构→开发组织；验证实际消费后再核 SPEC。
+
+全局考虑是先核需求、现有能力、所有权、显式依赖影响及验证／CI／存储成本，再收窄实现，不是每次全仓审计或全测。现有能力足够就复用；审计证实归属或耦合问题才先在负责该内容的位置重构，开发只补真实消费者尚未覆盖的需要。缺少登记、重复入口、执行结果与登记不符必须有明确错误，不能靠“智能推断”补全。系统信任 AI 非恶意，处理的是遗漏、漂移、错误和演进成本；AI 自主登记、修复和推进。AI 在现有授权与权限内构建、测试、更新约束和重建分支，不新增或申请额外权限，也不增加人工审批、签字或确认步骤。
+
+局部依赖失败保留真实失败及恢复条件，只阻断其显式依赖闭包，独立已授权工作继续；必需验收不旁路、不伪报通过。无必要真实消费者却依赖特殊权限的功能应删除，不增加替代远端激活机制；普通必要流程沿用已有权限范围。性能以最小充分的消费者、IO、进程和按 DELTA 影响比例的验证为依据，成本未知保持未知，不抬限额或删除必要行为测试。
 
 功能必须有真实消费者。新增功能、抽象、扩展点及结构优化先明确现存问题、具体调用者、实际入口、所需输入、产出被谁使用以及可观察验收，再实施最小充分改动；不能假想未来场景、消费者或潜在扩展需求来建立功能。消费者可在同仓，也可在明确的外部仓库或真实用户操作中；同一交付新增的消费者必须解决已存在的问题并实际接入，不能为证明新功能有用途而制造空调用。
 
 消费者、生产者及其依赖由宿主在 `.chrono-harness/` 显式登记，记录“现存需求／问题 → 生产功能 → 具体调用 → 输出用途”的因果关系及相应证据地址。仓库外消费者须有真实身份／仓库地址、固定版本或提交、调用位置与入口、所消费的接口／产物和实际接入证据；不因位于仓库外而豁免，也不能把发布包、README 使用示例、可选参数或测试 fixture 本身当作实际消费。专属测试验证功能，不为该功能凭空提供用途；服务现有测试流程的工具则以那个真实流程为消费者。证据不可取得或未接入时据实保持未验证，不伪造消费者或实现臆想功能。
 
-受影响消费者的缺失登记、悬空引用、身份／调用不符及缺必需证据由登记判官沿同一 check 检查，需求忠实性与使用价值由 AI 对具体事实负责，不宣称图可证明用途。内部调用沿现有 FILEMAP／项目／操作真源，外部消费沿显式版本化扩展登记，不另造自动发现或重复账本。仅为测试或将来消费构造的功能不得作为独立交付；必需中间实现与真实调用一起验收。既有未受影响功能不因本次新增合同全仓判红；确认无实际用途的代码由 AI 核对真实消费者后按第 6 节退休，未知使用情况不冒充无人使用。
+受影响消费者的缺失登记、悬空引用、身份／调用不符及缺必需证据由登记判官沿同一 check 检查，需求忠实性与使用价值由 AI 对具体事实负责，不宣称图可证明用途。内部调用沿现有 FILEMAP／项目／操作的唯一登记源，外部消费沿显式版本化扩展登记，不另造自动发现或重复账本。仅为测试或将来消费构造的功能不得作为独立交付；必需中间实现与真实调用一起验收。既有未受影响功能不因本次新增合同全仓判红；确认无实际用途的代码由 AI 核对真实消费者后按第 6 节退役，未知使用情况不冒充无人使用。
 
 可执行的项目准入约束必须实现为登记判官，不能隐藏在 runner、CI YAML、hook 或根指南中。
 根指南直接呈现一般工作方法；它不是可执行判官，也不因严格措辞变成已运行的机器门。
-runner 的固定职责仅为命令/协议解析、输入运输、启动指定程序、限时限量与结果聚合。
+runner 的固定职责仅为命令/协议解析、输入传输、启动指定程序、限时限量与结果聚合。
 Git 差异是输入事实；是否允许脏目录、怎样选测试、分支是否过期，均由登记判官裁决。
 插件、脚本和内置发行的判官遵守同一协议；“随产品发行”不等于“自动生效”。
 宿主可替换判官，不能把某个项目名、固定目录规模或测试名称写死在通用运行时。
@@ -99,20 +111,16 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 产品 crate 不定义单元测试或 doctest；所有当前行为测试归唯一配对测试项目。
 以后新增独立生产项目必须同时登记一个专属测试项目；不能以共享巨型测试项目替代。
 
-宿主的所有生效 harness 约束、脚本配置、安装绑定和指令 canonical 材料都在宿主 `.chrono-harness/` 内。
-根 CLAUDE.md 的受管块直接呈现所选方法，默认是短流程；AGENTS.md 是指向 CLAUDE.md 的字面相对符号链接；
-块外原有文字属于宿主；方法在 canonical 源编辑后生成，不独立维护副本。
-宿主可以使用其他仓库构建的二进制，但须在此显式绑定路径、版本与摘要。
-自举时 `crates/runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。
-其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。
-产品构建不会自动启用宿主规则、安装 hook、修改全局配置或访问参考仓库。
+宿主的所有生效 harness 约束、脚本配置、安装绑定和指令 canonical 材料都在宿主 `.chrono-harness/` 内。根 CLAUDE.md 的受管块直接呈现所选方法，默认是短流程；AGENTS.md 是指向 CLAUDE.md 的字面相对符号链接；块外原有文字属于宿主；方法在 canonical 源编辑后生成，不独立维护副本。宿主可以使用其他仓库构建的二进制，但须在此显式绑定路径、版本与摘要。
+
+自举时 `crates/runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。产品构建不会自动启用宿主规则、安装 hook、修改全局配置或访问参考仓库。
 
 ### 2.1 形式化真源与实现对应
 
 chrono-harness 所需的通用形式化定义与证明统一归入 trureturing，按数学主题组织并优先复用已有结果；不建立独立 chrono-harness-trureturing 库，不为本产品复制证明或新增仅包装已有定理的数学声明。
 chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归用例，以及 SPEC 子句到形式模型的对应说明。两库独立构建；宿主使用 harness 二进制不因此需要 Lean、trureturing checkout 或特定宿主语言／目录结构。
 
-形式化 lane 使用 trureturing 的独立 worktree 与 PR 交付，其数学准入、编译及验证遵循该库现役规范。对应说明须固定所引用修订和声明，列明对象、参数、假设、结论与实际消费者；已找到、已编译、已证明模型命题、已检验实现对应是不同状态。未完成部分如实保留，不以引用或 CI 绿色冒领全部形式化。
+形式化工作 使用 trureturing 的独立 worktree 与 PR 交付，其数学准入、编译及验证遵循该库现役规范。对应说明须固定所引用修订和声明，列明对象、参数、假设、结论与实际消费者；已找到、已编译、已证明模型命题、已检验实现对应是不同状态。未完成部分如实保留，不以引用或 CI 绿色冒领全部形式化。
 
 形式模型与反例可以推动 SPEC 演进：发现缺失前提、错误推论或实现不符时，分别修订适用的模型、产品合同或实现，并验证受影响义务。不得为匹配当前实现而静默缩小用户目标或改写旧结论的适用范围。Lean 核验只证明其形式陈述；Rust 实现符合模型仍需单独的对应证据，完整依赖登记、局部性与确定性等现实前提也不能由图闭包或一次通过自动取得。
 
@@ -134,22 +142,19 @@ projects schema v2 要求每个 project／script 显式登记非空 `language`�
 
 ## 3. 登记格式与字段合同
 
-Config accepts explicit `schema_version: 1 | 2 | 3 | 4`; projects accept version 1 | 2 and judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3/v4 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
-当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
-启用前由 AI 对宿主定义的治理／输入范围作负责的 declared-complete 工程声明，补齐该范围的实际输入、依赖、绑定、两端快照、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
-判官核验声明引用、身份、快照和观察到的操作；普通 full check 不要求证明所有隐藏输入不存在，也不要求 VM 或 OS 隔离。
-已知缺输入、未解决的必需依赖、缺绑定／快照及漂移仍须失败，不能以声明或手写成功清除。
-null 摘要只允许 draft；不能被解释为“任意二进制都已通过验证”。
-类型表按各登记的现役 schema 描述；registration 严格验证结构。明确支持的历史 scoped 遗留项先由候选解释器转换并保留原始事实（见 §14），不作为第二套当前登记。
-对象未列出的字段、重复 JSON key、重复 ID、悬空引用由 registration 判官报错。
-路径是仓库根相对 UTF-8 POSIX 路径，不含 `..` 或隐式 glob；environment.inputs.location 可显式指定外部绝对路径。
-所有文件逐个登记；目录条目只用于明确生成物，不允许替代源文件登记。
+Config 接受明确的 `schema_version: 1 | 2 | 3 | 4`；projects 接受 1／2，judges 使用 1，当前 FILEMAP／workflow 使用 2。Config v2／v3／v4 要求每个外部输入声明存在或缺失，v1 保留仅摘要的原含义。每份登记都有 `status: "proposed" | "active"`。候选读取器只按明确的解释约定读取固定历史 v1 数据。
+
+当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。启用前由 AI 对宿主定义的治理／输入范围作负责的 declared-complete 工程声明，补齐该范围的实际输入、依赖、绑定、两端快照、二进制 SHA-256 和全部必需判官，再改为 active/enabled。判官核验声明引用、身份、快照和观察到的操作；普通 full check 不要求证明所有隐藏输入不存在，也不要求 VM 或 OS 隔离。
+
+已知缺输入、未解决的必需依赖、缺绑定／快照及漂移仍须失败，不能以声明或手写成功清除。null 摘要只允许 draft；不能被解释为“任意二进制都已通过验证”。类型表按各登记的现役 schema 描述；registration 严格验证结构。明确支持的历史 scoped 遗留项先由候选解释器转换并保留原始事实（见 §14），不作为第二套当前登记。对象未列出的字段、重复 JSON key、重复 ID、悬空引用由 registration 判官报错。
+
+路径是仓库根相对 UTF-8 POSIX 路径，不含 `..` 或隐式 glob；environment.inputs.location 可显式指定外部绝对路径。所有文件逐个登记；目录条目只用于明确生成物，不允许替代源文件登记。
 
 | config 字段 | 类型与约束 |
 | --- | --- |
 | runner | `{path, version, sha256}`；path 为指定入口，sha256 为 64 位小写 hex 或 draft null |
 | registries | judges/projects/filemap/workflow 四个唯一 JSON 路径 |
-| canonical_check | v1–v3 `{operation, argv: string[]}`；v4 adds `profile`、可选独立 `initial_profile` 和 `inputs.local/ci` actions `{operation,tool,argv}`；唯一 `validate.delta` 路由 |
+| canonical_check | v1–v3 `{operation, argv: string[]}`；v4 增加 `profile`、可选独立 `initial_profile` 和 `inputs.local/ci` actions `{operation,tool,argv}`；唯一 `validate.delta` 路由 |
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
 | facts_git | config v3/v4 必填 `{tool, input, guard?}`，前两项分别引用唯一 tools 与 present 文件输入；可选 guard 见下；v1/v2 不接纳此字段，包括 null |
 | environment | `{inherit: string[], values: object, inputs: object[]}`；v4 可加 `credential_environment: string[]`，声明仅用于输入取得、不转发给 Git／判官的 inherit 凭据；v1 输入 `{id, location, sha256}`，v2/v3/v4 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
@@ -159,9 +164,13 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 | artifacts | `{path, owner, kind, tracked: false}[]`；明确生成目录白名单 |
 | enforcement | `not-implemented` 或 `enabled`；proposed 不产生通过报告 |
 
-tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次，报告绝对路径、
-文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。
-Config v3 在读取 Git 对象前，从显式 candidate 配置绑定 `facts_git`；该配置的原始字节随后必须与固定 candidate 中的 blob 相同。tool 的 program 按已声明 PATH 或显式路径解析，input.location 必须指向同一执行物，present 摘要先于任何启动核验，expected_version 必须为非空字符串并匹配 version_argv 的实际 UTF-8 stdout（只去末尾空白）。相同 candidate 绑定读取 base 与 candidate，不启动 base 工具。每次进程使用清空后重建的登记环境及 protocol 的时间／输出上限；显式 GIT_DIR、GIT_WORK_TREE、GIT_INDEX_FILE 因重定向 checkout 而拒绝。进程前后核配置、绑定路径与执行物摘要，保留原始输出字节、摘要、退出和边界失败。完整请求及消费者报告通过 `git_facts` 运输观察；下游核对绑定和环境，缺失或不符不得回退 ambient Git。执行前的失败以 `E_GIT_FACTS` 携观察返回；尚未启动的进程不伪造回执。完整调用、initial inventory 和输入 capture 共用该读取器；initial 仍不裁决 DELTA。Config v1/v2、旧 library facts API、scoped CI 与旧版事件准备保持各自旧合同。详见 [Git 事实绑定](docs/git-facts.md)。此绑定不证明 Git 配置、解释器、动态库、OS、委托工具及其它实际输入已完整登记，也不证明无并发瞬时变化或本地/CI 同判。
+tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次，报告绝对路径、文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。Config v3 在读取 Git 对象前，从显式 candidate 配置绑定 `facts_git`；该配置的原始字节随后必须与固定 candidate 中的 blob 相同。
+
+tool 的 program 按已声明 PATH 或显式路径解析，input.location 必须指向同一执行物，present 摘要先于任何启动核验，expected_version 必须为非空字符串并匹配 version_argv 的实际 UTF-8 stdout（只去末尾空白）。相同 candidate 绑定读取 base 与 candidate，不启动 base 工具。
+
+每次进程使用清空后重建的登记环境及 protocol 的时间／输出上限；显式 GIT_DIR、GIT_WORK_TREE、GIT_INDEX_FILE 因重定向 checkout 而拒绝。进程前后核配置、绑定路径与执行物摘要，保留原始输出字节、摘要、退出和边界失败。完整请求及消费者报告通过 `git_facts` 传递观察结果；下游核对绑定和环境，缺失或不符不得回退 环境中的未绑定 Git。执行前的失败以 `E_GIT_FACTS` 携观察返回；尚未启动的进程不伪造回执。
+
+完整调用、initial inventory 和输入 capture 共用该读取器；initial 仍不裁决 DELTA。Config v1/v2、旧 library facts API、scoped CI 与旧版事件准备保持各自旧合同。详见 [Git 事实绑定](docs/git-facts.md)。此绑定不证明 Git 配置、解释器、动态库、OS、委托工具及其它实际输入已完整登记，也不证明无并发瞬时变化或本地/CI 同判。
 
 独立 `facts_config`、完整 `--config`、initial `Profile.host_config`、输入 capture、
 scoped 的可选 `registration_config` 及 full-CI `check_config` 均可显式指向
@@ -170,69 +179,46 @@ scoped 的可选 `registration_config` 及 full-CI `check_config` 均可显式�
 语言或目录；各平台文件仍由宿主明确登记。选择器及目标均为 `.chrono-harness/` 下的
 字面相对路径，拒绝链接、自引用、嵌套选择器和旧版目标。
 
-固定端点读取器独立按各自 commit 解析 entry 与 selected target，并在 registry snapshot
-中按真实路径保留 selector、target 和五份 status-bearing registry 的原字节和值；不把
-target JSON 别名到 selector，也不把 candidate target 套到 base。请求、registration
-view（选择器模式版本化为 `chrono-registration-view/v2`）、历史 decode（选择器输入
-版本化为 `chrono-historical-decode/v3`）、FILEMAP provenance、mixed documents 与 workflow checks 同时保留
-原始 entry identity、effective target identity 和结构化 selector binding，缺失、替换或
-漂移均拒绝。Git facts 仍按原合同绑定 candidate，历史 endpoint 只读固定对象，不执行
-历史工具。选中输入快照使用版本化 `chrono-input-snapshot/v3` 绑定 entry、effective
-target 与 selector；direct v1/v2/v3 和旧快照语义保持不变。
+固定端点读取器独立按各自 commit 解析 entry 与 selected target，并在 registry snapshot中按真实路径保留 selector、target 和五份 status-bearing registry 的原字节和值；不把target JSON 别名到 selector，也不把 candidate target 套到 base。
 
-本地与 CI 使用同一 canonical entry argv，routes 仍登记稳定 entry；直接 target argv
-替换被拒绝。不同平台选中不同政策仍是不同有效输入，不能据此声明 parity；完整 host
-activation、portable initial judge bindings、complete effective inputs、native full
-dispatch、Rust formal refinement 和完整 SPEC 仍未完成。旧直接配置保留原义。
+请求、registrationview（选择器模式版本化为 `chrono-registration-view/v2`）、历史 decode（选择器输入版本化为 `chrono-historical-decode/v3`）、FILEMAP provenance、mixed documents 与 workflow checks 同时保留原始 entry identity、effective target identity 和结构化 selector binding，缺失、替换或漂移均拒绝。
 
-Config v3 可在 facts_git 中采用 `guard: {schema: "chrono-git-inputs/v1", inputs: string[]}`。
-非空 inputs 逐项引用唯一 environment.inputs 文件 ID，拒绝重复、未知引用和未绑定摘要；
-present 必须匹配 SHA-256，absent 必须实际缺失，目录、符号链接、IO 错误不作缺失。
-读取器在第一次版本探测前及每次 Git 调用前后检查这些宿主指定输入；失败不得继续读取
-对象或 fetch，已运行的子进程保留原始输出与退出。下游请求须绑定相同的初始核验结果。
-Git 配置、include、解释器或库是否完整仍由宿主显式登记；不扫描或添加输入，不自动解析
-worktree 元数据位置。省略 guard 保持旧 v3 语义与报告形状，历史配置不补写。
-具名 inputs 观察使用 chrono-git-inputs-result/v1，保留实际文件身份／缺失与
-completeness_proven=false；前后观察不证明瞬时并发隔离、完整输入或确定性同判。
+Git facts 仍按原合同绑定 candidate，历史 endpoint 只读固定对象，不执行历史工具。选中输入快照使用版本化 `chrono-input-snapshot/v3` 绑定 entry、effectivetarget 与 selector；direct v1/v2/v3 和旧快照语义保持不变。
 
-当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备完整 Cargo/SDK 输入闭包。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。可选 `chrono-cargo-inputs/v5` 进一步登记 sysroot、backend、linker、SDK 与 build-script 输入，但仍只证明登记的有限边界。
-`argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
-没有 shell 插值、模板语言或依据当前目录猜测 manifest 的行为。
-只继承 environment.inherit 逐个列出的变量，缺值记录为 absent，values 显式覆盖。
-inputs 为逐文件登记的有效输入，ID 唯一。v1 及 v2 present 的摘要 null 仍仅表示未绑定草稿；不得解释为缺失。v2 absent 禁止携带摘要；缺失不同于空文件。v2 快照保留实际 `{absent:true}` 或文件内容身份，判官核对登记与两端快照，并在操作前后核候选路径。目录、符号链接、权限及 IO 错误不作缺失；路径祖先也不得是符号链接。历史缺失只从保留快照读取，不重读今天的路径。报告绑定实际值，不自动读取 dotenv。
+本地与 CI 使用同一 唯一登记入口 argv，routes 仍登记稳定 entry；直接目标 argv
+替换被拒绝。不同平台选中不同政策，实际生效输入就不同，不能据此声称同判。完整宿主启用、可搬运的 initial 判官绑定、完整有效输入、原生 full 派发、Rust 实现的形式化对应及完整 SPEC 仍未完成。旧直接配置保留原义。
 
-Config v2 可用于两端均采用该合同的宿主，也可经 workflow v3 显式版本选择的宿主 decoder 从 v1 迁移。v1→v2 仍须 §6 的实际转换及兼容测试；支持读取 v2 本身不证明已有宿主升级成功。文件状态变化通过 input 节点的显式边传播；没有边不推断消费者。捕获成功不是治理成功，缺失检查不是完整输入闭包或并发隔离证明。
-外部输入须保留两端快照，变化通过登记的存在状态或摘要进入提交 DELTA；磁盘值不符或快照缺失报输入不足，不隐式扩展 DELTA。
-PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声明的工具链运行；
-完整闭包包括实际 cargo/rustc、编译器后端、链接器、SDK、目标库和所读配置文件，
-包括 HOME/CARGO_HOME 下配置、rust-toolchain、间接依赖、fixture、外部数据及环境变量。
-会影响裁决的随机种子、时钟值、网络响应和超时/资源条件也须显式固定并登记为有效输入。
-文件输入用 FILEMAP 或 environment.inputs 登记；后者以 input:<id> 显式连接消费者，不推断边。
-宿主实际采用状态与缺口归 docs/spec-coverage.md 及现役输入登记；不能从已有输入数量推出完整闭包。补齐宿主声明范围内的工具、输入、关系与证据后才可声明 declared-complete，unresolved 必须为空。
-declared-complete 是可信 AI 对该范围承担责任的工程声明；真实工具链、SDK、配置及其它已知适用输入义务仍保留。判官不自动发现隐含依赖，声明通过不证明普遍输入完备。
-Config v3 可额外登记 `input_closure.bindings`：每项必须有唯一 `id`、可执行消费者
-`project:<id>`、`script:<id>`、`test:<id>` 或 `judge:<id>`、非空 `kind` 以及非空
-`inputs`。`inputs` 只能逐项引用已登记的 `tool:<id>`、`input:<id>` 或
-`environment:<name>` 节点；未知节点、错误种类或悬空引用由 registration 报
-`E_REFERENCE`。v1/v2 拒绝该字段。bindings 只记录 AI 明确选择的关系，registration
-不扫描目录、语言、命令、manifest 或工具链来补齐依赖，也不把登记成功解释为现实中
-没有遗漏输入；声明范围的登记就绪由 `status`、`unresolved` 和各消费者的实际证据共同决定。
-Config v3 可显式采用版本化 `input_closure.coverage`，合同为
-`{schema: "chrono-input-coverage/v1", required: [{consumer, domains: string[]}], rows: [{consumer, domain, state, bindings: string[], reason}]}`。
-`required` 非空，逐个列出可执行消费者及非空的宿主自定义输入域；rows 必须恰好覆盖
-这些消费者／域组合一次。缺行、多行、未知域、重复域、错误消费者、未知 binding 和
-空 reason 均报错。`bound` 和 `absent` 要求非空 bindings，每个 binding 同属该消费者
-且有非空 inputs；一个 binding 可以关联多个域。`absent` 只接受显式缺失文件输入，
-实际存在状态仍由两端快照及操作前后输入核验裁决。`not-applicable` 与 `unresolved`
-不携带 bindings，前者是 AI 的适用性声明，后者明确缺证。采用 coverage 且声明
-`declared-complete` 时，每个 binding 至少被一行覆盖且不能有 unresolved 域。
-域名由宿主登记，例如 compiler-library、SDK、network、clock 或 randomness；判官
-不猜项目语言、工具链或读取行为来补域。省略 coverage 保持既有 v3 含义；v1/v2
-拒绝此扩展，旧二进制拒绝未知扩展。候选判官读取未采用扩展的历史快照，无需重写历史。
-通过后产生 `chrono-input-coverage-result/v1`，保留完整声明与 `scope: declared-domains`、
-`completeness_proven: false`；它证明登记的对应关系和已核验输入状态，不证明没有未登记域
-或任意程序的读取闭包。完整有效输入、并发一致性和本地／CI 同判仍需实际消费者证据。
-未知或已知缺失项返回 E_INPUT_UNDECLARED / E_EVIDENCE_UNRESOLVED；登记有效不证明真实输入完整。
+Config v3 可在 facts_git 中采用 `guard: {schema: "chrono-git-inputs/v1", inputs: string[]}`。非空 inputs 逐项引用唯一 environment.inputs 文件 ID，拒绝重复、未知引用和未绑定摘要；present 必须匹配 SHA-256，absent 必须实际缺失，目录、符号链接、IO 错误不作缺失。
+
+读取器在第一次版本探测前及每次 Git 调用前后检查这些宿主指定输入；失败不得继续读取对象或 fetch，已运行的子进程保留原始输出与退出。下游请求须绑定相同的初始核验结果。Git 配置、include、解释器或库是否完整仍由宿主显式登记；不扫描或添加输入，不自动解析worktree 元数据位置。省略 guard 保持旧 v3 语义与报告形状，历史配置不补写。
+
+具名 inputs 观察使用 chrono-git-inputs-result/v1，保留实际文件身份／缺失与completeness_proven=false；前后观察不证明瞬时并发隔离、完整输入或确定性同判。
+
+当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备Cargo／SDK 输入及其依赖的完整性。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。可选 `chrono-cargo-inputs/v5` 进一步登记 sysroot、backend、linker、SDK 与 build-script 输入，但仍只证明登记的有限边界。`argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
+
+没有 shell 插值、模板语言或依据当前目录猜测 manifest 的行为。只继承 environment.inherit 逐个列出的变量，缺值记录为 absent，values 显式覆盖。inputs 为逐文件登记的有效输入，ID 唯一。v1 及 v2 present 的摘要 null 仍仅表示未绑定草稿；不得解释为缺失。v2 absent 禁止携带摘要；缺失不同于空文件。v2 快照保留实际 `{absent:true}` 或文件内容身份，判官核对登记与两端快照，并在操作前后核候选路径。
+
+目录、符号链接、权限及 IO 错误不作缺失；路径祖先也不得是符号链接。历史缺失只从保留快照读取，不重读今天的路径。报告绑定实际值，不自动读取 dotenv。
+
+Config v2 可用于两端均采用该合同的宿主，也可经 workflow v3 显式版本选择的宿主 decoder 从 v1 迁移。v1→v2 仍须 §6 的实际转换及兼容测试；支持读取 v2 本身不证明已有宿主升级成功。文件状态变化通过 input 节点的显式边传播；没有边不推断消费者。捕获成功不是治理成功，缺失检查不是输入及其依赖的完整性或并发隔离证明。外部输入须保留两端快照，变化通过登记的存在状态或摘要进入提交 DELTA；磁盘值不符或快照缺失报输入不足，不隐式扩展 DELTA。
+
+PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声明的工具链运行；完整输入范围包括实际 cargo/rustc、编译器后端、链接器、SDK、目标库和所读配置文件，包括 HOME/CARGO_HOME 下配置、rust-toolchain、间接依赖、fixture、外部数据及环境变量。会影响裁决的随机种子、时钟值、网络响应和超时/资源条件也须显式固定并登记为有效输入。
+
+文件输入用 FILEMAP 或 environment.inputs 登记；后者以 input:<id> 显式连接消费者，不推断边。宿主实际采用状态与缺口归 docs/spec-coverage.md 及现役输入登记；不能从已有输入数量推出完整闭包。补齐宿主声明范围内的工具、输入、关系与证据后才可声明 declared-complete，unresolved 必须为空。declared-complete 是可信 AI 对该范围承担责任的工程声明；真实工具链、SDK、配置及其它已知适用输入义务仍保留。
+
+判官不自动发现隐含依赖，声明通过不证明普遍输入完备。Config v3 可额外登记 `input_closure.bindings`：每项必须有唯一 `id`、可执行消费者`project:<id>`、`script:<id>`、`test:<id>` 或 `judge:<id>`、非空 `kind` 以及非空`inputs`。
+
+`inputs` 只能逐项引用已登记的 `tool:<id>`、`input:<id>` 或`environment:<name>` 节点；未知节点、错误种类或悬空引用由 registration 报`E_REFERENCE`。v1/v2 拒绝该字段。
+
+bindings 只记录 AI 明确选择的关系，registration不扫描目录、语言、命令、manifest 或工具链来补齐依赖，也不把登记成功解释为现实中没有遗漏输入；声明范围的登记就绪由 `status`、`unresolved` 和各消费者的实际证据共同决定。
+
+Config v3 可显式采用版本化 `input_closure.coverage`，合同为`{schema: "chrono-input-coverage/v1", required: [{consumer, domains: string[]}], rows: [{consumer, domain, state, bindings: string[], reason}]}`。`required` 非空，逐个列出可执行消费者及非空的宿主自定义输入域；rows 必须恰好覆盖这些消费者／域组合一次。
+
+缺行、多行、未知域、重复域、错误消费者、未知 binding 和空 reason 均报错。`bound` 和 `absent` 要求非空 bindings，每个 binding 同属该消费者且有非空 inputs；一个 binding 可以关联多个域。`absent` 只接受显式缺失文件输入，实际存在状态仍由两端快照及操作前后输入核验裁决。`not-applicable` 与 `unresolved`不携带 bindings，前者是 AI 的适用性声明，后者明确缺证。
+
+采用 coverage 且声明`declared-complete` 时，每个 binding 至少被一行覆盖且不能有 unresolved 域。域名由宿主登记，例如 compiler-library、SDK、network、clock 或 randomness；判官不猜项目语言、工具链或读取行为来补域。省略 coverage 保持既有 v3 含义；v1/v2拒绝此扩展，旧二进制拒绝未知扩展。候选判官读取未采用扩展的历史快照，无需重写历史。
+
+通过后产生 `chrono-input-coverage-result/v1`，保留完整声明与 `scope: declared-domains`、`completeness_proven: false`；它证明登记的对应关系和已核验输入状态，不证明没有未登记域或任意程序的读取闭包。完整有效输入、并发一致性和本地／CI 同判仍需实际消费者证据。未知或已知缺失项返回 E_INPUT_UNDECLARED / E_EVIDENCE_UNRESOLVED；登记有效不证明真实输入完整。
 
 | projects 字段 | 类型与约束 |
 | --- | --- |
@@ -242,29 +228,21 @@ Config v3 可显式采用版本化 `input_closure.coverage`，合同为
 | actions | 非空的显式具名方法对象；方法名不限定语言或活动；每项 `{operation, tool, argv}`。测试的 `execute` 是其执行入口合同 |
 | scripts | `{id, path, test_script, actions}[]` 或 `{id, path, tests_for, actions}[]` |
 
-每个 production 与一个 test 双向一一对应，test 不再要求递归配一个 test。
-脚本以同样的一对一关系单独登记，不为它创建虚假的编译项目。
-operation 在全部 actions 与 canonical_check 中唯一；同名不同参数也属于重复方法。
-宿主可以没有 manifest、lockfile、统一 source root 或编译输出目录。可选 legacy manifest/lockfile 只是显式归属的 opaque 文件引用；root 不授予内容或输出推断权。通用 projects 判官检查一对一配对、显式测试边、实际文件归属与声明产物目录的隔离，不解析语言文件，也不根据路径猜 `target/`。产物登记变更与删除按两端显式 owner 唤醒对应 project/script，再沿 FILEMAP 边选择测试。
-构建、测试依赖只由 FILEMAP 提供。语言工具可作为可选一致性判官，例如 [chrono-judge-cargo](docs/cargo-projects.md)；适配器消费显式语言政策与既有边，不能补登记或选测试。
-可选 Cargo guard 的配置合同必须显式登记每个查找位置的存在／缺失、命令行配置与递归 include；文件内容沿既有输入 ID 和 FILEMAP 边连接消费者。缺失也是有效输入，不能以未发现文件替代缺失声明。登记表按 Cargo 的固定版本查找规则核完整性，不因此取得自动补登记权。配置闭包不代表编译器、SDK、构建脚本或外部服务输入闭包。当前有界实现及 v1→v2 迁移见同文档。
-可选 guard v4 进一步显式绑定 Cargo 与 `RUSTC` 的输入 ID、文件身份、路径和版本，
-要求宿主登记唯一编译器选择环境，拒绝另一套 Cargo 配置／wrapper 选择来源。
-这只绑定被传给 Cargo 的执行入口，不证明其委托程序、编译器库、链接器或 SDK 闭包。
-v2/v3 保持原解释；v4 的支持命令与边界见同文档，不由通用 projects 判官推断语言工具链。
-可选 guard v5 保留 v4 字段并增加显式 `toolchain`：sysroot 使用
-`chrono-input-directory/v1` 文件清单且只能由精确 `RUSTFLAGS=--sysroot=...` 选择；
-backend 与 build-script 输入逐项连接 FILEMAP；linker 以独立工具、输入 ID 和环境变量
-绑定；每个 SDK 以目录清单和精确环境根绑定。目录文件、选择路径和外部输入在 Cargo
-前后重核，递归配置不得提供第二套 linker/sysroot 来源。v5 报告使用
-`chrono-cargo-run/v3`，仍保持 `input_closure_complete: false`；它不推断未登记的
-编译器库、委托进程、SDK 元数据、构建脚本读取、OS 或网络输入。v2/v3/v4 的解释保持不变。
+每个 production 与一个 test 双向一一对应，test 不再要求递归配一个 test。脚本以同样的一对一关系单独登记，不为它创建虚假的编译项目。operation 在全部 actions 与 canonical_check 中唯一；同名不同参数也属于重复方法。宿主可以没有 manifest、lockfile、统一 source root 或编译输出目录。可选 legacy manifest/lockfile 只是显式归属的 opaque 文件引用；root 不授予内容或输出推断权。
 
-v3 可显式选择逐项祖先清单，或断言宿主根的所有严格祖先都没有 Cargo 配置；后一种只核验具名范围的缺失，发现文件即失败，不推断登记或依赖。Cargo home 可显式相对同一宿主根解释，避免将 checkout 深度或个人绝对路径写死进可搬移政策。根、Cargo home、命令行与 include 输入仍逐项登记；v2 合同保留原义。适用迁移与观测边界见同文档，不能由配置可搬移推断整个宿主或完整输入已可移植。
-脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。
-生成器自举 init/generate 通过已登记 cargo 工具的 `run --locked --manifest-path ... -- ...` 调用，
-argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定制；首次采用内嵌精选核心与空上下文。
-不新增工具发现或路径模板。任意外部宿主直接用 §16 的 CLI。
+通用 projects 判官检查一对一配对、显式测试边、实际文件归属与声明产物目录的隔离，不解析语言文件，也不根据路径猜 `target/`。产物登记变更与删除按两端显式 owner 唤醒对应 project/script，再沿 FILEMAP 边选择测试。构建、测试依赖只由 FILEMAP 提供。语言工具可作为可选一致性判官，例如 [chrono-judge-cargo](docs/cargo-projects.md)；适配器消费显式语言政策与既有边，不能补登记或选测试。
+
+可选 Cargo guard 的配置合同必须显式登记每个查找位置的存在／缺失、命令行配置与递归 include；文件内容沿既有输入 ID 和 FILEMAP 边连接消费者。缺失也是有效输入，不能以未发现文件替代缺失声明。登记表按 Cargo 的固定版本查找规则核完整性，不因此取得自动补登记权。配置及其依赖完整不代表编译器、SDK、构建脚本或外部服务输入及其依赖的完整性。当前范围有限的实现及 v1→v2 迁移见同文档。
+
+可选 guard v4 进一步显式绑定 Cargo 与 `RUSTC` 的输入 ID、文件身份、路径和版本，要求宿主登记唯一编译器选择环境，拒绝另一套 Cargo 配置／wrapper 选择来源。这只绑定被传给 Cargo 的执行入口，不证明其委托程序、编译器库、链接器或 SDK 闭包。v2/v3 保持原解释；v4 的支持命令与边界见同文档，不由通用 projects 判官推断语言工具链。
+
+可选 guard v5 保留 v4 字段并增加显式 `toolchain`：sysroot 使用`chrono-input-directory/v1` 文件清单且只能由精确 `RUSTFLAGS=--sysroot=...` 选择；backend 与 build-script 输入逐项连接 FILEMAP；linker 以独立工具、输入 ID 和环境变量绑定；每个 SDK 以目录清单和精确环境根绑定。目录文件、选择路径和外部输入在 Cargo前后重核，递归配置不得提供第二套 linker/sysroot 来源。
+
+v5 报告使用`chrono-cargo-run/v3`，仍保持 `input_closure_complete: false`；它不推断未登记的编译器库、委托进程、SDK 元数据、构建脚本读取、OS 或网络输入。v2/v3/v4 的解释保持不变。
+
+v3 可显式选择逐项祖先清单，或断言宿主根的所有严格祖先都没有 Cargo 配置；后一种只核验具名范围的缺失，发现文件即失败，不推断登记或依赖。Cargo home 可显式相对同一宿主根解释，避免将 checkout 深度或个人绝对路径写死进可搬移政策。根、Cargo home、命令行与 include 输入仍逐项登记；v2 合同保留原义。适用迁移与观测边界见同文档，不能由配置可搬移推断整个宿主或完整输入已可移植。脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。
+
+生成器自举 init/generate 通过已登记 cargo 工具的 `run --locked --manifest-path ... -- ...` 调用，argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定制；首次采用内嵌精选核心与空上下文。不新增工具发现或路径模板。任意外部宿主直接用 §16 的 CLI。
 
 | FILEMAP 字段 | 类型与约束 |
 | --- | --- |
@@ -275,22 +253,18 @@ argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定
 | surface | `product / test / documentation / membership / instruction-policy / judge-policy / judge-implementation` |
 | Edge | `{kind, to}`；from 隐含为 `file:<path>` |
 | project_edges | `{from, kind, to}[]`；显式项目/脚本/外部输入关系 |
-| execution_plans | FILEMAP v2: `test:ID` -> `{operations: string[], timeout_seconds, output_limit_bytes, operation_bounds?}`; optional map from listed operation IDs to complete positive `{timeout_seconds, output_limit_bytes}` (output ≤64 MiB), missing entries inherit defaults, absent/empty map preserves historical serialization; ordered nonempty unique IDs, test execute required; shared precedence and resolved bounds must agree before any launch |
-| execution_scheduling | FILEMAP v2 optional: `{max_running: positive integer, resources: string[], claims: {operation: {resources: string[], outputs: artifact-path[]}}}`; every participating operation explicitly claimed, including empty lists; exclusive resources and overlapping output namespaces; absent preserves serial plan identity |
+| execution_plans | FILEMAP v2：`test:ID` → `{operations: string[], timeout_seconds, output_limit_bytes, operation_bounds?}`。可按已列操作 ID 另给完整正值 `{timeout_seconds, output_limit_bytes}`，输出不得超过 64 MiB；缺项沿用默认值，映射缺失／空时保留历史序列化。操作 ID 有序、非空、唯一，必须含测试 execute。启动前，共享操作顺序和实际上限必须一致 |
+| execution_scheduling | FILEMAP v2 可选：`{max_running: positive integer, resources: string[], claims: {operation: {resources: string[], outputs: artifact-path[]}}}`。每个参与操作都须声明 claim，空列表也要写明；资源独占，输出命名空间不得重叠。省略保留串行计划身份 |
 | test_costs | `{test, cost}[]`；每个可执行测试项目或脚本有成本引用 |
 
 symlink/projection 是明确的文件表示及所有权说明，不自动增加编译或测试执行边。
 本仓 AGENTS 的 symlink 恰为 CLAUDE.md，CLAUDE 的受管块与登记的英文 Markdown/skill 由 instructions 从宿主 manifest/catalog 产生；
-框架资产的编译边、资产运输测试边和源/目标读取的 runtime-input 边另行显式登记。
+框架资产的编译边、资产传输测试边和源/目标读取的 runtime-input 边另行显式登记。
 这些 FILEMAP 扩展仍属 proposed；专用生成器 manifest 的实际链接/源校验不等于通用 FILEMAP 判官已实现。
 
-图节点 ID 使用 `file:<path>`、`input:<id>`、`tool:<id>`、`environment:<name>`、`project:<id>`、`script:<id>`、`test:<id>`、`judge:<id>`。工具和环境记录必须显式连接消费者；不推断执行依赖。
-input 节点引用对应状态的 environment.inputs；其边在 project_edges 显式列出，变化也成为种子。
-环境变量及其他非文件输入以显式快照文件登记；两端值无法保留/比较时属于输入不足。
-test 节点指向登记项目的 execute 操作或脚本的测试操作，不是猜出的测试函数。
-每个 owner、cost、节点及操作引用必须存在；同一文件不能由两个项目隐式共享。
-成本数字为非负估计，未知为 null，basis 必须解释来源；禁止把 null 当作 0。
-所有项目都可通过登记演进，无固定项目数量上限；拆分项目时同时迁移归属与测试边。
+图节点 ID 使用 `file:<path>`、`input:<id>`、`tool:<id>`、`environment:<name>`、`project:<id>`、`script:<id>`、`test:<id>`、`judge:<id>`。工具和环境记录必须显式连接消费者；不推断执行依赖。input 节点引用对应状态的 environment.inputs；其边在 project_edges 显式列出，变化也成为种子。环境变量及其他非文件输入以显式快照文件登记；两端值无法保留/比较时属于输入不足。
+
+test 节点指向登记项目的 execute 操作或脚本的测试操作，不是猜出的测试函数。每个 owner、cost、节点及操作引用必须存在；同一文件不能由两个项目隐式共享。成本数字为非负估计，未知为 null，basis 必须解释来源；禁止把 null 当作 0。所有项目都可通过登记演进，无固定项目数量上限；拆分项目时同时迁移归属与测试边。
 
 | judges 字段 | 类型与约束 |
 | --- | --- |
@@ -300,10 +274,9 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 | after | 必须存在的判官 ID 数组；有向无环，稳定 ID 顺序打破并列 |
 | modes | v1 仅 `evaluate`；candidate 判官读取两端事实，见 §6 |
 
-Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. All seven judges have bounded implementations; full host activation remains incomplete. See [workflow evidence](docs/workflow.md).
-每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
-七对判官项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-filemap、judge-routes、judge-projects、judge-cost、judge-mixed、judge-workflow、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
-第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
+默认二进制路径为 `.chrono-harness/bin/chrono-judge-<id>`。七个判官均有范围有限的实现，完整宿主启用仍未完成，见 [workflow 证据](docs/workflow.md)。每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
+
+七对判官项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-filemap、judge-routes、judge-projects、judge-cost、judge-mixed、judge-workflow、judge-ci、ci、instructions 及各自测试，不创建空判官项目。第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
 
 | workflow 字段 | 类型与约束 |
 | --- | --- |
@@ -314,19 +287,13 @@ Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. All seven judges h
 | mixed_change | `{level: "warning", code, requires_acknowledgement: false}` |
 | integration | `{tests, bind, evidence}`；精确绑定字段与状态目录路径 |
 | retirements | `{kind, id, replacement: string|null, reason}[]`；显式退出/迁移事实 |
-| historical_profiles | workflow v2 retains the named FILEMAP v1 profile `{id,filemap_version,profile_path,script,test,mappings,legacy_records,ambiguities}`. Workflow v3 also accepts `{id,from_versions,to_versions,script,test,mappings,legacy_records,ambiguities}`; both version maps explicitly name all five registries (`config,filemap,projects,judges,workflow`). Selection requires exact before/after version agreement and one matching profile. |
-| historical_profiles.method_replacements | Optional explicit `{from,to,reason}` rows in workflow v2/v3. Each method has exact `{owner,operation,tool,argv}`. Require one original legacy action and one current method, equal operation IDs and explicit changed-owner mapping. Duplicate, unchanged, stale or unused declarations fail; omission preserves the standalone strict old-method contract. Original definitions and operation obligations remain; semantic equivalence is not inferred. Source extension after beta.13; see docs/workflow.md. |
+| historical_profiles | workflow v2 保留具名 FILEMAP v1 profile `{id,filemap_version,profile_path,script,test,mappings,legacy_records,ambiguities}`；v3 也接受 `{id,from_versions,to_versions,script,test,mappings,legacy_records,ambiguities}`。两份版本映射均须明确列全五登记（`config,filemap,projects,judges,workflow`），两端版本精确相符且恰有一个匹配 profile 才能选中 |
+| historical_profiles.method_replacements | workflow v2／v3 可选的明确 `{from,to,reason}` 行。每个方法有精确 `{owner,operation,tool,argv}`，须对应一个原 legacy action 和一个当前方法，operation ID 相同，并明确映射所有者变化。重复、未变、过期或未用声明均失败；省略则保留原独立严格旧方法合同。原定义和操作义务保留，不推断语义等价。这是 beta.13 后的源码扩展，见 docs/workflow.md |
 | migrations | `{from_version, to_version, script, test, mappings, reason}[]`；mappings 为旧/新记录 ID 对 |
 
-本节每份文件有共同 schema_version/status，表格列出其余字段；不另设未登记的规则文件。
-版本选择合同只登记需要执行哪个 candidate decoder，不推断宿主结构、语言或迁移算法。
-v3 的版本选择会给 decoder 传原始登记及字节、candidate 登记和所选 profile；原始 config
-不得被历史视图改写，旧输入快照仍按旧版本及其原始摘要核验。配置 v1→v2 可用此合同
-验证宿主登记的转换及兼容测试，v1 的 `sha256:null` 仍是未绑定而非缺失。
-实际转换收据与同一专属测试的执行结果均须通过 workflow 验证，版本声明本身不认证兼容。
-指令生成专用 manifest 使用 §16 的独立合同，没有 active/proposed 状态，不参与判官启用。
-登记的语法/引用约束也由 registration 判官实施；runner 只负责 JSON 运输与协议解析。
-配置不可解析、进程无法启动等基础故障是运行时错误，不是一个未声明的业务判官。
+本节每份文件有共同 schema_version/status，表格列出其余字段；不另设未登记的规则文件。版本选择合同只登记需要执行哪个 candidate decoder，不推断宿主结构、语言或迁移算法。v3 的版本选择会给 decoder 传原始登记及字节、candidate 登记和所选 profile；原始 config不得被历史视图改写，旧输入快照仍按旧版本及其原始摘要核验。配置 v1→v2 可用此合同验证宿主登记的转换及兼容测试，v1 的 `sha256:null` 仍是未绑定而非缺失。
+
+实际转换收据与同一专属测试的执行结果均须通过 workflow 验证，版本声明本身不认证兼容。指令生成专用 manifest 使用 §16 的独立合同，没有 active/proposed 状态，不参与判官启用。登记的语法/引用约束也由 registration 判官实施；runner 只负责 JSON 传输与协议解析。配置不可解析、进程无法启动等基础故障是运行时错误，不是一个未声明的业务判官。
 
 ## 4. 唯一检查指令、快照与 CI 对等
 
@@ -340,15 +307,10 @@ v3 的版本选择会给 decoder 传原始登记及字节、candidate 登记和�
   --context .chrono-harness/state/context.json
 ```
 
-两个变量必须是已存在的完整、不可变 commit OID（按仓库对象格式为 40 或 64 位 hex）。
-不得直接传 `HEAD`、`dev`、短 SHA、工作目录别名或 CI 默认 merge ref。
-`base` 是此轮已获取的 dev tip；`candidate` 是拟向 dev 交付的精确提交。
-DELTA 比较二者的 tree，不自动改用 merge-base，base 不必是 candidate 的祖先。
-分支过期和合并关系由 workflow 判官处理；不允许 CI 悄悄改成全量检查。
-本地/CI 必须运输相同 OID、context 与版本化配置；其报告绑定这些内容的摘要。
-同一指令保证调用和输入解释语义一致；相同裁决还要求完整有效输入、政策、执行物、工具链、
-配置和环境相同，并且判官/测试确定性求值。仅 Cargo 版本或环境摘要存在不足以证明这些前提。
-前提未建立时报告 parity:unestablished，不能承诺裁决相同；这不另加普通 full check 准入门。其已登记合同所需输入／证据不足仍报错。
+两个变量必须是已存在的完整、不可变 commit OID（按仓库对象格式为 40 或 64 位 hex）。不得直接传 `HEAD`、`dev`、短 SHA、工作目录别名或 CI 默认 merge ref。`base` 是此轮已获取的 dev tip；`candidate` 是拟向 dev 交付的精确提交。DELTA 比较二者的 tree，不自动改用 merge-base，base 不必是 candidate 的祖先。分支过期和合并关系由 workflow 判官处理；不允许 CI 悄悄改成全量检查。
+
+本地/CI 必须运输相同 OID、context 与版本化配置；其报告绑定这些内容的摘要。同一指令保证调用和输入解释语义一致；相同裁决还要求完整有效输入、政策、执行物、工具链、配置和环境相同，并且判官/测试确定性求值。仅 Cargo 版本或环境摘要存在不足以证明这些前提。前提未建立时报告 parity:unestablished，不能承诺裁决相同；这不另加普通 full check 准入门。其已登记合同所需输入／证据不足仍报错。
+
 普通 full check 在登记要求及全部选中义务通过后表示该 DELTA 满足现役登记合同；现役 registration 的 effective_inputs 仍可为 completeness_proven:false。
 
 当前不提供独立 `parity` 比较／报告改写命令。现役输入生产者均报告
@@ -356,68 +318,84 @@ DELTA 比较二者的 tree，不自动改用 merge-base，base 不必是 candida
 不能建立输入完整性或普遍确定性。检查状态归实际生产者，不提供写死宿主状态的 `spec status`。
 宿主尚未登记的 compiler、SDK、网络、凭据或其他已知适用外部输入仍须补齐。
 
-v1 明确选择干净、不可变 commit 快照这一工程边界；不另设 dirty-worktree 验证模式。
-工作树必须检出 candidate，索引和已跟踪文件必须等于 candidate，子模块不得隐式展开。
-未跟踪文件须登记并提交；只有 config.artifacts 中生成目录可忽略。
-仅写进 `.gitignore` 不够：判官检查所有未跟踪路径，包括被 Git 忽略的路径。
-生成目录里若出现跟踪文件，按普通 DELTA 文件要求登记；忽略不覆盖 Git 事实。
-采集未跟踪路径时可按显式生成目录做字面、区分大小写的排除，避免先输出全部产物路径，再由调用方过滤。
-排除不覆盖目录同名的文件／链接、相邻未登记路径或独立的已跟踪文件／索引核对；不规范的目录写法不得归一化成更宽排除。
-迁移解码器前后也只比较受治理输入，允许写登记生成目录，新增未登记文件或修改候选源码仍须报错。
-暂存、未暂存、未跟踪的非生成物变化或 candidate 不匹配返回 `E_SNAPSHOT_DIRTY`，不静默丢弃。
-这些行为是 registration 判官的默认策略，runner 只传入 Git 状态事实。
+v1 明确选择干净、不可变 commit 快照这一工程边界；不另设 dirty-worktree 验证模式。工作树必须检出 candidate，索引和已跟踪文件必须等于 candidate，子模块不得隐式展开。未跟踪文件须登记并提交；只有 config.artifacts 中生成目录可忽略。仅写进 `.gitignore` 不够：判官检查所有未跟踪路径，包括被 Git 忽略的路径。生成目录里若出现跟踪文件，按普通 DELTA 文件要求登记；忽略不覆盖 Git 事实。
+
+采集未跟踪路径时可按显式生成目录做字面、区分大小写的排除，避免先输出全部产物路径，再由调用方过滤。排除不覆盖目录同名的文件／链接、相邻未登记路径或独立的已跟踪文件／索引核对；不规范的目录写法不得归一化成更宽排除。迁移解码器前后也只比较受治理输入，允许写登记生成目录，新增未登记文件或修改候选源码仍须报错。暂存、未暂存、未跟踪的非生成物变化或 candidate 不匹配返回 `E_SNAPSHOT_DIRTY`，不静默丢弃。这些行为是 registration 判官的默认策略，runner 只传入 Git 状态事实。
+
 仓库路径边界、特殊文件类型不支持时必须返回 `E_INPUT_UNSUPPORTED`，不能漏判。
 
-`--config` 的磁盘内容必须等于 candidate 中同路径 blob；base 配置单独从 base tree 读取。
-base.root 是从固定 base tree 导出的只读文件快照；不执行其中程序。candidate.root 是实际检出的候选工作树根，不是导出的干净副本。判官将其视为只读源，构建及证据仅使用登记生成目录。只读是输入消费合同，不声称 OS 沙箱隔离；registration 对比观察与固定对象。
-context 为 UTF-8 JSON：`schema_version, base, candidate, dev_tip, branch_ref, fork_point,`
-`branch_started_at, observed_at, operation, integration_evidence`，时间均为 UTC RFC3339。
-workflow 使用 context schema 2，另须显式 `run_kind: integration | delivery`；integration 前缀的交付也必须使用 delivery。registration 保留 v1 供现有有界消费者读取。
-operation 固定为 validate.delta；integration_evidence 为证据摘要或 null。
-context 的 base/candidate 必须与 CLI 相同，dev_tip 必须等于 base；CI 不接受悄悄漂移。
-Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING`，AI 补取后重跑。
-工作开始记录 branch_started_at，observed_at 是本轮获取 dev 的时间，不用提交时间猜分支年龄。
-同一轮本地/CI 使用相同 context；dev 再推进就建立新一轮输入，不能冒用旧报告。
+`--config` 的磁盘内容必须等于 candidate 中同路径 blob；base 配置单独从 base tree 读取。base.root 是从固定 base tree 导出的只读文件快照；不执行其中程序。candidate.root 是实际检出的候选工作树根，不是导出的干净副本。判官将其视为只读源，构建及证据仅使用登记生成目录。只读是输入消费合同，不声称 OS 沙箱隔离；registration 对比观察与固定对象。
 
-完整报告写入 `.chrono-harness/state/report.json` 与本轮唯一的 `run-<identity>.json`，格式、原始证据与摘要保持完整。短命令 stdout 只呈现原状态、退出码、有限的具名诊断与唯一原报告路径；超出行数或文本长度的诊断明确标示省略，完整内容从原报告读取。显式旧合同 `--config` 调用仍输出与存储报告相同的完整 JSON。报告的 report_path 指向后者；runner 将实际前序判官进程及 request_digest 传入 observations，供 workflow 核对执行身份与完成证据。
-CI 只负责准备工具、不可变输入并调用指令、保存报告和原样传播退出码。
-不得另写 CI 专属判官、skip 参数或本地宽松模式；现役生成 workflow 的 scoped 合同见 docs/ci.md；不设置虚假的绿色 workflow。
+context 为 UTF-8 JSON：`schema_version, base, candidate, dev_tip, branch_ref, fork_point,``branch_started_at, observed_at, operation, integration_evidence`，时间均为 UTC RFC3339。
 
-`chrono-github-full-ci/v1` 是显式完整 context 的独立 dispatch 投影。调用方提供
-context 原始 UTF-8 JSON 字符串与所有引用证据；生成器不推断角色、时间、宿主布局或
-证据获取方式。候选 config v3 的 Git 绑定核对 HEAD、配置、provider 源和指定 workflow
-修订中的投影字节，只在精确缺对象读数后补取固定 OID。准备阶段保留 context 原字节，
-另存 Git 观察、源身份和同一完整 check argv；其 `prepared` 不承担治理裁决，
-parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。
-所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。
-输出冲突不得覆盖旧证据，原始进程失败须保留并传播。单文件发布不认证并发或跨文件
-事务；此投影不自动启用完整宿主、PR/合并流程或 required check。字段、重试与采用
-边界见 [完整 CI 传输合同](docs/full-ci.md)。
+workflow 使用 context schema 2，另须显式 `run_kind: integration | delivery`；integration 前缀的交付也必须使用 delivery。registration 保留 v1 供现有有界消费者读取。operation 固定为 validate.delta；integration_evidence 为证据摘要或 null。context 的 base/candidate 必须与 CLI 相同，dev_tip 必须等于 base；CI 不接受悄悄漂移。
 
-固定快照的干净检查须同时比较 candidate 树、索引 stage 和实际文件。现役源码按 Git 对象头与原始字节计算 SHA-1／SHA-256 blob 身份，逐项核常规文件类型及 Git 的 owner-executable 位、符号链接字面目标；目录祖先不得沿链接读取。它不通过工作区 diff、textconv、clean filter 或换行转换决定文件身份；配置隐藏的字节、类型与执行位差异仍须拒绝。索引的新增／删除／mode／OID／未合并 stage 独立比较，不能由相反工作区变化抵消；既有 index flag 和 untracked/artifact 检查继续适用。核验只消费固定树／索引清单，不登记依赖、不选测试，不因缓存或 Git status 干净而跳过读取。完整／initial／scoped 检查及 worktree 创建、重建、恢复、清理复用同一文件比较实现，各自通过已有 Git 绑定读取树和索引。Gitlink、特殊文件及非 UTF-8 登记路径尚不支持；时间戳、ACL、xattr 不是 Git 树身份的一部分，且不承诺并发原子快照。完整 Git 配置、委托程序、工具链／SDK 输入闭包仍须另行补齐。详见 [原始快照身份](docs/git-facts.md#literal-checkout-identity)。
+Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING`，AI 补取后重跑。工作开始记录 branch_started_at，observed_at 是本轮获取 dev 的时间，不用提交时间猜分支年龄。同一轮本地/CI 使用相同 context；dev 再推进就建立新一轮输入，不能冒用旧报告。
+
+完整报告写入 `.chrono-harness/state/report.json` 与本轮唯一的 `run-<identity>.json`，格式、原始证据与摘要保持完整。短命令 stdout 只呈现原状态、退出码、有限的具名诊断与唯一原报告路径；超出行数或文本长度的诊断明确标示省略，完整内容从原报告读取。显式旧合同 `--config` 调用仍输出与存储报告相同的完整 JSON。
+
+报告的 report_path 指向后者；runner 将实际前序判官进程及 request_digest 传入 observations，供 workflow 核对执行身份与完成证据。CI 只负责准备工具、不可变输入并调用指令、保存报告和原样传播退出码。不得另写 CI 专属判官、skip 参数或本地宽松模式；现役生成 workflow 的 scoped 合同见 docs/ci.md；不设置虚假的绿色 workflow。
+
+`chrono-github-full-ci/v1` 是显式完整 context 的独立 dispatch 投影。调用方提供context 原始 UTF-8 JSON 字符串与所有引用证据；生成器不推断角色、时间、宿主布局或证据获取方式。候选 config v3 的 Git 绑定核对 HEAD、配置、provider 源和指定 workflow修订中的投影字节，只在精确缺对象读数后补取固定 OID。
+
+准备阶段保留 context 原字节，另存 Git 观察、源身份和同一完整 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。输出冲突不得覆盖旧证据，原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
+
+字段、重试与采用边界见 [完整 CI 传输合同](docs/full-ci.md)。
+
+固定快照的干净检查须同时比较 candidate 树、索引 stage 和实际文件。现役源码按 Git 对象头与原始字节计算 SHA-1／SHA-256 blob 身份，逐项核常规文件类型及 Git 的 owner-executable 位、符号链接字面目标；目录祖先不得沿链接读取。它不通过工作区 diff、textconv、clean filter 或换行转换决定文件身份；配置隐藏的字节、类型与执行位差异仍须拒绝。
+
+索引的新增／删除／mode／OID／未合并 stage 独立比较，不能由相反工作区变化抵消；既有 index flag 和 untracked/artifact 检查继续适用。核验只消费固定树／索引清单，不登记依赖、不选测试，不因缓存或 Git status 干净而跳过读取。完整／initial／scoped 检查及 worktree 创建、重建、恢复、清理复用同一文件比较实现，各自通过已有 Git 绑定读取树和索引。
+
+Gitlink、特殊文件及非 UTF-8 登记路径尚不支持；时间戳、ACL、xattr 不是 Git 树身份的一部分，且不承诺并发原子快照。完整 Git 配置、委托程序、工具链／SDK 输入及其依赖的完整性仍须另行补齐。详见 [原始快照身份](docs/git-facts.md#literal-checkout-identity)。
 
 
 ### 4.1 显式单元与独立条件 job
 
 短入口仅在原报告发布后投影，不另执行判官或业务。失败生产者与版本探针保留原始回执，解码／校验失败引用原 acquisition；完成报告发布前的执行错误另留原错误，不能称为已完成报告。保留失败时如实返回原错误与保留失败，不伪造路径；早期配置／选择错误仍为原 E_CHECK，不宣称普遍输出上界。
 
-无论仓库规模，每个能独立验收、独立重跑的单元均生成独立 job；当前目标是一份 parent workflow，先 detector，再 job-level if 单元，最后 `always()` aggregate（needs detector 与全部单元），仅 aggregate 为 required check。旧登记在显式迁移前保留各独立 workflow 合同。边界由宿主显式登记，必要前置与完整测试义务仍须保留。各单元具有独立检查名、checkout、启动命令、边界、报告及重跑。单元及完整测试计划的对应在宿主 `.chrono-harness/` 显式登记；不得按目录、语言或自动发现依赖分组。计划须恰有一个所属单元，漏登、重登和未知计划先报错。跨单元共用操作须逐项声明由哪些单元各自重复；本版不隐式传输工件或推断单元间依赖。
+无论仓库规模，每个能独立验收、独立重跑的单元均生成独立 job；当前目标是一份 parent workflow，先 detector，再 job 级 if 条件 单元，最后 `always()` aggregate（needs detector 与全部单元），仅 aggregate 为 必需检查。旧登记在显式迁移前保留各独立 workflow 合同。边界由宿主显式登记，必要前置与完整测试义务仍须保留。各单元具有独立检查名、checkout、启动命令、边界、报告及重跑。
 
-现役 config schema4 支持固定 root invocation `check`、`check --unit ID`、无值 `check --collect`；非根 bare check 保留全局 DELTA，显式 standalone 初始化绑定见 §12。固定配置／原生 selector、bound Git、工具／环境／协议约束及 source-local/CI action 在执行前解析；`CHRONO_CHECK_SOURCE` 必须显式继承，无值／local 和 ci 各有唯一登记生产者，无混合覆盖、猜范围或手工 prepare。runner 分别保留真实 argv/cwd 与 PreparedCheck 的配置、端点、scope、context 原字节／语义摘要及原始生产证据，执行现役判官；canonical consumers 拒绝伪造展开 argv 和 selector 不一致。worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。旧合同显式拼写仅留给旧登记。full 独立短单元／汇总已接入显式 execution_units 与原始证据；当前实现不宣称 native 完成或完整 SPEC 验收。
+单元及完整测试计划的对应在宿主 `.chrono-harness/` 显式登记；不得按目录、语言或自动发现依赖分组。计划须恰有一个所属单元，漏登、重登和未知计划先报错。跨单元共用操作须逐项声明由哪些单元各自重复；本版不隐式传输产物或推断单元间依赖。
+
+现役 config schema4 支持固定 root invocation `check`、`check --unit ID`、无值 `check --collect`；非根 bare check 保留全局 DELTA，显式 standalone 初始化绑定见 §12。
+
+固定配置／原生 selector、bound Git、工具／环境／协议约束及 source-local/CI action 在执行前解析；`CHRONO_CHECK_SOURCE` 必须显式继承，无值／local 和 ci 各有唯一登记生产者，无混合覆盖、猜范围或手工 prepare。
+
+runner 分别保留真实 argv/cwd 与 PreparedCheck 的配置、端点、scope、context 原字节／语义摘要及原始生产证据，执行现役判官；canonical consumers 拒绝伪造展开 argv 和 selector 不一致。
+
+worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。
+
+旧合同显式拼写仅留给旧登记。full 独立短单元／汇总已接入显式 execution_units 与原始证据；当前实现不宣称 native 完成或完整 SPEC 验收。
 
 现役源码扩展 `chrono-ci-check/v3` 的 `policy.units` 与 `shared_operations`。判官先完成两端 DELTA、移除／替代义务及全局所选操作图验证，再按 `--unit ID` 过滤执行；不能借单元过滤隐藏全局操作环。单元报告分别列本单元所选、全局所选、交给其它单元、所需单元及真正不需要的义务。某单元成功只承担自身结果，其失败不取消不相关 workflow。本地及该 workflow 均追加完全相同的 `--unit ID` 到登记 check 指令；v1/v2 原调用行为保留。
 
 同一入口的 `--collect MANIFEST` 只重建当前义务并核所需原始单元报告，不能重跑业务测试。它检查完整报告集合、固定端点／配置／执行物 pin、原始判官输出、计划身份及候选操作／顺序／边界、工具观察、逐操作原始回执和成功状态；缺漏、重复、陈旧或失败报告不得全局通过。执行物 pin 由明确调用输入承担，不宣称据此证明构建产地、外部输入完整或跨环境同判。
 
-`chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。完整字段、共享／重试合同、初始输入及当前采用边界见 [并发 CI 合同](docs/ci-units.md)。此扩展不自动启用完整七判官治理；产品仓库按登记将完整测试计划分配给显式单元，当前通过 `job_gating` 投影为一份 parent 内的独立条件 job；启动核心及共享操作也由宿主登记。
+`chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。
 
-`job_gating` 是 `chrono-github-units/v1` scoped／v2 full 的显式可选采用；缺字段保持旧语义，不追溯重解释历史证据。检测复用 judge-ci collection inventory；full 调度复用 FILEMAP/routes 的纯声明选测及两端 assignment，SDK 输入快照仍归实际 full 准入。检测不得调用业务 check/probe、选全兜底或推断目录／语言／import；允许按宿主显式 source inputs 启动产品本身。Git 完整树／登记 blob 在不物化全部宿主源时可读，PR 固定 event base/head、默认 push 完整 before/after，既有 integration `push_baselines` 保留并由 detector 一次固定。浅 blobless depth2 是可用起点，缺端点明确补取；禁止静默 HEAD^／merge-base 和 workflow paths／paths-ignore。完整 Git DELTA 不设路径数量门，超过平台 API 路径上限仍完整处理。aggregate 的 Rust provider 必须拒绝 detection 失败及任一 required 单元非 success（含 cancelled、missing、unexpected skip）；仅 nonrequired 单元允许 skip。汇总仍经固定 `check --collect` 核原始报告及最终判官，不以 GitHub 状态代替准入。单元重跑保留同一 parent 的原 detector／成功前置 attempt，逐项核最新实际 job 与相应 original artifact attempt；不轮询其它 workflow 或等待自己完成。投影切换统一归显式 migrate：按前一 provider 快照核精确旧投影字节和所有新目标冲突后退休旧输出，保留自定义并拒覆盖 user files。普通 init/generate/verify 只处理当前 provider 的投影，不派生另一拓扑、读取或退休其投影。详细字段、原生环境登记、full context／external input 与历史 decoder 的未完成边界见 [CI units](docs/ci-units.md)。
+完整字段、共享／重试合同、初始输入及当前采用边界见 [并发 CI 合同](docs/ci-units.md)。此扩展不自动启用完整七判官治理；产品仓库按登记将完整测试计划分配给显式单元，当前通过 `job_gating` 投影为一份 parent 内的独立条件 job；启动核心及共享操作也由宿主登记。
 
-full-v3/v4 的 `execution_units` 由同一 assignment/select/required 与七判官 DAG 裁决。schema4 日常入口仍为 `check`、`check --unit ID`、`check --collect`；裸 check 保留全局 DELTA，单元贡献不等于准入。汇总消费 `chrono-full-collection/v1` 的原始报告、请求、七判官绑定与回执，不执行业务或业务版本命令。`chrono-github-full-ci/v2` 保留显式 exact-context dispatch；`chrono-github-units/v2` 在现有自动 push/PR provider 中显式登记 collection/各 unit 的 full context 路径与上传映射。bootstrap/caller 必须供应同一精确 full context；producer 核它与实际事件端点一致，原生 gather 核 workflow/attempt、下载原始上传目录，再交同一短命令裁决。缺失或不匹配输入失败。本仓实际 full 启用、公开新二进制和远端原生 full 验收仍未完成。
+`job_gating` 是 `chrono-github-units/v1` scoped／v2 full 的显式可选采用；缺字段保持旧语义，不追溯重解释历史证据。检测复用 judge-ci collection inventory；full 调度复用 FILEMAP/routes 的纯声明选测及两端 assignment，SDK 输入快照仍归实际 full 准入。检测不得调用业务 check/probe、选全兜底或推断目录／语言／import；允许按宿主显式 source inputs 启动产品本身。
 
-local 独立 scopes 仅在当前端点、birth／role 与输入引用一致且新观察仍满足 workflow 登记的 age 判法时保留同一 context 及原 `observed_at`；超过期限自动保留旧原件并发布新的不可变观察，旧贡献不能满足新 context，当前分支仍由 workflow 拒绝 stale。裸 check 产生新观察。unit 的 live 文件输入由 registration/input 单一实现按显式 unit plans、操作所有者、FILEMAP 依赖及 closure bindings 选取，含共享操作及治理输入；结构和引用仍全局检查，缺失／漂移／畸形／未知输入失败。capture 复用该投影；collection 核原始 blobs 与逐单元有效输入投影，不启动业务或业务版本工具。这些源码行为不证明远端 full 启用、release 或完整 SPEC 验收。
+Git 完整树／登记 blob 在不物化全部宿主源时可读，PR 固定 event base/head、默认 push 完整 before/after，既有 integration `push_baselines` 保留并由 detector 一次固定。浅 blobless depth2 是可用起点，缺端点明确补取；禁止静默 HEAD^／merge-base 和 workflow paths／paths-ignore。完整 Git DELTA 不设路径数量门，超过平台 API 路径上限仍完整处理。
 
-宿主自定义与更新是交付合同：单元、启动参数、平台、超时及扩展调用由宿主显式配置；安装新二进制不重置这些源。`init` 保留已有宿主源，常规修改仍从该源生成和核验。显式迁移以旧、新 provider 为输入，先核旧投影及所有目标冲突，再更新受管输出、退休不再使用的旧输出；保留新源和无关宿主文件，不推断测试归属或替宿主改登记。公开 beta.13 的 `chrono-ci migrate` 支持 scoped v1／units 到 units，以及同源地址的显式旧配置快照；初始 inventory、full 和 release 合同不在该迁移入口中。完整 CLI 与失败边界见上述合同；投影迁移通过不等于 CI、完整治理或跨文件事务通过。
+aggregate 的 Rust provider 必须拒绝 detection 失败及任一 required 单元非 success（含 cancelled、missing、unexpected skip）；仅 nonrequired 单元允许 skip。汇总仍经固定 `check --collect` 核原始报告及最终判官，不以 GitHub 状态代替准入。
+
+单元重跑保留同一 parent 的原 detector／成功前置 attempt，逐项核最新实际 job 与相应 original artifact attempt；不轮询其它 workflow 或等待自己完成。投影切换统一归显式 migrate：按前一 provider 快照核精确旧投影字节和所有新目标冲突后退役旧输出，保留自定义并拒覆盖 user files。普通 init/generate/verify 只处理当前 provider 的投影，不派生另一拓扑、读取或退役其投影。
+
+详细字段、原生环境登记、full context／external input 与历史 decoder 的未完成边界见 [CI units](docs/ci-units.md)。
+
+full-v3/v4 的 `execution_units` 由同一 assignment/select/required 与七判官 DAG 裁决。schema4 日常入口仍为 `check`、`check --unit ID`、`check --collect`；裸 check 保留全局 DELTA，单元贡献不等于准入。汇总消费 `chrono-full-collection/v1` 的原始报告、请求、七判官绑定与回执，不执行业务或业务版本命令。
+
+`chrono-github-full-ci/v2` 保留显式 exact-context dispatch；`chrono-github-units/v2` 在现有自动 push/PR provider 中显式登记 collection/各 unit 的 full context 路径与上传映射。bootstrap/caller 必须供应同一精确 full context；producer 核它与实际事件端点一致，原生 gather 核 workflow/attempt、下载原始上传目录，再交同一短命令裁决。
+
+缺失或不匹配输入失败。本仓实际 full 启用、公开新二进制和远端原生 full 验收仍未完成。
+
+local 独立 scopes 仅在当前端点、birth／role 与输入引用一致且新观察仍满足 workflow 登记的 age 判法时保留同一 context 及原 `observed_at`；超过期限自动保留旧原件并发布新的不可变观察，旧贡献不能满足新 context，当前分支仍由 workflow 拒绝 stale。裸 check 产生新观察。
+
+unit 的 live 文件输入由 registration/input 单一实现按显式 unit plans、操作所有者、FILEMAP 依赖及 closure bindings 选取，含共享操作及治理输入；结构和引用仍全局检查，缺失／漂移／畸形／未知输入失败。capture 复用该投影；collection 核原始 blobs 与逐单元有效输入投影，不启动业务或业务版本工具。这些源码行为不证明远端 full 启用、release 或完整 SPEC 验收。
+
+宿主自定义与更新是交付合同：单元、启动参数、平台、超时及扩展调用由宿主显式配置；安装新二进制不重置这些源。`init` 保留已有宿主源，常规修改仍从该源生成和核验。显式迁移以旧、新 provider 为输入，先核旧投影及所有目标冲突，再更新受管输出、退役不再使用的旧输出；保留新源和无关宿主文件，不推断测试归属或替宿主改登记。公开 beta.13 的 `chrono-ci migrate` 支持 scoped v1／units 到 units，以及同源地址的显式旧配置快照；初始 inventory、full 和 release 合同不在该迁移入口中。完整 CLI 与失败边界见上述合同；投影迁移通过不等于 CI、完整治理或跨文件事务通过。
 
 一个测试项目可以显式登记多个测试组并分别绑定 CI 单元，不为分组另造生产／测试项目。分组须保留原测试义务，使用登记的库存判法核对当前未过滤集合：各组非空、互斥、并集完整，不能按历史数量或隐式发现规则选测。共享编译输出与库存操作仍登记互斥；原未过滤入口、各组执行边界和超时分别明确，不把分组后的多个预算声称为原单项总预算。宿主 projects 的普通测试和真实宿主迁移测试采用此分组，原断言与测试内时限保留，具体登记见 [独立 CI 单元](docs/ci-units.md)。分组不证明总工作量减少或原生时限充分。
 
@@ -427,7 +405,7 @@ local 独立 scopes 仅在当前端点、birth／role 与输入引用一致且�
 
 CI 必须实际恢复和保存可重建缓存，覆盖启动工具、当前判官及所选生产／测试项目的编译工作。检查与发布 CI 均适用；检测、单元及汇总 job 按各自登记的消费者取缓存，不默认构建或缓存全仓项目。仅有名为 cache 的本地目录或 artifact 上传不算跨运行缓存已启用。
 
-缓存政策与 provider 源由宿主在 `.chrono-harness/` 显式登记，沿现有 generate/verify 入口生成与核验 CI 投影；不得独立手改生成 YAML。逐项登记缓存 ID、所有者、生产／消费操作、准确路径、兼容输入、键的构造、允许的恢复前缀、恢复／保存时机和处置方式。路径引用已有登记工件或显式外部工具缓存，不按目录、语言或文件扫描发现缓存。执行与选测仍只消费 FILEMAP 的声明。
+缓存政策与 provider 源由宿主在 `.chrono-harness/` 显式登记，沿现有 generate/verify 入口生成与核验 CI 投影；不得独立手改生成 YAML。逐项登记缓存 ID、所有者、生产／消费操作、准确路径、兼容输入、键的构造、允许的恢复前缀、恢复／保存时机和处置方式。路径引用已有登记产物或显式外部工具缓存，不按目录、语言或文件扫描发现缓存。执行与选测仍只消费 FILEMAP 的声明。
 
 同一 provider 配置中的一个缓存 ID 至多登记一个保存 job。`save_caches` 显式选择各 job 的保存子集；省略表示保存全部所选缓存，空数组表示只恢复。生成／校验预检在写投影前拒绝多个保存者，报 `E_CACHE_SAVE_OWNERSHIP` 并列出缓存与冲突 job；不自动选择保存者、不增加 job 或跨单元等待。允许全部消费者只恢复；指定保存者被跳过或未满足保存条件时，本轮没有新归档。独立生产域（如不同发布平台）须各有显式缓存身份，不由程序推断拆分。
 
@@ -453,12 +431,9 @@ Rust 的登记编译操作必须启用增量编译，并将各项目实际使用
 
 ## 5. DELTA 与依赖图算法
 
-在宿主定义的治理／输入范围内，DELTA 选择充分的前提是：两状态实际语义输入及其直接/间接依赖均完整登记，且判官/测试
-谓词具有局部性：仅由已登记的语义输入决定，未受变更输入及其闭包影响的谓词保持不变；外部输入也属于状态。
-图上闭包仅是相对于给定登记图的机械事实，真实依赖完整性与局部性是工程义务，不能由合法登记推出。
-该范围内未解决的必需依赖、已知缺失的 fixture、环境、外部输入或非局部影响须报输入/证据不足，AI 显式补登记或调整检查单元；
-不推断补边，不声称能自动发现所有遗漏，也不声称已检查每个历史对象或证明未来 Rust 实现。
-AI 的 declared-complete 工程声明及登记核验支持普通合同验收；普遍隐藏输入不存在的证明不是该验收前提，也不能从一次通过推出。
+在宿主定义的治理／输入范围内，DELTA 选择充分的前提是：两状态实际语义输入及其直接/间接依赖均完整登记，且判官/测试谓词具有局部性：仅由已登记的语义输入决定，未受变更输入及其闭包影响的谓词保持不变；外部输入也属于状态。图上闭包仅是相对于给定登记图的机械事实，真实依赖完整性与局部性是工程义务，不能由合法登记推出。
+
+该范围内未解决的必需依赖、已知缺失的 fixture、环境、外部输入或非局部影响须报输入/证据不足，AI 显式补登记或调整检查单元；不推断补边，不声称能自动发现所有遗漏，也不声称已检查每个历史对象或证明未来 Rust 实现。AI 的 declared-complete 工程声明及登记核验支持普通合同验收；普遍隐藏输入不存在的证明不是该验收前提，也不能从一次通过推出。
 
 DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID 和 mode。
 按字节稳定排序路径，用 Git `--no-renames` 的含 NUL 输出或等价库接口读取事实。
@@ -467,16 +442,11 @@ DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID �
 同内容改名仍须检查旧归属、旧消费者、旧测试和新路径登记。
 二进制文件也按 blob 比较；没有文本 diff 不等于没有 DELTA。
 
-第 1 步：读取 B/C 两份登记，解析变更文件及变更的记录 ID、字段和边。
-第 2 步：建立 `G = G_base ∪ G_candidate`，保留每条边来源 base/candidate/both。
-第 3 步：变更文件、已登记有效输入的两端变化为种子；登记变化另把变更记录目标加入种子；有类型边的增加、删除或改接必须把两端节点加入种子。
-例如只删除 `runner → runner-tests` 测试边，也把 runner 与旧测试作为影响种子。
-第 4 步：沿已登记的有类型正向边计算影响闭包，去重但保留来源和因果路径。
-第 5 步：选出候选测试、判官、成本项；验证删除/迁移事实后执行候选中仍存在的测试。
-第 6 步：每个 finding 必须关联一个 DELTA 路径或登记变更，以及明确的依赖因果链。
-没有因果链的旧缺陷不应成为本次错误；可作为未裁决 context 列出。
+第 1 步：读取 B/C 两份登记，解析变更文件及变更的记录 ID、字段和边。第 2 步：建立 `G = G_base ∪ G_candidate`，保留每条边来源 base/candidate/both。第 3 步：变更文件、已登记有效输入的两端变化为种子；登记变化另把变更记录目标加入种子；有类型边的增加、删除或改接必须把两端节点加入种子。例如只删除 `runner → runner-tests` 测试边，也把 runner 与旧测试作为影响种子。
 
-可达节点集合不能代替有类型边、逐种子来源或执行要求。即使端点图与并集图的可达节点集合相同，也不能据此改用 candidate-only 图选测。例如 base 仅有 `project:p → test:t` 的 test-execution 边、candidate 删除该边、两端节点都已成为种子时，两图都到达这两个节点；只有保留旧边的并集仍选择旧测试。测试删除、替换或退休仍按第 6 节结算，不因节点已到达而省略。
+第 4 步：沿已登记的有类型正向边计算影响闭包，去重但保留来源和因果路径。第 5 步：选出候选测试、判官、成本项；验证删除/迁移事实后执行候选中仍存在的测试。第 6 步：每个 finding 必须关联一个 DELTA 路径或登记变更，以及明确的依赖因果链。没有因果链的旧缺陷不应成为本次错误；可作为未裁决 context 列出。
+
+可达节点集合不能代替有类型边、逐种子来源或执行要求。即使端点图与并集图的可达节点集合相同，也不能据此改用 candidate-only 图选测。例如 base 仅有 `project:p → test:t` 的 test-execution 边、candidate 删除该边、两端节点都已成为种子时，两图都到达这两个节点；只有保留旧边的并集仍选择旧测试。测试删除、替换或退役仍按第 6 节结算，不因节点已到达而省略。
 
 | 边 kind | 方向与含义 | 不允许的推断 |
 | --- | --- | --- |
@@ -486,13 +456,9 @@ DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID �
 | test-execution | 受影响项目/文件/脚本/输入→测试 ID | 不按文件名、测试名、Cargo 元数据猜测试 |
 | judge-trigger | 文件/项目→判官 ID | 不凭扩展名选判官 |
 
-compile/build-input/runtime-input 可沿显式项目 compile 边继续传播，但只有 test-execution 边能选测试。
-workflow 的显式 stability 路径/测试及条件 integration.tests 同样是白名单关系；现役 FILEMAP impact v2 将适用要求降为有来源的 test-execution 边，再交同一闭包与执行链，见 [选择合同](docs/workflow-selection.md)。此步骤不认证分支、迁移或 integration 证据。
-配对关系表达所有权，不隐式产生测试边；缺配对执行边由 projects 判官报错。
-every-delta 判官始终被选择，judge-trigger 提供额外影响解释；二者取并集去重。
-依赖闭包需要读取未变文件和历史登记，这是读取上下文，不是重判历史文件。
-若某个声明的测试单元会验证完整项目，允许执行它；测试由 DELTA 选出且故障须说明因果。
-与该 DELTA 无因果关系的既存测试失败标为 `E_EVIDENCE_UNRESOLVED`，不能捏造通过或旧违规。
+compile/build-input/runtime-input 可沿显式项目 compile 边继续传播，但只有 test-execution 边能选测试。workflow 的显式 stability 路径/测试及条件 integration.tests 同样是白名单关系；现役 FILEMAP impact v2 将适用要求降为有来源的 test-execution 边，再交同一闭包与执行链，见 [选择合同](docs/workflow-selection.md)。
+
+此步骤不认证分支、迁移或 integration 证据。配对关系表达所有权，不隐式产生测试边；缺配对执行边由 projects 判官报错。every-delta 判官始终被选择，judge-trigger 提供额外影响解释；二者取并集去重。依赖闭包需要读取未变文件和历史登记，这是读取上下文，不是重判历史文件。若某个声明的测试单元会验证完整项目，允许执行它；测试由 DELTA 选出且故障须说明因果。与该 DELTA 无因果关系的既存测试失败标为 `E_EVIDENCE_UNRESOLVED`，不能捏造通过或旧违规。
 
 删除文件从 base FILEMAP 取得 owner/依赖/成本；不能因为 candidate 不再登记而丢失影响。
 新增文件必须在 candidate 注册；修改文件必须在两端有可解释的注册或显式补登记记录。
@@ -502,7 +468,9 @@ schema 不可解析影响本轮输入时是错误；不能以“历史问题”�
 
 ### 5.1 形式对应与保留义务
 
-以下对应固定引用 trureturing 修订 `5cd5558013f6e02612a617b2ba5b03db7a6de0f6` 的 [TwoStateLocalityIncrementalPreservation.lean](https://github.com/the-omega-institute/trureturing/blob/5cd5558013f6e02612a617b2ba5b03db7a6de0f6/D5/S3/ConceptDynamics/Governance/TwoStateLocalityIncrementalPreservation.lean)。模型只承载下述条件结论，不提升 Rust 实现、宿主登记或实际执行的验证状态。
+以下对应固定引用 trureturing 修订 `5cd5558013f6e02612a617b2ba5b03db7a6de0f6` 的 [TwoStateLocalityIncrementalPreservation.lean](https://github.com/the-omega-institute/trureturing/blob/5cd5558013f6e02612a617b2ba5b03db7a6de0f6/D5/S3/ConceptDynamics/Governance/TwoStateLocalityIncrementalPreservation.lean)。
+
+模型只承载下述条件结论，不提升 Rust 实现、宿主登记或实际执行的验证状态。
 
 | SPEC 对象／义务 | 形式对象与结论 | 仍须履行的实现义务 |
 | --- | --- | --- |
@@ -510,51 +478,43 @@ schema 不可解析影响本轮输入时是错误；不能以“历史问题”�
 
 `State` 对应固定端点，`Artifact` 对应受检查对象及其输入，`bytes` 对应包含缺失态的输入值；`reads` 是两端实际读取，`dep` 是宿主声明的依赖上界，`property` 是要保留的判定属性。使用 `Option String` 的精确应用已编译，可区分不存在与空字节。实际读取集合、局部性和依赖包含关系仍由宿主履行，不能把 `Local` 假设当作自动取得的结论。不另造仅包装既有结论的定理。
 
-已合并的 trureturing [PR #10868](https://github.com/the-omega-institute/trureturing/pull/10868) 在修订 `168e85c372e38d926a25892a5f752c3f9ad8a173` 的 [TYPED_GOVERNANCE_ADMISSION.md §Theorem 6](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/docs/develop/theory/TYPED_GOVERNANCE_ADMISSION.md#L190) 交付种子边更新的节点集合推论，并登记对应的 [atom](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/Meta/Digestion/atoms/sha256/e041845285be68b9a306b63e427dfde5f58b09e7b8c977c1099c760f214c432e) 与[吸收映射](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/Meta/Digestion/backfill/typed-governance-admission/absorbed-closed/e041845285be68b9a306b63e427dfde5f58b09e7b8c977c1099c760f214c432e.yaml)。它复用修订 `64b78db1ad18a8a90b42e13a412dfc281d5c0922` 中已冻结的 [ConsequenceClosure.lean](https://github.com/the-omega-institute/trureturing/blob/64b78db1ad18a8a90b42e13a412dfc281d5c0922/D5/S3/ConceptDynamics/DagCompletion/ConsequenceClosure.lean) 的 `ConsequenceClosure.consequenceClosure_least`、`ConsequenceClosure.consequenceClosure_successorClosed`、`ConsequenceClosure.subset_consequenceClosure`；该 PR 未新增命名 Lean 定理或冻结条目。
+已合并的 trureturing [PR #10868](https://github.com/the-omega-institute/trureturing/pull/10868) 在修订 `168e85c372e38d926a25892a5f752c3f9ad8a173` 的 [TYPED_GOVERNANCE_ADMISSION.md §Theorem 6](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/docs/develop/theory/TYPED_GOVERNANCE_ADMISSION.md#L190) 交付种子边更新的节点集合推论，并登记对应的 [atom](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/Meta/Digestion/atoms/sha256/e041845285be68b9a306b63e427dfde5f58b09e7b8c977c1099c760f214c432e) 与[吸收映射](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/Meta/Digestion/backfill/typed-governance-admission/absorbed-closed/e041845285be68b9a306b63e427dfde5f58b09e7b8c977c1099c760f214c432e.yaml)。
+
+它复用修订 `64b78db1ad18a8a90b42e13a412dfc281d5c0922` 中已冻结的 [ConsequenceClosure.lean](https://github.com/the-omega-institute/trureturing/blob/64b78db1ad18a8a90b42e13a412dfc281d5c0922/D5/S3/ConceptDynamics/DagCompletion/ConsequenceClosure.lean) 的 `ConsequenceClosure.consequenceClosure_least`、`ConsequenceClosure.consequenceClosure_successorClosed`、`ConsequenceClosure.subset_consequenceClosure`；该 PR 未新增命名 Lean 定理或冻结条目。
 
 Theorem 6 的派生结论是：给定任意顶点类型、两端有向关系及同一个种子集合，若每条新增或删除的关系边的终点都在种子中，则并集图、base 图、candidate 图从这些种子可达的节点集合相等。它允许环和无限顶点类型，路径仍是有限路径且允许零长度。证明遇到某端缺失的边时，从其已登记为种子的终点重新出发，因此不保留原来的起始种子。
 
 与 FILEMAP 的对应是：顶点取显式节点 ID，关系取“存在某种 kind 的登记边”，种子取本轮变更种子的节点集合。第 5 节要求变更边两端进入种子，强于该推论仅要求变更关系边终点的前提；从 Rust 的有类型登记变化到该前提的实现对应仍须核验。此结果不授权删除旧边，也不授权把逐种子解释、路径、边类型、测试选择或成本替换为节点集合。精确有类型边投影应用及下述删边反例的既有编译证据不构成 Rust 算法的形式验证。
 
-第 5 节的删边例子也给出实现对应的边界：把有类型边投影为“存在某个 kind 的边”，或只保留可达节点，会丢掉测试选择需要的信息。`project:p` 和 `test:t` 同为种子、唯一测试执行边被删除时，两图的可达节点均为这两个节点；candidate 图没有执行边，并集图保留旧执行边。因此任何只证明节点集合相等的结果都不足以替代旧边、逐种子解释、路径、测试选择、成本或退休义务。
+第 5 节的删边例子也给出实现对应的边界：把有类型边投影为“存在某个 kind 的边”，或只保留可达节点，会丢掉测试选择需要的信息。`project:p` 和 `test:t` 同为种子、唯一测试执行边被删除时，两图的可达节点均为这两个节点；candidate 图没有执行边，并集图保留旧执行边。因此任何只证明节点集合相等的结果都不足以替代旧边、逐种子解释、路径、测试选择、成本或退役义务。
 
-当前对应限于上述参数映射、冻结声明与派生推论、精确应用及反例的既有编译证据与现有行为回归。相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
+当前对应限于上述参数映射、冻结声明与派生推论、精确应用及反例的既有编译证据与现有行为回归。
+
+相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。
+
+没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
 
 ### 5.2 按实际消费者重构依赖
 
-依赖重构须绑定现有宿主操作、真实消费者和具体耦合问题，说明哪些调用、构建或测试受影响。AI 从最新 dev 建隔离候选，在自然所有者修改代码与显式登记，沿同一检查入口验证 DELTA，核落地并清理。只报告图或建议不算交付；不为假想优化预建分析器或固定排名。
+依赖重构须绑定现有宿主操作、真实消费者和具体耦合问题，说明哪些调用、构建或测试受影响。AI 从最新 dev 建隔离候选，在负责该内容的位置修改代码与显式登记，沿同一检查入口验证 DELTA，核落地并清理。只报告图或建议不算交付；不为假想优化预建分析器或固定排名。
 
-FILEMAP 只须产生第 5 节的两端有类型并集、逐种子影响闭包、真实边与有限路径见证。它不常态产生 SCC、压缩图层深、关系数、跨所有者排名、执行冲突摘要或这些辅助报告的自检；当前没有使用这些输出的生产消费者。FILEMAP 允许循环，有限闭包仍须保留环边、菱形替代路径和全部种子。执行 DAG 的无环、前置与资源／输出排斥仍由 routes 和 projects 的现役入口检查，不得以退休辅助报告省略它们；执行回执的必要自诊断保持。
+FILEMAP 只须产生第 5 节的两端有类型并集、逐种子影响闭包、真实边与有限路径见证。它不常态产生 SCC、压缩图层深、关系数、跨所有者排名、执行冲突摘要或这些辅助报告的自检；当前没有使用这些输出的生产消费者。FILEMAP 允许循环，有限闭包仍须保留环边、菱形替代路径和全部种子。执行 DAG 的无环、前置与资源／输出排斥仍由 routes 和 projects 的现役入口检查，不得以退役辅助报告省略它们；执行回执的必要自诊断保持。
 
-每项重构固定前后提交、范围与必要对应关系，保留实际接口、行为、配对和测试义务。不得通过删除必要登记边、测试或创建空壳缩小闭包；退休按第 6 节处理。只量与当前问题有关的成本，注明输入、方法、单位及窗口，未知保持未知，不要求所有改动生成固定结构向量或统一评分。图闭合或指标改善不证明语义、输入完整、加速或最优。政策与产品同改须明确说明影响和验证成本，适用检查未完成或失败时保留原件并如实报告，不升级为已交付。
+每项重构固定前后提交、范围与必要对应关系，保留实际接口、行为、配对和测试义务。不得通过删除必要登记边、测试或创建空壳缩小闭包；退役按第 6 节处理。只量与当前问题有关的成本，注明输入、方法、单位及窗口，未知保持未知，不要求所有改动生成固定结构向量或统一评分。图闭合或指标改善不证明语义、输入完整、加速或最优。政策与产品同改须明确说明影响和验证成本，适用检查未完成或失败时保留原件并如实报告，不升级为已交付。
 
 ## 6. 登记变化、移除与演进
 
-登记自身也是代码数据，其 A/M/D 进入 DELTA；不使用 candidate-only 图或“最后配置赢”。
-FILEMAP 新增文件行、调整 owner、登记实际 build 输入/测试边是 membership 变化。
-引用目标删除后仍存在的消费者报 `E_DANGLING_EDGE`；AI 修改消费者或明确登记迁移。
-删除测试项目必须同步迁移生产项目的专属测试及执行边，不能留下一个无测试项目。
-合法同时删除生产项目与其测试时，workflow.retirements 明确列出二者及原因。
-旧测试计入 `retired_tests` 和成本影响；不存在的候选测试不被误标为已执行。
-旧测试若无合法 retirement 或 replacement，返回 `E_REQUIRED_TEST_REMOVED`。
-替代测试必须在 candidate 真正执行，旧成本依然可见；同一方法不永久冻结项目结构。
+登记自身也是代码数据，其 A/M/D 进入 DELTA；不使用 candidate-only 图或“最后配置赢”。FILEMAP 新增文件行、调整 owner、登记实际 build 输入/测试边是 membership 变化。引用目标删除后仍存在的消费者报 `E_DANGLING_EDGE`；AI 修改消费者或明确登记迁移。删除测试项目必须同步迁移生产项目的专属测试及执行边，不能留下一个无测试项目。合法同时删除生产项目与其测试时，workflow.retirements 明确列出二者及原因。
 
-删除/替换判官要登记 `kind: "judge"` 的 retirement、replacement 或 null 和原因。
-只执行 candidate 指定的当前判官，以 evaluate 模式按新政策判本轮 DELTA。
-candidate 的 migration_validator 消费 registration/filemap/cost 的结果，核对 base 登记、
-旧边、成本、retirement/replacement、迁移映射与 integration 证据；旧谓词不永久生效。
-base 只提供历史事实，不启动旧判官，也不要求取得、重建或用适配器包裹失效旧执行物。
-当前验证器可自主替换；其自身替换同样保留两端证据并经过新候选的 integration 验证。
-不自动下载猜测的插件、不把未知删除当“关闭成功”；有意规则调整是正常自主工程动作。
+旧测试计入 `retired_tests` 和成本影响；不存在的候选测试不被误标为已执行。旧测试若无合法 retirement 或 replacement，返回 `E_REQUIRED_TEST_REMOVED`。替代测试必须在 candidate 真正执行，旧成本依然可见；同一方法不永久冻结项目结构。
 
-schema 版本变更要登记当前替代：旧/新版本、受影响消费者、记录变化与删除原因。
-无需维持旧接口、旧格式执行或配对历史兼容测试；验证当前合同的成功、失败和边界行为。
-workflow.migrations 保留版本、mappings 和 reason；仅实际数据转换时成对登记 script/test，
-二者必须引用已登记脚本。mappings 元素为 `{from, to}`，
-from/to 可为 null 表示新增/删除，但不能同时为 null；删除原因放同条 reason。
-仅现役消费者确需转换已有数据时才登记一次性迁移及其行为验证；不为历史兼容创建脚本或适配器。
-candidate 按当前合同读取固定基线所需事实，保留原始记录、变化与摘要；缺失必要事实明确失败，不落回默认配置。
-新判官 ID、项目、语言和适配器都经白名单扩展；runner 无需知道当前项目全集。
+删除/替换判官要登记 `kind: "judge"` 的 retirement、replacement 或 null 和原因。只执行 candidate 指定的当前判官，以 evaluate 模式按新政策判本轮 DELTA。candidate 的 migration_validator 消费 registration/filemap/cost 的结果，核对 base 登记、旧边、成本、retirement/replacement、迁移映射与 integration 证据；旧谓词不永久生效。
+
+base 只提供历史事实，不启动旧判官，也不要求取得、重建或用适配器包裹失效旧执行物。当前验证器可自主替换；其自身替换同样保留两端证据并经过新候选的 integration 验证。不自动下载猜测的插件、不把未知删除当“关闭成功”；有意规则调整是正常自主工程动作。
+
+schema 版本变更要登记当前替代：旧/新版本、受影响消费者、记录变化与删除原因。无需维持旧接口、旧格式执行或配对历史兼容测试；验证当前合同的成功、失败和边界行为。workflow.migrations 保留版本、mappings 和 reason；仅实际数据转换时成对登记 script/test，二者必须引用已登记脚本。mappings 元素为 `{from, to}`，from/to 可为 null 表示新增/删除，但不能同时为 null；删除原因放同条 reason。
+
+仅现役消费者确需转换已有数据时才登记一次性迁移及其行为验证；不为历史兼容创建脚本或适配器。candidate 按当前合同读取固定基线所需事实，保留原始记录、变化与摘要；缺失必要事实明确失败，不落回默认配置。新判官 ID、项目、语言和适配器都经白名单扩展；runner 无需知道当前项目全集。
 
 ## 7. 判官、脚本与插件协议
 
@@ -588,17 +548,21 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
 }
 ```
 
-上述新增事实字段不裁决 admissibility：config_path 是两端共同的显式根相对配置路径；checkout.tracked 是相对 candidate 的索引/工作树变更路径并集，untracked 包括 ignore 路径；index_flags 是 Git ls-files -v 的完整 {path, tag} 记录，registration 拒绝 assume-unchanged/skip-worktree 隐藏条件，runner 不改写索引。runner 绑定实际当前执行物。registration 从固定 tree 判断支持的 entry 类型，重读对象、磁盘配置、context 和 checkout，忽略两次观察之间新增的已声明 artifact；其它变化报错。request_id 覆盖这些字段；不把 exported clean copy 当实际 checkout。base 导出保留在 state，普通文件无写权限，不执行 base 工具。
+上述新增事实字段不裁决 admissibility：config_path 是两端共同的显式根相对配置路径；checkout.tracked 是相对 candidate 的索引/工作树变更路径并集，untracked 包括 ignore 路径；index_flags 是 Git ls-files -v 的完整 {path, tag} 记录，registration 拒绝 assume-unchanged/skip-worktree 隐藏条件，runner 不改写索引。runner 绑定实际当前执行物。
+
+registration 从固定 tree 判断支持的 entry 类型，重读对象、磁盘配置、context 和 checkout，忽略两次观察之间新增的已声明 artifact；其它变化报错。request_id 覆盖这些字段；不把 导出的干净副本 当实际 checkout。base 导出保留在 state，普通文件无写权限，不执行 base 工具。
+
 registries.digest 精确定义为 JCS `{"base": {"<path>": <parsed JSON>, ...}, "candidate": {"<path>": <parsed JSON>, ...}}` 的 SHA-256，每端包含 config_path 与该端 config 指定的四份 registry；context.sha256 为 context JCS 摘要，evidence.sha256 为原始文件字节摘要。所有 JSON 先拒绝重复成员。
+
 普通 full DELTA CLI 要求两个真实 commit。根提交只通过第 12 节的显式初始化配置进入单候选清单协议；不构造伪造空 base，不产生 DELTA 治理成功。登记版本迁移按第 6 节的候选转换与实际兼容测试合同执行。
 
-impact 的版本为 `schema: "chrono-filemap-impact/v1"`，以下示例列核心字段；完整附加事实见 [FILEMAP impact 合同](docs/filemap-impact.md)。impact.edges 为平铺的 `{from, kind, to, origin}`；origin 是 base/candidate/both。seeds 是确定性去重的节点 ID 列表，附加 seed_causes 保留每个原因的 ID、节点、实际路径／记录引用和原因。tests 是候选仍存在的选中测试节点 ID 列表，retired_tests 是候选已不存在的选中必需测试节点 ID 列表，两者确定性去重，只表达选择／删除事实，不代表执行或退休批准。required_tests 和完整两端记录、节点定义及因果来源作为附加字段保留。retired_tests 成员资格不得豁免 `E_REQUIRED_TEST_REMOVED` 或第 6 节的迁移／退休证据义务。
-prior_results 仅含 after 列出的前置判官完整响应；不得从运行目录猜测旧输出复用。
-registration 先消费原始快照与 context；filemap 据登记生成 impact，其他判官显式消费结果。尚无前驱产物时 impact 为 null，不填造已算出的空闭包；runner 仅将直接前驱 outputs.impact 同名传入，冲突报错，其余具名产物保留在 prior_results.outputs。
-routes 先验证执行入口，projects 再执行测试；judges.after 中明确登记这个依赖顺序。
-共享上下文的推导属于登记判官逻辑；runner 只传递具名输出，不在内部另写项目政策。
-所有摘要使用 SHA-256；JSON 摘要使用 RFC 8785 JCS，文件 blob 按原始字节计算。
-普通请求的 registries.digest 覆盖两端五份 JSON 的路径与内容，两个端点都必须存在。初始化请求没有 base 或 delta 字段，使用单份候选登记映射的独立摘要。
+impact 的版本为 `schema: "chrono-filemap-impact/v1"`，以下示例列核心字段；完整附加事实见 [FILEMAP impact 合同](docs/filemap-impact.md)。impact.edges 为平铺的 `{from, kind, to, origin}`；origin 是 base/candidate/both。seeds 是确定性去重的节点 ID 列表，附加 seed_causes 保留每个原因的 ID、节点、实际路径／记录引用和原因。
+
+tests 是候选仍存在的选中测试节点 ID 列表，retired_tests 是候选已不存在的选中必需测试节点 ID 列表，两者确定性去重，只表达选择／删除事实，不代表执行或退役批准。required_tests 和完整两端记录、节点定义及因果来源作为附加字段保留。retired_tests 成员资格不得豁免 `E_REQUIRED_TEST_REMOVED` 或第 6 节的迁移／退役证据义务。prior_results 仅含 after 列出的前置判官完整响应；不得从运行目录猜测旧输出复用。
+
+registration 先消费原始快照与 context；filemap 据登记生成 impact，其他判官显式消费结果。尚无前驱产物时 impact 为 null，不填造已算出的空闭包；runner 仅将直接前驱 outputs.impact 同名传入，冲突报错，其余具名产物保留在 prior_results.outputs。routes 先验证执行入口，projects 再执行测试；judges.after 中明确登记这个依赖顺序。
+
+共享上下文的推导属于登记判官逻辑；runner 只传递具名输出，不在内部另写项目政策。所有摘要使用 SHA-256；JSON 摘要使用 RFC 8785 JCS，文件 blob 按原始字节计算。普通请求的 registries.digest 覆盖两端五份 JSON 的路径与内容，两个端点都必须存在。初始化请求没有 base 或 delta 字段，使用单份候选登记映射的独立摘要。
 
 ```json
 {
@@ -634,7 +598,7 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 ### 7.1 标准日志体系（目标合同）
 
-所有产品程序、判官、宿主脚本和插件适配器必须通过统一标准日志体系输出诊断、进度、告警及异常，禁止在业务代码中散落自由格式的 print／println／eprintln 充当日志。Rust 使用 `tracing` 事件／span 与统一初始化和格式化入口；其它语言使用其标准日志接口接入同一记录合同。日志字段、级别语义和格式的唯一实现归现有自然所有者，消费者复用，不各自维护拼接配方。
+所有产品程序、判官、宿主脚本和插件适配器必须通过统一标准日志体系输出诊断、进度、告警及异常，禁止在业务代码中散落自由格式的 print／println／eprintln 充当日志。Rust 使用 `tracing` 事件／span 与统一初始化和格式化入口；其它语言使用其标准日志接口接入同一记录合同。日志字段、级别语义和格式的唯一实现归现有对应所有者，消费者复用，不各自维护拼接配方。
 
 默认机器日志为 UTF-8 JSON Lines，每行恰好一个 `chrono-log/v1` 记录。日志格式／级别／sink 的选择及影响运行的环境变量由宿主显式登记；本地可选人类可读格式，仍由同一记录渲染。默认级别为 info，trace/debug 用于诊断，info 记录正常阶段与已处理观察，warn 记录降级／可恢复问题，error 记录当前操作未完成的失败。日志级别不是 pass/warn/fail/error 的裁决状态，stderr 非空不代表失败。
 
@@ -654,7 +618,9 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 错误必须作为带类型和原始因果关系的值逐层向调用边界传播。每层可增加当前操作、输入、路径及稳定错误码，但必须保留原错误为 `source`；禁止把原错误仅格式化成字符串、新建无 source 的“失败”、置空 cause 或用通用码覆盖原生错误。Rust 使用 `std::error::Error::source` 的错误链，Python 使用保留 traceback 的重抛或 `raise ... from ...`；其它语言使用等价的 cause／inner exception。没有底层异常的直接领域拒绝可用 `source: null`，不得制造异常。
 
-跨进程与报告边界使用独立、版本化的 `chrono-error/v1` 记录保留等价结构。每一层包含 `type, code, message, context, source`；根因保留实际类型、原始消息及已取得的原生错误码，已取得的栈／traceback 也保留。子进程失败附原 argv、退出／signal、stdout/stderr 字节或不可变证据引用，以及 timeout／overflow 等实际观察；尚未启动时不伪造进程结果。记录及引用由生产者产生，消费者核身份并展开完整链；引用不可用须明确报证据不足。现有 finding 的 `causes` 仍表示登记图边，不兼作异常链。新记录与其传输字段须通过显式 schema／协议演进接入，不能静默塞入当前严格 v1 请求／响应。
+跨进程与报告边界使用独立、版本化的 `chrono-error/v1` 记录保留等价结构。每一层包含 `type, code, message, context, source`；根因保留实际类型、原始消息及已取得的原生错误码，已取得的栈／traceback 也保留。子进程失败附原 argv、退出／signal、stdout/stderr 字节或不可变证据引用，以及 timeout／overflow 等实际观察；尚未启动时不伪造进程结果。记录及引用由生产者产生，消费者核身份并展开完整链；引用不可用须明确报证据不足。
+
+现有 finding 的 `causes` 仍表示登记图边，不兼作异常链。新记录与其传输字段须通过显式 schema／协议演进接入，不能静默塞入当前严格 v1 请求／响应。
 
 捕获、重试、降级、恢复、转换为领域结果或忽略预期缺失也是处理事件，必须附原始异常链和实际处理动作／结果，即便最终成功。成功只描述已完成的恢复或业务操作，不删除先前失败。重试逐次绑定尝试及原异常；次数、时限、可重试条件由当前登记规则决定，不靠循环直到偶然成功。受控的预期缺失可作为结构化领域状态返回，但若由异常触发，处理记录仍保留原异常。无异常发生的正常缺失不凭空补异常。
 
@@ -664,7 +630,9 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 现役缓存恢复可由宿主 v2 明确采用 `recover_failed_restores`：在独占的原生恢复阶段、原构建开始前，以固定计划和原观察重新核对登记，仅清理 restore 原始 outcome=failure 的登记宿主产物，保留原失败、intent、逐项结果及发布异常，再沿原构建入口执行。登记漂移、路径别名、缺失／未知原生结果、未完成 intent 或清理失败须阻断；已完成尝试的重入只返回原结果，不再次删除后来构建的产物。外部目录和 linked worktree 尚不支持；该机制不替代完整归档校验，也不证明成功 restore 的内容未损坏。报告必须保留恢复原始证据，不能把恢复成功改写为原 restore 或业务检查成功。
 
-宿主还可显式采用 `recover_unconfirmed_restores`，须同时采用上述失败恢复及隔离边界，省略保持旧行为。同一恢复入口在原生步骤 success 却没有命中键、键为空或不在登记兼容域时，也清理对应登记输出，避免下载／解压异常被原生实现转为警告后留下部分产物。原步骤不改判；缺键仍是 miss-or-unavailable，清理不证明缓存原先损坏。恢复与报告共享键分类，命中 exact／compatible 或明确 skipped 保留输出；缺失／取消 outcome 及畸形 outputs 在删除前失败。策略绑定恢复计划但不使未变编译缓存失效。普通冷缓存且没有残留工件时不制造恢复错误警告；删除残留、原生失败和后续构建失败仍分别保留。该扩展不校验声称有效命中后的完整内容，也不自动完成原生损坏实验、外部目录或 linked-worktree 的所有权合同。
+宿主还可显式采用 `recover_unconfirmed_restores`，须同时采用上述失败恢复及隔离边界，省略保持旧行为。同一恢复入口在原生步骤 success 却没有命中键、键为空或不在登记兼容域时，也清理对应登记输出，避免下载／解压异常被原生实现转为警告后留下部分产物。原步骤不改判；缺键仍是 miss-or-unavailable，清理不证明缓存原先损坏。
+
+恢复与报告共享键分类，命中 exact／compatible 或明确 skipped 保留输出；缺失／取消 outcome 及畸形 outputs 在删除前失败。策略绑定恢复计划但不使未变编译缓存失效。普通冷缓存且没有残留产物时不制造恢复错误警告；删除残留、原生失败和后续构建失败仍分别保留。该扩展不校验声称有效命中后的完整内容，也不自动完成原生损坏实验、外部目录或 linked-worktree 的所有权合同。
 
 最终缓存报告须按固定计划逐项核对恢复阶段与报告阶段的 restore 原始观测。后续构建、测试和保存可增加其它步骤，既有恢复观测不得丢失或改写；不一致时先保留两端原始记录，以缓存 ID 和原件路径报 `E_CACHE_REPORT`，不发布正常 transport 报告、不查询后端。该核对只证明两份观测一致，不证明原生动作或缓存内容正确。
 
@@ -680,7 +648,9 @@ Harness 自身的检查、观测、缓存与资源报告也按独立生产／测
 
 ### 7.4 任务完成所有权与等待（目标合同）
 
-每项任务的调用方负责保存实际任务身份、加入本任务及其自有子孙，并核对最终结果；宿主负责提供完成通知或真正阻塞的等待能力。启动前必须确认当前宿主实际可用的唯一完成通道及原结果的取得方式：有主动完成通知就优先等该通知，收到后一次收取原结果；没有通知则使用任务原生的真正阻塞等待。不得同时为同一任务另开完成通道；禁止短周期反复查询状态、进程或产物，不以反复空读会话、sleep 后查询或改名 wait/watch 的短周期循环代替等待。允许授权内对原任务作长周期核实，不因此另开同时运行的完成通道或新增确认门。真正阻塞的原生工具可以内部查询，但名称、默认间隔或包装器退出 0 均不证明符合等待要求或任务成功。缺少两种能力时，启动前报告能力缺口，不启动无法收取终态的工作；已存在的任务保留原句柄和未知状态。
+每项任务的调用方负责保存实际任务身份、加入本任务及其自有子孙，并核对最终结果；宿主负责提供完成通知或真正阻塞的等待能力。启动前必须确认当前宿主实际可用的唯一完成通道及原结果的取得方式：有主动完成通知就优先等该通知，收到后一次收取原结果；没有通知则使用任务原生的真正阻塞等待。不得同时为同一任务另开完成通道；禁止短周期反复查询状态、进程或产物，不以反复空读会话、sleep 后查询或改名 wait/watch 的短周期循环代替等待。允许授权内对原任务作长周期核实，不因此另开同时运行的完成通道或新增确认门。
+
+真正阻塞的原生工具可以内部查询，但名称、默认间隔或包装器退出 0 均不证明符合等待要求或任务成功。缺少两种能力时，启动前报告能力缺口，不启动无法收取终态的工作；已存在的任务保留原句柄和未知状态。
 
 完成只由匹配该任务身份的原始终态结果及真实退出产生。任务生产者必须实际等待自己启动的子孙和后台工作结束，再发布其所负责操作的终态；调用方仍须加入自己另行启动的任务。启动器、包装器、父进程或一个参与者退出，不证明真实任务、存活子孙或其他消费者已经结束。runner 只控制自己启动的操作，不据此接管宿主、调用方或其他任务的进程。所需原 stdout／stderr、退出／signal 和结果身份按 §7.1、§7.2 保留、传递并核对，不能用包装器退出 0、静默或报告文件存在代替。
 
@@ -688,7 +658,7 @@ Harness 自身的检查、观测、缓存与资源报告也按独立生产／测
 
 ## 8. 默认判官、规则表面与警告
 
-当前 judges.json 登记以下判官；registration、filemap、routes、projects、cost、mixed、workflow 已实现有界合同，宿主绑定仍 proposed，不存在默认隐形 gate。
+当前 judges.json 登记以下判官；registration、filemap、routes、projects、cost、mixed、workflow 已实现范围有限的约定，宿主绑定仍 proposed，不存在默认隐藏门槛。
 
 | ID | 本轮职责与典型错误 |
 | --- | --- |
@@ -700,60 +670,43 @@ Harness 自身的检查、观测、缓存与资源报告也按独立生产／测
 | mixed | 规则与产品同一 DELTA 的可见成本警告；W_MIXED_JUDGE_PRODUCT |
 | workflow | dev/integration、新鲜度、稳定性及登记迁移证据；E_BRANCH_STALE、E_INTEGRATION_REQUIRED |
 
-FILEMAP.surface 显式声明整个文件表面，不通过文件内容、目录名或语言模型猜语义。
-membership 文件中的部分字段通过 config.semantic_fields 声明为语义表面：
-projects 的 actions 新增/修改/删除涉及治理方法；FILEMAP 已有行的 surface 改动/删除涉及分类。
-pointer 的 `*` 仅匹配一个对象 key 或数组元素，不是文件路径通配符；行用 path/id 定位比较，
-不能因 JSON 数组换序误判规则变化。schema_version 改动按登记 schema 迁移处理。
-对同一文件取 base/candidate 表面分类并集，不能通过本轮重分类遗失旧语义影响。
-config/judges/workflow 全文件为 judge-policy；独立判官脚本可登记为 judge-implementation。
+FILEMAP.surface 显式声明整个文件类别，不通过文件内容、目录名或语言模型猜语义。membership 文件中的部分字段通过 config.semantic_fields 声明为影响判定的字段类别：projects 的 actions 新增/修改/删除涉及治理方法；FILEMAP 已有行的 surface 改动/删除涉及分类。pointer 的 `*` 仅匹配一个对象 key 或数组元素，不是文件路径通配符；行用 path/id 定位比较，不能因 JSON 数组换序误判规则变化。
 
-代码加对应 FILEMAP 普通成员行或真实依赖边，是通常的代码+登记协同修改，不触发混合警告。
-已有判定字段、动作、规则配置、判官实现或绑定二进制摘要变化属于规则语义变化。
-此类变化与 product/test 文件修改同一 DELTA 时，mixed 输出 warning 及两组路径、旧/新成本。
-warning 不升级成 blanket block、不索要批准、不要求人为确认或另起提交才能继续。
-integration 是这类规则变更本身的稳定性要求，并非混合提交惩罚。
-AI 先尝试在现有规则下解决任务；确需改判官时自主变更并验证，报告为什么和影响多大。
-源码自举的 engine 修改只按显式 stability 登记要求 integration，本身不被当作宿主 policy。
-现役 mixed 输出和语义选择合同见 [docs/mixed.md](docs/mixed.md)；integration 认证由独立 workflow 消费实际结果与完成报告，合同见 [docs/workflow.md](docs/workflow.md)。
+schema_version 改动按登记 schema 迁移处理。对同一文件取 base/candidate 表面分类并集，不能通过本轮重分类遗失旧语义影响。config/judges/workflow 全文件为 judge-policy；独立判官脚本可登记为 judge-implementation。
+
+代码加对应 FILEMAP 普通成员行或真实依赖边，是通常的代码+登记协同修改，不触发混合警告。已有判定字段、动作、规则配置、判官实现或绑定二进制摘要变化属于规则语义变化。此类变化与 product/test 文件修改同一 DELTA 时，mixed 输出 warning 及两组路径、旧/新成本。warning 不升级成 一律阻断、不索要批准、不要求人为确认或另起提交才能继续。integration 是这类规则变更本身的稳定性要求，并非混合提交惩罚。
+
+AI 先尝试在现有规则下解决任务；确需改判官时自主变更并验证，报告为什么和影响多大。从产品源码构建工具的 engine 修改只按显式 stability 登记要求 integration，本身不被当作宿主 policy。现役 mixed 输出和语义选择合同见 [docs/mixed.md](docs/mixed.md)；integration 认证由独立 workflow 消费实际结果与完成报告，合同见 [docs/workflow.md](docs/workflow.md)。
 
 ## 9. 成本与执行报告
 
-报告必须包含 `schema_version, status, base, candidate, candidate_tree, context_digest,`
-`registry_digest, executables, tools, environment, effective_inputs, parity, delta, impact, judges, tests, findings, costs`。
-executables 为 `{path, sha256, version}` 列表；tools 另记录实际解析路径和工具版本。
-effective_inputs 记录两端完整有效输入的 ID、实际值摘要及来源证据；摘要存在本身不证明相等或完整。
-parity 为 `{status: "unestablished", compared_report: null}`；当前不生成成对比较状态。
-性能测量差异分别报告，不用状态声明替代实际观察。
-judges/tests 记录每项的 selected/executed/blocked/retired 状态、退出码和证据摘要。
-这里 selected 是执行计划状态，完整结果不能停留在 selected 就返回 pass。
+报告必须包含 `schema_version, status, base, candidate, candidate_tree, context_digest,``registry_digest, executables, tools, environment, effective_inputs, parity, delta, impact, judges, tests, findings, costs`。
 
-costs 报告每个变更文件、影响项目、选择测试及旧删除节点的成本引用和来源。
-四维向量分别为 CPU 时间、墙钟时间、峰值内存、IO 字节；不折算成虚构统一分数或罚税。
-展示 declared_before、declared_after、affected_tests、retired_tests 和 unknown 列表。
-不同资源的峰值不能直接相加；并行 wall 时间也不能当串行总和。
-可按显式串行计划估算总 CPU/IO，任何输入未知则总估计注明不完整，不填 0。
-实际测量放在 measured 下，附工具、样本与时间；不能把构建耗时冒充测试耗时。
-当前所有成本 unknown 是诚实的初始登记；cost 判官报告 warning，不能捏造基准数据。现役有界成本输出见 [docs/costs.md](docs/costs.md)。
+executables 为 `{path, sha256, version}` 列表；tools 另记录实际解析路径和工具版本。effective_inputs 记录两端完整有效输入的 ID、实际值摘要及来源证据；摘要存在本身不证明相等或完整。parity 为 `{status: "unestablished", compared_report: null}`；当前不生成成对比较状态。性能测量差异分别报告，不用状态声明替代实际观察。
 
-首增量的 `scope: "configured-judges"` 草稿也必须提供上述全部顶层字段。尚无生产者结果的
-tools/effective_inputs/impact/tests/costs 写 `null`，扩展字段 `unresolved` 按报告 JSON pointer
-给出原因；不能用空列表、零成本或配置声明冒充已观察结果。`sources` 按目标 JSON pointer
-列出原始响应在同一报告中的 JSON pointer。验证通过的响应若提供同名 outputs，原值转入对应字段；
-多份值相同可共用，冲突或生产者给 null 则保持 unresolved，原响应完整保留。这仅运输结果，
-不由 runner 判断专门政策、输入闭包或具名产物的语义完整性。
-findings 汇集所有验证通过的响应，逐条绑定来源；部分响应缺失时列明不完整原因，无有效响应时写 null。
-executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行物和编译版本，判官使用
-实际 process 观察的路径/摘要；未观察的判官版本为 null 并给原因。每个 judge 的 binding 仅是
-配置元数据，executable_index 才指向已有进程观察，不把 blocked 或未获进程观察的绑定填成执行事实。
-草稿 status/退出码只聚合配置判官与运输状态，parity 保持 unestablished；即使 scoped pass，
-这些未知项仍不是完整治理成功。完整报告、专门生产者及完整输入证据的义务不因此减免。
+judges/tests 记录每项的 selected/executed/blocked/retired 状态、退出码和证据摘要。这里 selected 是执行计划状态，完整结果不能停留在 selected 就返回 pass。
+
+costs 报告每个变更文件、影响项目、选择测试及旧删除节点的成本引用和来源。四维向量分别为 CPU 时间、墙钟时间、峰值内存、IO 字节；不折算成虚构统一分数或罚税。展示 declared_before、declared_after、affected_tests、retired_tests 和 unknown 列表。不同资源的峰值不能直接相加；并行 wall 时间也不能当串行总和。可按显式串行计划估算总 CPU/IO，任何输入未知则总估计注明不完整，不填 0。
+
+实际测量放在 measured 下，附工具、样本与时间；不能把构建耗时冒充测试耗时。当前所有成本 unknown 是诚实的初始登记；cost 判官报告 warning，不能捏造基准数据。现役有界成本输出见 [docs/costs.md](docs/costs.md)。
+
+首增量的 `scope: "configured-judges"` 草稿也必须提供上述全部顶层字段。尚无生产者结果的tools/effective_inputs/impact/tests/costs 写 `null`，扩展字段 `unresolved` 按报告 JSON pointer给出原因；不能用空列表、零成本或配置声明冒充已观察结果。`sources` 按目标 JSON pointer列出原始响应在同一报告中的 JSON pointer。
+
+验证通过的响应若提供同名 outputs，原值转入对应字段；多份值相同可共用，冲突或生产者给 null 则保持 unresolved，原响应完整保留。这只传递结果，不由 runner 判断专门政策、输入及其依赖的完整性或具名产物的语义完整性。findings 汇集所有验证通过的响应，逐条绑定来源；部分响应缺失时列明不完整原因，无有效响应时写 null。
+
+executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行物和编译版本，判官使用实际 process 观察的路径/摘要；未观察的判官版本为 null 并给原因。每个 judge 的 binding 仅是配置元数据，executable_index 才指向已有进程观察，不把 blocked 或未获进程观察的绑定填成执行事实。
+
+草稿 status/退出码只聚合配置判官与传输状态，parity 保持 unestablished；即使 scoped pass，这些未知项仍不是完整治理成功。完整报告、专门生产者及完整输入证据的义务不因此减免。
 
 ### 9.1 暴露登记与执行中的资源问题
 
-证据的固定发布地址可以由宿主显式选择保存原件引用，不重复保存完整正文。scoped v3 的 `policy.report_publication = "retained-reference/v1"` 只适用于已准备输入的短 check；固定地址保存 `chrono-check-reference/v1` 的原件路径和 SHA-256，完整报告先独立保留，控制台指向完整原件。未采用保持旧格式，未知值、null 及旧 profile 采用须拒绝。汇总核固定引用摘要，再按登记上传映射核原件摘要、原始留存路径、实际字节上限及既有全部报告义务；缺失、损坏、越界、链接或引用链不得通过。不删除历史原件，不改变业务失败，不新增 job 或重执行业务。宿主采用前须配套升级生产者及实际消费者；该机制只消除 check 报告固定地址与原件的正文重复，不宣称其它证据已去重。
+证据的固定发布地址可以由宿主显式选择保存原件引用，不重复保存完整正文。scoped v3 的 `policy.report_publication = "retained-reference/v1"` 只适用于已准备输入的短 check；固定地址保存 `chrono-check-reference/v1` 的原件路径和 SHA-256，完整报告先独立保留，控制台指向完整原件。未采用保持旧格式，未知值、null 及旧 profile 采用须拒绝。
 
-显式采用 `retained-reference/v2` 时，固定引用格式不变，原件为 `chrono-check-report/v2`。判官 stdout／stderr 各按原始字节独立保留，以路径和 SHA-256 引用；进程身份、退出码、失败、请求与报告身份保留。报告不再另存 stdout／stderr 文本、数字字节数组或独立 response；消费者核原字节后在内存重建进程视图，并从原 stdout 解码唯一 response。汇总继续执行既有协议、进程、执行物、计划、回执和判词校验；不能因存储投影而改变原业务失败。`report_bytes` 对每份原件累计约束元数据＋stdout＋stderr，固定引用另受相同上限约束。引用及全部原件须经过同一已登记上传映射；缺失、损坏、未登记、越界、链接、重复内联视图或超出累计上限均失败。本地与原生消费者须配套升级；旧版本政策保持原义。不宣称业务回执内部或其它采集证据已去重。
+汇总核固定引用摘要，再按登记上传映射核原件摘要、原始留存路径、实际字节上限及既有全部报告义务；缺失、损坏、越界、链接或引用链不得通过。不删除历史原件，不改变业务失败，不新增 job 或重执行业务。宿主采用前须配套升级生产者及实际消费者；该机制只消除 check 报告固定地址与原件的正文重复，不宣称其它证据已去重。
+
+显式采用 `retained-reference/v2` 时，固定引用格式不变，原件为 `chrono-check-report/v2`。判官 stdout／stderr 各按原始字节独立保留，以路径和 SHA-256 引用；进程身份、退出码、失败、请求与报告身份保留。报告不再另存 stdout／stderr 文本、数字字节数组或独立 response；消费者核原字节后在内存重建进程视图，并从原 stdout 解码唯一 response。
+
+汇总继续执行既有协议、进程、执行物、计划、回执和判词校验；不能因存储投影而改变原业务失败。`report_bytes` 对每份原件累计约束元数据＋stdout＋stderr，固定引用另受相同上限约束。引用及全部原件须经过同一已登记上传映射；缺失、损坏、未登记、越界、链接、重复内联视图或超出累计上限均失败。本地与原生消费者须配套升级；旧版本政策保持原义。不宣称业务回执内部或其它采集证据已去重。
 
 按登记执行成功不证明登记必要、消费真实或资源合理。宿主须把库源码依赖与运行所需发布资产分开登记；前置构建／下载与显式消费合同不符时报错，缺少消费说明时给出具名单元和未验证依赖，不把未知当作已合理。声明只能证明一致性；必要性须由真实消费者和适用的隔离／反例验证支持，不自动猜测或删改依赖。
 
@@ -763,27 +716,49 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 现役发布配方 v5 的可选 `verification_consumers` 以验证单元 ID 登记 `{need, release_assets}`；预检核资产引用唯一且其生产者恰为该单元 `needs`。报告区分 `declared` 与 `unverified`，有发布前置却无说明时输出 `W_RELEASE_CONSUMPTION_UNVERIFIED`。它不证明消费说明真实或依赖最小；本宿主逐项登记全部验证单元的实际发布资产消费。
 
-parent CI 的可选 `gather.resource_observation` 用宿主显式 `step_categories` 分类现有 jobs 响应，将步骤读数、分类汇总、未知值与来源摘要写入原始 gather 报告；显式 `summary_environment` 可将简表写入已继承的 GitHub summary 文件。不新增 CI job、API 请求或业务执行。时间及比较只计当前 attempt API 视图内唯一 job ID 下有效已完成步骤；相同分页行去重，冲突身份排除并报告。旧 attempt 的 job ID／attempt 显式列为排除项，完整行及失败仍保存在原始响应。GitHub 可用新 ID 将已完成 job 沿用到新 attempt；当前视图可含沿用结果，既不代表本次重跑成本，也不代表去重后的完整执行历史。不能把不同 attempt 的 API 行相加，或按相同名字／时间戳猜测执行身份。缺步骤、未分类、未完成、无响应均显式保留。汇总尚在运行，后续步骤无读数；检查步骤内部编译／测试拆分、排队、峰值及计费仍未知。它不改变准入判词或推断依赖必要性。其余单元消费核验、完整资源分项与普遍冗余诊断仍未完成。
+parent CI 的可选 `gather.resource_observation` 用宿主显式 `step_categories` 分类现有 jobs 响应，将步骤读数、分类汇总、未知值与来源摘要写入原始 gather 报告；显式 `summary_environment` 可将简表写入已继承的 GitHub summary 文件。不新增 CI job、API 请求或业务执行。时间及比较只计当前 attempt API 视图内唯一 job ID 下有效已完成步骤；相同分页行去重，冲突身份排除并报告。
 
-该资源登记可在 `comparisons` 按规则 ID 声明两个不同的已登记类别、正有限倍数与非负秒数下限。对同一已完成 job，两个类别的全部实际执行步骤读数完整时，前者达到下限且严格超过后者乘倍数即产生 `W_CI_RESOURCE_COMPARISON`；报告保留规则、job／attempt 与两个实测值，摘要呈现告警。缺类别、缺读数或 job 未完成须具名报告无法比较，跳过 job 不适用；未知不得填零。规则只提示需要审查的成本，不证明冗余或节省，不改变原检查结果。本宿主以倍数 1、下限 60 秒登记 bootstrap 与同 job canonical-check 的比较；detector 以 delta-detection 为参照，bootstrap／缓存准备下限 30 秒、缓存保存下限 10 秒，另以 10 秒下限比较保存与 canonical-check。检测 job 没有 canonical-check，不能把缺少参照的比较当作成本正常。缓存准备与传输也须计入优化评估，不能只凭命中或构建变快声称总资源下降。
+旧 attempt 的 job ID／attempt 显式列为排除项，完整行及失败仍保存在原始响应。GitHub 可用新 ID 将已完成 job 沿用到新 attempt；当前视图可含沿用结果，既不代表本次重跑成本，也不代表去重后的完整执行历史。不能把不同 attempt 的 API 行相加，或按相同名字／时间戳猜测执行身份。缺步骤、未分类、未完成、无响应均显式保留。汇总尚在运行，后续步骤无读数；检查步骤内部编译／测试拆分、排队、峰值及计费仍未知。它不改变准入判词或推断依赖必要性。
+
+其余单元消费核验、完整资源分项与普遍冗余诊断仍未完成。
+
+该资源登记可在 `comparisons` 按规则 ID 声明两个不同的已登记类别、正有限倍数与非负秒数下限。对同一已完成 job，两个类别的全部实际执行步骤读数完整时，前者达到下限且严格超过后者乘倍数即产生 `W_CI_RESOURCE_COMPARISON`；报告保留规则、job／attempt 与两个实测值，摘要呈现告警。缺类别、缺读数或 job 未完成须具名报告无法比较，跳过 job 不适用；未知不得填零。规则只提示需要审查的成本，不证明冗余或节省，不改变原检查结果。
+
+本宿主以倍数 1、下限 60 秒登记 bootstrap 与同 job canonical-check 的比较；detector 以 delta-detection 为参照，bootstrap／缓存准备下限 30 秒、缓存保存下限 10 秒，另以 10 秒下限比较保存与 canonical-check。检测 job 没有 canonical-check，不能把缺少参照的比较当作成本正常。缓存准备与传输也须计入优化评估，不能只凭命中或构建变快声称总资源下降。
 
 ## 10. dev、integration 与过期分支
 
 现役 `chrono-worktree start` 按宿主 `.chrono-harness/worktree.json`、五份登记及实际远端抓取结果创建新工作树，记录固定 base/tree、分支、开始时间和真实 Git 回执。它只生产操作结果，不产生新鲜度、integration 或治理通过判词；后续仍调用相同的登记 check 入口。创建失败保留工作和身份供恢复，不重置已有分支或删除已有目录。实际合同与当前恢复、PR、合并边界见 [worktree 合同](docs/worktree.md)。
 
-源码增加 opt-in 的 `automatic_cleanup`：宿主在 `.chrono-harness/` 登记版本化政策、准确工件路径／处置、存活协调锚、固定保留分支与可选删分支；未采用的旧配置保持显式维护语义。成功 start/reconstruct 自动登记实际 birth，并在新建前排空已登记终态项；finish 是调用方加入任务并确认完成／落地后的固定交接，运行时观察当前身份、固定保留 OID、产生不可覆盖终态回执并立即调用同一 drain，独立命令为 maintain。登记消费操作通过 use 复用现有进程 owner 与小型持久使用保护，和 finish／删除同步；任意未登记后台写入仍归调用方加入。缓存处置复用现役工件 owner，不推断语言或目录；未解决证据、脏源码及未保留提交保留 checkout，只清准确授权的可重建输出。整树清理继续委托原 Cleanup 保留合同。原失败、部分效果、缺失／中断及漂移均据实保留，未建立空闲定时清理、掉电事务或通用证据归档平台。主宿主政策保留 state/bin，默认 cache-only；真实宿主 terminal 事件与 Git/GitHub 落地归调用方。完整格式与限界见 [自动生命周期清理](docs/worktree.md#opt-in-automatic-lifecycle-cleanup)。
+源码增加 可选的 `automatic_cleanup`：宿主在 `.chrono-harness/` 登记版本化政策、准确产物路径／处置、存活协调锚、固定保留分支与可选删分支；未采用的旧配置保持显式维护语义。成功 start/reconstruct 自动登记实际 birth，并在新建前排空已登记终态项；finish 是调用方加入任务并确认完成／落地后的固定交接，运行时观察当前身份、固定保留 OID、产生不可覆盖终态回执并立即调用同一 drain，独立命令为 maintain。
+
+登记消费操作通过 use 复用现有进程 owner 与小型持久使用保护，和 finish／删除同步；任意未登记后台写入仍归调用方加入。缓存处置复用现役产物 owner，不推断语言或目录；未解决证据、脏源码及未保留提交保留 checkout，只清准确授权的可重建输出。整树清理继续委托原 Cleanup 保留合同。原失败、部分效果、缺失／中断及漂移均据实保留，未建立空闲定时清理、掉电事务或通用证据归档平台。
+
+主宿主政策保留 state/bin，默认 cache-only；真实宿主 terminal 事件与 Git/GitHub 落地归调用方。完整格式与限界见 [自动生命周期清理](docs/worktree.md#opt-in-automatic-lifecycle-cleanup)。
 
 自动生命周期重试以 `chrono-worktree-retained-input/v1` 引用保留的原始证据，绑定协调宿主、相对 state 路径、摘要、长度及 receipt／原始 bytes 格式。不可变回执直接引用，部分或未封口结果的原字节独立保留；沿合同明确列出的引用核验原件，缺失、改写、绑定错误或符号链接拒绝处置。不得逐层嵌入历史正文导致重试报告递归膨胀，不把保留未知结果改判为成功，不改写既有原件。显式维护的旧报告合同保留；具体字段及消费规则见 worktree 合同。
 
-现役 `chrono-worktree reconstruct` 接收固定旧 base/candidate 和完整逐路径 carry/retire 计划，复用 fresh 创建后重新应用所选 DELTA；成功仅表示已得到暂存树，冲突保留实际失败与锁，旧工作不删除。AI 仍须检查变化是否必要、修复冲突及登记、提交候选，再运行现役统一检查。工具不自动判断语义必要性，也不复制旧检查或 integration 成功。
+现役 `chrono-worktree reconstruct` 接收固定旧 base/candidate 和完整逐路径 carry/retire 计划，复用 创建新工作树后重新应用所选 DELTA；成功仅表示已得到暂存树，冲突保留实际失败与锁，旧工作不删除。AI 仍须检查变化是否必要、修复冲突及登记、提交候选，再运行现役统一检查。工具不自动判断语义必要性，也不复制旧检查或 integration 成功。
 
-现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项工件处置清理已保存工作。源码现先核所有选中工件为两端登记的非跟踪真实目录，且不含候选树已跟踪路径；在自有锁内单独删除这些工件，再由有时限的 Git 移除 checkout。逐项报告已缺失、尝试未核实或已核实缺失；文件系统删除不继承 Git 子进程时限，调用方须在宿主作业生命周期中运行。工件阶段失败保留锁及源码，协调后用既有恢复入口和显式重试继续；不承诺并发或掉电事务，也不保证任意规模的源码移除均不超时。最后核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。`cleanup-fetch` 只清理原失败 start／reconstruct 回执绑定的临时 fetch ref，要求固定本地保留分支包含期望 commit，并以期望 OID 删除、核对缺失及部分效果。源码现已在 checkout／锁操作及 fetch 前分别保留不可覆盖的 intent；`recover-interrupted` 核对当前工作树并解锁，`cleanup-fetch-interrupted` 按固定保留分支清理该 intent 绑定的临时 ref，均保留原结果的缺失或原始字节并标原操作结果未知。调用 AI 须先确认原进程已停止；终态回执仍用普通维护入口，intent 不是操作成功证明。这些入口不重建损坏元数据；显式重建见下款，PR／合并编排仍未完成。格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
+现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项产物处置清理已保存工作。源码现先核所有选中产物为两端登记的非跟踪真实目录，且不含候选树已跟踪路径；在自有锁内单独删除这些产物，再由有时限的 Git 移除 checkout。
 
-公开 beta.11 提供 `inspect-rebind`／`rebind`：旧收据、intent 或 linked-worktree 元数据缺失／损坏时，由 AI 显式登记现有目标目录、已有工作分支及 HEAD、要采用的 index tree、原元数据成员、全新备份和 donor 路径。观察只为该范围生成文件内容／mode／字面链接身份，不发现依赖或推断丢失的原索引。执行前绑定观察和计划、保留 intent，将原 gitfile 与残存元数据保存在登记 state 中，再用同一 Git 创建 locked/no-checkout donor、应用显式 index tree 并 repair 指针；成功须核可见工作、备份、分支及索引，随后释放锁。原操作结果始终未知；重建成功不代表检查或治理通过。普通失败保留实际输出、阶段、备份和部分效果；已附着且仍持原锁的失败可经既有 `recover` 在 AI 解决工作后释放，源码新增 `resume-rebind`：以原 intent、原计划和明确观察的缺失／部分／失败结果，复用保留与附着步骤完成续跑；原结果与工作保持，冲突报错，完成不追认原成功，beta.15 开始包含此入口。备份 rename 要求同文件系统，不保证并发或掉电事务。这两个入口已通过 beta.11 的原生发布测试与公开混合宿主消费验证；完整格式与边界见 [元数据重建](docs/worktree.md#explicit-metadata-rebind)。
+逐项报告已缺失、尝试未核实或已核实缺失；文件系统删除不继承 Git 子进程时限，调用方须在宿主作业生命周期中运行。产物阶段失败保留锁及源码，协调后用既有恢复入口和显式重试继续；不承诺并发或掉电事务，也不保证任意规模的源码移除均不超时。最后核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。
+
+`cleanup-fetch` 只清理原失败 start／reconstruct 回执绑定的临时 fetch ref，要求固定本地保留分支包含期望 commit，并以期望 OID 删除、核对缺失及部分效果。源码现已在 checkout／锁操作及 fetch 前分别保留不可覆盖的 intent；`recover-interrupted` 核对当前工作树并解锁，`cleanup-fetch-interrupted` 按固定保留分支清理该 intent 绑定的临时 ref，均保留原结果的缺失或原始字节并标原操作结果未知。
+
+调用 AI 须先确认原进程已停止；终态回执仍用普通维护入口，intent 不是操作成功证明。这些入口不重建损坏元数据；显式重建见下款，PR／合并编排仍未完成。格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
+
+公开 beta.11 提供 `inspect-rebind`／`rebind`：旧收据、intent 或 linked-worktree 元数据缺失／损坏时，由 AI 显式登记现有目标目录、已有工作分支及 HEAD、要采用的 index tree、原元数据成员、全新备份和 donor 路径。观察只为该范围生成文件内容／mode／字面链接身份，不发现依赖或推断丢失的原索引。
+
+执行前绑定观察和计划、保留 intent，将原 gitfile 与残存元数据保存在登记 state 中，再用同一 Git 创建 locked/no-checkout donor、应用显式 index tree 并 repair 指针；成功须核可见工作、备份、分支及索引，随后释放锁。原操作结果始终未知；重建成功不代表检查或治理通过。
+
+普通失败保留实际输出、阶段、备份和部分效果；已附着且仍持原锁的失败可经既有 `recover` 在 AI 解决工作后释放，源码新增 `resume-rebind`：以原 intent、原计划和明确观察的缺失／部分／失败结果，复用保留与附着步骤完成续跑；原结果与工作保持，冲突报错，完成不追认原成功，beta.15 开始包含此入口。备份 rename 要求同文件系统，不保证并发或掉电事务。
+
+这两个入口已通过 beta.11 的原生发布测试与公开混合宿主消费验证；完整格式与边界见 [元数据重建](docs/worktree.md#explicit-metadata-rebind)。
 
 所有交付最终进入 dev；feature 与 integration 均从当时最新 dev 创建。
 
-现役源码新增 `cleanup-remote`，按显式计划与登记 remote 核对唯一 push URL、工作分支期望 OID、固定本地及远端目标提交，复用 ancestor／same-tree 保留检查，以精确 OID lease 删除并核对远端缺失。真实退出、部分效果与显式缺失重试分别报告；不清理本地工作，不推断 PR 或治理成功。目标引用、配置与服务器观察不构成原子事务；目标在删除期间变化可导致删除后的失败。该入口已包含在公开 beta.10，合同见 [远端分支退休](docs/worktree.md#remote-branch-retirement)。
+现役源码新增 `cleanup-remote`，按显式计划与登记 remote 核对唯一 push URL、工作分支期望 OID、固定本地及远端目标提交，复用 ancestor／same-tree 保留检查，以精确 OID lease 删除并核对远端缺失。真实退出、部分效果与显式缺失重试分别报告；不清理本地工作，不推断 PR 或治理成功。目标引用、配置与服务器观察不构成原子事务；目标在删除期间变化可导致删除后的失败。该入口已包含在公开 beta.10，合同见 [远端分支退役](docs/worktree.md#remote-branch-retirement)。
 
 workflow 当前草案阈值：落后 dev **超过 3 个提交**，或本分支年龄 **超过 24 小时**，
 任一成立即 E_BRANCH_STALE；等于阈值仍允许。二者在 workflow.json 可配置。
@@ -797,50 +772,49 @@ fork_point 必须是 branch/candidate 与 dev 的共同祖先；负年龄或不�
 重新登记输入、构建、测试并生成新报告；旧报告与旧 integration 证据失效。
 旧分支仅作可回退材料，完成前不删除工作；该流程不要求人介入。
 
-判官语义/绑定改动或 stability 路径变动：先创建 fresh integration，组合拟交付完整变化。
+判官语义/绑定改动或 stability 路径变动：先创建 新的 integration 分支，组合拟交付完整变化。
 integration 上执行同一 check 指令与注册稳定性测试；成功报告作为 integration 证据。
 workflow 判官在显式 integration run_kind 上标记 `integration_run`，执行所需测试后生成证据，
 不会递归要求本轮先提供自身成功证据；feature/dev 交付才消费已完成的 integration 证据。
 纯普通变化在 feature 验证后可进入 dev；AI 可显式新增 stability 登记扩大测试需求。
 
-integration.json 为 `{schema_version, base, candidate_tree, registry_digest, executables,`
-`tools, environment, effective_inputs, required_tests, results_digest, branch_ref, fork_point, branch_started_at, observed_at, status}`。
-绑定 base、候选 tree、两端登记摘要、执行二进制/完整工具链、有效输入与环境、所需测试及结果摘要。
-证据放 state，不纳入 tree，从而不发生“报告包含自身提交摘要”的循环。
-进入 dev 前最终 candidate tree 必须完全等于测试 tree，base 必须仍是最新获取的 dev。
-允许 commit OID 因合并元数据不同而变，只要 tree/base/其他绑定字段相同；报告写明映射。
-若合并冲突处理改变 tree 或 dev 推进，重新建立 integration 候选并测试，不能复用旧绿灯。
-缺失、失败、过期或绑定不匹配证据分别为 E_INTEGRATION_REQUIRED / E_INTEGRATION_MISMATCH。
-证据额外保留 producer 身份和 proof 中的实际 context、plan、results、inputs 与判官进程。交付必须同时取得发布该证据摘要的成功完成 runner 报告；未完成进程留下的证据不能使用。输入比较只规范化宿主路径与允许变化的候选 commit 身份，保留原始证据；交付仍执行选中测试。
-报告来自可信但可能出错的 AI/runner；摘要用于识别误用，不设计对抗 AI 的授权系统。
+integration.json 为 `{schema_version, base, candidate_tree, registry_digest, executables,``tools, environment, effective_inputs, required_tests, results_digest, branch_ref, fork_point, branch_started_at, observed_at, status}`。
+
+绑定 base、候选 tree、两端登记摘要、执行二进制/完整工具链、有效输入与环境、所需测试及结果摘要。证据放 state，不纳入 tree，从而不发生“报告包含自身提交摘要”的循环。进入 dev 前最终 candidate tree 必须完全等于测试 tree，base 必须仍是最新获取的 dev。允许 commit OID 因合并元数据不同而变，只要 tree/base/其他绑定字段相同；报告写明映射。
+
+若合并冲突处理改变 tree 或 dev 推进，重新建立 integration 候选并测试，不能复用旧绿灯。缺失、失败、过期或绑定不匹配证据分别为 E_INTEGRATION_REQUIRED / E_INTEGRATION_MISMATCH。证据额外保留 producer 身份和 proof 中的实际 context、plan、results、inputs 与判官进程。交付必须同时取得发布该证据摘要的成功完成 runner 报告；未完成进程留下的证据不能使用。
+
+输入比较只规范化宿主路径与允许变化的候选 commit 身份，保留原始证据；交付仍执行选中测试。报告来自可信但可能出错的 AI/runner；摘要用于识别误用，不设计对抗 AI 的授权系统。
 
 ### 10.1 报告、证据与临时产物的自动清理（目标合同）
 
-自动清理必须覆盖历史报告、日志、测试现场、下载／解压工件和可重建缓存，而不只清理工作树的顶层编译目录。新宿主首次采用须登记并启用有界留存政策；既有宿主通过显式迁移采用，不静默改变旧版政策或证据解释。不得仅因文件位于 `state`、曾用于验证、属于失败现场或被历史报告引用，就将整个目录永久保留。留存依据是当前实际用途、登记的消费者与有限留存要求。
+自动清理必须覆盖历史报告、日志、测试现场、下载／解压产物和可重建缓存，而不只清理工作树的顶层编译目录。新宿主首次采用须登记并启用有限保留政策；既有宿主通过显式迁移采用，不静默改变旧版政策或证据解释。不得仅因文件位于 `state`、曾用于验证、属于失败现场或被历史报告引用，就将整个目录永久保留。留存依据是当前实际用途、登记的消费者与有限留存要求。
 
-政策由宿主在 `.chrono-harness/` 显式配置；每类产生物须登记自然所有者、生产／消费操作、准确输出范围、留存理由与释放条件、保留期限、数量上限及逻辑／实际字节预算。独立产生物不得通过全局可变账本、准入锁或全库数量／字节配额相互串行；状态与互斥归准确输出、消费者或实际依赖关系。普通发布／读取／完成只处理这些显式地址；跨对象维护独立执行，局部繁忙或损坏保留原失败并继续无关对象。关系集、单个输出和单轮维护仍须有界。清理触发点、单轮对象数／时间上限及超限处置也须登记，不使用产品内写死的宿主目录或逐个历史 case 的删除配方。生产者在发布前登记产生物身份与 intent，实际完成后发布路径、摘要、长度、结果和消费者绑定；此程序维护的清单是产生物及其状态的唯一来源，不靠目录扫描、文件名、年龄、反射或 IO 分析推断所有者、用途与依赖。嵌套测试宿主的输出也由原生产者按该登记纳入生命周期，不能借放在证据目录内逃避缓存回收。
+政策由宿主在 `.chrono-harness/` 显式配置；每类产生物须登记对应所有者、生产／消费操作、准确输出范围、留存理由与释放条件、保留期限、数量上限及逻辑／实际字节预算。独立产生物不得通过全局可变账本、准入锁或全库数量／字节配额相互串行；状态与互斥归准确输出、消费者或实际依赖关系。普通发布／读取／完成只处理这些显式地址；跨对象维护独立执行，局部繁忙或损坏保留原失败并继续无关对象。关系集、单个输出和单轮维护仍须有界。
+
+清理触发点、单轮对象数／时间上限及超限处置也须登记，不使用产品内写死的宿主目录或逐个历史 case 的删除配方。生产者在发布前登记产生物身份与 intent，实际完成后发布路径、摘要、长度、结果和消费者绑定；此程序维护的清单是产生物及其状态的唯一来源，不靠目录扫描、文件名、年龄、反射或 IO 分析推断所有者、用途与依赖。嵌套测试宿主的输出也由原生产者按该登记纳入生命周期，不能借放在证据目录内逃避缓存回收。
 
 | 产生物类别 | 自动清理与留存要求 |
 | --- | --- |
 | 当前运行／恢复所需状态 | 存活消费者的租约、当前对象登记／指针、未终结操作的 intent、尚需恢复或交付的实际输入按明确角色保护；租约身份保持稳定。历史副本不因与它们同目录而获得相同保护 |
 | 成功检查的完整报告与原始输出 | 操作终结、登记消费者释放且保留期届满后自动回收；可保留有界的提交／输入身份、结果及处置摘要，不默认永久保存完整测试现场 |
-| 失败、取消或未知结果的现场 | 保留原异常链、真实结果和当前恢复／复查所需原件；有用的回归程序与最小复现数据归其自然所有者。失败本身不授予整套现场无限留存，释放后按同一有界政策回收 |
-| 缓存与临时产物 | 下载包、解压副本、测试仓库的已登记编译／增量输出、临时验证程序和工件副本在实际消费／保存结束后按兼容复用及容量政策自动回收；未保存源码、必要实验程序／数据和未保留提交继续保护 |
-| 重复内容与会话过程记录 | 同一原始字节只保留一份内容实体，报告、stdout 捕获与下载副本通过核验过的身份引用复用；历史 brief／回答／PR 草稿等过程文件无当前用途时按有界政策回收，不另立长期手工权威 |
+| 失败、取消或未知结果的现场 | 保留原异常链、真实结果和当前恢复／复查所需原件；有用的回归程序与最小复现数据归其对应所有者。失败本身不授予整套现场无限留存，释放后按同一有限保留政策回收 |
+| 缓存与临时产物 | 下载包、解压副本、测试仓库的已登记编译／增量输出、临时验证程序和产物副本在实际消费／保存结束后按兼容复用及容量政策自动回收；未保存源码、必要实验程序／数据和未保留提交继续保护 |
+| 重复内容与会话过程记录 | 同一原始字节只保留一份内容实体，报告、stdout 捕获与下载副本通过核验过的身份引用复用；历史 brief／回答／PR 草稿等过程文件无当前用途时按有限保留政策回收，不另立长期手工权威 |
 
 保留根只能由当前运行／恢复／交付角色、明确保存的有用成果及尚未到期的留存条目产生。消费者必须显式取得和释放所需引用及使用保护；沿合同声明的引用计算需保留的闭包，不扫描文件正文猜引用。旧报告互相引用或形成环不构成永久根；长期结果摘要和清理回执只记录身份及实际处置事实，不将全部历史原件再次强引用保留。不得截断仍需使用的原始输出、错误链或历史事实来满足预算，也不得把清理摘要冒充原检查报告。
 
-同内容复用须核原始字节的摘要、长度与实际内容，保留各次操作的独立身份、结果和完整异常关系；相同内容不表示不同运行获得同一成功判词。新的日志／报告不得逐层嵌入历史正文、同时复制完整字符串和原字节数字数组，或在多个目录反复存整份相同工件。引用到期处置后，结果摘要必须能区分原结果与原件已回收的事实；实际仍需原件的检查明确报证据不足，不伪造可用路径。压缩只能减少存储占用，不能代替释放、去重和自动回收，也不能改写仍被引用的字节／身份合同。
+同内容复用须核原始字节的摘要、长度与实际内容，保留各次操作的独立身份、结果和完整异常关系；相同内容不表示不同运行获得同一成功判词。新的日志／报告不得逐层嵌入历史正文、同时复制完整字符串和原字节数字数组，或在多个目录反复存整份相同产物。引用到期处置后，结果摘要必须能区分原结果与原件已回收的事实；实际仍需原件的检查明确报证据不足，不伪造可用路径。压缩只能减少存储占用，不能代替释放、去重和自动回收，也不能改写仍被引用的字节／身份合同。
 
-普通 start／reconstruct／check／bootstrap／use 及报告发布入口在登记的时机调用同一现役维护实现；正常操作在加入消费者、完成必要缓存保存并释放使用保护后自动尝试回收。会话意外终止或未调用 finish 时，由后续普通入口消费原 intent 和实际租约状态恢复清理，不要求用户先运行手工删除或由 AI 记得 finish。固定 maintain 只作独立重试／诊断入口；复用 worktree、原进程、状态发布和工件处置的自然所有者，不新增空闲定时扫描器、守护进程或第二套清理平台。
+普通 start／reconstruct／check／bootstrap／use 及报告发布入口在登记的时机调用同一现役维护实现；正常操作在加入消费者、完成必要缓存保存并释放使用保护后自动尝试回收。会话意外终止或未调用 finish 时，由后续普通入口消费原 intent 和实际租约状态恢复清理，不要求用户先运行手工删除或由 AI 记得 finish。固定 maintain 只作独立重试／诊断入口；复用 worktree、原进程、状态发布和产物处置的对应所有者，不新增空闲定时扫描器、守护进程或第二套清理平台。
 
 留存期限和容量只能用于已确认释放、符合处置条件的产生物；不得以过期、低 CPU、PID 缺失或超出预算推断活消费者结束。删除前立即重验目标身份、政策／引用代际、实际排除、跟踪／索引与提交保留条件；与新的发布、引用取得及使用保护同步，不能在检查后被重新引用的窗口内删除。存活子孙、当前必要状态、源码和未保留提交不得为了腾空间而回收。受保护对象使预算无法满足时，生产者报告各类实际占用、保留原因、可回收量及登记的超限处置结果，不静默丢证据或假称达标。
 
 清理自身须可中断、可重试，并且留存有界。发布紧凑 intent 后逐项处置，记录真实缺失／部分效果、原异常链、逻辑字节及可取得的实际占用变化；未测量值写未知，不把文件长度当成物理释放量。中断后沿原身份恢复，保留必要失败事实，不制造原清理成功或工作完成。报告登记范围内剩余量和拒绝原因；无关对象的失败不阻断合法当前任务，目标／协调状态失败仍按现役合同阻断，显式 maintain 据实返回失败。清理回执不得递归嵌入历史清理报告或成为无限增长的另一份日志。
 
-旧宿主与未登记历史目录先由各自然所有者显式迁移：列明当前消费者、必要恢复状态、保留根、原件身份、重复关系及逐项处置条件，核原引用后采用同一维护入口。未知归属、仍有引用或身份不兼容的对象先保留并报告，不能仅凭本节批量删 `state`。允许原始内容迁到唯一保留实体并更新已登记消费者；迁移后仍核字节、原结果和实际引用，不运行旧判官、不把旧失败重写成成功。
+旧宿主与未登记历史目录先由各对应所有者显式迁移：列明当前消费者、必要恢复状态、保留根、原件身份、重复关系及逐项处置条件，核原引用后采用同一维护入口。未知归属、仍有引用或身份不兼容的对象先保留并报告，不能仅凭本节批量删 `state`。允许原始内容迁到唯一保留实体并更新已登记消费者；迁移后仍核字节、原结果和实际引用，不运行旧判官、不把旧失败重写成成功。
 
-本节是新增目标合同。现役 v2 可显式采用主检出 cache-only 登记和一个 CI 命令回执生产者的精确产生物／引用释放登记；只由同一生命周期 drain 回收已释放且白名单内的生成输出，保留必要原件和未知历史状态。主检出不获得整树删除权，已存在但未迁移的输出继续保护。逻辑长度、分配块和未知物理释放分别报告；独立 Cargo 项目保留独立 manifest、lock 和 target。该有界实现仍不满足通用产生物留存、容量控制、证据去重、完整自动回收或本节全部验收；实际宿主迁移、原生 CI 与交付尚未完成。
+本节是新增目标合同。现役 v2 可显式采用主检出 cache-only 登记和一个 CI 命令回执生产者的精确产生物／引用释放登记；只由同一生命周期 drain 回收已释放且白名单内的生成输出，保留必要原件和未知历史状态。主检出不获得整树删除权，已存在但未迁移的输出继续保护。逻辑长度、分配块和未知物理释放分别报告；独立 Cargo 项目保留独立 manifest、lock 和 target。该范围有限的实现仍不满足通用产生物留存、容量控制、证据去重、完整自动回收或本节全部验收；实际宿主迁移、原生 CI 与交付尚未完成。
 
 
 ### 10.2 兼容工作树复用、协作与交接（目标合同）
@@ -873,21 +847,27 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 
 ## 12. 初始根提交与自取自举
 
-空仓库没有 base，允许一次明确标记的根提交存储 spec/scaffold/草案登记。
-初始根提交不是一次通过的 DELTA，也不生成“所有历史已合规”的报告。
-随后修改都有真实 base；初次启用仍按 §6 由候选判官检查 activation DELTA 和迁移证据，并通过 integration。
-base.status 为 proposed 时记录 previous_enforcement:none，不能回填之前的成功；根提交之外不得伪造空 base。
+空仓库没有 base，允许一次明确标记的根提交存储 spec/scaffold/草案登记。初始根提交不是一次通过的 DELTA，也不生成“所有历史已合规”的报告。随后修改都有真实 base；初次启用仍按 §6 由候选判官检查 activation DELTA 和迁移证据，并通过 integration。base.status 为 proposed 时记录 previous_enforcement:none，不能回填之前的成功；根提交之外不得伪造空 base。
+
 草案与 active 的迁移都不执行旧判官；启用必须补齐宿主声明的治理／输入范围并满足 registration 要求，input_closure 为 declared-complete 且无 unresolved。此工程声明不要求普遍隐藏输入证明；现役判官仍可报告 completeness_proven:false。
 
-宿主可显式登记 `chrono-initial-check/v1` 初始化配置，包含完整登记的 `host_config`、具名 `judges` 及进程上限。schema4 的 `canonical_check.initial_profile` 将它与 DELTA `profile` 分别绑定候选字节，standalone v4 provider 显式保留同一 `initial_inventory`，本地和 CI 均使用登记的 bare check。生产者先核真实 Git 拓扑／事件：真正无父提交进入单候选清单，非根仍须真实 base 并检查 DELTA；缺绑定或 base 失败。空业务清单保留为空，不转入 unit/collection；已有非空 scoped v3 unit 初始化仍保留原显式合同。旧登记保留其 `check --config P --candidate OID --initial` 合同。普通完整配置不自动降级到该模式；初始化配置拒绝 `--base` 与 `--context`，读取真实 commit header 排除非根提交，包括浅历史及 Git replace 覆盖造成的伪根。
+宿主可显式登记 `chrono-initial-check/v1` 初始化配置，包含完整登记的 `host_config`、具名 `judges` 及进程上限。schema4 的 `canonical_check.initial_profile` 将它与 DELTA `profile` 分别绑定候选字节，standalone v4 provider 显式保留同一 `initial_inventory`，本地和 CI 均使用登记的 bare check。
 
-初始化绑定采用 `every-initial` / `inventory`，通过 `chrono-initial-judge/v1` 只传候选端点、配置与登记摘要、实际 checkout／runner／环境观察和显式前驱结果。没有 base、DELTA 或猜测的判官，复用已有进程调用、摘要、严格 JSON 与退出码校验。默认 registration 初始化判官要求草案状态，复用登记引用检查并检查整个初始文件清单；它不执行项目测试、不证明输入闭包，也不启用治理。扩展判官和脚本通过该配置的显式 DAG 登记。
+生产者先核真实 Git 拓扑／事件：真正无父提交进入单候选清单，非根仍须真实 base 并检查 DELTA；缺绑定或 base 失败。空业务清单保留为空，不转入 unit/collection；已有非空 scoped v3 unit 初始化仍保留原显式合同。旧登记保留其 `check --config P --candidate OID --initial` 合同。
 
-`chrono-initial-report/v1` 的 scope 为 `initial-inventory`，成功状态为 `complete`，base 和 delta 为 null，governance 恒为 `not-evaluated`；实际判官响应和进程回执另行保留。初始化检查成功不会修改草案登记或补写历史合规。配置、请求、报告及已验边界见 [执行合同](docs/execution.md#initial-inventory)。`chrono-github-ci/v2` 可在宿主 CI 源中显式声明 `initial_inventory: {path, profile}`，由同一 init/generate 生成初始配置与 workflow，verify 核对二者；初始事件与本地使用所声明的同一 check 配置，普通 DELTA 仍使用 check_config。v1 保持原义且不接受该扩展；v2 必须具备完整初始声明，不推断判官、语言、路径或摘要。来源与输出均由宿主显式登记，采用保留原有定制；生成不认证登记语义，不启用治理。具体所有权与失败边界见 [CI 合同](docs/ci.md#owned-github-projection)。完整自举来源、工具链闭包、原生 v2 初始事件采用与启用仍是独立义务。
+普通完整配置不自动降级到该模式；初始化配置拒绝 `--base` 与 `--context`，读取真实 commit header 排除非根提交，包括浅历史及 Git replace 覆盖造成的伪根。
+
+初始化绑定采用 `every-initial` / `inventory`，通过 `chrono-initial-judge/v1` 只传候选端点、配置与登记摘要、实际 checkout／runner／环境观察和显式前驱结果。没有 base、DELTA 或猜测的判官，复用已有进程调用、摘要、严格 JSON 与退出码校验。默认 registration 初始化判官要求草案状态，复用登记引用检查并检查整个初始文件清单；它不执行项目测试、不证明输入及其依赖的完整性，也不启用治理。扩展判官和脚本通过该配置的显式 DAG 登记。
+
+`chrono-initial-report/v1` 的 scope 为 `initial-inventory`，成功状态为 `complete`，base 和 delta 为 null，governance 恒为 `not-evaluated`；实际判官响应和进程回执另行保留。初始化检查成功不会修改草案登记或补写历史合规。配置、请求、报告及已验边界见 [执行合同](docs/execution.md#initial-inventory)。
+
+`chrono-github-ci/v2` 可在宿主 CI 源中显式声明 `initial_inventory: {path, profile}`，由同一 init/generate 生成初始配置与 workflow，verify 核对二者；初始事件与本地使用所声明的同一 check 配置，普通 DELTA 仍使用 check_config。v1 保持原义且不接受该扩展；v2 必须具备完整初始声明，不推断判官、语言、路径或摘要。来源与输出均由宿主显式登记，采用保留原有定制；生成不认证登记语义，不启用治理。
+
+具体所有权与失败边界见 [CI 合同](docs/ci.md#owned-github-projection)。完整自举来源、工具链输入完整性、原生 v2 初始事件采用与启用仍是独立义务。
 
 产品自举按登记方式从指定产品提交构建，将结果放宿主 `.chrono-harness/bin/`，
 写入具体版本、产品源提交、二进制摘要和工具链证据后，再调用唯一 check 指令。
-源提交记录在 state 构建证据中，由绑定摘要连接；源码与宿主 policy 始终是两个表面。
+源提交记录在 state 构建证据中，由绑定摘要连接；产品源码与宿主政策始终分别归类。
 更新已生效二进制绑定是规则变化，须 integration；AI 可自行完成，无人审批。
 构建失败、缺组件或 draft 配置不得生成成功报告；从本机取包也不得默默解析 latest。
 
@@ -895,7 +875,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 产品发布统一维护在 chrono-harness Releases，宿主不跟踪产品源码包或二进制。独立 distribution/专属测试对负责显式发布清单、平台成员、版本与 SHA-256/长度锁定、采用及安装；宿主保留 `.chrono-harness/distribution.json` 与生成的 `install.py`。本地/CI 都运行该入口，再调用同一 check。平台选择只使用登记的 OS/架构，不读取宿主语言、项目目录或依赖清单。
 
-原生打包固定干净源提交/树，发布组合拒绝不同源、不同成员或重复平台。每份下载先验身份；全部所选成员验证后才替换，普通替换失败尝试回滚并报告恢复位置。显式更新可由 AI 自主执行；摘要不证明来源、完整工具链闭包或跨平台同判。完整格式、实现范围和故障边界见 docs/distribution.md。
+原生打包固定干净源提交/树，发布组合拒绝不同源、不同成员或重复平台。每份下载先验身份；全部所选成员验证后才替换，普通替换失败尝试回滚并报告恢复位置。显式更新可由 AI 自主执行；摘要不证明来源、完整工具链输入完整性或跨平台同判。完整格式、实现范围和故障边界见 docs/distribution.md。
 
 ## 13. 可执行验收矩阵（目标行为）
 
@@ -933,7 +913,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 判官退出成功但 stdout 为空/非法 JSON | E_PROTOCOL，exit 2 |
 | 插件崩溃/超时/摘要不匹配 | error，exit 2；不得 fail-open |
 | 全部成本未知 | W_COST_UNKNOWN，unknown 明示，不编造测量 |
-| 替换/退休判官，旧二进制缺失、崩溃或不支持新 schema | 当前 migration_validator 核对保留的旧事实与迁移证据；candidate evaluate + integration，无旧执行前提 |
+| 替换/退役判官，旧二进制缺失、崩溃或不支持新 schema | 当前 migration_validator 核对保留的旧事实与迁移证据；candidate evaluate + integration，无旧执行前提 |
 | 无 DELTA | 报告 delta=[]，不裁决历史；输入/分支条件仍检查 |
 | 首个根提交 | bootstrap/no prior base，无绿色 DELTA 报告 |
 | 当前 CLI：check | **已实现**独立 chrono-ci-check/v1、显式 Git 绑定的 v2 与带 --context 的 chrono-judge/v1；完整宿主仍因 proposed/缺绑定/未实现义务非零，具体范围见 §14 |
@@ -952,7 +932,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 已超过容量／数量预算，但仍有存活消费者或必要恢复状态 | 保护有效保留根，报告占用和保留原因并执行登记的超限处置，不靠预算强删 |
 | 清理判定后出现新引用、身份漂移或未加入子进程 | 发布／引用取得／处置同步，立即重验；不能确认排除时保留目标并报告 |
 | 原件已按政策回收，摘要仍在；或清理自身反复重试 | 明确原件已回收，实际需要原件的消费者报证据不足；清理摘要／回执本身有界且不递归膨胀 |
-| 既有宿主有超大旧报告、未登记状态或重复 CI 工件 | 所有者显式迁移、核引用和处置条件；未知项保留并报告，不批量删除整个 state |
+| 既有宿主有超大旧报告、未登记状态或重复 CI 产物 | 所有者显式迁移、核引用和处置条件；未知项保留并报告，不批量删除整个 state |
 | 开放集合出现未见过的合法输入或失败变体 | 按类型／结构／不变量及明确边界处理，未知异常保留并传播；不依赖 case 名或错误文本补丁 |
 | CI 冷缓存与后续精确命中 | 观察真实恢复／保存与当前执行物核验；所选判官及测试在两轮均实际执行 |
 | 源码变化，兼容旧编译缓存可用 | 同一登记构建入口增量重建；复用指纹／依赖／增量数据，候选判官源码及绑定更新 |
@@ -971,58 +951,84 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 自主结构优化完成或中断，出现与 DELTA 无关的旧热点 | 完成须核真实 PR／落地与适用检查；中断保留未完成状态，旧热点仅为上下文，不全仓判红或要求人介入 |
 | 新功能仅有专属测试、文档配方或臆想的未来调用 | 不作为功能交付；先核真实现存问题与消费者，必需中间实现随实际接入一起验收 |
 | 消费者在外部仓库或真实用户操作中 | 显式登记身份、固定版本、实际入口、输入输出用途与接入证据；证据不可取得不伪造消费或成功 |
-| 受影响功能的消费者缺登记、已退休或实际调用不符 | 对该 DELTA 报具体登记／引用／证据错误；保留未验证边界，不自动猜消费者或全仓判红 |
+| 受影响功能的消费者缺登记、已退役或实际调用不符 | 对该 DELTA 报具体登记／引用／证据错误；保留未验证边界，不自动猜消费者或全仓判红 |
 | 启动任务前宿主有完成通知、只有原生阻塞等待，或两者均缺 | 只选实际可用的一个通道并明确原结果取得方式；两者均缺时报能力缺口，不启动无法收取终态的任务 |
 | 等待超时、静默或通道丢失，原任务尚无匹配终态 | 保留原句柄、已有结果及 unknown；恢复原任务收取，不重复启动；独立已授权工作继续 |
 | 启动器退出而自有子孙仍在运行，或收到另一任务的终态 | 不宣称本任务完成；实际加入自有工作并核对匹配身份、原退出和结果后才交接 |
 | 固定修订只读或兼容既有检出承接后续任务 | 只读不切共享分支；复用核身份、已有工作和绑定，新分支仍从最新 dev 创建且保留原验收义务 |
-| 协作编辑、index／ref 操作与整树变换发生范围冲突 | 在自然所有者协调实际读写及 Git 范围，只在冲突操作期间排除；其他参与者／子孙的使用保护持续有效 |
+| 协作编辑、index／ref 操作与整树变换发生范围冲突 | 在对应所有者协调实际读写及 Git 范围，只在冲突操作期间排除；其他参与者／子孙的使用保护持续有效 |
 | 已保存提交或检查通过，但尚有其他消费者或未核实际落地 | 交接分别报告保存、加入、检查、落地和清理边界，不据单一退出／成功释放其他消费者或删除工作树 |
 
-## 14. Implementation boundaries
+<a id="14-implementation-boundaries"></a>
+## 14. 实现范围与限制
 
-§7.4、§10.2 及其新增验收行是尚未完整实现、未验收的目标合同。本次只明确宿主／调用方的任务加入与等待责任，以及现有生命周期／操作所有者的兼容复用、协作范围和交接义务，不变更当前 schema、CLI 或运行时。已有进程回执、受保护消费与 worktree 恢复仅证明各自已测试范围；它们不证明任务级唯一完成通道、丢失通道恢复、全部自有任务加入或完整协作检出合同已实现。后续实现须在相应自然所有者补齐实际消费者和行为验收，覆盖表保持 pending，不以文档检查通过更新实现状态。
+§7.4、§10.2 及其新增验收行是尚未完整实现、未验收的目标合同。本次只明确宿主／调用方的任务加入与等待责任，以及现有生命周期／操作所有者的兼容复用、协作范围和交接义务，不变更当前 schema、CLI 或运行时。已有进程回执、受保护消费与 worktree 恢复仅证明各自已测试范围；它们不证明任务级唯一完成通道、丢失通道恢复、全部自有任务加入或完整协作检出合同已实现。后续实现须在相应对应所有者补齐实际消费者和行为验收，覆盖表保持 pending，不以文档检查通过更新实现状态。
 
 §2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓已采用 v2，示例的 v2 采用、helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
 
-§4.2、§7.1 与 §7.2 是尚未完整验收的目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，结构化日志与跨层异常链尚未全面采用。缓存键与 provider 投影已有候选实现，主宿主显式登记实际检查／Rust 发布作业、需求、用途和项目编译产物，生成固定版本的 restore/save action；当前运行输入与编译源码分别取有界命令观察及 FILEMAP 显式闭包。生成成功不证明实际恢复、保存或增量复用；v2 消费者引用原操作登记，恢复前拒绝生产操作已退出计划的缓存订阅，消费者增减不使未变产物失效。当前报告保存 action 原始读数；save 步骤成功本身仍报未确认。v2 可显式登记有界 GitHub 后端查询，在已有 report 步骤只核待确认保存；精确 key/ref 的单一后端条目可报告可用性已观察，不能归因到本次 action 或证明归档内容。分页非原子快照，未观察到不证明不存在；歧义、查询失败、超时与截断保留原始读数及未确认状态，业务失败不改判。无待确认保存不发请求；查询成本计入原 cache-report 分类，凭据值不进入保留环境。启动构建成功的显式子集可在后续检查失败并结束后保存；完整原生验收、后端观察验收、损坏恢复、任意项目的测试失败后独立保存、完整适用输入及 linked worktree 全程租约仍未完成。现有 target、bin、名为 cache 的目录和 artifact 传输本身不满足缓存合同。具体实现边界与待实现项见 docs/ci-cache.md 和 docs/spec-coverage.md。
+§4.2、§7.1 与 §7.2 是尚未完整验收的目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，结构化日志与跨层异常链尚未全面采用。缓存键与 provider 投影已有候选实现，主宿主显式登记实际检查／Rust 发布作业、需求、用途和项目编译产物，生成固定版本的 restore/save action；当前运行输入与编译源码分别取有界命令观察及 FILEMAP 显式闭包。
 
-The host-owned native release recipe accepts only `chrono-release-build/v5`; retired formats fail before tool execution or output creation. Its explicit build, verification and collector units retain `chrono-release-unit/v1` receipts with actual source observations, process argv/cwd, original stdout/stderr files, hashes and exits. The local driver retains `chrono-release-local/v1` metadata and the same unit evidence. Preflight rejects invalid registration and existing outputs. Native artifact upload is attempted on success and failure; directory or report presence alone is not release success.
+生成成功不证明实际恢复、保存或增量复用；v2 消费者引用原操作登记，恢复前拒绝生产操作已退出计划的缓存订阅，消费者增减不使未变产物失效。当前报告保存 action 原始读数；save 步骤成功本身仍报未确认。v2 可显式登记有界 GitHub 后端查询，在已有 report 步骤只核待确认保存；精确 key/ref 的单一后端条目可报告可用性已观察，不能归因到本次 action 或证明归档内容。分页非原子快照，未观察到不证明不存在；歧义、查询失败、超时与截断保留原始读数及未确认状态，业务失败不改判。
 
-The current recipe explicitly declares Rust components, per-verifier toolchain use and build dependencies, release-plan assets and consumer destinations admitted by one untracked host artifact declaration. Git-tracked destinations, symlinks and source/destination overlaps are rejected before staging. Selected release bytes and modes are staged before verification or packaging, with identity observations before and after each operation. Identity drift prevents success; a failed child retains its original exit even when an additional observation fails. These bounded observations do not certify transient-replacement absence, hard-termination or storage recovery, complete build inputs, universal CLI consumption or full native governance. The recipe contract remains under `.chrono-harness/release/`; see [docs/distribution.md](docs/distribution.md).
+无待确认保存不发请求；查询成本计入原 cache-report 分类，凭据值不进入保留环境。启动构建成功的显式子集可在后续检查失败并结束后保存；完整原生验收、后端观察验收、损坏恢复、任意项目的测试失败后独立保存、完整适用输入及 linked worktree 全程租约仍未完成。现有 target、bin、名为 cache 的目录和 artifact 传输本身不满足缓存合同。具体实现边界与待实现项见 docs/ci-cache.md 和 docs/spec-coverage.md。
 
-`chrono-github-release/v1` explicitly declares a GitHub release-build projection under host `.chrono-harness/`, selected by the existing chrono-ci init/generate/verify commands. Each job declares its runner, complete command argv, timeout and literal artifact directory/name; no host language, project layout or release recipe is inferred. The generator shares output preflight and writing with check projections but uses a distinct ownership marker. Verification does not repair drift; unknown declarations and ownership collisions fail. Failed build commands retain their exit and artifact upload is attempted with `always()`. Local and CI consumers use the same declared command. Source checkout is a requested revision, not a generator-certified immutable OID; the registered build consumer owns source identity and release acceptance. Generation neither publishes a release nor certifies input closure or parity. Existing check schemas retain their semantics; the host adoption and limits are specified in [release CI](docs/release-ci.md).
+宿主管理的原生发布配方只接受 `chrono-release-build/v5`，旧格式在启动工具或创建输出前失败。明确的 build、verification、collector 单元保留 `chrono-release-unit/v1` 回执，含真实源码观察、进程 argv／cwd、原 stdout／stderr 文件、哈希和退出。本地驱动保存 `chrono-release-local/v1` 及同一单元证据。预检拒绝无效登记和已有输出；无论构建成功或失败，原生上传都尝试保留产物。目录或报告存在不代表发布成功。
 
-Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. After launch, retained evidence publication failure preserves the actual bounded stream bytes, exit code and process identity as failed evidence. Bound Git facts observations use `chrono-git-facts/v2`; request consumers reject v1, missing and unknown schema identities before Git execution. Historical process decoding does not establish v1 facts request compatibility; see [Git facts](docs/git-facts.md). Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, explicit ownership/output isolation, actual execution, blocked dependents and required replacement execution. Optional chrono-judge-cargo owns explicitly adopted Cargo workspace/path-dependency consistency and guarded retained-package/metadata validation; the generic core has no host-language or directory semantics. These are separate production/test projects with independent manifests, lockfiles and targets.
+当前配方明确声明 Rust 组件、逐 verifier 工具链选择、构建依赖、release-plan 资产及消费目的地；目的地须由一个 untracked 宿主产物声明接纳。staging 前拒绝 Git 已跟踪目的地、链接及源／目的重叠。验证或打包前暂存选中字节和 mode，每项操作前后核身份。漂移会阻止成功；子进程失败后，即使额外观察失败也保留原退出。这些有限时点观察不能证明期间无临时替换、硬终止／存储恢复、完整构建输入、所有测试调用 CLI 或原生 full 治理。配方约定归 `.chrono-harness/release/`，见[发布与安装](docs/distribution.md)。
 
-The current FILEMAP v2 execution and workflow v2/v3 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config supports v1 and explicit-presence v2/v3/v4; projects support v1/v2 and judges use v1. Workflow v3 selects an explicitly registered host decoder by exact endpoint schema versions, including config v1→v2 compatibility with unchanged historical input semantics. It does not supply an automatic host config writer. Strict old v1 readers reject the new fields. The shipped host historical decoder remains chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
+`chrono-github-release/v1` 在宿主 `.chrono-harness/` 明确声明 GitHub 发布构建投影，由现有 chrono-ci init／generate／verify 选择。每个 job 写明 runner、完整 argv、时限和字面产物目录／名称，生成器不推断语言、项目结构或配方。它与检查投影共用预检／写入器，但使用独立所有权标记。verify 不修漂移，未知声明和所有权冲突均失败。构建失败保留退出，`always()` 尝试上传产物；本地／CI 使用同一登记命令。
 
-Scoped judge-ci reuses routes planning and projects execution/receipt logic through an explicit adapter. Current host sequences live only in FILEMAP; historical v1 bindings remain decoder input. Scoped legacy selection/environment limitations remain labelled until full native CI replaces that consumer. ci still owns workflow generation and event preparation, and instructions remains independent. Bootstrap installs both new binaries and uses registered locked build actions with Rust 1.95.0. All costs remain unknown.
+checkout 的 source 是请求修订，生成器不认证其为不可变 OID；构建消费者负责源码身份和发布验收。生成不发布 Release，也不证明输入完整或同判。检查 schema 语义保留，宿主采用和限制见[发布 CI](docs/release-ci.md)。
 
-Scoped profile `chrono-ci-check/v2` requires an explicit `policy.facts_config` path under `.chrono-harness/`, selecting the candidate full-v3 Git binding before object acquisition. That reader reads both endpoints, the original commit parents, index/dirty facts, optional full-registration interpretation and post-execution facts. Candidate profile and facts-config bytes must match their fixed blobs. Failed binding after construction and later failures retain structured original process observations in `evidence.git_facts`. Optional `registration_config` independently activates its existing registry/canonical-invocation semantics; Git binding alone does not require full registry adoption. V1 rejects the new field including null. Selection, initial rules, operation environments, protocol and canonical check argv retain their scoped contracts; base enforcement names the actual endpoint schema. The product host has not adopted v2. This does not certify Git/delegated input completeness, full governance or parity.
+runner 负责 Git／输入事实传输、真实入口 argv／cwd、有限进程观察、候选执行物绑定、协议和具名输出汇总。启动后证据发布失败时，仍将已捕获流、退出和进程身份保为失败证据。绑定 Git facts 使用 `chrono-git-facts/v2`；消费者在 Git 执行前拒绝 v1、缺失或未知 schema。能解码历史进程不代表兼容 v1 facts 请求，见 [Git 事实](docs/git-facts.md)。
 
-Context may name retained_inputs containing original external-file bytes or content-addressed blob references and environment snapshots at both fixed endpoints. The independent chrono-inputs capture/pair producer and streaming validation are specified in [docs/inputs.md](docs/inputs.md). Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods without manifest/lock/root, custom action names and arbitrary file locations; optional Cargo consumers preserve workspace/path-dependency checks and run locked/offline metadata before explicitly registered Cargo operations. The adapter validates retained registry/Git inputs, exact resolution and ordered configuration arguments through the same full/scoped action path; see docs/cargo-projects.md. Neither certifies compiler/SDK or undisclosed input closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
+registration 负责严格当前 schema、受影响引用、固定快照、登记就绪、所供保留输入验证及有限历史解码；filemap 负责显式类型化 DELTA 并集、记录、因果影响及必需测试事实；routes 负责唯一登记方法、有序计划、单次工具绑定和回执比较；projects 负责受影响双向配对、显式所有权／输出隔离、真实执行、依赖阻断和必需替代执行。可选 chrono-judge-cargo 负责明确采用的 Cargo workspace／路径依赖一致性和受保护包／metadata 验证。通用核心没有语言或目录专用语义。这些项目及专属测试各有独立 manifest、lockfile、target。
 
-CI provider v3 explicitly names `facts_config`, selecting a full config v3 candidate Git binding for every event preparation read and fetch. Candidate policy bytes and checkout identity are checked before network observation. A bounded batch probe accepts only the exact requested commit or an exact missing-object response; only the latter permits fetch. Malformed output, wrong object type and execution failure fail without fetch, retaining original process evidence. Successful fetch is followed by another probe and commit identity check. Context carries `git_facts`; preparation errors retain observations without inventing a completed context. Provider v1/v2 keep their prior interpretations and reject the new field, including null. V3 may explicitly include the existing initial-inventory projection; it never infers it. This does not adopt scoped v2 in the host, certify network/credential/Git configuration closure or establish generated-v3 native host adoption. See [docs/ci.md](docs/ci.md).
+当前 FILEMAP v2 执行及 workflow v2／v3 历史 profile 约定见[执行说明](docs/execution.md)。Config 支持 v1 及明确存在状态的 v2／v3／v4，projects 支持 v1／v2，judges 用 v1。Workflow v3 按两端精确 schema 版本选择登记的宿主 decoder，含保留旧输入语义的 config v1→v2 兼容验证；它不自动写宿主配置，严格旧 v1 Reader 会拒绝新字段。
 
-CI event preparation supports explicit push_baselines prefixes and named baseline refs on origin: matching integration creation and repair pushes compare the complete candidate with the fixed observed dev tip, while unconfigured pushes retain before/after semantics (docs/ci.md). This preparation does not certify workflow obligations. Workflow now certifies bounded branch, integration, retirement and finite migration contracts using actual observations and completed reports; see [docs/workflow.md](docs/workflow.md). Complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance beyond the explicit root inventory profile, full native CI/parity, AI reconciliation and complete stale reconstruction orchestration, PR/merge/landing and the final full-SPEC audit remain unfinished. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
+早期随宿主提供的历史 decoder 处理 chrono-ci-check/v1 加 FILEMAP v1，使用固定原字节和明确绑定，保留候选 script／tool、映射、输出摘要及全部旧定义。ci.verify 原样移入 ci.actions.execute，由 ci-tests 执行；旧伪脚本／owner／test 以明确替代退役。六条旧验证触发边保留，原 ci-tests 独有触发现在也执行 verify。这不声称选测或成本精确等价。该历史 decoder 的当前退役范围见 docs/execution.md。
+
+scoped judge-ci 经明确适配器复用 routes 计划及 projects 执行／回执逻辑。当前宿主操作顺序只由 FILEMAP 管理，历史 v1 绑定仅作 decoder 输入。在原生 full CI 替代此消费者前，scoped 旧选测／环境限制继续标明。ci 仍负责 workflow 生成与事件准备，instructions 独立。bootstrap 使用 Rust 1.95.0 和登记 locked build action 安装新增二进制，所有成本仍未知。
+
+scoped `chrono-ci-check/v2` 必须明确 `policy.facts_config` 为 `.chrono-harness/` 下路径，在获取对象前选择候选 full-v3 Git 绑定。同一 Reader 读取两端、原 commit parents、index／dirty 事实、可选 full-registration 解释及执行后事实。
+
+候选 profile／facts-config 字节须匹配固定 blob；构建后绑定失败和后续失败都在 `evidence.git_facts` 保留结构化进程原观察。可选 `registration_config` 独立采用原有登记／canonical 调用语义，单独 Git 绑定不要求完整登记。v1 拒绝新字段（含 null）。选测、initial 规则、操作环境、协议及唯一 check argv 保留 scoped 合同，base enforcement 写明真实端点 schema。
+
+这批历史实现时产品宿主尚未采用 v2；此能力不证明 Git／委托输入完整、full 治理或同判。
+
+context 可通过 retained_inputs 引用两固定端点的外部文件原字节、按内容寻址的 blob 及环境快照。独立 chrono-inputs capture／pair 生产者和流式验证见[输入说明](docs/inputs.md)。registration 核摘要、当前候选字节、缺失／空变量及候选观察；哈希和声明不证明未披露输入完整。正向项目 fixture 在无 manifest／lock／root、自定义 action 和任意文件位置下执行登记方法。
+
+可选 Cargo 消费者保留 workspace／路径依赖检查，在登记操作前跑 locked／offline metadata；同一 full／scoped action 路径核保留 registry／Git 输入、精确解析和有序配置参数，见 docs/cargo-projects.md。两者均不认证 compiler／SDK 或未披露输入完整。仓库 ci-tests 的真实 Cargo 执行由 scoped 迁移消费者覆盖。本宿主仍 proposed／incomplete，full 治理仍非零。
+
+CI provider v3 明确 `facts_config`，为每次事件准备读取／fetch 选择候选 full config v3 的 Git 绑定。网络观察前核候选政策字节和检出身份。有限 batch probe 只接受精确请求 commit 或精确缺对象响应；只有后者允许 fetch。畸形输出、错误对象类型、执行失败都保留原进程证据且不 fetch；fetch 成功后再探测并核 commit。context 携 `git_facts`，准备失败保留观察、不虚构完成 context。
+
+provider v1／v2 保留解释并拒绝新字段（含 null）；v3 可明确加入已有 initial 清单投影，不会推断。它不自动让宿主采用 scoped v2，也未证明网络／凭据／Git 配置完整或生成 v3 的原生宿主采用，见 [CI 说明](docs/ci.md)。
+
+CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹配的 integration 创建／修复 push，以完整候选对比固定观察 dev 顶端；未配置 push 仍用 before／after，见 docs/ci.md。准备不认证 workflow 义务。workflow 用真实观察和完成报告核有限分支、integration、退役、迁移合同，见 [workflow 说明](docs/workflow.md)。
+
+完整 Cargo／SDK／外部输入、超出明确根清单 profile 的 initial 采用／bootstrap 来源、原生 full CI／同判、AI 协调与陈旧重建全流程、PR／merge／落地及最终完整 SPEC 审计仍未完成。单个执行者的本地行为检查不证明独立评审、原生 CI 或落地；指令生成的平台／崩溃／并发限制仍有效。原编号要求和每项验收目标全部保留。
 
 ## 15. 实际参考经验
 
 只读参考 trureturing 提交 `fbac8071cc862c8a43a247db2d8101dc61f655ea`：
 
 - [Meta/FILEMAP.toml](https://github.com/the-omega-institute/trureturing/blob/fbac8071cc862c8a43a247db2d8101dc61f655ea/Meta/FILEMAP.toml)：已有 resources/materials/require 登记；本设计保留显式影响，进一步逐文件化、区分边类型。
+
 - [Meta/engineering-projects.json](https://github.com/the-omega-institute/trureturing/blob/fbac8071cc862c8a43a247db2d8101dc61f655ea/Meta/engineering-projects.json)：明确 production、专属测试、references/build_inputs/execution_inputs；本设计避免从源码推断测试。
+
 - [harness-gate.sh](https://github.com/the-omega-institute/trureturing/blob/fbac8071cc862c8a43a247db2d8101dc61f655ea/.github/scripts/harness-gate.sh) 与 [local-harness-gate.sh](https://github.com/the-omega-institute/trureturing/blob/fbac8071cc862c8a43a247db2d8101dc61f655ea/tools/scripts/local-harness-gate.sh)：实际入口传入 base、候选和报告；本设计进一步固定同一 argv，去除本地/CI 入口差异。
+
 - [judge-content-address.sh](https://github.com/the-omega-institute/trureturing/blob/fbac8071cc862c8a43a247db2d8101dc61f655ea/tools/scripts/workflow/judge-content-address.sh)：判官地址包含 source/runtime/architecture/sdk；本设计同样绑定执行物与工具证据，避免复用错报告。
 
 这些是经验来源而非兼容承诺，不复制已有复杂体系，不读取其运行时配置，不把它当依赖。
-上述参考材料不因引用而被本产品修改；第 2.1 节的通用数学成果通过 trureturing 独立 lane 与 PR 交付。本产品没有宿主全局 hook、权限门禁或人工流程。
+上述参考材料不因引用而被本产品修改；第 2.1 节的通用数学成果通过 trureturing 独立工作树与 PR 交付。本产品没有宿主全局 hook、权限门禁或人工流程。
 
 另只读核对 trureturing 固定提交 `1239bd2a0ed6e9d54aabb5a42af94234e9eb61ae`，补充采用范围如下；上述 `fbac8071cc862c8a43a247db2d8101dc61f655ea` 示例保持各自历史来源：
 
-- [CLAUDE.md §1.2、§2.10](https://github.com/the-omega-institute/trureturing/blob/1239bd2a0ed6e9d54aabb5a42af94234e9eb61ae/CLAUDE.md)：复用唯一自然所有者、保留结果与真实边界的原则；本产品的权威、记录与留存仍由 §1、§7.1／§7.2、§10.1 定义，不建立重复账本。
+- [CLAUDE.md §1.2、§2.10](https://github.com/the-omega-institute/trureturing/blob/1239bd2a0ed6e9d54aabb5a42af94234e9eb61ae/CLAUDE.md)：复用唯一对应所有者、保留结果与真实边界的原则；本产品的权威、记录与留存仍由 §1、§7.1／§7.2、§10.1 定义，不建立重复账本。
+
 - [CLAUDE.md §8.6–§8.8](https://github.com/the-omega-institute/trureturing/blob/1239bd2a0ed6e9d54aabb5a42af94234e9eb61ae/CLAUDE.md)：采用真实任务及自有子孙加入、宿主完成通知优先和唯一等待通道的经验，形成 §7.4；不以该参考的外部状态轮询例外、宿主命令或预算授予本仓权限，本仓授权内的长周期核实以 §7.4 为准。
+
 - [CLAUDE.md §6.1](https://github.com/the-omega-institute/trureturing/blob/1239bd2a0ed6e9d54aabb5a42af94234e9eb61ae/CLAUDE.md) 与 [golden-ledger-repo-spec.md A20](https://github.com/the-omega-institute/trureturing/blob/1239bd2a0ed6e9d54aabb5a42af94234e9eb61ae/docs/develop/spec/golden-ledger-repo-spec.md)：采用兼容既有检出复用、语义读写／index／ref／整树操作范围及保存、加入、检查、落地的区别，形成 §10.2；不复制主检出丢弃工作权限、额外 clone 禁令、CLI／路径、阈值、数学或语言体系。
 
 这些固定源码是设计参考数据，不是本仓执行权威或运行依赖，也不证明新增目标已实现、宿主已采用或实际交付完成。
@@ -1031,40 +1037,63 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 
 `chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。通用方法由双语内容叶子与普通空文本 aggregate 组成，既有 core 稳定入口及 core.general 保留；旧主题入口只组合原职责。聚焦 skill 选择修复产生处及其证据／复用前提。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
 
-`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合同语言测试要求与实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的双语短流程根及本仓完整英文指南的读数见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
+`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合同语言测试要求与实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的双语简短流程根指南及本仓完整英文指南的读数见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
 
-当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。产品默认和本仓根 manifest 显式选择现有内容叶子，以 workflow 的需求、审计、重构、开发四阶段组织，验证／SPEC 迭代与交付／清理归开发下级。完整 general 布局和 core.general 保留供自定义 Markdown／skills；本仓 general-en 选择完整库，聚焦 skill 保持原平铺。清理原子只承载便携生命周期责任，宿主操作、部署及恢复限制归登记 host_context 与现役生命周期文档。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
+当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。
 
-根受管块保留宿主块外原文、sole donor 和预期整份比较语义。Markdown/skill 为带身份 envelope 的整文件投影，未拥有/畸形现有文件预写入拒绝。skill frontmatter 从首字节开始，元数据显式验证。当前 manifest 是唯一管理计划，删条目/改名保留旧输出，由授权 AI 显式退休；不建立历史 ledger 或扫描删除器。
+产品默认和本仓根 manifest 显式选择现有内容叶子，以 workflow 的需求、审计、重构、开发四阶段组织，验证／SPEC 迭代与交付／清理归开发下级。完整 general 布局和 core.general 保留供自定义 Markdown／skills；本仓 general-en 选择完整库，聚焦 skill 保持原平铺。清理原子只承载便携生命周期责任，宿主操作、部署及恢复限制归登记 host_context 与现役生命周期文档。
+
+source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
+
+根受管块保留宿主块外原文、唯一原文来源 和预期整份比较语义。Markdown/skill 为带身份起止标记 的整文件投影，未拥有/畸形现有文件预写入拒绝。skill frontmatter 从首字节开始，元数据显式验证。当前 manifest 是唯一管理计划，删条目/改名保留旧输出，由授权 AI 显式退役；不建立历史总表 或扫描删除器。
 
 init/generate 只接受当前 schema 2 / atomic-rules/relative-alias/v3 manifest；不支持的格式在写入前报错，保全源、manifest 和根文件，不自动迁移旧格式。新宿主 init --methodology 将显式方法绑定为 file atom，未声明语言时为 und，保留原 UTF-8 字节。init --locale 只绑定新根；省略选项保留采用数据，显式冲突报错。全计划预检、路径/链接/实际别名检查、父先子后建目录及多输出回滚复用现有 publisher；新建 manifest 最后发布。当前 macOS 普通 IO 为已测边界，无跨平台、崩溃/并发保证。
 
 完整 schema、组合配方、CLI、所有权与恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护。
-[来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
-五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。
 
-`automatic_cleanup/v2` 以目标独立的 metadata 租约与附件代际 SH/EX 租约，在后续普通生命周期与已采用 check/bootstrap 中恢复未调用 finish 的会话中断，包含正常返回且没有遗留 use token 的情况。EX 取得后，准确的两端登记可重建缓存以专属不可覆盖 intent、原缺失／失败输入和新真实回执重试；不创建持久自有 Git lock，不设 terminal，不删除源码、分支、未保留提交、bin/state 或证据。旧／缺失／漂移身份保留，整树 finish 保留真实交接合同。描述符由原进程 engine 的子副本与登记 Python pass_fds 明确传递，不推断通用继承。本地真实 Cargo test／原生子进程回归验证独立父子进程的租约转交，完整采用仍需已提交组合与支持平台验收；不从父进程退出、PID 缺失、年龄或空闲推断子孙终止。源与宿主政策同时修改，兼容协调者部署、旧生产者排除、已提交组合、支持平台验收、真实宿主切换和 Git/PR/发布仍归调用方。
-现役本地执行扩展由 projects 唯一调度 routes 已合并的 DAG。显式有限 cap 只限操作数，不推断 CPU／语言，不限工具内部线程；前置未终结等待，失败只阻断后继，冲突 ready 项可让位于独立项。回执保留原字节与失败，结果按规范计划顺序输出，线程与已知嵌套 runner 进程由原 runner 引擎收束。FILEMAP 声明缺失／未知／歧义在执行前失败；两端 cap、claim、冲突消费者与输出登记变更进入 DELTA，collection 仅重建核原登记和证据。Unix 匿名继承描述符承载已知 launch tree，超时后有限清理不延长执行额度；不承诺跨调用锁或关闭继承描述符的未登记外部进程树。本宿主 cap 2 与独立输出／workflow inventory 共用 claim 属于宿主政策；未从 owner suites 声称完整 canonical／native 成功、交付或完整 SPEC 验收。
+[来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。
+
+自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。
+
+`automatic_cleanup/v2` 以目标独立的 metadata 租约与附件代际 SH/EX 租约，在后续普通生命周期与已采用 check/bootstrap 中恢复未调用 finish 的会话中断，包含正常返回且没有遗留 use token 的情况。EX 取得后，准确的两端登记可重建缓存以专属不可覆盖 intent、原缺失／失败输入和新真实回执重试；不创建持久自有 Git lock，不设 terminal，不删除源码、分支、未保留提交、bin/state 或证据。
+
+旧／缺失／漂移身份保留，整树 finish 保留真实交接合同。描述符由原进程 engine 的子副本与登记 Python pass_fds 明确传递，不推断通用继承。本地真实 Cargo test／原生子进程回归验证独立父子进程的租约转交，完整采用仍需已提交组合与支持平台验收；不从父进程退出、PID 缺失、年龄或空闲推断子孙终止。源与宿主政策同时修改，兼容协调者部署、旧生产者排除、已提交组合、支持平台验收、真实宿主切换和 Git/PR/发布仍归调用方。
+
+现役本地执行扩展由 projects 唯一调度 routes 已合并的 DAG。显式有限 cap 只限操作数，不推断 CPU／语言，不限工具内部线程；前置未终结等待，失败只阻断后继，冲突 ready 项可让位于独立项。回执保留原字节与失败，结果按规范计划顺序输出，线程与已知嵌套 runner 进程由原 runner 引擎收束。FILEMAP 声明缺失／未知／歧义在执行前失败；两端 cap、claim、冲突消费者与输出登记变更进入 DELTA，collection 仅重建核原登记和证据。
+
+Unix 匿名继承描述符承载已知 launch tree，超时后有限清理不延长执行额度；不承诺跨调用锁或关闭继承描述符的未登记外部进程树。本宿主 cap 2 与独立输出／workflow inventory 共用 claim 属于宿主政策；未从 owner suites 声称完整 canonical／native 成功、交付或完整 SPEC 验收。
 
 `execution_scheduling.priority` 可显式登记启动优先顺序，只含不重复的已登记操作 ID；空／未知 ID 或类型错误在业务执行前拒绝。就绪项先按该列表、再按未列项的规范计划顺序选择；依赖、失败传播、cap 和资源／输出排斥仍同时生效。优先级不新增选择义务、不推断耗时，也不阻止不冲突的就绪项前进。完整列表进入计划身份及留存核对；缺省或空列表保留旧序列化身份。列表重排、修改和删除按两端登记影响所有计划消费者，报告顺序仍为规范计划顺序。
 
-Unix runner 的中断恢复由同一 process engine 的单个已加入 observer 承载：exec 前固定 child 与 launcher 的活身份，macOS 用 kernel exit event，Linux 用 pidfd；只有两者的实际终结与已登记子树完成才能协调丢失 destructor 的 slot。PID 消失、已发信号或外层 exit 0 都不是完成回执；代际固定阻止旧事件／上下文消费复用 slot。清理仍限原一秒；中断 owner 的存活子进程终止后仍保留清理失败，未知完成不成功。进程 exit 0 后的 receipt／清理失败在 CI 摘要投影为 failed、exit null，原 receipt 保留真实 exit 0、诊断与绑定；collection 保留原失败而不重执行。宿主 cap、计划、选择义务及本地／原生验收仍由原登记与调用方负责。
+Unix runner 的中断恢复由同一 process engine 的单个已加入 observer 承载：exec 前固定 child 与 launcher 的活身份，macOS 用 kernel exit event，Linux 用 pidfd；只有两者的实际终结与已登记子树完成才能协调丢失 destructor 的 slot。PID 消失、已发信号或外层 exit 0 都不是完成回执；代际固定阻止旧事件／上下文消费复用 slot。
+
+清理仍限原一秒；中断 owner 的存活子进程终止后仍保留清理失败，未知完成不成功。进程 exit 0 后的 receipt／清理失败在 CI 摘要投影为 failed、exit null，原 receipt 保留真实 exit 0、诊断与绑定；collection 保留原失败而不重执行。宿主 cap、计划、选择义务及本地／原生验收仍由原登记与调用方负责。
 
 observer 以与执行时限相同的系统单调时钟记录实际内核退出观察。监控恢复时已过期限，仅当该观察严格早于原期限且立即取得真实子进程退出状态，才保留原退出结果；观察缺失、过晚、时钟失败或仍未退出均不授予额外等待。取消、输出上限与收束失败仍独立生效。时间戳是退出的观察上界，不是内核记录的精确退出时间；observer 自身延迟时不推断更早退出。共享布局身份独立钉版，嵌套执行须配套运行时，不兼容继承描述符直接拒绝。
 
-exec 前身份登记失败保留 observer 的实际 kernel errno；child 经已有私有 context descriptor 以有界、核返回值的写入发布固定 stage／reason／errno 记录，pre-exec 所有错误路径不分配，只返回 raw OS error；诊断文字由 parent 在 spawn 失败后构造。诊断缺失或部分写入不替换实际 errno，无 OS errno 的 owner 失败使用 EINVAL。已有 send loop 在原一秒 handoff 内重试 EAGAIN、EINTR、ENOBUFS，耗尽后保留最后 send errno；parent 区分 acknowledgement poll timeout 与 short read。启动失败仍不制造已执行 process／exit／完成回执，不延长原一秒 handoff／清理额度或注册执行时限。Linux pidfd syscall 显式采用已有 `libc::pid_t` ABI 类型；编译修复不证明 Linux 运行行为。
+exec 前身份登记失败保留 observer 的实际 kernel errno；child 经已有私有 context descriptor 以有界、核返回值的写入发布固定 stage／reason／errno 记录，pre-exec 所有错误路径不分配，只返回 raw OS error；诊断文字由 parent 在 spawn 失败后构造。诊断缺失或部分写入不替换实际 errno，无 OS errno 的 owner 失败使用 EINVAL。
+
+已有 send loop 在原一秒 handoff 内重试 EAGAIN、EINTR、ENOBUFS，耗尽后保留最后 send errno；parent 区分 acknowledgement poll timeout 与 short read。启动失败仍不制造已执行 process／exit／完成回执，不延长原一秒 handoff／清理额度或注册执行时限。Linux pidfd syscall 显式采用已有 `libc::pid_t` ABI 类型；编译修复不证明 Linux 运行行为。
 
 observer 接收端的 recvmsg 失败（EAGAIN／EINTR 除外）与不完整 handoff 在原共享内存中保留有界计数及最近的原始 errno／msg_flags。启动失败报告只追加本次 launch 观察窗口内的增量；原 spawn errno 与 child 诊断保留。共享 observer 的读数不归因到某个 child，也不将无读数解释为接收端正常。诊断由 parent 渲染，pre-exec 不增加分配、文件或等待额度；共享布局钉版，所有参与执行物须配套更新。受控接收端描述符耗尽验证能暴露该故障，不证明既有超时皆由同一原因造成。
 
 已登记 v2 birth 的封口中断由原 worktree owner 在正常入口取得实际排除、核原附件与政策后恢复；保留原缺失／部分结果及独立恢复回执，重复中断重用固定回执，不据恢复制造原成功或 finish。新消费在已发布缓存尝试后开启新代际、保留旧 intent/result；后续回收可绑定当前 HEAD。bootstrap 消费原 managed_command_failed 分类，原非零构建与后续生命周期拒绝及报告引用分别保留。
 
+自动清理政策的已登记 v2 内核附件可以显式迁移：从存活协调宿主调用 `chrono-worktree migrate --path <已登记工作树>`，在目标 metadata 与附件独占租约下核已提交的两端同政策／配置、原物理附件、有效 birth 和两端产物登记。原登记及回执不改写，另保留旧新输入原字节与固定提交的不可覆盖迁移记录；后续普通操作核整条关联并消费最终绑定。迁移不删除、不更新 Git、不设完成；active 开新缓存代际，retained 保持已保留状态并要求新的 finish。
 
-自动清理政策的已登记 v2 内核附件可以显式迁移：从存活协调宿主调用 `chrono-worktree migrate --path <已登记工作树>`，在目标 metadata 与附件独占租约下核已提交的两端同政策／配置、原物理附件、有效 birth 和两端工件登记。原登记及回执不改写，另保留旧新输入原字节与固定提交的不可覆盖迁移记录；后续普通操作核整条关联并消费最终绑定。迁移不删除、不更新 Git、不设完成；active 开新缓存代际，retained 保持已保留状态并要求新的 finish。缺失／损坏原证据、未知租约、未封口 birth、待执行终态删除及协调锚／状态地址／政策地址搬迁不自动解释。发布迁移记录但尚未登记的中断允许按同一绑定重试；普通入口只消费当前登记格式。当前 binary 部署、实际宿主切换、未登记写入加入及落地验证仍由调用方完成。
+缺失／损坏原证据、未知租约、未封口 birth、待执行终态删除及协调锚／状态地址／政策地址搬迁不自动解释。发布迁移记录但尚未登记的中断允许按同一绑定重试；普通入口只消费当前登记格式。当前 binary 部署、实际宿主切换、未登记写入加入及落地验证仍由调用方完成。
 
+Git main 的已登记历史可重建产物可经同一生命周期所有者 `migrate --path <main> --adopt-cache <state-input>` 接管当前 custody。`chrono-main-cache-custody/v1` 输入显式绑定物理 main、当前完整 HEAD、逐项 dispose 路径、`current_consumers_released:true` 与当前工程原因；操作方须实际加入或排除旧的未登记消费者，不据目录、年龄或静默猜 release。
 
-Git main 的已登记历史可重建工件可经同一生命周期所有者 `migrate --path <main> --adopt-cache <state-input>` 接管当前 custody。`chrono-main-cache-custody/v1` 输入显式绑定物理 main、当前完整 HEAD、逐项 dispose 路径、`current_consumers_released:true` 与当前工程原因；操作方须实际加入或排除旧的未登记消费者，不据目录、年龄或静默猜 release。目标 metadata／附件独占租约保护 active main；源码、index、bin／证据、未知路径及活的已采用消费者仍拒绝。不可覆盖的独立接管回执保留原声明、附件与所有权 DELTA，历史 producer outcome 保持 unknown，原 producer／disposal outcome 保留，不制造 terminal。现有 `reconcile_uses` 可追加中断消费历史并移除过期 token，mutable enrollment／uses 不保证字节不变。已托管项重入不增接管历史，未登记的独立对象不否决已选择的合法兄弟；发布中断可按同绑定重试。接管本身不删除，新 pending 代际由现有普通入口／maintain drain 回收；后续普通构建及中断恢复继续使用同一租约。该局部源与行为合同不证明 native、全 SPEC、PR 或发布完成。
+目标 metadata／附件独占租约保护 active main；源码、index、bin／证据、未知路径及活的已采用消费者仍拒绝。不可覆盖的独立接管回执保留原声明、附件与所有权 DELTA，历史 producer outcome 保持 unknown，原 producer／disposal outcome 保留，不制造 terminal。现有 `reconcile_uses` 可追加中断消费历史并移除过期 token，mutable enrollment／uses 不保证字节不变。
 
-已结束历史复制路径消费的精确证据别名，可由 worktree 现役 maintenance 所有者执行 `retire-evidence`。当前 custodian 输入绑定物理 checkout、固定 HEAD／branch、明确结束消费、权威声明原件及逐项路径／长度／SHA256／保留原件／所有者／原因；等同字节不独自授权处置。复用目标独立 metadata 和附件租约，核现役单一 enrollment、Git 锁、干净源码与真实工件登记，不迁移历史源码或执行旧判官，不清理其它登记项。逐文件稳定身份／原件核验后删除，独立失败不阻断合格兄弟；独立原 intent/result 日志保留部分效果，重入只报告实际缺失，不制造原成功或 release。`removed` 只计完全核验的删除完成；unlink 后的核验失败可记 failed，因此 removed=0 不证明没有删除效果。回执依赖精确引用的 retained declaration／authority，不保证自包含副本。历史 manifest 可由当前 custodian 明确结束 replay，原字节仍保留。当前 CI gather 保留下载报告原字节，不再改写旧内联报告的硬链接；宿主采用 retained-reference/v2 在发布处避免复制报告正文，失败 native／transport 原件继续保留。该有限行为不证明通用全历史回收、完整自动证据终点、native parity、PR／发布或持续目标完成。
+已托管项重入不增接管历史，未登记的独立对象不否决已选择的合法兄弟；发布中断可按同绑定重试。接管本身不删除，新 pending 代际由现有普通入口／maintain drain 回收；后续普通构建及中断恢复继续使用同一租约。该局部源与行为合同不证明 native、全 SPEC、PR 或发布完成。
+
+已结束历史复制路径消费的精确证据别名，可由 worktree 现役维护所有者执行 `retire-evidence`。当前 custodian 输入绑定物理 checkout、固定 HEAD／branch、明确结束消费、权威声明原件及逐项路径／长度／SHA256／保留原件／所有者／原因；等同字节不独自授权处置。复用目标独立 metadata 和附件租约，核现役单一 enrollment、Git 锁、干净源码与真实产物登记，不迁移历史源码或执行旧判官，不清理其它登记项。
+
+逐文件稳定身份／原件核验后删除，独立失败不阻断合格兄弟；独立原 intent/result 日志保留部分效果，重入只报告实际缺失，不制造原成功或 release。`removed` 只计完全核验的删除完成；unlink 后的核验失败可记 failed，因此 removed=0 不证明没有删除效果。回执依赖精确引用的 retained declaration／authority，不保证自包含副本。历史 manifest 可由当前 custodian 明确结束 replay，原字节仍保留。
+
+当前 CI gather 保留下载报告原字节，不再改写旧内联报告的硬链接；宿主采用 retained-reference/v2 在发布处避免复制报告正文，失败 native／transport 原件继续保留。该有限行为不证明通用全历史回收、完整自动证据终点、native parity、PR／发布或持续目标完成。
 
 
 当前独立工作树的生命周期登记按物理工作树地址分别存储和互斥，不得使用跨工作树的可变成员账本或全局准入独占锁。一个工作树的登记占用、损坏或清理失败只阻断该目标及显式依赖，维护继续处理可用的独立目标。普通 start／reconstruct／use／check／bootstrap／finish 只维护本目标，不把其他工作树或 fixture producer 的清理作为前置；跨目标回收使用显式 maintain，继续处理可用的独立目标。共享执行程序的替换须排除其全部实际使用者；普通操作对该程序持共享保护。当前登记的历史格式不构成兼容义务，切换须保护并迁移仍在使用的原状态。详见 docs/worktree.md。
