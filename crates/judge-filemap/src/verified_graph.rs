@@ -150,6 +150,7 @@ pub proof fn edge_kind_wire_unique(a: EdgeKind, b: EdgeKind)
     assert("judge-trigger".spec_bytes()[0] == 106);
 }
 
+#[cfg(verus_keep_ghost)]
 impl vstd::std_specs::cmp::PartialEqSpecImpl for EdgeKind {
     open spec fn obeys_eq_spec() -> bool { true }
     open spec fn eq_spec(&self, other: &Self) -> bool { *self == *other }
@@ -165,6 +166,7 @@ impl PartialEq for EdgeKind {
 
 impl Eq for EdgeKind {}
 
+#[cfg(verus_keep_ghost)]
 impl vstd::std_specs::cmp::OrdSpecImpl for EdgeKind {
     open spec fn obeys_cmp_spec() -> bool { true }
     open spec fn cmp_spec(&self, other: &Self) -> Ordering {
@@ -180,6 +182,7 @@ impl Ord for EdgeKind {
     }
 }
 
+#[cfg(verus_keep_ghost)]
 impl vstd::std_specs::cmp::PartialOrdSpecImpl for EdgeKind {
     open spec fn obeys_partial_cmp_spec() -> bool { true }
     open spec fn partial_cmp_spec(&self, other: &Self) -> Option<Ordering> {
