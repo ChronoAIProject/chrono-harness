@@ -446,7 +446,7 @@ on:
         .filter(|d| **d != c.artifact_directory)
     {
         format!(
-            "{rendered}      - name: Preserve failed job diagnostics\n        if: ${{{{ failure() }}}}\n        uses: {}\n        with:\n          name: {artifact_prefix}-diagnostics-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}",
+            "{rendered}      - name: Preserve failed job diagnostics\n        if: ${{{{ failure() }}}}\n        uses: {}\n        with:\n          name: diagnostics-{artifact_prefix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}",
             c.upload_artifact_action,
             scalar(directory),
             artifact_hidden_files(c.include_hidden_files)

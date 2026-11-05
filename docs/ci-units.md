@@ -856,7 +856,7 @@ These are observations of that one artifact, not an end-to-end saving claim.
 
 Optional `failure_artifact_directory` preserves the wider diagnostic owner when
 a job fails. It uses the same pinned upload action with `failure()` and a distinct
-`-diagnostics` artifact name. The host selects `.chrono-harness/state/`, retaining
+`diagnostics-` artifact prefix. The host selects `.chrono-harness/state/`, retaining
 failed fixture originals without sending successful fixture bodies to collection.
 The ordinary report upload and delivery acknowledgement keep their own artifact
 and mapping. Equal directories need no duplicate diagnostic upload. No new
