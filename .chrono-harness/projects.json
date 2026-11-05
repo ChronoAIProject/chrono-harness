@@ -42,7 +42,9 @@
     "host-bootstrap",
     "host-bootstrap-tests",
     "cache",
-    "cache-tests"
+    "cache-tests",
+    "ci-native-adapter",
+    "ci-native-adapter-tests"
   ],
   "projects": [
     {
@@ -4386,6 +4388,45 @@
             ".chrono-harness/ci/bootstrap-tests.py",
             "--lifecycle-program",
             "crates/worktree/target/debug/chrono-worktree"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ci-native-adapter",
+      "language": "python",
+      "path": "assets/ci/native.py",
+      "test_script": "ci-native-adapter-tests",
+      "actions": {
+        "forward": {
+          "operation": "ci.native.forward",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            "assets/ci/native.py",
+            "forward",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units.json"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ci-native-adapter-tests",
+      "language": "python",
+      "path": ".chrono-harness/ci/native-adapter-tests.py",
+      "tests_for": "ci-native-adapter",
+      "actions": {
+        "execute": {
+          "operation": "test.ci-native-adapter",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/native-adapter-tests.py",
+            "--interpreter",
+            "/usr/bin/python3"
           ]
         }
       }
