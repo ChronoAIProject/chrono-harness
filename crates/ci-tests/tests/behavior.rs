@@ -197,10 +197,8 @@ fn report_upload_and_failed_job_diagnostics_have_separate_consumers() {
     assert_ne!(diagnostics["with"]["name"], evidence["with"]["name"]);
     for invalid in [Value::Null, json!("/tmp/"), json!(".chrono-harness/state")] {
         raw["failure_artifact_directory"] = invalid;
-        let result = serde_json::from_value::<Config>(raw.clone())
-            .map_err(|e| e.to_string())
-            .and_then(|c| chrono_ci::validate(&c));
-        assert!(result.is_err());
+        fs::write(&p, serde_json::to_vec(&raw).unwrap()).unwrap();
+        assert!(init(d.path(), &p).is_err());
     }
 }
 #[test]
