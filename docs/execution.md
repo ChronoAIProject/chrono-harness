@@ -26,7 +26,8 @@ exit, output limit and timeout assertions. The child fixture and provider are
 separate registered files. The same `build.ci` prerequisite supplies the real
 Rust bridge; private fixture roots link that unmodified tool and retain failures
 until diagnosis and acceptance. Successful fixtures are removed after their
-children join and assertions consume the originals. The existing `ci` unit
+children join and assertions consume the originals. Each invocation owns its
+fresh temporary root; it claims no shared output namespace. The existing `ci` unit
 executes the Python pair beside the unfiltered Rust tests, without a new CI job.
 The release recipe also retains that moved obligation as an independent Python
 verification unit on each existing platform. It consumes only `build_ci`, stages
