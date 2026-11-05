@@ -14,33 +14,39 @@ fn preparation_requires_exact_command_and_prerequisite() {
     let command = vec!["python", "bootstrap", ".", "profile"];
     let prerequisites = vec!["verify"];
     let accepted = policy::matches_preparation(&command, "python", "bootstrap", "profile",
-        "chrono-bootstrap/v1", &prerequisites, "verify");
+        "chrono-bootstrap/v1", &prerequisites, "verify", "python", "python", "projects", "projects");
     assert(accepted);
     let missing: Vec<&str> = Vec::new();
     let absent = policy::matches_preparation(&command, "python", "bootstrap", "profile",
-        "chrono-bootstrap/v1", &missing, "verify");
+        "chrono-bootstrap/v1", &missing, "verify", "python", "python", "projects", "projects");
     assert(!absent);
     let duplicate = vec!["verify", "verify"];
     let duplicated = policy::matches_preparation(&command, "python", "bootstrap", "profile",
-        "chrono-bootstrap/v1", &duplicate, "verify");
+        "chrono-bootstrap/v1", &duplicate, "verify", "python", "python", "projects", "projects");
     assert(!duplicated);
     let wrong = policy::matches_preparation(&command, "python", "bootstrap", "profile",
-        "chrono-bootstrap/v1", &prerequisites, "other");
+        "chrono-bootstrap/v1", &prerequisites, "other", "python", "python", "projects", "projects");
     assert(!wrong);
     let changed = policy::matches_preparation(&command, "python", "bootstrap", "other",
-        "chrono-bootstrap/v1", &prerequisites, "verify");
+        "chrono-bootstrap/v1", &prerequisites, "verify", "python", "python", "projects", "projects");
     assert(!changed);
     let schema = policy::matches_preparation(&command, "python", "bootstrap", "profile",
-        "other", &prerequisites, "verify");
+        "other", &prerequisites, "verify", "python", "python", "projects", "projects");
     assert(!schema);
     let root = vec!["python", "bootstrap", "other", "profile"];
     let wrong_root = policy::matches_preparation(&root, "python", "bootstrap", "profile",
-        "chrono-bootstrap/v1", &prerequisites, "verify");
+        "chrono-bootstrap/v1", &prerequisites, "verify", "python", "python", "projects", "projects");
     assert(!wrong_root);
     let extra = vec!["python", "bootstrap", ".", "profile", "extra"];
     let extra_arg = policy::matches_preparation(&extra, "python", "bootstrap", "profile",
-        "chrono-bootstrap/v1", &prerequisites, "verify");
+        "chrono-bootstrap/v1", &prerequisites, "verify", "python", "python", "projects", "projects");
     assert(!extra_arg);
+    let executor = policy::matches_preparation(&command, "python", "bootstrap", "profile",
+        "chrono-bootstrap/v1", &prerequisites, "verify", "other", "python", "projects", "projects");
+    assert(!executor);
+    let registry = policy::matches_preparation(&command, "python", "bootstrap", "profile",
+        "chrono-bootstrap/v1", &prerequisites, "verify", "python", "python", "other", "projects");
+    assert(!registry);
 }
 
 }

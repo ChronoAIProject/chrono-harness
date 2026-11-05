@@ -333,6 +333,7 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
             return Err("unit preparation invocation mismatch".into());
         }
         let prerequisites = argv(&config["prerequisites"])?;
+        let verification = command(&p.verifier)?;
         if !crate::verified_consumption::matches_preparation(
             &verify.iter().map(String::as_str).collect(),
             nonempty(&tool["program"])?,
@@ -341,12 +342,16 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
             nonempty(&config["schema"])?,
             &prerequisites.iter().map(String::as_str).collect(),
             &p.verifier,
+            nonempty(&config["tools"][&method(&p.verifier)?.tool])?,
+            verification.first().ok_or("missing verification program")?,
+            nonempty(&config["projects"])?,
+            nonempty(&s.config["registries"]["projects"])?,
         ) {
             return Err(
                 "unit preparation must invoke its declared verification prerequisite".into(),
             );
         }
-        verify = command(&p.verifier)?;
+        verify = verification;
     }
     if verify.len() != 6
         || verify[..4] != produce[..4]

@@ -201,6 +201,10 @@ fn preparation_requires_registered_invocation_and_early_verification() {
                 ])
             }
             "schema" => new.documents.get_mut(PREPARATION).unwrap()["schema"] = json!("other"),
+            "tool" => {
+                new.documents.get_mut(PREPARATION).unwrap()["tools"]["python3"] = json!("other")
+            }
+            "projects" => new.documents.get_mut(PREPARATION).unwrap()["projects"] = json!("other"),
             "entrypoint" => {
                 new.documents.get_mut(PREPARATION).unwrap()["entrypoint"]["script"] = json!("other")
             }
