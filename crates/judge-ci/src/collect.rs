@@ -171,6 +171,7 @@ pub fn unit_originals(
     } else {
         serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?
     };
+    process(&producer)?;
     let response = json(&producer.stdout_bytes)?;
     let mut compiler_originals = Vec::new();
     for artifact in super::verus::compiler_artifacts(&response["evidence"])? {
@@ -326,7 +327,6 @@ pub(super) fn collect(
                 return Err("original preparation differs from collected unit".into());
             }
         }
-        process(&producer)?;
         let decoded = json(&producer.stdout_bytes)?;
         let response_value = if retained_streams {
             decoded.clone()
