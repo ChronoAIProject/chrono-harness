@@ -67,6 +67,28 @@ and invalid separator/non-ASCII bytes. Both shared source and test roots have
 explicit verifier actions in the runner test plan. This does not clear the
 unproved remainder of runner, CI or their adapters.
 
+`crates/runner/src/verified_paths.rs` owns the runner's shared lexical POSIX
+relative-path decision. Its in-source specification rejects empty/absolute
+paths, an initial current-directory component, every complete parent-directory
+component, NUL, LF, CR and backslash. The executable scanner proves both success
+and rejection against that contract, including all array bounds and termination.
+Repeated/trailing separators, noninitial `.` components and other POSIX filename
+bytes retain their existing admission behavior. Callers supply UTF-8 through
+`str`; canonical spelling, glob restrictions, symlinks and filesystem identity
+remain separate consumer obligations. The actual `relative_path` API calls this
+same source instead of making its decision through `std::path::components`.
+Its error formatting and the rest of the runner adapter remain unproved.
+
+The independent runner test project verifies boundary examples for empty and
+absolute paths, parent components in every position, dot/separator boundaries,
+forbidden and permitted bytes, Unicode and POSIX colon/glob names. Cargo executes
+the same examples against the production module; it does not substitute a test
+implementation. Both whole-crate proof roots are explicit operations in the
+existing runner plan. This adds two proof/compiler operations and one Cargo test
+target, reusing the existing pinned toolchain and macro. No external assumption
+is added. Proof/build/storage costs beyond the existing bounds are unmeasured;
+the runner's remaining whole-file and unit migration gaps stay declared.
+
 **Product and host execution registration change together:** the shared runner
 source uses the already pinned erasure macro dependency, replacing duplicated
 repository predicates. The existing Verus binary, checking flags and external

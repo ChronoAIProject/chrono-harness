@@ -14,6 +14,12 @@ and collection regressions retain the exact byte-level `changed_paths` boundary.
 This remains a partial migration: selection construction, the adapter, complete
 SPEC correspondence and unchanged-root proof reuse still require verification.
 
+The runner's shared lexical POSIX relative-path decision also has an executable
+Verus owner in `verified_paths.rs`, with exact success/rejection, termination and
+boundary proofs. The public API consumes that source. Canonical/glob/filesystem
+policy and surrounding adapter/error formatting remain separate obligations;
+this does not establish complete path handling or clear the runner's file gap.
+
 This is a maintained coverage map, not a run log or a second policy. Full SPEC remains the objective. `implemented` means the named contract has a real producer and behavior test; it does not mean this host is activated or delivered. `partial` retains the uncovered obligation. All full host registries remain proposed, with incomplete input closure and missing executable bindings. Registration/filemap success on a bounded host is not seven-judge success. Local checks do not certify native CI or landing.
 
 Ordinary full-check acceptance means the DELTA satisfies the active registered contract. `declared-complete` is the trusted AI's accountable declaration of the host-defined governance/input scope; judges verify declared references, identities, snapshots and observed operations. Current registration emits `completeness_proven:false`, which does not prevent ordinary acceptance after the required registration and selected checks pass. Known missing inputs, unresolved required dependencies, missing bindings/snapshots and drift still fail; real toolchain/SDK/configuration obligations remain. A universal hidden-input-absence proof or VM is not an ordinary acceptance requirement.

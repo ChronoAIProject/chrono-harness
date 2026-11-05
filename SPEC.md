@@ -165,6 +165,7 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 类型表按各登记的现役 schema 描述；registration 严格验证结构。明确支持的历史 scoped 遗留项先由候选解释器转换并保留原始事实（见 §14），不作为第二套当前登记。
 对象未列出的字段、重复 JSON key、重复 ID、悬空引用由 registration 判官报错。
 路径是仓库根相对 UTF-8 POSIX 路径，不含 `..` 或隐式 glob；environment.inputs.location 可显式指定外部绝对路径。
+共享 runner 的词法相对路径判法由 `crates/runner/src/verified_paths.rs` 的 Verus 合同与同源执行实现承载；规范写法、glob、符号链接及实际文件身份仍由相应消费者另行约束。其余本节规则尚未全部迁入 Verus。
 所有文件逐个登记；目录条目只用于明确生成物，不允许替代源文件登记。
 
 | config 字段 | 类型与约束 |
