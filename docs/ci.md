@@ -117,7 +117,9 @@ Other values and missing native bindings/variables fail. The CI action explicitl
 names the event, payload, workflow revision and collection repository variables.
 Provider `chrono-github-ci/v4` projects the short check step, including this
 selector and workflow revision; checkout, bootstrap and upload remain native
-steps. The scoped profile explicitly binds both registration_config and facts_config
+steps. The renderer selects this step directly; it does not build and then remove
+the explicit-endpoint preparation and initial/DELTA steps used by v1/v2/v3.
+The scoped profile explicitly binds both registration_config and facts_config
 to the fixed configuration entry; short acquisition never uses legacy unbound Git.
 Push, PR, branch creation and explicit manual endpoint semantics remain
 with the existing event producer. Preparation is unjudged input acquisition.
