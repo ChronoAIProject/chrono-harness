@@ -323,6 +323,18 @@
       "id": "judge-projects-migration",
       "replacement": "judge-projects-tests",
       "reason": "Retire fixed historical-host support and its tests. The remaining current projects contract runs through its original unfiltered dedicated test action; this replacement does not claim preservation of the retired historical assertions."
+    },
+    {
+      "kind": "script",
+      "id": "artifact-members",
+      "replacement": null,
+      "reason": "Retire per-member HTTP range transport; the current artifact consumer uses the existing GitHub CLI download with cumulative acquisition budgets and original evidence validation."
+    },
+    {
+      "kind": "test",
+      "id": "artifact-members-tests",
+      "replacement": null,
+      "reason": "Joint retirement with artifact-members and its dedicated ZIP fixture; range transport is no longer a supported operation. Existing Rust collection tests preserve original report, stream, identity, retry and budget acceptance."
     }
   ],
   "migrations": [],

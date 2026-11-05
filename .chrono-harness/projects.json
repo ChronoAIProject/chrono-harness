@@ -43,8 +43,6 @@
     "host-bootstrap-tests",
     "cache",
     "cache-tests",
-    "artifact-members",
-    "artifact-members-tests",
     "ci-native-adapter",
     "ci-native-adapter-tests"
   ],
@@ -4390,38 +4388,6 @@
             ".chrono-harness/ci/bootstrap-tests.py",
             "--lifecycle-program",
             "crates/worktree/target/debug/chrono-worktree"
-          ]
-        }
-      }
-    },
-    {
-      "id": "artifact-members",
-      "language": "python",
-      "path": ".chrono-harness/ci/artifact_members.py",
-      "test_script": "artifact-members-tests",
-      "actions": {
-        "execute": {
-          "operation": "ci.artifact-member",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/artifact_members.py"
-          ]
-        }
-      }
-    },
-    {
-      "id": "artifact-members-tests",
-      "language": "python",
-      "path": ".chrono-harness/ci/artifact_members_tests.py",
-      "tests_for": "artifact-members",
-      "actions": {
-        "execute": {
-          "operation": "ci.artifact-member-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/artifact_members_tests.py"
           ]
         }
       }

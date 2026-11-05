@@ -49,7 +49,6 @@
     "test.diagnostics-tests",
     "host.bootstrap-tests",
     "test.cache-tests",
-    "ci.artifact-member-tests",
     "test.ci-native-adapter"
   ],
   "consumer_staging": {
@@ -555,14 +554,6 @@
       "rust_toolchain": true
     },
     {
-      "id": "verify_artifact_members_tests",
-      "kind": "verify",
-      "operation": "ci.artifact-member-tests",
-      "needs": [],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_artifact_members_tests",
-      "rust_toolchain": false
-    },
-    {
       "id": "verify_ci_native_adapter_tests",
       "kind": "verify",
       "operation": "test.ci-native-adapter",
@@ -613,7 +604,6 @@
       "verify_host_bootstrap_tests",
       "build_cache",
       "verify_cache_tests",
-      "verify_artifact_members_tests",
       "verify_ci_native_adapter_tests"
     ],
     "package_asset": "chrono-distribution",
@@ -660,7 +650,6 @@
       "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests",
       "build_cache": "linux_build_cache",
       "verify_cache_tests": "linux_verify_cache_tests",
-      "verify_artifact_members_tests": "linux_verify_artifact_members_tests",
       "verify_ci_native_adapter_tests": "linux_verify_ci_native_adapter_tests"
     },
     "macos": {
@@ -702,7 +691,6 @@
       "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests",
       "build_cache": "macos_build_cache",
       "verify_cache_tests": "macos_verify_cache_tests",
-      "verify_artifact_members_tests": "macos_verify_artifact_members_tests",
       "verify_ci_native_adapter_tests": "macos_verify_ci_native_adapter_tests"
     }
   },
@@ -745,7 +733,6 @@
     "verify_host_bootstrap_tests": "unmeasured",
     "build_cache": "unmeasured",
     "verify_cache_tests": "unmeasured",
-    "verify_artifact_members_tests": "unmeasured",
     "verify_ci_native_adapter_tests": "unmeasured"
   },
   "limits": {
@@ -797,7 +784,7 @@
       ]
     },
     "verify_runner_tests": {
-      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project\u2019s Rust fixture executables.",
+      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
       "release_assets": [
         "chrono-harness"
       ]
@@ -903,7 +890,7 @@
       ]
     },
     "verify_judge_mixed_tests": {
-      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host\u2019s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture\u2019s actual cost invocation.",
+      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-registration",
@@ -942,10 +929,6 @@
       "release_assets": [
         "chrono-cache"
       ]
-    },
-    "verify_artifact_members_tests": {
-      "need": "The ci.artifact-member-tests Python action imports the candidate artifact_members implementation and reads its declared binary fixture; it consumes no release executable.",
-      "release_assets": []
     },
     "verify_ci_native_adapter_tests": {
       "need": "The dedicated Python native adapter tests call the actual chrono-ci native-process bridge and check original IO, executable resolution, credential omission and bounded failure receipts. The staged chrono-ci release asset supplies that existing bridge.",
