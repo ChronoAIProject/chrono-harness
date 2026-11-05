@@ -398,6 +398,7 @@ impl Scope {
 pub fn read_bounded(root: &std::path::Path, path: &str, limit: u64) -> Result<Vec<u8>, String> {
     use std::io::Read;
     artifact_path(path)?;
+    let _input = crate::retained_artifacts::retention::read_guard(root, path)?;
     let resolved = crate::no_symlink_parents(root, path)?;
     let meta = std::fs::symlink_metadata(&resolved).map_err(|e| e.to_string())?;
     if !meta.is_file() || meta.len() > limit {

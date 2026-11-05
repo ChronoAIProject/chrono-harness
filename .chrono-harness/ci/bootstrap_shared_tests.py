@@ -34,7 +34,7 @@ def fixture_host_config(root):
     a binding or falls back to another platform's historical policy.
     """
     value = json.loads((root / ".chrono-harness/config.json").read_bytes())
-    if value.get("schema") == "chrono-git-configs/v2":
+    if value.get("schema") == "chrono-git-configs/v3":
         operating_system = {"Darwin": "macos", "Linux": "linux"}.get(platform.system())
         architecture = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64"}.get(platform.machine())
         host = value["platforms"].get(str(operating_system) + "-" + str(architecture))
@@ -58,10 +58,10 @@ class FixtureHostPolicy(unittest.TestCase):
             policy = {"expected": hashlib.sha256(program.read_bytes()).hexdigest()}
             (root / "current.json").write_text(json.dumps(policy))
             (root / "historical.json").write_text(json.dumps({"expected": "old admitted Git"}))
-            selector = {"schema": "chrono-git-configs/v2", "platforms": {"macos-aarch64": {
+            selector = {"schema": "chrono-git-configs/v3", "platforms": {"macos-aarch64": {
                 "program": str(program), "configurations": [
-                    {"sha256": "0" * 64, "path": "historical.json"},
-                    {"sha256": policy["expected"], "path": "current.json"}]}}}
+                    {"sha256": "0" * 64, "path": "historical.json", "registry_path": "historical.json"},
+                    {"sha256": policy["expected"], "path": "current.json", "registry_path": "current.json"}]}}}
             path = root / ".chrono-harness/config.json"
             path.write_text(json.dumps(selector))
             original = path.read_bytes()
@@ -77,7 +77,7 @@ class FixtureHostPolicy(unittest.TestCase):
             root = Path(directory)
             (root / ".chrono-harness").mkdir()
             (root / ".chrono-harness/config.json").write_text(json.dumps({
-                "schema": "chrono-git-configs/v2", "platforms": {}}))
+                "schema": "chrono-git-configs/v3", "platforms": {}}))
             with self.assertRaisesRegex(ValueError, "no registered native Git platform"):
                 fixture_host_config(root)
 

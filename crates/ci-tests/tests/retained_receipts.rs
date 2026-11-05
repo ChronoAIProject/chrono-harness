@@ -34,6 +34,30 @@ fn producer_objects(report: &Value) -> Value {
     json!(objects)
 }
 
+// Assertion view of the current producer's explicit registrations.
+fn registry(directory: &Path) -> Value {
+    let bytes = fs::read(directory.join("objects.json")).unwrap();
+    let mut owner: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(owner["schema"], "chrono-retained-producer/v2");
+    let mut objects = vec![];
+    for entry in fs::read_dir(directory.join("producer-records")).unwrap() {
+        let record: Value =
+            serde_json::from_slice(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
+        assert_eq!(record["schema"], "chrono-retained-producer-object/v1");
+        assert_eq!(record["owner_sha256"], chrono_harness::sha256(&bytes));
+        objects.push(record["object"].clone());
+    }
+    objects.sort_by(|a, b| a["path"].as_str().unwrap().cmp(b["path"].as_str().unwrap()));
+    owner["objects"] = json!(objects);
+    owner
+}
+fn object_record(directory: &Path, allocation: &Path) -> PathBuf {
+    directory.join("producer-records").join(format!(
+        "{}.json",
+        chrono_harness::sha256(allocation.file_name().unwrap().as_encoded_bytes())
+    ))
+}
+
 pub(super) struct Owner {
     _dir: tempfile::TempDir,
     pub(super) root: PathBuf,
@@ -184,9 +208,7 @@ impl Owner {
     }
 
     fn object(&self) -> PathBuf {
-        let registry: Value =
-            serde_json::from_slice(&fs::read(self.root.join(FAMILY).join("objects.json")).unwrap())
-                .unwrap();
+        let registry = registry(&self.root.join(FAMILY));
         self.root
             .join(FAMILY)
             .join(registry["objects"][0]["path"].as_str().unwrap())
@@ -194,7 +216,7 @@ impl Owner {
 }
 
 #[test]
-fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
+fn linked_default_wrapper_reclaims_released_copies_on_explicit_maintenance() {
     assert!(std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_none());
     let owner = Owner::new();
     owner.participating();
@@ -239,7 +261,11 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
             "expected failure and original streams checked",
         )
         .unwrap();
-    let (code, protected) = owner.reenter(&linked);
+    let (code, reentered) = owner.reenter(&linked);
+    assert_eq!(code, 0, "{reentered}");
+    assert!(producer_objects(&reentered).as_array().unwrap().is_empty());
+    assert!(object.join(GENERATED[1]).exists());
+    let (code, protected) = owner.drain();
     assert_eq!(code, 0, "{protected}");
     assert_eq!(producer_objects(&protected)[0]["status"], "protected");
     assert!(object.join(GENERATED[1]).exists());
@@ -247,7 +273,11 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
         .release("diagnostic", "real diagnostic consumer finished")
         .unwrap();
     drop(receipt);
-    let (code, reclaimed) = owner.reenter(&linked);
+    let (code, reentered) = owner.reenter(&linked);
+    assert_eq!(code, 0, "{reentered}");
+    assert!(producer_objects(&reentered).as_array().unwrap().is_empty());
+    assert!(object.join(GENERATED[1]).exists());
+    let (code, reclaimed) = owner.drain();
     assert_eq!(code, 0, "{reclaimed}");
     assert_eq!(producer_objects(&reclaimed)[0]["status"], "cleaned");
     for path in GENERATED {
@@ -271,8 +301,13 @@ fn linked_default_wrapper_reclaims_released_copies_on_ordinary_owner_reentry() {
     );
     assert_eq!(fs::read(owner.root.join(".git/index")).unwrap(), index);
     assert!(owner.root.is_dir());
+    let (code, reentered) = owner.reenter(&linked);
+    assert_eq!(code, 0, "{reentered}");
+    assert!(producer_objects(&reentered).as_array().unwrap().is_empty());
+    let (code, maintained) = owner.drain();
+    assert_eq!(code, 0, "{maintained}");
     assert_eq!(
-        producer_objects(&owner.reenter(&linked).1)[0]["status"],
+        producer_objects(&maintained)[0]["status"],
         "already-disposed"
     );
 }
@@ -680,7 +715,7 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
 }
 
 #[test]
-fn typed_registry_preserves_strict_maps_and_nested_fields_before_allocation() {
+fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation() {
     let owner = Owner::new();
     let directory = owner.root.join(".chrono-harness/state/registry-decoding");
     let allocation =
@@ -697,14 +732,14 @@ fn typed_registry_preserves_strict_maps_and_nested_fields_before_allocation() {
         "real strict-decoder fixture copy",
     )
     .unwrap();
-    let path = directory.join("objects.json");
+    let path = object_record(&directory, allocation.path());
     let valid = fs::read(&path).unwrap();
-    let registry: Value = serde_json::from_slice(&valid).unwrap();
-    let lease = directory.join("registry.lease");
-    let lease_identity = chrono_harness::ownership::identity(&lease).unwrap();
-    let compact = serde_json::to_string(&registry).unwrap();
+    let original_record: Value = serde_json::from_slice(&valid).unwrap();
+    let record = &original_record;
+    let owner_bytes = fs::read(directory.join("objects.json")).unwrap();
+    let compact = serde_json::to_string(record).unwrap();
     let reference = r#"{"released":false,"reason":"current consumer","receipt":null}"#;
-    let body = serde_json::to_string(&registry["objects"][0]["bodies"]["copy"]).unwrap();
+    let body = serde_json::to_string(&record["object"]["bodies"]["copy"]).unwrap();
     let mut invalid = Vec::new();
     for (field, before, after) in [
         (
@@ -735,15 +770,10 @@ fn typed_registry_preserves_strict_maps_and_nested_fields_before_allocation() {
     }
     invalid.push((
         "duplicate root".into(),
-        compact.replacen("{", r#"{"schema":"chrono-retained-producer/v1","#, 1),
+        compact.replacen("{", r#"{"schema":"chrono-retained-producer-object/v1","#, 1),
     ));
-    for pointer in [
-        "",
-        "/objects/0",
-        "/objects/0/bodies/copy",
-        "/objects/0/cache_lease",
-    ] {
-        let mut malformed = registry.clone();
+    for pointer in ["", "/object", "/object/bodies/copy", "/object/cache_lease"] {
+        let mut malformed = original_record.clone();
         malformed.pointer_mut(pointer).unwrap()["unknown_field"] = json!(true);
         invalid.push((
             format!("unknown field at {pointer}"),
@@ -753,14 +783,13 @@ fn typed_registry_preserves_strict_maps_and_nested_fields_before_allocation() {
     invalid.push(("trailing document".into(), format!("{compact}{{}}")));
     for (case, malformed) in invalid {
         fs::write(&path, malformed.as_bytes()).unwrap();
-        let error = chrono_worktree::TemporaryHost::allocate(
+        let error = chrono_worktree::RetainedArtifact::resume(
             &directory,
             "strict-fixture",
-            &[],
-            "must-not-be-created-",
+            allocation.path(),
         )
         .err()
-        .expect("malformed registry must refuse before allocation");
+        .expect("malformed registration must refuse its addressed allocation");
         assert!(
             error.contains("duplicate")
                 || error.contains("unknown field")
@@ -769,8 +798,8 @@ fn typed_registry_preserves_strict_maps_and_nested_fields_before_allocation() {
         );
         assert_eq!(fs::read(&path).unwrap(), malformed.as_bytes(), "{case}");
         assert_eq!(
-            chrono_harness::ownership::identity(&lease).unwrap(),
-            lease_identity,
+            fs::read(directory.join("objects.json")).unwrap(),
+            owner_bytes,
             "{case}"
         );
         assert_eq!(
@@ -779,21 +808,27 @@ fn typed_registry_preserves_strict_maps_and_nested_fields_before_allocation() {
             "{case}"
         );
     }
-    // The same consumer accepts pretty historical bytes and publishes a new
-    // allocation without losing the original copied-input registration.
-    fs::write(&path, serde_json::to_vec_pretty(&registry).unwrap()).unwrap();
+    // Pretty current bytes retain their original copied-input declaration;
+    // an independent allocation publishes only its own registration.
+    fs::write(&path, serde_json::to_vec_pretty(record).unwrap()).unwrap();
     let second =
         chrono_worktree::TemporaryHost::allocate(&directory, "strict-fixture", &[], "second-")
             .unwrap();
-    let current: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    let current = registry(&directory);
     assert_eq!(current["objects"].as_array().unwrap().len(), 2);
-    assert_eq!(current["objects"][0], registry["objects"][0]);
+    let retained = current["objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|object| object["path"] == original_record["object"]["path"])
+        .unwrap();
+    assert_eq!(retained, &original_record["object"]);
     assert!(allocation.path().is_dir() && second.path().is_dir());
     assert_eq!(fs::read(original).unwrap(), b"required original input");
 }
 
 #[test]
-fn established_registry_does_not_reenter_birth_while_its_lease_exists() {
+fn established_namespace_does_not_reenter_birth_during_unrelated_store_exclusion() {
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);
     let first = cargo_result(true);
@@ -808,9 +843,8 @@ fn established_registry_does_not_reenter_birth_while_its_lease_exists() {
         None,
     );
     let second = cargo_result(false);
-    // An established registry is already bound to its named lease. A still-live
-    // birth capability (including one inherited by a different fork) must not
-    // make an ordinary publication enter directory birth again.
+    // The immutable established namespace no longer acquires directory birth
+    // exclusion for ordinary independent allocation publications.
     let held_birth = fs::File::open(&directory).unwrap();
     held_birth.lock().unwrap();
     let mut observations = Vec::new();
@@ -822,13 +856,8 @@ fn established_registry_does_not_reenter_birth_while_its_lease_exists() {
         if phase == "registry-read-entered" {
             let birth = fs::File::open(&directory).unwrap();
             let birth_available = birth.try_lock().is_ok();
-            let registry = fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(directory.join("registry.lease"))
-                .unwrap();
-            let registry_excluded = registry.try_lock().is_err();
-            observations.push((birth_available, registry_excluded));
+            assert!(!directory.join("registry.lease").exists());
+            observations.push(birth_available);
         }
     };
     retain_command_result_observed(
@@ -843,13 +872,13 @@ fn established_registry_does_not_reenter_birth_while_its_lease_exists() {
     );
     assert_eq!(
         observations,
-        [(false, true)],
-        "one excluded snapshot must proceed while the independent birth holder remains live"
+        [false],
+        "publication must proceed while the independent namespace birth holder remains live"
     );
 }
 
 #[test]
-fn established_registry_never_recreates_or_rebinds_its_expected_lease() {
+fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
     for replaced in [false, true] {
         let owner = Owner::new();
         let directory = owner.root.join(FAMILY);
@@ -864,11 +893,11 @@ fn established_registry_never_recreates_or_rebinds_its_expected_lease() {
         )
         .unwrap();
         let original = fs::read(directory.join("objects.json")).unwrap();
-        let lease = directory.join("registry.lease");
-        let saved = directory.join("original-registry.lease");
-        fs::rename(&lease, &saved).unwrap();
+        let records = directory.join("producer-records");
+        let saved = directory.join("original-producer-records");
+        fs::rename(&records, &saved).unwrap();
         if replaced {
-            fs::copy(&saved, &lease).unwrap();
+            fs::create_dir(&records).unwrap();
         }
         fs::create_dir(directory.join("next")).unwrap();
         let error = chrono_worktree::RetainedArtifact::begin(
@@ -885,18 +914,22 @@ fn established_registry_never_recreates_or_rebinds_its_expected_lease() {
             error.contains(if replaced {
                 "identity differs"
             } else {
-                "unavailable"
+                "No such file"
             }),
             "{error}"
         );
         assert_eq!(fs::read(directory.join("objects.json")).unwrap(), original);
-        assert_eq!(lease.exists(), replaced, "missing lease must stay missing");
+        assert_eq!(
+            records.exists(),
+            replaced,
+            "missing namespace must stay missing"
+        );
         assert!(saved.exists());
     }
 }
 
 #[test]
-fn producer_registry_birth_serializes_create_before_lock_and_retains_both_commands() {
+fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_commands() {
     use std::{os::unix::fs::MetadataExt, sync::mpsc, time::Duration};
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);
@@ -911,7 +944,7 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
         let store = &directory;
         let first = scope.spawn(move || {
             let mut observer = |phase: &str| {
-                if phase == "lease-created-before-lock" {
+                if phase == "birth-gate-acquired" {
                     created_tx.send(()).unwrap();
                     resume_rx.recv_timeout(Duration::from_secs(10)).unwrap();
                 }
@@ -929,17 +962,13 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
         });
         created_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(!directory.join("objects.json").exists());
-        let lease_path = directory.join("registry.lease");
-        let lease_identity = fs::metadata(&lease_path).unwrap();
-        // Prove A is paused after creating the visible lease and before flock.
-        // Release this probe before B starts, allowing B to take the old gap.
-        let lease = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&lease_path)
-            .unwrap();
-        lease.try_lock().unwrap();
-        drop(lease);
+        let namespace_identity = fs::metadata(&directory).unwrap();
+        let namespace = fs::File::open(&directory).unwrap();
+        assert!(
+            namespace.try_lock().is_err(),
+            "birth must already hold actual namespace exclusion"
+        );
+        assert!(!directory.join("registry.lease").exists());
         let first_copy = fs::read_dir(&directory)
             .unwrap()
             .map(|entry| entry.unwrap().path())
@@ -988,15 +1017,15 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
         );
         let first = first.unwrap();
         let second = second.unwrap();
-        let metadata = fs::metadata(&lease_path).unwrap();
+        let metadata = fs::metadata(&directory).unwrap();
         assert_eq!(
             (metadata.dev(), metadata.ino()),
-            (lease_identity.dev(), lease_identity.ino())
+            (namespace_identity.dev(), namespace_identity.ino())
         );
+        assert!(!directory.join("registry.lease").exists());
         (first, second)
     });
-    let registry: Value =
-        serde_json::from_slice(&fs::read(directory.join("objects.json")).unwrap()).unwrap();
+    let registry = registry(&directory);
     let objects = registry["objects"].as_array().unwrap();
     assert_eq!(objects.len(), 2);
     let verify_originals = || {

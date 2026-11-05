@@ -106,7 +106,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 62 duplicate original bytes across reports/streams/downloads | partial: addressed blob transport deduplicates declared originals; v2 process transport is lossless compression; native gather shares exact explicitly bound report aliases within an artifact while preserving paths and failure closure | unique content entities across enrolled producers, independent operation results and exception relations; compression or shared allocation is not path retirement |
 | 63 nested fixture SDK/build/incremental outputs under state | implemented bounded: `runner-tests/tests/retention.rs::ordinary_entry_reclaims_completed_nested_outputs_with_real_savings` enrolls the actual nested SDK `target/incremental` output, reclaims exactly 2097152 logical bytes through ordinary adopted maintenance, preserves original failure exit 7 and leaves physical savings unknown; current Darwin native original confirms execution | all actual host SDK/fixture producers must adopt explicit enrollment; directory placement grants no authority |
 | 64 interruption during artifact publication/reclamation | partial: worktree cache retry intents and kernel leases; `runner-tests/tests/retention.rs::no_finish_preserves_live_producer_then_recovers_unknown_partial_publication` protects a live publication, recovers its actual partial tree after capability close without finish, retains completion `not-established` and rejects retired-original consumption; current Darwin native original confirms execution | general producer publication/reclamation interruption and complete host recovery adoption remain bounded |
-| 65 count/byte overflow with live consumers/recovery state | partial: `runner-tests/tests/retention.rs::protected_capacity_refuses_enrollment_and_bounded_replacement_recovers` refuses a second publication at count capacity 1 while the first is live and recovers interrupted inventory replacement without raising capacity; current Darwin native original confirms execution | byte/unknown occupancy overflow combinations and complete producer/recovery adoption remain uncovered |
+| 65 count/byte overflow with live consumers/recovery state | partial: current candidate `per_relation_capacity_preserves_independent_outputs_and_recovers_pending_record` requires independent publication at related-set limit 1 and recovery of its addressed pending record; candidate execution is pending | byte/unknown occupancy overflow combinations and complete producer/recovery adoption remain uncovered |
 | 66 new references/identity drift/unjoined descendants before disposal | partial: lifecycle admission/exclusion and identity rechecks | synchronize all declared artifact publication/reference/release/disposal under existing owners |
 | 67 retired originals or repeated cleanup retries | partial: cache retry evidence avoids recursive growth | truthful retired-original summaries and evidence-insufficient consumption; finite metadata for general artifact retirement |
 | 68 large old/unregistered/duplicate historical host artifacts | partial: `runner-tests/tests/retention.rs::historical_cli_requires_registered_producer_receipt_exclusion_and_release_evidence` exercises the current retention CLI, rejects a live legacy owner and an internal disposable receipt, requires exact source/receipt/lease/root and release evidence, reclaims 2048 bytes and preserves original exit 101 plus external receipt bytes; current Darwin native original confirms execution | arbitrary large, unregistered or duplicate host artifacts still require actual owner migration and real consumer/release evidence; unknown ownership remains protected without historical API compatibility |
@@ -1125,3 +1125,24 @@ a final aggregate. Focused Rust v3-unit/retained-engine tests cover this bounded
 consumer; see [the adoption and limits](diagnostics.md#scoped-ci-execution-progress-adoption).
 The fixed native timeout root cause, committed canonical/native acceptance, broader
 SPEC 7.1/7.2 adoption and full SPEC delivery remain unresolved.
+
+
+The current lifecycle and final-output implementation uses addressed enrollment,
+allocation, output and consumer records. Independent objects share no mutable
+membership ledger or exclusive admission. Global output-count/byte quotas are
+removed; relationship, per-output and per-round limits remain. Ordinary entries
+maintain their addressed worktree and declared dependencies. Explicit maintenance
+preserves busy/damaged records and continues independent objects. Shared executable
+replacement still excludes its actual users. Existing custody, migration,
+interruption and owner-deployment consumers use the addressed storage; old active
+state requires the documented protected owner cutover, without a runtime fallback.
+
+Product and host policy change together. Native run `41944861461` on clean
+candidate `a0071a5cec3079a01cc839fcc095fda1323bc923` passed all 24 business units
+and collection. The registered runner action passed 241 tests with one existing
+ignored test. Clean candidate `66806b61ebe5a2892a6fd2e276e28a676f379a6d` passed the
+local canonical worktree unit after the retention test was corrected to exercise
+bounded continuation. Final source bootstrap at
+`a41cd43aa7233a32847fe47c67e7f1b90846881a` passed. Those observations do not establish
+final-candidate acceptance, deployment to other coordinators, actual landing or
+complete SPEC delivery. Total runtime, CI and storage costs remain unmeasured.

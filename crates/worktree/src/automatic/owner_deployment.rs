@@ -30,16 +30,29 @@ impl Manager {
         if !e.cache_only || e.status != "active" || e.terminal.is_some() {
             return Err("owner deployment preserves unknown or terminal enrollment".into());
         }
-        // Admission excludes new ordinary entrants. Each already admitted target
+        // Exclusive executable deployment excludes new ordinary entrants. Each already admitted target
         // has its own enrollment SH, including linked checkout descendants.
         let inventory = r.inventory(root)?;
-        let entries: Vec<_> = self
-            .ledger
-            .entries
-            .iter()
-            .filter(|entry| entry.status != "disposed")
-            .cloned()
-            .collect();
+        let mut entries = Vec::new();
+        let mut originals = Vec::new();
+        for path in self.enrollment_paths()? {
+            let file = record_directory(&self.directory, &path)?.join("ledger.json");
+            let raw = fs::read(&file).map_err(|e| e.to_string())?;
+            let ledger: Ledger = decode(&raw)?;
+            if ledger.coordinator_root != self.inputs.policy.coordinator_root
+                || ledger.common != self.inputs.common
+                || ledger.entries.iter().any(|entry| entry.path != path)
+            {
+                return Err("owner deployment enrollment namespace changed".into());
+            }
+            entries.extend(
+                ledger
+                    .entries
+                    .into_iter()
+                    .filter(|entry| entry.status != "disposed"),
+            );
+            originals.push((file, raw));
+        }
         for row in &inventory {
             let path = Path::new(&row["worktree"]);
             if !entries.iter().any(|entry| entry.path == path) {
@@ -78,7 +91,7 @@ impl Manager {
             }
             exclusions.push((entry, r.oid(&entry.path, "HEAD")?, lease));
         }
-        let ledger_path = self.directory.join("ledger.json");
+        let ledger_path = self.record_directory.join("ledger.json");
         let ledger_bytes = fs::read(&ledger_path).map_err(|e| e.to_string())?;
         if value!(decode::<Ledger>(&ledger_bytes)?) != value!(&self.ledger) {
             return Err(
@@ -87,6 +100,11 @@ impl Manager {
         }
         let stable = |r: &mut Runner| -> Result<(), String> {
             self.stable(r)?;
+            for (file, raw) in &originals {
+                if fs::read(file).map_err(|e| e.to_string())? != *raw {
+                    return Err("owner deployment enrollment changed; preserve originals".into());
+                }
+            }
             if fs::read(&ledger_path).map_err(|e| e.to_string())? != ledger_bytes
                 || r.inventory(root)? != inventory
             {

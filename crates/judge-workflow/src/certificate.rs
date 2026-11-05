@@ -100,12 +100,19 @@ pub fn consume(
     binding: &Value,
     observation: Option<&Value>,
 ) -> Result<Value, String> {
-    let _report_activity =
-        chrono_harness::retained_artifacts::retention::report_activity(&req.candidate.root)?;
+    let _read_scope =
+        chrono_harness::retained_artifacts::retention::read_scope(&req.candidate.root)?;
     let digest = ctx["integration_evidence"]
         .as_str()
         .ok_or("E_INTEGRATION_REQUIRED: no evidence digest")?;
     let path = location(req, r)?;
+    let _certificate = chrono_harness::retained_artifacts::retention::read_guard(
+        &req.candidate.root,
+        path.strip_prefix(&req.candidate.root)
+            .map_err(|e| e.to_string())?
+            .to_str()
+            .ok_or("certificate path UTF8")?,
+    )?;
     let bytes = fs::read(path).map_err(|e| format!("E_INTEGRATION_REQUIRED: {e}"))?;
     let check = || -> Result<Value, String> {
         if sha256(&bytes) != digest {

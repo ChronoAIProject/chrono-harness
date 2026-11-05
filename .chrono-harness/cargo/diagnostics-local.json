@@ -48,11 +48,11 @@
       "input": null
     },
     {
-      "path": "/Users/macstudio2/chrono-native-diagnostics-input-20261030/.chrono-harness/state/bootstrap-owner-tooling/cargo/config",
+      "path": ".chrono-harness/state/bootstrap-owner-tooling/cargo/config",
       "input": null
     },
     {
-      "path": "/Users/macstudio2/chrono-native-diagnostics-input-20261030/.chrono-harness/state/bootstrap-owner-tooling/cargo/config.toml",
+      "path": ".chrono-harness/state/bootstrap-owner-tooling/cargo/config.toml",
       "input": null
     }
   ],

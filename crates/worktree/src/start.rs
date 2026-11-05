@@ -17,7 +17,7 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 pub(crate) struct Runner {
     pub(crate) config: Config,
     pub(crate) birth_lease: Option<crate::ownership::Lease>,
-    pub(crate) coordinator_reports: Option<crate::ownership::Lease>,
+    pub(crate) coordinator_inputs: Option<chrono_harness::retained_artifacts::retention::ReadScope>,
     environment: BTreeMap<String, String>,
     tool: observation::Tool,
     processes: Vec<Value>,
@@ -630,7 +630,6 @@ pub(crate) fn with_report_for_consumer(
     }
     // Reclaim before this invocation starts protecting its report family.
     // Admission below also resumes bounded work before reserving the result.
-    chrono_harness::retained_artifacts::retention::maintain_adopted(root)?;
     let dir = no_symlink_parents(&root, config.report_directory.trim_end_matches('/'))?;
     let mut inherited = serde_json::Map::new();
     let mut environment = BTreeMap::new();
@@ -726,11 +725,10 @@ pub(crate) fn with_report_for_consumer(
         false,
         value!({"operation":operation,"outcome":"not-established"}),
     )?;
-    // The publication capability and durable recovery root already protect this
-    // output. Start family protection only after admission's maintenance, so it
-    // can resume a partial retirement without this invocation rooting all history.
-    // Other active collectors and exact roots still exclude both earlier rounds.
-    let _report_activity = chrono_harness::retained_artifacts::retention::report_activity(root)?;
+    // The publication capability and durable recovery root protect this output.
+    // This caller retains only its actual inputs and child-produced originals
+    // through their handoff to the completed report.
+    let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(root)?;
     let mut output = fs::OpenOptions::new()
         .write(true)
         .open(&output_path)
@@ -763,7 +761,7 @@ pub(crate) fn with_report_for_consumer(
     let mut runner = Runner {
         config,
         birth_lease: None,
-        coordinator_reports: None,
+        coordinator_inputs: None,
         environment,
         tool,
         processes: vec![],

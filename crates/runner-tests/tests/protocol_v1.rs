@@ -1,5 +1,7 @@
 #[path = "support/native_executable.rs"]
 mod native_executable;
+#[path = "support/retention_state.rs"]
+mod retention_state;
 
 use chrono_harness::{json, sha256, wire};
 use serde_json::json as value;
@@ -1005,13 +1007,7 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
                 if case == "publication-both" { 0 } else { 1 }
             );
             if adopted {
-                let inventory: serde_json::Value = serde_json::from_slice(
-                    &fs::read(
-                        root.join(".chrono-harness/state/output-retention-v1/inventory.json"),
-                    )
-                    .unwrap(),
-                )
-                .unwrap();
+                let inventory: serde_json::Value = retention_state::snapshot(root);
                 let original = report["report_path"].as_str().unwrap();
                 let output = inventory["outputs"]
                     .as_array()
@@ -1050,10 +1046,7 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
                 assert_eq!(process["exit_code"], 17);
             }
             if adopted {
-                let inventory_path =
-                    root.join(".chrono-harness/state/output-retention-v1/inventory.json");
-                let inventory: serde_json::Value =
-                    serde_json::from_slice(&fs::read(&inventory_path).unwrap()).unwrap();
+                let inventory: serde_json::Value = retention_state::snapshot(root);
                 let path = report["report_path"].as_str().unwrap();
                 let output = inventory["outputs"]
                     .as_array()
@@ -1096,8 +1089,7 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
                     "recheck-request.json",
                 ]);
                 assert_eq!(result.exit_code, 0, "{}", result.stderr);
-                let inventory: serde_json::Value =
-                    serde_json::from_slice(&fs::read(&inventory_path).unwrap()).unwrap();
+                let inventory: serde_json::Value = retention_state::snapshot(root);
                 assert!(
                     !inventory["roots"]
                         .as_object()
@@ -1129,11 +1121,7 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
             text
         );
         if adopted {
-            let inventory: serde_json::Value = serde_json::from_slice(
-                &fs::read(root.join(".chrono-harness/state/output-retention-v1/inventory.json"))
-                    .unwrap(),
-            )
-            .unwrap();
+            let inventory: serde_json::Value = retention_state::snapshot(root);
             let output = inventory["outputs"]
                 .as_array()
                 .unwrap()

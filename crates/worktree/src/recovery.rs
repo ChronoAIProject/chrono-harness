@@ -28,6 +28,7 @@ fn state_path(root: &Path, path: &str) -> Result<PathBuf, String> {
     no_symlink_parents(root, path)
 }
 pub(crate) fn state_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
+    let _input = chrono_harness::retained_artifacts::retention::read_guard(root, path)?;
     fs::read(state_path(root, path)?).map_err(|e| e.to_string())
 }
 fn original_bytes(root: &Path, path: &str) -> Result<Option<Vec<u8>>, String> {

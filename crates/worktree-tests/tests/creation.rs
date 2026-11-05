@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/retention_state.rs"]
+mod retention_state;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_harness::{json, sha256};
@@ -43,6 +45,29 @@ fn producer_objects(report: &Value) -> Value {
                 .clone())
             .collect::<Vec<_>>()
     )
+}
+// Assertion view over current producer-written registrations. There is no
+// mutable aggregate in the implementation and no historical-format fallback.
+fn producer_state(directory: &Path) -> Value {
+    let owner_bytes = fs::read(directory.join("objects.json")).unwrap();
+    let mut owner = json(&owner_bytes).unwrap();
+    assert_eq!(owner["schema"], "chrono-retained-producer/v2");
+    let mut objects = vec![];
+    for entry in fs::read_dir(directory.join("producer-records")).unwrap() {
+        let record = json(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
+        assert_eq!(record["schema"], "chrono-retained-producer-object/v1");
+        assert_eq!(record["owner_sha256"], sha256(&owner_bytes));
+        objects.push(record["object"].clone());
+    }
+    objects.sort_by(|a, b| a["path"].as_str().unwrap().cmp(b["path"].as_str().unwrap()));
+    owner["objects"] = value!(objects);
+    owner
+}
+fn producer_record_path(directory: &Path, allocation: &Path) -> PathBuf {
+    directory.join("producer-records").join(format!(
+        "{}.json",
+        sha256(allocation.file_name().unwrap().to_str().unwrap().as_bytes())
+    ))
 }
 fn fixture_git() -> PathBuf {
     let registry = source().join(".chrono-harness/tests/worktree-tools.json");
@@ -167,24 +192,19 @@ impl Host {
                 }
             }
             // Only explicitly enrolled fixtures, never live worker artifacts.
-            if let Ok(bytes) = fs::read(
-                self.root
-                    .join(".chrono-harness/state/automatic-cleanup/ledger.json"),
-            ) {
-                if let Ok(ledger) = json(&bytes) {
-                    for entry in ledger["entries"].as_array().into_iter().flatten() {
-                        let Some(path) = entry["path"].as_str() else {
-                            continue;
-                        };
-                        let target = Path::new(path);
-                        retain_fixture_state(
-                            &target.join(".chrono-harness/state"),
-                            &destination.join(format!(
-                                "enrollment-{}",
-                                sha256(target.as_os_str().as_encoded_bytes())
-                            )),
-                        )?;
-                    }
+            if let Ok(ledger) = automatic::snapshot(&self.root) {
+                for entry in ledger["entries"].as_array().into_iter().flatten() {
+                    let Some(path) = entry["path"].as_str() else {
+                        continue;
+                    };
+                    let target = Path::new(path);
+                    retain_fixture_state(
+                        &target.join(".chrono-harness/state"),
+                        &destination.join(format!(
+                            "enrollment-{}",
+                            sha256(target.as_os_str().as_encoded_bytes())
+                        )),
+                    )?;
                 }
             }
             Ok(())
@@ -1883,7 +1903,7 @@ fn artifact_directory_names_do_not_hide_tracked_changes_files_or_symlinks() {
 fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_consumer() {
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = Host::new("payload");
-    let policy = value!({"schema":"chrono-output-retention/v1","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},"keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000});
+    let policy = value!({"schema":"chrono-output-retention/v2","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},"keep_seconds":0,"max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000});
     fs::write(
         h.root.join(POLICY_PATH),
         serde_json::to_vec(&policy).unwrap(),
@@ -1897,7 +1917,7 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
     fs::write(h.root.join(FM), serde_json::to_vec(&filemap).unwrap()).unwrap();
     commit(&h.root);
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-    let activity = inventory.report_activity().unwrap();
+    let activity = inventory.read_scope().unwrap();
     let occupied = h.parent.join("occupied-for-failure");
     fs::create_dir(&occupied).unwrap();
     fs::write(
@@ -1911,14 +1931,7 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
     let report_path = report["report_path"].as_str().unwrap();
     let raw = fs::read(h.root.join(report_path)).unwrap();
     assert_eq!(json(&raw).unwrap()["status"], "failed");
-    let ledger = json(
-        &fs::read(
-            h.root
-                .join(".chrono-harness/state/output-retention-v1/inventory.json"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
+    let ledger = retention_state::snapshot(&h.root);
     let role = format!(
         "consumer:lifecycle-recheck:{}",
         sha256(report_path.as_bytes())
@@ -1944,7 +1957,7 @@ fn adopted_lifecycle_failure_keeps_large_error_in_original_with_compact_outcome(
     let h = Host::new("payload");
     let diagnostic = "original failure detail\n".repeat(1000);
     automatic::native_git(&h, "large-diagnostic", value!({"diagnostic":diagnostic}));
-    let policy = value!({"schema":"chrono-output-retention/v1","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},"keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000});
+    let policy = value!({"schema":"chrono-output-retention/v2","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},"keep_seconds":0,"max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000});
     fs::write(
         h.root.join(POLICY_PATH),
         serde_json::to_vec(&policy).unwrap(),
@@ -1960,7 +1973,7 @@ fn adopted_lifecycle_failure_keeps_large_error_in_original_with_compact_outcome(
     let activity = Inventory::adopted(&h.root)
         .unwrap()
         .unwrap()
-        .report_activity()
+        .read_scope()
         .unwrap();
     let target = h.parent.join("large-failed-original");
     let (code, report, error) = h.invoke("integration", "large-failed-original", &target);
@@ -1973,14 +1986,7 @@ fn adopted_lifecycle_failure_keeps_large_error_in_original_with_compact_outcome(
     let path = report["report_path"].as_str().unwrap();
     let raw = fs::read(h.root.join(path)).unwrap();
     assert_eq!(json(&raw).unwrap()["error"], report["error"]);
-    let ledger = json(
-        &fs::read(
-            h.root
-                .join(".chrono-harness/state/output-retention-v1/inventory.json"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
+    let ledger = retention_state::snapshot(&h.root);
     let output = ledger["outputs"]
         .as_array()
         .unwrap()
