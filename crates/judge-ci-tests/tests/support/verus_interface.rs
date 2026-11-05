@@ -10,6 +10,7 @@ fn main() {
     }
     assert_eq!(args.len(), 12);
     let output = &args[10];
+    fs::create_dir_all(std::path::Path::new(output).parent().unwrap()).unwrap();
     let paths = ["src.txt", "doc.txt"];
     let list = paths.join(" ");
     let mut dependency = format!("{output}.d: {list}\n\n{output}: {list}\n\n");
