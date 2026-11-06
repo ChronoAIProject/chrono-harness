@@ -368,6 +368,7 @@ impl Context {
                 "requested_bytes":requested,"physical_reclaim_bytes":Value::Null,
                 "enforcement":"admission-and-checkpoint observation; concurrent writers are not reserved"});
             if bytes
+                .max(allocated)
                 .checked_add(requested)
                 .is_none_or(|total| total > maximum)
             {

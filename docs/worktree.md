@@ -1527,7 +1527,19 @@ while the obligation remains; eligible exact recovery can settle one independent
 Unreleased originals below the bound stay protected without blocking independent
 siblings. Neither missing producer completion nor age releases their consumers.
 There is no shared byte ledger, whole-library quota, admission lock, daemon or
-filesystem reservation. External builders and native raw streams remain outside
+filesystem reservation. Optional `capacity.max_directory_bytes` limits each
+explicit producer directory at allocation/copy/capture admission and checkpoints.
+The same bounded tree measurement counts all sibling allocations, shared input
+bytes and producer metadata, without enrolling each file or following symlinks.
+Both logical bytes and observed allocated blocks must fit that limit, including
+a controlled write's known requested length. Unknown or incomplete measurements
+refuse production and preserve originals. Cleanup still requires its original
+ownership and consumer release; measuring an excess grants no deletion authority.
+The whole-directory walk uses the existing checkpoint entry/time limits and adds
+IO when the option is selected; total production cost remains unmeasured. Hosts
+must deploy the compatible owner and migrate the existing producer context
+before adopting the option. A budget observation is not a concurrent reservation.
+External builders and native raw streams remain outside
 continuous byte enforcement: they can overshoot between launch/join checkpoints,
 including while a producer is interrupted. Overshoot size is unknown and can
 exceed available space. Further related production refuses on the observed
