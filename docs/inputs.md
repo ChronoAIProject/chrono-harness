@@ -31,7 +31,7 @@ v3 将输入范围标为 `declared-complete` 时，必须提供 `bindings`，每
 
 macOS 27 政策另为 `chrono-ci`、`chrono-worktree`、`chrono-inputs` 和 `cargo-guard` 登记已安装文件的摘要，补齐现有四条工具绑定中的文件输入，并在该配置专属 FILEMAP 边中连接原使用方。工具版本声明仍在 `tools`，文件身份只由 `environment.inputs` 负责。摘要取自本次独立工作树的源码 bootstrap，已与安装报告和实际文件核对；它们不能直接作为其他构建或平台的身份。此采用不启用完整治理，完整输入及本地／CI 同判仍未建立。
 
-两项文件输入绑定现已把既有 runner 和 diagnostics Cargo 保护消费者连到它们所选的显式 FILEMAP 输入。runner 在原有 18 项文件绑定旁补充 2,653 项引用；diagnostics 绑定其声明的 1,138 项文件。因此政策中的全部 2,671 个文件输入节点都已出现在绑定内。它们属于现有包／缓存、配置／缺失、可执行／运行时和清单声明，没有发现或新增输入、依赖边或执行。diagnostics action 保留登记的配置与政策选择器，为绑定的本地 Git 选择 macOS 27 政策和 `cargo/diagnostics-local.json`。
+runner 和 diagnostics 的 Cargo 保护消费者通过现有绑定引用各自明确登记的文件输入，包括包源码／缓存、配置／明确缺失、执行文件／运行时和清单。文件身份与使用方关系以当前政策和 FILEMAP 为准，不从目录发现输入或依赖，也不因此增加执行。diagnostics action 保留登记的配置与政策选择器，为绑定的本地 Git 选择 macOS 27 政策和 `cargo/diagnostics-local.json`。
 
 其他消费者、原快照、完整编译器／SDK 输入和真实 CI 采用仍不齐，政策保持 `status: proposed`、`enforcement: not-implemented`、`input_closure.status: incomplete`。验证沿用候选 bootstrap、标准变更检查和真实 PR／落地检查，总验证及存储成本未测。
 
