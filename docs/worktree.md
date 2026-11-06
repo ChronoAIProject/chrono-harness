@@ -1564,12 +1564,22 @@ links inside the directory are unlinked without following their targets.
 **Product/policy cochange:** whole-directory disposal is appropriate for owned
 synthetic test hosts; real worktrees continue to preserve their source and unique
 commits. A policy/context migration does not grant this ownership to allocations
-created under the previous choice. Those mixed historical directories require
-their producer's actual custody handoff. The direct behavioral acceptance is
+created under the previous choice. The existing `migrate --adopt-fixtures`
+handoff accepts `adopt_directory: true` with `release_originals: true` and empty
+`members` for one exact old temporary allocation. Its producer-written custody
+receipt binds the original intent and physical identity without rewriting that
+intent. The current policy must adopt directory ownership; active capabilities,
+unreleased diagnostics, changed identities and allocations already handed to
+output retention refuse the transfer. Migration itself does no disposal. Old
+per-output retirement must finish under its existing owner before those remaining
+directories can transfer; the new option does not bypass that owner.
+The direct behavioral acceptance is
 `test.worktree.directory-cleanup`, covering a failed command, diagnostic release,
 a synthetic committed repository, unregistered scratch members, an external
-symlink and preservation of a preexisting source allocation. Validation and
-actual host adoption remain separate from declaring this option.
+symlink, preservation without custody and exact historical directory custody.
+The five temporary test producers adopt directory ownership for new allocations;
+the non-temporary command-result producer keeps its own lifetime. Actual
+coordinator adoption remains separate from declaring this option.
 
 Metadata writes have finite byte/node admission. Released output and metadata
 retirement use retention.json's finite content/metadata windows, per-round work

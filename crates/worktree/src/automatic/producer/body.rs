@@ -821,7 +821,8 @@ impl Manager {
                                 "custody":custody,"candidate":self.inputs.anchor_head,
                                 "reason":plan.reason,"historical_outcome":"unchanged"}),
                         )?;
-                        Arc::make_mut(&mut store.state.objects[0]).directory_custody = Some(receipt);
+                        Arc::make_mut(&mut store.state.objects[0]).directory_custody =
+                            Some(receipt);
                     }
                     Arc::make_mut(&mut store.state.objects[0]).original_release = Some(format!(
                         "current custodian released exact originals: {}; custody {}",

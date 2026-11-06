@@ -542,8 +542,8 @@ pub(super) fn directory_custody_stable(
     let Some(receipt) = &object.directory_custody else {
         return Ok(());
     };
-    let bytes = fs::read(no_symlink_parents(directory, &receipt.path)?)
-        .map_err(|e| e.to_string())?;
+    let bytes =
+        fs::read(no_symlink_parents(directory, &receipt.path)?).map_err(|e| e.to_string())?;
     let custody = json(&bytes)?;
     if object.disposable_directory
         || sha256(&bytes) != receipt.sha256

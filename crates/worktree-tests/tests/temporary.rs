@@ -180,7 +180,9 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
     fs::write(root.join("unregistered-scratch"), b"temporary").unwrap();
     let artifact =
         chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
-    artifact.acquire("diagnostic", "inspect old fixture").unwrap();
+    artifact
+        .acquire("diagnostic", "inspect old fixture")
+        .unwrap();
     drop(allocation);
     let record = producer_record_path(&store, &root);
     let object = json(&fs::read(&record).unwrap()).unwrap()["object"].clone();
@@ -189,7 +191,12 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
     adopt_directory_cleanup(&h);
     let (code, report, error) = h.auto(
         "migrate",
-        &["--path", h.root.to_str().unwrap(), "--partition-producer", "test-allocation"],
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--partition-producer",
+            "test-allocation",
+        ],
     );
     assert_eq!(code, 0, "{report} {error}");
     let live = chrono_harness::ownership::Lease::acquire(
@@ -198,7 +205,9 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
         false,
         false,
         None,
-    ).unwrap().unwrap();
+    )
+    .unwrap()
+    .unwrap();
     let mut plan = value!({"schema":"chrono-fixture-body-custody/v1",
         "head":git(&h.root,&["rev-parse","HEAD"]),"current_consumers_released":true,
         "reason":"current fixture custodian inspected originals and releases this synthetic directory",
@@ -208,18 +217,26 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
     let path = ".chrono-harness/state/directory-custody.json";
     let adopt = |plan: &Value| {
         fs::write(h.root.join(path), serde_json::to_vec(plan).unwrap()).unwrap();
-        h.auto("migrate", &["--path", h.root.to_str().unwrap(), "--adopt-fixtures", path])
+        h.auto(
+            "migrate",
+            &["--path", h.root.to_str().unwrap(), "--adopt-fixtures", path],
+        )
     };
     assert_eq!(adopt(&plan).0, 2, "live capability must exclude custody");
     drop(live);
     assert_eq!(adopt(&plan).0, 2, "diagnostic must separately release");
-    artifact.release("diagnostic", "old fixture inspected").unwrap();
+    artifact
+        .release("diagnostic", "old fixture inspected")
+        .unwrap();
     plan["objects"][0]["identity"] = value!("wrong physical identity");
     assert_eq!(adopt(&plan).0, 2);
     plan["objects"][0]["identity"] = object["identity"].clone();
     let (code, report, error) = adopt(&plan);
     assert_eq!(code, 0, "{report} {error}");
-    assert!(root.is_dir(), "custody must not itself dispose the directory");
+    assert!(
+        root.is_dir(),
+        "custody must not itself dispose the directory"
+    );
     assert_eq!(fs::read(&intent).unwrap(), original);
     let adopted = json(&fs::read(&record).unwrap()).unwrap();
     assert!(adopted["object"]["directory_custody"].is_object());
@@ -228,8 +245,14 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
         chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "new-owned-")
             .unwrap();
     next.finish().unwrap();
-    assert!(!root.exists() && !record.exists(), "adopted old directory accumulated");
-    assert_eq!(json(&original).unwrap()["producer_outcome"], "not-established");
+    assert!(
+        !root.exists() && !record.exists(),
+        "adopted old directory accumulated"
+    );
+    assert_eq!(
+        json(&original).unwrap()["producer_outcome"],
+        "not-established"
+    );
 }
 
 #[test]

@@ -178,6 +178,7 @@
       "id": "worktree-test-host",
       "directory": ".chrono-harness/state/temporary-hosts/worktree/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "source with spaces/independent/producer/target/",
@@ -216,6 +217,7 @@
       "id": "ci-test-host",
       "directory": ".chrono-harness/state/temporary-hosts/ci/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "arbitrary non Cargo layout/.chrono-harness/state/cargo/producer/target/",
@@ -248,6 +250,7 @@
       "id": "projects-test-host",
       "directory": ".chrono-harness/state/temporary-hosts/projects/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "fixture/p/target/",
@@ -284,6 +287,7 @@
       "id": "workflow-test-tools",
       "directory": ".chrono-harness/state/temporary-hosts/workflow-tools/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "fixture/local-lane/p/target/",
@@ -317,6 +321,7 @@
       "id": "projects-migration-host",
       "directory": ".chrono-harness/state/temporary-hosts/migration/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "fixture/crates/runner/target/",
