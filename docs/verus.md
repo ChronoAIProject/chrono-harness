@@ -2,7 +2,7 @@
 
 本仓库的真实消费者是 `chrono-harness check` 及其本地／CI 汇总。它们必须对登记、选择、状态和失败结果给出可复查的语义。普通 Rust 测试只能执行有限样例，不能证明边界、组合和状态转移没有一条未覆盖的分支；因此影响这些结果的逻辑以 Verus 源码为权威，并由 coverage gate 检查证明和生产调用是否相连。
 
-当前首批实现已接入 runner 的三个实际边界：完整 commit OID、CI 单元 ID 和 POSIX 相对路径。`facts::full_oid`、`units::id`、`runner::relative_path` 直接调用同源 `verified_identifiers.rs`／`verified_paths.rs`；独立 Rust 测试通过 Verus 宏检查边界。Verus 归档由 `.chrono-harness/ci/bootstrap-verus.json` 声明、`.chrono-harness/ci/verus_bootstrap.py` 下载并校验，归档和解压出的工具都属于可重建宿主状态，不入 Git。此批只证明这些局部谓词和调用接线，不证明 JSON 解码、Git／文件系统事实、registration、图选择或其它状态逻辑。
+当前首批实现已接入 runner 的三个实际边界：完整 commit OID、CI 单元 ID 和 POSIX 相对路径。`facts::full_oid`、`units::id`、`runner::relative_path` 直接调用同源 `verified_identifiers.rs`／`verified_paths.rs`；独立 Rust 测试通过 Verus 宏检查边界。Verus 的唯一规范入口是 `.chrono-harness/verus.json`；`.chrono-harness/ci/bootstrap-verus.json` 只引用它，`.chrono-harness/ci/verus_bootstrap.py` 下载并校验归档，归档和解压出的工具都属于可重建宿主状态，不入 Git。此批只证明这些局部谓词和调用接线，不证明 JSON 解码、Git／文件系统事实、registration、图选择或其它状态逻辑。
 
 这项要求有明确的终点：如果移除 Verus proof，check 仍可运行，却无法把通过／拒绝／未知绑定到已证明的规范谓词，当前 SPEC 的核心正确性就失去可观察保证。纯 IO、进程运输、Git／CI provider 观察和不改变裁决的 fixture 没有这个终点，不因项目使用 Rust 或存在 Cargo 文件而强行加入 Verus。
 

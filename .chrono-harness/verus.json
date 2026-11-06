@@ -1,0 +1,42 @@
+{
+  "schema": "chrono-verus/v1",
+  "version": "0.2026.04.24.f8e1704",
+  "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be",
+  "toolchain": "1.95.0-aarch64-apple-darwin",
+  "macro_version": "0.0.0-2026-04-20-1748",
+  "cache_directory": ".chrono-harness/cache/bootstrap-verus",
+  "install_directory": ".chrono-harness/bin/verus",
+  "platforms": {
+    "Darwin/arm64": {
+      "url": "https://github.com/verus-lang/verus/releases/download/release/0.2026.04.24.f8e1704/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
+      "archive": "verus-0.2026.04.24.f8e1704-arm64-macos.zip",
+      "sha256": "023e0a6e67bb9927f43a8757ebdec318b50cbfe1fec4a1c320c53d5fd71008e7"
+    }
+  },
+  "proof_roots": [
+    {
+      "id": "runner-identifiers",
+      "source": "crates/runner/src/verified_identifiers.rs",
+      "consumer": "project:runner",
+      "operation": "verify.runner-identifiers"
+    },
+    {
+      "id": "runner-paths",
+      "source": "crates/runner/src/verified_paths.rs",
+      "consumer": "project:runner",
+      "operation": "verify.runner-paths"
+    },
+    {
+      "id": "runner-identifiers-tests",
+      "source": "crates/runner-tests/tests/verified_identifiers.rs",
+      "consumer": "project:runner-tests",
+      "operation": "verify.runner-identifiers-tests"
+    },
+    {
+      "id": "runner-paths-tests",
+      "source": "crates/runner-tests/tests/verified_paths.rs",
+      "consumer": "project:runner-tests",
+      "operation": "verify.runner-paths-tests"
+    }
+  ]
+}

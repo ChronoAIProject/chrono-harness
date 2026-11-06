@@ -23,22 +23,24 @@ class VerusBootstrapTests(unittest.TestCase):
             output.writestr("verus-test/verus", b"verus executable")
             output.writestr("verus-test/z3", b"z3")
         declaration = {
-            "schema": "chrono-bootstrap/v1",
-            "verus": {
-                "cache_directory": ".chrono-harness/cache/bootstrap-verus",
-                "install_directory": ".chrono-harness/bin/verus",
-                "platforms": {
-                    platform.system() + "/" + platform.machine(): {
-                        "version": "test",
-                        "url": "https://github.com/verus-lang/verus/releases/download/test/test.zip",
-                        "archive": "verus-test.zip",
-                        "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-                    }
-                },
+            "schema": "chrono-verus/v1",
+            "version": "test",
+            "commit": "test",
+            "toolchain": "test",
+            "macro_version": "test",
+            "cache_directory": ".chrono-harness/cache/bootstrap-verus",
+            "install_directory": ".chrono-harness/bin/verus",
+            "platforms": {
+                platform.system() + "/" + platform.machine(): {
+                    "url": "https://github.com/verus-lang/verus/releases/download/test/test.zip",
+                    "archive": "verus-test.zip",
+                    "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                }
             },
         }
         (self.host / ".chrono-harness/ci/bootstrap-verus.json").write_text(
-            json.dumps(declaration))
+            json.dumps({"verus_policy": ".chrono-harness/verus.json"}))
+        (self.host / ".chrono-harness/verus.json").write_text(json.dumps(declaration))
 
     def test_verify_and_extract_are_digest_bound(self):
         verus_bootstrap.verify(self.host, Path(".chrono-harness/ci/bootstrap-verus.json"))

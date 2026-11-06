@@ -25,14 +25,19 @@ def fail(message):
 def load(root, config_path):
     path = root / config_path
     config = json.loads(path.read_bytes())
-    declaration = config.get("verus")
-    if not isinstance(declaration, dict):
-        fail("missing Verus declaration")
+    policy_path = Path(config.get("verus_policy", ""))
+    if (policy_path.is_absolute() or ".." in policy_path.parts
+            or policy_path.as_posix() != str(policy_path)
+            or policy_path.parts[:1] != (".chrono-harness",)):
+        fail("invalid Verus policy path")
+    declaration = json.loads((root / policy_path).read_bytes())
+    if declaration.get("schema") != "chrono-verus/v1":
+        fail("missing or invalid Verus declaration")
     key = platform.system() + "/" + platform.machine()
     entry = declaration.get("platforms", {}).get(key)
     if not isinstance(entry, dict):
         fail("unsupported Verus host: " + key)
-    required = {"version", "url", "archive", "sha256"}
+    required = {"url", "archive", "sha256"}
     if set(entry) != required or any(not isinstance(entry[name], str) or not entry[name]
                                      for name in required):
         fail("invalid Verus archive declaration")
@@ -50,7 +55,7 @@ def load(root, config_path):
             fail("invalid Verus " + name + " path")
         if not value.as_posix().startswith(".chrono-harness/"):
             fail("Verus " + name + " must be under .chrono-harness")
-    return entry, root / cache, root / install
+    return declaration, entry, root / cache, root / install
 
 
 def digest(path):
@@ -69,11 +74,11 @@ def archive_path(cache, declaration):
 
 
 def download(root, config_path):
-    declaration, cache, install = load(root, config_path)
+    declaration, entry, cache, install = load(root, config_path)
     del install
     cache.mkdir(parents=True, exist_ok=True)
-    target = archive_path(cache, declaration)
-    if target.is_file() and digest(target) == declaration["sha256"]:
+    target = archive_path(cache, entry)
+    if target.is_file() and digest(target) == entry["sha256"]:
         print(json.dumps({"phase": "download", "status": "reused", "path": str(target)}))
         return
     if target.exists():
@@ -83,14 +88,14 @@ def download(root, config_path):
     temporary_path = Path(temporary)
     try:
         request = urllib.request.Request(
-            declaration["url"], headers={"User-Agent": "chrono-harness-verus-bootstrap/1"})
+            entry["url"], headers={"User-Agent": "chrono-harness-verus-bootstrap/1"})
         with urllib.request.urlopen(request, timeout=120) as response, temporary_path.open("wb") as output:
             while True:
                 chunk = response.read(1024 * 1024)
                 if not chunk:
                     break
                 output.write(chunk)
-        if digest(temporary_path) != declaration["sha256"]:
+        if digest(temporary_path) != entry["sha256"]:
             fail("downloaded Verus archive digest mismatch")
         os.replace(temporary_path, target)
     finally:
@@ -99,13 +104,13 @@ def download(root, config_path):
 
 
 def verify(root, config_path):
-    declaration, cache, install = load(root, config_path)
+    declaration, entry, cache, install = load(root, config_path)
     del install
-    target = archive_path(cache, declaration)
-    if not target.is_file() or digest(target) != declaration["sha256"]:
+    target = archive_path(cache, entry)
+    if not target.is_file() or digest(target) != entry["sha256"]:
         fail("Verus archive is absent or has the wrong digest")
     print(json.dumps({"phase": "verify", "version": declaration["version"],
-                      "sha256": declaration["sha256"]}))
+                      "sha256": entry["sha256"]}))
 
 
 def safe_members(archive):
@@ -123,9 +128,9 @@ def safe_members(archive):
 
 
 def extract(root, config_path):
-    declaration, cache, install = load(root, config_path)
-    archive = archive_path(cache, declaration)
-    if not archive.is_file() or digest(archive) != declaration["sha256"]:
+    declaration, entry, cache, install = load(root, config_path)
+    archive = archive_path(cache, entry)
+    if not archive.is_file() or digest(archive) != entry["sha256"]:
         fail("Verus archive is absent or has the wrong digest")
     members = safe_members(archive)
     install.parent.mkdir(parents=True, exist_ok=True)
