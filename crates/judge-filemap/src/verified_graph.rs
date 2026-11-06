@@ -3361,4 +3361,83 @@ pub fn propagate<'t, 'a>(topology: &'t Topology<'a>, root: usize) -> (out: Propa
     Propagation { rows, predecessors }
 }
 
+pub open spec fn seed_topology_matches(topology: &Topology, seeds: Seq<Seed>) -> bool {
+    ordered_names(topology.names@)
+        && topology.names.len() == topology.edge_rows.len()
+        && topology.names.len() == topology.indices.rows.len()
+        && valid_graph(topology.indices.rows@)
+        && (forall|row: int| 0 <= row < topology.edge_rows.len()
+            ==> edge_indices_match(topology.names@, topology.edge_rows@[row]@,
+                #[trigger] topology.indices.rows@[row]@))
+        && topology.indices.roots.len() == seeds.len()
+        && forall|at: int| 0 <= at < seeds.len() ==> {
+            let root = #[trigger] topology.indices.roots@[at];
+            root < topology.names.len()
+                && topology.names@[root as int].spec_bytes() == seeds[at].key().1
+        }
+}
+
+/// One actual Seed and the propagation from its corresponding topology root.
+pub struct SeedPropagation<'t, 'a> {
+    pub seed: &'a Seed,
+    pub propagation: Propagation<'t, 'a>,
+}
+
+pub open spec fn seed_propagation_matches(
+    item: SeedPropagation, topology: &Topology, seeds: Seq<Seed>, at: int,
+) -> bool {
+    0 <= at < seeds.len() && item.seed.key() == seeds[at].key()
+        && propagation_rows(item.propagation.rows@, topology.names@, topology.edge_rows@,
+            fifo(topology.indices.rows@, topology.indices.roots@[at]).2)
+        && (forall|name: Seq<u8>| propagation_names(item.propagation.rows@).contains(name)
+            == reachable_name(topology.names@, topology.indices.rows@,
+                topology.indices.roots@[at], name))
+        && predecessor_keys(item.propagation.predecessors.view()).to_set()
+            == fifo_predecessors(topology.names@, topology.edge_rows@,
+                topology.indices.rows@, topology.indices.roots@[at])
+}
+
+/// Streaming state: every successful step advances exactly one seed position.
+/// No zip truncation and no collection of all live propagation rows.
+pub struct SeedPropagations<'t, 'a> {
+    topology: &'t Topology<'a>,
+    seeds: &'a [Seed],
+    next: usize,
+}
+
+impl<'t, 'a> SeedPropagations<'t, 'a> {
+    #[verifier::type_invariant]
+    spec fn inv(self) -> bool {
+        seed_topology_matches(self.topology, self.seeds@) && self.next <= self.seeds.len()
+    }
+
+    pub closed spec fn position(&self) -> usize { self.next }
+    pub closed spec fn seed_values(&self) -> Seq<Seed> { self.seeds@ }
+    pub closed spec fn graph(&self) -> &'t Topology<'a> { self.topology }
+
+    pub fn new(topology: &'t Topology<'a>, seeds: &'a [Seed]) -> (out: Self)
+        requires seed_topology_matches(topology, seeds@),
+        ensures out.position() == 0, out.seed_values() == seeds@, out.graph() == topology,
+    {
+        Self { topology, seeds, next: 0 }
+    }
+
+    pub fn next(&mut self) -> (out: Option<SeedPropagation<'t, 'a>>)
+        ensures self.seed_values() == old(self).seed_values(), self.graph() == old(self).graph(),
+            out.is_none() <==> old(self).position() == old(self).seed_values().len(),
+            self.position() == old(self).position() + if out.is_some() { 1int } else { 0int },
+            out matches Some(item) ==> seed_propagation_matches(
+                item, old(self).graph(), old(self).seed_values(), old(self).position() as int),
+    {
+        proof { use_type_invariant(self); }
+        if self.next == self.seeds.len() { return None; }
+        let at = self.next;
+        let root = self.topology.indices.roots[at];
+        let propagation = propagate(self.topology, root);
+        let item = SeedPropagation { seed: &self.seeds[at], propagation };
+        self.next += 1;
+        Some(item)
+    }
+}
+
 }

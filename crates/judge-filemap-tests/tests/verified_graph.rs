@@ -1363,6 +1363,50 @@ fn cause_set_normalizes_unordered_unicode_nul_and_repeated_input() {
     assert(policy::ordered_causes(entries@));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn seed_propagation_stream_keeps_every_position_and_all_seed_fields() {
+    let edges: Vec<policy::UnionEdge> = vec![];
+    let seeds = vec![seed("same", "根\0", "first", "one"),
+        seed("same", "", "second", "two"), seed("same", "根\0", "first", "one")];
+    let topology = policy::seed_topology(&edges, &seeds);
+    let mut stream = policy::SeedPropagations::new(&topology, &seeds);
+    assert(stream.position() == 0);
+    let first = stream.next().unwrap();
+    assert(stream.position() == 1);
+    assert(first.seed.id@ == "same"@ && first.seed.node@ == "根\0"@);
+    assert(first.seed.reference@ == "first"@ && first.seed.reason@ == "one"@);
+    assert(policy::seed_propagation_matches(first, &topology, seeds@, 0));
+    let second = stream.next().unwrap();
+    assert(stream.position() == 2);
+    assert(second.seed.id@ == "same"@ && second.seed.node@ == ""@);
+    assert(second.seed.reference@ == "second"@ && second.seed.reason@ == "two"@);
+    assert(policy::seed_propagation_matches(second, &topology, seeds@, 1));
+    let third = stream.next().unwrap();
+    assert(stream.position() == 3);
+    assert(third.seed.key() == first.seed.key());
+    assert(policy::seed_propagation_matches(third, &topology, seeds@, 2));
+    let end = stream.next();
+    assert(end.is_none() && stream.position() == 3);
+    let stable_end = stream.next();
+    assert(stable_end.is_none() && stream.position() == 3);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn empty_seed_stream_stays_finished_and_mismatched_root_counts_are_inadmissible() {
+    let edges: Vec<policy::UnionEdge> = vec![];
+    let seeds: Vec<policy::Seed> = vec![];
+    let topology = policy::seed_topology(&edges, &seeds);
+    let mut stream = policy::SeedPropagations::new(&topology, &seeds);
+    let end = stream.next();
+    assert(end.is_none() && stream.position() == 0);
+    let end_again = stream.next();
+    assert(end_again.is_none() && stream.position() == 0);
+    let other_seeds = vec![seed("other", "root", "ref", "reason")];
+    assert(!policy::seed_topology_matches(&topology, other_seeds@));
+    let other_topology = policy::seed_topology(&edges, &other_seeds);
+    assert(!policy::seed_topology_matches(&other_topology, seeds@));
+}
+
 fn seed(id: &str, node: &str, reference: &str, reason: &str) -> (out: policy::Seed)
     ensures out.key() == (id.spec_bytes(), node.spec_bytes(), reference.spec_bytes(), reason.spec_bytes()),
         out.id@ == id@, out.node@ == node@, out.reference@ == reference@, out.reason@ == reason@,
