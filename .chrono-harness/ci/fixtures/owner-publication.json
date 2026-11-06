@@ -1,0 +1,10 @@
+{
+  "intent": {
+    "schema": "chrono-bootstrap-owner-publication-intent/v1"
+  },
+  "result": {
+    "adoption": "not-claimed",
+    "schema": "chrono-bootstrap-owner-publication/v1",
+    "task_completion": "not-claimed"
+  }
+}
