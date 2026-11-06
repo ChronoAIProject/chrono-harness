@@ -981,26 +981,9 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
         }
     }
     let mock = tools.path().join("mock-gh");
-    let data = tools.path().join("transport.json");
-    fs::write(&data,serde_json::to_vec(&json!({"candidate":h.candidate,"uploads":tools.path().join("uploads"),"workflow_root":collector.path()})).unwrap()).unwrap();
-    let python = chrono_harness::resolve_program(&root, "python3", None).unwrap();
-    fs::write(&mock,format!(r#"#!{python}
-import sys,json,pathlib,shutil
-args=sys.argv[1:];data=json.loads(pathlib.Path({data:?}).read_text())
-def run(unit):
- return dict(id=1 if unit=='one' else 2,run_attempt=1,status='completed',conclusion='success',head_sha=data['candidate'],event='push',path='.github/workflows/'+unit+'.yml')
-if args[0]=='api':
- endpoint=args[1]
- if '/actions/workflows/' in endpoint:
-  unit=endpoint.split('/actions/workflows/')[1].split('.yml')[0];print(json.dumps([dict(workflow_runs=[run(unit)])]))
- elif '/contents/' in endpoint:
-  path=endpoint.split('/contents/')[1].split('?')[0];sys.stdout.buffer.write((pathlib.Path(data['workflow_root'])/path).read_bytes())
- else:
-  unit='one' if endpoint.endswith('/1') else 'two';print(json.dumps(run(unit)))
-else:
- unit='one' if args[2]=='1' else 'two';dest=pathlib.Path(args[args.index('--dir')+1]);shutil.copytree(pathlib.Path(data['uploads'])/unit,dest,dirs_exist_ok=True)
-"#,python=python.display(),data=data.to_str().unwrap())).unwrap();
-    fs::set_permissions(&mock, fs::Permissions::from_mode(0o755)).unwrap();
+    let data = tools.path().join("seed-api.json");
+    fs::write(&data,serde_json::to_vec(&json!({"profile":"full-units","candidate":h.candidate,"uploads":tools.path().join("uploads"),"workflow_root":collector.path()})).unwrap()).unwrap();
+    native_tools::install(tools.path(), &mock);
     one.close().unwrap();
     two.close().unwrap();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
