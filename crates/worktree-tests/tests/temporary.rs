@@ -349,6 +349,7 @@ fn directory_cleanup_keeps_shared_input_until_its_last_directory_releases() {
         fs::copy(&source, &destination).unwrap();
     }
     assert_eq!(originals[0], originals[1]);
+    fs::write(first.path().join("copied.rs"), b"synthetic fixture mutation").unwrap();
     let report = first.finish().unwrap();
     assert!(
         !first.path().exists(),
