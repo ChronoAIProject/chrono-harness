@@ -10,6 +10,8 @@ chrono-harness 帮仓库按登记的依赖选择检查，让本地和 CI 使用�
 
 [公开测试版 v0.1.0-beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19) 提供 macOS arm64 和 Linux x86_64 可执行文件。接入仓库可以直接安装，无需 Rust，详见[发布与安装](docs/distribution.md)。
 
+源码中的新安装入口为固定版本的 Shell 脚本，安装不依赖 Python 或 Rust 工具链。发布者用 `chrono-distribution assemble` 生成 `install.sh` 并随版本上传后，接入仓库可按[一键安装](docs/distribution.md#一键安装)使用；上述旧版发行尚无该脚本文件。
+
 ## 从哪里开始
 
 | 要做的事 | 阅读位置 |
