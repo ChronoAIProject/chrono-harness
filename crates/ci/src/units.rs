@@ -582,9 +582,9 @@ pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
             },
         });
     }
-    profile(root, &c)?;
-    projection_changes(root, path, &c, false)?;
     if !existing {
+        profile(root, &c)?;
+        projection_changes(root, path, &c, false)?;
         write_file(
             root,
             path,
