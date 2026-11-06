@@ -220,7 +220,7 @@ pub(super) fn collect(
         return Err("missing required CI unit report".into());
     }
     // Nonselected units may report successful inventory too; unknown or duplicate reports never pass.
-    let not_required: BTreeSet<_> = snapshot
+    let not_required: Vec<_> = snapshot
         .plans
         .keys()
         .filter(|t| !selected.contains(*t))
@@ -459,6 +459,8 @@ pub(super) fn collect(
             .iter()
             .map(|o| o.method.operation.clone())
             .collect();
+        let expected_ids = verified_collection::borrow_texts(&expected_ops);
+        let not_required_ids = verified_collection::borrow_texts(&not_required);
         let executed = e["executed"].as_array().ok_or("unit executions missing")?;
         if e["operations"] != object!(expected_ops) || executed.len() != operations.len() {
             return Err("unit execution coverage missing or extra".into());
@@ -480,34 +482,23 @@ pub(super) fn collect(
             if row["operation"] != operation.method.operation
                 || receipt.process.exit_code != 0
                 || receipt.process.failure.is_some()
-                || !response.results.iter().any(|r| {
-                    r.id == operation.method.operation
-                        && r.status == Status::Passed
-                        && r.exit_code == Some(0)
-                })
+                || !verified_collection::has_result(
+                    &response.results,
+                    &operation.method.operation,
+                    &Status::Passed,
+                    Some(0),
+                )
             {
                 return Err("unit operation original evidence failed or disagrees".into());
             }
         }
-        let expected_results: BTreeSet<_> = std::iter::once("ci.inventory".to_owned())
-            .chain(expected_ops)
-            .chain(not_required.iter().cloned())
-            .collect();
         // Successful replacement markers are not emitted by the scoped producer.
-        if !response
-            .results
-            .iter()
-            .any(|r| r.id == "ci.inventory" && r.status == Status::Passed && r.exit_code.is_none())
-            || response
-                .results
-                .iter()
-                .map(|r| r.id.clone())
-                .collect::<BTreeSet<_>>()
-                != expected_results
-            || response
-                .results
-                .iter()
-                .any(|r| not_required.contains(&r.id) && r.status != Status::NotRequired)
+        if !verified_collection::matches_result_states(&response.results, &not_required_ids)
+            || !verified_collection::matches_report_result_ids(
+                &response.results,
+                &expected_ids,
+                &not_required_ids,
+            )
         {
             return Err("unit result coverage differs from plan".into());
         }

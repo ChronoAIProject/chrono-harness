@@ -12,6 +12,8 @@ use std::path::Path;
 mod collect;
 pub use collect::{UnitOriginals, unit_originals};
 mod units;
+#[allow(unexpected_cfgs)]
+pub mod verified_collection;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum ExecutionDiagnostics {

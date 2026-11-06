@@ -32,7 +32,7 @@ pub mod verified_identifiers;
 pub mod verified_paths;
 #[allow(unexpected_cfgs)]
 pub mod verified_status;
-pub use verified_status::Status;
+pub use verified_status::{CheckResult, Status};
 pub use verus_builtin_macros::verus;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
@@ -95,14 +95,6 @@ pub struct Request {
     pub base: Option<String>,
     pub candidate: String,
     pub initial: bool,
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CheckResult {
-    pub id: String,
-    pub status: Status,
-    pub cause: String,
-    pub exit_code: Option<i32>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
