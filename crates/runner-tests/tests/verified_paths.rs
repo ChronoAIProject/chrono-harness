@@ -1,4 +1,4 @@
-//! Independent success/error boundaries for the shared executable path decision.
+//! 实际路径判断的独立成功／失败边界。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
 #[path = "../../runner/src/verified_paths.rs"]
@@ -62,7 +62,7 @@ fn forbidden_bytes_and_permitted_posix_names() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn unicode_bytes_preserve_component_boundaries() {
-    // U+4E2D, '/', U+6587. The caller's str owns UTF-8 validity.
+    // U+4E2D、'/'、U+6587。调用方的 str 保证 UTF-8 有效性。
     expect(&[228u8, 184, 173, 47, 230, 150, 135], true);
     expect(&[228u8, 184, 173, 47, 46, 46], false);
     expect(&[228u8, 184, 173, 46, 46], true);

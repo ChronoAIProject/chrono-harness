@@ -30,6 +30,7 @@ pub mod units;
 pub mod verified_identifiers;
 #[allow(unexpected_cfgs)]
 pub mod verified_paths;
+pub use verus_builtin_macros::verus;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]

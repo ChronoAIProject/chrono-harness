@@ -1110,6 +1110,24 @@
             "--manifest-path",
             "crates/judge-registration/Cargo.toml"
           ]
+        },
+        "verify_preparation": {
+          "operation": "verify.registration-preparation",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-preparation.rlib,dep-info=.chrono-harness/state/verify.registration-preparation.rlib.d",
+            "crates/judge-registration/src/verified_consumption.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-preparation.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -1211,6 +1229,24 @@
             "fmt",
             "--manifest-path",
             "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "verify_preparation": {
+          "operation": "verify.registration-preparation-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-preparation-tests.rlib,dep-info=.chrono-harness/state/verify.registration-preparation-tests.rlib.d",
+            "crates/judge-registration-tests/tests/verified_consumption.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-preparation-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },

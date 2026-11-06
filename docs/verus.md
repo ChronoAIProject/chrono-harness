@@ -19,11 +19,18 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 
 独立 Verus 根直接读取生产源码，声明成功、失败和边界预期。Cargo 消费同一源码并擦除 ghost；
 Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 SPEC 对应仍未证明。
+把错误长度的 OID 改为接受，会直接违反返回值后置条件（6 verified / 1 error）；
+正确源码按 SHA-256 恢复，再运行正式检查。
+
+实际启动准备判定也使用同源 `verified_consumption::matches_preparation`，证明命令、宿主配置、
+唯一先行 verifier、执行工具和项目登记必须精确对应。消费关系判官读取显式 preparation，
+再核原共享 core 合同；解码和外层组合仍待证明。独立根与 Rust 回归核缺前置、重复、
+把校验放入普通操作、工具／schema／命令／项目错绑及缺文档。registration 原计划增加两项整 crate 证明。
 
 ## 固定执行入口
 
 本地和 CI 都使用宿主上下文登记的 bootstrap 与 canonical check。
-`test:runner-tests` 的执行计划先运行四项整 crate Verus 操作，再运行原 Rust 构建和未过滤测试。
+`test:runner-tests` 的执行计划先运行 runner 的四项整 crate Verus 操作，再运行原 Rust 构建和未过滤测试。
 生产和独立根均强制 `--no-cheating --no-external-by-default`，并编译产物及源依赖清单。
 未增加仓内受信接口、函数过滤或证明预算。
 

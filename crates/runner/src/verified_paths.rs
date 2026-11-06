@@ -1,5 +1,5 @@
-//! Lexical POSIX relative-path admission. Callers supply UTF-8 path bytes;
-//! filesystem identity, canonical spelling and glob policy remain separate.
+//! POSIX 相对路径的词法准入。调用方提供 UTF-8 路径字节；
+//! 文件系统身份、规范拼写和 glob 政策另由各自所有者处理。
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -21,9 +21,8 @@ pub open spec fn parent_component_at(path: Seq<u8>, i: int) -> bool {
         && (i + 2 == path.len() || path[i + 2] == 47)
 }
 
-/// Matches the runner's POSIX lexical domain: no root, initial current-dir
-/// component, parent-dir component, NUL, LF, CR or backslash. Repeated/trailing
-/// separators and noninitial current-dir components do not change admission.
+/// 精确匹配 runner 的 POSIX 词法范围：拒绝根、开头的当前目录、父目录分量、
+/// NUL、LF、CR 和反斜杠；重复／末尾分隔符及非开头的当前目录分量不影响准入。
 #[verifier::inline]
 pub open spec fn relative_path(path: Seq<u8>) -> bool {
     path.len() > 0 && path[0] != 47

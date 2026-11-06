@@ -1,4 +1,4 @@
-//! Boundary proofs for the actual shared identity implementations.
+//! 实际身份实现的边界证明。
 #![allow(unexpected_cfgs)]
 #[path = "../../runner/src/verified_identifiers.rs"]
 mod policy;
