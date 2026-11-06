@@ -96,7 +96,10 @@ fn directory_cleanup_accounts_all_scratch_and_blocks_fresh_allocations_on_excess
     assert_eq!(fs::read(&bytes).unwrap(), b"123456789");
 
     fs::write(&bytes, b"12345678").unwrap();
-    assert_eq!(allocation.checkpoint().unwrap()["generated_logical_bytes"], 8);
+    assert_eq!(
+        allocation.checkpoint().unwrap()["generated_logical_bytes"],
+        8
+    );
     let mut next =
         chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recovered-")
             .unwrap();
