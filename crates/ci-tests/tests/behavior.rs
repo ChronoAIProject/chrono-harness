@@ -54,7 +54,11 @@ fn retired_scoped_providers_are_rejected_before_publishing_outputs() {
                 original_inputs.display()
             );
         }
-        assert!(result.unwrap_err().contains("unsupported CI provider/schema"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("unsupported CI provider/schema")
+        );
         assert!(!host.path().join(".github").exists());
         assert!(!host.path().join(".chrono-harness").exists());
         assert_eq!(fs::read(&input).unwrap(), bytes);
