@@ -26,6 +26,10 @@ pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
+#[allow(unexpected_cfgs)]
+pub mod verified_identifiers;
+#[allow(unexpected_cfgs)]
+pub mod verified_paths;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]
@@ -275,12 +279,7 @@ pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
     copy_hashed(file, std::io::sink())
 }
 pub fn relative_path(value: &str) -> Result<(), String> {
-    if value.is_empty()
-        || value.contains(['\0', '\n', '\r', '\\'])
-        || Path::new(value)
-            .components()
-            .any(|c| !matches!(c, Component::Normal(_)))
-    {
+    if !verified_paths::valid_relative_path(value.as_bytes()) {
         return Err(format!("invalid relative path: {value:?}"));
     }
     Ok(())
