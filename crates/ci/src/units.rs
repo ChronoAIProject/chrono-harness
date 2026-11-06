@@ -21,8 +21,6 @@ pub struct FullContexts {
 pub struct NativeAdoption {
     pub schema: String,
     pub lineage: chrono_harness::prepared::Original,
-    pub adapter_path: String,
-    pub interpreter: String,
     pub inputs_program: String,
     pub seed_directory: String,
     pub seed_artifact: String,
@@ -242,8 +240,7 @@ pub fn validate(c: &Config) -> Result<(), String> {
     if let Some(a) = &c.native_adoption {
         if c.schema != FULL_SCHEMA
             || c.job_gating.is_none()
-            || a.schema != "chrono-native-adoption/v1"
-            || a.interpreter.is_empty()
+            || a.schema != "chrono-native-adoption/v2"
             || a.inputs_program.is_empty()
             || !chrono_harness::wire::is_digest(&a.lineage.sha256)
             || !a.seed_directory.ends_with('/')
@@ -255,17 +252,11 @@ pub fn validate(c: &Config) -> Result<(), String> {
         {
             return Err("invalid native adoption extension/bindings".into());
         }
-        for path in [
-            &a.lineage.path,
-            &a.adapter_path,
-            &a.seed_directory,
-            &a.retained_inputs,
-        ] {
+        for path in [&a.lineage.path, &a.seed_directory, &a.retained_inputs] {
             relative_path(path)?;
         }
         chrono_harness::units::id(&a.seed_artifact)?;
-        if !a.adapter_path.starts_with(".chrono-harness/ci/")
-            || a.lineage.path.starts_with(".chrono-harness/state/")
+        if a.lineage.path.starts_with(".chrono-harness/state/")
             || !a.seed_directory.starts_with(".chrono-harness/state/")
             || !a.retained_inputs.starts_with(".chrono-harness/state/")
             || c.units
@@ -526,13 +517,7 @@ fn projection_changes(
     let outputs = render(c, path)?;
     let mut writes = vec![];
     for (path, bytes) in &outputs {
-        let marker = if c
-            .native_adoption
-            .as_ref()
-            .is_some_and(|a| a.adapter_path == *path)
-        {
-            "# chrono-ci: owned native-adoption/v1\n"
-        } else if c.job_gating.is_some() {
+        let marker = if c.job_gating.is_some() {
             super::gating::MARKER
         } else {
             MARKER

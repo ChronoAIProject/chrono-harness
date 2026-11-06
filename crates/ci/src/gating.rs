@@ -138,11 +138,10 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         ""
     };
     body = body.replacen("          CHRONO_CHECK_SOURCE: ci\n", &format!("          CHRONO_CHECK_SOURCE: ci\n          CHRONO_CI_DETECTION: ${{{{ needs.detect.outputs.detection }}}}\n{extra}"), 1);
-    if let Some(a) = &c.native_adoption {
+    if c.native_adoption.is_some() {
         let command = format!(
-            "{} {} acquire --config {}{}",
-            shell(&a.interpreter),
-            shell(&a.adapter_path),
+            "{} native-adoption acquire --host-root . --config {}{}",
+            shell(&c.collection.generator),
             shell(path),
             unit.map(|u| format!(" --unit {}", shell(u)))
                 .unwrap_or_default()
@@ -297,9 +296,8 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
     )?;
     if let Some(a) = &c.native_adoption {
         let command = format!(
-            "{} {} publish --config {}",
-            shell(&a.interpreter),
-            shell(&a.adapter_path),
+            "{} native-adoption publish --host-root . --config {}",
+            shell(&c.collection.generator),
             shell(path)
         );
         text.push_str(&format!("      - name: Publish shared native context\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n          CHRONO_CI_DETECTION: ${{{{ steps.detect.outputs.detection }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {command}\n      - name: Upload detector original context\n        uses: {}\n        with:\n          name: {}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, a.seed_artifact, scalar(&a.seed_directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
@@ -311,14 +309,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         text.push_str(&job(c, path, Some(id))?);
     }
     text.push_str(&job(c, path, None)?);
-    let mut outputs = BTreeMap::from([(c.collection.workflow_path.clone(), text)]);
-    if let Some(a) = &c.native_adoption {
-        outputs.insert(
-            a.adapter_path.clone(),
-            include_str!("../../../assets/ci/native.py").into(),
-        );
-    }
-    Ok(outputs)
+    Ok(BTreeMap::from([(c.collection.workflow_path.clone(), text)]))
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
