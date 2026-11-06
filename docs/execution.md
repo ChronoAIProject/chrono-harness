@@ -295,3 +295,5 @@ Python 源码导入检查归已有 bootstrap 和 workflow-inventory Python 测�
 registration 的 Git 事实测试也编译同一 Rust 辅助程序，以明确的 `registration` 选择其环境、轨迹及故障模式。完整和初始检查保留原真实 Git 转交、NUL 输出／退出码、超时与 8192 字节边界，以及成功子进程后的字节漂移拒绝；漂移沿已有私有执行物替换方法保留权限后 rename，不写共享 helper。依赖该宿主的输入 guard 和 coverage 测试保留原断言。
 
 **测试实现与宿主登记同改：**FILEMAP 为现有源码增加 registration 测试项目的第三条编译边，合成宿主同步登记实际 profile、mode 和真实 Git 的环境输入及绑定。各项目沿原未过滤 Cargo 测试操作验收；未增加依赖或测试入口，其他跨语言逻辑及完整 SPEC 验收仍未完成，总成本未测。
+
+**外部接口样本与宿主登记同改：**分发安装／升级测试的六份静态外部执行资产独立存放并由 FILEMAP 编译边连接 `distribution-tests`。Rust 驱动以 `include_bytes!` 使用原字节，保留 alpha／beta 两版输出、安装器退出 0／23、摘要／长度、完整性拒绝和打包的原断言。样本仅提供真实外部接口，不承载测试驱动或断言；没有增加测试入口或依赖，总验证成本未测。
