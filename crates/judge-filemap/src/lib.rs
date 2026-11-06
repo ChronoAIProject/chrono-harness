@@ -1,8 +1,8 @@
 //! Candidate FILEMAP impact policy. No operation execution, retirement or cost verdicts.
 pub mod graph;
+mod records;
 #[allow(unexpected_cfgs)]
 pub mod verified_graph;
-mod records;
 mod workflow;
 use chrono_harness::{
     facts,
