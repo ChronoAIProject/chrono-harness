@@ -2081,7 +2081,16 @@ fn independent_live_writers_keep_their_own_sealed_tree_accounting() {
         .unwrap();
     fs::write(h.path().join(&a).join("bytes"), [5; 400]).unwrap();
     first.complete(json!({"exit":0})).unwrap();
-    assert_eq!(maintenance(h.path())["removed_logical_bytes"], 400);
+    let rounds = maintain_fixture_rounds_to(h.path(), 1);
+    assert_eq!(
+        rounds
+            .iter()
+            .map(|round| round["removed_logical_bytes"].as_u64().unwrap())
+            .sum::<u64>(),
+        400,
+        "{rounds:?}"
+    );
+    assert!(h.path().join(&b).exists());
     second.complete(json!({"exit":2})).unwrap();
 }
 
@@ -3339,7 +3348,7 @@ fn addressed_decoder_keeps_duplicate_unknown_and_opaque_json_refusals() {
         assert!(h.path().join(&path).exists());
     }
     fs::write(file, original).unwrap();
-    maintenance(h.path());
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert!(!h.path().join(path).exists());
 }
 
