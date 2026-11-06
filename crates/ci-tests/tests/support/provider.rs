@@ -127,7 +127,7 @@ pub fn parent(args: &[String]) {
     serde_json::to_writer(&mut calls, args).unwrap();
     writeln!(calls).unwrap();
     if args[0] == "run" {
-        if mode == "artifact-deadline" {
+        if matches!(mode, "artifact-deadline" | "final-parent-deadline") {
             std::thread::sleep(std::time::Duration::from_millis(1200));
         }
         if mode == "artifact-stdout" {
@@ -253,6 +253,9 @@ pub fn parent(args: &[String]) {
             .lines()
             .filter(|line| serde_json::from_str::<Vec<String>>(line).unwrap()[0] == "run")
             .count();
+        if mode == "final-parent-deadline" && downloads > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+        }
         let attempt = if (mode == "changed-attempt-after-downloads"
             && downloads == detection["required_units"].as_array().unwrap().len())
             || matches!(

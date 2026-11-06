@@ -2092,6 +2092,7 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
         "artifact-missing",
         "artifact-misbound",
         "artifact-deadline",
+        "final-parent-deadline",
         "artifact-stdout",
         "artifact-stderr",
     ] {
@@ -2101,10 +2102,10 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
             .len();
         if matches!(
             mode,
-            "artifact-deadline" | "artifact-stdout" | "artifact-stderr"
+            "artifact-deadline" | "final-parent-deadline" | "artifact-stdout" | "artifact-stderr"
         ) {
             h.host.modify(PROVIDER, |c| {
-                if mode == "artifact-deadline" {
+                if matches!(mode, "artifact-deadline" | "final-parent-deadline") {
                     c["gather"]["timeout_seconds"] = json!(2);
                 }
                 if mode == "artifact-stdout" {
@@ -2150,7 +2151,7 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
                     .contains("binding differs")
             );
             assert!(!processes.iter().any(|p| p["argv"][1] == "run"));
-        } else if mode == "artifact-deadline" {
+        } else if matches!(mode, "artifact-deadline" | "final-parent-deadline") {
             // Metadata, download and source checks share one deadline. A slow
             // earlier phase must reject too; reaching the source is not promised.
             assert_eq!(
