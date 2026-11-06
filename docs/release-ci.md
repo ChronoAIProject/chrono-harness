@@ -85,3 +85,5 @@ Python 发布 integration 组保留真实 distribution pack，并加入真实 ca
 编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。`host.bootstrap-tests` 的断言输入释放实际调用 `chrono-harness retention`，因此两平台发布验证同步补登记 `build_runner` 与 `chrono-harness` 暂存依赖；没有跳过原测试。
 
 Linux 发行政策也保留工作树所有者读取登记所需的完整结构，以及真实 custody fixture 使用的 Python 工具槽；Python 版本保持未知（`null`），fixture 自行绑定实际解释器。该登记不声称完成 Linux canonical/full 采用。原生 `42222842930/1` 已暴露并保留最小 Git 配置不能满足这些实际消费者的失败。
+
+Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时仍由现有入口选择 local。`host.bootstrap-tests` 失败时沿用已有有界采集，保留登记的 `bootstrap-custody-tests/` 原件；目录缺失或容量省略仍如实报告。断言同时显示真实退出码和 stdout／stderr 尾部及原路径，不把空 stderr 当作完整错误。

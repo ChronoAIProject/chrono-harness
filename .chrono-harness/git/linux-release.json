@@ -290,7 +290,8 @@
     "credential_environment": [],
     "inherit": [
       "PATH",
-      "HOME"
+      "HOME",
+      "CHRONO_CHECK_SOURCE"
     ],
     "values": {},
     "inputs": [
