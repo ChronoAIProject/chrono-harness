@@ -36,7 +36,7 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 
 官方 Verus 固定为 `0.2026.04.24.f8e1704`、Rust 1.95.0。
 宿主使用现有通用 bootstrap 执行已登记的 HTTPS 下载、SHA-256 核对和解包操作；
-runner 的原生启动先核共享 core，再安装该工具。Python bootstrap 源码和测试均无修改。
+runner 与 registration 的原生启动先核共享 core，再安装该工具。Python bootstrap 源码和测试均无修改。
 当前工具归档适用于 macOS arm64；其他平台尚未采用这份证明执行计划。
 
 **产品和宿主政策同时变更：**产品判断改为同源 Verus，FILEMAP、工具、启动和执行计划登记实际证明。
