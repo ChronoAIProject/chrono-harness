@@ -2187,12 +2187,16 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
 }
 
 #[test]
-fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
+fn registered_consumers_forward_leases_after_both_wrappers_die() {
     use std::os::unix::fs::symlink;
     for route in ["bootstrap", "workflow-inventory"] {
         let h = Host::new("payload");
         h.kernel_cleanup();
-        let script = source().join(format!(".chrono-harness/ci/{route}.py"));
+        let script = if route == "workflow-inventory" {
+            fs::canonicalize(source().join("crates/ci/target/debug/chrono-ci")).unwrap()
+        } else {
+            source().join(".chrono-harness/ci/bootstrap.py")
+        };
         let consumer = env!("CARGO_BIN_EXE_chrono-worktree-test-consumer");
         let tools = h.parent.join("python-tools");
         fs::create_dir(&tools).unwrap();
@@ -2286,7 +2290,7 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
         assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(
             target.join("output λ/cache").exists(),
-            "{route}: subprocess child must retain lease after Python and worktree wrappers die"
+            "{route}: subprocess child must retain lease after consumer and worktree wrappers die"
         );
         fs::write(
             target.join(".chrono-harness/state/python-release"),

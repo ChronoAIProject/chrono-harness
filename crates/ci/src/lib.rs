@@ -10,6 +10,7 @@ mod event_git;
 pub mod full;
 mod gather;
 pub mod gating;
+pub mod inventory;
 pub mod migrate;
 pub mod release;
 pub mod resources;
@@ -925,6 +926,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
         return Err("extra arguments".into());
     }
     match command.as_str() {
+        "test-inventory" => inventory::execute(&root, config),
         "migrate" => {
             if opts
                 .keys()

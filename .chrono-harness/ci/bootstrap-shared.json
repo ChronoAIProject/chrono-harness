@@ -80,9 +80,6 @@
       "cache",
       "core"
     ],
-    "unit_workflow-inventory": [
-      "core"
-    ],
     "unit_release-build": [
       "core"
     ],
