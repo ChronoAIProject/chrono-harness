@@ -1261,7 +1261,9 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     let lineage_bytes = fs::read(lane.join(origin["birth_report"].as_str().unwrap())).unwrap();
     let lineage_path = ".chrono-harness/ci/lineage.json";
     fs::write(lane.join(lineage_path), &lineage_bytes).unwrap();
-    let system_ci = fs::canonicalize(lane.join(".chrono-harness/bin/chrono-ci")).unwrap();
+    // This shared tool is a physical input outside every independent host.
+    // A path inside the first host would change meaning in relocated delivery.
+    let system_ci = fs::canonicalize(source().join("crates/ci/target/debug/chrono-ci")).unwrap();
     // Exercise the Linux layout even when the host's native executable is a regular file.
     let native_directory = fs::canonicalize(tools.path()).unwrap().join("native-ci");
     fs::create_dir(&native_directory).unwrap();
