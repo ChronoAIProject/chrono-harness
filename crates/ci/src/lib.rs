@@ -11,6 +11,7 @@ pub mod full;
 mod gather;
 pub mod gating;
 pub mod migrate;
+pub mod native;
 pub mod release;
 pub mod resources;
 pub mod startup;
@@ -873,8 +874,8 @@ fn store_context(
     Ok(())
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {
-    if args.first().map(String::as_str) == Some("native-process") {
-        return check_inputs::native_process(args);
+    if args.first().map(String::as_str) == Some("native-adoption") {
+        return native::dispatch(args);
     }
     if args.first().map(String::as_str) == Some("production") {
         return gating::production(args);
