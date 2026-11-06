@@ -844,7 +844,7 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     ] {
         let mut invalid = selected.clone();
         invalid["selection"]["registry_path"] = path;
-        assert!(snapshot_shape(&invalid).is_err());
+        assert!(chrono_judge_registration::inputs::snapshot_shape(&invalid).is_err());
     }
     fs::write(root.join("src.bin"), b"selected candidate").unwrap();
     let selected_candidate = commit(&root);
