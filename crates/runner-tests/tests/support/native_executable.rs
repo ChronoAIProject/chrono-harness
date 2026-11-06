@@ -16,5 +16,10 @@ pub fn install(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::R
         Ok(())
     }
     #[cfg(not(target_os = "macos"))]
-    std::fs::hard_link(source, destination)
+    {
+        // Each fixture owns its permissions; chmod must not change the build
+        // executable or another test. copy closes its writable handle here.
+        std::fs::copy(source, destination)?;
+        Ok(())
+    }
 }

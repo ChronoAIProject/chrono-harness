@@ -20,6 +20,16 @@
           "registry_path": ".chrono-harness/git/macos-27.json"
         }
       ]
+    },
+    "linux-x86_64": {
+      "program": "/usr/bin/git",
+      "configurations": [
+        {
+          "sha256": "824d5b2fffef332ec7ba053e579659bb12f26a0b4747da6f9c6dc0e71d36f235",
+          "path": ".chrono-harness/git/linux-release.json",
+          "registry_path": ".chrono-harness/git/linux-release.json"
+        }
+      ]
     }
   }
 }

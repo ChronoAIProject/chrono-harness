@@ -3089,7 +3089,7 @@ jobs:
           include-hidden-files: true
   macos_build_runner:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3178,7 +3178,7 @@ jobs:
           include-hidden-files: true
   macos_build_instructions:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3267,7 +3267,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_ci:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3356,7 +3356,7 @@ jobs:
           include-hidden-files: true
   macos_build_ci:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3445,7 +3445,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_registration:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3534,7 +3534,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_filemap:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3623,7 +3623,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_routes:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3712,7 +3712,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_projects:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3801,7 +3801,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_cost:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3890,7 +3890,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_mixed:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -3979,7 +3979,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_workflow:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4068,7 +4068,7 @@ jobs:
           include-hidden-files: true
   macos_build_inputs:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4157,7 +4157,7 @@ jobs:
           include-hidden-files: true
   macos_build_distribution:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4246,7 +4246,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_cargo:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4335,7 +4335,7 @@ jobs:
           include-hidden-files: true
   macos_build_worktree:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4425,7 +4425,7 @@ jobs:
   macos_verify_distribution_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_distribution"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4523,7 +4523,7 @@ jobs:
   macos_verify_worktree_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_ci","macos_build_worktree"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4637,7 +4637,7 @@ jobs:
   macos_verify_runner_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4728,7 +4728,7 @@ jobs:
   macos_verify_inputs_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4883,7 +4883,7 @@ jobs:
   macos_verify_ci_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_worktree"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -4985,7 +4985,7 @@ jobs:
   macos_verify_judge_ci_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_ci"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5077,7 +5077,7 @@ jobs:
   macos_verify_judge_registration_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_registration"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5169,7 +5169,7 @@ jobs:
   macos_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5266,7 +5266,7 @@ jobs:
   macos_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_worktree"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5367,7 +5367,7 @@ jobs:
   macos_verify_judge_cargo_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_judge_cargo"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5473,7 +5473,7 @@ jobs:
           include-hidden-files: true
   macos_verify_instructions_tests:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5563,7 +5563,7 @@ jobs:
   macos_verify_judge_filemap_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5657,7 +5657,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_routes_tests:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5747,7 +5747,7 @@ jobs:
   macos_verify_judge_cost_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5841,7 +5841,7 @@ jobs:
   macos_verify_judge_mixed_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost","macos_build_judge_mixed"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -5936,7 +5936,7 @@ jobs:
   macos_package:
     if: ${{ always() && github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_judge_cargo_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_workflow_inventory_tests","macos_verify_release_build_tests","macos_verify_release_build_integration","macos_verify_diagnostics_tests","macos_verify_host_bootstrap_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_ci_native_adapter_tests"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -6247,7 +6247,7 @@ jobs:
           include-hidden-files: true
   macos_verify_workflow_inventory_tests:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -6289,7 +6289,7 @@ jobs:
           include-hidden-files: true
   macos_verify_release_build_tests:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -6377,7 +6377,7 @@ jobs:
   macos_verify_release_build_integration:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_distribution","macos_build_cache"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -6510,7 +6510,7 @@ jobs:
           include-hidden-files: true
   macos_verify_diagnostics_tests:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -6599,7 +6599,7 @@ jobs:
           include-hidden-files: true
   linux_verify_host_bootstrap_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_worktree"]
+    needs: ["linux_build_worktree","linux_build_runner"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -6622,6 +6622,7 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_14
+      - *chrono_release_download_13
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6643,8 +6644,8 @@ jobs:
           include-hidden-files: true
   macos_verify_host_bootstrap_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_worktree"]
-    runs-on: "macos-14"
+    needs: ["macos_build_worktree","macos_build_runner"]
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -6666,6 +6667,7 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_29
+      - *chrono_release_download_28
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6867,7 +6869,7 @@ jobs:
           include-hidden-files: true
   macos_build_cache:
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -6957,7 +6959,7 @@ jobs:
   macos_verify_cache_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_cache"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
@@ -7092,7 +7094,7 @@ jobs:
   macos_verify_ci_native_adapter_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_ci"]
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}

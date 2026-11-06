@@ -53,6 +53,29 @@ const PROCESS_FIXTURE: &str = env!("CARGO_BIN_EXE_chrono-test-process-lifecycle"
 const PROTOCOL_FIXTURE: &str = env!("CARGO_BIN_EXE_chrono-test-protocol-judge");
 
 #[test]
+fn installed_fixture_permissions_are_independent() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("source");
+    let changed = directory.path().join("changed");
+    let sibling = directory.path().join("sibling");
+    fs::copy(PROTOCOL_FIXTURE, &source).unwrap();
+    let original_mode = fs::metadata(&source).unwrap().permissions().mode();
+    assert_ne!(original_mode & 0o111, 0);
+    native_executable::install(&source, &changed).unwrap();
+    native_executable::install(&source, &sibling).unwrap();
+    fs::set_permissions(&changed, fs::Permissions::from_mode(0o600)).unwrap();
+    for path in [&source, &sibling] {
+        assert_eq!(
+            fs::metadata(path).unwrap().permissions().mode(),
+            original_mode
+        );
+        assert_eq!(fs::read(path).unwrap(), fs::read(PROTOCOL_FIXTURE).unwrap());
+    }
+}
+
+#[test]
 fn published_rfc8785_vectors() {
     // RFC 8785 §3.2.2 and §3.2.3, not produced by this implementation.
     let v =
@@ -79,7 +102,7 @@ fn fixture(case: serde_json::Value) -> (tempfile::TempDir, wire::Request, wire::
         .unwrap();
     let path = dir.path().join("judge");
     // The protocol requires a regular file with the completed build bytes;
-    // installation never opens an executable for writing.
+    // installation closes all writable handles before launching the fixture.
     native_executable::install(PROTOCOL_FIXTURE, &path).unwrap();
     fs::write(
         dir.path().join("judge-case.json"),
