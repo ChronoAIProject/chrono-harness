@@ -32,11 +32,10 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 
 ## 生成 AI 工作指南
 
-在产品源码中安装生成器，再初始化要接入的仓库。先确保 Cargo 的可执行文件目录在 `PATH` 中：
+按上面的命令安装后，在接入仓库根目录初始化指南：
 
 ```sh
-cargo install --locked --path crates/instructions
-chrono-instructions init --host-root "/path/to/existing-host"
+.chrono-harness/bin/chrono-instructions init --host-root .
 ```
 
 生成器内置[默认规则](assets/instructions/catalog.json)和只生成根指南的默认计划，复制可执行文件后也能使用。初始化在目标仓库的 `.chrono-harness/instructions/` 下建立独立的规则目录、输出计划和空上下文，再生成 `CLAUDE.md`，让 `AGENTS.md` 以相对符号链接指向它。
@@ -46,7 +45,7 @@ chrono-instructions init --host-root "/path/to/existing-host"
 以后修改仓库自己登记的规则或输出计划，再运行：
 
 ```sh
-chrono-instructions generate --host-root "/path/to/existing-host"
+.chrono-harness/bin/chrono-instructions generate --host-root .
 ```
 
 规则可组合成 Markdown 指南或专用技能文件。未指定布局时先输出依赖，再输出使用它的规则；指定布局时，每条选中的非空规则必须出现一次。布局只影响阅读顺序。缺少翻译、循环依赖或无效引用都会报错。完整格式和示例见[指南生成](docs/instructions.md)。
