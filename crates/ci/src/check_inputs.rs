@@ -343,10 +343,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             .map_err(|e| format!("native event payload {payload_path}: {e}"))?;
         let payload: Value = decode(&payload_raw)?;
         let revision = named_env(&opts, "--revision-env")?;
-        let (mut evidence, context, scope) = if matches!(
-            config["schema"].as_str(),
-            Some(full::SCHEMA | full::SHORT_SCHEMA)
-        ) {
+        let full_provider = config["schema"].as_str() == Some(full::SCHEMA);
+        let (mut evidence, context, scope) = if full_provider {
             let c: full::Config = decode(&config_bytes)?;
             if c.check_config != req.profile || !req.selection.matches(&c.scope) {
                 return Err("full native profile binding mismatch".into());

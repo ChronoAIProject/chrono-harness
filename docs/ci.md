@@ -227,7 +227,7 @@ evidence 须为非空对象。ID／协议、总状态／逐项状态、实际子
 
 ## GitHub 工作流的生成与所有权
 
-完整治理有单独明确 dispatch schema [`chrono-github-full-ci/v1`](full-ci.md)，保留调用方上下文字节，本地／CI 使用同一完整 runner 命令。下面事件 profile 保留按范围含义，采用时不会静默升级。
+完整治理有单独明确 dispatch schema [`chrono-github-full-ci/v2`](full-ci.md)，保留调用方上下文字节，本地／CI 使用同一 schema4 短 runner 入口。下面事件 profile 保留按范围含义，采用时不会静默升级。
 
 <a id="registered-event-git"></a>
 
