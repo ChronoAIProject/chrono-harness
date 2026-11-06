@@ -77,14 +77,12 @@
     }
   },
   "native_adoption": {
-    "schema": "chrono-native-adoption/v1",
+    "schema": "chrono-native-adoption/v2",
     "lineage": {
       "path": ".chrono-harness/ci/lineage.json",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     },
-    "adapter_path": ".chrono-harness/ci/native.py",
-    "interpreter": "/usr/bin/python3",
-    "inputs_program": "python3",
+    "inputs_program": ".chrono-harness/bin/chrono-inputs",
     "seed_directory": ".chrono-harness/state/shared-seed/",
     "seed_artifact": "chrono-context",
     "retained_inputs": ".chrono-harness/state/inputs.json",
