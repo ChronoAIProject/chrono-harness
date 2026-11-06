@@ -144,10 +144,7 @@ fn decode_projection(bytes: &[u8]) -> Result<Projection, String> {
         Some(release::SCHEMA | release::UNITS_SCHEMA)
     ) {
         Ok(Projection::Release(release::decode_config(bytes)?))
-    } else if matches!(
-        value["schema"].as_str(),
-        Some(full::SCHEMA | full::SHORT_SCHEMA)
-    ) {
+    } else if matches!(value["schema"].as_str(), Some(full::SCHEMA)) {
         let c = decode(bytes)?;
         full::validate(&c)?;
         Ok(Projection::Full(c))

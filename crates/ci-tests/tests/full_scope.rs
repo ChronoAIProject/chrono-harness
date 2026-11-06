@@ -42,14 +42,12 @@ fn scoped_config(scope: &Value) -> FullConfig {
     serde_json::from_value(value).expect("strict typed provider scope")
 }
 
-fn local_argv(c: &FullConfig, scope: &Value, base: &str, candidate: &str) -> Vec<String> {
-    let mut argv =
-        chrono_harness::canonical_argv(&c.runner, &c.check_config, Some(base), candidate, false);
-    argv.extend(["--context".into(), c.context_path.clone()]);
+fn local_argv(c: &FullConfig, scope: &Value) -> Vec<String> {
+    let mut argv = vec![c.runner.clone(), "check".into()];
     argv.extend(
         serde_json::from_value::<Scope>(scope.clone())
             .unwrap()
-            .argv(),
+            .short_argv(),
     );
     argv
 }
@@ -65,21 +63,7 @@ fn unscoped_source_identity_and_check_argv_are_explicit() {
             .unwrap(),
         source
     );
-    assert_eq!(
-        full::argv(&c, "base", "candidate"),
-        vec![
-            c.runner.clone(),
-            "check".into(),
-            "--config".into(),
-            c.check_config.clone(),
-            "--base".into(),
-            "base".into(),
-            "--candidate".into(),
-            "candidate".into(),
-            "--context".into(),
-            c.context_path.clone(),
-        ]
-    );
+    assert_eq!(full::argv(&c), vec![c.runner.clone(), "check".into(),]);
 }
 
 #[test]
@@ -97,8 +81,8 @@ fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
             .args(["-e", "-c", &script(&yaml, "Canonical full harness check")]).output().unwrap();
         assert_eq!(out.status.code(), Some(23), "scope {scope}: {out:?}");
         assert_eq!(out.stderr, b"\xffscope-consumer-failure");
-        let expected = local_argv(&c, &scope, "base fixed", "candidate fixed");
-        assert_eq!(full::argv(&c, "base fixed", "candidate fixed"), expected);
+        let expected = local_argv(&c, &scope);
+        assert_eq!(full::argv(&c), expected);
         assert_eq!(String::from_utf8(out.stdout).unwrap().lines().collect::<Vec<_>>(), expected[1..]);
         assert!(yaml.contains("if: ${{ always() }}"));
         assert!(yaml.contains(&c.checkout_action) && yaml.contains(&c.upload_artifact_action));
@@ -142,13 +126,10 @@ fn malformed_scopes_and_ownership_collisions_fail_before_generation() {
         ".chrono-harness/state/m\n.json",
         &c.context_path,
         &c.preparation_path,
-        ".chrono-harness/state/full/prepare.stdout.json",
-        ".chrono-harness/state/full/prepare.stderr",
         ".chrono-harness/state/full",
         ".chrono-harness/state/full/context.json/child",
         ".chrono-harness/state/full/./context.json",
         ".chrono-harness/state/full//preparation.json",
-        ".chrono-harness/state/full/prepare.stderr/",
     ] {
         invalid.push(json!({"kind":"collect","manifest":path}));
     }
@@ -188,7 +169,7 @@ fn malformed_scopes_and_ownership_collisions_fail_before_generation() {
     collided.runner = ".chrono-harness/state/evidence/manifest.json".into();
     assert!(full::render(&collided, SOURCE).is_err());
     collided = collector;
-    collided.generator = ".chrono-harness/state/evidence/manifest.json/child".into();
+    collided.check_config = ".chrono-harness/state/evidence/manifest.json/child".into();
     assert!(full::render(&collided, SOURCE).is_err());
 }
 
@@ -384,10 +365,7 @@ fn committed_unit_and_collector_cli_prepare_preserve_caller_bytes_and_canonical_
             assert_eq!(report["config_path"], path);
             assert_eq!(report["config_sha256"], sha256(&source));
             assert_eq!(fs::read(h.root.join(path)).unwrap(), source);
-            assert_eq!(
-                report["canonical_argv"],
-                json!(local_argv(&c, &scope, &h.candidate, &h.candidate))
-            );
+            assert_eq!(report["canonical_argv"], json!(local_argv(&c, &scope)));
             assert_eq!(report["status"], "prepared");
             assert_eq!(report["governance"], "not-evaluated");
             assert_eq!(report["parity"], "unestablished");
@@ -588,14 +566,13 @@ fn scoped_generation_preserves_other_source_outputs() {
 
 #[test]
 fn unscoped_full_generation_and_init_preserve_other_source_outputs() {
-    for schema in [full::SCHEMA, full::SHORT_SCHEMA] {
+    {
         for operation in ["generate", "init"] {
             let d = tempfile::tempdir().unwrap();
             let root = d.path();
             let previous = ".chrono-harness/providers/previous.json";
             let current = ".chrono-harness/providers/current.json";
             let mut c = config();
-            c.schema = schema.into();
             write(root, previous, &serde_json::to_value(&c).unwrap());
             generate(root, previous, false).unwrap();
             let workflow = fs::read(root.join(&c.workflow_path)).unwrap();
@@ -608,7 +585,7 @@ fn unscoped_full_generation_and_init_preserve_other_source_outputs() {
             } else {
                 generate(root, current, false)
             };
-            assert!(result.is_err(), "{schema} {operation}: {result:?}");
+            assert!(result.is_err(), "{operation}: {result:?}");
             assert_eq!(fs::read(root.join(&c.workflow_path)).unwrap(), workflow);
             assert_eq!(fs::read(root.join(previous)).unwrap(), previous_bytes);
             assert_eq!(fs::read(root.join(current)).unwrap(), current_bytes);
@@ -640,23 +617,4 @@ fn collection_symlink_is_rejected_without_provisioning_or_output() {
     );
     assert!(!root.join(&c.context_path).exists());
     assert!(!root.join(&c.preparation_path).exists());
-}
-
-#[test]
-fn short_full_scope_survives_argv_and_rendering_early_returns() {
-    for scope in scopes() {
-        let mut c = scoped_config(&scope);
-        c.schema = full::SHORT_SCHEMA.into();
-        let mut expected = vec![c.runner.clone(), "check".into()];
-        expected.extend(serde_json::from_value::<Scope>(scope).unwrap().short_argv());
-        assert_eq!(full::argv(&c, "base", "candidate"), expected);
-        let rendered = full::render(&c, SOURCE).unwrap();
-        let command = expected
-            .iter()
-            .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
-            .collect::<Vec<_>>()
-            .join(" ");
-        assert!(rendered.contains(&command));
-        assert!(!rendered.contains("Preserve fixed full context"));
-    }
 }
