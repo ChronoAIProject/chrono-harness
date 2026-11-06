@@ -181,7 +181,6 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
     let artifact =
         chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
     artifact.acquire("diagnostic", "inspect old fixture").unwrap();
-    let live = allocation.capability().unwrap();
     drop(allocation);
     let record = producer_record_path(&store, &root);
     let object = json(&fs::read(&record).unwrap()).unwrap()["object"].clone();
@@ -193,6 +192,13 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
         &["--path", h.root.to_str().unwrap(), "--partition-producer", "test-allocation"],
     );
     assert_eq!(code, 0, "{report} {error}");
+    let live = chrono_harness::ownership::Lease::acquire(
+        &store.join(object["cache_lease"]["path"].as_str().unwrap()),
+        Some(object["cache_lease"]["id"].as_str().unwrap()),
+        false,
+        false,
+        None,
+    ).unwrap().unwrap();
     let mut plan = value!({"schema":"chrono-fixture-body-custody/v1",
         "head":git(&h.root,&["rev-parse","HEAD"]),"current_consumers_released":true,
         "reason":"current fixture custodian inspected originals and releases this synthetic directory",
