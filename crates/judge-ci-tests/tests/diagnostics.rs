@@ -492,11 +492,11 @@ fn incomplete_execution(delayed_admission: bool) {
 fn execution_diagnostics_prepared_consumer_matches_real_host_root_before_effects() {
     let h = host(Some("success".into()));
     h.change_registry(CONFIG, |v| {
-        v["policy"]["tools"] = json!({"sh":"/bin/sh"});
+        v["policy"]["tools"] = json!({"fixture":OPERATION_TOOL});
     });
     h.change_registry(".chrono-harness/projects.json", |v| {
-        v["projects"][1]["actions"]["execute"]["tool"] = json!("sh");
-        v["projects"][1]["actions"]["execute"]["argv"] = json!(["check.sh"]);
+        v["projects"][1]["actions"]["execute"]["tool"] = json!("fixture");
+        v["projects"][1]["actions"]["execute"]["argv"] = json!(["fixture-operation", "check.case"]);
     });
     h.commit();
     let aliases = tempfile::tempdir().unwrap();

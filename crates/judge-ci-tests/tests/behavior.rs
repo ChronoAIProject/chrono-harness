@@ -330,7 +330,7 @@ fn operation_only_change_is_selected_and_failure_is_real() {
     let h = Host::new();
     let b = h.head();
     h.change_registry(".chrono-harness/projects.json", |v| {
-        v["projects"][1]["actions"]["execute"]["argv"] = json!(["-c", "exit 7"])
+        v["projects"][1]["actions"]["execute"]["argv"] = json!(["fail-seven"])
     });
     let c = h.commit();
     let r = h.check(&b, &c);
