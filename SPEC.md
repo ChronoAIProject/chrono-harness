@@ -863,7 +863,7 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 
 `chrono-initial-report/v1` 的 scope 为 `initial-inventory`，成功状态为 `complete`，base 和 delta 为 null，governance 恒为 `not-evaluated`；实际判官响应和进程回执另行保留。初始化检查成功不会修改草案登记或补写历史合规。配置、请求、报告及已验边界见 [执行合同](docs/execution.md#initial-inventory)。
 
-`chrono-github-ci/v2` 可在宿主 CI 源中显式声明 `initial_inventory: {path, profile}`，由同一 init/generate 生成初始配置与 workflow，verify 核对二者；初始事件与本地使用所声明的同一 check 配置，普通 DELTA 仍使用 check_config。v1 保持原义且不接受该扩展；v2 必须具备完整初始声明，不推断判官、语言、路径或摘要。来源与输出均由宿主显式登记，采用保留原有定制；生成不认证登记语义，不启用治理。
+当前 scoped CI 源使用 `chrono-github-ci/v4`，明确登记必需的 `facts_config`，并可声明 `initial_inventory: {path, profile}`。同一 init/generate 生成初始配置与 workflow，verify 核对二者；本地与 CI 使用登记的短命令，初始事件选择初始配置，普通 DELTA 选择 check_config。v1/v2/v3 长命令 provider 已退役，必须在发布任何生成物前拒绝。不推断判官、语言、路径或摘要。来源与输出均由宿主明确登记，采用时保留定制；生成不认证登记语义，也不启用治理。固定旧发布包及其宿主登记保留原有事实，不产生当前源码的兼容义务。
 
 具体所有权与失败边界见 [CI 合同](docs/ci.md#owned-github-projection)。完整自举来源、工具链输入完整性、原生 v2 初始事件采用与启用仍是独立义务。
 

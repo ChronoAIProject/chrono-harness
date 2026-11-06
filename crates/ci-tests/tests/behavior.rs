@@ -12,6 +12,54 @@ mod retained_receipts;
 fn config() -> Config {
     serde_json::from_value(json!({"schema":"chrono-github-ci/v1","workflow_path":".github/workflows/check.yml","name":"Host checks","runs_on":"macos-14","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["python3",".chrono-harness/ci/bootstrap.py","."],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":".chrono-harness/ci/check.json","context_path":".chrono-harness/state/context.json","artifact_directory":".chrono-harness/state/"})).unwrap()
 }
+#[test]
+fn retired_scoped_providers_are_rejected_before_publishing_outputs() {
+    for schema in [
+        "chrono-github-ci/v1",
+        "chrono-github-ci/v2",
+        "chrono-github-ci/v3",
+    ] {
+        let mut source = serde_json::to_value(config()).unwrap();
+        source["schema"] = json!(schema);
+        source.as_object_mut().unwrap().remove("facts_config");
+        source.as_object_mut().unwrap().remove("initial_inventory");
+        if schema == "chrono-github-ci/v2" {
+            source["initial_inventory"] = json!({
+                "path":".chrono-harness/ci/initial.json",
+                "profile":{
+                    "schema":"chrono-initial-check/v1",
+                    "host_config":".chrono-harness/registry.json",
+                    "timeout_seconds":30,"stdout_limit_bytes":1048576,
+                    "judges":[{"id":"inventory","executable":".chrono-harness/bin/custom-judge",
+                        "version":"0.1.0","sha256":"a".repeat(64),
+                        "argv":["--protocol","chrono-initial-judge/v1"],
+                        "selector":"every-initial","modes":["inventory"],"after":[]}]
+                }
+            });
+        } else if schema == "chrono-github-ci/v3" {
+            source["facts_config"] = json!(".chrono-harness/event-facts.json");
+        }
+        let host = tempfile::tempdir().unwrap();
+        let inputs = tempfile::tempdir().unwrap();
+        let input = inputs.path().join("provider.json");
+        let bytes = serde_json::to_vec_pretty(&source).unwrap();
+        fs::write(&input, &bytes).unwrap();
+        let result = init(host.path(), &input);
+        if let Ok(changed) = result {
+            let original_host = host.keep();
+            let original_inputs = inputs.keep();
+            panic!(
+                "retired provider {schema} was accepted; changed={changed}; original host: {}; original inputs: {}",
+                original_host.display(),
+                original_inputs.display()
+            );
+        }
+        assert!(result.unwrap_err().contains("unsupported CI provider/schema"));
+        assert!(!host.path().join(".github").exists());
+        assert!(!host.path().join(".chrono-harness").exists());
+        assert_eq!(fs::read(&input).unwrap(), bytes);
+    }
+}
 fn write(p: &Path, c: &Config) {
     fs::create_dir_all(p.parent().unwrap()).unwrap();
     fs::write(p, serde_json::to_vec_pretty(c).unwrap()).unwrap();
