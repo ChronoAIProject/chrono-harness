@@ -37,7 +37,7 @@ proof fn distinct_names()
     ensures "old"@ != "new"@, "old-hash"@ != "new-hash"@,
         "target"@ != "other"@, "stage"@ != "other"@,
         "stage-inode"@ != "other"@, "new-hash"@ != "other"@,
-        "old"@ != "other"@, "old-hash"@ != "other"@,
+        "old"@ != "other"@, "new"@ != "other"@, "old-hash"@ != "other"@,
 {
     reveal_strlit("old"); reveal_strlit("new"); reveal_strlit("old-hash");
     reveal_strlit("new-hash"); reveal_strlit("target"); reveal_strlit("stage");
@@ -49,6 +49,7 @@ proof fn distinct_names()
     assert("stage-inode"@.len() != "other"@.len());
     assert("new-hash"@.len() != "other"@.len());
     assert("old"@.len() != "other"@.len());
+    assert("new"@.len() != "other"@.len());
     assert("old-hash"@.len() != "other"@.len());
 }
 
@@ -101,10 +102,13 @@ fn preserving_original_requires_exact_selected_binding_only_when_absent() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn immutable_original_preserves_all_bytes_including_nul_and_non_utf8() {
+    broadcast use vstd::array::group_array_axioms;
     let original = [0u8, 255, 97];
     let same = [0u8, 255, 97];
     let changed = [0u8, 254, 97];
     let extra = [0u8, 255, 97, 0];
+    assert(original@.len() == 3);
+    assert(extra@.len() == 4);
     let absent = policy::immutable_original(false, &[], &original);
     assert(absent is Create);
     let keep = policy::immutable_original(true, &same, &original);
@@ -267,13 +271,13 @@ fn prefixes_cover_empty_short_exact_wrong_and_retained_locations() {
     assert(longer);
     let wrong = policy::has_prefix(&[97u8, 99], &[97u8, 98]);
     assert(!wrong);
-    let retained = policy::retained_paths(b".chrono-harness/bin/owner-stages/a/owner",
-        b".chrono-harness/bin/chrono-worktree");
+    let retained = policy::retained_paths(&[46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 98u8, 105u8, 110u8, 47u8, 111u8, 119u8, 110u8, 101u8, 114u8, 45u8, 115u8, 116u8, 97u8, 103u8, 101u8, 115u8, 47u8, 97u8, 47u8, 111u8, 119u8, 110u8, 101u8, 114u8],
+        &[46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 98u8, 105u8, 110u8, 47u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 119u8, 111u8, 114u8, 107u8, 116u8, 114u8, 101u8, 101u8]);
     assert(retained);
-    let ephemeral = policy::retained_paths(b".chrono-harness/cache/owner",
-        b".chrono-harness/bin/chrono-worktree");
+    let ephemeral = policy::retained_paths(&[46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 99u8, 97u8, 99u8, 104u8, 101u8, 47u8, 111u8, 119u8, 110u8, 101u8, 114u8],
+        &[46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 98u8, 105u8, 110u8, 47u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 119u8, 111u8, 114u8, 107u8, 116u8, 114u8, 101u8, 101u8]);
     assert(!ephemeral);
-    let wrong_selected = policy::retained_paths(b".chrono-harness/bin/owner-stages/a/owner", b"/tmp/owner");
+    let wrong_selected = policy::retained_paths(&[46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 98u8, 105u8, 110u8, 47u8, 111u8, 119u8, 110u8, 101u8, 114u8, 45u8, 115u8, 116u8, 97u8, 103u8, 101u8, 115u8, 47u8, 97u8, 47u8, 111u8, 119u8, 110u8, 101u8, 114u8], &[47u8, 116u8, 109u8, 112u8, 47u8, 111u8, 119u8, 110u8, 101u8, 114u8]);
     assert(!wrong_selected);
     let missing = policy::retained_paths(&[], &[]);
     assert(!missing);

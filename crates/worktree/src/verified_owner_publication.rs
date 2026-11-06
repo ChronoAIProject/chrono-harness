@@ -107,23 +107,37 @@ pub fn stage_equal(a: &Stage, b: &Stage) -> (equal: bool)
 }
 
 pub open spec fn prefix(actual: Seq<u8>, expected: Seq<u8>) -> bool {
-    expected.len() <= actual.len() && actual.take(expected.len() as int) == expected
+    expected.len() <= actual.len()
+        && forall|i: int| 0 <= i < expected.len() ==> actual[i] == expected[i]
 }
 
 pub fn has_prefix(actual: &[u8], expected: &[u8]) -> (matches: bool)
     ensures matches <==> prefix(actual@, expected@),
 {
     if actual.len() < expected.len() { return false; }
-    equal_bytes(&actual[..expected.len()], expected)
+    let mut i = 0;
+    while i < expected.len()
+        invariant
+            expected.len() <= actual.len(),
+            0 <= i <= expected.len(),
+            forall|j: int| 0 <= j < i ==> actual[j] == expected[j],
+        decreases expected.len() - i,
+    {
+        if actual[i] != expected[i] { return false; }
+        i += 1;
+    }
+    true
 }
 
+// ASCII bytes for `.chrono-harness/bin/owner-stages/` and `.chrono-harness/bin/`.
+// The fixed Verus release accepts numeric byte arrays, not Rust byte literals.
 pub fn retained_paths(staged: &[u8], selected: &[u8]) -> (valid: bool)
     ensures valid <==> (
-        prefix(staged@, b".chrono-harness/bin/owner-stages/"@)
-            && prefix(selected@, b".chrono-harness/bin/"@)),
+        prefix(staged@, seq![46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 98u8, 105u8, 110u8, 47u8, 111u8, 119u8, 110u8, 101u8, 114u8, 45u8, 115u8, 116u8, 97u8, 103u8, 101u8, 115u8, 47u8])
+            && prefix(selected@, seq![46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 98u8, 105u8, 110u8, 47u8])),
 {
-    has_prefix(staged, b".chrono-harness/bin/owner-stages/")
-        && has_prefix(selected, b".chrono-harness/bin/")
+    has_prefix(staged, &[46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 98u8, 105u8, 110u8, 47u8, 111u8, 119u8, 110u8, 101u8, 114u8, 45u8, 115u8, 116u8, 97u8, 103u8, 101u8, 115u8, 47u8])
+        && has_prefix(selected, &[46u8, 99u8, 104u8, 114u8, 111u8, 110u8, 111u8, 45u8, 104u8, 97u8, 114u8, 110u8, 101u8, 115u8, 115u8, 47u8, 98u8, 105u8, 110u8, 47u8])
 }
 
 pub fn stable_observation(
