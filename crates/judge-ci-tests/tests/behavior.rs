@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 const CONFIG: &str = ".chrono-harness/ci/check.json";
+const OPERATION_TOOL: &str = env!("CARGO_BIN_EXE_chrono-test-ci-diagnostics");
 
 #[test]
 fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_output_bound() {
@@ -92,25 +93,22 @@ impl Host {
         h.write(".gitignore", ".chrono-harness/state/\n");
         h.write("src.txt", "one\n");
         h.write("doc.txt", "one\n");
-        h.write(
-            "check.sh",
-            "mkdir -p .chrono-harness/state\nprintf 'called\\n' >> .chrono-harness/state/calls\n",
-        );
-        h.json(".chrono-harness/projects.json",&json!({"schema_version":1,"owners":["host","lib","suite"],"projects":[{"id":"lib","actions":{}},{"id":"suite","actions":{"execute":{"operation":"test.suite","tool":"sh","argv":["check.sh"]}}}],"scripts":[]}));
+        h.write("check.case", "called\n");
+        h.json(".chrono-harness/projects.json",&json!({"schema_version":1,"owners":["host","lib","suite"],"projects":[{"id":"lib","actions":{}},{"id":"suite","actions":{"execute":{"operation":"test.suite","tool":"fixture","argv":["fixture-operation","check.case"]}}}],"scripts":[]}));
         let mut files = vec![];
         for p in [
             ".gitignore",
             "src.txt",
             "doc.txt",
-            "check.sh",
+            "check.case",
             ".chrono-harness/projects.json",
             ".chrono-harness/FILEMAP.json",
             CONFIG,
         ] {
-            files.push(json!({"path":p,"owner":"host","surface":"product","cost":"unmeasured","edges":if p=="src.txt"{json!([{"kind":"compile","to":"project:lib"}])}else if p=="check.sh"{json!([{"kind":"test-execution","to":"test:suite"}])}else{json!([])}}));
+            files.push(json!({"path":p,"owner":"host","surface":"product","cost":"unmeasured","edges":if p=="src.txt"{json!([{"kind":"compile","to":"project:lib"}])}else if p=="check.case"{json!([{"kind":"test-execution","to":"test:suite"}])}else{json!([])}}));
         }
         h.json(".chrono-harness/FILEMAP.json",&json!({"schema_version":1,"files":files,"project_edges":[{"from":"project:lib","kind":"test-execution","to":"test:suite"}]}));
-        h.json(CONFIG,&json!({"schema":"chrono-ci-check/v1","judge":{"program":"unused","args":[],"timeout_seconds":5,"output_limit_bytes":4096},"report_path":".chrono-harness/state/check.json","policy":{"filemap":".chrono-harness/FILEMAP.json","projects":".chrono-harness/projects.json","tools":{"sh":"/bin/sh"},"bindings":{"test:suite":["test.suite"]},"artifacts":[".chrono-harness/state/"],"required_inputs":[CONFIG,"check.sh"],"adoption_base":null,"operation_timeout_seconds":3,"operation_output_limit_bytes":4096}}));
+        h.json(CONFIG,&json!({"schema":"chrono-ci-check/v1","judge":{"program":"unused","args":[],"timeout_seconds":5,"output_limit_bytes":4096},"report_path":".chrono-harness/state/check.json","policy":{"filemap":".chrono-harness/FILEMAP.json","projects":".chrono-harness/projects.json","tools":{"fixture":OPERATION_TOOL},"bindings":{"test:suite":["test.suite"]},"artifacts":[".chrono-harness/state/"],"required_inputs":[CONFIG,"check.case"],"adoption_base":null,"operation_timeout_seconds":3,"operation_output_limit_bytes":4096}}));
         h.commit();
         h
     }
@@ -556,7 +554,7 @@ fn initial_rejects_actual_parents_in_full_and_shallow_history_before_operations(
 fn output_mutating_inputs_fails_after_execution() {
     let h = Host::new();
     let b = h.head();
-    h.write("check.sh", "printf dirty > src.txt\n");
+    h.write("check.case", "dirty-input\n");
     let c = h.commit();
     fail(&h.check(&b, &c), "dirty tracked");
 }
@@ -601,15 +599,12 @@ fn adoption_uses_real_base_and_requires_exact_opt_in() {
 fn explicitly_registered_extension_executes_without_scheduler_changes() {
     let h = Host::new();
     let b = h.head();
-    h.write(
-        "extra.sh",
-        "mkdir -p .chrono-harness/state\nprintf extra > .chrono-harness/state/extra\n",
-    );
-    h.change_registry(".chrono-harness/projects.json",|v|{v["owners"].as_array_mut().unwrap().push("extra".into());v["scripts"].as_array_mut().unwrap().push(json!({"id":"extra","actions":{"execute":{"operation":"extra.check","tool":"sh","argv":["extra.sh"]}}}));});
+    h.write("extra.case", "extra\n");
+    h.change_registry(".chrono-harness/projects.json",|v|{v["owners"].as_array_mut().unwrap().push("extra".into());v["scripts"].as_array_mut().unwrap().push(json!({"id":"extra","actions":{"execute":{"operation":"extra.check","tool":"fixture","argv":["fixture-operation","extra.case"]}}}));});
     h.change_registry(CONFIG, |v| {
         v["policy"]["bindings"]["test:extra"] = json!(["extra.check"])
     });
-    h.change_registry(".chrono-harness/FILEMAP.json",|v|v["files"].as_array_mut().unwrap().push(json!({"path":"extra.sh","owner":"extra","surface":"test","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:extra"}]})));
+    h.change_registry(".chrono-harness/FILEMAP.json",|v|v["files"].as_array_mut().unwrap().push(json!({"path":"extra.case","owner":"extra","surface":"test","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:extra"}]})));
     let c = h.commit();
     let r = h.check(&b, &c);
     pass(&r);
@@ -627,7 +622,12 @@ fn tool_or_environment_change_reexecutes_its_registered_bindings() {
             if env {
                 v["policy"]["environment"] = json!({"CHRONO_FIXTURE":"changed"})
             } else {
-                v["policy"]["tools"]["sh"] = "sh".into()
+                let path = Path::new(OPERATION_TOOL);
+                v["policy"]["tools"]["fixture"] = json!(format!(
+                    "{}/./{}",
+                    path.parent().unwrap().display(),
+                    path.file_name().unwrap().to_str().unwrap()
+                ));
             }
         });
         let c = h.commit();
@@ -664,10 +664,7 @@ fn hidden_worktree_bytes_fail_before_execution_without_changing_index() {
             }
         });
         h.write(path, "bad\n");
-        h.write(
-            "check.sh",
-            "test \"$(cat 'source with\ttab.txt')\" = good || exit 7\n",
-        );
+        h.write("check.case", "require-good-tab-input\n");
         let candidate = h.commit();
         let control = h.check(&base, &candidate);
         fail(&control, "exit 7");
@@ -693,8 +690,8 @@ fn index_flags_created_by_operations_fail_the_post_snapshot_guard() {
         let h = Host::new();
         let base = h.head();
         h.write(
-            "check.sh",
-            &format!("git update-index {flag} src.txt\nprintf hidden > src.txt\n"),
+            "check.case",
+            &format!("index-{}\n", flag.trim_start_matches("--")),
         );
         let candidate = h.commit();
         let result = h.check(&base, &candidate);
@@ -724,7 +721,8 @@ fn adapter_explains_legacy_only_selection_without_graph_edges() {
     });
     let b = h.commit();
     h.change_registry(".chrono-harness/projects.json", |v| {
-        v["projects"][1]["actions"]["execute"]["argv"] = json!(["check.sh", "changed"]);
+        v["projects"][1]["actions"]["execute"]["argv"] =
+            json!(["fixture-operation", "check.case", "changed"]);
     });
     let c = h.commit();
     let r = h.check(&b, &c);
@@ -786,7 +784,7 @@ fn filemap_v2_plan_operations_additions_and_removals_keep_obligations() {
         let h = Host::new();
         h.change_registry(".chrono-harness/projects.json", |v| {
             v["projects"][1]["actions"]["prepare"] =
-                json!({"operation":"prepare.suite","tool":"sh","argv":["check.sh"]});
+                json!({"operation":"prepare.suite","tool":"fixture","argv":["fixture-operation","check.case"]});
         });
         explicit_plans(&h);
         h.change_registry(".chrono-harness/FILEMAP.json", |v| {
@@ -851,14 +849,14 @@ fn language_host(scripts: bool, implementation: &str, testing: &str) -> Host {
         v["status"] = json!("active");
         let rows = v["projects"].as_array_mut().unwrap();
         rows[0]["actions"] =
-            json!({"build":{"operation":"build.lib","tool":"sh","argv":["check.sh"]}});
+            json!({"build":{"operation":"build.lib","tool":"fixture","argv":["fixture-operation","check.case"]}});
         rows[0]["language"] = json!(implementation);
         rows[1]["language"] = json!(testing);
         rows[1]["tests_for"] = json!("lib");
         if scripts {
             rows[0]["path"] = json!("src.txt");
             rows[0]["test_script"] = json!("suite");
-            rows[1]["path"] = json!("check.sh");
+            rows[1]["path"] = json!("check.case");
             v["scripts"] = v["projects"].take();
             v["projects"] = json!([]);
         } else {
@@ -962,9 +960,9 @@ fn v2_languages_missing_empty_or_non_string_declarations_are_rejected() {
 fn v2_languages_selected_test_and_initial_adoption_validate_the_pair() {
     let h = language_host(false, "rust", "python");
     let b = h.head();
-    let mut fixture = fs::read_to_string(h.root().join("check.sh")).unwrap();
+    let mut fixture = fs::read_to_string(h.root().join("check.case")).unwrap();
     fixture.push('\n');
-    h.write("check.sh", &fixture);
+    h.write("check.case", &fixture);
     let c = h.commit();
     fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
     h.git(&["checkout", "--orphan", "initial"]);

@@ -3,16 +3,13 @@ use super::*;
 fn host() -> Host {
     let h = Host::new();
     h.write("other.txt", "one\n");
-    h.write(
-        "other.sh",
-        "mkdir -p .chrono-harness/state\nprintf other >> .chrono-harness/state/other\n",
-    );
+    h.write("other.case", "other\n");
     h.change_registry(".chrono-harness/projects.json", |v| {
         v["owners"].as_array_mut().unwrap().push(json!("other"));
-        v["projects"].as_array_mut().unwrap().push(json!({"id":"other","actions":{"execute":{"operation":"test.other","tool":"sh","argv":["other.sh"]}}}));
+        v["projects"].as_array_mut().unwrap().push(json!({"id":"other","actions":{"execute":{"operation":"test.other","tool":"fixture","argv":["fixture-operation","other.case"]}}}));
     });
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
-        for path in ["other.txt", "other.sh"] {
+        for path in ["other.txt", "other.case"] {
             v["files"].as_array_mut().unwrap().push(json!({"path":path,"owner":"other","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:other"}]}));
         }
     });
@@ -61,7 +58,7 @@ fn cli(h: &Host, base: &str, candidate: &str, selector: &[&str]) -> (i32, Value)
     (output.status.code().unwrap(), report)
 }
 
-fn filemap_v2_bound_delta(key: &str, old: u64, candidate: u64, body: &str, reason: &str) {
+fn filemap_v2_bound_delta(key: &str, old: u64, candidate: u64, case: &str, reason: &str) {
     let h = host();
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     h.change_registry(CONFIG, |v| {
@@ -69,11 +66,8 @@ fn filemap_v2_bound_delta(key: &str, old: u64, candidate: u64, body: &str, reaso
         v["judge"]["timeout_seconds"] = json!(120);
         v["judge"]["output_limit_bytes"] = json!(4 * 1024 * 1024);
     });
-    h.write("check.sh", &format!("mkdir -p .chrono-harness/state\nprintf 'called\\n' >> .chrono-harness/state/calls\n{body}\nprintf done > .chrono-harness/state/done\n"));
-    h.write(
-        "other.sh",
-        "mkdir -p .chrono-harness/state\nprintf failed > .chrono-harness/state/other\nexit 19\n",
-    );
+    h.write("check.case", case);
+    h.write("other.case", "failed-other\n");
     explicit_plans(&h);
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
         v["execution_plans"]["test:suite"][key] = json!(old);
@@ -154,7 +148,7 @@ fn filemap_v2_timeout_only_delta_executes_candidate_plan() {
         "timeout_seconds",
         1,
         3,
-        "sleep 2",
+        "sleep-2-done\n",
         "changed operation timeout",
     );
 }
@@ -165,7 +159,7 @@ fn filemap_v2_output_limit_only_delta_executes_candidate_plan() {
         "output_limit_bytes",
         64,
         4096,
-        "printf '%0128d' 0",
+        "zeros-128-done\n",
         "changed operation output limit",
     );
 }
@@ -217,7 +211,7 @@ fn registered_unit_runs_only_its_selected_plan() {
 fn independent_unit_survives_another_units_failure() {
     let h = host();
     let b = h.head();
-    h.write("check.sh", "exit 19\n");
+    h.write("check.case", "exit-19\n");
     h.write("other.txt", "two");
     let c = h.commit();
     fail(&unit(&h, &b, &c, "alpha"), "19");
@@ -337,7 +331,7 @@ fn write_report(h: &Host, b: &str, c: &str, unit: &str) -> Value {
         &serde_json::to_vec(&request).unwrap(),
     )
     .unwrap();
-    let runner = sha256(&fs::read("/bin/sh").unwrap());
+    let runner = sha256(&fs::read(OPERATION_TOOL).unwrap());
     let judge = process.sha256.clone();
     let path = format!(".chrono-harness/state/{unit}/check.json");
     h.json(&path, &json!({"schema":"chrono-check-report/v1","request":request,"response":response,"judge":process,"runner":{"sha256":runner}}));
@@ -363,7 +357,7 @@ fn execution_originals_use_one_lossless_receipt_and_collect_without_reexecution(
         v["policy"]["operation_output_limit_bytes"] = json!(100_000)
     });
     let b = h.commit();
-    h.write("check.sh", "mkdir -p .chrono-harness/state\nprintf 'called\\n' >> .chrono-harness/state/calls\nprintf '%080000d' 0\nprintf '\\377\\000λ\\n'\nprintf 'original diagnostic\\n' >&2\n");
+    h.write("check.case", "large-invalid-output\n");
     let c = h.commit();
     let started = std::time::Instant::now();
     let input = write_report(&h, &b, &c, "alpha");
@@ -736,7 +730,10 @@ fn collection_rechecks_candidate_plan_and_environment_beyond_report_hashes() {
         let e = &mut report["response"]["evidence"];
         match mode {
             "environment" => e["plan"]["environment"]["FIXTURE_LITERAL"] = json!("changed"),
-            "method" => e["plan"]["operations"][0]["method"]["argv"] = json!(["other.sh"]),
+            "method" => {
+                e["plan"]["operations"][0]["method"]["argv"] =
+                    json!(["fixture-operation", "other.case"])
+            }
             "partition" => e["assigned_elsewhere"] = json!(["test:other"]),
             _ => e["executed"] = json!([]),
         }
@@ -852,12 +849,12 @@ fn exit_zero_infrastructure_failure_has_null_summary_and_retained_receipt_in_col
         v["projects"][1]["actions"]["execute"]["tool"] = json!("infrastructure");
         v["projects"][1]["actions"]["execute"]["argv"] = json!(["infrastructure-operation", exe]);
     });
-    fs::remove_file(h.root().join("check.sh")).unwrap();
+    fs::remove_file(h.root().join("check.case")).unwrap();
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
         v["files"]
             .as_array_mut()
             .unwrap()
-            .retain(|f| f["path"] != "check.sh");
+            .retain(|f| f["path"] != "check.case");
     });
     let c = h.commit();
     let (exit, report) = cli(&h, &b, &c, &["--unit", "alpha"]);

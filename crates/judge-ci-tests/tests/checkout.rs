@@ -8,7 +8,7 @@ fn raw_checkout_scoped_rejects_hidden_mode_before_and_after_operations() {
         h.git(&["config", "core.filemode", "false"]);
         let base = h.head();
         if after {
-            h.write("check.sh", "chmod +x src.txt\n");
+            h.write("check.case", "executable-input\n");
         }
         h.write("src.txt", "candidate\n");
         let candidate = h.commit();
