@@ -1425,7 +1425,7 @@ class ManagedAttemptCustody(unittest.TestCase):
                     # A missing owner original must not replace the real nonzero
                     # command, just as empty stdout must not do so on native CI.
                     with fixture.mock.patch.object(attempt, "owner_report", side_effect=FileNotFoundError("missing owner original")):
-                        with self.assertRaisesRegex(AssertionError, "managed-use: E_WORKTREE: Git executable digest mismatch") as failed:
+                        with self.assertRaisesRegex(AssertionError, r"managed-use: exit_code=2[\s\S]*E_WORKTREE: Git executable digest mismatch") as failed:
                             with attempt:
                                 attempt.managed("fixture.custody")
                 else:

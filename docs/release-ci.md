@@ -87,3 +87,5 @@ Python 发布 integration 组保留真实 distribution pack，并加入真实 ca
 Linux 发行政策也保留工作树所有者读取登记所需的完整结构，以及真实 custody fixture 使用的 Python 工具槽；Python 版本保持未知（`null`），fixture 自行绑定实际解释器。该登记不声称完成 Linux canonical/full 采用。原生 `42222842930/1` 已暴露并保留最小 Git 配置不能满足这些实际消费者的失败。
 
 Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时仍由现有入口选择 local。`host.bootstrap-tests` 失败时沿用已有有界采集，保留登记的 `bootstrap-custody-tests/` 原件；目录缺失或容量省略仍如实报告。断言同时显示真实退出码和 stdout／stderr 尾部及原路径，不把空 stderr 当作完整错误。
+
+Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，供真实源码 DELTA fixture 解析两端登记；未观察的 Rust 工具版本保持 `null`。这仅补齐引用关系，不代表 Linux canonical/full 输入已经完整绑定。失败诊断格式变化时，同步迁移原有 custody 断言，仍核验主错误、失败状态和原始输出。
