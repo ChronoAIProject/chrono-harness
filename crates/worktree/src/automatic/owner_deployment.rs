@@ -32,7 +32,6 @@ impl Manager {
         }
         // Exclusive executable deployment excludes new ordinary entrants. Each already admitted target
         // has its own enrollment SH, including linked checkout descendants.
-        let inventory = r.inventory(root)?;
         let mut entries = Vec::new();
         let mut originals = Vec::new();
         for path in self.enrollment_paths()? {
@@ -45,6 +44,12 @@ impl Manager {
             {
                 return Err("owner deployment enrollment namespace changed".into());
             }
+            if ledger.entries.is_empty() {
+                return Err(format!(
+                    "owner deployment affected checkout {} has no current enrollment; preserve selected bytes",
+                    path.display()
+                ));
+            }
             entries.extend(
                 ledger
                     .entries
@@ -53,14 +58,20 @@ impl Manager {
             );
             originals.push((file, raw));
         }
+        // Git membership and a CWD holder do not bind a checkout to these
+        // executable bytes. Only unresolved owner enrollments declare that use.
+        let affected_inventory = |rows: Vec<BTreeMap<String, String>>| {
+            rows.into_iter()
+                .filter(|row| {
+                    entries
+                        .iter()
+                        .any(|entry| entry.path == Path::new(&row["worktree"]))
+                })
+                .collect::<Vec<_>>()
+        };
+        let inventory = affected_inventory(r.inventory(root)?);
         for row in &inventory {
             let path = Path::new(&row["worktree"]);
-            if !entries.iter().any(|entry| entry.path == path) {
-                return Err(format!(
-                    "owner deployment affected checkout {} has no current enrollment; original custodian exclusion required; preserve selected bytes",
-                    path.display()
-                ));
-            }
             if row.contains_key("locked") || row.contains_key("prunable") {
                 return Err(format!(
                     "owner deployment affected checkout {} has unknown Git ownership; preserve selected bytes",
@@ -106,7 +117,7 @@ impl Manager {
                 }
             }
             if fs::read(&ledger_path).map_err(|e| e.to_string())? != ledger_bytes
-                || r.inventory(root)? != inventory
+                || affected_inventory(r.inventory(root)?) != inventory
             {
                 return Err(
                     "owner deployment affected enrollment inventory changed; preserve originals"

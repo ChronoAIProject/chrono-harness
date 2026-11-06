@@ -1879,6 +1879,10 @@ require policy adoption by excluded linked enrollments. Live descendants,
 unknown/unavailable affected attachments, missing ownership or unjoined use inputs
 refuse specifically, preserving installed bytes and originals. Disposed generations
 do not become live consumers; another physical coordinator is outside this set.
+An unregistered Git checkout, its independent Git lock and a CWD-only user do not
+establish consumption of the shared executable. Inventory stability is projected
+onto unresolved enrolled consumers; unrelated checkout movement cannot invalidate
+publication. An existing empty or malformed enrollment remains an error.
 An actually bound out-of-protocol producer still requires its identified original
 custodian's join/exclusion. Historical unknown tasks do not establish that binding.
 An immutable publication result alone proves neither adoption nor task completion.
