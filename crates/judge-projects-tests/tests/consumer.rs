@@ -296,7 +296,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         assert!(version.status.success());
         let chosen = root.join(".chrono-harness/bin/chosen git");
         fs::create_dir_all(&shadow).unwrap();
-        let helper = Path::new(env!("CARGO_BIN_EXE_chrono-test-projects-git"));
+        let helper = std::path::Path::new(env!("CARGO_BIN_EXE_chrono-test-projects-git"));
         for destination in [&chosen, &shadow.join("git")] {
             host::copied_fixture_input(&root, helper, destination);
             let copied = h.capture_native(Command::new("/bin/cp").arg(helper).arg(destination));
