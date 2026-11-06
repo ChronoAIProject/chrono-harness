@@ -233,31 +233,31 @@ evidence 须为非空对象。ID／协议、总状态／逐项状态、实际子
 
 ### 为事件读取登记 Git
 
-源码实现接受 `chrono-github-ci/v3` 及明确 `facts_config: ".chrono-harness/<registered-config>.json"`。该文件须为 full config v3，声明 [Git 工具／输入绑定](git-facts.md)，作为产物目录外的政策输入，并与生成初始 profile、执行物／上下文输出分开。文件和真实消费者都须登记到 FILEMAP，生成器不推断依赖或生成 Git 声明。公开 beta.8 不包含此能力。
+当前 scoped 来源只接受 `chrono-github-ci/v4` 及明确 `facts_config: ".chrono-harness/<registered-config>.json"`。该文件须提供 full config v3 的显式 Git 绑定，声明 [Git 工具／输入绑定](git-facts.md)，作为产物目录外的政策输入，并与生成初始 profile、执行物／上下文输出分开。文件和真实消费者都须登记到 FILEMAP，生成器不推断依赖或生成 Git 声明。公开 beta.8 不包含此能力。
 
-v3 保留事件和标准命令构造方式，可选 `initial_inventory` 保留原生成含义，省略则用单一检查 profile。v1／v2 拒绝 `facts_config`，包括 null，保留各自 Git 和初始 profile 合同。采用须明确；`init` 保留已有来源的定制和版本。
+v4 的工作流只调用 `check`、`check --unit ID` 或 `check --collect`，输入准备由登记的标准入口负责。可选 `initial_inventory` 生成独立初始 profile，省略则用单一 DELTA profile。旧 scoped v1／v2／v3 已退役，在发布输出前拒绝；没有未绑定 Git 的回退。`init` 保留已有当前来源的宿主定制，不自动迁移旧来源。
 
-事件进行网络观察前，所选 Git 核绑定配置原字节匹配固定候选，并确认 HEAD 就是该候选。v3 事件读取、远端基线观察、对象探测、fetch、初始父读取共用同一候选绑定、环境和逐进程上限。
+事件进行网络观察前，所选 Git 核绑定配置原字节匹配固定候选，并确认 HEAD 就是该候选。事件读取、远端基线观察、对象探测、fetch、初始父读取共用同一候选绑定、环境和逐进程上限。
 
 事件库仍消费调用方提供的 `Config` 和载荷，不证明 provider 来源或 CI 源码与候选一致。生成工作流和事件身份须由真实交付消费者验证。
 
-批量对象探测在 stdin 发送一个完整 OID。只有精确成功响应 `OID commit` 证明存在，只有 `OID missing` 允许从 `origin` 明确 fetch。非零、超时、溢出、类型错误、格式错误或多余输出都报错。fetch 成功后再次探测并核提交身份，不把诊断文本或任意探测失败解释成历史缺失。旧版本保留原探测路径。
+批量对象探测在 stdin 发送一个完整 OID。只有精确成功响应 `OID commit` 证明存在，只有 `OID missing` 允许从 `origin` 明确 fetch。非零、超时、溢出、类型错误、格式错误或多余输出都报错。fetch 成功后再次探测并核提交身份，不把诊断文本或任意探测失败解释成历史缺失。
 
 成功 `chrono-ci-inputs/v1` 上下文新增 `git_facts`。绑定后错误在 `E_CI_GIT` 保留观察；绑定期间失败则尽可能保留读取器 `E_GIT_FACTS` 诊断。每个实际进程保留 argv、stdin 摘要、原输出／摘要、退出及限制失败，不编造未启动进程或成功上下文。失败不覆盖旧上下文文件，调用方须读本次真实退出。
 
-专属测试用真实本地 remote 和所选 Git 入口，包括从其他 cwd、遮蔽环境 Git 的真实 CLI 调用。覆盖历史缺失、探测失败／错误、fetch 失败、配置 integration 基线、initial／manual／PR、源码／检出变化及旧版本对照。fixture 原生测试不证明宿主采用生成 v3 事件路径。
+专属测试用真实本地 remote 和所选 Git 入口，包括从其他 cwd、遮蔽环境 Git 的真实 CLI 调用。覆盖历史缺失、探测失败／错误、fetch 失败、配置 integration 基线、initial／manual／PR、源码／检出变化和旧格式拒绝。fixture 测试不证明当前候选的原生采用。
 
 本产品宿主当前事件配置见前文；网络、凭据、Git 配置、helper、OS、委托输入仍未完整验证。绑定不会关闭仓库配置的隐含 Git 行为，也不证明输入完整。完整启用、宿主版本采用和确定同判仍分别验收。
 
 ### provider 数据与首次清单
 
-`.chrono-harness/ci/github.json` 的 `schema: chrono-github-ci/v1` 明确配置 `workflow_path`、`name`、`runs_on`、`push_branches`、`pull_request_branches`、`branch_creation_base_ref`、SHA 固定的 `checkout_action`／`upload_artifact_action`、`timeout_minutes`、bootstrap argv、runner、generator、check_config、context_path、artifact_directory。
+`.chrono-harness/ci/github.json` 的 `schema: chrono-github-ci/v4` 明确配置 `workflow_path`、`name`、`runs_on`、`push_branches`、`pull_request_branches`、`branch_creation_base_ref`、SHA 固定的 `checkout_action`／`upload_artifact_action`、`timeout_minutes`、bootstrap argv、runner、generator、check_config、facts_config、context_path、artifact_directory。
 
-路径相对宿主；此 provider 支持单 job、GitHub Actions。脚本、工具 bootstrap、runner 标签、事件分支、超时都是数据，所选测试命令不出现在 YAML。runner 命令渲染与事件证据共用标准 argv 构造器。
+路径相对宿主；此 provider 支持单 job、GitHub Actions。脚本、工具 bootstrap、runner 标签、事件分支、超时都是数据，所选测试命令不出现在 YAML。工作流与事件证据都记录对应短命令。
 
 新登记应为 check／full／release provider 设 `include_hidden_files: true`；单元 provider 用 `collection.include_hidden_files`，也管理 detector 上下文上传。它包含明确产物根下隐藏后代，不扩根、不证明回执内容。省略或 false 保留旧生成方式及序列化来源身份。本仓检查／发布已明确开启。
 
-要用独立根清单，在同一来源选 `chrono-github-ci/v2` 并增加下列声明，填入真实所选判官摘要，其余字段含义沿用 v1：
+要用独立根清单，在同一 v4 来源增加下列声明，并在 schema4 `canonical_check.initial_profile` 绑定相同路径，填入真实所选判官摘要：
 
 ```json
 "initial_inventory": {
@@ -283,17 +283,17 @@ v3 保留事件和标准命令构造方式，可选 `initial_inventory` 保留�
 
 `host_config` 可为严格一层原生选择器。初始请求保留入口路径，按共享登记快照合同解析每个固定端点的直接目标；选择器和目标仍是两个独立登记文件。
 
-`init`／`generate` 将声明生成登记 JSON profile 和工作流，`verify` 不修改文件地核对两者。来源声明拥有 profile 输出：改来源再生成，不独立维护第二份政策。初始事件准备和工作流初始分支，通过同一标准 argv 构造器选择此精确 profile；普通 DELTA 继续用 `check_config`。
+`init`／`generate` 将声明生成登记 JSON profile 和工作流，`verify` 不修改文件地核对两者。来源声明拥有 profile 输出：改来源再生成，不独立维护第二份政策。标准输入生产者按真实拓扑和事件选择此精确 profile；普通 DELTA 继续用 `check_config`，工作流仍调用同一短命令。
 
-v1 拒绝扩展、保留单 profile 行为，v2 必须有此声明；版本或 null 不会静默选择回退。profile 复用 runner 的真实 schema、绑定、摘要、DAG 验证器，不发现 judge ID、二进制身份、宿主语言或布局。
+`initial_inventory` 可省略，显式 null 和无效声明均失败。profile 复用 runner 的真实 schema、绑定、摘要、DAG 验证器，不发现 judge ID、二进制身份、宿主语言或布局。
 
 输出须在 `.chrono-harness/ci/` 独立路径，位于产物路径外，区别于来源、普通检查、宿主配置、执行物。来源和输出都须明确登记 FILEMAP。生成器不检查／合成五份宿主登记，也不证明内容正确。
 
-新采用先检查两个输出，已有 profile 不同就拒绝，完全相同可复用。已有来源定制保留。登记后按来源重新生成可替换 profile 漂移，工作流标记和符号链接检查继续适用。改名／移除输出声明不自动删旧文件，AI 须明确退役旧登记和文件；不自动升级 v1 来源。
+新采用先检查两个输出，已有 profile 不同就拒绝，完全相同可复用。已有来源定制保留。登记后按来源重新生成可替换 profile 漂移，工作流标记和符号链接检查继续适用。改名／移除输出声明不自动删旧文件，AI 须明确退役旧登记和文件。
 
 专属测试在已提交无父宿主上，以真实 runner／registration 进程消费生成 profile，覆盖未登记文件拒绝、空格路径、其他 cwd，以及旧明确存储／stdout 报告身份。短检查显示状态、有限诊断、不可变原报告位置，消费者读取已有完整文件。
 
-公开[初始宿主示例](https://github.com/ChronoAIProject/chrono-harness-examples-initial)安装 beta.5，使用生成 v2 CI 验证真实无父首次 push，之后在 integration／PR／dev 执行普通文档 DELTA。它明确登记 macOS arm64／`macos-14` 和该平台初始判官摘要。真实证据及范围见[示例索引](examples.md)，不证明跨平台初始 profile、完整 bootstrap 来源／输入、治理启用或确定同判。
+公开[初始宿主示例](https://github.com/ChronoAIProject/chrono-harness-examples-initial)锁定独立 beta.20 发布，保留该发布的生成 v2 CI；历史采用曾验证真实无父首次 push，之后在 integration／PR／dev 执行普通文档 DELTA。它明确登记 macOS arm64／`macos-14` 和该平台初始判官摘要。真实证据及范围见[示例索引](examples.md)，不证明跨平台初始 profile、完整 bootstrap 来源／输入、治理启用或确定同判。
 
 ### push 基线与生成流程
 
@@ -323,7 +323,7 @@ v1 拒绝扩展、保留单 profile 行为，v2 必须有此声明；版本或 n
 | --- | --- |
 | 匹配 `push_baselines` 的 push | 创建及后续 push 均用观察到的配置基线 ref／载荷 `after` |
 | 未匹配的已有分支 push | 载荷 `before`／`after` |
-| 创建配置基线分支（`created`、before 全零、ref 匹配） | 无父 `after` 用同一 check 加 `--initial`，无 base，模式 `initial-inventory`；有父候选要求明确范围 |
+| 创建配置基线分支（`created`、before 全零、ref 匹配） | 无父 `after` 由同一短命令选择显式初始 profile，无 base，模式 `initial-inventory`；有父候选要求明确范围 |
 | 创建其他未匹配分支（`created`、before 全零、ref 不同） | 观察一次配置创建基线 ref，固定提交，与载荷 `after` 比较；候选等于已有基线就如实无操作 |
 | 指向 dev 的 PR | 事件 `pull_request.base.sha`／`head.sha`；检出 head，不用默认 merge ref |
 | workflow_dispatch | 明确完整 base／candidate，或明确 initial 加无父 candidate |
@@ -331,7 +331,7 @@ v1 拒绝扩展、保留单 profile 行为，v2 必须有此声明；版本或 n
 
 这里的单工作流 provider 检查 dev、integration/** push，指向 dev 的 PR 和手动 dispatch。已采用独立单元 provider 复用事件准备，collector 没有手动触发，见[单元说明](ci-units.md)。
 
-工作流检出事件候选、bootstrap 候选登记工具、调用 `chrono-ci prepare`、运行标准检查，失败也上传证据。checkout 临时读取凭据保留给必要对象获取，由 post-job 清理移除。对象缺失须明确 fetch 或失败。手动 dispatch 可用性可能取决于默认分支是否登记工作流。源码 revision 用 `github.workflow_sha` 独立记录。
+工作流检出事件候选、bootstrap 候选登记工具、运行登记的短检查，失败也上传证据。标准输入程序委托事件准备，不生成额外长命令步骤。checkout 临时读取凭据保留给必要对象获取，由 post-job 清理移除。对象缺失须明确 fetch 或失败。手动 dispatch 可用性可能取决于默认分支是否登记工作流。源码 revision 用 `github.workflow_sha` 独立记录。
 
 创建事件须有有效 `refs/heads/...` 载荷 ref。创建基线本身绝不把新候选当作自己的旧基线。无父首次 push 记 source `baseline-creation-initial-inventory`、null base、`initial-inventory`；其他未匹配创建记 `branch-creation-baseline-ref`、`delta`。
 
@@ -365,7 +365,7 @@ GitHub bootstrap 要求自托管 runner 上明确配置的工具目录；托管 
 
 ## 迁移独立初始宿主
 
-CI 所有者已有 `migrate`，可把明确保留的独立 v2／v3／v4 清单 provider 迁到同址或新址的独立 v4。保留旧来源，用 `--previous-config` 声明原地址，再以新 provider 调用登记迁移入口。
+CI 所有者已有 `migrate`，可把明确保留的当前独立 v4 清单 provider 迁到同址或新址的独立 v4。保留旧来源，用 `--previous-config` 声明原地址，再以新 provider 调用登记迁移入口。
 
 写入前核旧工作流和生成清单，保留精确清单声明及输出；拒绝改动／删除清单，或迁入单元汇总。宿主配置、facts／平台政策、FILEMAP、profile 绑定都须明确编辑，迁移不推断选择。
 

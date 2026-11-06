@@ -405,7 +405,7 @@ local 独立 scopes 仅在当前端点、birth／role 与输入引用一致且�
 
 unit 的 live 文件输入由 registration/input 单一实现按显式 unit plans、操作所有者、FILEMAP 依赖及 closure bindings 选取，含共享操作及治理输入；结构和引用仍全局检查，缺失／漂移／畸形／未知输入失败。capture 复用该投影；collection 核原始 blobs 与逐单元有效输入投影，不启动业务或业务版本工具。这些源码行为不证明远端 full 启用、release 或完整 SPEC 验收。
 
-宿主自定义与更新是交付合同：单元、启动参数、平台、超时及扩展调用由宿主显式配置；安装新二进制不重置这些源。`init` 保留已有宿主源，常规修改仍从该源生成和核验。显式迁移以旧、新 provider 为输入，先核旧投影及所有目标冲突，再更新受管输出、退役不再使用的旧输出；保留新源和无关宿主文件，不推断测试归属或替宿主改登记。公开 beta.13 的 `chrono-ci migrate` 支持 scoped v1／units 到 units，以及同源地址的显式旧配置快照；初始 inventory、full 和 release 合同不在该迁移入口中。完整 CLI 与失败边界见上述合同；投影迁移通过不等于 CI、完整治理或跨文件事务通过。
+宿主自定义与更新是交付合同：单元、启动参数、平台、超时及扩展调用由宿主显式配置；安装新二进制不重置这些源。`init` 保留已有宿主源，常规修改仍从该源生成和核验。显式迁移以旧、新 provider 为输入，先核旧投影及所有目标冲突，再更新受管输出、退役不再使用的旧输出；保留新源和无关宿主文件，不推断测试归属或替宿主改登记。当前 `chrono-ci migrate` 支持 scoped v4（无初始清单）／units 到 units，以及同源地址的显式前一配置快照；独立 v4 的初始清单只允许保留同一声明的迁移，full 和 release 合同不在该迁移入口中。完整 CLI 与失败边界见上述合同；投影迁移通过不等于 CI、完整治理或跨文件事务通过。
 
 一个测试项目可以显式登记多个测试组并分别绑定 CI 单元，不为分组另造生产／测试项目。分组须保留原测试义务，使用登记的库存判法核对当前未过滤集合：各组非空、互斥、并集完整，不能按历史数量或隐式发现规则选测。共享编译输出与库存操作仍登记互斥；原未过滤入口、各组执行边界和超时分别明确，不把分组后的多个预算声称为原单项总预算。宿主 projects 的普通测试和真实宿主迁移测试采用此分组，原断言与测试内时限保留，具体登记见 [独立 CI 单元](docs/ci-units.md)。分组不证明总工作量减少或原生时限充分。
 
@@ -871,9 +871,9 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 
 `chrono-initial-report/v1` 的 scope 为 `initial-inventory`，成功状态为 `complete`，base 和 delta 为 null，governance 恒为 `not-evaluated`；实际判官响应和进程回执另行保留。初始化检查成功不会修改草案登记或补写历史合规。配置、请求、报告及已验边界见 [执行合同](docs/execution.md#initial-inventory)。
 
-`chrono-github-ci/v2` 可在宿主 CI 源中显式声明 `initial_inventory: {path, profile}`，由同一 init/generate 生成初始配置与 workflow，verify 核对二者；初始事件与本地使用所声明的同一 check 配置，普通 DELTA 仍使用 check_config。v1 保持原义且不接受该扩展；v2 必须具备完整初始声明，不推断判官、语言、路径或摘要。来源与输出均由宿主显式登记，采用保留原有定制；生成不认证登记语义，不启用治理。
+当前 scoped CI 源使用 `chrono-github-ci/v4`，明确登记必需的 `facts_config`，并可声明 `initial_inventory: {path, profile}`。同一 init/generate 生成初始配置与 workflow，verify 核对二者；本地与 CI 使用登记的短命令，初始事件选择初始配置，普通 DELTA 选择 check_config。v1/v2/v3 长命令 provider 已退役，必须在发布任何生成物前拒绝。不推断判官、语言、路径或摘要。来源与输出均由宿主明确登记，采用时保留定制；生成不认证登记语义，也不启用治理。固定旧发布包及其宿主登记保留原有事实，不产生当前源码的兼容义务。
 
-具体所有权与失败边界见 [CI 合同](docs/ci.md#owned-github-projection)。完整自举来源、工具链输入完整性、原生 v2 初始事件采用与启用仍是独立义务。
+具体所有权与失败边界见 [CI 合同](docs/ci.md#owned-github-projection)。完整自举来源、工具链输入完整性、当前候选的原生初始事件采用与启用仍是独立义务。
 
 产品自举按登记方式从指定产品提交构建，将结果放宿主 `.chrono-harness/bin/`，
 写入具体版本、产品源提交、二进制摘要和工具链证据后，再调用唯一 check 指令。
@@ -1012,9 +1012,9 @@ context 可通过 retained_inputs 引用两固定端点的外部文件原字节�
 
 可选 Cargo 消费者保留 workspace／路径依赖检查，在登记操作前跑 locked／offline metadata；同一 full／scoped action 路径核保留 registry／Git 输入、精确解析和有序配置参数，见 docs/cargo-projects.md。两者均不认证 compiler／SDK 或未披露输入完整。仓库 ci-tests 的真实 Cargo 执行由 scoped 迁移消费者覆盖。本宿主仍 proposed／incomplete，full 治理仍非零。
 
-CI provider v3 明确 `facts_config`，为每次事件准备读取／fetch 选择候选 full config v3 的 Git 绑定。网络观察前核候选政策字节和检出身份。有限 batch probe 只接受精确请求 commit 或精确缺对象响应；只有后者允许 fetch。畸形输出、错误对象类型、执行失败都保留原进程证据且不 fetch；fetch 成功后再探测并核 commit。context 携 `git_facts`，准备失败保留观察、不虚构完成 context。
+当前 scoped CI provider v4 必须明确 `facts_config`，为每次事件准备读取／fetch 选择候选 full config v3 的 Git 绑定。网络观察前核候选政策字节和检出身份。有限 batch probe 只接受精确请求 commit 或精确缺对象响应；只有后者允许 fetch。畸形输出、错误对象类型、执行失败都保留原进程证据且不 fetch；fetch 成功后再探测并核 commit。context 携 `git_facts`，准备失败保留观察、不虚构完成 context。
 
-provider v1／v2 保留解释并拒绝新字段（含 null）；v3 可明确加入已有 initial 清单投影，不会推断。它不自动让宿主采用 scoped v2，也未证明网络／凭据／Git 配置完整或生成 v3 的原生宿主采用，见 [CI 说明](docs/ci.md)。
+旧 scoped provider v1／v2／v3 已退役；v4 可明确加入 initial 清单投影，不会推断。固定旧发布包的登记不产生当前源码的兼容义务。绑定不证明网络／凭据／Git 配置完整或当前候选的原生采用，见 [CI 说明](docs/ci.md)。
 
 CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹配的 integration 创建／修复 push，以完整候选对比固定观察 dev 顶端；未配置 push 仍用 before／after，见 docs/ci.md。准备不认证 workflow 义务。workflow 用真实观察和完成报告核有限分支、integration、退役、迁移合同，见 [workflow 说明](docs/workflow.md)。
 
