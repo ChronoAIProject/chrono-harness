@@ -2,7 +2,7 @@ use super::*;
 
 fn verus_report_host() -> Host {
     let h = Host::new();
-    fs::remove_file(h.root().join("check.sh")).unwrap();
+    fs::remove_file(h.root().join("check.case")).unwrap();
     h.json(".chrono-harness/verus.json", &json!({
         "schema":"chrono-verus/v1", "tool":"verus", "version":"fixture",
         "commit":"fixture-commit", "external_interfaces":{"fixture":"synthetic compiler interface for admission behavior only"}
@@ -27,7 +27,7 @@ fn verus_report_host() -> Host {
     });
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
         let files = v["files"].as_array_mut().unwrap();
-        files.retain(|f| f["path"] != "check.sh");
+        files.retain(|f| f["path"] != "check.case");
         files.push(json!({"path":".chrono-harness/verus.json","owner":"host",
             "surface":"judge-policy","cost":"unmeasured","edges":[]}));
         for f in files {
