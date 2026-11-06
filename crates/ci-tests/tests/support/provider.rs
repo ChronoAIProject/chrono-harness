@@ -127,7 +127,7 @@ pub fn parent(args: &[String]) {
     serde_json::to_writer(&mut calls, args).unwrap();
     writeln!(calls).unwrap();
     if args[0] == "run" {
-        if mode == "artifact-deadline" {
+        if matches!(mode, "artifact-deadline" | "final-parent-deadline") {
             std::thread::sleep(std::time::Duration::from_millis(1200));
         }
         if mode == "artifact-stdout" {
@@ -184,7 +184,20 @@ pub fn parent(args: &[String]) {
         if mode == "artifact-misbound" {
             artifacts[0]["workflow_run"]["head_sha"] = json!("incorrect-source");
         }
-        println!("{}", json!([{"artifacts":artifacts}]));
+        if mode == "artifact-missing-last" {
+            artifacts.pop().unwrap();
+        }
+        if mode == "artifact-misbound-last" {
+            artifacts.last_mut().unwrap()["workflow_run"]["head_sha"] = json!("incorrect-source");
+        }
+        if mode == "artifact-ambiguous-last" {
+            artifacts.push(artifacts.last().unwrap().clone());
+        }
+        let last_page = artifacts.split_off(artifacts.len().min(1));
+        println!(
+            "{}",
+            json!([{"artifacts":artifacts}, {"artifacts":last_page}])
+        );
     } else if args[1].contains("/jobs?") {
         let mut rows = vec![json!({"id":200,"run_id":101,"run_attempt":2,
             "name":"Detect registered DELTA","status":"completed", "conclusion":"success",
@@ -235,10 +248,20 @@ pub fn parent(args: &[String]) {
                 .unwrap_or(json!([{"jobs":rows}]))
         );
     } else if args[1].contains("/actions/runs/") {
-        let attempt = if matches!(
-            mode,
-            "changed-attempt" | "retry" | "carried" | "latest-failure" | "aggregate-only"
-        ) {
+        let downloads = fs::read_to_string(".chrono-harness/state/parent-calls")
+            .unwrap()
+            .lines()
+            .filter(|line| serde_json::from_str::<Vec<String>>(line).unwrap()[0] == "run")
+            .count();
+        if mode == "final-parent-deadline" && downloads > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(1200));
+        }
+        let attempt = if (mode == "changed-attempt-after-downloads"
+            && downloads == detection["required_units"].as_array().unwrap().len())
+            || matches!(
+                mode,
+                "changed-attempt" | "retry" | "carried" | "latest-failure" | "aggregate-only"
+            ) {
             3
         } else {
             2

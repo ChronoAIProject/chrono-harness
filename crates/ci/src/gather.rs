@@ -148,16 +148,12 @@ impl<'a> Transport<'a> {
     }
 
     fn artifact_metadata(
-        &mut self,
+        pages: &Value,
         run: u64,
         repository: &str,
         name: &str,
         candidate: &str,
     ) -> Result<(), String> {
-        let pages = self.api(
-            &format!("repos/{repository}/actions/runs/{run}/artifacts?per_page=100"),
-            true,
-        )?;
         let mut found = Vec::new();
         for page in pages.as_array().ok_or("artifact metadata pages missing")? {
             for artifact in page["artifacts"]
@@ -500,7 +496,6 @@ fn parent_units(
         binding["run_attempt"] = json!(p.run_attempt);
         binding["latest_job_attempt"] = json!(latest_attempt);
         binding["production"] = json!(production);
-        binding["parent_attempt"] = json!(native.run_attempt);
         completed.insert(unit.clone(), binding);
     }
     Ok(completed)
@@ -664,6 +659,10 @@ fn inner(
     } else {
         c.gather.download_directory.clone()
     };
+    // Parent jobs share a completed artifact inventory and immutable workflow
+    // revision. Reuse those observations only within this one acquisition.
+    let mut parent_artifacts = None;
+    let mut workflow_source = None;
     for (unit, run) in completed {
         let id = run["id"].as_u64().ok_or("unit run ID missing")?;
         let attempt = run["run_attempt"]
@@ -682,7 +681,19 @@ fn inner(
         };
         transport.begin_artifact()?;
         if c.job_gating.is_some() {
-            transport.artifact_metadata(id, repository, &artifact, candidate)?;
+            if parent_artifacts.is_none() {
+                parent_artifacts = Some(transport.api(
+                    &format!("repos/{repository}/actions/runs/{id}/artifacts?per_page=100"),
+                    true,
+                )?);
+            }
+            Transport::artifact_metadata(
+                parent_artifacts.as_ref().unwrap(),
+                id,
+                repository,
+                &artifact,
+                candidate,
+            )?;
         }
         let destination = transport.download(id, repository, &artifact, &destination)?;
         let downloaded = |input: &str| -> Result<String, String> {
@@ -819,10 +830,14 @@ fn inner(
             "--header".into(),
             "Accept: application/vnd.github.raw".into(),
         ];
-        let source = transport.run(&source_args)?;
-        if source != fs::read(root.join(workflow_path)).map_err(|e| e.to_string())? {
-            return Err(format!("unit {unit} executed a different workflow source"));
+        if c.job_gating.is_none() || workflow_source.is_none() {
+            let source = transport.run(&source_args)?;
+            if source != fs::read(root.join(workflow_path)).map_err(|e| e.to_string())? {
+                return Err(format!("unit {unit} executed a different workflow source"));
+            }
+            workflow_source = Some(source);
         }
+        let source = workflow_source.as_ref().unwrap();
         let report_path = downloaded(&registered[&unit].report_path)?;
         let mut input = json!({"unit":unit,"path":report_path,"sha256":file_identity(&no_symlink_parents(root,&report_path)?)?.0,
             "runner_sha256":unit_context["executables"]["runner_sha256"],"judge_sha256":unit_context["executables"]["judge_sha256"],
@@ -839,21 +854,9 @@ fn inner(
             input.as_object_mut().unwrap().remove("artifacts");
         }
         reports.push(input);
-        let endpoint = format!("repos/{repository}/actions/runs/{id}");
-        let fresh = transport.api(&endpoint, false)?;
-        if c.job_gating.is_some() {
-            let d =
-                serde_json::from_value(context["detection"].clone()).map_err(|e| e.to_string())?;
-            parent_run(
-                &fresh,
-                repository,
-                &d,
-                c,
-                run["parent_attempt"]
-                    .as_u64()
-                    .ok_or("parent attempt missing")?,
-            )?;
-        } else {
+        if c.job_gating.is_none() {
+            let endpoint = format!("repos/{repository}/actions/runs/{id}");
+            let fresh = transport.api(&endpoint, false)?;
             if fresh["run_attempt"] != attempt
                 || fresh["status"] != "completed"
                 || fresh["head_sha"] != candidate
@@ -868,8 +871,33 @@ fn inner(
             .as_ref()
             .ok_or("artifact budget missing")?
             .remaining()?;
-        transport.acquisition = None;
+        if c.job_gating.is_none() {
+            transport.acquisition = None;
+        }
         identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"job_id":run["unit_job_id"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
+    }
+    if c.job_gating.is_some() && !identities.is_empty() {
+        let d: super::gating::Detection =
+            serde_json::from_value(context["detection"].clone()).map_err(|e| e.to_string())?;
+        let fresh = transport.api(
+            &format!("repos/{repository}/actions/runs/{}", d.run_id),
+            false,
+        )?;
+        parent_run(
+            &fresh,
+            repository,
+            &d,
+            c,
+            context["native_run"]["run_attempt"]
+                .as_u64()
+                .ok_or("parent attempt missing")?,
+        )?;
+        transport
+            .acquisition
+            .as_ref()
+            .ok_or("artifact budget missing")?
+            .remaining()?;
+        transport.acquisition = None;
     }
     if identities.iter().any(|i| i["conclusion"] != "success") {
         return Err(format!(
