@@ -1,5 +1,4 @@
 use super::*;
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 const FACTS: &str = ".chrono-harness/scoped facts.json";
@@ -15,11 +14,8 @@ struct BoundHost {
 fn source() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
-fn quote(path: &Path) -> String {
-    format!("'{}'", path.to_str().unwrap().replace('\'', "'\\''"))
-}
 impl BoundHost {
-    fn new(body: &str) -> Self {
+    fn new(mode: &str) -> Self {
         let host = Host::new();
         let legacy_base = host.head();
         let state = fs::canonicalize(host.root())
@@ -31,23 +27,11 @@ impl BoundHost {
         let real = chrono_harness::resolve_program(host.root(), "git", None).unwrap();
         let version = Command::new(&real).arg("--version").output().unwrap();
         assert!(version.status.success());
-        fs::write(
-            &program,
-            format!(
-                "#!/bin/sh\n[ \"$BOUND_SCOPED_VALUE\" = declared ] || exit 81\n[ -z \"$SCOPED_AMBIENT\" ] || exit 82\nprintf '%s\\n' \"$*\" >> \"$SCOPED_TRACE\" || exit $?\n{body}\nexec {} \"$@\"\n",
-                quote(&real)
-            ),
-        )
-        .unwrap();
-        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+        let helper = env!("CARGO_BIN_EXE_chrono-test-scoped-git");
+        fs::copy(helper, &program).unwrap();
         let shadow = state.join("ambient-bin");
         fs::create_dir(&shadow).unwrap();
-        fs::write(
-            shadow.join("git"),
-            "#!/bin/sh\necho ambient-git >&2\nexit 83\n",
-        )
-        .unwrap();
-        fs::set_permissions(shadow.join("git"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::copy(helper, shadow.join("git")).unwrap();
         let path = std::env::var("PATH").unwrap();
         host.json(
             FACTS,
@@ -56,7 +40,8 @@ impl BoundHost {
                 "tools":[{"id":"scoped-git","program":program,"resolution":"PATH-once",
                     "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
                 "environment":{"inherit":[],"values":{"PATH":path,"BOUND_SCOPED_VALUE":"declared",
-                    "SCOPED_TRACE":trace,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
+                    "SCOPED_TRACE":trace,"SCOPED_REAL_GIT":real,"SCOPED_GIT_MODE":mode,
+                    "CHRONO_TEST_GIT_PROFILE":"scoped","GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
                     "inputs":[{"id":"scoped-git-bytes","location":program,"presence":"present",
                         "sha256":sha256(&fs::read(&program).unwrap())}]},
                 "protocol":{"timeout_seconds":30,"stdout_limit_bytes":1048576}}),
@@ -137,7 +122,7 @@ fn assert_process_bytes(observation: &Value) {
 
 #[test]
 fn scoped_v2_cli_binds_git_and_preserves_registered_execution() {
-    let h = BoundHost::new("");
+    let h = BoundHost::new("pass");
     h.host.write("src.txt", "candidate source");
     let candidate = h.host.commit();
     let (exit, report, error) = h.cli(&candidate);
@@ -179,7 +164,7 @@ fn scoped_v2_cli_binds_git_and_preserves_registered_execution() {
 
 #[test]
 fn scoped_v2_docs_delta_retains_both_snapshots_without_execution() {
-    let h = BoundHost::new("");
+    let h = BoundHost::new("pass");
     h.host.write("doc.txt", "candidate documentation");
     let candidate = h.host.commit();
     let response = h.host.check(&h.base, &candidate);
@@ -197,7 +182,7 @@ fn scoped_v2_filemap_plan_bounds_select_with_bound_git_facts() {
         ("timeout_seconds", 31, "changed operation timeout"),
         ("output_limit_bytes", 8192, "changed operation output limit"),
     ] {
-        let h = BoundHost::new("");
+        let h = BoundHost::new("pass");
         explicit_plans(&h.host);
         let base = h.host.commit();
         h.host.change_registry(".chrono-harness/FILEMAP.json", |v| {
@@ -239,7 +224,7 @@ fn select_platform(h: &BoundHost) {
 #[test]
 fn scoped_cli_platform_selection_keeps_execution_and_docs_locality() {
     for changed in ["src.txt", "doc.txt"] {
-        let mut h = BoundHost::new("");
+        let mut h = BoundHost::new("pass");
         select_platform(&h);
         h.base = h.host.commit();
         h.host.write(changed, "selected platform candidate");
@@ -257,7 +242,7 @@ fn scoped_cli_platform_selection_keeps_execution_and_docs_locality() {
 
 #[test]
 fn scoped_platform_selector_drift_rejects_before_business_execution() {
-    let h = BoundHost::new("");
+    let h = BoundHost::new("pass");
     select_platform(&h);
     h.host.write("src.txt", "candidate source");
     let candidate = h.host.commit();
@@ -276,9 +261,7 @@ fn scoped_platform_selector_drift_rejects_before_business_execution() {
 
 #[test]
 fn scoped_v2_failed_read_keeps_original_bytes_and_exit() {
-    let h = BoundHost::new(
-        "case \"$*\" in *'ls-tree'*) printf 'a\\000b'; printf 'chosen-failure' >&2; exit 17;; esac",
-    );
+    let h = BoundHost::new("read-failure");
     h.host.write("src.txt", "candidate source");
     let candidate = h.host.commit();
     let response = h.host.check(&h.base, &candidate);
@@ -295,7 +278,7 @@ fn scoped_v2_failed_read_keeps_original_bytes_and_exit() {
 #[test]
 fn scoped_v2_rejects_bound_input_and_fixed_policy_drift() {
     for fault in ["digest", "version", "policy"] {
-        let h = BoundHost::new("");
+        let h = BoundHost::new("pass");
         if fault != "policy" {
             h.host.change_registry(FACTS, |f| {
                 if fault == "digest" {
@@ -365,7 +348,7 @@ fn scoped_v2_requires_explicit_full_v3_facts_source() {
         "source-v2",
         "profile",
     ] {
-        let h = BoundHost::new("");
+        let h = BoundHost::new("pass");
         h.host.change_registry(CONFIG, |c| match fault {
             "missing" => {
                 c["policy"].as_object_mut().unwrap().remove("facts_config");
@@ -393,7 +376,7 @@ fn scoped_v2_requires_explicit_full_v3_facts_source() {
 
 #[test]
 fn scoped_v2_initial_reads_real_parents_even_when_shallow() {
-    let h = BoundHost::new("");
+    let h = BoundHost::new("pass");
     h.host.git(&["checkout", "--orphan", "new-root"]);
     let root = h.host.commit();
     let result = judge(&h.host.request(None, &root));
@@ -419,7 +402,7 @@ fn scoped_v2_initial_reads_real_parents_even_when_shallow() {
 
 #[test]
 fn scoped_v2_transition_and_old_only_deletion_keep_test_obligations() {
-    let h = BoundHost::new("");
+    let h = BoundHost::new("pass");
     h.host.write("src.txt", "migrated source");
     let candidate = h.host.commit();
     let result = h.host.check(&h.legacy_base, &candidate);
@@ -461,7 +444,7 @@ fn scoped_v2_bound_reader_preserves_checkout_and_index_guards() {
         "skip",
         "checkout",
     ] {
-        let h = BoundHost::new("");
+        let h = BoundHost::new("pass");
         match fault {
             "tracked" => h.host.write("src.txt", "dirty"),
             "staged" => {
@@ -507,7 +490,7 @@ fn scoped_v2_bound_reader_preserves_checkout_and_index_guards() {
 
 #[test]
 fn scoped_v2_post_execution_rechecks_with_bound_reader() {
-    let h = BoundHost::new("");
+    let h = BoundHost::new("pass");
     h.host.write("check.sh", "printf changed > src.txt\n");
     let candidate = h.host.commit();
     let result = h.host.check(&h.base, &candidate);
@@ -535,14 +518,7 @@ fn scoped_v2_post_execution_rechecks_with_bound_reader() {
 #[test]
 fn scoped_v2_opening_and_bounded_failures_retain_structured_observations() {
     for fault in ["version-exit", "version-timeout", "read-limit"] {
-        let body = match fault {
-            "version-exit" => {
-                "if [ \"$1\" = --version ]; then printf 'a\\000b'; printf version-failed >&2; exit 19; fi"
-            }
-            "version-timeout" => "if [ \"$1\" = --version ]; then exec /bin/sleep 60; fi",
-            _ => "case \"$*\" in *'ls-tree'*) while :; do printf 0123456789abcdef; done;; esac",
-        };
-        let h = BoundHost::new(body);
+        let h = BoundHost::new(fault);
         h.host.change_registry(FACTS, |f| {
             if fault == "version-timeout" {
                 f["protocol"]["timeout_seconds"] = json!(1);
@@ -583,7 +559,7 @@ fn scoped_v2_opening_and_bounded_failures_retain_structured_observations() {
 
 #[test]
 fn scoped_artifact_inventory_does_not_spend_git_output_bound_on_declared_outputs() {
-    let h = BoundHost::new("");
+    let h = BoundHost::new("pass");
     h.host.change_registry(FACTS, |f| {
         f["protocol"]["stdout_limit_bytes"] = json!(8192);
         f["environment"]["values"]["GIT_LITERAL_PATHSPECS"] = json!("1");
@@ -637,7 +613,7 @@ fn scoped_artifact_inventory_does_not_spend_git_output_bound_on_declared_outputs
 #[test]
 fn scoped_artifact_exclusion_keeps_literal_neighbors_ignored_files_and_root_types_visible() {
     use std::os::unix::fs::symlink;
-    let h = BoundHost::new("");
+    let h = BoundHost::new("pass");
     h.host.change_registry(FACTS, |f| {
         f["environment"]["values"]["GIT_LITERAL_PATHSPECS"] = json!("1");
         f["environment"]["values"]["GIT_ICASE_PATHSPECS"] = json!("1");

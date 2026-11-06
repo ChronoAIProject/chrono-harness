@@ -1,23 +1,27 @@
 ---
 name: "diagnose-recurring-failures"
-description: "Diagnose a recurring failure by inspecting actual evidence and repairing its producer. Use when the same symptom requires the same corrective action for a second time."
+description: "诊断反复出现的失败，先检查实际证据，再修复产生问题的程序、工具或规则。同一症状第二次需要相同处理动作时使用。"
 ---
 <!-- chrono-instructions:output producer=chrono-instructions id=repair-skill format=skill begin -->
-Generated from registered rules. Edit sources and regenerate, not this file alone. Generation proves neither compliance nor executed checks.
+本文件由登记规则生成。请修改登记源后重新生成，不要单独编辑本文件。生成成功不代表规则已被遵守或检查已执行。
 
-<!-- Instructions are modified, generalized and translated from Copyright 2026 The Omega Institute, Apache-2.0. Accompanying license/provenance are optional legal reading, not policy. -->
+<!-- 默认指令含修改、泛化和翻译的派生文本。原作 Copyright 2026 The Omega Institute；Apache-2.0。随分发提供的许可与来源说明是可选阅读资料，不是执行政策。 -->
 
-Measure first. Measure what is measurable; report actual inputs, results, sources and task exits. Specify what is untested, unimplemented or unresolved, and why. Confidence, guesses, time, docs or wrapper success replace no checks.
+先测量，再下结论。能够测量的就先测，报告实际输入、结果、来源和任务的真实退出状态。分别说明哪些尚未测试、实现或解决，以及原因。自信、猜测、耗时、文档说明或包装程序成功，都不能代替检查。
 
-Inspect failures first. On failure, timeout or no result, read available authorized errors, inputs, outputs, exits and logs before diagnosis/repair. Verify input matches dispatch intent. Silence, low CPU, missing output or timeout alone proves neither inactivity, a hang nor difficulty. Without evidence, leave causes unverified.
+先看实际失败。遇到失败、超时或没有结果时，先读取授权范围内已有的错误、输入、输出、退出状态和必要日志，再判断原因、选择修法。同时核对实际收到的输入是否符合派发任务的本意。没有输出、保持静默、CPU 使用率低或超时，都不能单独证明任务没在工作、已经卡死或很困难。证据不足时，就保留“尚未验证”的结论，不猜原因。
 
-Programs produce their state. Active producers generate program success, failure and domain state; never hand-fill success. Unrun checks give no assurance. Shallow checks, wrapper exits or workflow steps prove no unvalidated results.
+让程序报告自己的状态。程序负责的成功、失败和业务状态，应由当前实际运行的程序产生，不能手填成功。没有执行的检查不提供保证；浅层校验、包装程序退出成功或工作流步骤完成，都不能证明它们没有验证过的结果。
 
-Audit before extending. Default to established, proven software engineering practices; apply KISS, YAGNI and DRY through existing owners, sufficient simplicity, current needs and reuse. Compare requirements, current SPEC, real consumers, existing capabilities and retained evidence; check ownership, explicitly registered dependency impact and validation, CI and storage costs. Search the repo, pinned direct dependencies and allowed external sources, including private definitions and valid failure findings; verify interfaces, assumptions and scope. Reuse sufficient capability; scope audits and tests to actual risks and explicit dependencies. Invisible is not absent; global consideration does not require a whole-repo audit or test run for every change.
+先审查已有能力，再扩展。采用成熟、经过验证的软件工程方法，按 KISS、YAGNI、DRY 在现有负责位置简化、按需开发和复用。对照需求、当前 SPEC、实际使用方、已有能力和保留证据，核对职责归属、已登记依赖的影响，以及验证、CI 和存储成本。
 
-Reuse at the source. If visibility blocks a real call, expose the original definition and needed types. If location/layering blocks consumers, extract a dependency shared with original callers. Preserve legal dependency direction; avoid copies, useless forwarding and cycles.
+依次查本仓、固定版本的直接依赖和允许使用的外部来源，包括私有定义和仍有效的失败结论；核对接口、假设和适用范围。已有能力够用就复用。审查和测试限于实际风险与明确依赖；看不见不等于没有，考虑全局也不意味着每次都审查或测试全仓。
 
-Verify real reuse. Live paths must call existing code; references, unused imports or alias chains do not suffice. Preserve shared semantics, interface promises and assumptions; validate affected consumers.
+从原定义实现复用。可见性挡住实际调用时，开放原定义和必要类型；位置或分层挡住多个使用方时，提取它们共同依赖的实现，原调用方也改用它。保持正确的依赖方向，不复制实现、不增加无用转发，也不制造循环依赖。
 
-Follow requirement → audit → refactor → develop against current SPEC and real consumption; refactor an evidenced producer problem and develop only uncovered needs. Repair recurring causes. Recurrence means the same symptom AND remedy. Compare actions; differing local explanations do not exclude systemic causes. On the second occurrence, explain why and prioritize producer/tool/rule repair before later cases; no third blind retry. If repair is blocked, stop similar attempts; report count, per-attempt/total cost, output and limits. Continue independent work. Do not weaken goals, acceptance or detection. Check known issues and valid remedies before investing.
+确认复用发生在实际执行路径中。现役路径必须调用已有实现；说明里提到它、导入后不用，或层层起别名，都不算复用。修改共享定义时，保持其语义、接口承诺和假设，并验证受影响的实际使用方。
+
+按“需求→审计→重构→开发”核对当前 SPEC 和实际使用情况。有证据表明问题出在产生结果的位置，就先在那里重构；只开发仍未满足的需要。
+
+第二次遇到相同症状、需要相同处理动作时，就修复问题的产生处。判断是否同类，要逐项比较症状和前后处理动作；局部解释不同，不能排除共同根因。第二次出现时说明为何重现，优先修复产生问题的程序、工具或规则，再处理后续实例，不进行第三次盲目重试。暂时无法修复，就停止重复投入，报告次数、单次和总成本、产出及实际限制，转向独立工作；不得降低目标、验收或检测要求。投入前先查已有问题和有效处理办法。
 <!-- chrono-instructions:output producer=chrono-instructions id=repair-skill format=skill end -->

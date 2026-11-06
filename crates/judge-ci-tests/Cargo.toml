@@ -27,3 +27,9 @@ name = "chrono-test-ci-diagnostics"
 path = "tests/support/diagnostics_child.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-test-scoped-git"
+path = "../ci-tests/tests/support/git.rs"
+test = false
+bench = false
