@@ -4,7 +4,7 @@
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
 
-## runner 标识符与路径
+## runner 标识符、路径与结果状态
 
 `crates/runner/src/verified_identifiers.rs` 是实际 OID 和 CI 单元 ID 判断的唯一实现。
 OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID 必须非空，
@@ -16,6 +16,12 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 以及 NUL、换行、回车和反斜杠；保留原本允许的内部 `.`、重复分隔符和末尾分隔符。
 调用方的 `str` 保证 UTF-8 有效性。规格与执行循环证明全部字节的拒绝条件、分量边界及终止；
 不据此主张文件系统解析、符号链接或目录穿越的完整安全合同。
+
+`crates/runner/src/verified_status.rs` 是实际 CI 结果 `Status` 的唯一类型定义。
+四种状态 `Passed`、`Failed`、`NotRequired`、`Blocked` 的比较精确保持变体身份，
+克隆保持原状态；独立根逐项列出全部 16 对比较预期。实际报告与汇总通过 runner 的公开类型使用同一实现。
+原 Serde 派生和 JSON 名称保留，Rust 回归核四种名称、往返及非规范值拒绝；
+序列化适配、外层状态转换和完整响应合同仍待证明，不把派生实现计为已证明。
 
 独立 Verus 根直接读取生产源码，声明成功、失败和边界预期。Cargo 消费同一源码并擦除 ghost；
 Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 SPEC 对应仍未证明。
@@ -49,7 +55,7 @@ FIFO 首次发现生成确定的最短跳数和前驱；传播行逐槽对应原
 ## 固定执行入口
 
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
-`test:runner-tests` 先运行四项整 crate Verus 操作及编译，registration 与 filemap 各先运行两项，
+`test:runner-tests` 先运行六项整 crate Verus 操作及编译，registration 与 filemap 各先运行两项，
 再执行各自原 Rust 构建和未过滤测试。独立根直接读取生产源码，声明成功、失败和边界预期；
 Rust 测试另外验证真实消费者，不替代证明。
 
@@ -59,7 +65,7 @@ Rust 测试另外验证真实消费者，不替代证明。
 三个证明单元先核共享 core，再安装工具；Python bootstrap 源码和测试无修改。
 当前归档只适用于 macOS arm64。
 
-**产品与宿主政策同时变更：**实际判断与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记八项证明。
+**产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十项证明。
 固定宏依赖通过 runner 传播到现役依赖方的独立 lockfile，没有升级其他包。
 runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` 定位需要 O(log C) 次字节比较，
 新增插入最多移动 C 个字符串句柄，存储为 O(C)。原图索引与遍历成本继续保留；
