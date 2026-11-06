@@ -2,6 +2,16 @@
 
 `chrono-ci-check/v3` 明确把每个登记测试计划分配给一个单元。按范围 `chrono-github-units/v1` 和完整 `/v2` 可明确选择 `job_gating`。本产品宿主已采用：一个父工作流内运行一个检测 job、按需运行的独立单元 job、始终运行的汇总。各单元仍有独立检出、名称、runner、bootstrap、超时、上下文、上传和重跑；产品不解释宿主语言或布局。
 
+## 显式测试清单
+
+```sh
+chrono-ci test-inventory --host-root HOST --config CONFIG
+```
+
+宿主登记 `chrono-workflow-inventory/v1` 配置。`projects` 和 `project` 点名项目登记及唯一项目；`unfiltered_action` 点名未过滤 action，`groups` 将分组 ID 对应到 action，并须与项目的 `test_groups` 相同。`binaries` 为每个 action 声明测试二进制的名称和顺序，`tools` 明确绑定 action 使用的工具。程序只执行这些 action 的 `--list`，另外列举未过滤 action 的 ignored 清单，不从清单推导依赖或选测。
+
+`timeout_seconds`、`output_limit_bytes` 约束既有 Rust 进程执行器；子进程继承调用方环境，租约描述符由执行器传递。`report_directory` 接收各次列举的 stdout／stderr 原字节和 `receipts.json`，保留 argv、原退出、失败、耗时及流摘要。全部校验通过后写 `inventory.json`，绑定配置／项目原字节摘要、完整清单和各分组。退出 0 并输出数量摘要表示本次验证成功；配置、列举或覆盖失败时输出 `E_CI` 并退出 1。成功报告须结合本次退出与摘要消费。
+
 ## 本仓如何划分测试
 
 本仓 workflow 专属测试项目明确登记三组，分别分配给 `judge-workflow`（核心）、`judge-workflow-units`（直接完整单元测试）、`judge-workflow-short`（完整短命令测试）。action 明确选择成员，清单保护核覆盖范围，不推断依赖。三组合计覆盖原两个测试二进制，保留 fixture、profile 和业务限制。发布仍使用不带过滤的 `actions.execute`／原 `test.judge-workflow-tests`，旧测试身份通过 `test_groups` 绑定独立的核心过滤 action。
@@ -10,7 +20,7 @@
 
 共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
 
-worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名六项宿主入口集成测试：参与式检查、脱离父进程的 Python 消费者、短检查、登记 Python 消费者、原生 Cargo 子进程、独立 bootstrap。核心组排除同样六个名称。两组保留原测试 ID、断言、期限、默认 libtest 线程，发布仍用原未过滤 action。
+worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名六项宿主入口集成测试：参与式检查、脱离父进程的 Python 消费者、短检查、登记的 bootstrap 与 Rust 清单消费者、原生 Cargo 子进程、独立 bootstrap。核心组排除同样六个名称。两组保留原测试 ID、断言、期限、默认 libtest 线程，发布仍用原未过滤 action。
 
 `worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
 
