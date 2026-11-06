@@ -329,6 +329,56 @@ fn capacity_filesystem_refusal_survives_fresh_allocation_ids() {
 }
 
 #[test]
+fn capacity_explicit_maintenance_advances_the_existing_bounded_cursor() {
+    let h = capacity_host(|capacity| capacity["max_records_per_round"] = value!(1));
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocations = Vec::new();
+    for prefix in ["active-", "eligible-a-", "eligible-b-"] {
+        let allocation =
+            chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, prefix)
+                .unwrap();
+        fs::create_dir(allocation.path().join("cache 空白")).unwrap();
+        fs::write(allocation.path().join("cache 空白/generated"), b"123").unwrap();
+        allocations.push(allocation);
+    }
+    let active = allocations.remove(0);
+    let eligible = allocations
+        .iter()
+        .map(|allocation| allocation.path().join("cache 空白"))
+        .collect::<Vec<_>>();
+    drop(allocations);
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        let producer = report["producer_drains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["producer"] == "test-allocation")
+            .unwrap();
+        let original = h.root.join(producer["receipt"]["path"].as_str().unwrap());
+        let raw = fs::read(original).unwrap();
+        assert_eq!(sha256(&raw), producer["receipt"]["sha256"]);
+        let observed = report_view(json(&raw).unwrap());
+        let scope = &observed["producer_recovery_scope"];
+        assert_eq!(scope["bounded"], true, "{observed}");
+        assert!(scope["visited"].as_u64().unwrap() <= 1, "{observed}");
+        rounds.push(scope.clone());
+        assert!(active.path().join("cache 空白/generated").is_file());
+        if eligible.iter().all(|path| !path.exists()) {
+            break;
+        }
+    }
+    assert!(
+        eligible.iter().all(|path| !path.exists()),
+        "explicit maintenance did not advance past the active allocation: {rounds:?}"
+    );
+}
+
+#[test]
 fn capacity_bounded_recovery_advances_past_active_and_corrupt_siblings() {
     let h = capacity_host(|capacity| capacity["max_records_per_round"] = value!(1));
     let (store, outputs) =

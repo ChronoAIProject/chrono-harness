@@ -3453,6 +3453,20 @@
             "fixture_body::copied_input_reenters_retirement_without_publishing_an_unprotected_claim",
             "--test-threads=2"
           ]
+        },
+        "bounded_maintenance": {
+          "operation": "test.worktree.bounded-maintenance",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--",
+            "--exact",
+            "temporary::capacity_explicit_maintenance_advances_the_existing_bounded_cursor",
+            "--test-threads=2"
+          ]
         }
       },
       "tests_for": "worktree",
