@@ -395,3 +395,10 @@ I3 实测失败修复加入明确的配置级 FILEMAP 边投影和可选 scoped-
 产品和宿主政策同改。干净候选 `21a5e6acebabe285fbec0bbe821e297327d51f98` 通过源码 bootstrap（12 操作、6 工具）、本地 canonical worktree 单元（215 测试，其中 6 项归 adoption 组）及原生 `41950114155`（24 个业务单元及 collection 全过）。下载汇总归档匹配 provider 长度／摘要，原报告及流摘要核验通过，25 行聚合结果全部通过。登记 runner action 另通过 241 项测试，1 项既有 ignored。
 
 PR #221 落地为 `3b605cf80aa9e96a6442b2e54991602713acca31`，树与受验候选相同。随后 PR #227 落地为 `2ec6e5ce6c16cd6e56433729a06db7a4cab3ba49`，落地原生 `41965898150` 核过全部 13 项选中汇总结果。原主检出的九项登记已完成受保护状态拆分及共用 owner 部署；普通 bootstrap 通过。无关旧 worktree 的 metadata EX 租约持续持有至完成时，另一个 linked start 仍成功。该 linked 检出的同端 canonical check 未选业务测试，不能重复证明早前 worktree 测试结果。旧原件及两份独立独有提交保留；其他协调者仍须各自受保护切换。完整 SPEC 交付和运行／CI／存储总收益未建立。
+
+## runner 的 Verus 分批迁移
+
+实际完整 OID、CI 单元 ID 与相对词法路径判断已迁到同源 Verus，生产调用方直接使用；
+独立证明根覆盖零值／长度／大小写、ASCII 与路径分量边界。登记计划强制四项整 crate 验证，
+再运行原 Rust 库存。范围和固定工具见 [Verus 实施范围](verus.md)。
+其他程序、调用适配器和全仓强制覆盖仍未完成，Python 实现暂缓。
