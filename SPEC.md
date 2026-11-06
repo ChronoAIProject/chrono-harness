@@ -875,7 +875,9 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 
 ### 12.1 中央测试版分发
 
-产品发布统一维护在 chrono-harness Releases，宿主不跟踪产品源码包或二进制。独立 distribution/专属测试对负责显式发布清单、平台成员、版本与 SHA-256/长度锁定、采用及安装；宿主保留 `.chrono-harness/distribution.json` 与生成的 `install.py`。本地/CI 都运行该入口，再调用同一 check。平台选择只使用登记的 OS/架构，不读取宿主语言、项目目录或依赖清单。
+产品发布统一维护在 chrono-harness Releases，宿主不跟踪产品源码包或二进制。独立 distribution/专属测试对负责显式发布清单、平台成员、版本与 SHA-256/长度锁定、采用及安装；宿主保留 `.chrono-harness/distribution.json` 与生成的 `install.sh`。本地/CI 都运行该入口，再调用同一 check。平台选择只使用登记的 OS/架构，不读取宿主语言、项目目录或依赖清单。
+
+组合发布包同时生成固定版本的 `install.sh`，支持通过 `curl … | sh -s -- --host-root H` 首次采用，默认选择该清单的全部工具，也可用重复的 `--tool NAME` 显式收窄。Shell 只使用系统工具识别平台、取得并校验安装器及清单，再委托 Rust 的 adopt/install；宿主生成入口固定安装声明的原字节身份。安装不要求 Python、Rust 编译器、sudo 或全局配置修改；可选 CI 与宿主业务工具依赖另行登记。
 
 原生打包固定干净源提交/树，发布组合拒绝不同源、不同成员或重复平台。每份下载先验身份；全部所选成员验证后才替换，普通替换失败尝试回滚并报告恢复位置。显式更新可由 AI 自主执行；摘要不证明来源、完整工具链输入完整性或跨平台同判。完整格式、实现范围和故障边界见 docs/distribution.md。
 
