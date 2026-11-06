@@ -202,6 +202,8 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 
 运行需要 POSIX `sh`、`uname`、`mktemp`、`cp`、`chmod`、`rm`、`wc`、`sha256sum` 或 `shasum -a 256`，HTTPS 源另需登记的 curl；无需 Python、Rust/Cargo、sudo 或修改全局配置。脚本来自所选固定版本，是首次信任入口；内嵌摘要固定字节，不单独认证发布者身份。临时下载在退出时清理，失败诊断留在原 stderr。
 
+beta.29 的全部 34 个公开资产已匿名核对摘要和大小。macOS arm64 已在仅提供所需系统工具的 PATH 中用上述命令安装全部 16 个工具，并验证同配置复用、配置变更拒绝、显式替换、生成的宿主入口和已安装的指南生成器。Linux x86_64 已通过原生构建和登记验证；公开安装的实际执行平台为 macOS。
+
 ## 宿主采用
 
 取得固定发布清单和对应平台的 `chrono-distribution` 后，明确选择要安装的工具：
