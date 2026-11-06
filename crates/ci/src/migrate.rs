@@ -10,11 +10,11 @@ fn source_path(path: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn previous(root: &Path, input: &str, source: &str) -> Result<BTreeMap<String, String>, String> {
-    match load_projection(&no_symlink_parents(root, input)?)? {
-        Projection::Units(c) => units::render(&c, source),
+fn previous(projection: &Projection, source: &str) -> Result<BTreeMap<String, String>, String> {
+    match projection {
+        Projection::Units(c) => units::render(c, source),
         Projection::Check(c) if c.schema == "chrono-github-ci/v1" || c.initial_inventory.is_some() => {
-            Ok(BTreeMap::from([(c.workflow_path.clone(), render(&c, source)?)]))
+            Ok(BTreeMap::from([(c.workflow_path.clone(), render(c, source)?)]))
         }
         _ => Err("migration supports scoped v1, explicit standalone initial and unit sources; full/release contracts require their own explicit migration".into()),
     }
@@ -39,12 +39,13 @@ pub fn migrate(root: &Path, input: &str, old_source: &str, source: &str) -> Resu
     }
     let old_bytes = fs::read(no_symlink_parents(root, input)?).map_err(|e| e.to_string())?;
     let source_bytes = fs::read(no_symlink_parents(root, source)?).map_err(|e| e.to_string())?;
-    let old = previous(root, input, old_source)?;
-    let prior_inventory = match load_projection(&no_symlink_parents(root, input)?)? {
-        Projection::Check(c) => inventory_output(&c)?.map(|(p, b)| (p.to_owned(), b)),
+    let old_projection = decode_projection(&old_bytes)?;
+    let old = previous(&old_projection, old_source)?;
+    let prior_inventory = match &old_projection {
+        Projection::Check(c) => inventory_output(c)?.map(|(p, b)| (p.to_owned(), b)),
         _ => None,
     };
-    let new = match load_projection(&no_symlink_parents(root, source)?)? {
+    let new = match decode_projection(&source_bytes)? {
         Projection::Units(next) if prior_inventory.is_none() => {
             units::profile(root, &next)?;
             units::render(&next, source)?
