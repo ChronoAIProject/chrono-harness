@@ -40,27 +40,27 @@
       "layout": "workflow"
     },
     {
-      "id": "general-en",
-      "path": "docs/generated/general-methods.en.md",
+      "id": "general-zh",
+      "path": "docs/generated/general-methods.zh-CN.md",
       "format": "markdown",
-      "locale": "en",
+      "locale": "zh-CN",
       "roots": [
         "core.general"
       ],
-      "title": "General working methods",
+      "title": "通用工作方法：完整指南",
       "layout": "general"
     },
     {
       "id": "repair-skill",
       "path": "skills/diagnose-recurring-failures/SKILL.md",
       "format": "skill",
-      "locale": "en",
+      "locale": "zh-CN",
       "roots": [
         "core.repair-producer"
       ],
       "skill": {
         "name": "diagnose-recurring-failures",
-        "description": "Diagnose a recurring failure by inspecting actual evidence and repairing its producer. Use when the same symptom requires the same corrective action for a second time."
+        "description": "诊断反复出现的失败，先检查实际证据，再修复产生问题的程序、工具或规则。同一症状第二次需要相同处理动作时使用。"
       }
     }
   ]
