@@ -559,7 +559,10 @@ fn dispose_owned_directory(
     }
     let allocation = no_symlink_parents(directory, &object.path)?;
     let metadata = no_symlink_parents(directory, &metadata_name(&object.path))?;
-    let binding = object.cache_lease.as_ref().ok_or("owned directory lease missing")?;
+    let binding = object
+        .cache_lease
+        .as_ref()
+        .ok_or("owned directory lease missing")?;
     let lease_path = no_symlink_parents(directory, &binding.path)?;
     let acquired;
     let lease = if let Some(held) = held {
@@ -598,34 +601,63 @@ fn dispose_owned_directory(
         return Err("owned directory original intent is missing; preserve allocation".into());
     }
     let paths = [allocation.clone(), metadata.clone()];
-    let names = paths.iter().map(|p| {
-        p.strip_prefix(&inputs.policy.coordinator_root).map_err(|e| e.to_string())?
-            .to_str().map(str::to_owned).ok_or("owned directory path UTF-8".into())
-    }).collect::<Result<Vec<_>, String>>()?;
+    let names = paths
+        .iter()
+        .map(|p| {
+            p.strip_prefix(&inputs.policy.coordinator_root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .map(str::to_owned)
+                .ok_or("owned directory path UTF-8".into())
+        })
+        .collect::<Result<Vec<_>, String>>()?;
     let mut result = value!({"automatic_cleanup":true,"artifact_disposals":[],
         "owner":"temporary-directory","producer_outcome":"unchanged"});
-    artifact_disposal::dispose(&inputs.policy.coordinator_root, &names, &paths, &mut result, || {
-        inputs.stable(r)?;
-        context.stable()?;
-        store.owner_stable()?;
-        if fs::read(&record).map_err(|e| e.to_string())? != original {
-            return Err("owned directory continuation changed before disposal".into());
-        }
-        if let Some(lease) = lease { lease.stable()?; }
-        if allocation.exists() {
-            allocation_gate.as_ref().ok_or("owned directory exclusion missing")?.stable()?;
-            if directory_id(&allocation)? != object.identity {
-                return Err("owned directory identity changed before disposal".into());
+    artifact_disposal::dispose(
+        &inputs.policy.coordinator_root,
+        &names,
+        &paths,
+        &mut result,
+        || {
+            inputs.stable(r)?;
+            context.stable()?;
+            store.owner_stable()?;
+            if fs::read(&record).map_err(|e| e.to_string())? != original {
+                return Err("owned directory continuation changed before disposal".into());
             }
-        }
-        if metadata.exists() && Some(directory_id(&metadata)?.as_str()) != object.metadata_identity.as_deref() {
-            return Err("owned directory metadata identity changed before disposal".into());
-        }
-        chrono_harness::artifact_disposal::source_safe(&inputs.policy.coordinator_root, &names[0])?;
-        chrono_harness::artifact_disposal::source_safe(&inputs.policy.coordinator_root, &names[1])
-    })?;
-    if let Some(lease) = lease { lease.stable()?; }
-    if lease_path.exists() { fs::remove_file(&lease_path).map_err(|e| e.to_string())?; }
+            if let Some(lease) = lease {
+                lease.stable()?;
+            }
+            if allocation.exists() {
+                allocation_gate
+                    .as_ref()
+                    .ok_or("owned directory exclusion missing")?
+                    .stable()?;
+                if directory_id(&allocation)? != object.identity {
+                    return Err("owned directory identity changed before disposal".into());
+                }
+            }
+            if metadata.exists()
+                && Some(directory_id(&metadata)?.as_str()) != object.metadata_identity.as_deref()
+            {
+                return Err("owned directory metadata identity changed before disposal".into());
+            }
+            chrono_harness::artifact_disposal::source_safe(
+                &inputs.policy.coordinator_root,
+                &names[0],
+            )?;
+            chrono_harness::artifact_disposal::source_safe(
+                &inputs.policy.coordinator_root,
+                &names[1],
+            )
+        },
+    )?;
+    if let Some(lease) = lease {
+        lease.stable()?;
+    }
+    if lease_path.exists() {
+        fs::remove_file(&lease_path).map_err(|e| e.to_string())?;
+    }
     if fs::read(&record).map_err(|e| e.to_string())? != original {
         return Err("owned directory continuation changed before final unlink".into());
     }

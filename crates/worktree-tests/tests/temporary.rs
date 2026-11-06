@@ -161,6 +161,47 @@ fn directory_cleanup_policy_does_not_reclassify_existing_source_directories() {
     );
 }
 
+#[test]
+fn directory_cleanup_preserves_live_capability_and_staged_source_then_resumes() {
+    let h = host();
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "guarded-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    fs::write(root.join("source.rs"), b"staged host source").unwrap();
+    let capability = allocation.capability().unwrap();
+    let report = allocation.finish().unwrap();
+    assert!(root.is_dir(), "live capability lost its directory: {report}");
+    drop(capability);
+
+    let source = root.join("source.rs");
+    let relative = source.strip_prefix(&h.root).unwrap().to_str().unwrap();
+    git(&h.root, &["add", "-f", "--", relative]);
+    let rejected = allocation.finish().unwrap();
+    let rows = rejected["producer_objects"].as_array().unwrap();
+    assert!(rows.iter().any(|r| r["original_retirement"]["error"]
+        .as_str().is_some_and(|e| e.contains("committed/index source"))), "{rejected}");
+    assert_eq!(fs::read(&source).unwrap(), b"staged host source");
+    let record = producer_record_path(&store, &root);
+    let before = fs::read(&record).unwrap();
+    let object = json(&before).unwrap();
+    assert_eq!(object["object"]["retiring"], true);
+    let intent = store.join(object["object"]["intent"]["path"].as_str().unwrap());
+    let intent_bytes = fs::read(&intent).unwrap();
+    assert_eq!(json(&intent_bytes).unwrap()["producer_outcome"], "not-established");
+
+    git(&h.root, &["rm", "--cached", "-q", "--", relative]);
+    let resumed = allocation.finish().unwrap();
+    assert!(resumed["recovery_error"].is_null(), "{resumed}");
+    assert!(!root.exists() && !record.exists());
+    assert_eq!(json(&intent_bytes).unwrap()["producer_outcome"], "not-established");
+    assert!(rows.iter().any(|r| r["original_retirement"]["status"] == "failed"));
+}
+
 // Re-enter the real producer rather than assuming that one bounded retention
 // round can remove an entire original/metadata relationship. Preserve the final
 // physical-absence assertions and reject every error except honest capacity

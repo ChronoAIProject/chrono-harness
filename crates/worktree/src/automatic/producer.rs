@@ -2403,7 +2403,10 @@ impl ProducerPolicy {
                 let context = Context::load(&directory, &self.id)?;
                 if self.temporary
                     && !object.retiring
-                    && !matches!(row["original_retirement"]["status"].as_str(), Some("retiring" | "disposed"))
+                    && !matches!(
+                        row["original_retirement"]["status"].as_str(),
+                        Some("retiring" | "disposed")
+                    )
                 {
                     let _ = context
                         .observe_capacity(&directory.join(&object.path), cache_guard.is_some());
