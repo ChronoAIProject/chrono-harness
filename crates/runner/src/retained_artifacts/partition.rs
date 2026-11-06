@@ -565,33 +565,41 @@ impl Inventory {
             let directory = self.path_directory(&path)?;
             fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
             let marker = no_symlink_parents(&directory, "address.json")?;
-            if self.read_metadata::<Address>(&marker)?.is_none() {
-                let initial = DirectoryLease::acquire(
+            let acquire = |exclusive| {
+                DirectoryLease::acquire(
                     &directory,
-                    true,
+                    exclusive,
                     wait.then(|| Duration::from_secs(5).saturating_sub(began.elapsed())),
                 )?
-                .ok_or("retention path birth is busy")?;
-                if self.read_metadata::<Address>(&marker)?.is_none() {
-                    self.write_metadata(
-                        &marker,
-                        &Address {
-                            path: path.clone(),
-                            output: None,
-                        },
-                    )?;
+                .ok_or_else(|| format!("retention path is busy: {path}"))
+            };
+            let mut lease = acquire(exclusive)?;
+            let mut address = self.read_metadata::<Address>(&marker)?;
+            if address.is_none() {
+                // Existing addresses need only one read, under their actual
+                // capability. A new ancestor must be born under exclusion;
+                // release its shared lease before acquiring that exclusion.
+                if !exclusive {
+                    drop(lease);
+                    lease = acquire(true)?;
+                    address = self.read_metadata::<Address>(&marker)?;
                 }
-                initial.stable()?;
+                if address.is_none() {
+                    let initial = Address {
+                        path: path.clone(),
+                        output: None,
+                    };
+                    self.write_metadata(&marker, &initial)?;
+                    address = Some(initial);
+                }
+                lease.stable()?;
+                if !exclusive {
+                    drop(lease);
+                    lease = acquire(false)?;
+                    address = self.read_metadata::<Address>(&marker)?;
+                }
             }
-            let lease = DirectoryLease::acquire(
-                &directory,
-                exclusive,
-                wait.then(|| Duration::from_secs(5).saturating_sub(began.elapsed())),
-            )?
-            .ok_or_else(|| format!("retention path is busy: {path}"))?;
-            let address = self
-                .read_metadata::<Address>(&marker)?
-                .ok_or("retention path declaration disappeared")?;
+            let address = address.ok_or("retention path declaration disappeared")?;
             if address.path != path {
                 return Err("retention path address changed".into());
             }
