@@ -1,7 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前已有 v1 外部判官传输、七个独立判官（registration／filemap／routes／projects／cost／mixed／workflow）、限定范围 CI 和宿主指令生成器。它们只实现了部分要求，实际范围见 §14、§16 和 docs/spec-coverage.md。
+当前已有 v1 外部判官传输、七个独立判官（registration／filemap／routes／projects／cost／mixed／workflow）、限定范围 CI 和宿主指令生成器。Verus 规范性权威是目标合同，尚未在当前 `dev` 启用；现有 Rust／Python 判官不能因测试通过而冒充已证明。实际范围见 §14、§16 和 docs/spec-coverage.md。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
 为便于阅读，本文沿用几个代码术语：
@@ -141,6 +141,18 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 形式化工作 使用 trureturing 的独立 worktree 与 PR 交付，其数学准入、编译及验证遵循该库现役规范。对应说明须固定所引用修订和声明，列明对象、参数、假设、结论与实际消费者；已找到、已编译、已证明模型命题、已检验实现对应是不同状态。未完成部分如实保留，不以引用或 CI 绿色冒领全部形式化。
 
 形式模型与反例可以推动 SPEC 演进：发现缺失前提、错误推论或实现不符时，分别修订适用的模型、产品合同或实现，并验证受影响义务。不得为匹配当前实现而静默缩小用户目标或改写旧结论的适用范围。Lean 核验只证明其形式陈述；Rust 实现符合模型仍需单独的对应证据，完整依赖登记、局部性与确定性等现实前提也不能由图闭包或一次通过自动取得。
+
+### 2.1.1 Verus 规范性权威
+
+仓库内会影响裁决、选择、错误分类、状态迁移或生命周期结果的逻辑，最终必须由同一份 Verus 源码定义并证明。范围包括解析后的字段约束、登记与必要性链、DELTA／影响选择、路由与项目准入、CI 汇总、缓存／报告／工作树状态、生成器和 bootstrap 的政策决策，以及这些逻辑的测试 oracle。Rust 可以承载 IO、进程、Git、CI provider 和 JSON 编解码等边界适配，但适配器只能把实际输入映射到已证明的 Verus 函数并保留其结果；在 Rust、Python、Shell 或 YAML 中另写一份会改变结果的判断，就不属于权威实现。
+
+采用 Verus 有一个当前不可替代的消费理由：`chrono-harness check` 的真实消费者需要知道“通过／拒绝／未知”来自已证明的规范性谓词，而不是某个测试样例或未证明的 wrapper。移除该证明会使检查无法对当前 SPEC 的核心决策正确性给出可观察保证，因此 coverage gate 必须把 proof result、源码根和实际调用的对应关系作为输入。这个理由只适用于规范性逻辑；纯传输、外部接口观察和没有影响裁决的 fixture 不因仓库使用 Verus 而强行迁移。
+
+Verus tool、版本、编译器／宏版本、证明根、执行参数和允许的外部接口由宿主显式登记（目标文件为 `.chrono-harness/verus.json` 及相应 project／FILEMAP 条目）。`--no-cheating`、`--no-external-by-default` 和整 crate 检查是默认边界；外部 OS、Git、CI provider、Rust/Cargo、Verus/Z3 只提供登记的接口假设，不给仓库函数授予 `external_body` 例外。证明源码、编译结果、实际调用 argv、候选文件摘要和 coverage response 必须互相绑定；只改 `language`、只编译 proof root、只运行普通 Rust 测试或只看到 CI 绿色都不能建立对应关系。
+
+每个被治理的 program／specification 文件必须有非空 proof root、唯一登记的 Verus invocation 和真实消费者；没有 proof 或 proof 与生产调用不一致时返回 `E_VERUS_COVERAGE`，保持 `proposed`／`incomplete`，不回退到未证明的 Rust／Python 决策。迁移按真实消费者分批进行：先把局部谓词接入现役调用并证明边界，再迁移组合、状态和跨进程适配，最后才评估 coverage gate 是否可启用。证明范围、未知输入和未迁移逻辑在覆盖表中保持可见，不以阶段性成功宣称全仓完成。
+
+非 Rust 的真实业务可以继续使用自己的语言；它只有在不承担本仓规范性裁决、或把裁决委托给已登记且已证明的 Verus 核心时才不需要迁移。若 Python／Shell／其它语言自己解析并决定本仓状态、准入或报告结论，就和 Rust wrapper 一样属于未迁移的规范性逻辑，不能以“外部脚本”豁免。
 
 ### 2.2 实现与测试使用同一种语言
 
@@ -930,6 +942,8 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 | 本地与 CI 同一 check 指令 | 同调用/输入解释语义，不单凭命令保证裁决相等 |
 | 完整有效输入/政策/执行物/工具链/环境相同且确定性求值 | 相同选择和裁决；不要求非裁决性能测量值相同 |
 | 仅 OID/context/Cargo 相同，其他输入或确定性未证实 | parity:unestablished；普通检查只按现役登记合同裁决，所需输入/证据不足仍报错 |
+| 规范性判断由未证明的 Rust／Python／Shell wrapper 作出，或 proof root 与实际调用不一致 | `E_VERUS_COVERAGE`；保持 `proposed`／`incomplete`，不以普通测试或 CI 绿色放行 |
+| 纯 IO／外部接口适配不改变规范性结果 | 可保留在实现语言中；必须登记边界输入、接口假设和到已证明 Verus 函数的唯一调用 |
 | 暂存/未暂存/未跟踪非生成物变化 | E_SNAPSHOT_DIRTY，不偷偷只判 committed 子集 |
 | 浅历史缺 base 或 fork_point | E_HISTORY_MISSING；补取后重跑 |
 | 判官退出成功但 stdout 为空/非法 JSON | E_PROTOCOL，exit 2 |
@@ -989,7 +1003,7 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 <a id="14-implementation-boundaries"></a>
 ## 14. 实现范围与限制
 
-§1.1、§7.4、§10.2 及其新增验收行是尚未完整实现、未验收的目标合同。本次只明确全局必要性链、宿主／调用方的任务加入与等待责任，以及现有生命周期／操作所有者的兼容复用、协作范围和交接义务，不变更当前 schema、CLI 或运行时。已有进程回执、受保护消费与 worktree 恢复仅证明各自已测试范围；它们不证明所有对象已有当前必要性终点、任务级唯一完成通道、丢失通道恢复、全部自有任务加入或完整协作检出合同已实现。后续实现须在相应对应所有者补齐实际消费者、必要性链和行为验收，覆盖表保持 pending，不以文档检查通过更新实现状态。
+§1.1、§2.1.1、§7.4、§10.2 及其新增验收行是尚未完整实现、未验收的目标合同。本次只明确全局必要性链、Verus 规范性权威、宿主／调用方的任务加入与等待责任，以及现有生命周期／操作所有者的兼容复用、协作范围和交接义务，不变更当前 schema、CLI 或运行时。已有进程回执、受保护消费与 worktree 恢复仅证明各自已测试范围；它们不证明所有对象已有当前必要性终点、规范性逻辑已有 Verus 对应、任务级唯一完成通道、丢失通道恢复、全部自有任务加入或完整协作检出合同已实现。后续实现须在相应对应所有者补齐实际消费者、必要性链、Verus proof root／调用对应和行为验收，覆盖表保持 pending，不以文档检查通过更新实现状态。
 
 §2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓已采用 v2，示例的 v2 采用、helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
 
