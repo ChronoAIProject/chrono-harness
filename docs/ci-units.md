@@ -195,6 +195,10 @@ Rust provider 拒绝检测失败／取消／缺失，以及任一选中单元失
 
 API job 身份和 `run_attempt` 可能描述沿用工作，不能据此造产物名。gather 将原 context／run／attempt／job 和两个摘要与 production 输出核对。后续失败／跳过不能用早先成功替代；父 attempt 漂移、产物不符／缺失均失败。原进程字节、源码 SHA／revision、事件／端点、报告摘要、执行物身份及上传／来源根映射继续绑定并判断。
 
+同一父运行的一次 gather 只读取一份完整分页产物清单，以及该固定 revision 的工作流原字节；逐个单元仍核唯一产物、仓库／run／candidate、生产 attempt、上下文和报告摘要。观察只保存在本次调用内，不跨运行共享。全部下载与原件检查结束后、发布 manifest 前，重新核父运行身份和 attempt；该核验仍计入末个产物原有的累计期限与流上限。没有选中单元时不读取产物清单或源码。独立工作流继续分别绑定其运行和源码。
+
+Rust 行为回归验证单／多／零单元及重复汇总的请求次数，跨页末个产物缺失、歧义或错误绑定，以及最后下载后父 attempt 漂移时拒绝发布，并保留已下载报告原字节。这里只约束显式启动的传输进程；CLI 内部网络请求、完整执行耗时和计费成本仍需实际观察。
+
 按范围 provider 在生产环境登记 `CHRONO_CI_DETECTION`、`CHRONO_CI_NEEDS`、`GITHUB_RUN_ID`、`GITHUB_RUN_ATTEMPT`、`GITHUB_JOB`。可选完整原生适配器则记录真实获取值，在业务继承外转发，保留独立 job 差异。生成汇总传精确 `needs` 对象，Rust provider 独自拥有接受条件，YAML／bootstrap Python 没有第二套白名单或选择算法。
 
 ### 拓扑迁移

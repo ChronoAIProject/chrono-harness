@@ -1250,7 +1250,6 @@ fn compiler_binding_rejects_cargo_configuration_selection_overrides() {
 }
 #[test]
 fn compiler_binding_tracks_real_invocation_and_rejects_post_execution_mutation() {
-    use std::os::unix::fs::PermissionsExt;
     let mut f = Fixture::new();
     compiler_binding(&mut f);
     let actual = f.values[CONFIG]["environment"]["values"]["RUSTC"]
@@ -1259,14 +1258,15 @@ fn compiler_binding_tracks_real_invocation_and_rejects_post_execution_mutation()
         .to_owned();
     let wrapper = f.root().join(".chrono-harness/state/bound-compiler");
     let trace = f.root().join(".chrono-harness/state/compiler-arguments");
-    let quote = |s: &str| format!("'{}'", s.replace('\'', "'\"'\"'"));
-    let script = format!(
-        "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\nexec {} \"$@\"\n",
-        quote(trace.to_str().unwrap()),
-        quote(&actual)
-    );
-    fs::write(&wrapper, &script).unwrap();
-    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    let copied = Command::new("/bin/cp")
+        .arg(env!("CARGO_BIN_EXE_chrono-test-cargo-compiler"))
+        .arg(&wrapper)
+        .status()
+        .unwrap();
+    assert!(copied.success(), "compiler fixture installation: {copied}");
+    let environment = &mut f.values.get_mut(CONFIG).unwrap()["environment"]["values"];
+    environment["CHRONO_TEST_REAL_COMPILER"] = json!(actual);
+    environment["CHRONO_TEST_COMPILER_TRACE"] = json!(trace);
     f.values.get_mut(CONFIG).unwrap()["tools"]
         .as_array_mut()
         .unwrap()
@@ -1280,7 +1280,7 @@ fn compiler_binding_tracks_real_invocation_and_rejects_post_execution_mutation()
         .find(|i| i["id"] == "tool.rustc")
         .unwrap();
     input["location"] = json!(wrapper);
-    input["sha256"] = json!(sha256(script.as_bytes()));
+    input["sha256"] = json!(sha256(&fs::read(&wrapper).unwrap()));
     f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTC"] = json!(wrapper);
     f.contract["operations"]["test.t"]["argv"]
         .as_array_mut()
@@ -1988,20 +1988,20 @@ fn shared_directory_ancestors_recheck_every_file_and_parent_after_the_consumer()
 }
 
 // Explicit host experiment, separate from the portable fixture suite. The
-// registered production consumer and all its input/guard bounds remain intact.
+// registered runner preparation and all its input/guard bounds remain intact.
 #[test]
-#[ignore = "requires the host's selected isolated toolchain and SDK inventories"]
-fn isolated_production_within_joinable_observation_window() {
-    observe_q1_consumer(false);
+#[ignore = "requires the host's selected toolchain and SDK inventories"]
+fn runner_preparation_within_joinable_observation_window() {
+    observe_runner_consumer(false);
 }
 
 #[test]
-#[ignore = "requires the host's selected isolated toolchain and SDK inventories"]
-fn isolated_guard_within_joinable_observation_window() {
-    observe_q1_consumer(true);
+#[ignore = "requires the host's selected toolchain and SDK inventories"]
+fn runner_guard_within_joinable_observation_window() {
+    observe_runner_consumer(true);
 }
 
-fn observe_q1_consumer(guard_only: bool) {
+fn observe_runner_consumer(guard_only: bool) {
     let root = source();
     let evidence_root = root.join(".chrono-harness/state/input-q1-repair");
     fs::create_dir_all(&evidence_root).unwrap();
@@ -2041,7 +2041,7 @@ fn observe_q1_consumer(guard_only: bool) {
     let operation = if guard_only {
         "guard.check.runner"
     } else {
-        "inputs.provision-isolated"
+        "inputs.prepare-runner"
     };
     let action = projects["projects"]
         .as_array()

@@ -475,6 +475,40 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
                     .len(),
                 d["required_units"].as_array().unwrap().len()
             );
+            let gather: Value = serde_json::from_slice(
+                &fs::read(
+                    h.host
+                        .root
+                        .join(".chrono-harness/state/collection/gather.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let calls = gather["processes"].as_array().unwrap();
+            let requests =
+                |endpoint: &str| calls.iter().filter(|p| p["argv"][2] == endpoint).count();
+            let selected = !d["required_units"].as_array().unwrap().is_empty();
+            assert_eq!(
+                requests("repos/owner/host/actions/runs/101"),
+                if selected { 2 } else { 1 }
+            );
+            assert_eq!(
+                requests("repos/owner/host/actions/runs/101/jobs?filter=all&per_page=100"),
+                1
+            );
+            assert_eq!(
+                requests("repos/owner/host/actions/runs/101/artifacts?per_page=100"),
+                usize::from(selected)
+            );
+            assert_eq!(
+                calls
+                    .iter()
+                    .filter(|p| p["argv"][2]
+                        .as_str()
+                        .is_some_and(|a| a.contains("/contents/")))
+                    .count(),
+                usize::from(selected)
+            );
         }
         for (id, before) in ["a", "b"].iter().zip(counts) {
             assert_eq!(
@@ -494,6 +528,86 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
         assert!(!calls.contains("fixture-parent-secret"));
         if paths.len() == 1 {
             assert!(!calls.contains("chrono-unit-beta"));
+        }
+    }
+}
+
+#[test]
+fn shared_parent_observation_checks_every_artifact_and_final_attempt_before_publication() {
+    for mode in [
+        "artifact-missing-last",
+        "artifact-misbound-last",
+        "artifact-ambiguous-last",
+        "changed-attempt-after-downloads",
+    ] {
+        let mut h = GatedHost::new();
+        h.change(&["a.txt", "b.txt"]);
+        let d = h.detection();
+        h.units(&d);
+        h.mock(&d, mode);
+        let out = h
+            .command(&["check", "--collect"], &d, &needs(&h, &d))
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "accepted {mode}");
+        let report: Value = serde_json::from_slice(
+            &fs::read(
+                h.host
+                    .root
+                    .join(".chrono-harness/state/collection/gather.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(report["result"].is_null(), "{mode}");
+        assert!(
+            !h.host
+                .root
+                .join(".chrono-harness/state/collection/manifest.json")
+                .exists()
+        );
+        let processes = report["processes"].as_array().unwrap();
+        let downloads: Vec<_> = processes.iter().filter(|p| p["argv"][1] == "run").collect();
+        assert_eq!(
+            downloads.len(),
+            if mode == "changed-attempt-after-downloads" {
+                2
+            } else {
+                1
+            },
+            "{mode}: {report}"
+        );
+        assert!(
+            report["error"].as_str().unwrap().contains(
+                if mode == "changed-attempt-after-downloads" {
+                    "parent run/repository/event/source/attempt mismatch"
+                } else {
+                    "binding differs"
+                }
+            ),
+            "{mode}: {report}"
+        );
+        for download in downloads {
+            let argv = download["argv"].as_array().unwrap();
+            let index = argv.iter().position(|a| a == "--dir").unwrap();
+            let directory = h.host.root.join(argv[index + 1].as_str().unwrap());
+            let name = argv[argv.iter().position(|a| a == "--name").unwrap() + 1]
+                .as_str()
+                .unwrap();
+            let unit = name
+                .strip_prefix("chrono-unit-")
+                .unwrap()
+                .split('-')
+                .next()
+                .unwrap();
+            assert_eq!(
+                fs::read(directory.join("check.json")).unwrap(),
+                fs::read(h.host.root.join(format!(
+                    ".chrono-harness/state/mock-artifacts/{unit}/check.json"
+                )))
+                .unwrap(),
+                "{mode}: original {unit} report changed"
+            );
         }
     }
 }
@@ -1014,7 +1128,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
     assert_eq!(d["detection"]["base"], h.host.base);
     assert_eq!(d["detection"]["required_units"], json!(["alpha", "beta"]));
     assert!(!root.join("a.txt").exists());
-    assert!(!root.join("a.sh").exists());
+    assert!(!root.join("a.case").exists());
     assert!(!root.join("b.txt").exists());
     git(
         &root,
@@ -1135,7 +1249,7 @@ fn scoped_and_full_detection_refuse_decoder_history_before_interpreter_acquisiti
         h.payload["before"] = json!(h.host.base);
         json_file(&h.host.root, check_path, &check);
         for id in ["decoder", "decoder-tests"] {
-            current["files"].as_array_mut().unwrap().push(json!({"path":format!("{id}.sh"),"owner":id,"surface":"product","cost":"unmeasured","edges":[]}));
+            current["files"].as_array_mut().unwrap().push(json!({"path":format!("{id}.case"),"owner":id,"surface":"product","cost":"unmeasured","edges":[]}));
         }
         json_file(&h.host.root, ".chrono-harness/FILEMAP.json", &current);
         let mut wf: Value = serde_json::from_slice(
@@ -1151,22 +1265,15 @@ fn scoped_and_full_detection_refuse_decoder_history_before_interpreter_acquisiti
         .unwrap();
         for (id, pair) in [("decoder", "test_script"), ("decoder-tests", "tests_for")] {
             projects["owners"].as_array_mut().unwrap().push(json!(id));
-            projects["scripts"].as_array_mut().unwrap().push(json!({"id":id,"path":format!("{id}.sh"),pair:if id=="decoder" {"decoder-tests"}else{"decoder"},"actions":{"execute":{"operation":id,"tool":"sh","argv":[format!("{id}.sh")]}}}));
-            fs::write(
-                h.host.root.join(format!("{id}.sh")),
-                "printf launched >> .chrono-harness/state/decoder-launched\nexit 66\n",
-            )
-            .unwrap();
+            projects["scripts"].as_array_mut().unwrap().push(json!({"id":id,"path":format!("{id}.case"),pair:if id=="decoder" {"decoder-tests"}else{"decoder"},"actions":{"execute":{"operation":id,"tool":"unit-fixture","argv":["unit-operation",format!("{id}.case")]}}}));
+            fs::write(h.host.root.join(format!("{id}.case")), "decoder-launch\n").unwrap();
         }
         json_file(&h.host.root, ".chrono-harness/projects.json", &projects);
         let mut cfg: Value = serde_json::from_slice(
             &fs::read(h.host.root.join(".chrono-harness/config.json")).unwrap(),
         )
         .unwrap();
-        cfg["tools"][3]["version_argv"] = json!([
-            "-c",
-            "printf probed >> .chrono-harness/state/decoder-probed; printf shell"
-        ]);
+        cfg["tools"][3]["version_argv"] = json!(["decoder-probe"]);
         if full {
             cfg["execution_units"] = json!({"units":{"alpha":{"tests":["test:a"],"report_path":".chrono-harness/state/alpha/check.json"},"beta":{"tests":["test:b"],"report_path":".chrono-harness/state/beta/check.json"}},"shared_operations":{},"report_path":".chrono-harness/state/collection/check.json","collection_limits":{"manifest_bytes":1048576,"report_bytes":67108864}});
             let mut c: Value =
@@ -1978,6 +2085,7 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
         "artifact-missing",
         "artifact-misbound",
         "artifact-deadline",
+        "final-parent-deadline",
         "artifact-stdout",
         "artifact-stderr",
     ] {
@@ -1987,10 +2095,10 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
             .len();
         if matches!(
             mode,
-            "artifact-deadline" | "artifact-stdout" | "artifact-stderr"
+            "artifact-deadline" | "final-parent-deadline" | "artifact-stdout" | "artifact-stderr"
         ) {
             h.host.modify(PROVIDER, |c| {
-                if mode == "artifact-deadline" {
+                if matches!(mode, "artifact-deadline" | "final-parent-deadline") {
                     c["gather"]["timeout_seconds"] = json!(2);
                 }
                 if mode == "artifact-stdout" {
@@ -2036,7 +2144,7 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
                     .contains("binding differs")
             );
             assert!(!processes.iter().any(|p| p["argv"][1] == "run"));
-        } else if mode == "artifact-deadline" {
+        } else if matches!(mode, "artifact-deadline" | "final-parent-deadline") {
             // Metadata, download and source checks share one deadline. A slow
             // earlier phase must reject too; reaching the source is not promised.
             assert_eq!(

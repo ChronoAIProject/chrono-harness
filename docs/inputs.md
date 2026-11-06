@@ -147,9 +147,9 @@ Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩�
 
 原 macOS／Linux 编译器、SDK／完整 Developer、运行时／配置和失败别名范围仍保留。只有配置操作成功后才安装，获取失败不能推定二进制已经安装。构建前存活的协调所有者是另一个参与者，仍须实际源码／政策／工具链／安装身份和受保护关联工作树使用。bootstrap 在 stderr 转交原所有者报告路径；该保留报告才是受管理进程和租约的依据。
 
-独立来源链为 `inputs.provision-isolated` → 已有 worktree `use inputs.produce-admit-isolated` → `host.bootstrap-isolated`、34 次 fetch、紧接的 `guard.check.runner`。保护配置点名当前直接政策 `.chrono-harness/git/macos-27.json`，不把根 Git 身份选择器重新解释成直接政策。
+本机 runner 准备的唯一登记入口为 `inputs.prepare-runner` → 已有 worktree `use inputs.prepare-runner-body` → `.chrono-harness/inputs/runner-preparation.json` → `inputs.fetch.runner` → `guard.check.runner`。沿用所选宿主环境，以 Rustup 的两次路径选择绑定 Cargo／rustc；可变 Cargo home 位于当前工作树。保护配置点名当前直接政策 `.chrono-harness/git/macos-27.json`，不把根 Git 身份选择器重新解释成直接政策。
 
-该消费者仍为 proposed，实际 Cargo、编译器、package／resolver、SDK、配置和保留输入绑定尚未解决。政策保留必需领域和预期包参数，不采用历史机器字节。有源码不等于保护机制已采用。执行前，负责人须绑定并核对观察器选中的 Cargo／Rustup home、rustc 与私有 bootstrap 及保护配置完全相同，仅继承 home 不证明一致。
+该消费者仍为 proposed，实际 Cargo、编译器、package／resolver、SDK、配置和保留输入绑定尚未解决。政策保留必需领域和预期包参数，不采用历史机器字节。有源码不等于保护机制已采用。执行前，负责人须核对观察器选中的 Cargo／Rustup home、rustc 与当前宿主环境及保护配置一致；继承环境本身不证明输入完整。
 
 获取参与仍保留当前根 worktree v3 政策。这些来源声明没有采用 Linux 关联／协调政策或完整 Linux 宿主配置，真实平台采用仍待完成。
 
@@ -165,7 +165,9 @@ macOS 27 直接政策通过按配置选择的 FILEMAP 表，把 runner v6 每个
 
 普通保护使用当前工作树 bootstrap Cargo 缓存，以及明确共享只读 Rust 工具链、空包装器、sysroot、链接器和 SDK 环境。配置缺失记录点名本工作树 Cargo home。包参数包含当前 runner 直接依赖 `tracing`，它已在声明的传递包清单中，不改包文件或 resolver 输入摘要。
 
-独立观察器和私有 bootstrap 提案仍使用另一 home，消费前须明确协调，不能认为已与普通保护一致。
+**可见宿主方法修改：**runner 准备移除写入旧工作树的独立 home、仅用于该路径的组件卸载／安装配方和 33 次无关 fetch。现役观察器及两项 Rust 实验同步迁移，保留原进程驱动、断言、600 秒保护期限和 300 秒实验窗口。通用 bootstrap 工具链配置及更广的原生获取／输入观察不变。实际耗时、IO 和存储收益未知，须由当前准备及保护消费者验证。
+
+本机 runner 的 `cargo-cache.cc.index` 显式采用当前稀疏索引原件：新增 `cc 1.11.0` 后共 231 条记录，原有 230 条版本及 JSON 记录的字节不变，锁定的 `cc 1.4.6` 记录和包校验值也不变。此前保护正确拒绝旧登记摘要与当前索引的差异，尚未启动 metadata 或编译。本次只更新这个完整文件的预期摘要，不增加索引等价规则或自动更新预期的路径；其他包、配置、编译器、SDK 和前后身份检查继续适用，真实保护消费和候选验收须另行核验。
 
 当前 Xcode 获取识别 Xcode 26.5／17F42。只登记 Developer 时，`usr/bin/altool` 别名指向兄弟 SharedFrameworks，因越出范围被拒绝。因此选中的目录清单改覆盖外层 `Xcode.app/Contents`，directory v3 检查不变；`DEVELOPER_DIR` 仍指 Developer，`CHRONO_XCODE_CONTENTS` 选择外层清单。当前本机 runner 和 diagnostics 的构建政策从原清单选择 `.chrono-harness/inputs/local-xcode-build.json`：声明的链接工具、四个发行库、clang 21 资源及别名，以及发行／工具链 metadata。文件摘要和精确父目录子项名不变。移动 SDK 和图形应用内容不属于此构建子集；完整 macOS SDK 仍单独绑定。[Cargo 说明](cargo-projects.md)记录了依赖审计和政策边界。SDK、Developer、配置、运行时范围仍明确。
 

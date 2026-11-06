@@ -13,7 +13,7 @@ fn host() -> Host {
         v["projects"][0]["kind"] = json!("production");
         v["projects"][0]["test_project"] = json!("suite");
         v["projects"][0]["actions"] = json!({"build":{
-            "operation":"build.lib","tool":"sh","argv":["-c","printf fixture-production"]
+            "operation":"build.lib","tool":"fixture","argv":["production"]
         }});
         v["projects"][1]["kind"] = json!("test");
         v["projects"][1]["tests_for"] = json!("lib");
@@ -35,8 +35,8 @@ fn host() -> Host {
         "schema_version":1,"status":"active","enforcement":"enabled",
         "runner":{"path":".chrono-harness/bin/chrono-harness","version":"0.1.0","sha256":null},
         "registries":{"filemap":FILEMAP,"projects":PROJECTS,"judges":JUDGES,"workflow":WORKFLOW},
-        "canonical_check":{"operation":"validate.delta","argv":["/bin/sh","check","--base","{base}","--candidate","{candidate}"]},
-        "tools":[{"id":"sh","program":"/bin/sh","resolution":"PATH-once","version_argv":["-c","printf current-sh"],"expected_version":"current-sh"}],
+        "canonical_check":{"operation":"validate.delta","argv":[OPERATION_TOOL,"check","--base","{base}","--candidate","{candidate}"]},
+        "tools":[{"id":"fixture","program":OPERATION_TOOL,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-test-ci-diagnostics/v1"}],
         "environment":{"inherit":["PATH"],"values":{},"inputs":[]},
         "input_closure":{"status":"declared-complete","unresolved":[]},
         "protocol":{"id":"chrono-judge/v1","timeout_seconds":30,"stdout_limit_bytes":8388608,"encoding":"UTF-8"},
@@ -69,7 +69,7 @@ fn host() -> Host {
 fn check(h: &Host, base: &str, candidate: &str) -> Response {
     let mut request = h.request(Some(base), candidate);
     request.observations = json!({"entry":{
-        "argv":["/bin/sh","check","--base",base,"--candidate",candidate],
+        "argv":[OPERATION_TOOL,"check","--base",base,"--candidate",candidate],
         "cwd":h.root()
     }});
     judge(&request)
@@ -188,7 +188,7 @@ fn a_declared_replacement_that_fails_cannot_approve_retirement() {
     let base = h.head();
     replace(&h);
     h.change_registry(PROJECTS, |v| {
-        v["projects"][1]["actions"]["execute"]["argv"] = json!(["-c", "exit 7"]);
+        v["projects"][1]["actions"]["execute"]["argv"] = json!(["fail-seven"]);
     });
     let candidate = h.commit();
     let result = check(&h, &base, &candidate);
