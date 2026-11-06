@@ -67,7 +67,7 @@ chrono-judge-cargo run --host-root HOST --config .chrono-harness/config.json \
 
 这些提案声明不证明输入完整或同判。新增成本为一次有限政策读取和身份复核，总验证成本未测；原期限和受保护操作继续适用。
 
-保护程序的登记开发构建与其他清单判官一样使用优化级别 1。大型 sysroot／SDK 清单仍执行原有全部文件、目录、别名及边界检查，只改变编译后的执行成本。隔离生产者仍限 600 秒。实际外层消费者须在所选宿主证明性能符合期限，不能只凭构建 profile 或小型回归判断。
+保护程序的登记开发构建与其他清单判官一样使用优化级别 1。大型 sysroot／SDK 清单仍执行原有全部文件、目录、别名及边界检查，只改变编译后的执行成本。runner 保护程序仍限 600 秒。实际外层消费者须在所选宿主证明性能符合期限，不能只凭构建 profile 或小型回归判断。
 
 ### 目录清单如何复核
 
@@ -81,7 +81,7 @@ chrono-judge-cargo run --host-root HOST --config .chrono-harness/config.json \
 
 ### 两项诊断实验
 
-本宿主在已有 Rust 测试项目登记 `test.judge-cargo-isolated-observation`，在实验已有 use 保护下，通过已有保留进程引擎，原样调用登记的 `inputs.provision-isolated`。观察窗口收紧为 300 秒，让当前终端能等待结束；这个窗口超时，不能据此判断生产 600 秒期限失败。
+本宿主在已有 Rust 测试项目登记 `test.judge-cargo-runner-preparation-observation`，在实验已有 use 保护下，通过已有保留进程引擎，原样调用登记的 `inputs.prepare-runner`。观察窗口收紧为 300 秒，让当前终端能等待结束；这个窗口超时，不能据此判断生产 600 秒期限失败。
 
 跨平台测试集忽略这项宿主清单实验，由单独登记 action 明确选择。原输出、进程结果及耗时保存在唯一的 `.chrono-harness/state/input-q1-repair/representative-retained-*/` 目录，供 Q1 验收与调用方交接，之后由调用方负责保留／清理。不新增工作者、轮询或传输实现；执行前总验证／存储成本仍未测。
 
@@ -206,7 +206,7 @@ v5 以 `chrono-cargo-run/v3` 报告工具链证据和链接器工具观察；v2�
 
 同一本地消费者只绑定当前 50 个外部包的归档／索引对及 crates.io registry 配置，共 101 个缓存输入。26 项无关或已被取代的缓存声明及其 runner 边已移除，当前包源码输入和归档 checksum 保留。新的所选 home 无需其他项目缓存即可准入此 runner 检查。
 
-独立隔离准备提案仍须协调自己的所选 home 和参与者；通用行为用例保留在专属 Rust 测试中。Cargo 保护是可选能力：对应 PR163 的当前 95 个方法，保留 94 个直接 Cargo 配方，以及一个通过 `.chrono-harness/cargo/diagnostics-config.json`、`diagnostics.json` 运行的普通 `build.diagnostics`。普通按范围操作不要求恢复历史并行保护别名，底层方法、断言和输入义务仍保留。
+当前 `inputs.prepare-runner` 沿用所选宿主环境，只获取 runner 根锁文件的依赖，再执行原 `guard.check.runner`；准备及保护消费者须实际核对当前工作树 Cargo home 和共享只读工具链／SDK，通用行为用例保留在专属 Rust 测试中。Cargo 保护是可选能力：对应 PR163 的当前 95 个方法，保留 94 个直接 Cargo 配方，以及一个通过 `.chrono-harness/cargo/diagnostics-config.json`、`diagnostics.json` 运行的普通 `build.diagnostics`。普通按范围操作不要求恢复历史并行保护别名，底层方法、断言和输入义务仍保留。
 
 **宿主输入政策修改：**`local-xcode-build.json` 从保留的 Xcode 26.5 Contents 原清单选择当前本机 runner 和 diagnostics 所需的记录。保留五个已声明工具（`clang`、`ar`、`ld`、`libtool`、`dsymutil`）、链接器的四个发行库（`libLTO`、`libtapi`、`libcodedirectory`、`libswiftDemangle`）、clang 21 资源子树及版本别名，以及 Xcode／工具链 metadata。固定工具的 Mach-O 导入和 clang 资源／链接命令观察支持这份范围；系统框架依赖仍在这份有限清单的完整性声明之外。
 
