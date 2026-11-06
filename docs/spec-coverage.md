@@ -588,10 +588,20 @@ per-file cleanup records. Eleven direct cases passed at `3c14557b` (335.87 test
 seconds / 410.39 managed seconds), including individually compliant siblings
 whose sum exceeds the directory budget, recovery after reducing owned bytes,
 external symlinks and refusal on unknown aggregate usage. Source bootstrap and
-both affected format checks passed. The option is not yet selected or migrated
-in the real host's producer contexts; its whole-directory production cost and
-main-coordinator adoption remain unverified. This is admission/checkpoint
-enforcement, without a concurrent reservation or strict filesystem quota.
+both affected format checks passed. At `29459627`, all twelve directory cases
+passed (277.02 test seconds / 338.78 managed seconds), including policy-only
+migration after a released retirement capability is removed. The five candidate
+temporary producers select 8 GiB directory limits and 8 GiB filesystem reserves;
+the four existing contexts migrated through the registered owner. The fifth
+producer directory is absent; its original migration refusal remains recorded.
+All six owner-deployment regressions also passed (202.57 test seconds), including
+an unmanaged, independently locked Git checkout with an actual CWD-only child;
+its source and ledger remain unchanged. Empty existing ledgers and unresolved
+actual consumers still refuse publication. Source bootstrap and both format
+checks passed. Whole-directory production cost, original-main policy adoption,
+full canonical acceptance and delivery remain unverified. This is
+admission/checkpoint enforcement, without a concurrent reservation or strict
+filesystem quota.
 The candidate host selects the five temporary test producers and has adopted
 four existing producer contexts; nine exact historical directories transferred
 through the current custodian entry are now physically absent. Historical shared

@@ -178,6 +178,7 @@
       "id": "worktree-test-host",
       "directory": ".chrono-harness/state/temporary-hosts/worktree/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "source with spaces/independent/producer/target/",
@@ -204,18 +205,20 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     },
     {
       "id": "ci-test-host",
       "directory": ".chrono-harness/state/temporary-hosts/ci/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "arbitrary non Cargo layout/.chrono-harness/state/cargo/producer/target/",
@@ -236,18 +239,20 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     },
     {
       "id": "projects-test-host",
       "directory": ".chrono-harness/state/temporary-hosts/projects/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "fixture/p/target/",
@@ -272,18 +277,20 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     },
     {
       "id": "workflow-test-tools",
       "directory": ".chrono-harness/state/temporary-hosts/workflow-tools/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "fixture/local-lane/p/target/",
@@ -305,18 +312,20 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     },
     {
       "id": "projects-migration-host",
       "directory": ".chrono-harness/state/temporary-hosts/migration/",
       "temporary": true,
+      "disposable_directory": true,
       "fixture_bodies": true,
       "generated_outputs": [
         "fixture/crates/runner/target/",
@@ -335,12 +344,13 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     }
   ],
