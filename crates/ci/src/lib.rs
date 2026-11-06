@@ -1,5 +1,5 @@
 //! Owned GitHub Actions projection and event input preparation; no judgment or test discovery.
-use chrono_harness::{canonical_argv, decode, no_symlink_parents, relative_path};
+use chrono_harness::{decode, no_symlink_parents, relative_path};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use std::fs;
@@ -159,13 +159,7 @@ fn validate(c: &Config) -> Result<(), String> {
     validate_policy(c, false)
 }
 fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
-    if !matches!(
-        (c.schema.as_str(), &c.initial_inventory, &c.facts_config),
-        ("chrono-github-ci/v1", None, None)
-            | ("chrono-github-ci/v2", Some(_), None)
-            | ("chrono-github-ci/v3", _, Some(_))
-            | ("chrono-github-ci/v4", _, Some(_))
-    ) {
+    if c.schema != "chrono-github-ci/v4" || c.facts_config.is_none() {
         return Err("unsupported CI provider/schema".into());
     }
     for p in [
@@ -181,8 +175,7 @@ fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
         return Err("workflow must be .github/workflows/*.yml".into());
     }
     let valid_policy = if full_policy {
-        c.schema == "chrono-github-ci/v4"
-            && c.check_config.starts_with(".chrono-harness/")
+        c.check_config.starts_with(".chrono-harness/")
             && !c.check_config.starts_with(".chrono-harness/state/")
     } else {
         c.check_config.starts_with(".chrono-harness/ci/")
@@ -278,33 +271,6 @@ fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
     action(&c.upload_artifact_action, "actions/upload-artifact")?;
     Ok(())
 }
-fn invoke(c: &Config, initial: bool) -> String {
-    canonical_argv(
-        &c.runner,
-        check_profile(c, initial),
-        if initial { None } else { Some("$CHRONO_BASE") },
-        "$CHRONO_CANDIDATE",
-        initial,
-    )
-    .iter()
-    .map(|v| {
-        if v.starts_with("$CHRONO_") {
-            format!("\"{v}\"")
-        } else {
-            shell(v)
-        }
-    })
-    .collect::<Vec<_>>()
-    .join(" ")
-}
-fn check_profile(c: &Config, initial: bool) -> &str {
-    if initial {
-        if let Some(projection) = &c.initial_inventory {
-            return &projection.path;
-        }
-    }
-    &c.check_config
-}
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
     render_extended(c, config_path, None, "chrono-check", false, false)
 }
@@ -389,7 +355,7 @@ fn render_job(
         .map(|v| shell(v))
         .collect::<Vec<_>>()
         .join(" ");
-    let check = if c.schema == "chrono-github-ci/v4" {
+    let check = {
         let suffix = match scope {
             None => String::new(),
             Some(chrono_harness::units::Scope::Unit { unit }) => {
@@ -405,61 +371,6 @@ fn render_job(
         format!(
             "      - name: Canonical harness check\n        shell: bash\n        env:\n          CHRONO_CHECK_SOURCE: ci\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n{credentials}        run: |\n          {} 'check'{suffix}\n",
             shell(&c.runner)
-        )
-    } else {
-        let prepare_suffix = match scope {
-            Some(chrono_harness::units::Scope::Unit { unit }) => {
-                format!(" --unit {}", shell(unit))
-            }
-            _ => String::new(),
-        };
-        let prepare = format!(
-            "{} prepare --host-root . --config {} --event \"$GITHUB_EVENT_NAME\" --payload \"$GITHUB_EVENT_PATH\" --workflow-revision \"$CHRONO_WORKFLOW_REVISION\" --github-output \"$GITHUB_OUTPUT\"",
-            shell(&c.generator),
-            shell(config_path)
-        ) + &prepare_suffix;
-        let pre_check = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
-            format!(
-                "      - name: Gather independent unit reports\n        shell: bash\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {} gather --host-root . --config {} --repository \"$GITHUB_REPOSITORY\"\n",
-                shell(&c.generator),
-                shell(config_path)
-            )
-        } else {
-            String::new()
-        };
-        let suffix = scope
-            .map(|s| {
-                s.argv()
-                    .iter()
-                    .map(|v| shell(v))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .map(|s| format!(" {s}"))
-            .unwrap_or_default();
-        format!(
-            r#"      - name: Prepare fixed event inputs
-        id: inputs
-        shell: bash
-        env:
-          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}
-        run: |
-          {prepare}
-{pre_check}      - name: Canonical harness check
-        shell: bash
-        env:
-          CHRONO_BASE: ${{{{ steps.inputs.outputs.base }}}}
-          CHRONO_CANDIDATE: ${{{{ steps.inputs.outputs.candidate }}}}
-          CHRONO_INITIAL: ${{{{ steps.inputs.outputs.initial }}}}
-        run: |
-          if [ "$CHRONO_INITIAL" = true ]; then
-            {initial}
-          else
-            {normal}
-          fi
-"#,
-            initial = invoke(c, true) + &suffix,
-            normal = invoke(c, false) + &suffix,
         )
     };
     let job_name = if scope.is_some() {
@@ -833,7 +744,7 @@ fn prepare_policy_fixed(
         }.into());
         }
         Ok(
-            json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":if c.schema=="chrono-github-ci/v4" {vec![c.runner.clone(),"check".into()]}else{canonical_argv(&c.runner,check_profile(c,initial),base.as_deref(),&candidate,initial)}}),
+            json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":vec![c.runner.clone(),"check".into()]}),
         )
     })();
     match result {

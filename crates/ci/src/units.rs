@@ -189,9 +189,7 @@ pub fn validate(c: &Config) -> Result<(), String> {
     match (&c.full_contexts, c.schema.as_str()) {
         (None, SCHEMA) => {}
         (Some(contexts), FULL_SCHEMA)
-            if c.collection.schema == "chrono-github-ci/v4"
-                && contexts.units.keys().collect::<Vec<_>>()
-                    == c.units.keys().collect::<Vec<_>>() =>
+            if contexts.units.keys().collect::<Vec<_>>() == c.units.keys().collect::<Vec<_>>() =>
         {
             let mut inputs = vec![(&contexts.collection, c.workflow(None)?)];
             for (id, path) in &contexts.units {
@@ -566,7 +564,7 @@ pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     } else {
         incoming
     };
-    if !existing && c.job_gating.is_none() && c.collection.schema == "chrono-github-ci/v4" {
+    if !existing && c.job_gating.is_none() {
         c.job_gating = Some(super::gating::Config {
             startup: None,
             schema: super::gating::SCHEMA.into(),
@@ -704,13 +702,9 @@ fn prepare_scope_inner(
         .as_array_mut()
         .ok_or("missing canonical command")?;
     if let Some(scope) = &scope {
-        if w.schema == "chrono-github-ci/v4" {
-            match scope {
-                Scope::Unit { unit } => argv.extend([json!("--unit"), json!(unit)]),
-                Scope::Collect { .. } => argv.push(json!("--collect")),
-            }
-        } else {
-            argv.extend(scope.argv().into_iter().map(Value::String));
+        match scope {
+            Scope::Unit { unit } => argv.extend([json!("--unit"), json!(unit)]),
+            Scope::Collect { .. } => argv.push(json!("--collect")),
         }
     }
     context["scope"] = serde_json::to_value(scope).map_err(|e| e.to_string())?;

@@ -9,9 +9,8 @@ fn source() -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/ci/units.json");
     let provider: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     let mut c = provider["collection"].clone();
-    c["schema"] = "chrono-github-ci/v2".into();
-    // This fixture exercises the historical v2 contract, without the host's newly adopted facts binding.
-    c.as_object_mut().unwrap().remove("facts_config");
+    c["schema"] = "chrono-github-ci/v4".into();
+    c["facts_config"] = ".chrono-harness/event-facts.json".into();
     c["initial_inventory"] = json!({
         "path":".chrono-harness/ci/root inventory.json",
         "profile": {
@@ -56,7 +55,7 @@ fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
     write(&input, &c);
     assert!(
         init(host.path(), &input)
-            .expect("v2 must generate the explicitly registered initial profile")
+            .expect("v4 must generate the explicitly registered initial profile")
     );
     let path = host
         .path()
@@ -71,8 +70,8 @@ fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
     assert!(!generate(host.path(), ".chrono-harness/ci/github.json", true).unwrap());
     let workflow =
         fs::read_to_string(host.path().join(c["workflow_path"].as_str().unwrap())).unwrap();
-    assert!(workflow.contains("'.chrono-harness/ci/root inventory.json'"));
-    assert!(workflow.contains("'.chrono-harness/ci/check.json'"));
+    assert!(workflow.contains("'.chrono-harness/bin/chrono-harness' 'check'\n"));
+    tools::write_event_facts(host.path());
     git(host.path(), &["init", "-q", "-b", "dev"]);
     git(host.path(), &["add", "."]);
     git(
@@ -98,7 +97,7 @@ fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
         &root_oid,
     )
     .unwrap();
-    assert_eq!(initial["canonical_argv"][3], c["initial_inventory"]["path"]);
+    assert_eq!(initial["canonical_argv"], json!([c["runner"], "check"]));
     assert!(initial["base"].is_null());
     let normal = prepare(
         host.path(),
@@ -108,7 +107,7 @@ fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
         &root_oid,
     )
     .unwrap();
-    assert_eq!(normal["canonical_argv"][3], c["check_config"]);
+    assert_eq!(normal["canonical_argv"], initial["canonical_argv"]);
     assert_eq!(normal["initial"], false);
 }
 
@@ -167,10 +166,7 @@ fn initial_adoption_collision_is_preflighted_before_any_output_is_written() {
 #[test]
 fn invalid_initial_sources_do_not_publish_partial_configuration() {
     for case in [
-        "v1-extension",
-        "v1-null",
-        "v2-missing",
-        "v2-null",
+        "null",
         "bad-profile",
         "digest",
         "cycle",
@@ -187,15 +183,7 @@ fn invalid_initial_sources_do_not_publish_partial_configuration() {
         let input = inputs.path().join("source.json");
         let mut c = source();
         match case {
-            "v1-extension" => c["schema"] = "chrono-github-ci/v1".into(),
-            "v1-null" => {
-                c["schema"] = "chrono-github-ci/v1".into();
-                c["initial_inventory"] = Value::Null;
-            }
-            "v2-missing" => {
-                c.as_object_mut().unwrap().remove("initial_inventory");
-            }
-            "v2-null" => c["initial_inventory"] = Value::Null,
+            "null" => c["initial_inventory"] = Value::Null,
             "bad-profile" => c["initial_inventory"]["profile"]["schema"] = "unknown/v1".into(),
             "digest" => c["initial_inventory"]["profile"]["judges"][0]["sha256"] = Value::Null,
             "cycle" => {
@@ -286,6 +274,7 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             .expect("build the explicitly registered production prerequisites");
         }
         let mut c = source();
+        tools::write_event_facts(root);
         let binding = &mut c["initial_inventory"]["profile"]["judges"][0];
         binding["executable"] = ".chrono-harness/bin/chrono-judge-registration".into();
         binding["sha256"] =
@@ -348,7 +337,7 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             &root.join(".chrono-harness/judges.json"),
             &json!({"schema_version":1,"status":"proposed","judges":[normal_binding],"migration_validator":"inventory"}),
         );
-        let files: Vec<_> = [".gitignore", ".chrono-harness/registry.json", ".chrono-harness/projects.json", ".chrono-harness/judges.json", ".chrono-harness/workflow.json", ".chrono-harness/FILEMAP.json", ".chrono-harness/ci/github.json", ".chrono-harness/ci/root inventory.json", ".github/workflows/chrono-ci.yml"]
+        let files: Vec<_> = [".gitignore", ".chrono-harness/event-facts.json", ".chrono-harness/registry.json", ".chrono-harness/projects.json", ".chrono-harness/judges.json", ".chrono-harness/workflow.json", ".chrono-harness/FILEMAP.json", ".chrono-harness/ci/github.json", ".chrono-harness/ci/root inventory.json", ".github/workflows/chrono-ci.yml"]
             .into_iter().map(|path| json!({"path":path,"owner":"repository","surface":"documentation","cost":"unknown","edges":[]})).collect();
         write(
             &root.join(".chrono-harness/FILEMAP.json"),
@@ -380,10 +369,17 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
         let candidate = git(root, &["rev-parse", "HEAD"]);
         let adopted = load(&root.join(".chrono-harness/ci/github.json")).unwrap();
         let context = prepare(root, &adopted, "push", &json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":candidate,"created":true}), &candidate).unwrap();
-        let mut argv: Vec<String> =
-            serde_json::from_value(context["canonical_argv"].clone()).unwrap();
-        assert_eq!(argv[3], c["initial_inventory"]["path"]);
-        argv[3] = root.join(&argv[3]).to_str().unwrap().into();
+        assert_eq!(context["canonical_argv"], json!([c["runner"], "check"]));
+        // Exercise the generated inventory profile through its independent explicit runner API.
+        let argv = chrono_harness::canonical_argv(
+            c["runner"].as_str().unwrap(),
+            root.join(c["initial_inventory"]["path"].as_str().unwrap())
+                .to_str()
+                .unwrap(),
+            None,
+            &candidate,
+            true,
+        );
         let output = Command::new(root.join(&argv[0]))
             .args(&argv[1..])
             .current_dir(inputs.path())
@@ -474,7 +470,7 @@ fn standalone_initial_migration_preserves_inventory_and_refuses_edits_or_weakeni
             .join(old["initial_inventory"]["path"].as_str().unwrap());
         let before = fs::read(&inventory).unwrap();
         let mut next = old.clone();
-        next["schema"] = json!("chrono-github-ci/v4");
+        next["name"] = json!("Updated initial host");
         next["facts_config"] = json!(".chrono-harness/registry.json");
         if case == "inventory-change" {
             next["initial_inventory"]["profile"]["judges"][0]["sha256"] = json!("b".repeat(64));

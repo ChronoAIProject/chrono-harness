@@ -133,15 +133,15 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
 use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
-struct ShortHost {
+pub(super) struct ShortHost {
     _dir: crate::tools::FixtureDirectory,
     root: PathBuf,
-    remote: PathBuf,
-    base: String,
-    candidate: String,
+    pub(super) remote: PathBuf,
+    pub(super) base: String,
+    pub(super) candidate: String,
 }
 impl ShortHost {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let (old, _, _) = consumer_source();
         let dir = crate::tools::temporary_host("short host λ ");
         let parent = fs::canonicalize(dir.path()).unwrap();
@@ -258,6 +258,9 @@ impl ShortHost {
             base,
             candidate,
         }
+    }
+    pub(super) fn path(&self) -> &Path {
+        &self.root
     }
     fn prepared_command(&self, args: &[&str]) -> Command {
         let mut c = Command::new(self.root.join(".chrono-harness/bin/chrono-harness"));
@@ -1991,7 +1994,11 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
 
 // Read the existing canonical path, then verify its immutable original. Console
 // text is a human projection, not a second report protocol.
-fn published_report(root: &Path, unit: Option<&str>, out: &std::process::Output) -> Value {
+pub(super) fn published_report(
+    root: &Path,
+    unit: Option<&str>,
+    out: &std::process::Output,
+) -> Value {
     let config: Value =
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/ci/check.json")).unwrap())
             .unwrap();

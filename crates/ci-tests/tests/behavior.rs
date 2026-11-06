@@ -10,7 +10,7 @@ use std::path::Path;
 use std::process::Command;
 mod retained_receipts;
 fn config() -> Config {
-    serde_json::from_value(json!({"schema":"chrono-github-ci/v1","workflow_path":".github/workflows/check.yml","name":"Host checks","runs_on":"macos-14","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["python3",".chrono-harness/ci/bootstrap.py","."],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":".chrono-harness/ci/check.json","context_path":".chrono-harness/state/context.json","artifact_directory":".chrono-harness/state/"})).unwrap()
+    serde_json::from_value(json!({"schema":"chrono-github-ci/v4","facts_config":".chrono-harness/event-facts.json","workflow_path":".github/workflows/check.yml","name":"Host checks","runs_on":"macos-14","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["python3",".chrono-harness/ci/bootstrap.py","."],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":".chrono-harness/ci/check.json","context_path":".chrono-harness/state/context.json","artifact_directory":".chrono-harness/state/"})).unwrap()
 }
 #[test]
 fn retired_scoped_providers_are_rejected_before_publishing_outputs() {
@@ -90,7 +90,8 @@ fn repo() -> (tempfile::TempDir, String, String) {
     );
     git(d.path(), &["config", "user.name", "Fixture"]);
     fs::write(d.path().join("a"), "a").unwrap();
-    git(d.path(), &["add", "a"]);
+    tools::write_event_facts(d.path());
+    git(d.path(), &["add", "."]);
     git(d.path(), &["commit", "-qm", "base"]);
     let b = git(d.path(), &["rev-parse", "HEAD"]);
     fs::write(d.path().join("a"), "b").unwrap();
@@ -308,13 +309,7 @@ fn configured_push_baseline_covers_repeated_pushes_and_tracks_the_named_remote_r
     assert_eq!(context["candidate"], repaired);
     assert_eq!(
         context["canonical_argv"],
-        json!(chrono_harness::canonical_argv(
-            &configured.runner,
-            &configured.check_config,
-            Some(&base),
-            &repaired,
-            false
-        ))
+        json!([configured.runner, "check"])
     );
     git(
         d.path(),
@@ -564,16 +559,7 @@ fn event_context_contains_same_canonical_entry() {
     )
     .unwrap();
     let argv: Vec<String> = serde_json::from_value(r["canonical_argv"].clone()).unwrap();
-    assert_eq!(
-        argv,
-        chrono_harness::canonical_argv(
-            ".chrono-harness/bin/chrono-harness",
-            ".chrono-harness/ci/check.json",
-            Some(&b),
-            &c,
-            false
-        )
-    );
+    assert_eq!(argv, vec![".chrono-harness/bin/chrono-harness", "check"]);
 }
 #[test]
 fn cli_preserves_context_and_outputs_full_identity() {
@@ -614,46 +600,6 @@ fn cli_preserves_context_and_outputs_full_identity() {
             .contains(&format!("candidate={c}"))
     );
     assert!(d.path().join(".chrono-harness/state/context.json").exists());
-}
-fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
-    // A copied-host fixture owns its receipt policy too. The source checkout's
-    // deployed Git binding is host policy, not a native test-platform input.
-    let owner = retained_receipts::Owner::new();
-    let argv: Vec<String> = serde_json::from_value(context["canonical_argv"].clone()).unwrap();
-    assert_eq!(argv[1], "check");
-    let output = Command::new(root.join(&argv[0]))
-        .args(&argv[1..])
-        .current_dir(root)
-        .output()
-        .unwrap();
-    let receipt = retain_expected_command_result(
-        &owner.root,
-        root,
-        &argv,
-        context,
-        &output,
-        Some(expected_exit),
-    );
-    assert_eq!(
-        output.status.code(),
-        Some(expected_exit),
-        "root {}; argv {argv:?}; status {}; stdout {}; stderr {}",
-        root.display(),
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(report.get("transport_failure").is_none(), "{report}");
-    if let Some(receipt) = receipt {
-        receipt
-            .release(
-                "command-assertion",
-                "expected exit and original response consumed",
-            )
-            .unwrap();
-    }
-    report
 }
 fn retain_command_result(
     root: &Path,
