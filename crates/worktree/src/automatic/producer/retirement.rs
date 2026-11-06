@@ -354,7 +354,7 @@ fn capture_only_allocation(directory: &Path, object: &Object) -> Result<bool, St
 }
 
 fn retained_paths(directory: &Path, object: &Object) -> Result<Vec<PathBuf>, String> {
-    let mut paths = if capture_only_allocation(directory, object)? {
+    let mut paths = if object.disposable_directory || capture_only_allocation(directory, object)? {
         vec![no_symlink_parents(directory, &object.path)?]
     } else {
         object
@@ -532,6 +532,9 @@ pub(super) fn retire(
     lease: Option<&Lease>,
     row: &Value,
 ) -> Result<Value, String> {
+    if object.disposable_directory && (!policy.temporary || !policy.disposable_directory) {
+        return Err("whole-directory disposal is no longer adopted; preserve allocation".into());
+    }
     if object.original_release.is_none() {
         return Ok(
             value!({"status":"protected","reason":"actual original consumer has not released; interruption outcome unchanged"}),

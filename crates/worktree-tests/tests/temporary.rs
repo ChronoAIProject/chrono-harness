@@ -96,15 +96,28 @@ fn directory_cleanup_reclaims_synthetic_repository_after_actual_consumers_releas
     let result = fs::read(capture.join("result.json")).unwrap();
     let artifact =
         chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
-    artifact.acquire("diagnostic", "inspect actual failed original").unwrap();
+    artifact
+        .acquire("diagnostic", "inspect actual failed original")
+        .unwrap();
     let report = allocation.finish().unwrap();
-    assert!(root.is_dir(), "released owner lost an active diagnostic: {report}");
+    assert!(
+        root.is_dir(),
+        "released owner lost an active diagnostic: {report}"
+    );
     assert_eq!(fs::read(capture.join("result.json")).unwrap(), result);
-    artifact.release("diagnostic", "original failure inspected").unwrap();
+    artifact
+        .release("diagnostic", "original failure inspected")
+        .unwrap();
     let mut next = capacity_reenter_after_release(&store, &outputs, &root);
     next.finish().unwrap();
-    assert!(!root.exists(), "released owned fixture directory accumulated");
-    assert!(!record.exists(), "released directory registration accumulated");
+    assert!(
+        !root.exists(),
+        "released owned fixture directory accumulated"
+    );
+    assert!(
+        !record.exists(),
+        "released directory registration accumulated"
+    );
     assert_eq!(fs::read(&outside).unwrap(), b"real external source");
     assert_eq!(json(&result).unwrap()["exit_code"], 7);
 }
@@ -121,10 +134,17 @@ fn directory_cleanup_policy_does_not_reclassify_existing_source_directories() {
     let old = allocation.path().to_owned();
     fs::write(old.join("unique-source.rs"), b"unsaved source").unwrap();
     drop(allocation);
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     adopt_directory_cleanup(&h);
-    let (code, report, error) = h.auto("migrate", &[
-        "--path", h.root.to_str().unwrap(), "--partition-producer", "test-allocation",
-    ]);
+    let (code, report, error) = h.auto(
+        "migrate",
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--partition-producer",
+            "test-allocation",
+        ],
+    );
     assert_eq!(code, 0, "{report} {error}");
     let mut next =
         chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "new-")
@@ -135,7 +155,10 @@ fn directory_cleanup_policy_does_not_reclassify_existing_source_directories() {
     let mut reentry = capacity_reenter_after_release(&store, &outputs, &new);
     reentry.finish().unwrap();
     assert!(!new.exists(), "new directory ownership was not applied");
-    assert_eq!(fs::read(old.join("unique-source.rs")).unwrap(), b"unsaved source");
+    assert_eq!(
+        fs::read(old.join("unique-source.rs")).unwrap(),
+        b"unsaved source"
+    );
 }
 
 // Re-enter the real producer rather than assuming that one bounded retention
