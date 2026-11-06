@@ -2044,6 +2044,9 @@ impl ProducerPolicy {
             if snapshot.retiring {
                 match retirement::resume_retirement(inputs, r, &directory, snapshot) {
                     Ok(mut value) => {
+                        if value["status"] == "failed" {
+                            failures.push(value["error"].to_string());
+                        }
                         value["producer"] = value!(self.id);
                         value["path"] = value!(format!("{}{}", self.directory, snapshot.path));
                         value["identity"] = value!(snapshot.identity);
@@ -2158,6 +2161,9 @@ impl ProducerPolicy {
                 drop(store.take());
                 match retirement::retire_owned_directory(self, inputs, r, &directory, object, lease) {
                     Ok(retirement) => {
+                        if retirement["status"] == "failed" {
+                            failures.push(retirement["error"].to_string());
+                        }
                         row["status"] = retirement["status"].clone();
                         row["original_retirement"] = retirement;
                     }
@@ -2426,6 +2432,9 @@ impl ProducerPolicy {
                         &row,
                     ) {
                         Ok(retirement) => {
+                            if retirement["status"] == "failed" {
+                                failures.push(retirement["error"].to_string());
+                            }
                             row["original_retirement"] = retirement;
                         }
                         Err(error) => {

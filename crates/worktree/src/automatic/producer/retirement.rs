@@ -718,21 +718,30 @@ fn dispose_owned_directory(
             )
         },
     )?;
-    if let Some(lease) = lease {
-        lease.stable()?;
-        for (digest, length) in &object.shared_originals {
-            body::release_original(inputs, r, directory, object, digest, *length, lease)?;
+    let completion = (|| -> Result<(), String> {
+        if let Some(lease) = lease {
+            lease.stable()?;
+            for (digest, length) in &object.shared_originals {
+                body::release_original(inputs, r, directory, object, digest, *length, lease)?;
+            }
         }
-    }
-    if lease_path.exists() {
-        fs::remove_file(&lease_path).map_err(|e| e.to_string())?;
-    }
-    if fs::read(&record).map_err(|e| e.to_string())? != original {
-        return Err("owned directory continuation changed before final unlink".into());
-    }
-    fs::remove_file(record).map_err(|e| e.to_string())?;
-    result["status"] = value!("disposed");
+        if lease_path.exists() {
+            fs::remove_file(&lease_path).map_err(|e| e.to_string())?;
+        }
+        if fs::read(&record).map_err(|e| e.to_string())? != original {
+            return Err("owned directory continuation changed before final unlink".into());
+        }
+        fs::remove_file(record).map_err(|e| e.to_string())?;
+        Ok(())
+    })();
+    // A later custody failure must not erase already verified directory effects.
+    // Keep its continuation and report the failure alongside the original bytes
+    // and footprint receipts; callers still fail the producer's recovery.
+    result["status"] = value!(if completion.is_ok() { "disposed" } else { "failed" });
     result["physical_absence"] = value!("verified");
+    if let Err(error) = completion {
+        result["error"] = value!(error);
+    }
     // Shared originals have a different lifetime from this directory. Forward
     // their existing exact addresses to the content owner after releasing our
     // claims; other directories' claims still protect the same bytes.
