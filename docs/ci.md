@@ -63,8 +63,9 @@ bootstrap 最后参数明确选择宿主 CI 配置，省略沿用 full bootstrap
 准备记录环境值摘要及原环境摘要。可选 `environment.credential_environment` 从 `inherit` 点名仅供获取的凭据：传给生产者和其声明的收集传输，不传给 Git 或判官。本仓声明 `GH_TOKEN`，与已有 gather 凭据政策一致。外层获取继承也将已声明 `SSH_AUTH_SOCK` 交给 worktree Git 所有者；缺失仍记为缺失。环境清空和各所有者明确白名单继续适用。
 
 获取限 2400 秒，覆盖登记的 1800 秒原生汇总等待；冲突的更短获取上限明确失败。
+独立汇总的输入生产者在准备 Git 事件端点前拒绝这种静态时限冲突；条件父汇总不读取这项独立轮询检查所用的政策。
 
-`CHRONO_CHECK_SOURCE` 必须明确继承，不能固定值覆盖。未设或 `local` 选本地，`ci` 选原生；其他值、缺少原生绑定／变量都会失败。CI action 明确点名事件、载荷、工作流 revision 和汇总仓库变量。`chrono-github-ci/v4` 生成短检查步骤，含该选择器和工作流 revision；checkout、bootstrap、上传仍是原生步骤。
+`CHRONO_CHECK_SOURCE` 必须明确继承，不能固定值覆盖。未设或 `local` 选本地，`ci` 选原生；其他值、缺少原生绑定／变量都会失败。CI action 明确点名事件、载荷、工作流 revision 和汇总仓库变量。`chrono-github-ci/v4` 生成短检查步骤，含该选择器和工作流 revision；checkout、bootstrap、上传仍是原生步骤。生成器直接生成所选步骤，不再先构造 v1/v2/v3 使用的显式端点准备和初始／DELTA 步骤，再把它们删掉。
 
 按范围 profile 将 registration_config、facts_config 都明确绑定到固定配置入口，短命令获取不使用旧未绑定 Git。push、PR、分支创建、明确手动端点的含义仍归已有事件生产者。准备只是获取输入，尚未作判断。
 

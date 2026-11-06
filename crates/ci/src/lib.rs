@@ -326,21 +326,64 @@ fn render_extended(
         .map(|v| shell(v))
         .collect::<Vec<_>>()
         .join(" ");
-    let prepare = format!(
-        "{} prepare --host-root . --config {} --event \"$GITHUB_EVENT_NAME\" --payload \"$GITHUB_EVENT_PATH\" --workflow-revision \"$CHRONO_WORKFLOW_REVISION\" --github-output \"$GITHUB_OUTPUT\"",
-        shell(&c.generator),
-        shell(config_path)
-    ) + prepare_suffix;
-    let suffix = scope
-        .map(|s| {
-            s.argv()
-                .iter()
-                .map(|v| shell(v))
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
-        .map(|s| format!(" {s}"))
-        .unwrap_or_default();
+    let check = if c.schema == "chrono-github-ci/v4" {
+        let suffix = match scope {
+            None => String::new(),
+            Some(chrono_harness::units::Scope::Unit { unit }) => {
+                format!(" '--unit' {}", shell(unit))
+            }
+            Some(chrono_harness::units::Scope::Collect { .. }) => " '--collect'".into(),
+        };
+        let credentials = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
+            "          GH_TOKEN: ${{ github.token }}\n"
+        } else {
+            ""
+        };
+        format!(
+            "      - name: Canonical harness check\n        shell: bash\n        env:\n          CHRONO_CHECK_SOURCE: ci\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n{credentials}        run: |\n          {} 'check'{suffix}\n",
+            shell(&c.runner)
+        )
+    } else {
+        let prepare = format!(
+            "{} prepare --host-root . --config {} --event \"$GITHUB_EVENT_NAME\" --payload \"$GITHUB_EVENT_PATH\" --workflow-revision \"$CHRONO_WORKFLOW_REVISION\" --github-output \"$GITHUB_OUTPUT\"",
+            shell(&c.generator),
+            shell(config_path)
+        ) + prepare_suffix;
+        let suffix = scope
+            .map(|s| {
+                s.argv()
+                    .iter()
+                    .map(|v| shell(v))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .map(|s| format!(" {s}"))
+            .unwrap_or_default();
+        format!(
+            r#"      - name: Prepare fixed event inputs
+        id: inputs
+        shell: bash
+        env:
+          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}
+        run: |
+          {prepare}
+{pre_check}      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_BASE: ${{{{ steps.inputs.outputs.base }}}}
+          CHRONO_CANDIDATE: ${{{{ steps.inputs.outputs.candidate }}}}
+          CHRONO_INITIAL: ${{{{ steps.inputs.outputs.initial }}}}
+        run: |
+          if [ "$CHRONO_INITIAL" = true ]; then
+            {initial}
+          else
+            {normal}
+          fi
+"#,
+            initial = invoke(c, true) + &suffix,
+            normal = invoke(c, false) + &suffix,
+        )
+    };
     let manual_dispatch = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
         ""
     } else {
@@ -397,26 +440,7 @@ on:
         shell: bash
         run: |
           {bootstrap}
-      - name: Prepare fixed event inputs
-        id: inputs
-        shell: bash
-        env:
-          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}
-        run: |
-          {prepare}
-{pre_check}      - name: Canonical harness check
-        shell: bash
-        env:
-          CHRONO_BASE: ${{{{ steps.inputs.outputs.base }}}}
-          CHRONO_CANDIDATE: ${{{{ steps.inputs.outputs.candidate }}}}
-          CHRONO_INITIAL: ${{{{ steps.inputs.outputs.initial }}}}
-        run: |
-          if [ "$CHRONO_INITIAL" = true ]; then
-            {initial}
-          else
-            {normal}
-          fi
-      - name: Preserve actual check evidence
+{check}      - name: Preserve actual check evidence
         id: chrono_evidence_upload
         if: ${{{{ always() }}}}
         uses: {upload}
@@ -433,8 +457,6 @@ on:
         checkout = c.checkout_action,
         upload = c.upload_artifact_action,
         hidden_files = artifact_hidden_files(c.include_hidden_files),
-        initial = invoke(c, true) + &suffix,
-        normal = invoke(c, false) + &suffix,
         artifacts = scalar(&c.artifact_directory)
     );
     let rendered = if let Some(directory) = c
@@ -466,38 +488,7 @@ on:
     } else {
         rendered.replace("        id: chrono_evidence_upload\n", "")
     };
-    if c.schema == "chrono-github-ci/v4" {
-        let start = rendered
-            .find("      - name: Prepare fixed event inputs")
-            .ok_or("native prepare section")?;
-        let end = rendered
-            .find("      - name: Preserve actual check evidence")
-            .ok_or("native artifact section")?;
-        let suffix = match scope {
-            None => String::new(),
-            Some(chrono_harness::units::Scope::Unit { unit }) => {
-                format!(" '--unit' {}", shell(unit))
-            }
-            Some(chrono_harness::units::Scope::Collect { .. }) => " '--collect'".into(),
-        };
-        let credentials = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
-            "          GH_TOKEN: ${{ github.token }}\n"
-        } else {
-            ""
-        };
-        let check = format!(
-            "      - name: Canonical harness check\n        shell: bash\n        env:\n          CHRONO_CHECK_SOURCE: ci\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n{credentials}        run: |\n          {} 'check'{suffix}\n",
-            shell(&c.runner)
-        );
-        Ok(format!(
-            "{}{}{}",
-            &rendered[..start],
-            check,
-            &rendered[end..]
-        ))
-    } else {
-        Ok(rendered)
-    }
+    Ok(rendered)
 }
 fn output_preflight(root: &Path, path: &str, expected: &str, marker: &str) -> Result<bool, String> {
     if path.starts_with(".github/workflows/") && expected.len() > 500_000 {

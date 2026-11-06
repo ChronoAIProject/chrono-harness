@@ -344,6 +344,27 @@ fn held_native_capability_helper() {
 #[test]
 fn overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff() {
     use std::io::{BufRead, Write};
+    if std::env::var_os("CHRONO_FD_OVERLAP_ISOLATED").is_none() {
+        // Other tests can fork while this test owns its lock. Until exec, those
+        // unrelated children also hold the process-wide descriptor table.
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff",
+                "--nocapture",
+            ])
+            .env("CHRONO_FD_OVERLAP_ISOLATED", "1");
+        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
     for signal in [libc::SIGTERM, libc::SIGKILL] {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("capability");
@@ -400,7 +421,9 @@ fn overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_ha
         assert!(second.wait().unwrap().success());
         assert_eq!(
             unsafe { libc::flock(exclusion.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
-            0
+            0,
+            "{}",
+            std::io::Error::last_os_error()
         );
     }
 }
