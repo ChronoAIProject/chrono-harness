@@ -7,6 +7,9 @@ fn fixture() -> (Host, PathBuf, String, String) {
     fixture_with_publication_probe(None)
 }
 fn fixture_with_publication_probe(drift: Option<bool>) -> (Host, PathBuf, String, String) {
+    fixture_with_bindings(drift, false)
+}
+fn fixture_with_bindings(drift: Option<bool>, registry: bool) -> (Host, PathBuf, String, String) {
     let h = Host::new("payload");
     h.kernel_cleanup();
     let cleanup = h.root.join(".chrono-harness/cleanup.json");
@@ -64,7 +67,7 @@ fn fixture_with_publication_probe(drift: Option<bool>) -> (Host, PathBuf, String
          "actions":{"execute":{"operation":"owner.fixture-test","tool":"cargo","argv":["--version"]}}}
     ]);
     fs::write(projects_path, serde_json::to_vec_pretty(&projects).unwrap()).unwrap();
-    let profile = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0",
+    let mut profile = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0",
         "tools":{"cargo":tools.join("cargo"),"rustc":tools.join("rustc")},"operations":["owner.fixture-version"],"install":[],
         "require_tool_bindings":true,"rust_incremental":false,
         "native_platform":{"system":if cfg!(target_os="macos") {"Darwin"} else {"Linux"},
@@ -75,6 +78,32 @@ fn fixture_with_publication_probe(drift: Option<bool>) -> (Host, PathBuf, String
         "entrypoint":{"tool":"owner-probe","script":".chrono-harness/ci/bootstrap.py"},
         "participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":fixture_git(),"config":POLICY},
         "owner_stage":{"source":".chrono-harness/bin/built-owner","selected":".chrono-harness/bin/chrono-worktree"}});
+    if registry {
+        let path = ".chrono-harness/ci/owner-toolchains.json";
+        let native = &profile["native_platform"];
+        let platform = format!(
+            "{}/{}",
+            native["system"].as_str().unwrap(),
+            native["machine"].as_str().unwrap()
+        );
+        let mut tools = profile["tool_bindings"].clone();
+        for item in tools.as_object_mut().unwrap().values_mut() {
+            item.as_object_mut().unwrap().remove("path");
+        }
+        let registration = value!({"schema":"chrono-bootstrap-toolchains/v1",
+            "rust_toolchain":"1.95.0","platforms":{platform:{"tools":tools}}});
+        fs::write(
+            h.root.join(path),
+            serde_json::to_vec_pretty(&registration).unwrap(),
+        )
+        .unwrap();
+        files.push(path.into());
+        let declaration = profile.as_object_mut().unwrap();
+        declaration.remove("tool_bindings");
+        declaration.remove("native_platform");
+        declaration.insert("tool_bindings_registry".into(), value!(path));
+        declaration.insert("tools".into(), value!({}));
+    }
     fs::write(
         h.root.join(PROFILE),
         serde_json::to_vec_pretty(&profile).unwrap(),
@@ -552,6 +581,25 @@ fn owner_deployment_publishes_without_the_construction_interpreter() {
         fs::read(exe).unwrap()
     );
     assert_eq!(report["owner_deployment"]["task_completion"], "not-claimed");
+}
+
+#[test]
+fn owner_deployment_qualifies_the_selected_native_toolchain_registry() {
+    let (h, exe, path, sha) = fixture_with_bindings(None, true);
+    let stage = json(&fs::read(h.root.join(&path)).unwrap()).unwrap();
+    assert!(stage["registrations"][".chrono-harness/ci/owner-toolchains.json"].is_string());
+    fs::write(
+        h.root.join(".chrono-harness/state/owner-probe-unavailable"),
+        "construction interpreter is no longer available",
+    )
+    .unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(report.get("managed_process").is_none(), "{report}");
+    assert_eq!(
+        fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap(),
+        fs::read(exe).unwrap()
+    );
 }
 
 #[test]

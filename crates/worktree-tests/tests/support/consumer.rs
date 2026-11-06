@@ -39,7 +39,8 @@ fn main() -> ExitCode {
                 let name = std::env::args().last().unwrap();
                 println!(
                     "{}",
-                    Path::new(&invocation)
+                    std::env::current_exe()
+                        .unwrap()
                         .parent()
                         .unwrap()
                         .join(name)
