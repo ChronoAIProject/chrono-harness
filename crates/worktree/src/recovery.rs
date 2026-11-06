@@ -1,8 +1,9 @@
 //! Immutable pre-effect identity; an intent never certifies completion or a stopped process.
 use chrono_harness::{decode, facts, json, no_symlink_parents, relative_path, sha256};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
+    collections::BTreeSet,
     fs,
     io::Write,
     path::{Path, PathBuf},
@@ -31,6 +32,110 @@ pub(crate) fn state_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
     let _input = chrono_harness::retained_artifacts::retention::read_guard(root, path)?;
     fs::read(state_path(root, path)?).map_err(|e| e.to_string())
 }
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetainedInput {
+    schema: String,
+    source_root: PathBuf,
+    path: String,
+    sha256: String,
+    byte_length: usize,
+    format: String,
+}
+
+pub(crate) fn retained_input(root: &Path, path: &str, bytes: &[u8], format: &str) -> Value {
+    value!(RetainedInput {
+        schema: "chrono-worktree-retained-input/v1".into(),
+        source_root: root.to_owned(),
+        path: path.into(),
+        sha256: sha256(bytes),
+        byte_length: bytes.len(),
+        format: format.into(),
+    })
+}
+
+/// Follow only the reference-bearing fields of the lifecycle contract.
+fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(), String> {
+    if report
+        .get("prior_report")
+        .is_some_and(|prior| prior.get("report").is_some() || prior.get("input_bytes").is_some())
+    {
+        return Err("inline lifecycle prior reports are not the current contract".into());
+    }
+    {
+        for pointer in [
+            "/terminal_input",
+            "/prior_report/input",
+            "/prior_cache_attempt/intent_input",
+            "/prior_cache_attempt/result/input",
+            "/original_report/result/input",
+            "/unreferenced_original_receipt/input",
+            "/original_result/input",
+        ] {
+            if let Some(input) = report.pointer(pointer) {
+                inputs.push(
+                    serde_json::from_value(input.clone()).map_err(|e| {
+                        format!("invalid retained lifecycle input at {pointer}: {e}")
+                    })?,
+                );
+            }
+        }
+        if let Some(rows) = report.get("migration_inputs").and_then(Value::as_array) {
+            for row in rows {
+                if let Some(input) = row.get("input") {
+                    inputs.push(
+                        serde_json::from_value(input.clone())
+                            .map_err(|e| format!("invalid retained migration input: {e}"))?,
+                    );
+                }
+            }
+        }
+        if let Some(drain) = report.get("drain").and_then(Value::as_array) {
+            for entry in drain {
+                if let Some(input) = entry.get("input") {
+                    inputs.push(
+                        serde_json::from_value(input.clone())
+                            .map_err(|e| format!("invalid retained drain input: {e}"))?,
+                    );
+                }
+            }
+            if drain.iter().any(|entry| entry.get("report").is_some()) {
+                return Err("inline lifecycle drain reports are not the current contract".into());
+            }
+        }
+    }
+    Ok(())
+}
+pub(crate) fn verify_inputs(root: &Path, report: &Value) -> Result<(), String> {
+    let mut inputs = Vec::new();
+    let mut checked = BTreeSet::new();
+    collect_inputs(report, &mut inputs)?;
+    while let Some(input) = inputs.pop() {
+        if input.schema != "chrono-worktree-retained-input/v1"
+            || input.source_root != root
+            || !matches!(input.format.as_str(), "bytes" | "receipt")
+        {
+            return Err("invalid retained lifecycle input binding".into());
+        }
+        if !checked.insert((
+            input.path.clone(),
+            input.sha256.clone(),
+            input.byte_length,
+            input.format.clone(),
+        )) {
+            continue;
+        }
+        let bytes = crate::recovery::state_bytes(&input.source_root, &input.path)?;
+        if bytes.len() != input.byte_length || sha256(&bytes) != input.sha256 {
+            return Err("original lifecycle receipt changed: retained input mismatch".into());
+        }
+        if input.format == "receipt" {
+            collect_inputs(&json(&bytes)?, &mut inputs)?;
+        }
+    }
+    Ok(())
+}
+
 fn original_bytes(root: &Path, path: &str) -> Result<Option<Vec<u8>>, String> {
     let path = state_path(root, path)?;
     match fs::symlink_metadata(&path) {
@@ -379,6 +484,14 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
         .as_str()
         .ok_or("lifecycle result path")?;
     let mut originals = Vec::new();
+    if let Some(input) = report.pointer("/prior_report/input") {
+        let input: RetainedInput = serde_json::from_value(input.clone())
+            .map_err(|e| format!("invalid retained prior report: {e}"))?;
+        if input.source_root != root || input.format != "receipt" {
+            return Err("invalid retained prior report binding".into());
+        }
+        originals.push(input.path);
+    }
     for binding in [
         "recovery_intent",
         "fetch_intent",

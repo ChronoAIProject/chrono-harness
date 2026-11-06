@@ -738,7 +738,7 @@ parent CI 的可选 `gather.resource_observation` 用宿主显式 `step_categori
 
 主宿主政策保留 state/bin，默认 cache-only；真实宿主 terminal 事件与 Git/GitHub 落地归调用方。完整格式与限界见 [自动生命周期清理](docs/worktree.md#opt-in-automatic-lifecycle-cleanup)。
 
-自动生命周期重试以 `chrono-worktree-retained-input/v1` 引用保留的原始证据，绑定协调宿主、相对 state 路径、摘要、长度及 receipt／原始 bytes 格式。不可变回执直接引用，部分或未封口结果的原字节独立保留；沿合同明确列出的引用核验原件，缺失、改写、绑定错误或符号链接拒绝处置。不得逐层嵌入历史正文导致重试报告递归膨胀，不把保留未知结果改判为成功，不改写既有原件。显式维护的旧报告合同保留；具体字段及消费规则见 worktree 合同。
+自动生命周期重试及显式 `recover`／`cleanup-fetch` 以 `chrono-worktree-retained-input/v1` 引用保留的原始证据，绑定协调宿主、相对 state 路径、摘要、长度及 receipt／原始 bytes 格式。不可变回执直接引用，部分或未封口结果的原字节独立保留；沿合同明确列出的引用核验原件，缺失、改写、绑定错误或符号链接拒绝处置。不得逐层嵌入历史正文导致重试报告递归膨胀，不把保留未知结果改判为成功，不改写既有原件。父报告按现有逐输出保留关系保护所引用的原件；具体字段及消费规则见 worktree 合同。
 
 现役 `chrono-worktree reconstruct` 接收固定旧 base/candidate 和完整逐路径 carry/retire 计划，复用 创建新工作树后重新应用所选 DELTA；成功仅表示已得到暂存树，冲突保留实际失败与锁，旧工作不删除。AI 仍须检查变化是否必要、修复冲突及登记、提交候选，再运行现役统一检查。工具不自动判断语义必要性，也不复制旧检查或 integration 成功。
 

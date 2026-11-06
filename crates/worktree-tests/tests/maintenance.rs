@@ -266,6 +266,48 @@ fn maintenance_recovery_rejects_identity_lock_receipt_and_unresolved_state() {
 }
 
 #[test]
+fn maintenance_recovery_checks_declared_original_inputs_before_unlocking() {
+    for fault in ["missing", "modified", "root", "symlink", "length", "inline"] {
+        let h = Host::new("payload");
+        h.hook(value!({"exit":17}));
+        let target = h.parent.join("bound-original");
+        let (_, original, _) = h.invoke("feature", "bound-original", &target);
+        let path = h.root.join(original["report_path"].as_str().unwrap());
+        let mut raw = chrono_harness::json(&fs::read(&path).unwrap()).unwrap();
+        let input_path = ".chrono-harness/state/declared-original.bin";
+        let input_bytes = b"original input\0\xff";
+        fs::write(h.root.join(input_path), input_bytes).unwrap();
+        raw["original_result"] = value!({"input":{
+            "schema":"chrono-worktree-retained-input/v1", "source_root":h.root,
+            "path":input_path, "sha256":sha256(input_bytes),
+            "byte_length":input_bytes.len(), "format":"bytes"
+        }});
+        match fault {
+            "missing" => fs::remove_file(h.root.join(input_path)).unwrap(),
+            "modified" => fs::write(h.root.join(input_path), b"changed input").unwrap(),
+            "root" => raw["original_result"]["input"]["source_root"] = value!(h.parent),
+            "length" => {
+                raw["original_result"]["input"]["byte_length"] = value!(input_bytes.len() + 1)
+            }
+            "inline" => raw["prior_report"] = value!({"report":{"status":"failed"}}),
+            "symlink" => {
+                let survivor = h.parent.join("original-input-survivor");
+                fs::rename(h.root.join(input_path), &survivor).unwrap();
+                std::os::unix::fs::symlink(survivor, h.root.join(input_path)).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let bytes = serde_json::to_vec(&raw).unwrap();
+        fs::write(&path, &bytes).unwrap();
+        let (code, report, _) = h.maintain("recover", h.recovery(&original, &target));
+        assert_ne!(code, 0, "{fault}: {report}");
+        assert_eq!(fs::read(path).unwrap(), bytes);
+        assert!(target.exists());
+        assert!(git(&h.root, &["worktree", "list", "--porcelain"]).contains("locked"));
+    }
+}
+
+#[test]
 fn maintenance_cleanup_preserves_saved_work_and_declared_artifact_boundaries() {
     let h = Host::new("unusual/source.mts");
     let target = h.parent.join("saved λ");
