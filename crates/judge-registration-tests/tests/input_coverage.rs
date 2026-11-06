@@ -13,7 +13,7 @@ fn coverage() -> Value {
 
 #[test]
 fn optional_coverage_adopts_without_rewriting_legacy_v3_and_preserves_claim_boundary() {
-    let mut h = BoundHost::new(false, "");
+    let mut h = BoundHost::new(false, "pass");
     let (exit, legacy, error) = h.run(false);
     assert_eq!(exit, 0, "{error}");
     assert!(
@@ -57,7 +57,7 @@ fn incomplete_domain_accounting_cannot_claim_declared_complete() {
         "unknown-field",
         "duplicate-domain",
     ] {
-        let mut h = BoundHost::new(false, "");
+        let mut h = BoundHost::new(false, "pass");
         h.host.edit(CONFIG, |config| {
             let mut c = coverage();
             match case {
@@ -111,7 +111,7 @@ fn incomplete_domain_accounting_cannot_claim_declared_complete() {
 
 #[test]
 fn unresolved_draft_is_readable_but_not_activated_and_legacy_schemas_reject_coverage() {
-    let mut h = BoundHost::new(false, "");
+    let mut h = BoundHost::new(false, "pass");
     h.host.edit(CONFIG, |config| {
         config["input_closure"]["coverage"] = coverage();
         config["input_closure"]["coverage"]["rows"][1]["state"] = json!("unresolved");
@@ -135,7 +135,7 @@ fn unresolved_draft_is_readable_but_not_activated_and_legacy_schemas_reject_cove
 #[test]
 fn coverage_never_admits_unknown_consumers_or_invents_absence() {
     for case in ["unknown-consumer", "file-consumer", "false-absence"] {
-        let mut h = BoundHost::new(false, "");
+        let mut h = BoundHost::new(false, "pass");
         h.host.edit(CONFIG, |config| {
             let mut c = coverage();
             if case == "false-absence" {
@@ -171,7 +171,7 @@ fn coverage_never_admits_unknown_consumers_or_invents_absence() {
 
 #[test]
 fn absent_domain_uses_retained_file_absence_and_detects_new_bytes() {
-    let mut h = BoundHost::new(false, "");
+    let mut h = BoundHost::new(false, "pass");
     let absent = fs::canonicalize(h.host.root())
         .unwrap()
         .join(".chrono-harness/state/credential.json");

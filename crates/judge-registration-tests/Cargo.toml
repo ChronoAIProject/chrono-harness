@@ -15,6 +15,12 @@ path = "tests/support/regression_child.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "chrono-test-registration-git"
+path = "../ci-tests/tests/support/git.rs"
+test = false
+bench = false
+
 [dev-dependencies]
 chrono-judge-registration = { path = "../judge-registration" }
 tempfile = "3"
