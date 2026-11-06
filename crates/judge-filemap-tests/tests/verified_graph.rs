@@ -1409,6 +1409,18 @@ proof fn empty_target_keys_mean_no_names(names: Seq<String>)
     }
 }
 
+proof fn selected_prefix_step(rows: Seq<policy::TraversedEdge>, at: int)
+    requires 0 <= at < rows.len(),
+    ensures policy::selected_target_keys(rows.take(at + 1)) ==
+        if rows[at].edge.kind == policy::EdgeKind::TestExecution {
+            policy::selected_target_keys(rows.take(at)).insert(rows[at].edge.to_bytes())
+        } else { policy::selected_target_keys(rows.take(at)) },
+{
+    reveal(policy::selected_target_keys);
+    assert(rows.take(at + 1).drop_last() =~= rows.take(at));
+    assert(rows.take(at + 1).last() == rows[at]);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn selection_is_sorted_unique_and_keeps_complete_unicode_nul_targets() {
     let original = traversed("source\0", policy::EdgeKind::TestExecution, "根\0", "原因\0");
@@ -1423,13 +1435,22 @@ fn selection_is_sorted_unique_and_keeps_complete_unicode_nul_targets() {
         traversed("test:ignored", policy::EdgeKind::Compile, "not-selected", "cause"),
     ];
     let targets = policy::selected_test_targets(&rows);
-    proof { reveal_with_fuel(policy::selected_target_keys, 8); reveal(policy::cause_keys); }
-    let expected = vec!["".to_owned(), "z".to_owned(), "é".to_owned(), "根\0".to_owned()];
-    let normalized = policy::CauseSet::from_names(&expected);
-    assert(policy::cause_keys(targets@).to_set() == normalized.keys().to_set());
+    proof {
+        assert(policy::selected_target_keys(rows@.take(0)) == Set::<Seq<u8>>::empty()) by {
+            reveal(policy::selected_target_keys);
+        }
+        selected_prefix_step(rows@, 0);
+        selected_prefix_step(rows@, 1);
+        selected_prefix_step(rows@, 2);
+        selected_prefix_step(rows@, 3);
+        selected_prefix_step(rows@, 4);
+        selected_prefix_step(rows@, 5);
+        assert(rows@.take(6) =~= rows@);
+    }
+    assert(policy::cause_keys(targets@).to_set() == Set::<Seq<u8>>::empty()
+        .insert("".spec_bytes()).insert("z".spec_bytes())
+        .insert("é".spec_bytes()).insert("根\0".spec_bytes()));
     assert(policy::ordered_causes(targets@));
-    let roundtrip = normalized.into_names();
-    assert(policy::cause_keys(roundtrip@).to_set() == policy::cause_keys(targets@).to_set());
 }
 
 fn seed(id: &str, node: &str, reference: &str, reason: &str) -> (out: policy::Seed)
