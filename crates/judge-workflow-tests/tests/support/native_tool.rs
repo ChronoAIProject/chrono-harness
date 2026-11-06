@@ -67,8 +67,49 @@ fn copy_tree(source: &Path, destination: &Path) {
     }
 }
 
+fn full_units_api(data: &Value, args: &[std::ffi::OsString]) -> ExitCode {
+    let run = |unit: &str| {
+        json!({"id":if unit == "one" {1} else {2},"run_attempt":1,
+            "status":"completed","conclusion":"success","head_sha":data["candidate"],
+            "event":"push","path":format!(".github/workflows/{unit}.yml")})
+    };
+    if args[0] == "api" {
+        let endpoint = args[1].to_str().unwrap();
+        if let Some((_, address)) = endpoint.split_once("/actions/workflows/") {
+            let unit = address.split(".yml").next().unwrap();
+            emit(&json!([{"workflow_runs":[run(unit)]}]));
+        } else if let Some((_, address)) = endpoint.split_once("/contents/") {
+            let path = address.split('?').next().unwrap();
+            io::stdout()
+                .write_all(
+                    &fs::read(Path::new(data["workflow_root"].as_str().unwrap()).join(path))
+                        .unwrap(),
+                )
+                .unwrap();
+        } else {
+            emit(&run(if endpoint.ends_with("/1") {
+                "one"
+            } else {
+                "two"
+            }));
+        }
+    } else {
+        let unit = if args[2] == "1" { "one" } else { "two" };
+        let position = args.iter().position(|arg| arg == "--dir").unwrap();
+        copy_tree(
+            &Path::new(data["uploads"].as_str().unwrap()).join(unit),
+            Path::new(&args[position + 1]),
+        );
+    }
+    ExitCode::SUCCESS
+}
+
 fn native_seed_api(parent: &Path, args: &[std::ffi::OsString]) -> ExitCode {
     let data = read_json(&parent.join("seed-api.json"));
+    if let Some(profile) = data.get("profile") {
+        assert_eq!(profile, "full-units");
+        return full_units_api(&data, args);
+    }
     let case = data["case"].as_str().unwrap_or("valid");
     let mut run = json!({"id":data.get("seed_run").unwrap_or(&json!(900)),
         "run_attempt":data.get("attempt").unwrap_or(&json!(1)),

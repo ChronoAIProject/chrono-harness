@@ -27,9 +27,12 @@ impl Fixture {
             .unwrap();
         let mut tools = BTreeMap::new();
         for (name, body) in [
-            ("chrono-distribution", b"#!/bin/sh\nexit 0\n".as_slice()),
-            ("alpha", b"#!/bin/sh\nprintf 'alpha-v1\\n'\n"),
-            ("beta", b"#!/bin/sh\nprintf 'beta-v1\\n'\n"),
+            (
+                "chrono-distribution",
+                include_bytes!("fixtures/installer-ok.sh").as_slice(),
+            ),
+            ("alpha", include_bytes!("fixtures/alpha-v1.sh")),
+            ("beta", include_bytes!("fixtures/beta-v1.sh")),
         ] {
             let file = format!("{name}-{}", platform());
             let path = release.path().join(&file);
@@ -76,9 +79,12 @@ impl Fixture {
     fn changed_release(&self) {
         let mut r: Value = serde_json::from_slice(&fs::read(&self.manifest).unwrap()).unwrap();
         r["version"] = json!("v0.1.0-beta.2");
-        for n in ["alpha", "beta"] {
+        for (n, body) in [
+            ("alpha", include_bytes!("fixtures/alpha-v2.sh").as_slice()),
+            ("beta", include_bytes!("fixtures/beta-v2.sh")),
+        ] {
             let path = self.release.path().join(format!("{n}-{}", platform()));
-            fs::write(&path, format!("#!/bin/sh\nprintf '{n}-v2\\n'\n")).unwrap();
+            fs::write(&path, body).unwrap();
             let (hash, size) = file_identity(&path).unwrap();
             r["platforms"][platform()][n]["sha256"] = json!(hash);
             r["platforms"][platform()][n]["size"] = json!(size);
@@ -266,7 +272,7 @@ fn bootstrap_rejects_corrupt_installer_and_propagates_real_exit() {
         .release
         .path()
         .join(format!("chrono-distribution-{}", platform()));
-    fs::write(&path, "#!/bin/sh\nexit 23\n").unwrap();
+    fs::write(&path, include_bytes!("fixtures/installer-exit-23.sh")).unwrap();
     let (hash, size) = file_identity(&path).unwrap();
     let mut r: Value = serde_json::from_slice(&fs::read(&f.manifest).unwrap()).unwrap();
     r["platforms"][platform()]["chrono-distribution"]["sha256"] = json!(hash);
@@ -283,7 +289,7 @@ fn bootstrap_rejects_corrupt_installer_and_propagates_real_exit() {
             .unwrap()
     };
     assert_eq!(launch().status.code(), Some(23));
-    fs::write(path, "#!/bin/sh\nexit 0\n").unwrap();
+    fs::write(path, include_bytes!("fixtures/installer-ok.sh")).unwrap();
     let out = launch();
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("integrity mismatch"));
@@ -305,7 +311,11 @@ fn pack_and_assemble_bind_real_source_and_declared_members() {
     fs::write(repo.path().join(".gitignore"), "/built/\n").unwrap();
     fs::write(repo.path().join("source"), "real input").unwrap();
     fs::create_dir(repo.path().join("built")).unwrap();
-    fs::write(repo.path().join("built/installer"), "#!/bin/sh\nexit 0\n").unwrap();
+    fs::write(
+        repo.path().join("built/installer"),
+        include_bytes!("fixtures/installer-ok.sh"),
+    )
+    .unwrap();
     fs::set_permissions(
         repo.path().join("built/installer"),
         fs::Permissions::from_mode(0o755),

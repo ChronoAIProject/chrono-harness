@@ -2561,28 +2561,38 @@ pub proof fn predecessor_chain_valid(rows: Seq<Predecessor>, node: Seq<u8>, budg
     }
 }
 
+proof fn predecessor_path_prefix(rows: Seq<Predecessor>, node: Seq<u8>, path: Seq<EdgeKey>)
+    requires predecessor_path(rows, node, path), path.len() > 0,
+    ensures predecessor_path(rows, path.last().0, path.drop_last()),
+        predecessor_at(rows, node) matches Some(row)
+            && row.parent matches Some(parent) && parent.key() == path.last(),
+{
+    let last = path.last();
+    let prefix = path.drop_last();
+    assert(predecessor_at(rows, last.2) matches Some(row)
+        && row.parent matches Some(parent) && parent.key() == last);
+    assert forall|i: int| 0 <= i < prefix.len() implies {
+        let key = #[trigger] prefix[i];
+        predecessor_at(rows, key.2) matches Some(row)
+            && row.parent matches Some(parent) && parent.key() == key
+    } by { assert(prefix[i] == path[i]); }
+    assert forall|i: int| 0 <= i < prefix.len() - 1
+        implies (#[trigger] prefix[i]).2 == prefix[i + 1].0 by { assert(prefix[i] == path[i]); }
+    if prefix.len() > 0 { assert(prefix.last().2 == last.0); }
+}
+
 pub proof fn predecessor_chain_complete(rows: Seq<Predecessor>, node: Seq<u8>, path: Seq<EdgeKey>, budget: nat)
     requires predecessor_path(rows, node, path), path.len() < budget,
     ensures predecessor_chain(rows, node, budget) == Some(path.reverse()),
     decreases path.len(),
 {
-    reveal(predecessor_chain);
     if path.len() > 0 {
-        let last = path.last();
-        let prefix = path.drop_last();
-        assert(predecessor_at(rows, last.2) matches Some(row)
-            && row.parent matches Some(parent) && parent.key() == last);
-        assert forall|i: int| 0 <= i < prefix.len() implies {
-            let key = #[trigger] prefix[i];
-            predecessor_at(rows, key.2) matches Some(row)
-                && row.parent matches Some(parent) && parent.key() == key
-        } by { assert(prefix[i] == path[i]); }
-        assert forall|i: int| 0 <= i < prefix.len() - 1
-            implies (#[trigger] prefix[i]).2 == prefix[i + 1].0 by { assert(prefix[i] == path[i]); }
-        if prefix.len() > 0 { assert(prefix.last().2 == last.0); }
-        assert(predecessor_path(rows, last.0, prefix));
-        predecessor_chain_complete(rows, last.0, prefix, (budget - 1) as nat);
-        assert(path.reverse() =~= seq![last] + prefix.reverse());
+        predecessor_path_prefix(rows, node, path);
+        predecessor_chain_complete(rows, path.last().0, path.drop_last(), (budget - 1) as nat);
+        reveal(predecessor_chain);
+        assert(path.reverse() =~= seq![path.last()] + path.drop_last().reverse());
+    } else {
+        reveal(predecessor_chain);
     }
 }
 
