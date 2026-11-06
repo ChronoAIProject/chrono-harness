@@ -21,6 +21,10 @@ const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 // failure and identity assertions. Other documents keep their original view.
 fn json(bytes: &[u8]) -> Result<Value, String> {
     let mut report = chrono_harness::json(bytes)?;
+    expand_lifecycle_report(&mut report)?;
+    Ok(report)
+}
+fn expand_lifecycle_report(report: &mut Value) -> Result<(), String> {
     if report["schema"] == "chrono-worktree-report/v1" {
         if report["tool"]["version"].is_object() {
             report["tool"]["version"] =
@@ -37,8 +41,11 @@ fn json(bytes: &[u8]) -> Result<Value, String> {
                 }
             }
         }
+        if report["prior_report"]["report"].is_object() {
+            expand_lifecycle_report(&mut report["prior_report"]["report"])?;
+        }
     }
-    Ok(report)
+    Ok(())
 }
 
 // Consume the current producer's exact addressed original.
