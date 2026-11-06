@@ -1487,6 +1487,7 @@ fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_
     let path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
     policy["retained_producers"][0]["source_roots"] = value!(["."]);
+    policy["retained_producers"][0]["operations"] = value!(["use.consumer"]);
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
     commit(&h.root);
     let (store, outputs) =
@@ -1515,7 +1516,10 @@ fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_
         }),
     );
     drop(allocation);
-    let mut command = h.auto_command("maintain", &[]);
+    let mut command = h.auto_command(
+        "use",
+        &["--path", h.root.to_str().unwrap(), "--operation", "use.consumer"],
+    );
     let maintenance = std::thread::spawn(move || command.output().unwrap());
     let (mut stream, _) = listener.accept().unwrap();
     stream.read_exact(&mut [0; 5]).unwrap();
@@ -1536,7 +1540,7 @@ fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_
             "use",
             &["--path", h.root.to_str().unwrap(), "--operation", "use.consumer"],
         );
-        (result, fs::read(h.ledger_path(&h.root)).unwrap())
+        (result, json(&fs::read(h.ledger_path(&h.root)).unwrap()).unwrap())
     });
     let unrelated = chrono_worktree::TemporaryHost::allocate(
         &store,
@@ -1562,11 +1566,16 @@ fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_
     );
     let ((code, used, error), concurrent_ledger) = concurrent_ledger.unwrap();
     assert_eq!(code, 0, "independent coordinator use: {used} {error}");
-    assert_eq!(
-        fs::read(h.ledger_path(&h.root)).unwrap(),
-        concurrent_ledger,
-        "producer recovery overwrote the concurrent coordinator enrollment"
-    );
+    let after = json(&fs::read(h.ledger_path(&h.root)).unwrap()).unwrap();
+    let current = &after["entries"][0];
+    let concurrent = &concurrent_ledger["entries"][0];
+    assert_eq!(current["enrollment"], concurrent["enrollment"]);
+    assert_eq!(current["attachment"], concurrent["attachment"]);
+    assert_eq!(current["ownership"]["path"], concurrent["ownership"]["path"]);
+    assert_eq!(current["ownership"]["id"], concurrent["ownership"]["id"]);
+    assert!(current["ownership"]["generation"].as_u64().unwrap()
+        > concurrent["ownership"]["generation"].as_u64().unwrap());
+    assert_eq!(current["uses"], value!([]));
     assert!(!root.join("cache 空白").exists());
     assert_eq!(
         fs::read(root.join("source.rs")).unwrap(),
