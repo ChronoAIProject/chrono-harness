@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use crate::verified_graph::{
-    CauseSet, Edge, EdgeKind, Origin, Predecessor, PredecessorTree, Seed, TraversedEdge, UnionEdge, union,
+    CauseSet, Edge, EdgeKind, Origin, Predecessor, PredecessorTree, Seed, TraversedEdge, UnionEdge,
+    union,
 };
 
 impl std::fmt::Debug for EdgeKind {
@@ -231,7 +232,9 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
 }
 impl Closure {
     pub fn selected_tests(&self) -> BTreeSet<String> {
-        BTreeSet::from_iter(crate::verified_graph::selected_test_targets(&self.traversed))
+        BTreeSet::from_iter(crate::verified_graph::selected_test_targets(
+            &self.traversed,
+        ))
     }
     pub fn witness(&self, seed: &str, node: &str) -> Option<Vec<Edge>> {
         self.predecessors.get(seed)?.witness(node)
