@@ -2,6 +2,7 @@
 use crate::Registrations;
 use chrono_harness::{
     facts, file_identity, no_symlink_parents, relative_path, sha256,
+    verified_paths,
     wire::{self, Request},
 };
 use serde_json::{Value, json};
@@ -58,7 +59,7 @@ pub fn retained_shape(value: &Value) -> Result<Retained<'_>, String> {
             crate::schema::object(value, &["blob", "sha256", "length"], &[])?;
             let path = blob
                 .as_str()
-                .filter(|p| p.starts_with(".chrono-harness/state/"))
+                .filter(|p| verified_paths::valid_state_path(p.as_bytes()))
                 .ok_or("reference must be within host state")?;
             relative_path(path)?;
             let digest = value["sha256"]

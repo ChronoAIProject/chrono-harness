@@ -1,5 +1,5 @@
 //! Strict SPEC §3 structure. Reference/activation policy is evaluated separately.
-use chrono_harness::{relative_path, wire};
+use chrono_harness::{relative_path, verified_paths, wire};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 type Result<T = ()> = std::result::Result<T, String>;
@@ -349,7 +349,7 @@ fn validate_execution_units(v: &Value) -> Result {
     path(&fields["report_path"])?;
     if !fields["report_path"]
         .as_str()
-        .is_some_and(|p| p.starts_with(".chrono-harness/state/"))
+        .is_some_and(|p| verified_paths::valid_state_path(p.as_bytes()))
     {
         return Err("execution_units.report_path must reside in .chrono-harness/state/".into());
     }
@@ -373,7 +373,7 @@ fn validate_execution_units(v: &Value) -> Result {
         path(&unit["report_path"])?;
         if !unit["report_path"]
             .as_str()
-            .is_some_and(|p| p.starts_with(".chrono-harness/state/"))
+            .is_some_and(|p| verified_paths::valid_state_path(p.as_bytes()))
         {
             return Err("execution unit report must reside in .chrono-harness/state/".into());
         }

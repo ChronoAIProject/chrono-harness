@@ -1,7 +1,7 @@
 //! Snapshot transport, not dependency discovery or a governance verdict.
 mod composition;
 mod observation;
-use chrono_harness::{copy_hashed, facts, file_identity, json, no_symlink_parents, wire};
+use chrono_harness::{copy_hashed, facts, file_identity, json, no_symlink_parents, verified_paths, wire};
 pub use chrono_judge_registration::inputs::{
     SNAPSHOT_SCHEMA, SNAPSHOT_SCHEMA_V2, SNAPSHOT_SCHEMA_V3,
 };
@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 fn state(root: &Path, path: &str) -> Result<PathBuf, String> {
-    if !path.starts_with(".chrono-harness/state/") {
+    if !verified_paths::valid_state_path(path.as_bytes()) {
         return Err("E_INPUT_PATH: output/reference must be within host state".into());
     }
     no_symlink_parents(root, path)

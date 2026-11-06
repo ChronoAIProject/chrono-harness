@@ -170,6 +170,26 @@ projects schema v2 要求每个 project／script 显式登记非空 `language`�
 
 配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓采用 v2 声明；scoped CI 与 projects 判官共用配对和语言规则，scoped v1 登记保留旧解释。显式测试清单由 Rust `chrono-ci test-inventory` 读取宿主 `chrono-workflow-inventory/v1` 配置，核对登记的 Cargo/libtest 未过滤、ignored 与分组列表：未过滤清单及各分组须非空，各组互不相交，合计精确覆盖未过滤清单，ignored 清单须为空；不据此推导依赖或选测；行为验证归 `ci-tests`。宿主 bootstrap 及其专属 Python 测试仍独立登记并由独立 CI 单元执行。示例的 v2 采用、剩余跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
 
+### 2.3 仓库源数据、在线事实与主机绑定边界
+
+`.chrono-harness/` 中的 JSON 只是格式，不因是 JSON 或位于宿主目录就获得入库理由。每个受跟踪文件必须明确属于以下一种表面，并在 FILEMAP／对应登记中有自然所有者、真实消费者、用途、有限存储预算和 §1.1 的必要性链终点：
+
+* **可移植合同**：产品源码、锁文件、`rust-toolchain` 或等价工具链选择、CI 配方、镜像／OS-架构的预期身份、命令、输入 schema 和确实被判官或构建消费者读取的最小政策。它描述意图和准入边界，不冒充某次运行的事实。
+* **确定性投影**：由已跟踪源通过登记生成器产生、能够在 CI 重新生成并由实际消费者校验的文件，例如工作流投影。投影必须有源、生成器、校验入口和有界大小；生成成功本身不证明投影被采用。
+* **运行时事实／证据**：CI run/job/attempt 标识、时间、runner 主机名、checkout 或工具的绝对路径、`PATH`／`HOME`／`CARGO_HOME` 内容、已安装包或 SDK 清单、`cargo metadata`／输入 observe 输出、原始日志、报告、二进制、缓存和临时文件。它们必须写入被忽略的 `state` 或 CI artifact，并由生产者按 §10.1 清理，禁止提交 Git。
+
+运行时事实无论文件大小、是否失败、是否“历史”或是否被另一个报告引用，都不能变成 Git policy source。CI 在线观察是本次运行事实的权威；仓库只能记录供 CI 复现的可移植预期，不能把一次在线结果手工复制成永久主机快照。报告需要跨 job 运输时保留为有界 artifact，并记录 owner、消费者、保留期限／容量和释放条件；期限届满后只留仍有消费者需要的摘要或处置回执。
+
+可移植合同不得含个人 checkout、临时目录或某一 runner 的绝对路径。外部绝对路径只可作为未跟踪宿主绑定或运行时输入，必须由本轮实际观察提供；跟踪政策应使用仓库相对路径、稳定镜像／工具链身份或具名 `input` 绑定。发现这类路径时返回 `E_NONPORTABLE_POLICY`，不以改写成另一条本机路径消除错误。
+
+“固定主机／构建环境”只有在存在真实消费者且能改善可观察结果时才允许：登记最小的 OS／架构、镜像 digest、工具链版本、锁文件和命令即可；完整安装清单、SDK 目录、个人环境变量和 Cargo home 内容属于运行时输入，不能整体入库。每个额外绑定须说明消费者、失败时的裁决、owner、更新方式和退役条件。没有真实消费者、只供解释或只复制 CI 信息的 host policy 返回 `E_ORPHAN_HOST_POLICY`，应在同一迁移中删除其引用、FILEMAP 边和专属检查；未知用途先保留并报告，不能凭目录名或年龄批量删除。
+
+通用核心不因仓库出现 Cargo 文件而启用 Cargo 规则。Cargo／Rust guard 只能由真实 Cargo 消费者显式采用；非 Rust 项目使用通用的工具／输入合同，不承担 Cargo home、sysroot 或 Rust SDK 快照。若 Cargo guard 的唯一用途是记录当前 CI 主机，应退役 guard 并移除其 policy、selector、输入观察和测试边，而不是继续压缩快照。
+
+跟踪的源政策须有有限的记录／字节预算和增长原因；超过预算时先消除重复事实、拆出运行时证据或迁移到更小的可移植合同。压缩不能替代删除无消费者的事实，也不能以“大文件”本身推断必要源政策可删。任何无法证明来源、消费者、预算和生命周期的跟踪 JSON 均不得转为 active；现存历史文件在迁移完成前只能保持 proposed/incomplete，并列入 §14 的未完成边界。
+
+审计或迁移按以下顺序处理既有 host JSON：确认实际生产者和消费者；保留最小可移植合同；把本机／CI 观察移到 `state` 或在线 artifact；更新 FILEMAP、projects、routes 和测试边；再通过现役入口验证并删除已无消费者的文件。只删大文件而留下悬空引用不构成清理，也不能把 CI 绿色状态当作仓库政策的替代来源。
+
 ## 3. 登记格式与字段合同
 
 Config 接受明确的 `schema_version: 1 | 2 | 3 | 4`；projects 接受 1／2，judges 使用 1，当前 FILEMAP／workflow 使用 2。Config v2／v3／v4 要求每个外部输入声明存在或缺失，v1 保留仅摘要的原含义。每份登记都有 `status: "proposed" | "active"`。候选读取器只按明确的解释约定读取固定历史 v1 数据。
@@ -944,6 +964,8 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 | 仅 OID/context/Cargo 相同，其他输入或确定性未证实 | parity:unestablished；普通检查只按现役登记合同裁决，所需输入/证据不足仍报错 |
 | 规范性判断由未证明的 Rust／Python／Shell wrapper 作出，或 proof root 与实际调用不一致 | `E_VERUS_COVERAGE`；保持 `proposed`／`incomplete`，不以普通测试或 CI 绿色放行 |
 | 纯 IO／外部接口适配不改变规范性结果 | 可保留在实现语言中；必须登记边界输入、接口假设和到已证明 Verus 函数的唯一调用 |
+| 运行时证据引用越出 `.chrono-harness/state/`，或用 tracked policy 代替当前 state/artifact | `E_REPO_RUNTIME_FACT`／`E_NONPORTABLE_POLICY`；保留原件，迁移到已登记的 state／在线 artifact |
+| host policy 没有当前真实消费者，或只复制 CI 在线信息 | `E_ORPHAN_HOST_POLICY`；迁移／删除 policy、引用、FILEMAP 边和专属检查，不以历史引用保留 |
 | 暂存/未暂存/未跟踪非生成物变化 | E_SNAPSHOT_DIRTY，不偷偷只判 committed 子集 |
 | 浅历史缺 base 或 fork_point | E_HISTORY_MISSING；补取后重跑 |
 | 判官退出成功但 stdout 为空/非法 JSON | E_PROTOCOL，exit 2 |

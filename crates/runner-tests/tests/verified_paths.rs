@@ -62,6 +62,13 @@ fn unicode_bytes_preserve_component_boundaries() {
     expect(&[228u8, 184, 173, 46, 46], true);
 }
 
+fn state_references_are_explicitly_below_state() {
+    assert(policy::valid_state_path(b".chrono-harness/state/report.json"));
+    assert(!policy::valid_state_path(b".chrono-harness/inputs/report.json"));
+    assert(!policy::valid_state_path(b"/tmp/report.json"));
+    assert(!policy::valid_state_path(b".chrono-harness/state/../report.json"));
+}
+
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -118,5 +125,13 @@ mod runtime {
         expect(&[228u8, 184, 173, 47, 230, 150, 135], true);
         expect(&[228u8, 184, 173, 47, 46, 46], false);
         expect(&[228u8, 184, 173, 46, 46], true);
+    }
+
+    #[test]
+    fn state_references_are_explicitly_below_state() {
+        assert!(policy::valid_state_path(b".chrono-harness/state/report.json"));
+        assert!(!policy::valid_state_path(b".chrono-harness/inputs/report.json"));
+        assert!(!policy::valid_state_path(b"/tmp/report.json"));
+        assert!(!policy::valid_state_path(b".chrono-harness/state/../report.json"));
     }
 }

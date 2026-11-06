@@ -81,4 +81,38 @@ pub fn valid_relative_path(path: &[u8]) -> (valid: bool)
     true
 }
 
+/// A retained evidence reference must point below the ignored host state
+/// directory.  The prefix is part of the storage contract; it is not inferred
+/// from a caller's directory layout.
+#[verifier::inline]
+pub open spec fn state_path(path: Seq<u8>) -> bool {
+    relative_path(path)
+        && path.len() > 22
+        && path[0] == 46 && path[1] == 99 && path[2] == 104 && path[3] == 114
+        && path[4] == 111 && path[5] == 110 && path[6] == 111 && path[7] == 45
+        && path[8] == 104 && path[9] == 97 && path[10] == 114 && path[11] == 110
+        && path[12] == 101 && path[13] == 115 && path[14] == 115 && path[15] == 47
+        && path[16] == 115 && path[17] == 116 && path[18] == 97 && path[19] == 116
+        && path[20] == 101 && path[21] == 47
+}
+
+pub fn valid_state_path(path: &[u8]) -> (valid: bool)
+    ensures valid == state_path(path@),
+{
+    let relative = valid_relative_path(path);
+    if !relative || path.len() <= 22 {
+        return false;
+    }
+    if path[0] != 46 || path[1] != 99 || path[2] != 104 || path[3] != 114
+        || path[4] != 111 || path[5] != 110 || path[6] != 111 || path[7] != 45
+        || path[8] != 104 || path[9] != 97 || path[10] != 114 || path[11] != 110
+        || path[12] != 101 || path[13] != 115 || path[14] != 115 || path[15] != 47
+        || path[16] != 115 || path[17] != 116 || path[18] != 97 || path[19] != 116
+        || path[20] != 101 || path[21] != 47
+    {
+        return false;
+    }
+    true
+}
+
 }
