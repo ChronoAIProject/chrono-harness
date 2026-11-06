@@ -7311,9 +7311,9 @@
       },
       {
         "id": "toolchain.developer.inventory",
-        "location": ".chrono-harness/state/diagnostics-native/guard-inputs/xcode-contents.json",
+        "location": ".chrono-harness/inputs/diagnostics-xcode-build.json",
         "presence": "present",
-        "sha256": "866c18f9c3469a4cf734e452748b2eff0c4f3bcbeccccbab515c6a29d3309d4d"
+        "sha256": "9ce139aec4d4390479096359abeb63aa1c602d229c294ed20ceba486fd8df383"
       },
       {
         "id": "toolchain.dsymutil",

@@ -53,6 +53,8 @@ fn registered_intermediate_workspace_rejected_before_operations_and_standalone_p
                 p[field] = json!(format!("group/{}", p[field].as_str().unwrap()));
             }
         }
+        h.values.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]["build"]["argv"][1] =
+            json!("group/p/prepare.py");
         h.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"][1] =
             json!("group/t/check.py");
         for f in h.values.get_mut(FM).unwrap()["files"]

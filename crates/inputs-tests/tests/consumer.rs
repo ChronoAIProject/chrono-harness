@@ -53,7 +53,11 @@ fn fixture() -> Host {
     w["integration"]["tests"] = json!(["t"]);
     h.save();
     h.base = h.candidate.clone();
-    fs::write(h.root().join("p/product.py"), "def double(n): return 2*n\n").unwrap();
+    fs::write(
+        h.root().join("p/product.py"),
+        include_str!("fixtures/product-double.py"),
+    )
+    .unwrap();
     h.save();
     h
 }
@@ -100,7 +104,10 @@ fn native_v3(h: &mut Host) {
         );
     let test = h.root().join("t/check.py");
     let mut code = fs::read_to_string(&test).unwrap();
-    code.push_str(&format!("\nimport subprocess\nassert subprocess.run([os.environ['FACTS_GIT'], '--version'], stdout=subprocess.PIPE).returncode == 0\nassert os.environ.get('DECLARED_EMPTY') == '' and 'DECLARED_ABSENT' not in os.environ\nprint('data-present', os.path.exists({:?}))\n", h.external.path().to_str().unwrap()));
+    code.push_str(&include_str!("fixtures/native-input-check.py").replace(
+        "__EXTERNAL_INPUT__",
+        &format!("{:?}", h.external.path().to_str().unwrap()),
+    ));
     fs::write(test, code).unwrap();
 }
 
@@ -310,7 +317,11 @@ fn input_larger_than_judge_json_bound_remains_a_small_request_and_is_actually_va
     h.values.get_mut(CONFIG).unwrap()["protocol"]["timeout_seconds"] = 120.into();
     h.save();
     h.base = h.candidate.clone();
-    fs::write(h.root().join("p/product.py"), "def double(n): return n+n\n").unwrap();
+    fs::write(
+        h.root().join("p/product.py"),
+        include_str!("fixtures/product-sum.py"),
+    )
+    .unwrap();
     h.save();
     let pair = snapshots(&h);
     assert_eq!(pair["base"]["files"]["data"]["length"], length);
@@ -450,7 +461,11 @@ fn retained_absence_mismatch_missing_snapshot_and_v1_downgrade_fail_before_opera
     h.save();
     h.base = h.candidate.clone();
     let a = capture(&h, "before");
-    fs::write(h.root().join("p/product.py"), "def double(n): return n+n\n").unwrap();
+    fs::write(
+        h.root().join("p/product.py"),
+        include_str!("fixtures/product-sum.py"),
+    )
+    .unwrap();
     h.save();
     let b = capture(&h, "after");
     let pair = json!({"base":a,"candidate":b});
@@ -505,17 +520,21 @@ fn operation_creating_an_absent_input_fails_post_execution_validation() {
     let mut h = fixture();
     v2(&mut h);
     data_state(&mut h, true);
-    h.values.get_mut(PROJECTS).unwrap()["scripts"][1]["actions"]["execute"]["argv"] = json!([
-        "-c",
-        format!(
-            "open({:?},'w').write('created')",
-            h.external.path().to_str().unwrap()
-        )
-    ]);
+    fs::write(
+        h.root().join("t/check.py"),
+        include_str!("fixtures/create-absent-input.py"),
+    )
+    .unwrap();
+    h.values.get_mut(PROJECTS).unwrap()["scripts"][1]["actions"]["execute"]["argv"] =
+        json!(["-B", "t/check.py", h.external.path().to_str().unwrap()]);
     h.save();
     h.base = h.candidate.clone();
     let a = capture(&h, "before");
-    fs::write(h.root().join("p/product.py"), "def double(n): return n+n\n").unwrap();
+    fs::write(
+        h.root().join("p/product.py"),
+        include_str!("fixtures/product-sum.py"),
+    )
+    .unwrap();
     h.save();
     let b = capture(&h, "after");
     let (exit, r) = check(&h, &json!({"base":a,"candidate":b}));
@@ -593,106 +612,12 @@ fn migration_fixture_mode(selected: bool) -> (Host, Value) {
     {
         input.as_object_mut().unwrap().remove("presence");
     }
-    let decoder = r#"import copy,json,sys
-def upgrade(config):
-    if config['schema_version'] != 1:
-        raise ValueError('source config must be v1')
-    out = copy.deepcopy(config)
-    out['schema_version'] = 2
-    for item in out['environment']['inputs']:
-        if item['sha256'] is None:
-            raise ValueError('unbound digest is not absence')
-        item['presence'] = 'present'
-    return out
-def convert(req):
-    assert req['schema'] == 'chrono-historical-decode/v2'
-    for path, value in req['original'].items():
-        assert json.loads(bytes(req['original_bytes'][path])) == value
-    assert upgrade(req['original'][req['config_path']]) == req['candidate'][req['config_path']]
-    return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])
-if __name__ == '__main__':
-    print(json.dumps(convert(json.load(sys.stdin))))
-"#;
-    let tests = r#"import runpy
-upgrade = runpy.run_path('.chrono-harness/decoder.py')['upgrade']
-source = dict(schema_version=1,environment=dict(inputs=[dict(id='empty',location='x',sha256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')]))
-expected = dict(schema_version=2,environment=dict(inputs=[dict(id='empty',location='x',sha256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',presence='present')]))
-assert upgrade(source) == expected
-assert source['schema_version'] == 1 and 'presence' not in source['environment']['inputs'][0]
-source['environment']['inputs'][0]['sha256'] = None
-try:
-    upgrade(source)
-except ValueError:
-    pass
-else:
-    raise AssertionError('unbound digest became absence')
-print('config migration compatibility checked')
-"#;
+    let decoder = include_str!("fixtures/direct-decoder.py");
+    let tests = include_str!("fixtures/direct-compatibility.py");
     // Selected targets remain full-v3. The actual selected schema transition
     // is workflow v1 -> v3, certified by the candidate's finite decoder/test.
-    let selected_decoder = r#"import copy,json,sys
-def upgrade(workflow):
-    if workflow['schema_version'] != 1:
-        raise ValueError('source workflow must be v1')
-    out = copy.deepcopy(workflow)
-    out['schema_version'] = 3
-    out['historical_profiles'] = []
-    return out
-def convert(req):
-    assert req['schema'] == 'chrono-historical-decode/v3'
-    bindings = req['config_bindings']
-    for endpoint, key in [('base','original'),('candidate','candidate')]:
-        identity = bindings[endpoint]
-        assert identity['entry_path'] == req['config_path']
-        entry = req[key][identity['entry_path']]
-        selection = identity['selection']
-        assert selection['path'] == identity['entry_path']
-        assert entry['platforms'][selection['platform']] == identity['effective_path'] == selection['config_path']
-        assert req[key][identity['effective_path']]['schema_version'] == 3
-    for path, value in req['original'].items():
-        assert json.loads(bytes(req['original_bytes'][path])) == value
-    a = req['original'][bindings['base']['effective_path']]
-    b = req['candidate'][bindings['candidate']['effective_path']]
-    assert a == b
-    old = req['original'][a['registries']['workflow']]
-    new = req['candidate'][b['registries']['workflow']]
-    expected = upgrade(old)
-    for key in ['historical_profiles','migrations','integration']:
-        expected[key] = new[key]
-    assert expected == new
-    return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])
-if __name__ == '__main__':
-    req = json.load(sys.stdin)
-    with open('.chrono-harness/state/decoder-input.json','w') as f:
-        json.dump(req,f)
-    print(json.dumps(convert(req)))
-"#;
-    let selected_tests = r#"import copy,json,runpy
-module = runpy.run_path('.chrono-harness/decoder.py')
-upgrade,convert = module['upgrade'],module['convert']
-source = dict(schema_version=1,migrations=[])
-assert upgrade(source) == dict(schema_version=3,migrations=[],historical_profiles=[])
-assert source == dict(schema_version=1,migrations=[])
-try:
-    upgrade(dict(schema_version=3))
-except ValueError:
-    pass
-else:
-    raise AssertionError('accepted wrong historical schema')
-# Exercise compatibility on the actual retained decoder input as well.
-req = json.load(open('.chrono-harness/state/decoder-input.json'))
-assert convert(req)['values'] == req['original']
-for endpoint in ['base','candidate']:
-    bad = copy.deepcopy(req)
-    del bad['config_bindings'][endpoint]
-    try:
-        convert(bad)
-    except KeyError:
-        pass
-    else:
-        raise AssertionError('missing endpoint binding accepted')
-print('selected workflow migration compatibility checked')
-"#;
+    let selected_decoder = include_str!("fixtures/selected-decoder.py");
+    let selected_tests = include_str!("fixtures/selected-compatibility.py");
     let (decoder, tests) = if selected {
         native_v3(&mut h);
         (selected_decoder, selected_tests)
@@ -746,7 +671,7 @@ print('selected workflow migration compatibility checked')
         .push(json!({"test":"decoder-tests","cost":"unknown"}));
     fs::write(
         h.root().join(".chrono-harness/decoder.py"),
-        "raise RuntimeError('historical decoder must never execute')\n",
+        include_str!("fixtures/historical-decoder-rejects.py"),
     )
     .unwrap();
     if selected {
@@ -913,11 +838,7 @@ fn version_migration_rejects_ambiguous_incomplete_and_unmatched_selectors() {
 fn version_migration_cannot_rewrite_historical_input_semantics() {
     let (mut h, before) = migration_fixture();
     let path = h.root().join(".chrono-harness/decoder.py");
-    let source = fs::read_to_string(&path).unwrap();
-    fs::write(path, source.replace(
-        "return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])",
-        "req['original'][req['config_path']] = req['candidate'][req['config_path']]\n    return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])",
-    )).unwrap();
+    fs::write(path, include_str!("fixtures/rewrite-direct-input.py")).unwrap();
     h.save();
     let (exit, r) = migration_check(&h, &before);
     assert_ne!(exit, 0);
@@ -963,7 +884,7 @@ fn version_migration_requires_its_actual_compatibility_test_and_each_changed_ver
     h.values.get_mut(WORKFLOW).unwrap()["migrations"] = migrations;
     fs::write(
         h.root().join(".chrono-harness/decoder-tests.py"),
-        "raise AssertionError('incompatible migration')\n",
+        include_str!("fixtures/direct-compatibility-fails.py"),
     )
     .unwrap();
     h.save();
@@ -1303,7 +1224,7 @@ fn selected_migration_requires_actual_conversion_and_passing_compatibility() {
     // A passing unrelated compatibility command cannot replace conversion.
     fs::write(
         h.root().join(".chrono-harness/decoder-tests.py"),
-        "print('compatibility command passed without conversion')\n",
+        include_str!("fixtures/compatibility-without-conversion.py"),
     )
     .unwrap();
     h.save();
@@ -1320,7 +1241,7 @@ fn selected_migration_requires_actual_conversion_and_passing_compatibility() {
     h.values.insert(WORKFLOW.into(), workflow);
     fs::write(
         h.root().join(".chrono-harness/decoder-tests.py"),
-        "raise AssertionError('selected compatibility failed')\n",
+        include_str!("fixtures/selected-compatibility-fails.py"),
     )
     .unwrap();
     h.save();
@@ -1338,11 +1259,7 @@ fn selected_migration_requires_actual_conversion_and_passing_compatibility() {
 fn selected_decoder_cannot_rewrite_original_effective_config() {
     let (mut h, before) = migration_fixture_mode(true);
     let path = h.root().join(".chrono-harness/decoder.py");
-    let source = fs::read_to_string(&path).unwrap();
-    fs::write(path, source.replace(
-        "return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])",
-        "req['original'][bindings['base']['effective_path']]['environment']['values']['EMPTY'] = 'rewritten'\n    return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])",
-    )).unwrap();
+    fs::write(path, include_str!("fixtures/rewrite-selected-input.py")).unwrap();
     h.save();
     let (exit, report) = migration_check(&h, &before);
     assert_ne!(exit, 0);
