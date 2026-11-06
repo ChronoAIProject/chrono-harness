@@ -15,6 +15,10 @@ pub(super) struct ProducerPolicy {
     pub(super) generated_outputs: Vec<String>,
     #[serde(default)]
     pub(super) temporary: bool,
+    /// The producer owns every member, including synthetic repositories. Bound
+    /// prospectively at allocation; never inferred from a path or applied to old objects.
+    #[serde(default)]
+    pub(super) disposable_directory: bool,
     /// Exact Git roots within each allocation; no nested repository discovery.
     #[serde(default)]
     pub(super) source_roots: Vec<String>,
@@ -89,6 +93,20 @@ struct Object {
     metadata_identity: Option<String>,
     #[serde(default)]
     born_nanos: u64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    disposable_directory: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    directory_custody: Option<Receipt>,
+}
+
+impl Object {
+    fn owns_directory(&self) -> bool {
+        self.disposable_directory || self.directory_custody.is_some()
+    }
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -870,10 +888,13 @@ impl Store {
             || intent["path"] != object.path
             || intent["identity"] != object.identity
             || intent["producer"] != producer
+            || intent["disposable_directory"].as_bool().unwrap_or(false)
+                != object.disposable_directory
             || (object.cache_lease.is_some() && intent["cache_lease"] != value!(object.cache_lease))
         {
             return Err("producer intent changed; preserve object".into());
         }
+        retirement::directory_custody_stable(directory, producer, object)?;
         if object.sealed {
             let publication = object
                 .publication
@@ -1283,6 +1304,8 @@ impl RetainedArtifact {
                 None
             },
             born_nanos: retirement::now_nanos()?,
+            disposable_directory: false,
+            directory_custody: None,
         }));
         store.save(store.state.objects.len() - 1)?;
         Ok(Self {
@@ -1450,7 +1473,8 @@ impl RetainedArtifact {
 }
 
 /// One prospectively enrolled temporary allocation. Source and originals stay
-/// in place after Drop or interruption; only its declared outputs enter drain.
+/// in place after Drop or interruption. An explicitly owned temporary directory
+/// can be reclaimed as a whole after its actual original consumers release.
 /// Native consumers use bind_command; engine consumers inherit the same Scope.
 pub struct TemporaryHost {
     path: PathBuf,
@@ -1522,6 +1546,7 @@ impl TemporaryHost {
                 "schema":"chrono-temporary-host-intent/v1","producer":producer,
                 "path":object,"identity":identity,"generated_outputs":generated_outputs,
                 "cache_lease":binding,"metadata_directory":metadata_directory,
+                "disposable_directory":context.disposable_directory,
                 "original_lifetime":"explicit-consumer-release; interruption-is-unknown",
                 "producer_outcome":"not-established","task_completion":"not-claimed"
             }),
@@ -1549,6 +1574,8 @@ impl TemporaryHost {
             metadata_identity: Some(directory_id(&directory.join(&metadata_directory))?),
             metadata_directory: Some(metadata_directory),
             born_nanos: retirement::now_nanos()?,
+            disposable_directory: context.disposable_directory,
+            directory_custody: None,
         }));
         store.save(store.state.objects.len() - 1)?;
         Ok(Self {
@@ -1788,6 +1815,9 @@ impl ProducerPolicy {
 
     pub(super) fn validate(&self, policy: &Policy) -> Result<(), String> {
         self.capacity.validate()?;
+        if self.disposable_directory && !self.temporary {
+            return Err("whole-directory disposal requires prospective temporary ownership".into());
+        }
         let mut operations = BTreeSet::new();
         if self
             .operations
@@ -1885,7 +1915,7 @@ impl ProducerPolicy {
         r: &mut Runner,
         report: &mut Value,
     ) -> Result<(), String> {
-        self.drain_selected(inputs, r, report, None, false)
+        self.drain_selected(inputs, r, report, None)
     }
 
     pub(super) fn drain_selected(
@@ -1894,7 +1924,6 @@ impl ProducerPolicy {
         r: &mut Runner,
         report: &mut Value,
         selected: Option<&str>,
-        bounded: bool,
     ) -> Result<(), String> {
         let root = &inputs.policy.coordinator_root;
         let directory = self.directory(root)?;
@@ -1908,7 +1937,7 @@ impl ProducerPolicy {
         let mut cursor_guard = None;
         let mut recovery = retirement::Recovery::default();
         let cursor = directory.join("recovery-state");
-        if bounded && selected.is_none() {
+        if selected.is_none() {
             fs::create_dir_all(&cursor).map_err(|e| e.to_string())?;
             cursor_guard = DirectoryGate::available(&cursor)?;
             if cursor_guard.is_none() {
@@ -1931,7 +1960,7 @@ impl ProducerPolicy {
                 recovery.round_started = retirement::now_nanos()?;
             }
         }
-        let pending_mode = bounded && selected.is_none() && !recovery.pending.is_empty();
+        let pending_mode = selected.is_none() && !recovery.pending.is_empty();
         let pending_count = recovery
             .pending
             .len()
@@ -1956,7 +1985,7 @@ impl ProducerPolicy {
                 }
             }
             (objects, errors, String::new(), false)
-        } else if bounded {
+        } else {
             let mut page = (vec![], vec![], String::new(), false);
             for _ in 0..16 {
                 page = opened.record_page(
@@ -1986,14 +2015,11 @@ impl ProducerPolicy {
                 }
             }
             page
-        } else {
-            let (objects, errors) = opened.records()?;
-            (objects, errors, String::new(), false)
         };
         let snapshot_count = objects.len();
         report["producer_recovery_scope"] = value!({"kind":if selected.is_some(){"exact-allocation"}else{"related-producer"},
             "snapshot_records":snapshot_count,"partition":recovery.bucket,"after":recovery.after,
-            "bounded":bounded,"remaining":Value::Null,"unvisited_partitions":"unknown",
+            "bounded":true,"remaining":Value::Null,"unvisited_partitions":"unknown",
             "max_records_per_round":self.capacity.max_records_per_round,"max_millis_per_round":self.capacity.max_millis_per_round});
         let mut visited = 0;
         let registry_id = opened.state.directory_id.clone();
@@ -2008,8 +2034,7 @@ impl ProducerPolicy {
         }
         let mut originals = BTreeMap::new();
         for snapshot in &objects {
-            if bounded
-                && visited > 0
+            if visited > 0
                 && (visited >= self.capacity.max_records_per_round
                     || began.elapsed().as_millis() >= self.capacity.max_millis_per_round as u128)
             {
@@ -2017,11 +2042,19 @@ impl ProducerPolicy {
             }
             visited += 1;
             if snapshot.retiring {
-                match retirement::resume_retirement(inputs, &directory, snapshot) {
-                    Ok(value) => report["producer_objects"]
-                        .as_array_mut()
-                        .unwrap()
-                        .push(value),
+                match retirement::resume_retirement(inputs, r, &directory, snapshot) {
+                    Ok(mut value) => {
+                        if value["status"] == "failed" {
+                            failures.push(value["error"].to_string());
+                        }
+                        value["producer"] = value!(self.id);
+                        value["path"] = value!(format!("{}{}", self.directory, snapshot.path));
+                        value["identity"] = value!(snapshot.identity);
+                        report["producer_objects"]
+                            .as_array_mut()
+                            .unwrap()
+                            .push(value);
+                    }
                     Err(error) => {
                         failures.push(error.clone());
                         report["producer_objects"].as_array_mut().unwrap().push(value!({"producer":self.id,"path":snapshot.path,"status":"failed","error":error}));
@@ -2120,6 +2153,30 @@ impl ProducerPolicy {
             let mut row = value!({"producer":self.id,"path":format!("{}{}",self.directory,object.path),
                 "retention_reason":object.retention_reason,"consumers":object.consumers,
                 "registered_generated_objects":object.generated.len(),"evidence":"retained"});
+            if object.owns_directory()
+                && object.original_release.is_some()
+                && object.consumers.values().all(|consumer| consumer.released)
+                && let Some(lease) = cache_guard.as_ref()
+            {
+                drop(store.take());
+                match retirement::retire_owned_directory(self, inputs, r, &directory, object, lease)
+                {
+                    Ok(retirement) => {
+                        if retirement["status"] == "failed" {
+                            failures.push(retirement["error"].to_string());
+                        }
+                        row["status"] = retirement["status"].clone();
+                        row["original_retirement"] = retirement;
+                    }
+                    Err(error) => {
+                        failures.push(error.clone());
+                        row["status"] = value!("failed");
+                        row["original_retirement"] = value!({"status":"failed","error":error});
+                    }
+                }
+                report["producer_objects"].as_array_mut().unwrap().push(row);
+                continue;
+            }
             // Body recovery has its own membership and receipts. A historical
             // Cargo disposal bit cannot settle a subsequently adopted body.
             if !object.bodies.is_empty() {
@@ -2376,6 +2433,9 @@ impl ProducerPolicy {
                         &row,
                     ) {
                         Ok(retirement) => {
+                            if retirement["status"] == "failed" {
+                                failures.push(retirement["error"].to_string());
+                            }
                             row["original_retirement"] = retirement;
                         }
                         Err(error) => {
@@ -2389,7 +2449,10 @@ impl ProducerPolicy {
                 let context = Context::load(&directory, &self.id)?;
                 if self.temporary
                     && !object.retiring
-                    && row["original_retirement"]["status"] != "retiring"
+                    && !matches!(
+                        row["original_retirement"]["status"].as_str(),
+                        Some("retiring" | "disposed")
+                    )
                 {
                     let _ = context
                         .observe_capacity(&directory.join(&object.path), cache_guard.is_some());

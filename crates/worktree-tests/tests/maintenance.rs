@@ -621,7 +621,11 @@ fn fetch_cleanup_rejects_receipt_identity_ref_and_retention_changes() {
         "symbolic",
     ] {
         let h = Host::new("unusual/source.ts");
-        let mut original = h.failed_fetch(false);
+        let observed = h.failed_fetch(false);
+        let mut original =
+            json(&fs::read(h.root.join(observed["report_path"].as_str().unwrap())).unwrap())
+                .unwrap();
+        assert_eq!(super::report_view(original.clone()), observed);
         let fetch_ref = original["fetch_ref"].as_str().unwrap().to_string();
         let mut plan = h.fetch_cleanup(&original);
         match fault {

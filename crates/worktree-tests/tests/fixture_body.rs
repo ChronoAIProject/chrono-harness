@@ -50,6 +50,76 @@ fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
 }
 
 #[test]
+fn copied_input_reenters_retirement_without_publishing_an_unprotected_claim() {
+    use chrono_harness::retained_artifacts::retention::{Inventory, read_guard};
+
+    let h = host();
+    let (store, allocation) = allocation(&h);
+    let source = h.root.join("retiring-input.bin");
+    let bytes = b"same original bytes for the next real copy";
+    fs::write(&source, bytes).unwrap();
+    let digest = sha256(bytes);
+    let original = store.join(format!("body-inputs/{digest}.bin"));
+    fs::create_dir_all(original.parent().unwrap()).unwrap();
+    fs::copy(&source, &original).unwrap();
+    let relative = original.strip_prefix(&h.root).unwrap().to_str().unwrap();
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .begin("fixture-retirement", relative, value!(null))
+        .unwrap()
+        .complete(value!({"prior_original_consumer":"released"}))
+        .unwrap();
+
+    // A real staged-source refusal leaves the owner in its durable disposing
+    // phase. No test writes a lifecycle phase or releases that protection.
+    git(&h.root, &["add", "-f", "--", relative]);
+    let round = Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .maintain_paths(&[relative.into()])
+        .unwrap();
+    assert!(
+        round["protected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["reason"]
+                .as_str()
+                .is_some_and(|reason| reason.contains("committed/index source"))),
+        "{round}"
+    );
+    assert!(read_guard(&h.root, relative).is_err());
+    let destination = allocation.path().join("copied.bin");
+    let register = || {
+        chrono_worktree::TemporaryHost::register_copy(
+            &store,
+            "test-allocation",
+            &source,
+            &destination,
+            None,
+            "actual next copy after a prior original's bounded retirement",
+        )
+    };
+    assert!(register().is_err(), "staged-source protection must remain");
+    assert_eq!(fs::read(&original).unwrap(), bytes);
+    let claims = store.join(format!("body-input-claims/{digest}"));
+    assert!(
+        !claims.exists() || fs::read_dir(&claims).unwrap().next().is_none(),
+        "failed original protection must not publish a claim"
+    );
+
+    git(&h.root, &["reset", "-q", "--", relative]);
+    let recovered = register().unwrap();
+    assert_eq!(recovered, original);
+    assert_eq!(fs::read(&recovered).unwrap(), bytes);
+    assert_eq!(fs::read(&source).unwrap(), bytes);
+    assert_eq!(fs::read_dir(claims).unwrap().count(), 1);
+    fs::copy(&source, &destination).unwrap();
+    assert_eq!(fs::read(&destination).unwrap(), bytes);
+}
+
+#[test]
 fn preparing_a_copy_original_does_not_block_an_independent_allocation() {
     use std::{sync::mpsc, thread, time::Duration};
 
@@ -1034,7 +1104,18 @@ fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_sibli
 
 #[test]
 fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcome() {
+    custody_nested_consumers(false);
+}
+
+pub(super) fn custody_nested_consumers(owned_directory: bool) {
     let h = host();
+    if owned_directory {
+        let path = h.root.join(".chrono-harness/cleanup.json");
+        let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+        policy["retained_producers"][0]["disposable_directory"] = value!(true);
+        fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        commit(&h.root);
+    }
     let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 0, "{report} {error}");
     let (store, allocation) = allocation(&h);
@@ -1087,7 +1168,7 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     let registry = producer_state(&store);
     let object = &registry["objects"][0];
     let old_intent = fs::read(store.join(object["intent"]["path"].as_str().unwrap())).unwrap();
-    let plan = value!({"schema":"chrono-fixture-body-custody/v1", "head":git(&h.root,&["rev-parse","HEAD"]),
+    let mut plan = value!({"schema":"chrono-fixture-body-custody/v1", "head":git(&h.root,&["rev-parse","HEAD"]),
         "current_consumers_released":true,"reason":"This test has joined its actual legacy copy consumer",
         "objects":[{"producer":"test-allocation","allocation":object["path"],"identity":object["identity"],"intent":object["intent"],
         "members":[{"path":"legacy-copy","sha256":sha256(b"real copied input"),"length":17,"git_root":".","recipe":"recipe.rs"},
@@ -1096,6 +1177,9 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
         "nested_consumers":[{"directory":nested_directory,"producer":"nested-fixture",
         "registry_identity":nested_registry["directory_id"],"allocation":nested_object["path"],
         "identity":nested_object["identity"],"intent":nested_object["intent"]}]}]}]});
+    if owned_directory {
+        plan["objects"][0]["release_originals"] = value!(true);
+    }
     let plan_path = ".chrono-harness/state/body-custody.json";
     fs::write(h.root.join(plan_path), serde_json::to_vec(&plan).unwrap()).unwrap();
     let (code, report, error) = h.auto(
@@ -1144,6 +1228,17 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!root.join("legacy-copy").exists());
     assert!(!nested_root.join("copy").exists());
+    if owned_directory {
+        assert!(
+            !root.exists(),
+            "released nested fixture directory accumulated"
+        );
+        assert_eq!(
+            json(&old_intent).unwrap()["producer_outcome"],
+            "not-established"
+        );
+        return;
+    }
     assert_eq!(
         fs::read(store.join(object["intent"]["path"].as_str().unwrap())).unwrap(),
         old_intent

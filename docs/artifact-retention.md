@@ -46,6 +46,13 @@ The real-bootstrap fixture's cache-attempt reentry consumes every original strea
 
 Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then declares its exact effect paths and holds their addressed removal capability across the effect. Enrollment admission is released before physical IO; only overlapping publication is refused. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
 
+A new copied-input claim first acquires the shared original's actual protection.
+If a previous release has made that address unavailable, the copy owner invokes
+one bounded addressed retirement pass and retries protection once. An unfinished
+or refused retirement preserves the original error and maintenance result and
+publishes no new claim. Once retirement succeeds, the copy recreates the original
+from its still-owned source under the existing digest and identity checks.
+
 Fixture allocation metadata is partitioned at its actual producer. The immutable
 `objects.json` namespace binds the physical directory and `producer-records/`
 namespace; it contains no mutable member list. An ordinary allocation opens only
@@ -114,6 +121,14 @@ The supported owner entry is:
 ```
 
 `P` is an exact root-relative JSON request bounded to 64 KiB. Operations are `maintain`, `migrate-policy`, `enroll`, `release`, `protect-consumer`, `release-consumer` and `acknowledge-delivery`. A producer-generated result exits 0; invalid input, changed identity, unavailable capability or policy refusal exits 2. The result never declares historical engineering work completed.
+
+`maintain` accepts an optional `paths` array of exact root-relative output
+addresses. When supplied, it delegates to the same addressed retirement owner,
+visits only those declarations and their actual relationships, and reports
+`scope.kind:"declared-retirement-paths"`. Empty or oversized scopes reject;
+unknown paths do not become enrolled outputs. Omitting `paths` selects the
+ordinary bounded namespace maintenance. Both forms retain the existing node,
+byte, metadata and time budgets and all original/consumer protections.
 
 Publication persists an intent, exact destination and parent identity before creating an empty staging inode, attaches its identity durably and publishes by a kernel no-replace rename. Actual completion records the original outcome. Ordinary adopted entries resume bounded accounting, interrupted creation and partial effects. Each related graph, directory snapshot, summary ring and read/write operation has finite bounds. An oversized related set or output refuses controllable publication; unrelated retained originals impose no admission quota. External builders remain accounted after exclusion.
 

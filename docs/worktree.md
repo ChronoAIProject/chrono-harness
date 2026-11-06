@@ -1121,8 +1121,11 @@ The record contains only successive physical attachments of that exact address.
 Ordinary updates never rewrite another worktree's record. Cleanup keeps this
 local metadata exclusion and the target's exclusive enrollment capability through
 its physical effect and original-result publication. There is no aggregate
-`ledger.json`, global admission lease, or release/reload merge around independent
-IO. An unrelated owner's busy or damaged record is preserved and reported;
+`ledger.json` or global admission lease. Independent output-retention and retained
+producer work releases the invoking enrollment's metadata exclusion while keeping
+deployment protection. It reacquires the same metadata identity and reloads the
+current record before further updates; it never merges an old snapshot over
+concurrent work. An unrelated owner's busy or damaged record is preserved and reported;
 it does not refuse a valid target's admission. Explicit maintenance still reports
 these failures and continues available independent owners.
 
@@ -1480,8 +1483,10 @@ CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式�
 ### Prospective fixture custody and inventory observations
 
 The disk-capacity candidate binds each registered producer to its coordinator,
-committed cleanup policy and exact output declarations. Ordinary allocation and
-the declared `operations` run a bounded recovery page. Producer-written records
+committed cleanup policy and exact output declarations. Ordinary allocation,
+the declared `operations` and explicit `maintain` run the same bounded recovery
+page. Repeated maintenance resumes its durable cursor rather than traversing all
+historical allocations in one invocation. Producer-written records
 use sixteen SHA-256 partitions and a durable partition/lexical cursor; total
 history no longer has to fit one record snapshot. Active or corrupt rows preserve
 their original state while later rows and partitions advance. Unvisited ownership
@@ -1522,7 +1527,19 @@ while the obligation remains; eligible exact recovery can settle one independent
 Unreleased originals below the bound stay protected without blocking independent
 siblings. Neither missing producer completion nor age releases their consumers.
 There is no shared byte ledger, whole-library quota, admission lock, daemon or
-filesystem reservation. External builders and native raw streams remain outside
+filesystem reservation. Optional `capacity.max_directory_bytes` limits each
+explicit producer directory at allocation/copy/capture admission and checkpoints.
+The same bounded tree measurement counts all sibling allocations, shared input
+bytes and producer metadata, without enrolling each file or following symlinks.
+Both logical bytes and observed allocated blocks must fit that limit, including
+a controlled write's known requested length. Unknown or incomplete measurements
+refuse production and preserve originals. Cleanup still requires its original
+ownership and consumer release; measuring an excess grants no deletion authority.
+The whole-directory walk uses the existing checkpoint entry/time limits and adds
+IO when the option is selected; total production cost remains unmeasured. Hosts
+must deploy the compatible owner and migrate the existing producer context
+before adopting the option. A budget observation is not a concurrent reservation.
+External builders and native raw streams remain outside
 continuous byte enforcement: they can overshoot between launch/join checkpoints,
 including while a producer is interrupted. Overshoot size is unknown and can
 exceed available space. Further related production refuses on the observed
@@ -1546,6 +1563,57 @@ that same retirement owner as one tree, reclaiming its empty directory skeleton.
 Any source, checkout or unknown member preserves the root. A copy interrupted
 after claim publication but before original IO releases its exact empty claim
 after responsible consumer release; recovery never invents missing original bytes.
+
+Temporary producers can explicitly select `disposable_directory: true` when
+they own the entire allocation, including synthetic repositories and scratch
+files. The current context and immutable allocation intent bind that choice at
+creation. Once the responsible original consumer releases, every diagnostic
+consumer releases, and the kernel lease excludes live users, retirement uses the
+existing whole-directory disposal operation. One durable retiring allocation
+record preserves recovery; its members need no independent cleanup declarations
+or deletion manifest. It does not first dispose copied members one by one or
+require their synthetic bytes to remain unchanged. Explicit nested capabilities
+and diagnostic references still exclude removal. The shared input claims release
+after this directory is physically absent, preserving other directories' inputs.
+This temporary owner's release authorizes reclamation;
+diagnostic consumers retain required failures until they actually release them.
+Source/index checks at the real host and original result identities still apply;
+links inside the directory are unlinked without following their targets.
+Checkpoints measure all members of an owned allocation from its directory root,
+including scratch files without individual declarations. An observed excess
+blocks fresh allocations as well as further controlled production. The existing
+consumer can reduce its own bytes and checkpoint that exact directory again to
+clear the obligation; observing it does not create additional output or release
+any consumer. Other producers continue to measure their declared outputs.
+
+**Product/policy cochange:** whole-directory disposal is appropriate for owned
+synthetic test hosts; real worktrees continue to preserve their source and unique
+commits. A policy/context migration does not grant this ownership to allocations
+created under the previous choice. The existing `migrate --adopt-fixtures`
+handoff accepts `adopt_directory: true` with `release_originals: true` and empty
+`members` for one exact old temporary allocation. Its producer-written custody
+receipt binds the original intent and physical identity without rewriting that
+intent. The current policy must adopt directory ownership; active capabilities,
+unreleased diagnostics, changed identities and allocations already handed to
+output retention refuse the transfer. Migration itself does no disposal.
+The exact transferred directory enters the existing pending set so the next
+ordinary maintenance entry need not wait for a historical sweep to wrap around.
+Old per-output retirement must finish under its existing owner before those remaining
+directories can transfer; the new option does not bypass that owner.
+The direct behavioral acceptance is
+`test.worktree.directory-cleanup`, covering a failed command, diagnostic release,
+a synthetic committed repository, unregistered scratch members, an external
+symlink, preservation without custody and exact historical directory custody.
+It also verifies that a subsequent shared-input custody failure preserves the
+already verified directory-disposal receipts, reports failure and retains its
+continuation and original bytes.
+Its nine cases include the whole-directory capacity boundary, refusal of fresh
+allocation IDs during excess and recovery by the original consumer's checkpoint.
+They also exercise an actual paused source check, concurrent coordinator use and
+preservation of that use's original enrollment when the first operation resumes.
+The five temporary test producers adopt directory ownership for new allocations;
+the non-temporary command-result producer keeps its own lifetime. Actual
+coordinator adoption remains separate from declaring this option.
 
 Metadata writes have finite byte/node admission. Released output and metadata
 retirement use retention.json's finite content/metadata windows, per-round work
@@ -1642,11 +1710,15 @@ An ordinary drain attempts allocation metadata exclusion without waiting. An
 allocation being updated remains protected with its original state, while
 independent registrations continue. The thirty-second producer admission bound
 still applies to actual publication and reference updates for that allocation.
-Explicit retained-producer maintenance keeps only the invoking enrollment's
-metadata exclusion. Independent enrollments have separate records and locks; no
-release/reload merge is needed around physical IO. Actual regression and
-coordinator/native acceptance are required; the report publication owner still
-has its own separate concurrency limitations.
+Explicit retained-producer maintenance keeps deployment protection and releases
+the invoking enrollment's metadata exclusion during independent producer IO.
+The ordinary managed-operation path uses the same boundary and fully reloads its
+current enrollment on return, retaining the original producer failure if reload
+also fails. Operations without declared fixture producers skip this work.
+Independent enrollments retain separate records and locks. The separate traversal
+of those enrollments still holds the invoking metadata exclusion; this change
+does not establish independence for every nonlocal IO path. Actual coordinator
+adoption and full canonical acceptance remain required.
 
 `migrate --path COORDINATOR --partition-producer ID` is the sole explicit data
 cutover for an adopted retained producer. It consumes the exact v1 bytes under
@@ -1807,6 +1879,10 @@ require policy adoption by excluded linked enrollments. Live descendants,
 unknown/unavailable affected attachments, missing ownership or unjoined use inputs
 refuse specifically, preserving installed bytes and originals. Disposed generations
 do not become live consumers; another physical coordinator is outside this set.
+An unregistered Git checkout, its independent Git lock and a CWD-only user do not
+establish consumption of the shared executable. Inventory stability is projected
+onto unresolved enrolled consumers; unrelated checkout movement cannot invalidate
+publication. An existing empty or malformed enrollment remains an error.
 An actually bound out-of-protocol producer still requires its identified original
 custodian's join/exclusion. Historical unknown tasks do not establish that binding.
 An immutable publication result alone proves neither adoption nor task completion.
@@ -1902,3 +1978,14 @@ HEAD, index tree and source DELTA. It removes only that package's reconstructibl
 compiler outputs, not source, Git objects, diagnostic originals or other targets.
 Then use `build.worktree` unchanged. A successful rebuild establishes a new
 candidate CLI binding; it does not establish the cause of an earlier linker error.
+
+### Stored Git process streams
+
+Lifecycle reports encode Git stdout and stderr once with the existing
+`chrono-retained-process/v2` lossless codec. Process identity, environment, exit,
+failure and stream digests remain unchanged; readers use the shared
+`chrono_harness::full::expand_process` decoder for transient text/byte views.
+The stored report carries neither complete text aliases nor numeric byte arrays
+for those streams. Managed command streams and historical recovery payloads are
+separate remaining storage obligations. This representation does not release
+consumers or extend the existing finite original/metadata retention policy.

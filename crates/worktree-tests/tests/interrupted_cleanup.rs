@@ -2318,7 +2318,6 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let maintain_allocation = || {
         let mut command = Command::new(coordinator.join(".chrono-harness/bin/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
-        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output = observer.capture_output(&mut command).unwrap();
         let report = json(&output.stdout).unwrap();
         let failures = report["cleanup_failures"].as_array().unwrap();

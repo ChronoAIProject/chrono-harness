@@ -562,6 +562,45 @@ three inventory checks plus directly affected owner tests and exhaustive group r
 
 ## Report and evidence retention target (§10.1)
 
+The current target uses an owned directory with one lifecycle as the cleanup
+unit. Generated members do not each need an independent cleanup record;
+report integrity still verifies the original bytes. Target/cache disposal already
+uses declared directories. Runtime output retention still maintains per-output
+records, and fixture state mixes source, shared inputs and disposable outputs.
+The candidate now binds prospective `disposable_directory` ownership at the
+existing temporary allocation owner and disposes that complete directory
+after actual consumers release. Nine direct Rust regressions passed on Darwin,
+including exact historical directory custody through the existing migration
+owner, immutable intent preservation, live/diagnostic exclusion, staged source,
+external links, shared originals and retention of verified disposal effects when
+later input custody fails. Directory checkpoints also count unregistered scratch
+members, refuse fresh allocations on observed excess, and recover after the
+original consumer reduces its bytes. Independent producer IO releases the
+coordinator's unrelated metadata exclusion; an actual concurrent managed use
+retains its enrollment and advances its generation after reload (217.60 test
+seconds / 275.11 managed seconds at candidate `4ee29587`). The existing owner now
+also accepts `capacity.max_directory_bytes`: allocation, controlled copy/capture
+admission and checkpoints measure the declared producer directory, including
+sibling allocations, shared inputs and metadata. Logical bytes and observed
+allocated blocks must both fit the limit. This reuses the bounded tree walk;
+incomplete measurements refuse production without creating a new allocation or
+per-file cleanup records. Eleven direct cases passed at `3c14557b` (335.87 test
+seconds / 410.39 managed seconds), including individually compliant siblings
+whose sum exceeds the directory budget, recovery after reducing owned bytes,
+external symlinks and refusal on unknown aggregate usage. Source bootstrap and
+both affected format checks passed. The option is not yet selected or migrated
+in the real host's producer contexts; its whole-directory production cost and
+main-coordinator adoption remain unverified. This is admission/checkpoint
+enforcement, without a concurrent reservation or strict filesystem quota.
+The candidate host selects the five temporary test producers and has adopted
+four existing producer contexts; nine exact historical directories transferred
+through the current custodian entry are now physically absent. Historical shared
+input custody and already-disposing output references still cause maintenance
+failures; directory absence does not establish their retirement. Main coordinator
+deployment, already-retiring historical output handoffs and the remaining
+report/stream directory layout are pending. Bounded
+record traversal alone does not satisfy this target.
+
 The existing PR121 target is carried in SPEC §10.1. Runtime coverage remains
 partial: current cache-only cleanup protects lifecycle users and recovery
 originals, but does not implement general producer intents/output enrollment,

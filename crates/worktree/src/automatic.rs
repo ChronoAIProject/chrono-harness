@@ -894,16 +894,51 @@ impl Manager {
         }
         self.inputs.stable(r)
     }
-    // Only this worktree's metadata is excluded. Independent report owners
-    // and worktrees use their own capabilities; no global release/reload join
-    // is required around physical IO or an independent owner's failure.
+    // Independent owners retain their own exclusion during physical IO. Keep
+    // deployment protection, release this enrollment's unrelated metadata and
+    // reload its current state before the caller can update it again.
     fn outside_enrollment<T>(
         &mut self,
         r: &mut Runner,
         activity: impl FnOnce(&PolicyInputs, &mut Runner) -> Result<T, String>,
     ) -> Result<T, String> {
         self.stable(r)?;
-        activity(&self.inputs, r)
+        let Some(lease) = self._gate.lease.take() else {
+            return activity(&self.inputs, r);
+        };
+        let metadata_id = lease.id().to_owned();
+        drop(lease);
+        let outcome = activity(&self.inputs, r);
+        let reloaded = (|| {
+            self._namespace.stable()?;
+            self.inputs.stable(r)?;
+            let current = Self::open(
+                r,
+                &self.inputs.policy.coordinator_root,
+                &self.inputs.config_path,
+                &self.inputs.config_bytes,
+                &self._gate.token,
+                &self.scope,
+                false,
+                true,
+            )?
+            .ok_or("cleanup policy disappeared while independent owner was active")?;
+            if current._gate.lease.as_ref().map(Lease::id) != Some(metadata_id.as_str())
+                || current._namespace.id() != self._namespace.id()
+            {
+                return Err("enrollment exclusion identity changed during independent work".into());
+            }
+            self.inputs.stable(r)?;
+            *self = current;
+            Ok::<_, String>(())
+        })();
+        match (outcome, reloaded) {
+            (outcome, Ok(())) => outcome,
+            (Ok(_), Err(error)) => Err(format!("enrollment reload failed: {error}")),
+            (Err(original), Err(error)) => {
+                Err(format!("{original}; enrollment reload failed: {error}"))
+            }
+        }
     }
     fn outside_enrollment_readonly<T>(
         &mut self,
@@ -2324,6 +2359,16 @@ impl Manager {
         operation: &str,
         report: &mut Value,
     ) -> Result<(), String> {
+        if !self
+            .inputs
+            .policy
+            .retained_producers
+            .iter()
+            .any(|producer| producer.operations.iter().any(|op| op == operation))
+        {
+            report["related_producer_recovery"] = value!([]);
+            return Ok(());
+        }
         let observations = self.outside_enrollment(r, |inputs, r| {
             let mut observations = vec![];
             for producer in inputs
@@ -2334,7 +2379,7 @@ impl Manager {
             {
                 let mut attempt =
                     value!({"producer":producer.id,"operation":operation,"producer_objects":[]});
-                if let Err(error) = producer.drain_selected(inputs, r, &mut attempt, None, true) {
+                if let Err(error) = producer.drain_selected(inputs, r, &mut attempt, None) {
                     attempt["error"] = value!(error);
                 }
                 observations.push(attempt);

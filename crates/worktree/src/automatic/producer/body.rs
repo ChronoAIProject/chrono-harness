@@ -108,15 +108,13 @@ fn publish_claim(
     claim_guard.stable()?;
     let claim_path =
         no_symlink_parents(&claims, &format!("{}.json", sha256(allocation.as_bytes())))?;
-    match fs::read(&claim_path) {
-        Ok(bytes) if json(&bytes)? == claim => (),
+    let publish = match fs::read(&claim_path) {
+        Ok(bytes) if json(&bytes)? == claim => false,
         Ok(_) => return Err("shared copied-input claim differs; preserve original".into()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            write_json(&claim_path, &claim, true)?;
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
         Err(e) => return Err(e.to_string()),
-    }
-    if let Some(context) = Context::for_allocation(&directory.join(allocation))? {
+    };
+    let _read = if let Some(context) = Context::for_allocation(&directory.join(allocation))? {
         if let Some(inventory) =
             chrono_harness::retained_artifacts::retention::Inventory::adopted(&context.root)?
         {
@@ -126,15 +124,47 @@ fn publish_claim(
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("original UTF-8")?;
-            let _read =
-                chrono_harness::retained_artifacts::retention::read_guard(&context.root, relative)?;
+            let read = match chrono_harness::retained_artifacts::retention::read_guard(
+                &context.root,
+                relative,
+            ) {
+                Ok(read) => read,
+                Err(original_error) => {
+                    // A previous final consumer may have released this same
+                    // digest into bounded retirement. Join that exact owner
+                    // once before publishing a new claim; never bypass an
+                    // unavailable original or retry an unbounded cleanup loop.
+                    let recovery =
+                        inventory
+                            .maintain_paths(&[relative.into()])
+                            .map_err(|error| {
+                                format!("{original_error}; addressed original retirement: {error}")
+                            })?;
+                    chrono_harness::retained_artifacts::retention::read_guard(
+                        &context.root,
+                        relative,
+                    )
+                    .map_err(|error| {
+                        format!("{original_error}; addressed original retirement: {recovery}; original still unavailable: {error}")
+                    })?
+                }
+            };
             if inventory.enrolled(relative)? {
                 inventory.reference_paths(
                     &format!("fixture-input:{}:{digest}", sha256(allocation.as_bytes())),
                     &[relative.into()],
                 )?;
             }
+            read
+        } else {
+            None
         }
+    } else {
+        None
+    };
+    claim_guard.stable()?;
+    if publish {
+        write_json(&claim_path, &claim, true)?;
     }
     Ok(())
 }
@@ -603,6 +633,8 @@ struct Selection {
     members: Vec<Member>,
     #[serde(default)]
     release_originals: bool,
+    #[serde(default)]
+    adopt_directory: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -691,6 +723,16 @@ impl Manager {
                 if object.consumers.values().any(|c| !c.released) {
                     return Err("fixture allocation has an unreleased diagnostic consumer".into());
                 }
+                if selected.adopt_directory
+                    && (!policy.temporary
+                        || !policy.disposable_directory
+                        || !selected.release_originals
+                        || !selected.members.is_empty()
+                        || object.disposable_directory
+                        || object.retiring)
+                {
+                    return Err("directory custody requires adopted temporary ownership, exact original release and no member transfer or retirement".into());
+                }
                 drop(store);
                 let allocation = directory.join(&selected.allocation);
                 for member in selected.members {
@@ -770,11 +812,26 @@ impl Manager {
                     {
                         return Err("original release binding or consumers changed".into());
                     }
+                    if selected.adopt_directory && object.directory_custody.is_none() {
+                        let receipt = store.receipt(
+                            "producer-directory-custody",
+                            &value!({"schema":"chrono-fixture-directory-custody/v1",
+                                "producer":selected.producer,"path":object.path,
+                                "identity":object.identity,"original_intent":object.intent,
+                                "custody":custody,"candidate":self.inputs.anchor_head,
+                                "reason":plan.reason,"historical_outcome":"unchanged"}),
+                        )?;
+                        Arc::make_mut(&mut store.state.objects[0]).directory_custody =
+                            Some(receipt);
+                    }
                     Arc::make_mut(&mut store.state.objects[0]).original_release = Some(format!(
                         "current custodian released exact originals: {}; custody {}",
                         plan.reason, custody.path
                     ));
                     store.save(0)?;
+                    if selected.adopt_directory {
+                        retirement::prioritize(&directory, &selected.allocation)?;
+                    }
                 }
                 Ok(())
             })();
@@ -840,6 +897,56 @@ fn protect_source(
         }
     }
     Ok(())
+}
+
+pub(super) fn directory_guards(
+    directory: &Path,
+    object: &Object,
+) -> Result<Option<Vec<Lease>>, String> {
+    let allocation = directory.join(&object.path);
+    let mut guards: BTreeMap<String, Lease> = BTreeMap::new();
+    for (member, body) in &object.bodies {
+        let bytes = fs::read(no_symlink_parents(directory, &body.intent.path)?)
+            .map_err(|e| e.to_string())?;
+        let intent = json(&bytes)?;
+        if sha256(&bytes) != body.intent.sha256
+            || intent["producer_intent"] != value!(object.intent)
+            || intent["allocation"] != object.path
+            || intent["identity"] != object.identity
+            || intent["member"] != *member
+            || intent["leases"] != value!(body.leases)
+            || intent
+                .get("nested_consumers")
+                .cloned()
+                .unwrap_or_else(|| value!([]))
+                != value!(body.nested_consumers)
+        {
+            return Err("owned directory nested consumer intent differs".into());
+        }
+        for binding in &body.leases {
+            if let Some(held) = guards.get(&binding.path) {
+                if held.id() != binding.id {
+                    return Err("owned directory nested lease identities conflict".into());
+                }
+                continue;
+            }
+            let Some(held) = Lease::acquire(
+                &no_symlink_parents(&allocation, &binding.path)?,
+                Some(&binding.id),
+                false,
+                true,
+                None,
+            )?
+            else {
+                return Ok(None);
+            };
+            guards.insert(binding.path.clone(), held);
+        }
+        if !nested_released(&allocation, member, &body.nested_consumers, &body.leases)? {
+            return Ok(None);
+        }
+    }
+    Ok(Some(guards.into_values().collect()))
 }
 
 pub(super) fn drain(

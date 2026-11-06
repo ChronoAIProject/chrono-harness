@@ -407,7 +407,9 @@ class ReleaseUnits(unittest.TestCase):
                 else:
                     self.assertEqual(u['needs'],[])
                 if owner['language']=='rust':
-                    self.assertEqual(action['argv'],['test','--locked','--manifest-path',owner['manifest']])
+                    expected=['test','--locked','--manifest-path',owner['manifest']]
+                    if owner['id']=='worktree-tests':expected+=['--','--test-threads=2']
+                    self.assertEqual(action['argv'],expected)
                     self.assertEqual(len(u['needs']),len(set(u['needs'])))
                     self.assertTrue(set(u['needs']) <= builds)
                     if u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])

@@ -85,7 +85,10 @@ impl Runner {
         };
         match result {
             Ok(process) => {
-                let mut record = value!({"root":root,"argv":argv,"process":process});
+                // Keep one lossless stream representation in published Git
+                // evidence; the live caller still receives the original view.
+                let stored = chrono_harness::full::compact_process(&value!(process))?;
+                let mut record = value!({"root":root,"argv":argv,"process":stored});
                 if let Some(limit) = input_limit {
                     record["immutable_input_transport"] = value!({"stdout_limit_bytes":limit,
                         "stderr_limit_bytes":self.config.output_limit_bytes});

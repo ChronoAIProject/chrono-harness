@@ -7,6 +7,10 @@ use std::time::{Duration, Instant};
 #[serde(deny_unknown_fields)]
 pub(super) struct Capacity {
     pub max_generated_bytes: u64,
+    /// Admission/checkpoint observation for this declared producer directory,
+    /// including all allocations, shared inputs and metadata. No byte ledger.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_directory_bytes: Option<u64>,
     pub max_copy_bytes: u64,
     pub max_capture_bytes: u64,
     pub max_captures: usize,
@@ -21,6 +25,7 @@ impl Default for Capacity {
     fn default() -> Self {
         Self {
             max_generated_bytes: 2 * 1024 * 1024 * 1024,
+            max_directory_bytes: None,
             max_copy_bytes: 1024 * 1024 * 1024,
             max_capture_bytes: 64 * 1024 * 1024,
             max_captures: 256,
@@ -36,6 +41,7 @@ impl Default for Capacity {
 impl Capacity {
     pub(super) fn validate(&self) -> Result<(), String> {
         if self.max_generated_bytes == 0
+            || self.max_directory_bytes == Some(0)
             || self.max_copy_bytes == 0
             || self.max_capture_bytes == 0
             || self.max_captures == 0
@@ -66,6 +72,8 @@ pub(super) struct Context {
     pub(super) directory: PathBuf,
     pub(super) producer: String,
     pub(super) generated_outputs: Vec<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(super) disposable_directory: bool,
     pub(super) capacity: Capacity,
 }
 impl Context {
@@ -86,6 +94,7 @@ impl Context {
             directory: directory.into(),
             producer: producer.id.clone(),
             generated_outputs: producer.generated_outputs.clone(),
+            disposable_directory: producer.disposable_directory,
             capacity: producer.capacity.clone(),
         };
         let path = no_symlink_parents(directory, "producer-context.json")?;
@@ -125,6 +134,7 @@ impl Context {
             directory: directory.into(),
             producer: producer.id.clone(),
             generated_outputs: producer.generated_outputs.clone(),
+            disposable_directory: producer.disposable_directory,
             capacity: producer.capacity.clone(),
         };
         let current_bytes = serde_json::to_vec(&current).map_err(|e| e.to_string())?;
@@ -159,22 +169,63 @@ impl Context {
             ));
         }
         let mut metadata = vec![];
+        let mut retiring_records = vec![];
+        let mut retiring_leases = vec![];
         for object in &objects {
-            let guard = DirectoryGate::available(&directory.join(&object.path))?
-                .ok_or("context migration metadata busy")?;
+            let allocation = no_symlink_parents(directory, &object.path)?;
+            if object.retiring {
+                if object.original_release.is_none()
+                    || object.consumers.values().any(|c| !c.released)
+                    || object.cache_lease.is_none()
+                {
+                    return Err("context migration preserves an unreleased retirement".into());
+                }
+                let path = no_symlink_parents(directory, &Store::record_name(&object.path)?)?;
+                let original = fs::read(&path).map_err(|e| e.to_string())?;
+                if json(&original)?["object"] != value!(&**object) {
+                    return Err("context migration retirement record changed".into());
+                }
+                retiring_records.push((path, original));
+            }
+            let guard = match fs::symlink_metadata(&allocation) {
+                Ok(_) => {
+                    if object.retiring && directory_id(&allocation)? != object.identity {
+                        return Err("context migration retiring allocation changed".into());
+                    }
+                    Some(
+                        DirectoryGate::available(&allocation)?
+                            .ok_or("context migration metadata busy")?,
+                    )
+                }
+                Err(error) if object.retiring && error.kind() == std::io::ErrorKind::NotFound => {
+                    None
+                }
+                Err(error) => return Err(error.to_string()),
+            };
             if let Some(binding) = &object.cache_lease {
-                let lease = Lease::acquire(
-                    &no_symlink_parents(directory, &binding.path)?,
-                    Some(&binding.id),
-                    false,
-                    true,
-                    None,
-                )?
-                .ok_or("context migration has active allocation consumers")?;
+                let path = no_symlink_parents(directory, &binding.path)?;
+                match fs::symlink_metadata(&path) {
+                    Err(error)
+                        if object.retiring && error.kind() == std::io::ErrorKind::NotFound =>
+                    {
+                        // Retirement already excludes production. Binding a new
+                        // context neither resumes its old lease nor mutates its
+                        // continuation; the original retention owner still ends it.
+                        metadata.push(guard);
+                        continue;
+                    }
+                    Err(error) => return Err(error.to_string()),
+                    Ok(_) => (),
+                }
+                let lease = Lease::acquire(&path, Some(&binding.id), false, true, None)?
+                    .ok_or("context migration has active allocation consumers")?;
                 lease.stable()?;
                 // Every new consumer of this existing allocation first enters
                 // its metadata gate. Retain that EX gate after proving current
                 // cache holders quiescent; a second retained FD adds no exclusion.
+                if guard.is_none() {
+                    retiring_leases.push(lease);
+                }
             }
             metadata.push(guard);
         }
@@ -260,8 +311,18 @@ impl Context {
                 ));
             }
         }
-        for guard in &metadata {
+        for guard in metadata.iter().flatten() {
             guard.stable()?;
+        }
+        for lease in &retiring_leases {
+            lease.stable()?;
+        }
+        for (path, original) in &retiring_records {
+            if fs::read(path).map_err(|e| e.to_string())? != *original {
+                return Err(
+                    "context migration retirement record changed before publication".into(),
+                );
+            }
         }
         store.owner_stable()?;
         inputs.stable(r)?;
@@ -319,6 +380,7 @@ impl Context {
             .find(|p| p.id == self.producer)
             .ok_or("fixture context producer is not declared")?;
         if producer.capacity != self.capacity
+            || producer.disposable_directory != self.disposable_directory
             || producer.generated_outputs != self.generated_outputs
             || producer.directory(&self.root)? != self.directory
         {
@@ -341,6 +403,31 @@ impl Context {
             return Err(format!(
                 "fixture capacity unmet; production refused, protected/unknown originals preserved: {observation}"
             ));
+        }
+        let mut observation = observation;
+        if let Some(maximum) = self.capacity.max_directory_bytes {
+            let metadata = fs::symlink_metadata(&self.directory).map_err(|e| e.to_string())?;
+            if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                return Err(
+                    "producer capacity directory identity/type unknown; production deferred".into(),
+                );
+            }
+            let (bytes, allocated, entries) =
+                self.measure_paths(vec![self.directory.clone()], Instant::now())?;
+            let usage = value!({"scope":"declared producer directory","logical_bytes":bytes,
+                "allocated_bytes":allocated,"entries":entries,"max_directory_bytes":maximum,
+                "requested_bytes":requested,"physical_reclaim_bytes":Value::Null,
+                "enforcement":"admission-and-checkpoint observation; concurrent writers are not reserved"});
+            if bytes
+                .max(allocated)
+                .checked_add(requested)
+                .is_none_or(|total| total > maximum)
+            {
+                return Err(format!(
+                    "producer directory capacity unmet; production refused, originals preserved: {usage}"
+                ));
+            }
+            observation["producer_directory"] = usage;
         }
         Ok(observation)
     }
@@ -369,13 +456,14 @@ impl Context {
                 if producer.directory(&inputs.policy.coordinator_root)? != self.directory
                     || producer.generated_outputs != self.generated_outputs
                     || producer.capacity != self.capacity
+                    || producer.disposable_directory != self.disposable_directory
                 {
                     return Err("fixture context differs from authoritative producer policy".into());
                 }
                 report["producer_objects"] = value!([]);
                 // Object failures remain actual failed rows. They do not veto
                 // unrelated allocations; owner/context failures still do.
-                if let Err(error) = producer.drain_selected(&inputs, r, report, object, true) {
+                if let Err(error) = producer.drain_selected(&inputs, r, report, object) {
                     report["recovery_error"] = value!(error);
                     return Err(report["recovery_error"].as_str().unwrap().into());
                 }
@@ -417,7 +505,7 @@ impl Context {
         Ok(report)
     }
     pub(super) fn measure(&self, allocation: &Path) -> Result<Value, String> {
-        self.admit(&self.directory, 0)?;
+        let admission = self.admit(&self.directory, 0)?;
         let mut store = Store::open(&self.directory, &self.producer, false)?;
         let object = allocation
             .file_name()
@@ -429,46 +517,16 @@ impl Context {
             return Err("fixture original lifetime released; further production refused".into());
         }
         store.stable(record)?;
-        let mut paths = self
-            .generated_outputs
-            .iter()
-            .map(|p| no_symlink_parents(allocation, p.trim_end_matches('/')))
-            .collect::<Result<Vec<_>, _>>()?;
+        let paths = if record.owns_directory() {
+            vec![allocation.to_owned()]
+        } else {
+            self.generated_outputs
+                .iter()
+                .map(|p| no_symlink_parents(allocation, p.trim_end_matches('/')))
+                .collect::<Result<Vec<_>, _>>()?
+        };
         let began = Instant::now();
-        let mut entries = 0;
-        let mut bytes = 0u64;
-        let mut allocated = 0u64;
-        while let Some(path) = paths.pop() {
-            if entries >= self.capacity.max_entries_per_checkpoint
-                || began.elapsed() >= Duration::from_millis(self.capacity.max_millis_per_round)
-            {
-                return Err("fixture checkpoint bounded; usage unknown, production deferred and originals preserved".into());
-            }
-            entries += 1;
-            let metadata = match fs::symlink_metadata(&path) {
-                Ok(m) => m,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(e.to_string()),
-            };
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::MetadataExt;
-                allocated = allocated.saturating_add(metadata.blocks().saturating_mul(512));
-            }
-            if metadata.is_dir() {
-                for child in fs::read_dir(path).map_err(|e| e.to_string())? {
-                    if paths.len() >= self.capacity.max_entries_per_checkpoint {
-                        return Err(
-                            "fixture checkpoint entry capacity; usage unknown, production deferred"
-                                .into(),
-                        );
-                    }
-                    paths.push(child.map_err(|e| e.to_string())?.path());
-                }
-            } else {
-                bytes = bytes.saturating_add(metadata.len());
-            }
-        }
+        let (bytes, allocated, _) = self.measure_paths(paths, began)?;
         let (capture_bytes, capture_accounted_bytes, reserved_input_bytes) =
             self.capture_usage(record)?;
         let mut metadata_bytes = 0u64;
@@ -499,7 +557,9 @@ impl Context {
             "metadata_logical_bytes":metadata_bytes,"metadata_entries":metadata_entries,
             "capture_count":record.captures.len(),"max_captures":self.capacity.max_captures,
             "max_generated_bytes":self.capacity.max_generated_bytes,"max_capture_bytes":self.capacity.max_capture_bytes,
-            "scope":"exact allocation and declared outputs","producer_outcome":"unchanged"});
+            "scope":if record.owns_directory(){"owned allocation directory"}else{"exact allocation and declared outputs"},
+            "producer_directory":admission["producer_directory"],
+            "producer_outcome":"unchanged"});
         if metadata_bytes > self.capacity.max_metadata_bytes_per_round
             || bytes > self.capacity.max_generated_bytes
             || capture_accounted_bytes > self.capacity.max_capture_bytes
@@ -510,6 +570,54 @@ impl Context {
             ));
         }
         Ok(result)
+    }
+
+    fn measure_paths(
+        &self,
+        mut paths: Vec<PathBuf>,
+        began: Instant,
+    ) -> Result<(u64, u64, usize), String> {
+        let mut entries = 0;
+        let mut bytes = 0u64;
+        let mut allocated = 0u64;
+        while let Some(path) = paths.pop() {
+            if entries >= self.capacity.max_entries_per_checkpoint
+                || began.elapsed() >= Duration::from_millis(self.capacity.max_millis_per_round)
+            {
+                return Err("fixture checkpoint bounded; usage unknown, production deferred and originals preserved".into());
+            }
+            entries += 1;
+            let metadata = match fs::symlink_metadata(&path) {
+                Ok(m) => m,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(e.to_string()),
+            };
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                allocated = metadata
+                    .blocks()
+                    .checked_mul(512)
+                    .and_then(|amount| allocated.checked_add(amount))
+                    .ok_or("fixture allocated byte accounting overflow; usage unknown")?;
+            }
+            if metadata.is_dir() {
+                for child in fs::read_dir(path).map_err(|e| e.to_string())? {
+                    if paths.len() >= self.capacity.max_entries_per_checkpoint {
+                        return Err(
+                            "fixture checkpoint entry capacity; usage unknown, production deferred"
+                                .into(),
+                        );
+                    }
+                    paths.push(child.map_err(|e| e.to_string())?.path());
+                }
+            } else {
+                bytes = bytes
+                    .checked_add(metadata.len())
+                    .ok_or("fixture logical byte accounting overflow; usage unknown")?;
+            }
+        }
+        Ok((bytes, allocated, entries))
     }
     // Account known input promises under the allocation's metadata exclusion.
     // A still-unwritten input consumes capacity; materialization does not charge

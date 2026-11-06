@@ -44,6 +44,11 @@ their local operations cannot write that target concurrently. Independent native
 jobs retain separate checkouts, reports and reruns. This grouping does not certify
 that every host can satisfy a timing bound under arbitrary external load.
 
+The core plan runs its complete registered group once. Capacity and creation-age
+cases are already members of that group; their focused diagnostic actions are
+not additional prerequisites. Removing those duplicate executions preserves the
+core/adoption inventory, assertions, test threads, scheduling cap and deadlines.
+
 The projects test project uses the single `judge-projects` unit and its original
 unfiltered `execute` action. The fixed historical-host decoder and migration tests
 are retired, so the former `judge-projects-migration` unit and two-group inventory

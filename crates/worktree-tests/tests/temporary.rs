@@ -53,6 +53,675 @@ fn capacity_host(change: impl FnOnce(&mut Value)) -> Host {
     h
 }
 
+fn adopt_directory_cleanup(h: &Host) {
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["retained_producers"][0]["disposable_directory"] = value!(true);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+}
+
+#[test]
+fn directory_cleanup_budget_counts_siblings_without_individual_excess() {
+    let h = capacity_host(|capacity| {
+        capacity["max_generated_bytes"] = value!(1048576);
+        capacity["max_directory_bytes"] = value!(1048576);
+        capacity["max_entries_per_checkpoint"] = value!(1024);
+    });
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut first =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "first-")
+            .unwrap();
+    let first_bytes = first.path().join("scratch");
+    fs::write(&first_bytes, vec![b'a'; 600000]).unwrap();
+    first.checkpoint().unwrap();
+    let mut second =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "second-")
+            .unwrap();
+    let second_bytes = second.path().join("scratch");
+    fs::write(&second_bytes, vec![b'b'; 600000]).unwrap();
+    // Both allocations are individually within their bound. A fresh ID must
+    // observe the producer directory even before either publishes an excess.
+    let error = match chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "cannot-bypass-",
+    ) {
+        Ok(_) => panic!("fresh allocation bypassed the aggregate directory budget"),
+        Err(error) => error,
+    };
+    assert!(
+        error.contains("producer directory capacity unmet"),
+        "{error}"
+    );
+    assert!(!fs::read_dir(&store).unwrap().any(|entry| {
+        entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("cannot-bypass-")
+    }));
+    assert_eq!(fs::metadata(&first_bytes).unwrap().len(), 600000);
+    assert_eq!(fs::metadata(&second_bytes).unwrap().len(), 600000);
+    assert!(
+        second
+            .checkpoint()
+            .unwrap_err()
+            .contains("producer directory capacity unmet")
+    );
+
+    // Reducing our own scratch settles capacity without releasing a consumer
+    // or deleting its protected sibling. External symlink targets are excluded.
+    fs::remove_file(&second_bytes).unwrap();
+    let external = h.parent.join("external-large-input");
+    fs::write(&external, vec![b'x'; 1048576]).unwrap();
+    std::os::unix::fs::symlink(&external, second.path().join("external-link")).unwrap();
+    let usage = second.checkpoint().unwrap();
+    assert!(
+        usage["producer_directory"]["logical_bytes"]
+            .as_u64()
+            .unwrap()
+            < 1048576,
+        "{usage}"
+    );
+    let mut next =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recovered-")
+            .unwrap();
+    next.finish().unwrap();
+    second.finish().unwrap();
+    first.finish().unwrap();
+    assert_eq!(fs::metadata(&external).unwrap().len(), 1048576);
+}
+
+#[test]
+fn directory_cleanup_budget_refuses_unknown_usage_without_creating_an_allocation() {
+    let h = capacity_host(|capacity| {
+        capacity["max_directory_bytes"] = value!(1048576);
+    });
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "many-")
+            .unwrap();
+    for index in 0..128 {
+        fs::write(allocation.path().join(format!("scratch-{index}")), b"a").unwrap();
+    }
+    let error = match chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "unknown-usage-",
+    ) {
+        Ok(_) => panic!("incomplete directory measurement admitted production"),
+        Err(error) => error,
+    };
+    assert!(error.contains("usage unknown"), "{error}");
+    assert!(!fs::read_dir(&store).unwrap().any(|entry| {
+        entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("unknown-usage-")
+    }));
+    assert_eq!(fs::read_dir(allocation.path()).unwrap().count(), 128);
+}
+
+#[test]
+fn directory_cleanup_context_migration_preserves_retiring_objects_after_lease_retirement() {
+    let h = capacity_host(|capacity| capacity["max_capture_bytes"] = value!(4096));
+    let (code, report, error) = h.auto("import", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    let retention = h.root.join(".chrono-harness/retention.json");
+    let mut policy = json(&fs::read(&retention).unwrap()).unwrap();
+    policy["max_nodes_per_round"] = value!(1);
+    fs::write(retention, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let live =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "alive-")
+            .unwrap();
+    let mut retiring =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "retiring-")
+            .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command.arg("capture-once");
+    let original = retiring.capture_output(&mut command).unwrap();
+    drop(command);
+    assert_eq!(original.status.code(), Some(7));
+    retiring.finish().unwrap();
+    let record = producer_record_path(&store, retiring.path());
+    let original_record = fs::read(&record).unwrap();
+    let object = json(&original_record).unwrap()["object"].clone();
+    assert_eq!(object["retiring"], true);
+    assert!(object["original_release"].is_string());
+    // Reproduce the observed partial retention state: its producer-written
+    // continuation survives after the original capability file is retired.
+    let lease = store.join(object["cache_lease"]["path"].as_str().unwrap());
+    if lease.exists() {
+        fs::remove_file(&lease).unwrap();
+    }
+    let context_path = store.join("producer-context.json");
+    let previous = fs::read(&context_path).unwrap();
+    let cleanup = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&cleanup).unwrap()).unwrap();
+    policy["retained_producers"][0]["capacity"]["max_directory_bytes"] = value!(1048576);
+    fs::write(cleanup, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let migrate = || {
+        h.auto(
+            "migrate",
+            &[
+                "--path",
+                h.root.to_str().unwrap(),
+                "--partition-producer",
+                "test-allocation",
+            ],
+        )
+    };
+    let (code, report, error) = migrate();
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report.to_string().contains("active allocation consumers"),
+        "{report}"
+    );
+    assert_eq!(fs::read(&context_path).unwrap(), previous);
+    drop(live);
+    let (code, report, error) = migrate();
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(fs::read(&record).unwrap(), original_record);
+    assert_eq!(
+        fs::read(store.join(format!(
+            "producer-context-source-{}.json",
+            sha256(&previous)
+        )))
+        .unwrap(),
+        previous
+    );
+    let current = json(&fs::read(&context_path).unwrap()).unwrap();
+    assert_eq!(current["capacity"]["max_directory_bytes"], 1048576);
+    assert!(!lease.exists(), "migration recreated a retired capability");
+    assert_eq!(original.status.code(), Some(7));
+}
+
+#[test]
+fn directory_cleanup_accounts_all_scratch_and_blocks_fresh_allocations_on_excess() {
+    let h = capacity_host(|_| {});
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "bounded-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    let scratch = root.join("unregistered scratch");
+    fs::create_dir(&scratch).unwrap();
+    let bytes = scratch.join("bytes");
+    fs::write(&bytes, b"12345678").unwrap();
+    let usage = allocation.checkpoint().unwrap();
+    assert_eq!(usage["generated_logical_bytes"], 8, "{usage}");
+    assert_eq!(usage["scope"], "owned allocation directory", "{usage}");
+
+    fs::write(&bytes, b"123456789").unwrap();
+    let error = allocation.checkpoint().unwrap_err();
+    assert!(error.contains("capacity unmet"), "{error}");
+    let error = match chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "cannot-bypass-",
+    ) {
+        Ok(_) => panic!("a fresh allocation bypassed an owned directory's excess"),
+        Err(error) => error,
+    };
+    assert!(error.contains("capacity unmet"), "{error}");
+    assert_eq!(fs::read(&bytes).unwrap(), b"123456789");
+
+    fs::write(&bytes, b"12345678").unwrap();
+    assert_eq!(
+        allocation.checkpoint().unwrap()["generated_logical_bytes"],
+        8
+    );
+    let mut next =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recovered-")
+            .unwrap();
+    next.finish().unwrap();
+    allocation.finish().unwrap();
+    assert!(!root.exists());
+}
+
+#[test]
+fn directory_cleanup_reclaims_synthetic_repository_after_actual_consumers_release() {
+    use std::os::unix::fs::symlink;
+
+    let h = host();
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "owned-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    let record = producer_record_path(&store, &root);
+    let repo = root.join("synthetic repository");
+    fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "--initial-branch=dev", "-q"]);
+    fs::write(repo.join("fixture.rs"), b"synthetic fixture input").unwrap();
+    commit(&repo);
+    // No individual cleanup declarations for the repository or these members.
+    for index in 0..32 {
+        fs::write(root.join(format!("scratch-{index}")), b"temporary").unwrap();
+    }
+    let outside = h.parent.join("external-source.rs");
+    fs::write(&outside, b"real external source").unwrap();
+    symlink(&outside, root.join("external-link")).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command.arg("capture-once");
+    let output = allocation.capture_output(&mut command).unwrap();
+    drop(command);
+    assert_eq!(output.status.code(), Some(7));
+    let capture = capture_directory(&root);
+    let result = fs::read(capture.join("result.json")).unwrap();
+    let artifact =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    artifact
+        .acquire("diagnostic", "inspect actual failed original")
+        .unwrap();
+    let report = allocation.finish().unwrap();
+    assert!(
+        root.is_dir(),
+        "released owner lost an active diagnostic: {report}"
+    );
+    assert_eq!(fs::read(capture.join("result.json")).unwrap(), result);
+    artifact
+        .release("diagnostic", "original failure inspected")
+        .unwrap();
+    let recovered = allocation.finish().unwrap();
+    assert!(recovered["recovery_error"].is_null(), "{recovered}");
+    assert!(
+        !root.exists(),
+        "released owned fixture directory accumulated"
+    );
+    assert!(
+        !record.exists(),
+        "released directory registration accumulated"
+    );
+    assert_eq!(fs::read(&outside).unwrap(), b"real external source");
+    assert_eq!(json(&result).unwrap()["exit_code"], 7);
+}
+
+#[test]
+fn directory_cleanup_policy_does_not_reclassify_existing_source_directories() {
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "old-")
+            .unwrap();
+    let old = allocation.path().to_owned();
+    fs::write(old.join("unique-source.rs"), b"unsaved source").unwrap();
+    drop(allocation);
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    adopt_directory_cleanup(&h);
+    let (code, report, error) = h.auto(
+        "migrate",
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--partition-producer",
+            "test-allocation",
+        ],
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    let mut next =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "new-")
+            .unwrap();
+    let new = next.path().to_owned();
+    fs::write(new.join("scratch"), b"temporary").unwrap();
+    next.finish().unwrap();
+    let mut reentry = capacity_reenter_after_release(&store, &outputs, &new);
+    reentry.finish().unwrap();
+    assert!(!new.exists(), "new directory ownership was not applied");
+    assert_eq!(
+        fs::read(old.join("unique-source.rs")).unwrap(),
+        b"unsaved source"
+    );
+}
+
+#[test]
+fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_intent() {
+    let h = host();
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "old-owned-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    let repo = root.join("synthetic repository");
+    fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "--initial-branch=dev", "-q"]);
+    fs::write(repo.join("fixture.rs"), b"old synthetic fixture").unwrap();
+    commit(&repo);
+    fs::write(root.join("unregistered-scratch"), b"temporary").unwrap();
+    let artifact =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    artifact
+        .acquire("diagnostic", "inspect old fixture")
+        .unwrap();
+    drop(allocation);
+    let record = producer_record_path(&store, &root);
+    let object = json(&fs::read(&record).unwrap()).unwrap()["object"].clone();
+    let intent = store.join(object["intent"]["path"].as_str().unwrap());
+    let original = fs::read(&intent).unwrap();
+    // A valid historic sweep can predate this allocation. Custody must schedule
+    // its exact directory rather than waiting for that sweep to wrap around.
+    fs::create_dir_all(store.join("recovery-state")).unwrap();
+    fs::write(
+        store.join("recovery-state/cursor.json"),
+        serde_json::to_vec(&value!({"bucket":0,"after":"","round_started":1,"pending":[]}))
+            .unwrap(),
+    )
+    .unwrap();
+    adopt_directory_cleanup(&h);
+    let (code, report, error) = h.auto(
+        "migrate",
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--partition-producer",
+            "test-allocation",
+        ],
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    let live = chrono_harness::ownership::Lease::acquire(
+        &store.join(object["cache_lease"]["path"].as_str().unwrap()),
+        Some(object["cache_lease"]["id"].as_str().unwrap()),
+        false,
+        false,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let mut plan = value!({"schema":"chrono-fixture-body-custody/v1",
+        "head":git(&h.root,&["rev-parse","HEAD"]),"current_consumers_released":true,
+        "reason":"current fixture custodian inspected originals and releases this synthetic directory",
+        "objects":[{"producer":"test-allocation","allocation":object["path"],
+            "identity":object["identity"],"intent":object["intent"],"members":[],
+            "adopt_directory":true,"release_originals":true}]});
+    let path = ".chrono-harness/state/directory-custody.json";
+    let adopt = |plan: &Value| {
+        fs::write(h.root.join(path), serde_json::to_vec(plan).unwrap()).unwrap();
+        h.auto(
+            "migrate",
+            &["--path", h.root.to_str().unwrap(), "--adopt-fixtures", path],
+        )
+    };
+    assert_eq!(adopt(&plan).0, 2, "live capability must exclude custody");
+    drop(live);
+    assert_eq!(adopt(&plan).0, 2, "diagnostic must separately release");
+    artifact
+        .release("diagnostic", "old fixture inspected")
+        .unwrap();
+    plan["objects"][0]["identity"] = value!("wrong physical identity");
+    assert_eq!(adopt(&plan).0, 2);
+    plan["objects"][0]["identity"] = object["identity"].clone();
+    let (code, report, error) = adopt(&plan);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(
+        root.is_dir(),
+        "custody must not itself dispose the directory"
+    );
+    assert_eq!(fs::read(&intent).unwrap(), original);
+    let adopted = json(&fs::read(&record).unwrap()).unwrap();
+    assert!(adopted["object"]["directory_custody"].is_object());
+    assert_ne!(adopted["object"]["disposable_directory"], true);
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(
+        !root.exists() && !record.exists(),
+        "adopted old directory accumulated"
+    );
+    assert_eq!(
+        json(&original).unwrap()["producer_outcome"],
+        "not-established"
+    );
+}
+
+#[test]
+fn directory_cleanup_preserves_live_capability_and_staged_source_then_resumes() {
+    let h = host();
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "guarded-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    fs::write(root.join("source.rs"), b"staged host source").unwrap();
+    let capability = allocation.capability().unwrap();
+    let report = allocation.finish().unwrap();
+    assert!(
+        root.is_dir(),
+        "live capability lost its directory: {report}"
+    );
+    drop(capability);
+
+    let source = root.join("source.rs");
+    let relative = source.strip_prefix(&h.root).unwrap().to_str().unwrap();
+    git(&h.root, &["add", "-f", "--", relative]);
+    let rejected = allocation.finish().unwrap();
+    let rows = rejected["producer_objects"].as_array().unwrap();
+    assert!(
+        rows.iter().any(|r| r["original_retirement"]["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("committed/index source"))),
+        "{rejected}"
+    );
+    assert_eq!(fs::read(&source).unwrap(), b"staged host source");
+    let record = producer_record_path(&store, &root);
+    let before = fs::read(&record).unwrap();
+    let object = json(&before).unwrap();
+    assert_eq!(object["object"]["retiring"], true);
+    let intent = store.join(object["object"]["intent"]["path"].as_str().unwrap());
+    let intent_bytes = fs::read(&intent).unwrap();
+    assert_eq!(
+        json(&intent_bytes).unwrap()["producer_outcome"],
+        "not-established"
+    );
+
+    git(&h.root, &["rm", "--cached", "-q", "--", relative]);
+    let resumed = allocation.finish().unwrap();
+    assert!(resumed["recovery_error"].is_null(), "{resumed}");
+    assert!(!root.exists() && !record.exists());
+    assert_eq!(
+        json(&intent_bytes).unwrap()["producer_outcome"],
+        "not-established"
+    );
+    assert!(
+        rows.iter()
+            .any(|r| r["original_retirement"]["status"] == "failed")
+    );
+}
+
+#[test]
+fn directory_cleanup_keeps_shared_input_until_its_last_directory_releases() {
+    let h = host();
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let source = h.parent.join("real-input.rs");
+    fs::write(&source, b"real source outside temporary directories").unwrap();
+    let mut first =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "first-")
+            .unwrap();
+    let mut second =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "second-")
+            .unwrap();
+    let mut originals = vec![];
+    for allocation in [&first, &second] {
+        let destination = allocation.path().join("copied.rs");
+        originals.push(
+            chrono_worktree::TemporaryHost::register_copy(
+                &store,
+                "test-allocation",
+                &source,
+                &destination,
+                None,
+                "actual fixture input",
+            )
+            .unwrap(),
+        );
+        fs::copy(&source, &destination).unwrap();
+    }
+    assert_eq!(originals[0], originals[1]);
+    fs::write(
+        first.path().join("copied.rs"),
+        b"synthetic fixture mutation",
+    )
+    .unwrap();
+    let report = first.finish().unwrap();
+    assert!(
+        !first.path().exists(),
+        "released first directory accumulated: {report}"
+    );
+    assert!(
+        originals[0].is_file(),
+        "second directory lost its shared input"
+    );
+    let report = second.finish().unwrap();
+    assert!(
+        !second.path().exists(),
+        "released second directory accumulated: {report}"
+    );
+    assert!(
+        !originals[0].exists(),
+        "last released shared input accumulated: {report}"
+    );
+    assert_eq!(
+        fs::read(&source).unwrap(),
+        b"real source outside temporary directories"
+    );
+}
+
+#[test]
+fn directory_cleanup_preserves_nested_live_and_diagnostic_consumers() {
+    super::fixture_body::custody_nested_consumers(true);
+}
+
+#[test]
+fn directory_cleanup_reports_disposal_even_when_shared_input_custody_is_missing() {
+    let h = host();
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let source = h.parent.join("original-input.rs");
+    fs::write(&source, b"required original bytes").unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "partial-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    let destination = root.join("copied.rs");
+    let original = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        &source,
+        &destination,
+        None,
+        "actual fixture input",
+    )
+    .unwrap();
+    fs::copy(&source, &destination).unwrap();
+    let record = producer_record_path(&store, &root);
+    // A historical allocation may have original bytes but no claim namespace.
+    // It cannot establish a new release, yet its owned directory can be gone.
+    fs::remove_dir_all(
+        store
+            .join("body-input-claims")
+            .join(original.file_stem().unwrap()),
+    )
+    .unwrap();
+    let report = allocation.finish().unwrap();
+    assert!(!root.exists(), "owned directory was not disposed: {report}");
+    assert!(
+        record.exists(),
+        "incomplete retirement lost its continuation"
+    );
+    assert_eq!(fs::read(&original).unwrap(), b"required original bytes");
+    assert!(!report["recovery_error"].is_null(), "{report}");
+    let row = report["producer_objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| {
+            row["path"]
+                .as_str()
+                .is_some_and(|p| p.ends_with(root.file_name().unwrap().to_str().unwrap()))
+        })
+        .unwrap();
+    assert_eq!(row["status"], "failed", "{report}");
+    let result = &row["original_retirement"];
+    assert!(
+        result["error"]
+            .as_str()
+            .unwrap()
+            .contains("claim namespace unknown")
+    );
+    assert_eq!(result["physical_absence"], "verified", "{report}");
+    assert!(
+        result["artifact_disposals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|effect| effect["status"] == "verified-absent"
+                && effect["bytes_before"].as_u64().unwrap() > 0),
+        "actual disposal was lost when shared input release failed: {report}"
+    );
+}
+
+// Re-enter the real producer rather than assuming that one bounded retention
+// round can remove an entire original/metadata relationship. Preserve the final
+// physical-absence assertions and reject every error except honest capacity
+// deferral while its released predecessor still has work to retire.
+fn capacity_reenter_after_release(
+    store: &Path,
+    outputs: &[String],
+    predecessor: &Path,
+) -> chrono_worktree::TemporaryHost {
+    let record = producer_record_path(store, predecessor);
+    for _ in 0..20 {
+        match chrono_worktree::TemporaryHost::allocate(
+            store,
+            "test-allocation",
+            outputs,
+            "released-reentry-",
+        ) {
+            Ok(mut next) => {
+                if !record.exists() {
+                    return next;
+                }
+                next.finish().unwrap();
+            }
+            Err(error) => assert!(error.contains("capacity unmet"), "{error}"),
+        }
+    }
+    panic!("released predecessor did not retire through bounded ordinary reentry");
+}
+
 #[test]
 fn capacity_generated_boundary_and_explicit_finish_preserve_source_and_diagnostic() {
     let h = capacity_host(|_| {});
@@ -96,12 +765,11 @@ fn capacity_generated_boundary_and_explicit_finish_preserve_source_and_diagnosti
             "test consumer inspected the original and needs no further cache input",
         )
         .unwrap();
-    let next =
-        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recover-")
-            .unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, allocation.path());
     assert!(!cache.exists());
     assert_eq!(fs::read(&source).unwrap(), b"unique source");
     assert!(next.path().exists());
+    next.finish().unwrap();
 }
 
 #[test]
@@ -297,6 +965,56 @@ fn capacity_filesystem_refusal_survives_fresh_allocation_ids() {
     assert!(
         !store.join("objects.json").exists(),
         "refusal must precede allocation birth"
+    );
+}
+
+#[test]
+fn capacity_explicit_maintenance_advances_the_existing_bounded_cursor() {
+    let h = capacity_host(|capacity| capacity["max_records_per_round"] = value!(1));
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocations = Vec::new();
+    for prefix in ["active-", "eligible-a-", "eligible-b-"] {
+        let allocation =
+            chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, prefix)
+                .unwrap();
+        fs::create_dir(allocation.path().join("cache 空白")).unwrap();
+        fs::write(allocation.path().join("cache 空白/generated"), b"123").unwrap();
+        allocations.push(allocation);
+    }
+    let active = allocations.remove(0);
+    let eligible = allocations
+        .iter()
+        .map(|allocation| allocation.path().join("cache 空白"))
+        .collect::<Vec<_>>();
+    drop(allocations);
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        let producer = report["producer_drains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["producer"] == "test-allocation")
+            .unwrap();
+        let original = h.root.join(producer["receipt"]["path"].as_str().unwrap());
+        let raw = fs::read(original).unwrap();
+        assert_eq!(sha256(&raw), producer["receipt"]["sha256"]);
+        let observed = report_view(json(&raw).unwrap());
+        let scope = &observed["producer_recovery_scope"];
+        assert_eq!(scope["bounded"], true, "{observed}");
+        assert!(scope["visited"].as_u64().unwrap() <= 1, "{observed}");
+        rounds.push(scope.clone());
+        assert!(active.path().join("cache 空白/generated").is_file());
+        if eligible.iter().all(|path| !path.exists()) {
+            break;
+        }
+    }
+    assert!(
+        eligible.iter().all(|path| !path.exists()),
+        "explicit maintenance did not advance past the active allocation: {rounds:?}"
     );
 }
 
@@ -953,12 +1671,13 @@ fn declared_nested_git_root_preserves_committed_and_staged_source_under_outputs(
 }
 
 #[test]
-fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnostic() {
+fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_diagnostic() {
     use std::io::{Read, Write};
     let h = host();
     let path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
     policy["retained_producers"][0]["source_roots"] = value!(["."]);
+    policy["retained_producers"][0]["operations"] = value!(["use.consumer"]);
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
     commit(&h.root);
     let (store, outputs) =
@@ -987,10 +1706,45 @@ fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnosti
         }),
     );
     drop(allocation);
-    let mut command = h.auto_command("maintain", &[]);
+    let mut command = h.auto_command(
+        "use",
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
     let maintenance = std::thread::spawn(move || command.output().unwrap());
     let (mut stream, _) = listener.accept().unwrap();
     stream.read_exact(&mut [0; 5]).unwrap();
+    let coordinator_metadata = chrono_harness::ownership::Lease::acquire(
+        &h.record_directory(&h.root).join("metadata.lease"),
+        None,
+        false,
+        true,
+        None,
+    )
+    .unwrap();
+    let independent_admitted = coordinator_metadata.is_some();
+    drop(coordinator_metadata);
+    // Always release and join the original maintenance before asserting its
+    // exclusion result. The failing implementation must not strand its child.
+    let concurrent_ledger = independent_admitted.then(|| {
+        let result = h.auto(
+            "use",
+            &[
+                "--path",
+                h.root.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
+        );
+        (
+            result,
+            json(&fs::read(h.ledger_path(&h.root)).unwrap()).unwrap(),
+        )
+    });
     let unrelated = chrono_worktree::TemporaryHost::allocate(
         &store,
         "test-allocation",
@@ -1009,6 +1763,27 @@ fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnosti
     stream.write_all(b"r").unwrap();
     let output = maintenance.join().unwrap();
     assert!(output.status.success(), "{output:?}");
+    assert!(
+        independent_admitted,
+        "producer cleanup retained unrelated coordinator metadata exclusion"
+    );
+    let ((code, used, error), concurrent_ledger) = concurrent_ledger.unwrap();
+    assert_eq!(code, 0, "independent coordinator use: {used} {error}");
+    let after = json(&fs::read(h.ledger_path(&h.root)).unwrap()).unwrap();
+    let current = &after["entries"][0];
+    let concurrent = &concurrent_ledger["entries"][0];
+    assert_eq!(current["enrollment"], concurrent["enrollment"]);
+    assert_eq!(current["attachment"], concurrent["attachment"]);
+    assert_eq!(
+        current["ownership"]["path"],
+        concurrent["ownership"]["path"]
+    );
+    assert_eq!(current["ownership"]["id"], concurrent["ownership"]["id"]);
+    assert!(
+        current["ownership"]["generation"].as_u64().unwrap()
+            > concurrent["ownership"]["generation"].as_u64().unwrap()
+    );
+    assert_eq!(current["uses"], value!([]));
     assert!(!root.join("cache 空白").exists());
     assert_eq!(
         fs::read(root.join("source.rs")).unwrap(),
@@ -1542,7 +2317,7 @@ fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams
     );
     let capture = capture_directory(h._dir.path());
     assert_eq!(
-        json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap(),
+        super::report_view(json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap()),
         report
     );
     assert!(fs::read(capture.join("stderr.bytes")).unwrap().is_empty());
@@ -1578,11 +2353,10 @@ fn capacity_fresh_allocation_cannot_escape_protected_excess() {
     );
     assert!(cache.exists());
     diagnostic.release("reader", "original consumed").unwrap();
-    let next =
-        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "released-")
-            .unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, first.path());
     assert!(!cache.exists());
     assert!(next.path().exists());
+    next.finish().unwrap();
 }
 
 #[test]
@@ -1723,13 +2497,7 @@ fn capacity_native_failure_originals_and_metadata_retire_after_diagnostic_releas
             "actual consumer inspected original failed result and streams",
         )
         .unwrap();
-    let mut next = chrono_worktree::TemporaryHost::allocate(
-        &store,
-        "test-allocation",
-        &outputs,
-        "after-release-",
-    )
-    .unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, host.path());
     next.finish().unwrap();
     assert!(!capture.exists(), "released native originals accumulated");
     assert!(!metadata.exists(), "released producer receipts accumulated");
@@ -1825,6 +2593,8 @@ fn capacity_interrupted_copy_claim_retires_without_inventing_original_bytes() {
     assert_eq!(state["object"]["copy_intents"]["copy"], 7);
     assert!(state["object"]["original_release"].is_null());
     host.finish().unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, host.path());
+    next.finish().unwrap();
     assert!(!original.exists(), "recovery invented original bytes");
     assert!(!claims.exists(), "released pending-copy claims accumulated");
     assert!(
@@ -2144,6 +2914,8 @@ fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
     drop(command);
     assert_eq!(original.status.code(), Some(7));
     let record = producer_record_path(&store, host.path());
+    let original_record = json(&fs::read(&record).unwrap()).unwrap();
+    let original_identity = original_record["object"]["identity"].clone();
     host.finish().unwrap();
     assert!(
         host.path().exists(),
@@ -2170,11 +2942,23 @@ fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
     .unwrap_err();
     assert!(error.contains("original lifetime released"), "{error}");
     assert_eq!(capture_count(), before, "retired capture created output");
+    let mut observed_retirement = false;
     for _ in 0..16 {
         if !record.exists() {
             break;
         }
         let report = host.finish().unwrap();
+        for row in report["producer_objects"].as_array().unwrap() {
+            if row["status"] == "retiring" {
+                observed_retirement = true;
+                assert_eq!(row["producer"], "test-allocation");
+                assert_eq!(
+                    row["path"],
+                    host.path().strip_prefix(&h.root).unwrap().to_str().unwrap()
+                );
+                assert_eq!(row["identity"], original_identity);
+            }
+        }
         assert!(
             !report["original_retention"].as_array().unwrap().is_empty(),
             "ordinary reentry did not consume its declared retirement paths"
@@ -2184,6 +2968,10 @@ fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
             "continuation disappeared before original container"
         );
     }
+    assert!(
+        observed_retirement,
+        "bounded reentry lost the allocation's retirement identity"
+    );
     assert!(
         !host.path().exists(),
         "bounded ordinary recovery did not advance"
