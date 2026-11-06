@@ -398,31 +398,21 @@ work. This adds ghost specifications and proof bookkeeping, with the same
 executable traversal and no new trusted interface. Additional proof/compiler
 cost remains unmeasured.
 
-The actual `graph::closure` now calls `seed_topology` and, for each seed,
-the same proof root's `propagate`. This composes the executable FIFO search,
-sparse typed predecessor construction and the actual consumer-row projection.
-The search is proved to succeed. Every returned position has exactly the name
-bytes and complete original typed outgoing row of that FIFO position, preserving
-every parallel, cycle and self-loop slot. Returned names are exactly those with
-a finite root walk, and the sparse predecessor set equals the FIFO's reached
-nodes and first-discovery parent slots. The consumer directly uses those rows
-and the returned tree; the old unproved search `expect` and index-to-row loop
-are removed. This adds O(R) temporary borrowed rows per seed without cloning
-outgoing edges; measured total cost is unknown.
+实际 `graph::closure` 调用 `seed_topology`，再对每个 seed 调用同一证明根的 `propagate`。
+后者组合可执行的 FIFO 搜索、稀疏类型化前驱构造，以及实际使用行的投影，并证明搜索必成功。
+每个返回位置的完整名称字节和原类型化出边行，都精确对应同位置的 FIFO 节点，保留全部平行、环和自环槽。
+返回名称恰好存在有限根路径；稀疏前驱集合等于 FIFO 的已达节点及首发现槽。
+使用方直接消费这些行和返回的树，移除未证明的搜索 `expect` 及索引投影循环。
+每个 seed 增加 O(R) 临时借用行，不克隆出边；总实测成本未知。
 
-Independent proofs require exact FIFO names, original typed slots, sparse parents,
-unreachable exclusion, shortest direct parents and isolated Unicode/NUL roots.
-A runtime case consumes actual projected rows and checks the resulting closure's
-causes, typed traversals and test selection. Replacing each projected name with
-the root name fails its explicit byte-projection assertion (121 verified / 1 error);
-correct source is restored by SHA-256 before verification. The initial mutation
-without that assertion exhausted the loop proof's resource limit; that result
-is retained separately and is not reported as a semantic assertion failure.
-No dependency, trusted interface, operation or proof budget is added.
+独立证明要求精确 FIFO 名称、原类型边槽、稀疏前驱、不可达隔离、最短直接前驱和孤立 Unicode/NUL 根。
+运行时用例消费实际投影行，再核闭包的原因、类型化遍历边及选测。
+把每行名称错误投影为根名，会使显式字节投影断言失败（121 verified / 1 error）；正确源码按 SHA-256 恢复后才验证。
+未加该断言的首次变异触及循环证明资源上限，原结果另存，不把它称为语义断言失败。
+没有增加依赖、受信接口、操作或证明预算。
 
-The remaining per-seed adapter composition, cause merging, seed-ID map, seed
-production, serialization and test selection remain unproved;
-the adapter's empty-root obligation is retained. Independent Verus examples cover
+逐 seed 调用的适配组合、原因合并、seed-ID 映射、seed 构造、序列化和选测仍未证明；
+适配器的空证明根义务继续保留。Independent Verus examples cover
 empty graphs, invalid roots/destinations, self cycles, disconnected nodes, diamonds
 and parallel edges. Expected shortest distances use independently supplied paths
 and distance potentials. Further verified examples require exact constant

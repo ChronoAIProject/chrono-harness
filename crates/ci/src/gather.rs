@@ -530,7 +530,7 @@ fn inner(
             "collection context does not bind current provider and collection scope".into(),
         );
     }
-    let (_profile, registered) = units::profile(root, c)?;
+    let registered = units::profile(root, c)?.units;
     if context["check_config_sha256"] != file_identity(&root.join(&c.collection.check_config))?.0 {
         return Err("collection check profile changed".into());
     }
