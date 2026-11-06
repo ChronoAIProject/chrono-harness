@@ -55,6 +55,7 @@
     "projects": ".chrono-harness/projects.json",
     "operations": [
       "inputs.fetch.runner",
+      "inputs.vendor.runner",
       "guard.check.runner"
     ],
     "tools": {
