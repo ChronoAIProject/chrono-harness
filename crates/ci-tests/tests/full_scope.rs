@@ -2,6 +2,33 @@
 use super::*;
 use chrono_harness::units::Scope;
 
+#[test]
+fn retired_full_v1_is_rejected_before_any_publication() {
+    for operation in ["generate", "init", "prepare"] {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let mut c = config();
+        c.schema = "chrono-github-full-ci/v1".into();
+        write(root, SOURCE, &serde_json::to_value(&c).unwrap());
+        let original = fs::read(root.join(SOURCE)).unwrap();
+        let result = match operation {
+            "generate" => generate(root, SOURCE, false).map(|_| ()),
+            "init" => init(root, &root.join(SOURCE)).map(|_| ()),
+            _ => full::prepare(root, SOURCE, &c, b"{}", &"1".repeat(40)).map(|_| ()),
+        };
+        assert!(result.is_err(), "retired {operation} accepted: {result:?}");
+        assert_eq!(fs::read(root.join(SOURCE)).unwrap(), original);
+        for path in [
+            c.workflow_path.as_str(),
+            c.context_path.as_str(),
+            c.preparation_path.as_str(),
+            ".chrono-harness/ci/full.json",
+        ] {
+            assert!(!root.join(path).exists(), "{operation} published {path}");
+        }
+    }
+}
+
 fn scopes() -> [Value; 2] {
     [
         json!({"kind":"unit","unit":"compiler.arm64-1"}),
