@@ -6,8 +6,6 @@ use std::{
     os::fd::{AsFd, AsRawFd},
     path::Path,
 };
-#[path = "support/isolated_capability.rs"]
-mod isolated_capability;
 fn spec(program: &str, args: Vec<String>) -> CommandSpec {
     CommandSpec {
         program: program.into(),
@@ -346,9 +344,25 @@ fn held_native_capability_helper() {
 #[test]
 fn overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff() {
     use std::io::{BufRead, Write};
-    if !isolated_capability::isolated_capability_test(
-        "overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff",
-    ) {
+    if std::env::var_os("CHRONO_FD_OVERLAP_ISOLATED").is_none() {
+        // Other tests can fork while this test owns its lock. Until exec, those
+        // unrelated children also hold the process-wide descriptor table.
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "overlapping_native_commands_hold_exclusion_after_killed_wrapper_and_thread_handoff",
+                "--nocapture",
+            ])
+            .env("CHRONO_FD_OVERLAP_ISOLATED", "1");
+        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         return;
     }
     for signal in [libc::SIGTERM, libc::SIGKILL] {

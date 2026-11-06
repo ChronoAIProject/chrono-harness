@@ -1477,10 +1477,12 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
     h.modify(".chrono-harness/ci/units.json", |c| {
         c["gather"]["wait_seconds"] = json!(6)
     });
+    let launches = fs::read(h.root.join(".chrono-harness/state/mock-launches.jsonl")).unwrap();
     json_file(
         &h.root,
         ".chrono-harness/state/event.json",
-        &json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false}),
+        // Invalid acquisition bounds must reject before obtaining Git endpoints.
+        &json!({"ref":"refs/heads/dev","before":"b".repeat(40),"after":h.candidate,"created":false,"deleted":false}),
     );
     let rejected = h
         .command(&["check", "--collect"])
@@ -1506,6 +1508,10 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
         String::from_utf8_lossy(&rejected.stderr).contains("registered acquisition timeout"),
         "{}",
         String::from_utf8_lossy(&rejected.stderr)
+    );
+    assert_eq!(
+        fs::read(h.root.join(".chrono-harness/state/mock-launches.jsonl")).unwrap(),
+        launches
     );
 }
 
