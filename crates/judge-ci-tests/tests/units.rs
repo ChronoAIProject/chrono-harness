@@ -547,6 +547,59 @@ fn collection_verifies_complete_reports_without_executing_tests() {
     assert_eq!(h.calls(), 1);
 }
 
+#[test]
+fn collection_preserves_result_set_semantics_from_original_stdout() {
+    let h = report_host();
+    let b = h.head();
+    h.write("src.txt", "two");
+    let c = h.commit();
+    let input = write_report(&h, &b, &c, "alpha");
+    let path = input["path"].as_str().unwrap();
+    let original = h.read(path);
+    for mode in ["reordered", "missing", "extra", "duplicate"] {
+        let mut report = original.clone();
+        let results = report["response"]["results"].as_array_mut().unwrap();
+        match mode {
+            "reordered" => results.reverse(),
+            "missing" => {
+                let before = results.len();
+                results.retain(|row| row["id"] != "test:other");
+                assert_eq!(results.len() + 1, before);
+            }
+            "extra" => {
+                let mut extra = results[0].clone();
+                extra["id"] = json!("ci.unexpected");
+                results.push(extra);
+            }
+            _ => results.push(results[0].clone()),
+        }
+        let stdout = serde_json::to_vec(&report["response"]).unwrap();
+        report["judge"]["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+        report["judge"]["stdout_sha256"] = json!(sha256(&stdout));
+        report["judge"]["stdout_bytes"] = json!(stdout);
+        h.json(path, &report);
+        let mut changed = input.clone();
+        changed["sha256"] = json!(sha256(&fs::read(h.root().join(path)).unwrap()));
+        let response = collect(&h, &b, &c, json!([changed]));
+        if mode == "reordered" {
+            pass(&response);
+        } else {
+            fail(
+                &response,
+                if mode == "duplicate" {
+                    "duplicate"
+                } else {
+                    "unit result coverage differs"
+                },
+            );
+        }
+        assert_eq!(h.calls(), 1);
+    }
+    h.json(path, &original);
+    pass(&collect(&h, &b, &c, json!([input])));
+    assert_eq!(h.calls(), 1);
+}
+
 fn pad_report(h: &Host, mut report: Value, length: usize) -> Value {
     let path = h.root().join(report["path"].as_str().unwrap());
     let mut bytes = fs::read(&path).unwrap();
