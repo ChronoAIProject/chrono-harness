@@ -290,26 +290,28 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
     let trace = root.join(".chrono-harness/state/scoped-git.trace");
     let shadow = root.join(".chrono-harness/state/shadow");
     if bound {
-        use std::os::unix::fs::PermissionsExt;
         let facts = ".chrono-harness/scoped-facts.json";
         let git = chrono_harness::resolve_program(&root, "git", None).unwrap();
         let version = h.capture_native(Command::new(&git).arg("--version"));
         assert!(version.status.success());
         let chosen = root.join(".chrono-harness/bin/chosen git");
-        let quoted = format!("'{}'", git.to_str().unwrap().replace('\'', "'\\''"));
-        fs::write(&chosen, format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$SCOPED_TRACE\" || exit $?\nexec {quoted} \"$@\"\n")).unwrap();
-        fs::set_permissions(&chosen, fs::Permissions::from_mode(0o755)).unwrap();
         fs::create_dir_all(&shadow).unwrap();
-        fs::write(
-            shadow.join("git"),
-            "#!/bin/sh\necho unbound-registration-git >&2\nexit 83\n",
-        )
-        .unwrap();
-        fs::set_permissions(shadow.join("git"), fs::Permissions::from_mode(0o755)).unwrap();
+        let helper = std::path::Path::new(env!("CARGO_BIN_EXE_chrono-test-projects-git"));
+        for destination in [&chosen, &shadow.join("git")] {
+            host::copied_fixture_input(&root, helper, destination);
+            let copied = h.capture_native(Command::new("/bin/cp").arg(helper).arg(destination));
+            assert!(
+                copied.status.success(),
+                "Git fixture installation: {copied:?}"
+            );
+        }
         let facts_config = json!({"schema_version":3,
             "facts_git":{"tool":"git","input":"git-bytes"},
             "tools":[{"id":"git","program":chosen,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
-            "environment":{"inherit":[],"values":{"SCOPED_TRACE":trace,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
+            "environment":{"inherit":[],"values":{"SCOPED_TRACE":trace,
+                "CHRONO_TEST_GIT_PROFILE":"scoped","BOUND_SCOPED_VALUE":"declared",
+                "SCOPED_REAL_GIT":git,"SCOPED_GIT_MODE":"pass",
+                "GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
                 "inputs":[{"id":"git-bytes","location":chosen,"presence":"present","sha256":chrono_harness::sha256(&fs::read(&chosen).unwrap())}]},
             "protocol":{"timeout_seconds":30,"stdout_limit_bytes":1048576}});
         h.values.insert(facts.into(), facts_config);
