@@ -30,6 +30,9 @@ pub mod units;
 pub mod verified_identifiers;
 #[allow(unexpected_cfgs)]
 pub mod verified_paths;
+#[allow(unexpected_cfgs)]
+pub mod verified_status;
+pub use verified_status::Status;
 pub use verus_builtin_macros::verus;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
@@ -92,14 +95,6 @@ pub struct Request {
     pub base: Option<String>,
     pub candidate: String,
     pub initial: bool,
-}
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Status {
-    Passed,
-    Failed,
-    NotRequired,
-    Blocked,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
