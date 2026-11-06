@@ -83,3 +83,5 @@ Python 发布 integration 组保留真实 distribution pack，并加入真实 ca
 当前发布 macOS runner 采用主 CI 已使用的 `macos-26`；旧 `macos-14` 配置已被原生服务拒绝。Linux 发布中的缓存探测通过 `.chrono-harness/config.json` 选择 `.chrono-harness/git/linux-release.json`，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。该 Git 2.56.0 的精确摘要来自失败运行 `42183603167/1` 的原始 build receipt，原过程流已核摘要；工作树所有者同步登记此身份。未知 Git 字节继续在执行前拒绝，后续原生验证才证明候选可用。
 
 编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。`host.bootstrap-tests` 的断言输入释放实际调用 `chrono-harness retention`，因此两平台发布验证同步补登记 `build_runner` 与 `chrono-harness` 暂存依赖；没有跳过原测试。
+
+Linux 发行政策也保留工作树所有者读取登记所需的完整结构，以及真实 custody fixture 使用的 Python 工具槽；Python 版本保持未知（`null`），fixture 自行绑定实际解释器。该登记不声称完成 Linux canonical/full 采用。原生 `42222842930/1` 已暴露并保留最小 Git 配置不能满足这些实际消费者的失败。

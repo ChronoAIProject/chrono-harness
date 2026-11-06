@@ -257,6 +257,33 @@
         "--version"
       ],
       "expected_version": "git version 2.56.0"
+    },
+    {
+      "id": "python3",
+      "program": "/usr/bin/python3",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": null
+    },
+    {
+      "id": "chrono-ci",
+      "program": ".chrono-harness/bin/chrono-ci",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-ci 0.1.0"
+    },
+    {
+      "id": "chrono-worktree",
+      "program": ".chrono-harness/bin/chrono-worktree",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-worktree 0.1.0"
     }
   ],
   "environment": {
@@ -273,6 +300,102 @@
         "presence": "present",
         "sha256": "824d5b2fffef332ec7ba053e579659bb12f26a0b4747da6f9c6dc0e71d36f235"
       }
+    ]
+  },
+  "runner": {
+    "path": ".chrono-harness/bin/chrono-harness",
+    "version": "0.1.0",
+    "sha256": null
+  },
+  "registries": {
+    "judges": ".chrono-harness/judges.json",
+    "projects": ".chrono-harness/projects.json",
+    "filemap": ".chrono-harness/FILEMAP.json",
+    "workflow": ".chrono-harness/workflow.json"
+  },
+  "canonical_check": {
+    "operation": "validate.delta",
+    "argv": [
+      ".chrono-harness/bin/chrono-harness",
+      "check"
+    ],
+    "profile": ".chrono-harness/ci/check.json",
+    "inputs": {
+      "local": {
+        "operation": "prepare.check.local",
+        "tool": "chrono-worktree",
+        "argv": [
+          "check-inputs",
+          "--config",
+          ".chrono-harness/worktree.json"
+        ]
+      },
+      "ci": {
+        "operation": "prepare.check.ci",
+        "tool": "chrono-ci",
+        "argv": [
+          "check-inputs",
+          "--config",
+          ".chrono-harness/ci/units.json",
+          "--event-env",
+          "GITHUB_EVENT_NAME",
+          "--payload-env",
+          "GITHUB_EVENT_PATH",
+          "--revision-env",
+          "CHRONO_WORKFLOW_REVISION",
+          "--repository-env",
+          "GITHUB_REPOSITORY"
+        ]
+      }
+    },
+    "participation": {
+      "operation": "worktree.check",
+      "tool": "chrono-worktree",
+      "argv": [
+        "check"
+      ]
+    }
+  },
+  "semantic_fields": [
+    {
+      "path": ".chrono-harness/projects.json",
+      "pointers": [
+        "/projects/*/actions",
+        "/scripts/*/actions"
+      ],
+      "on": "add-modify-delete"
+    },
+    {
+      "path": ".chrono-harness/FILEMAP.json",
+      "pointers": [
+        "/files/*/surface",
+        "/execution_plans"
+      ],
+      "on": "modify-delete-existing"
+    },
+    {
+      "path": ".chrono-harness/workflow.json",
+      "pointers": [
+        "/historical_profiles",
+        "/migrations",
+        "/retirements"
+      ],
+      "on": "add-modify-delete"
+    },
+    {
+      "path": ".chrono-harness/config.json",
+      "pointers": [
+        "/tools",
+        "/environment",
+        "/canonical_check"
+      ],
+      "on": "add-modify-delete"
+    }
+  ],
+  "input_closure": {
+    "status": "incomplete",
+    "unresolved": [
+      "Linux release Git and artifact consumers are registered; canonical/full toolchain and environment adoption is not complete."
     ]
   }
 }
