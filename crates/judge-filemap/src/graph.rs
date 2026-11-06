@@ -211,8 +211,8 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
     };
     let topology = crate::verified_graph::seed_topology(edges, seeds);
     let mut traversed: BTreeMap<Edge, CauseSet> = BTreeMap::new();
-    let mut propagations = crate::verified_graph::SeedPropagations::new(&topology, seeds);
-    while let Some(item) = propagations.next() {
+    let propagations = crate::verified_graph::SeedPropagations::new(&topology, seeds);
+    for item in propagations {
         let seed = item.seed;
         let propagation = item.propagation;
         for row in propagation.rows {

@@ -3422,7 +3422,12 @@ impl<'t, 'a> SeedPropagations<'t, 'a> {
         Self { topology, seeds, next: 0 }
     }
 
-    pub fn next(&mut self) -> (out: Option<SeedPropagation<'t, 'a>>)
+}
+
+impl<'t, 'a> Iterator for SeedPropagations<'t, 'a> {
+    type Item = SeedPropagation<'t, 'a>;
+
+    fn next(&mut self) -> (out: Option<Self::Item>)
         ensures self.seed_values() == old(self).seed_values(), self.graph() == old(self).graph(),
             out.is_none() <==> old(self).position() == old(self).seed_values().len(),
             self.position() == old(self).position() + if out.is_some() { 1int } else { 0int },
