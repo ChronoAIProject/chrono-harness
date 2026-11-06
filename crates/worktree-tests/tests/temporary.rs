@@ -62,6 +62,87 @@ fn adopt_directory_cleanup(h: &Host) {
 }
 
 #[test]
+fn directory_cleanup_budget_counts_siblings_without_individual_excess() {
+    let h = capacity_host(|capacity| {
+        capacity["max_generated_bytes"] = value!(1048576);
+        capacity["max_directory_bytes"] = value!(1048576);
+        capacity["max_entries_per_checkpoint"] = value!(1024);
+    });
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut first =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "first-")
+            .unwrap();
+    let first_bytes = first.path().join("scratch");
+    fs::write(&first_bytes, vec![b'a'; 600000]).unwrap();
+    first.checkpoint().unwrap();
+    let mut second =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "second-")
+            .unwrap();
+    let second_bytes = second.path().join("scratch");
+    fs::write(&second_bytes, vec![b'b'; 600000]).unwrap();
+    // Both allocations are individually within their bound. A fresh ID must
+    // observe the producer directory even before either publishes an excess.
+    let error = match chrono_worktree::TemporaryHost::allocate(
+        &store, "test-allocation", &outputs, "cannot-bypass-",
+    ) {
+        Ok(_) => panic!("fresh allocation bypassed the aggregate directory budget"),
+        Err(error) => error,
+    };
+    assert!(error.contains("producer directory capacity unmet"), "{error}");
+    assert!(!fs::read_dir(&store).unwrap().any(|entry|
+        entry.unwrap().file_name().to_string_lossy().starts_with("cannot-bypass-")));
+    assert_eq!(fs::metadata(&first_bytes).unwrap().len(), 600000);
+    assert_eq!(fs::metadata(&second_bytes).unwrap().len(), 600000);
+    assert!(second.checkpoint().unwrap_err().contains("producer directory capacity unmet"));
+
+    // Reducing our own scratch settles capacity without releasing a consumer
+    // or deleting its protected sibling. External symlink targets are excluded.
+    fs::remove_file(&second_bytes).unwrap();
+    let external = h.parent.join("external-large-input");
+    fs::write(&external, vec![b'x'; 1048576]).unwrap();
+    std::os::unix::fs::symlink(&external, second.path().join("external-link")).unwrap();
+    let usage = second.checkpoint().unwrap();
+    assert!(usage["producer_directory"]["logical_bytes"].as_u64().unwrap() < 1048576, "{usage}");
+    let mut next =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recovered-")
+            .unwrap();
+    next.finish().unwrap();
+    second.finish().unwrap();
+    first.finish().unwrap();
+    assert_eq!(fs::metadata(&external).unwrap().len(), 1048576);
+}
+
+#[test]
+fn directory_cleanup_budget_refuses_unknown_usage_without_creating_an_allocation() {
+    let h = capacity_host(|capacity| {
+        capacity["max_directory_bytes"] = value!(1048576);
+    });
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "many-")
+            .unwrap();
+    for index in 0..128 {
+        fs::write(allocation.path().join(format!("scratch-{index}")), b"a").unwrap();
+    }
+    let error = match chrono_worktree::TemporaryHost::allocate(
+        &store, "test-allocation", &outputs, "unknown-usage-",
+    ) {
+        Ok(_) => panic!("incomplete directory measurement admitted production"),
+        Err(error) => error,
+    };
+    assert!(error.contains("usage unknown"), "{error}");
+    assert!(!fs::read_dir(&store).unwrap().any(|entry|
+        entry.unwrap().file_name().to_string_lossy().starts_with("unknown-usage-")));
+    assert_eq!(fs::read_dir(allocation.path()).unwrap().count(), 128);
+}
+
+#[test]
 fn directory_cleanup_accounts_all_scratch_and_blocks_fresh_allocations_on_excess() {
     let h = capacity_host(|_| {});
     adopt_directory_cleanup(&h);
