@@ -558,7 +558,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
             value!("CHRONO_WORKFLOW_REVISION"),
         ]);
     fs::write(h.root.join(CONFIG), serde_json::to_vec(&cfg).unwrap()).unwrap();
-    let provider = value!({"schema":"chrono-github-full-ci/v2","workflow_path":".github/workflows/full.yml","name":"native full fixture","runs_on":"macos-14","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":10,"bootstrap":["/bin/sh","explicit.sh"],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":CONFIG,"context_path":".chrono-harness/state/native evidence λ/context.json","preparation_path":".chrono-harness/state/native evidence λ/preparation.json","artifact_directory":".chrono-harness/state/native evidence λ/"});
+    let provider = value!({"schema":"chrono-github-full-ci/v2","workflow_path":".github/workflows/full.yml","name":"native full fixture","runs_on":"macos-14","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":10,"bootstrap":["/bin/sh","explicit.sh"],"runner":".chrono-harness/bin/chrono-harness","check_config":CONFIG,"context_path":".chrono-harness/state/native evidence λ/context.json","preparation_path":".chrono-harness/state/native evidence λ/preparation.json","artifact_directory":".chrono-harness/state/native evidence λ/"});
     fs::create_dir_all(h.root.join(".chrono-harness/ci")).unwrap();
     fs::write(
         h.root.join(".chrono-harness/ci/full.json"),
