@@ -2026,7 +2026,7 @@ impl ProducerPolicy {
             }
             visited += 1;
             if snapshot.retiring {
-                match retirement::resume_retirement(inputs, &directory, snapshot) {
+                match retirement::resume_retirement(inputs, r, &directory, snapshot) {
                     Ok(mut value) => {
                         value["producer"] = value!(self.id);
                         value["path"] = value!(format!("{}{}", self.directory, snapshot.path));
@@ -2403,7 +2403,7 @@ impl ProducerPolicy {
                 let context = Context::load(&directory, &self.id)?;
                 if self.temporary
                     && !object.retiring
-                    && row["original_retirement"]["status"] != "retiring"
+                    && !matches!(row["original_retirement"]["status"].as_str(), Some("retiring" | "disposed"))
                 {
                     let _ = context
                         .observe_capacity(&directory.join(&object.path), cache_guard.is_some());

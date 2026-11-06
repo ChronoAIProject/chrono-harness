@@ -1549,6 +1549,28 @@ Any source, checkout or unknown member preserves the root. A copy interrupted
 after claim publication but before original IO releases its exact empty claim
 after responsible consumer release; recovery never invents missing original bytes.
 
+Temporary producers can explicitly select `disposable_directory: true` when
+they own the entire allocation, including synthetic repositories and scratch
+files. The current context and immutable allocation intent bind that choice at
+creation. Once the responsible original consumer releases, every diagnostic
+consumer releases, and the kernel lease excludes live users, retirement uses the
+existing whole-directory disposal operation. One durable retiring allocation
+record preserves recovery; its members need no independent cleanup declarations
+or deletion manifest. This temporary owner's release authorizes reclamation;
+diagnostic consumers retain required failures until they actually release them.
+Source/index checks at the real host and original result identities still apply;
+links inside the directory are unlinked without following their targets.
+
+**Product/policy cochange:** whole-directory disposal is appropriate for owned
+synthetic test hosts; real worktrees continue to preserve their source and unique
+commits. A policy/context migration does not grant this ownership to allocations
+created under the previous choice. Those mixed historical directories require
+their producer's actual custody handoff. The direct behavioral acceptance is
+`test.worktree.directory-cleanup`, covering a failed command, diagnostic release,
+a synthetic committed repository, unregistered scratch members, an external
+symlink and preservation of a preexisting source allocation. Validation and
+actual host adoption remain separate from declaring this option.
+
 Metadata writes have finite byte/node admission. Released output and metadata
 retirement use retention.json's finite content/metadata windows, per-round work
 limits and summary capacity. Diagnostics and unknown consumers do not expire by

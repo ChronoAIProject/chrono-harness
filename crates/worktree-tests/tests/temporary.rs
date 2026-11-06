@@ -108,8 +108,8 @@ fn directory_cleanup_reclaims_synthetic_repository_after_actual_consumers_releas
     artifact
         .release("diagnostic", "original failure inspected")
         .unwrap();
-    let mut next = capacity_reenter_after_release(&store, &outputs, &root);
-    next.finish().unwrap();
+    let recovered = allocation.finish().unwrap();
+    assert!(recovered["recovery_error"].is_null(), "{recovered}");
     assert!(
         !root.exists(),
         "released owned fixture directory accumulated"

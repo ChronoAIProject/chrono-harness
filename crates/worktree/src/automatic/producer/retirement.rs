@@ -354,7 +354,8 @@ fn capture_only_allocation(directory: &Path, object: &Object) -> Result<bool, St
 }
 
 fn retained_paths(directory: &Path, object: &Object) -> Result<Vec<PathBuf>, String> {
-    let mut paths = if object.disposable_directory || capture_only_allocation(directory, object)? {
+    let whole = capture_only_allocation(directory, object)?;
+    let mut paths = if whole {
         vec![no_symlink_parents(directory, &object.path)?]
     } else {
         object
@@ -363,8 +364,10 @@ fn retained_paths(directory: &Path, object: &Object) -> Result<Vec<PathBuf>, Str
             .map(|p| no_symlink_parents(&directory.join(&object.path), p))
             .collect::<Result<Vec<_>, _>>()?
     };
-    for name in object.evidence.keys() {
-        paths.push(no_symlink_parents(&directory.join(&object.path), name)?);
+    if !whole {
+        for name in object.evidence.keys() {
+            paths.push(no_symlink_parents(&directory.join(&object.path), name)?);
+        }
     }
     if let Some(metadata) = &object.metadata_directory {
         paths.push(no_symlink_parents(directory, metadata)?);
@@ -380,9 +383,13 @@ fn retained_paths(directory: &Path, object: &Object) -> Result<Vec<PathBuf>, Str
 }
 pub(super) fn resume_retirement(
     inputs: &PolicyInputs,
+    r: &mut Runner,
     directory: &Path,
     object: &Object,
 ) -> Result<Value, String> {
+    if object.disposable_directory {
+        return dispose_owned_directory(inputs, r, directory, object, None);
+    }
     let allocation = no_symlink_parents(directory, &object.path)?;
     let allocation_matches = match fs::symlink_metadata(&allocation) {
         Ok(_) => directory_id(&allocation)? == object.identity,
@@ -523,6 +530,110 @@ pub(super) fn resume_retirement(
         value!({"status":"retiring","owner":"output-retention/v2","physical_absence":"pending","producer_outcome":"unchanged","retention_paths":selected}),
     )
 }
+
+// This producer owns the complete temporary directory. Its existing kernel
+// capability and one durable retiring record protect the whole operation; no
+// per-member output registrations or deletion manifest are needed.
+fn dispose_owned_directory(
+    inputs: &PolicyInputs,
+    r: &mut Runner,
+    directory: &Path,
+    object: &Object,
+    held: Option<&Lease>,
+) -> Result<Value, String> {
+    let context = Context::for_allocation(&directory.join(&object.path))?
+        .ok_or("owned directory context missing; preserve allocation")?;
+    if !context.disposable_directory
+        || !object.retiring
+        || object.original_release.is_none()
+        || object.consumers.values().any(|c| !c.released)
+        || object.metadata_directory.as_deref() != Some(metadata_name(&object.path).as_str())
+    {
+        return Err("owned directory retirement binding or consumer release differs".into());
+    }
+    let store = Store::open(directory, &context.producer, false)?;
+    let record = no_symlink_parents(directory, &Store::record_name(&object.path)?)?;
+    let original = fs::read(&record).map_err(|e| e.to_string())?;
+    if value!(store.decode_record(&record)?.as_ref()) != value!(object) {
+        return Err("owned directory retirement record changed".into());
+    }
+    let allocation = no_symlink_parents(directory, &object.path)?;
+    let metadata = no_symlink_parents(directory, &metadata_name(&object.path))?;
+    let binding = object.cache_lease.as_ref().ok_or("owned directory lease missing")?;
+    let lease_path = no_symlink_parents(directory, &binding.path)?;
+    let acquired;
+    let lease = if let Some(held) = held {
+        Some(held)
+    } else if lease_path.exists() {
+        acquired = Lease::acquire(&lease_path, Some(&binding.id), false, true, None)?;
+        let Some(lease) = acquired.as_ref() else {
+            return Ok(value!({"status":"protected","reason":"live owned directory consumer"}));
+        };
+        Some(lease)
+    } else if !allocation.exists() && !metadata.exists() {
+        // An interrupted final unlink may leave only its continuation record.
+        None
+    } else {
+        return Err("owned directory capability is missing; preserve remaining data".into());
+    };
+    let allocation_gate = if allocation.exists() {
+        Some(DirectoryGate::available(&allocation)?.ok_or("owned directory metadata busy")?)
+    } else {
+        None
+    };
+    if metadata.exists() {
+        let bytes = fs::read(no_symlink_parents(directory, &object.intent.path)?)
+            .map_err(|e| e.to_string())?;
+        let intent = json(&bytes)?;
+        if sha256(&bytes) != object.intent.sha256
+            || intent["disposable_directory"] != true
+            || intent["identity"] != object.identity
+            || intent["path"] != object.path
+            || intent["producer"] != context.producer
+            || intent["cache_lease"] != value!(object.cache_lease)
+        {
+            return Err("owned directory original intent differs; preserve allocation".into());
+        }
+    } else if allocation.exists() {
+        return Err("owned directory original intent is missing; preserve allocation".into());
+    }
+    let paths = [allocation.clone(), metadata.clone()];
+    let names = paths.iter().map(|p| {
+        p.strip_prefix(&inputs.policy.coordinator_root).map_err(|e| e.to_string())?
+            .to_str().map(str::to_owned).ok_or("owned directory path UTF-8".into())
+    }).collect::<Result<Vec<_>, String>>()?;
+    let mut result = value!({"automatic_cleanup":true,"artifact_disposals":[],
+        "owner":"temporary-directory","producer_outcome":"unchanged"});
+    artifact_disposal::dispose(&inputs.policy.coordinator_root, &names, &paths, &mut result, || {
+        inputs.stable(r)?;
+        context.stable()?;
+        store.owner_stable()?;
+        if fs::read(&record).map_err(|e| e.to_string())? != original {
+            return Err("owned directory continuation changed before disposal".into());
+        }
+        if let Some(lease) = lease { lease.stable()?; }
+        if allocation.exists() {
+            allocation_gate.as_ref().ok_or("owned directory exclusion missing")?.stable()?;
+            if directory_id(&allocation)? != object.identity {
+                return Err("owned directory identity changed before disposal".into());
+            }
+        }
+        if metadata.exists() && Some(directory_id(&metadata)?.as_str()) != object.metadata_identity.as_deref() {
+            return Err("owned directory metadata identity changed before disposal".into());
+        }
+        chrono_harness::artifact_disposal::source_safe(&inputs.policy.coordinator_root, &names[0])?;
+        chrono_harness::artifact_disposal::source_safe(&inputs.policy.coordinator_root, &names[1])
+    })?;
+    if let Some(lease) = lease { lease.stable()?; }
+    if lease_path.exists() { fs::remove_file(&lease_path).map_err(|e| e.to_string())?; }
+    if fs::read(&record).map_err(|e| e.to_string())? != original {
+        return Err("owned directory continuation changed before final unlink".into());
+    }
+    fs::remove_file(record).map_err(|e| e.to_string())?;
+    result["status"] = value!("disposed");
+    result["physical_absence"] = value!("verified");
+    Ok(result)
+}
 pub(super) fn retire(
     policy: &ProducerPolicy,
     inputs: &PolicyInputs,
@@ -603,7 +714,11 @@ pub(super) fn retire(
     store.save(0)?;
     let retiring = store.state.objects[0].clone();
     drop(store);
-    resume_retirement(inputs, directory, &retiring)
+    if retiring.disposable_directory {
+        dispose_owned_directory(inputs, r, directory, &retiring, lease)
+    } else {
+        resume_retirement(inputs, r, directory, &retiring)
+    }
 }
 
 pub(super) fn now_nanos() -> Result<u64, String> {
