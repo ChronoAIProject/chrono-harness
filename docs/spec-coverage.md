@@ -396,6 +396,8 @@ I3 实测失败修复加入明确的配置级 FILEMAP 边投影和可选 scoped-
 
 PR #221 落地为 `3b605cf80aa9e96a6442b2e54991602713acca31`，树与受验候选相同。随后 PR #227 落地为 `2ec6e5ce6c16cd6e56433729a06db7a4cab3ba49`，落地原生 `41965898150` 核过全部 13 项选中汇总结果。原主检出的九项登记已完成受保护状态拆分及共用 owner 部署；普通 bootstrap 通过。无关旧 worktree 的 metadata EX 租约持续持有至完成时，另一个 linked start 仍成功。该 linked 检出的同端 canonical check 未选业务测试，不能重复证明早前 worktree 测试结果。旧原件及两份独立独有提交保留；其他协调者仍须各自受保护切换。完整 SPEC 交付和运行／CI／存储总收益未建立。
 
-原生 CI 输入准备迁入 Rust `chrono-ci native-adoption`，扩展改为 `chrono-native-adoption/v2`，不生成 Python 适配器、不要求解释器。原时间、传输与有界失败预期迁至 `ci-tests` 的 Rust 配对用例，完整 seed／转发／交付消费者同步采用。Python 模板、专属脚本登记和重复发布验证 job 退役；真实 Python 业务／外部接口与其余 bootstrap、shared、release 迁移尚未完成。源码与政策同时改变，候选 canonical、两平台原生结果及 dev 落地仍须实际核验。
+原生 CI 输入准备迁入 Rust `chrono-ci native-adoption`，扩展改为 `chrono-native-adoption/v2`，不生成 Python 适配器、不要求解释器。原时间、传输与有界失败预期迁至 `ci-tests` 的 Rust 配对用例，完整 seed／转发／交付消费者同步采用。Python 模板、专属脚本登记和重复发布验证 job 退役；真实 Python 业务／外部接口与其余 bootstrap、shared、release 迁移尚未完成。
+
+该批源码与政策同步交付于 PR #273，dev 落地 `1cc909d9999baed15bd2f43135debe85e1abe605` 的文件树与受验候选 `69c1d8541614cdd6cd58a99f9acd06099d917560` 相同。PR 原生运行 `42265991709` 和落地运行 `42269755637` 均成功，原汇总各 21 行全部通过，归档长度／摘要、原报告和输出流摘要均已核对。这些结果覆盖对应 macOS scoped DELTA，不能证明 Linux、两平台公开发布或完整宿主采用。
 
 测试清单验证由 Rust `chrono-ci test-inventory` 负责，两个宿主配置继续显式绑定原 Cargo action、分组和二进制清单。Rust 配对测试保留完整／互斥覆盖、ignored、漂移、损坏清单、非零退出及有界失败原件；worktree 的真实后代租约消费者同步调用 Rust CLI。Python 实现、导入／字节码测试、独立 CI 单元和重复发布验证任务退役。程序与宿主政策同时改变；当前候选的正式检查、原生结果和 dev 落地分别需要实际证据。
