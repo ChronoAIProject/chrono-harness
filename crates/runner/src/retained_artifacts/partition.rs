@@ -67,13 +67,20 @@ impl Inventory {
         self.round_node_limit
             .set(Some(self.policy.max_nodes_per_round));
         let result = (|| {
-            // Resolve the declared addresses, then release their path gates
-            // before the maintenance closure acquires those same capabilities.
-            // The second gate revalidates each immutable output identity; a
-            // concurrently replaced address cannot authorize new output bytes.
-            let selected = self.addressed_gate(&[], paths, &[], None, false, false)?;
-            let ids: Vec<_> = selected.objects.borrow().keys().cloned().collect();
-            drop(selected);
+            // Address discovery grants no deletion capability. Resolve only the
+            // requested paths and their ancestors, then acquire and revalidate
+            // the actual relationship once, under the maintenance gate below.
+            // A stale address cannot authorize a replacement's physical bytes.
+            let mut directories = BTreeMap::new();
+            for path in paths {
+                crate::relative_path(path)?;
+                let parts: Vec<_> = path.split('/').collect();
+                for n in 1..=parts.len() {
+                    let prefix = parts[..n].join("/");
+                    directories.insert(prefix.clone(), self.path_directory(&prefix)?);
+                }
+            }
+            let ids: Vec<_> = self.path_ids(&directories, false)?.into_iter().collect();
             let gate = self.addressed_gate(&ids, &[], &[], None, true, false)?;
             let owned: Vec<_> = gate.objects.borrow().keys().cloned().collect();
             let mut result = self.maintain_locked(now()?, &gate)?;
