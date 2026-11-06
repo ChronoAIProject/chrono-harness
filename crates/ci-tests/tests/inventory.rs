@@ -2,6 +2,10 @@ use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{fs, path::Path};
 
+#[allow(dead_code)]
+#[path = "support/tools.rs"]
+mod tools;
+
 fn fixture(root: &Path, mode: &str) {
     let groups = json!({"t":"left","opaque":"right"});
     let mut actions = json!({});
@@ -50,10 +54,7 @@ fn read(root: &Path, path: &str) -> Value {
 
 #[test]
 fn explicit_test_inventory_keeps_complete_disjoint_groups_and_original_receipts() {
-    let host = tempfile::Builder::new()
-        .prefix("inventory λ ")
-        .tempdir()
-        .unwrap();
+    let host = tools::temporary_host("inventory λ ");
     let root = host.path();
     fixture(root, "ok");
     let summary: Value = serde_json::from_str(&execute(root).unwrap()).unwrap();
@@ -101,7 +102,7 @@ fn test_inventory_rejects_missing_overlapping_ignored_drifting_and_malformed_lis
         ("bench", "malformed"),
         ("unexpected", "unexpected"),
     ] {
-        let host = tempfile::tempdir().unwrap();
+        let host = tools::temporary_host("inventory invalid ");
         fixture(host.path(), mode);
         let error = execute(host.path()).unwrap_err();
         assert!(error.contains(expected), "{mode}: {error}");
@@ -116,7 +117,7 @@ fn test_inventory_keeps_nonzero_timeout_and_output_bound_originals() {
         ("timeout", "timed out"),
         ("overflow", "output limit"),
     ] {
-        let host = tempfile::tempdir().unwrap();
+        let host = tools::temporary_host("inventory process ");
         let root = host.path();
         fixture(root, mode);
         let error = execute(root).unwrap_err();
