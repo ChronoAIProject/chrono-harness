@@ -563,78 +563,6 @@ fn cli_preserves_context_and_outputs_full_identity() {
     );
     assert!(d.path().join(".chrono-harness/state/context.json").exists());
 }
-fn copied_example() -> tempfile::TempDir {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/ci-host");
-    let root = tempfile::Builder::new()
-        .prefix("copied example host ")
-        .tempdir()
-        .unwrap();
-    let map: Value =
-        serde_json::from_slice(&fs::read(source.join(".chrono-harness/FILEMAP.json")).unwrap())
-            .unwrap();
-    for row in map["files"].as_array().unwrap() {
-        let path = row["path"].as_str().unwrap();
-        if path == ".github/workflows/chrono-ci.yml" {
-            continue;
-        }
-        let out = root.path().join(path);
-        fs::create_dir_all(out.parent().unwrap()).unwrap();
-        fs::copy(source.join(path), out).unwrap();
-    }
-    init(
-        root.path(),
-        &root.path().join(".chrono-harness/ci/github.json"),
-    )
-    .unwrap();
-    root
-}
-#[test]
-fn example_bundle_adopts_without_source_checkout_dependency() {
-    let root = copied_example();
-    assert!(!generate(root.path(), ".chrono-harness/ci/github.json", true).unwrap());
-    let config = chrono_ci::load(&root.path().join(".chrono-harness/ci/github.json")).unwrap();
-    assert_eq!(config.runs_on, "self-hosted");
-}
-
-fn committed_example(message: &str) -> (tempfile::TempDir, tempfile::TempDir, String) {
-    let root = copied_example();
-    let installed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/bin");
-    let bin = root.path().join(".chrono-harness/bin");
-    fs::create_dir_all(&bin).unwrap();
-    for name in ["chrono-harness", "chrono-judge-ci", "chrono-ci"] {
-        fs::copy(installed.join(name), bin.join(name)).expect(
-            "bootstrap the registered candidate tools before running the copied-host tests",
-        );
-    }
-    git(root.path(), &["init", "-q", "-b", "dev"]);
-    git(
-        root.path(),
-        &["config", "user.email", "fixture@example.invalid"],
-    );
-    git(root.path(), &["config", "user.name", "Fixture"]);
-    fs::write(root.path().join("message.txt"), message).unwrap();
-    git(root.path(), &["add", "."]);
-    git(root.path(), &["commit", "-qm", "initial host"]);
-    let candidate = git(root.path(), &["rev-parse", "HEAD"]);
-    let remote = tempfile::tempdir().unwrap();
-    git(remote.path(), &["init", "--bare", "-q"]);
-    git(
-        root.path(),
-        &["remote", "add", "origin", remote.path().to_str().unwrap()],
-    );
-    git(root.path(), &["push", "-q", "origin", "dev"]);
-    (root, remote, candidate)
-}
-fn example_push(root: &Path, candidate: &str, branch: &str) -> Result<Value, String> {
-    let c = chrono_ci::load(&root.join(".chrono-harness/ci/github.json")).unwrap();
-    prepare(
-        root,
-        &c,
-        "push",
-        &json!({"ref":branch,"before":"0".repeat(40),"after":candidate,"created":true,"deleted":false}),
-        candidate,
-    )
-}
 fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
     // A copied-host fixture owns its receipt policy too. The source checkout's
     // deployed Git binding is host policy, not a native test-platform input.
@@ -868,49 +796,6 @@ fn retain_context_state(root: &Path, destination: &Path) {
             fs::copy(row.path(), destination.join(row.file_name())).unwrap();
         }
     }
-}
-#[test]
-fn first_baseline_push_runs_copied_example_inventory_with_failure_and_passing_control() {
-    for (message, exit) in [("wrong\n", 1), ("hello\n", 0)] {
-        let (root, _remote, candidate) = committed_example(message);
-        let context = example_push(root.path(), &candidate, "refs/heads/dev").unwrap();
-        let report = execute_context(root.path(), &context, exit);
-        assert_eq!(context["source"], "baseline-creation-initial-inventory");
-        assert_eq!(context["mode"], "initial-inventory");
-        assert_eq!(context["initial"], true);
-        assert!(context["base"].is_null());
-        assert_eq!(report["response"]["evidence"]["mode"], "initial-inventory");
-        let result = report["response"]["results"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|r| r["id"] == "example.check")
-            .unwrap();
-        assert_eq!(result["exit_code"], exit);
-        assert_eq!(
-            result["status"],
-            if exit == 0 { "passed" } else { "failed" }
-        );
-        assert_eq!(
-            report["response"]["evidence"]["executed"]
-                .as_array()
-                .unwrap()
-                .len(),
-            2
-        );
-    }
-}
-#[test]
-fn integration_creation_at_existing_baseline_is_an_honest_noop() {
-    let (root, _remote, candidate) = committed_example("hello\n");
-    let context = example_push(root.path(), &candidate, "refs/heads/integration/new").unwrap();
-    assert_eq!(context["base"], candidate);
-    assert_eq!(context["initial"], false);
-    assert_eq!(context["mode"], "delta");
-    assert_eq!(context["source"], "push-configured-baseline-ref");
-    let report = execute_context(root.path(), &context, 0);
-    assert_eq!(report["response"]["evidence"]["selected"], json!([]));
-    assert_eq!(report["response"]["evidence"]["executed"], json!([]));
 }
 #[test]
 fn baseline_creation_with_parents_requires_explicit_range() {

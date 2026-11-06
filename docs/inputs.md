@@ -29,7 +29,9 @@ v3 将输入范围标为 `declared-complete` 时，必须提供 `bindings`，每
 
 当前 macOS 27 政策声明了标准输入选择、CI 事件／Git／传输环境、获取凭据、测试原件目的和已安装工具消费者，绑定覆盖全部配置环境与工具节点。公共 FILEMAP 点名实际消费者，包括使用 `CARGO_INCREMENTAL` 的 34 个 Cargo 构建／测试负责人；它们也绑定 `CARGO_TERM_COLOR`。执行器按这些原样声明操作，`GH_TOKEN` 仍是获取凭据，不进入检查业务输入。
 
-两项文件输入绑定现已把既有 runner 和 diagnostics Cargo 保护消费者连到它们所选的显式 FILEMAP 输入。runner 在原有 18 项文件绑定旁补充 2,653 项引用；diagnostics 绑定其声明的 1,138 项文件。因此政策中的全部 2,671 个文件输入节点都已出现在绑定内。它们属于现有包／缓存、配置／缺失、可执行／运行时和清单声明，没有发现或新增输入、依赖边或执行。diagnostics action 保留登记的配置与政策选择器，为绑定的本地 Git 选择 macOS 27 政策和 `cargo/diagnostics-local.json`。
+macOS 27 政策另为 `chrono-ci`、`chrono-worktree`、`chrono-inputs` 和 `cargo-guard` 登记已安装文件的摘要，补齐现有四条工具绑定中的文件输入，并在该配置专属 FILEMAP 边中连接原使用方。工具版本声明仍在 `tools`，文件身份只由 `environment.inputs` 负责。摘要取自本次独立工作树的源码 bootstrap，已与安装报告和实际文件核对；它们不能直接作为其他构建或平台的身份。此采用不启用完整治理，完整输入及本地／CI 同判仍未建立。
+
+runner 和 diagnostics 的 Cargo 保护消费者通过现有绑定引用各自明确登记的文件输入，包括包源码／缓存、配置／明确缺失、执行文件／运行时和清单。文件身份与使用方关系以当前政策和 FILEMAP 为准，不从目录发现输入或依赖，也不因此增加执行。diagnostics action 保留登记的配置与政策选择器，为绑定的本地 Git 选择 macOS 27 政策和 `cargo/diagnostics-local.json`。
 
 macOS 27 另在现有 `runner.sha256` 和七条判官的 `sha256` 中绑定实际安装文件。该政策通过 `registries.judges` 选择独立的 `.chrono-harness/judges-macos-27.json`；各判官的调用参数、顺序、版本和职责沿用当前登记。共享判官登记继续由其他配置选择，本机字节不作为其他构建或平台的预期。摘要取自本独立工作树的源码 bootstrap，并核对安装报告和实际文件；不重复添加同一执行物的文件输入。此采用保持 proposed／not-implemented／incomplete，完整输入和真实 full 验收仍待完成。
 
