@@ -341,13 +341,13 @@ v1 拒绝扩展、保留单 profile 行为，v2 必须有此声明；版本或 n
 
 ## 在其他宿主采用
 
-[`examples/ci-host`](../examples/ci-host/README.md) 是完整小型宿主包，含明确 FILEMAP、projects、检查 profile、provider 配置、安装 bootstrap、Python 检查和输入。运行只需已安装／复制二进制及 Python，无需 harness 源码，也不推断语言／项目路径。
+[`examples/ci-host-job-gating`](../examples/ci-host-job-gating/README.md) 是当前可复制的宿主包，含明确 FILEMAP、projects、检查 profile、provider 配置、安装脚本、Python 检查和输入。运行使用已安装／复制的四个工具及 Python，无需 harness 源码，也不推断语言或项目路径。
 
 GitHub bootstrap 要求自托管 runner 上明确配置的工具目录；托管 runner 须明确登记固定版本安装／下载步骤。不假定不存在的预构建分发或隐含联网安装。
 
-复制后安装三个二进制、配置 bootstrap 来源、执行 init，再提交初始化清单。复制的 `chrono-ci` 可从其他 cwd、含空格宿主路径使用。加检查时登记真实操作、文件／边及 profile 绑定；改 runner／bootstrap／事件数据时，编辑 provider 并 generate，YAML 只作生成结果。
+按示例说明复制文件、安装工具，绑定实际 Git 和 Python 身份，配置 bootstrap 来源，执行 init／verify，再提交完整登记。日常使用同一短入口 `check`、`check --unit ID` 和 `check --collect`。加检查时登记真实操作、文件、依赖边和 profile 绑定；改 runner、bootstrap 或事件数据时，编辑 provider 并 generate，YAML 只作生成结果。
 
-专属行为测试覆盖真实成功／失败子进程、协议错误／超时、依赖范围内外 DELTA、边／操作变化及删除、未知登记、精确快照、采用、初始清单、无变化生成、漂移／所有权冲突、保留、扩展、事件映射。原指令行为仍由 61 项测试覆盖。本地测试不证明 GitHub 原生路由；宣称外部结果前，交付须核实际候选运行、选择、成功／失败及 PR head 行为。
+当前示例的真实执行测试覆盖首次单元清单、短命令、独立单元、汇总和失败原件；首次清单与空 DELTA 另有现役行为回归。旧 v1 示例包及三个仅服务该包的测试已退役，共享执行和回执辅助函数继续由当前单元测试使用。其他成功／失败子进程、协议错误／超时、范围选择、生成、漂移、归属和事件映射测试保留。本地测试不证明 GitHub 原生路由；宣称外部结果前，交付须核实际候选运行、选择、成功／失败及 PR head 行为。
 
 首次登记执行的原生 [36292159644](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36292159644) 在 macos-14-arm64 bootstrap 成功后，标准 harness 步骤失败。base `4f08aef7ab40d7b0a3fb6ba42af2620600f18d98`，candidate／工作流源码 `556fdb73b6f93275d18bd210b9b01be1173daec9`，原错误 `E_TOOL_BINDING: migration version mismatch`，未执行受治理操作。报告当时没保留解释器真实版本输出。
 

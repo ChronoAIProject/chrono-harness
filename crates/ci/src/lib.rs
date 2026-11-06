@@ -126,28 +126,31 @@ enum Projection {
 }
 fn load_projection(path: &Path) -> Result<Projection, String> {
     let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let value: Value = decode(&bytes)?;
+    decode_projection(&bytes)
+}
+fn decode_projection(bytes: &[u8]) -> Result<Projection, String> {
+    let value: Value = decode(bytes)?;
     if matches!(
         value["schema"].as_str(),
         Some(units::SCHEMA | units::FULL_SCHEMA)
     ) {
-        let c = decode(&bytes)?;
+        let c = decode(bytes)?;
         units::validate(&c)?;
         Ok(Projection::Units(c))
     } else if matches!(
         value["schema"].as_str(),
         Some(release::SCHEMA | release::UNITS_SCHEMA)
     ) {
-        Ok(Projection::Release(release::decode_config(&bytes)?))
+        Ok(Projection::Release(release::decode_config(bytes)?))
     } else if matches!(
         value["schema"].as_str(),
         Some(full::SCHEMA | full::SHORT_SCHEMA)
     ) {
-        let c = decode(&bytes)?;
+        let c = decode(bytes)?;
         full::validate(&c)?;
         Ok(Projection::Full(c))
     } else {
-        let c = decode(&bytes)?;
+        let c = decode(bytes)?;
         validate(&c)?;
         Ok(Projection::Check(c))
     }
