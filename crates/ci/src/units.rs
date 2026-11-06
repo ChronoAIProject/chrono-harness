@@ -492,18 +492,6 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
     {
         let w = c.workflow(unit)?;
         let scope = c.scope(unit);
-        let prepare = unit
-            .map(|u| format!(" --unit {}", shell(u)))
-            .unwrap_or_default();
-        let pre_check = if unit.is_none() {
-            format!(
-                "      - name: Gather independent unit reports\n        shell: bash\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {} gather --host-root . --config {} --repository \"$GITHUB_REPOSITORY\"\n",
-                shell(&w.generator),
-                shell(config_path)
-            )
-        } else {
-            String::new()
-        };
         let artifact = unit
             .map(|u| format!("chrono-unit-{u}"))
             .unwrap_or("chrono-collection".into());
@@ -511,8 +499,6 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
             &w,
             config_path,
             Some(&scope),
-            &prepare,
-            &pre_check,
             &artifact,
             unit.is_none() || c.native_adoption.is_some() || c.persistent_cache.is_some(),
             c.schema == FULL_SCHEMA,
