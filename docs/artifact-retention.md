@@ -115,6 +115,14 @@ The supported owner entry is:
 
 `P` is an exact root-relative JSON request bounded to 64 KiB. Operations are `maintain`, `migrate-policy`, `enroll`, `release`, `protect-consumer`, `release-consumer` and `acknowledge-delivery`. A producer-generated result exits 0; invalid input, changed identity, unavailable capability or policy refusal exits 2. The result never declares historical engineering work completed.
 
+`maintain` accepts an optional `paths` array of exact root-relative output
+addresses. When supplied, it delegates to the same addressed retirement owner,
+visits only those declarations and their actual relationships, and reports
+`scope.kind:"declared-retirement-paths"`. Empty or oversized scopes reject;
+unknown paths do not become enrolled outputs. Omitting `paths` selects the
+ordinary bounded namespace maintenance. Both forms retain the existing node,
+byte, metadata and time budgets and all original/consumer protections.
+
 Publication persists an intent, exact destination and parent identity before creating an empty staging inode, attaches its identity durably and publishes by a kernel no-replace rename. Actual completion records the original outcome. Ordinary adopted entries resume bounded accounting, interrupted creation and partial effects. Each related graph, directory snapshot, summary ring and read/write operation has finite bounds. An oversized related set or output refuses controllable publication; unrelated retained originals impose no admission quota. External builders remain accounted after exclusion.
 
 Every effect rechecks policy, exact output/entry identities, references, capabilities and committed/index source. Sealed manifests/cursors cover only the explicitly enrolled output. Replacements, changed content, unknown late descendants and special files are preserved. Links are unlinked without following their targets. Logical removed bytes, observed allocated blocks and unknown physical savings remain distinct facts. Maintenance summaries retain original outcomes without claiming the original bytes still exist after retirement.

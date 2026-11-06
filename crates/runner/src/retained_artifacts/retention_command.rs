@@ -36,7 +36,9 @@ pub(super) struct Historical {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "kebab-case", deny_unknown_fields)]
 enum Request {
-    Maintain,
+    Maintain {
+        paths: Option<Vec<String>>,
+    },
     MigratePolicy {
         previous_policy: Evidence,
     },
@@ -134,7 +136,8 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
                 &receipt.sha256,
             )
         }
-        Request::Maintain => inventory.maintain(),
+        Request::Maintain { paths: Some(paths) } => inventory.maintain_paths(&paths),
+        Request::Maintain { paths: None } => inventory.maintain(),
         Request::MigratePolicy { previous_policy } => {
             inventory.migrate_policy(&evidence(root, &previous_policy)?)
         }

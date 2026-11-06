@@ -3685,17 +3685,25 @@ fn cli_addressed_maintenance_preserves_live_rooted_unknown_and_unrelated_outputs
     let h = host(256, 16);
     let eligible = tree(h.path(), "eligible");
     fs::write(h.path().join(&eligible).join("original"), [7; 4096]).unwrap();
-    let publication = inventory(h.path()).begin("fixture", &eligible, json!(null)).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", &eligible, json!(null))
+        .unwrap();
     let id = publication.id().to_owned();
     publication.complete(json!({"exit": 7})).unwrap();
     let rooted = tree(h.path(), "required-original");
     fs::write(h.path().join(&rooted).join("original"), b"required failure").unwrap();
-    let publication = inventory(h.path()).begin("fixture", &rooted, json!(null)).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", &rooted, json!(null))
+        .unwrap();
     let rooted_id = publication.id().to_owned();
     publication.complete(json!({"exit": 101})).unwrap();
-    inventory(h.path()).reference("consumer:required-original", &[rooted_id]).unwrap();
+    inventory(h.path())
+        .reference("consumer:required-original", &[rooted_id])
+        .unwrap();
     let unrelated = tree(h.path(), "unrelated");
-    let publication = inventory(h.path()).begin("fixture", &unrelated, json!(null)).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", &unrelated, json!(null))
+        .unwrap();
     let unrelated_record = retention_state::object_path(h.path(), publication.id());
     publication.complete(json!({"exit": 3})).unwrap();
     let unrelated_original = fs::read(&unrelated_record).unwrap();
@@ -3704,17 +3712,29 @@ fn cli_addressed_maintenance_preserves_live_rooted_unknown_and_unrelated_outputs
     fs::write(h.path().join(unknown), b"unique unknown bytes").unwrap();
     let reader = inventory(h.path()).consume(&id).unwrap();
     let call = |paths: Value| {
-        fs::write(h.path().join("request.json"), serde_json::to_vec(&json!({
-            "operation":"maintain", "paths":paths
-        })).unwrap()).unwrap();
+        fs::write(
+            h.path().join("request.json"),
+            serde_json::to_vec(&json!({
+                "operation":"maintain", "paths":paths
+            }))
+            .unwrap(),
+        )
+        .unwrap();
         chrono_harness::dispatch(&[
-            "retention", "--host-root", h.path().to_str().unwrap(), "--request", "request.json",
+            "retention",
+            "--host-root",
+            h.path().to_str().unwrap(),
+            "--request",
+            "request.json",
         ])
     };
     let selected = json!([eligible, rooted, unknown]);
     let held = call(selected.clone());
     assert_eq!(held.exit_code, 0, "{}", held.stderr);
-    assert!(h.path().join(&eligible).exists(), "live reader excludes removal");
+    assert!(
+        h.path().join(&eligible).exists(),
+        "live reader excludes removal"
+    );
     drop(reader);
     let result = call(selected);
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
@@ -3722,14 +3742,31 @@ fn cli_addressed_maintenance_preserves_live_rooted_unknown_and_unrelated_outputs
     assert_eq!(round["scope"]["kind"], "declared-retirement-paths");
     assert_eq!(round["removed_logical_bytes"], 4096);
     assert!(!h.path().join(&eligible).exists());
-    assert!(round["disposed"].as_array().unwrap().iter().any(|r|
-        r["path"] == eligible && r["original_outcome"]["exit"] == 7
-    ));
-    assert_eq!(fs::read(h.path().join(&rooted).join("original")).unwrap(), b"required failure");
-    assert_eq!(fs::read(h.path().join(unknown)).unwrap(), b"unique unknown bytes");
-    assert_eq!(fs::read(&unrelated_record).unwrap(), b"unrelated damaged registration");
+    assert!(
+        round["disposed"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["path"] == eligible && r["original_outcome"]["exit"] == 7)
+    );
+    assert_eq!(
+        fs::read(h.path().join(&rooted).join("original")).unwrap(),
+        b"required failure"
+    );
+    assert_eq!(
+        fs::read(h.path().join(unknown)).unwrap(),
+        b"unique unknown bytes"
+    );
+    assert_eq!(
+        fs::read(&unrelated_record).unwrap(),
+        b"unrelated damaged registration"
+    );
     assert!(h.path().join(&unrelated).is_dir());
-    assert_eq!(call(json!([])).exit_code, 2, "empty scope cannot become a global sweep");
+    assert_eq!(
+        call(json!([])).exit_code,
+        2,
+        "empty scope cannot become a global sweep"
+    );
     assert_eq!(call(json!(["../outside"])).exit_code, 2);
     assert_eq!(call(json!(vec![unknown; 33])).exit_code, 2);
     fs::write(&unrelated_record, unrelated_original).unwrap();
