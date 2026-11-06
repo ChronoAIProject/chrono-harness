@@ -3439,6 +3439,20 @@
             "temporary::real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_output",
             "--test-threads=2"
           ]
+        },
+        "copied_original_reentry": {
+          "operation": "test.worktree.copied-original-reentry",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--",
+            "--exact",
+            "fixture_body::copied_input_reenters_retirement_without_publishing_an_unprotected_claim",
+            "--test-threads=2"
+          ]
         }
       },
       "tests_for": "worktree",

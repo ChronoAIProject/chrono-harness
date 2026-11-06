@@ -50,6 +50,71 @@ fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
 }
 
 #[test]
+fn copied_input_reenters_retirement_without_publishing_an_unprotected_claim() {
+    use chrono_harness::retained_artifacts::retention::{Inventory, read_guard};
+
+    let h = host();
+    let (store, allocation) = allocation(&h);
+    let source = h.root.join("retiring-input.bin");
+    let bytes = b"same original bytes for the next real copy";
+    fs::write(&source, bytes).unwrap();
+    let digest = sha256(bytes);
+    let original = store.join(format!("body-inputs/{digest}.bin"));
+    fs::create_dir_all(original.parent().unwrap()).unwrap();
+    fs::copy(&source, &original).unwrap();
+    let relative = original.strip_prefix(&h.root).unwrap().to_str().unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .begin("fixture-retirement", relative, value!(null))
+        .unwrap()
+        .complete(value!({"prior_original_consumer":"released"}))
+        .unwrap();
+
+    // A real staged-source refusal leaves the owner in its durable disposing
+    // phase. No test writes a lifecycle phase or releases that protection.
+    git(&h.root, &["add", "-f", "--", relative]);
+    let round = inventory.maintain_paths(&[relative.into()]).unwrap();
+    assert!(
+        round["protected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["reason"]
+                .as_str()
+                .is_some_and(|reason| reason.contains("committed/index source"))),
+        "{round}"
+    );
+    assert!(read_guard(&h.root, relative).is_err());
+    let destination = allocation.path().join("copied.bin");
+    let register = || {
+        chrono_worktree::TemporaryHost::register_copy(
+            &store,
+            "test-allocation",
+            &source,
+            &destination,
+            None,
+            "actual next copy after a prior original's bounded retirement",
+        )
+    };
+    assert!(register().is_err(), "staged-source protection must remain");
+    assert_eq!(fs::read(&original).unwrap(), bytes);
+    let claims = store.join(format!("body-input-claims/{digest}"));
+    assert!(
+        !claims.exists() || fs::read_dir(&claims).unwrap().next().is_none(),
+        "failed original protection must not publish a claim"
+    );
+
+    git(&h.root, &["reset", "-q", "--", relative]);
+    let recovered = register().unwrap();
+    assert_eq!(recovered, original);
+    assert_eq!(fs::read(&recovered).unwrap(), bytes);
+    assert_eq!(fs::read(&source).unwrap(), bytes);
+    assert_eq!(fs::read_dir(claims).unwrap().count(), 1);
+    fs::copy(&source, &destination).unwrap();
+    assert_eq!(fs::read(&destination).unwrap(), bytes);
+}
+
+#[test]
 fn preparing_a_copy_original_does_not_block_an_independent_allocation() {
     use std::{sync::mpsc, thread, time::Duration};
 
