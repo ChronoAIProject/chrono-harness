@@ -98,7 +98,7 @@ impl Host {
                 "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
             "environment":{"inherit":[],"values":{"PATH":std::env::var("PATH").unwrap(),
                 "BOUND_EVENT_VALUE":"declared","EVENT_TRACE":trace,
-                "EVENT_REAL_GIT":real,"EVENT_GIT_MODE":mode,
+                "EVENT_REAL_GIT":real,"EVENT_GIT_MODE":mode,"CHRONO_TEST_GIT_PROFILE":"event",
                 "GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
                 "inputs":[{"id":"event-git-bytes","presence":"present","location":program,
                     "sha256":sha256(&fs::read(&program).unwrap())}]},
