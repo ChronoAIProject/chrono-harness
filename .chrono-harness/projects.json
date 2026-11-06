@@ -157,6 +157,60 @@
             "crates/runner/Cargo.toml",
             ".chrono-harness/cache/runner-vendor"
           ]
+        },
+        "verify_identifiers": {
+          "operation": "verify.runner-identifiers",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-identifiers.rlib,dep-info=.chrono-harness/state/verify.runner-identifiers.rlib.d",
+            "crates/runner/src/verified_identifiers.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-identifiers.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "verify_paths": {
+          "operation": "verify.runner-paths",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-paths.rlib,dep-info=.chrono-harness/state/verify.runner-paths.rlib.d",
+            "crates/runner/src/verified_paths.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-paths.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "verify_status": {
+          "operation": "verify.runner-status",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-status.rlib,dep-info=.chrono-harness/state/verify.runner-status.rlib.d",
+            "crates/runner/src/verified_status.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-status.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -296,6 +350,60 @@
             "crates/runner-tests/Cargo.toml",
             "--test",
             "retention"
+          ]
+        },
+        "verify_identifiers": {
+          "operation": "verify.runner-identifiers-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-identifiers-tests.rlib,dep-info=.chrono-harness/state/verify.runner-identifiers-tests.rlib.d",
+            "crates/runner-tests/tests/verified_identifiers.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-identifiers-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "verify_paths": {
+          "operation": "verify.runner-paths-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-paths-tests.rlib,dep-info=.chrono-harness/state/verify.runner-paths-tests.rlib.d",
+            "crates/runner-tests/tests/verified_paths.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-paths-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "verify_status": {
+          "operation": "verify.runner-status-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-status-tests.rlib,dep-info=.chrono-harness/state/verify.runner-status-tests.rlib.d",
+            "crates/runner-tests/tests/verified_status.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-status-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },
@@ -1069,6 +1177,24 @@
             "--manifest-path",
             "crates/judge-registration/Cargo.toml"
           ]
+        },
+        "verify_preparation": {
+          "operation": "verify.registration-preparation",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-preparation.rlib,dep-info=.chrono-harness/state/verify.registration-preparation.rlib.d",
+            "crates/judge-registration/src/verified_consumption.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-preparation.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -1170,6 +1296,24 @@
             "fmt",
             "--manifest-path",
             "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "verify_preparation": {
+          "operation": "verify.registration-preparation-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-preparation-tests.rlib,dep-info=.chrono-harness/state/verify.registration-preparation-tests.rlib.d",
+            "crates/judge-registration-tests/tests/verified_consumption.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-preparation-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },

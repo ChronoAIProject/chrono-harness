@@ -98,11 +98,7 @@ pub fn utf8(b: Vec<u8>) -> Result<String, String> {
     String::from_utf8(b).map_err(|_| "E_INPUT_UNSUPPORTED: non UTF-8 Git output".into())
 }
 pub fn full_oid(s: &str) -> Result<(), String> {
-    if !matches!(s.len(), 40 | 64)
-        || s.bytes()
-            .any(|b| !b.is_ascii_digit() && !(b'a'..=b'f').contains(&b))
-        || s.bytes().all(|b| b == b'0')
-    {
+    if !crate::verified_identifiers::valid_oid(s.as_bytes()) {
         return Err("expected full nonzero lowercase commit OID".into());
     }
     Ok(())

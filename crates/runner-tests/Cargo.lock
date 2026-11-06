@@ -76,6 +76,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "verus_builtin_macros",
 ]
 
 [[package]]

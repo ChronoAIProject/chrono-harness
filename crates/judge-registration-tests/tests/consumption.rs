@@ -9,6 +9,7 @@ use std::{
 const UNITS: &str = ".chrono-harness/ci/units.json";
 const STARTUP: &str = ".chrono-harness/ci/bootstrap-shared.json";
 const CORE: &str = ".chrono-harness/ci/bootstrap-core.json";
+const PREPARATION: &str = ".chrono-harness/ci/bootstrap-unit.json";
 const CACHE: &str = ".chrono-harness/ci/bootstrap-cache.json";
 const CHECK: &str = ".chrono-harness/ci/check.json";
 const FM: &str = ".chrono-harness/FILEMAP.json";
@@ -26,7 +27,7 @@ fn host() -> Endpoint {
         projects: read(PROJECTS),
         config: read(POLICY),
         config_paths: BTreeSet::from([POLICY.into()]),
-        documents: [UNITS, STARTUP, CORE, CACHE, CHECK]
+        documents: [UNITS, STARTUP, CORE, CACHE, CHECK, PREPARATION]
             .into_iter()
             .map(|p| (p.into(), read(p)))
             .collect(),
@@ -139,7 +140,7 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
             }
             "check" => s.config["canonical_check"]["argv"] = json!(["some-other-runner", "check"]),
             "verify" => {
-                s.documents.get_mut(UNITS).unwrap()["units"]["runner"]["bootstrap"][5] =
+                action(&mut s, "host.bootstrap-shared-verify-core")["argv"][5] =
                     json!("absent-profile")
             }
             "evidence-method" => {
@@ -166,6 +167,60 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
         let error = consumption::validate_delta(Some(&old), &s, &paths(&[CORE]), &BTreeSet::new())
             .unwrap_err();
         assert!(error.starts_with("E_CONSUMPTION:"), "{defect}: {error}");
+    }
+}
+
+#[test]
+fn preparation_requires_registered_invocation_and_early_verification() {
+    for defect in [
+        "invocation",
+        "missing",
+        "ordinary-operation",
+        "duplicate",
+        "schema",
+        "entrypoint",
+        "document",
+        "tool",
+        "projects",
+    ] {
+        let old = host();
+        let mut new = host();
+        match defect {
+            "invocation" => {
+                new.documents.get_mut(UNITS).unwrap()["units"]["runner"]["bootstrap"][3] =
+                    json!("other")
+            }
+            "missing" => new.documents.get_mut(PREPARATION).unwrap()["prerequisites"] = json!([]),
+            "ordinary-operation" => {
+                new.documents.get_mut(PREPARATION).unwrap()["prerequisites"] = json!([]);
+                new.documents.get_mut(PREPARATION).unwrap()["operations"] =
+                    json!(["host.bootstrap-shared-verify-core"]);
+            }
+            "duplicate" => {
+                new.documents.get_mut(PREPARATION).unwrap()["prerequisites"] = json!([
+                    "host.bootstrap-shared-verify-core",
+                    "host.bootstrap-shared-verify-core"
+                ])
+            }
+            "schema" => new.documents.get_mut(PREPARATION).unwrap()["schema"] = json!("other"),
+            "tool" => {
+                new.documents.get_mut(PREPARATION).unwrap()["tools"]["python3"] = json!("other")
+            }
+            "projects" => new.documents.get_mut(PREPARATION).unwrap()["projects"] = json!("other"),
+            "entrypoint" => {
+                new.documents.get_mut(PREPARATION).unwrap()["entrypoint"]["script"] = json!("other")
+            }
+            "document" => {
+                new.documents.remove(PREPARATION);
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            consumption::validate_delta(Some(&old), &new, &paths(&[PREPARATION]), &BTreeSet::new())
+                .unwrap_err()
+                .starts_with("E_CONSUMPTION:"),
+            "{defect}"
+        );
     }
 }
 
@@ -308,6 +363,7 @@ fn scoped_adapter_reads_fixed_native_git_endpoints_and_retains_original_failure(
         CORE,
         CACHE,
         CHECK,
+        PREPARATION,
         ".chrono-harness/judges.json",
         ".chrono-harness/workflow.json",
     ] {
