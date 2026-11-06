@@ -15,8 +15,6 @@ root = Path.cwd()
 if route == "bootstrap":
     sys.argv = [str(source), str(root), ".chrono-harness/ci/python-bootstrap.json"]
     module.main()
-elif route == "workflow-inventory":
-    module.validate(root, Path(".chrono-harness/state/list-config.json"))
 elif route == "detached":
     config = json.loads(Path(".chrono-harness/state/python-consumer.json").read_text())
     subprocess.Popen(

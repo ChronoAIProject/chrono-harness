@@ -12,7 +12,8 @@
     "projects": ".chrono-harness/projects.json",
     "tools": {
       "python3": "/usr/bin/python3",
-      "chrono-ci": ".chrono-harness/bin/chrono-ci"
+      "chrono-ci": ".chrono-harness/bin/chrono-ci",
+      "bash": "/bin/bash"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -22,7 +23,7 @@
     "required_inputs": [
       ".chrono-harness/ci/check.json",
       ".chrono-harness/ci/units.json",
-      ".chrono-harness/ci/install.py",
+      ".chrono-harness/ci/install.sh",
       ".github/workflows/chrono-ci.yml"
     ],
     "adoption_base": null,

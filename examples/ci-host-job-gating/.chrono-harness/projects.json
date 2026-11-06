@@ -40,14 +40,14 @@
     },
     {
       "id": "installer",
-      "path": ".chrono-harness/ci/install.py",
+      "path": ".chrono-harness/ci/install.sh",
       "test_script": "harness",
       "actions": {
         "execute": {
           "operation": "tools.install",
-          "tool": "python3",
+          "tool": "bash",
           "argv": [
-            ".chrono-harness/ci/install.py",
+            ".chrono-harness/ci/install.sh",
             ".",
             "/opt/chrono-tools"
           ]
@@ -56,14 +56,14 @@
     },
     {
       "id": "harness",
-      "path": ".chrono-harness/ci/verify.py",
+      "path": ".chrono-harness/ci/verify.sh",
       "tests_for": "installer",
       "actions": {
         "execute": {
           "operation": "ci.verify",
-          "tool": "python3",
+          "tool": "bash",
           "argv": [
-            ".chrono-harness/ci/verify.py"
+            ".chrono-harness/ci/verify.sh"
           ]
         }
       }

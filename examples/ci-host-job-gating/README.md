@@ -4,14 +4,14 @@
 
 将本目录复制到新仓库，把兼容公开版本的 `chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-worktree` 安装到明确的工具目录。示例自托管 runner 从 `/opt/chrono-tools` 读取工具。按宿主实际情况修改 `.chrono-harness/ci/units.json` 中所有选中 bootstrap 的参数和 runner。
 
-变更检测 job 只安装这些 harness 工具，读取明确登记的稀疏源码路径；不导入 `message.py`，不执行业务检查。业务 SDK 由选中单元的 bootstrap 获取。
+变更检测 job 只通过薄 Shell 拷贝这些已安装的 harness 工具，读取明确登记的稀疏源码路径。harness 单元直接验证 Rust 生成器输出；这两处都不需要 Python。Python 只用于本例的 `message.py` 业务和 `check.py` 测试，由选中的业务单元使用。
 
-示例明确选择 macOS Git `/usr/bin/git` 和 Python `/usr/bin/python3`。首次提交前，在 config.json、worktree.json 登记实际 Git 可执行文件的 SHA-256／版本，在 config.json 登记实际 Python 版本。这些是宿主选择，不是可跨平台使用的产品默认值。无需 Rust 源码检出；安装的版本须包含条件父工作流和原 `production` 输出合同，旧版本不兼容。公开版本发布和真实原生 Actions 验证仍由调用方负责。
+示例明确选择 macOS Git `/usr/bin/git`、系统 Shell，以及业务 Python `/usr/bin/python3`。首次提交前，在 config.json、worktree.json 登记实际 Git 可执行文件的 SHA-256／版本，在 config.json 登记实际业务 Python 版本。验证转发脚本由登记的 `/bin/bash` 执行，版本由程序观察，预期版本未绑定。这些是宿主选择，不是可跨平台使用的产品默认值。无需 Rust 源码检出；安装的版本须包含条件父工作流和原 `production` 输出合同，旧版本不兼容。公开版本发布和真实原生 Actions 验证仍由调用方负责。
 
 完成上述配置后，初始化并验证生成结果：
 
 ```sh
-/usr/bin/python3 .chrono-harness/ci/install.py . /absolute/path/to/installed-tools
+/bin/sh .chrono-harness/ci/install.sh . /absolute/path/to/installed-tools
 .chrono-harness/bin/chrono-ci init --host-root . --config .chrono-harness/ci/units.json
 .chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
