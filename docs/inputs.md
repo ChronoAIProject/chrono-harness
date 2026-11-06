@@ -167,6 +167,8 @@ macOS 27 直接政策通过按配置选择的 FILEMAP 表，把 runner v6 每个
 
 独立观察器和私有 bootstrap 提案仍使用另一 home，消费前须明确协调，不能认为已与普通保护一致。
 
+本机 runner 的 `cargo-cache.cc.index` 显式采用当前稀疏索引原件：新增 `cc 1.11.0` 后共 231 条记录，原有 230 条版本及 JSON 记录的字节不变，锁定的 `cc 1.4.6` 记录和包校验值也不变。此前保护正确拒绝旧登记摘要与当前索引的差异，尚未启动 metadata 或编译。本次只更新这个完整文件的预期摘要，不增加索引等价规则或自动更新预期的路径；其他包、配置、编译器、SDK 和前后身份检查继续适用，真实保护消费和候选验收须另行核验。
+
 当前 Xcode 获取识别 Xcode 26.5／17F42。只登记 Developer 时，`usr/bin/altool` 别名指向兄弟 SharedFrameworks，因越出范围被拒绝。因此选中的目录清单改覆盖外层 `Xcode.app/Contents`，directory v3 检查不变；`DEVELOPER_DIR` 仍指 Developer，`CHRONO_XCODE_CONTENTS` 选择外层清单。当前本机 runner 和 diagnostics 的构建政策从原清单选择 `.chrono-harness/inputs/local-xcode-build.json`：声明的链接工具、四个发行库、clang 21 资源及别名，以及发行／工具链 metadata。文件摘要和精确父目录子项名不变。移动 SDK 和图形应用内容不属于此构建子集；完整 macOS SDK 仍单独绑定。[Cargo 说明](cargo-projects.md)记录了依赖审计和政策边界。SDK、Developer、配置、运行时范围仍明确。
 
 原拒绝获取和后续成功结果分别保留。生成 Rust、SDK、Xcode 清单是登记状态模块下的必需原输入，摘要在所选政策中；只有来源声明，不能提供或证明这些字节。
