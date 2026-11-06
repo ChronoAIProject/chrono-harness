@@ -117,6 +117,39 @@ fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, St
     h.received(h.native_output(&mut actual))
 }
 #[test]
+fn owner_deployment_publishes_in_the_rust_lease_owner() {
+    let (h, exe, path, sha) = fixture();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    let stage = json(&fs::read(h.root.join(path)).unwrap()).unwrap();
+    let original = exe.parent().unwrap().join("previous-owner");
+    assert_eq!(
+        chrono_harness::ownership::identity(&original).unwrap(),
+        stage["owner_stage"]["previous"]["identity"]
+    );
+    let validation = json(
+        &serde_json::from_value::<Vec<u8>>(report["managed_process"]["stdout_bytes"].clone())
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        validation["schema"],
+        "chrono-bootstrap-owner-stage-validation/v1"
+    );
+    assert_eq!(validation["stage"], stage["owner_stage"]);
+    assert_eq!(validation["stage_sha256"], sha);
+    let publication = &report["owner_deployment"]["publication"];
+    assert_eq!(
+        publication["installed"]["identity"],
+        chrono_harness::ownership::identity(&h.root.join(".chrono-harness/bin/chrono-worktree"))
+            .unwrap()
+    );
+    assert_eq!(
+        *publication,
+        json(&fs::read(exe.parent().unwrap().join("publication-result.json")).unwrap()).unwrap()
+    );
+}
+#[test]
 fn owner_deployment_retains_original_ex_through_publication_and_adoption() {
     let (h, exe, path, sha) = fixture();
     let before = h.ledger()["entries"][0].clone();
@@ -320,8 +353,10 @@ fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
     }
 }
 #[test]
-fn owner_deployment_keeps_publication_evidence_when_original_admission_drifts() {
+fn owner_deployment_refuses_before_publication_when_validation_admission_drifts() {
     let (h, exe, path, sha) = fixture();
+    let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+    let before = fs::read(&selected).unwrap();
     fs::write(
         h.root.join(".chrono-harness/state/owner-probe-drift"),
         "inject fixture drift",
@@ -340,11 +375,164 @@ fn owner_deployment_keeps_publication_evidence_when_original_admission_drifts() 
             .join(".chrono-harness/state/bootstrap-owner-current.json")
             .exists()
     );
+    assert_eq!(fs::read(&selected).unwrap(), before);
+    assert!(
+        !exe.parent()
+            .unwrap()
+            .join("publication-intent.json")
+            .exists()
+    );
+}
+
+#[test]
+fn owner_deployment_recovers_after_rename_when_result_publication_fails() {
+    let (h, exe, path, sha) = fixture();
+    let stage = json(&fs::read(h.root.join(&path)).unwrap()).unwrap();
+    let result = exe.parent().unwrap().join("publication-result.json");
+    // A real result IO failure occurs after replacement, without a test-only
+    // product entrypoint or hand-written successful intent/publication.
+    fs::create_dir(&result).unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report.to_string().contains("physical regular file"),
+        "{report}"
+    );
+    let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+    assert_eq!(fs::read(&selected).unwrap(), fs::read(&exe).unwrap());
+    let installed = chrono_harness::ownership::identity(&selected).unwrap();
+    assert_eq!(
+        chrono_harness::ownership::identity(&exe.parent().unwrap().join("previous-owner")).unwrap(),
+        stage["owner_stage"]["previous"]["identity"]
+    );
     assert!(
         exe.parent()
             .unwrap()
-            .join("publication-result.json")
+            .join("publication-intent.json")
+            .is_file()
+    );
+    assert!(
+        !h.root
+            .join(".chrono-harness/state/bootstrap-owner-current.json")
             .exists()
     );
-    assert!(exe.parent().unwrap().join("previous-owner").exists());
+    fs::remove_dir(&result).unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(
+        report["owner_deployment"]["installed"]["identity"],
+        installed
+    );
+    assert_eq!(
+        json(&fs::read(result).unwrap()).unwrap(),
+        report["owner_deployment"]["publication"]
+    );
+}
+
+#[test]
+fn owner_deployment_rejects_same_published_bytes_from_another_inode() {
+    let (h, exe, path, sha) = fixture();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+    let foreign = selected.with_extension("foreign");
+    fs::copy(&selected, &foreign).unwrap();
+    fs::rename(foreign, &selected).unwrap();
+    let original_adoption = fs::read(
+        h.root
+            .join(".chrono-harness/state/bootstrap-owner-current.json"),
+    )
+    .unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report
+            .to_string()
+            .contains("drifted after publication intent"),
+        "{report}"
+    );
+    assert_eq!(
+        fs::read(
+            h.root
+                .join(".chrono-harness/state/bootstrap-owner-current.json")
+        )
+        .unwrap(),
+        original_adoption
+    );
+}
+
+#[test]
+fn owner_deployment_rejects_changed_publication_inputs_without_replacement() {
+    for fault in [
+        "selected",
+        "staged",
+        "previous",
+        "unqualified-next",
+        "symlink-previous",
+        "symlink-intent",
+        "symlink-next",
+        "symlink-result",
+    ] {
+        let (h, exe, path, sha) = fixture();
+        let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+        match fault {
+            "selected" => fs::write(&selected, "changed selected").unwrap(),
+            "staged" => {
+                let foreign = exe.with_extension("foreign");
+                fs::copy(&exe, &foreign).unwrap();
+                fs::rename(foreign, &exe).unwrap();
+            }
+            "previous" => fs::write(
+                exe.parent().unwrap().join("previous-owner"),
+                "foreign owner",
+            )
+            .unwrap(),
+            "unqualified-next" => fs::write(
+                exe.parent().unwrap().join("publication-next-owner"),
+                "unqualified preparation",
+            )
+            .unwrap(),
+            _ => {
+                let name = match fault {
+                    "symlink-previous" => "previous-owner",
+                    "symlink-intent" => "publication-intent.json",
+                    "symlink-next" => "publication-next-owner",
+                    _ => "publication-result.json",
+                };
+                std::os::unix::fs::symlink(&selected, exe.parent().unwrap().join(name)).unwrap();
+            }
+        }
+        let before = fs::read(&selected).unwrap();
+        let (code, report, error) = deploy(&h, &exe, &path, &sha);
+        assert_ne!(code, 0, "{fault}: {report} {error}");
+        assert_eq!(fs::read(&selected).unwrap(), before, "{fault}");
+        assert!(
+            !h.root
+                .join(".chrono-harness/state/bootstrap-owner-current.json")
+                .exists(),
+            "{fault}"
+        );
+    }
+}
+
+#[test]
+fn owner_deployment_requires_complete_stage_validation_before_native_effects() {
+    for field in ["registrations", "operations", "installed"] {
+        let (h, exe, path, _) = fixture();
+        let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+        let before = fs::read(&selected).unwrap();
+        let mut stage = json(&fs::read(h.root.join(&path)).unwrap()).unwrap();
+        stage[field] = value!("invalid original construction input");
+        let raw = serde_json::to_vec_pretty(&stage).unwrap();
+        fs::write(h.root.join(&path), &raw).unwrap();
+        let (code, report, error) = deploy(&h, &exe, &path, &sha256(&raw));
+        assert_ne!(code, 0, "{field}: {report} {error}");
+        assert_eq!(fs::read(&selected).unwrap(), before, "{field}");
+        assert!(
+            !exe.parent()
+                .unwrap()
+                .join("publication-intent.json")
+                .exists()
+        );
+    }
 }
