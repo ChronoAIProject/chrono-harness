@@ -598,17 +598,21 @@ All six owner-deployment regressions also passed (202.57 test seconds), includin
 an unmanaged, independently locked Git checkout with an actual CWD-only child;
 its source and ledger remain unchanged. Empty existing ledgers and unresolved
 actual consumers still refuse publication. Source bootstrap and both format
-checks passed. Whole-directory production cost, original-main policy adoption,
-full canonical acceptance and delivery remain unverified. This is
-admission/checkpoint enforcement, without a concurrent reservation or strict
-filesystem quota.
+checks passed. The original Git main completed protected owner publication and
+source bootstrap at `e460dc7f`; its 24 retained operation streams and installed
+payloads were verified. It then adopted the candidate tree at `a616e874`, and all
+four existing producer contexts migrated successfully. Its fifth producer
+directory is absent. This establishes local owner and policy adoption, while
+whole-directory production cost, full canonical acceptance, other coordinators
+and delivery remain unverified. This is admission/checkpoint enforcement,
+without a concurrent reservation or strict filesystem quota.
 The candidate host selects the five temporary test producers and has adopted
 four existing producer contexts; nine exact historical directories transferred
 through the current custodian entry are now physically absent. Historical shared
 input custody and already-disposing output references still cause maintenance
-failures; directory absence does not establish their retirement. Main coordinator
-deployment, already-retiring historical output handoffs and the remaining
-report/stream directory layout are pending. Bounded
+failures; directory absence does not establish their retirement. Already-retiring
+historical output handoffs, other coordinators and the remaining report/stream
+directory layout are pending. Bounded
 record traversal alone does not satisfy this target.
 
 The existing PR121 target is carried in SPEC §10.1. Runtime coverage remains
