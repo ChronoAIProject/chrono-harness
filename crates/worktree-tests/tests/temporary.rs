@@ -188,6 +188,12 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
     let object = json(&fs::read(&record).unwrap()).unwrap()["object"].clone();
     let intent = store.join(object["intent"]["path"].as_str().unwrap());
     let original = fs::read(&intent).unwrap();
+    // A valid historic sweep can predate this allocation. Custody must schedule
+    // its exact directory rather than waiting for that sweep to wrap around.
+    fs::write(
+        store.join("recovery-state/cursor.json"),
+        serde_json::to_vec(&value!({"bucket":0,"after":"","round_started":1,"pending":[]})).unwrap(),
+    ).unwrap();
     adopt_directory_cleanup(&h);
     let (code, report, error) = h.auto(
         "migrate",
