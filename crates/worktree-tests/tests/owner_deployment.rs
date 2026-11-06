@@ -4,6 +4,9 @@ use std::process::Stdio;
 const PROFILE: &str = ".chrono-harness/ci/owner-stage.json";
 
 fn fixture() -> (Host, PathBuf, String, String) {
+    fixture_with_publication_probe(None)
+}
+fn fixture_with_publication_probe(drift: Option<bool>) -> (Host, PathBuf, String, String) {
     let h = Host::new("payload");
     h.kernel_cleanup();
     let cleanup = h.root.join(".chrono-harness/cleanup.json");
@@ -37,7 +40,7 @@ fn fixture() -> (Host, PathBuf, String, String) {
     let tools = h.parent.join("owner-tools");
     fs::create_dir(&tools).unwrap();
     for name in ["rustup", "cargo", "rustc"] {
-        std::os::unix::fs::symlink(
+        fs::copy(
             env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
             tools.join(name),
         )
@@ -51,8 +54,23 @@ fn fixture() -> (Host, PathBuf, String, String) {
         serde_json::to_vec_pretty(&config).unwrap(),
     )
     .unwrap();
+    // One real operation supplies original stdout/stderr for deployment checks.
+    let projects_path = h.root.join(PROJECTS);
+    let mut projects = json(&fs::read(&projects_path).unwrap()).unwrap();
+    projects["scripts"] = value!([
+        {"id":"construction","language":"python","path":".chrono-harness/ci/bootstrap.py","test_script":"construction-tests",
+         "actions":{"execute":{"operation":"owner.fixture-version","tool":"cargo","argv":["--version"]}}},
+        {"id":"construction-tests","language":"python","path":".chrono-harness/ci/bootstrap_shared.py","tests_for":"construction",
+         "actions":{"execute":{"operation":"owner.fixture-test","tool":"cargo","argv":["--version"]}}}
+    ]);
+    fs::write(projects_path, serde_json::to_vec_pretty(&projects).unwrap()).unwrap();
     let profile = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0",
-        "tools":{"cargo":tools.join("cargo"),"rustc":tools.join("rustc")},"operations":[],"install":[],
+        "tools":{"cargo":tools.join("cargo"),"rustc":tools.join("rustc")},"operations":["owner.fixture-version"],"install":[],
+        "require_tool_bindings":true,"rust_incremental":false,
+        "native_platform":{"system":if cfg!(target_os="macos") {"Darwin"} else {"Linux"},
+            "machine":if cfg!(all(target_os="macos",target_arch="aarch64")) {"arm64"} else {std::env::consts::ARCH}},
+        "tool_bindings":{"cargo":{"path":tools.join("cargo"),"sha256":sha256(&fs::read(tools.join("cargo")).unwrap()),"version":"cargo 1.95.0 (fixture)"},
+            "rustc":{"path":tools.join("rustc"),"sha256":sha256(&fs::read(tools.join("rustc")).unwrap()),"version":"rustc 1.95.0 (fixture)"}},
         "environment":{"PATH":std::env::join_paths(std::iter::once(tools).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap()))).unwrap().to_str().unwrap()},
         "entrypoint":{"tool":"owner-probe","script":".chrono-harness/ci/bootstrap.py"},
         "participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":fixture_git(),"config":POLICY},
@@ -70,6 +88,13 @@ fn fixture() -> (Host, PathBuf, String, String) {
             .push(file(&path, value!([])));
     }
     fs::write(h.root.join(FM), serde_json::to_vec_pretty(&fm).unwrap()).unwrap();
+    let probe_input = drift.map(|drift| {
+        automatic::native_git(
+            &h,
+            "owner-publication",
+            value!({"root":h.root,"drift":drift}),
+        )
+    });
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let (code, report, error) = h.auto("bootstrap", &["--bootstrap-config", PROFILE]);
@@ -94,6 +119,12 @@ fn fixture() -> (Host, PathBuf, String, String) {
     let executable = h
         .root
         .join(stage["owner_stage"]["staged"]["path"].as_str().unwrap());
+    if let Some(input) = probe_input {
+        let mut config = json(&fs::read(&input).unwrap()).unwrap();
+        config["publication"] =
+            value!(executable.parent().unwrap().join("publication-result.json"));
+        fs::write(input, serde_json::to_vec(&config).unwrap()).unwrap();
+    }
     (h, executable, path, sha)
 }
 fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, String) {
@@ -135,7 +166,7 @@ fn owner_deployment_publishes_without_the_construction_interpreter() {
 }
 #[test]
 fn owner_deployment_retains_original_ex_through_publication_and_adoption() {
-    let (h, exe, path, sha) = fixture();
+    let (h, exe, path, sha) = fixture_with_publication_probe(Some(false));
     let before = h.ledger()["entries"][0].clone();
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_eq!(code, 0, "{report} {error}");
@@ -149,6 +180,11 @@ fn owner_deployment_retains_original_ex_through_publication_and_adoption() {
         fs::read(&exe).unwrap()
     );
     assert_eq!(report["owner_deployment"]["task_completion"], "not-claimed");
+    assert!(
+        h.root
+            .join(".chrono-harness/state/owner-exclusions-checked")
+            .exists()
+    );
     assert_eq!(
         deploy(&h, &exe, &path, &sha).0,
         0,
@@ -338,12 +374,7 @@ fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
 }
 #[test]
 fn owner_deployment_keeps_publication_evidence_when_original_admission_drifts() {
-    let (h, exe, path, sha) = fixture();
-    fs::write(
-        h.root.join(".chrono-harness/state/owner-probe-drift"),
-        "inject fixture drift",
-    )
-    .unwrap();
+    let (h, exe, path, sha) = fixture_with_publication_probe(Some(true));
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_ne!(code, 0, "{report} {error}");
     assert!(
@@ -364,4 +395,178 @@ fn owner_deployment_keeps_publication_evidence_when_original_admission_drifts() 
             .exists()
     );
     assert!(exe.parent().unwrap().join("previous-owner").exists());
+}
+
+fn binding(path: &Path) -> Value {
+    let bytes = fs::read(path).unwrap();
+    value!({"identity":chrono_harness::ownership::identity(path).unwrap(),"sha256":sha256(&bytes),"size":bytes.len()})
+}
+
+#[test]
+fn owner_deployment_recovers_original_intent_before_and_after_replacement() {
+    for replaced in [false, true] {
+        let (h, exe, path, sha) = fixture();
+        let stage = json(&fs::read(h.root.join(&path)).unwrap()).unwrap();
+        let record = &stage["owner_stage"];
+        let selected = h.root.join(record["selected"].as_str().unwrap());
+        let directory = exe.parent().unwrap();
+        fs::hard_link(&selected, directory.join("previous-owner")).unwrap();
+        let next = directory.join("publication-next-owner");
+        fs::copy(&exe, &next).unwrap();
+        let intent = value!({"schema":"chrono-bootstrap-owner-publication-intent/v1",
+            "stage":record,"replacement":binding(&next)});
+        let original = serde_json::to_vec_pretty(&intent).unwrap();
+        fs::write(directory.join("publication-intent.json"), &original).unwrap();
+        if replaced {
+            fs::rename(&next, &selected).unwrap();
+        }
+        assert!(!directory.join("publication-result.json").exists());
+        let (code, report, error) = deploy(&h, &exe, &path, &sha);
+        assert_eq!(code, 0, "replaced={replaced}: {report} {error}");
+        assert_eq!(binding(&selected), intent["replacement"]);
+        assert_eq!(
+            binding(&directory.join("previous-owner")),
+            record["previous"]
+        );
+        assert_eq!(
+            fs::read(directory.join("publication-intent.json")).unwrap(),
+            original
+        );
+        assert_eq!(
+            report["owner_deployment"]["publication"]["adoption"],
+            "not-claimed"
+        );
+        let result = fs::read(directory.join("publication-result.json")).unwrap();
+        assert_eq!(deploy(&h, &exe, &path, &sha).0, 0);
+        assert_eq!(
+            fs::read(directory.join("publication-result.json")).unwrap(),
+            result
+        );
+    }
+}
+
+#[test]
+fn owner_deployment_preserves_bytes_on_stage_original_or_execution_drift() {
+    for fault in [
+        "source",
+        "registrations",
+        "operations",
+        "argv",
+        "exit",
+        "pid",
+        "stdout",
+        "staged",
+        "compiler",
+        "environment",
+    ] {
+        let (h, exe, path, _) = fixture();
+        let target = h.root.join(".chrono-harness/bin/chrono-worktree");
+        let before = binding(&target);
+        let mut stage = json(&fs::read(h.root.join(&path)).unwrap()).unwrap();
+        match fault {
+            "source" => stage["source"]["before"]["dirty"] = value!(true),
+            "registrations" => stage["registrations"][PROFILE] = value!("different"),
+            "operations" => stage["operations"] = value!([]),
+            "argv" => stage["operations"][0]["argv"][1] = value!("foreign"),
+            "exit" => stage["operations"][0]["exit_code"] = value!(1),
+            "pid" => stage["operations"][0]["pid"] = value!(0),
+            "stdout" => {
+                let path = h
+                    .root
+                    .join(stage["operations"][0]["stdout"]["path"].as_str().unwrap());
+                fs::write(path, "changed original output").unwrap();
+            }
+            "staged" => stage["owner_stage"]["staged"]["sha256"] = value!("0".repeat(64)),
+            "compiler" => stage["executables"][1]["sha256"] = value!("0".repeat(64)),
+            "environment" => stage["environment"]["RUSTC"] = value!("foreign compiler"),
+            _ => unreachable!(),
+        }
+        let bytes = serde_json::to_vec_pretty(&stage).unwrap();
+        fs::write(h.root.join(&path), &bytes).unwrap();
+        let (code, report, error) = deploy(&h, &exe, &path, &sha256(&bytes));
+        assert_ne!(code, 0, "{fault}: {report} {error}");
+        assert_eq!(binding(&target), before, "{fault}");
+        assert!(
+            !exe.parent()
+                .unwrap()
+                .join("publication-intent.json")
+                .exists(),
+            "{fault}"
+        );
+        assert!(report.get("managed_process").is_none(), "{fault}: {report}");
+    }
+}
+
+#[test]
+fn owner_deployment_refuses_foreign_or_symlink_publication_files() {
+    for fault in [
+        "selected",
+        "previous",
+        "next",
+        "intent",
+        "result",
+        "selected-symlink",
+        "intent-symlink",
+    ] {
+        let (h, exe, path, sha) = fixture();
+        let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+        let directory = exe.parent().unwrap();
+        match fault {
+            "selected" => fs::write(&selected, "foreign selected bytes").unwrap(),
+            "previous" => fs::write(directory.join("previous-owner"), "foreign original").unwrap(),
+            "next" => {
+                fs::write(directory.join("publication-next-owner"), "unqualified next").unwrap()
+            }
+            "intent" => fs::write(directory.join("publication-intent.json"), "{}").unwrap(),
+            "result" => fs::write(directory.join("publication-result.json"), "{}").unwrap(),
+            "selected-symlink" => {
+                let original = directory.join("foreign-selected");
+                fs::rename(&selected, &original).unwrap();
+                std::os::unix::fs::symlink(original, &selected).unwrap();
+            }
+            "intent-symlink" => {
+                std::os::unix::fs::symlink(&exe, directory.join("publication-intent.json")).unwrap()
+            }
+            _ => unreachable!(),
+        }
+        let original = fs::read(&selected).unwrap();
+        let (code, report, error) = deploy(&h, &exe, &path, &sha);
+        assert_ne!(code, 0, "{fault}: {report} {error}");
+        // A conflicting result is detected after publication and remains intact.
+        if fault == "result" {
+            assert_eq!(
+                fs::read(directory.join("publication-result.json")).unwrap(),
+                b"{}"
+            );
+            assert_eq!(fs::read(&selected).unwrap(), fs::read(&exe).unwrap());
+            assert!(directory.join("previous-owner").exists());
+        } else {
+            assert_eq!(fs::read(&selected).unwrap(), original, "{fault}");
+        }
+        assert!(
+            !h.root
+                .join(".chrono-harness/state/bootstrap-owner-current.json")
+                .exists()
+        );
+    }
+}
+
+#[test]
+fn owner_deployment_refuses_same_bytes_in_a_different_published_inode() {
+    let (h, exe, path, sha) = fixture();
+    assert_eq!(deploy(&h, &exe, &path, &sha).0, 0);
+    let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+    let foreign = exe.parent().unwrap().join("foreign-same-bytes");
+    fs::copy(&selected, &foreign).unwrap();
+    let before = binding(&foreign);
+    fs::rename(foreign, &selected).unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report
+            .to_string()
+            .contains("drifted after publication intent"),
+        "{report}"
+    );
+    assert_eq!(binding(&selected), before);
 }

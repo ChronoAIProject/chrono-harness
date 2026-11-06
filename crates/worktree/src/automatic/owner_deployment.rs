@@ -10,6 +10,458 @@ fn executable_binding(path: &Path) -> Result<Value, String> {
     Ok(value!({"identity":id,"sha256":sha256(&bytes),"size":bytes.len()}))
 }
 
+// Fixed producer data is checked here before any selected bytes change.
+fn stage_registration(
+    r: &mut Runner,
+    root: &Path,
+    head: &str,
+    path: &str,
+) -> Result<Vec<u8>, String> {
+    let bytes = fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?;
+    if r.blob(root, head, path)? != bytes {
+        return Err(format!(
+            "owner stage registration differs from source: {path}"
+        ));
+    }
+    Ok(bytes)
+}
+
+fn validate_stage(
+    r: &mut Runner,
+    root: &Path,
+    head: &str,
+    profile: &str,
+    policy: &Value,
+    stage: &Value,
+) -> Result<(), String> {
+    let tree = r.oid(root, &format!("{head}^{{tree}}"))?;
+    let observed = value!({"commit":head,"tree":tree,"dirty":false,"error":null});
+    if stage["source"]
+        != value!({"state":"clean","commit":head,"tree":tree,
+        "before":observed,"after":observed})
+        || stage["installed"] != value!([])
+    {
+        return Err("owner stage requires its original clean source and no installations".into());
+    }
+    let projects_path = policy["projects"].as_str().ok_or("owner stage projects")?;
+    let mut paths = vec![
+        profile,
+        projects_path,
+        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_owner.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
+    ];
+    if let Some(path) = policy.get("tool_bindings_registry") {
+        paths.push(path.as_str().ok_or("owner stage toolchain registry path")?);
+    }
+    if let Some(path) = policy.get("owner_upgrade") {
+        paths.push(path.as_str().ok_or("owner stage upgrade path")?);
+    }
+    let mut registrations = serde_json::Map::new();
+    let mut registration_bytes = BTreeMap::new();
+    for path in paths {
+        let bytes = stage_registration(r, root, head, path)?;
+        registrations.insert(path.into(), value!(sha256(&bytes)));
+        registration_bytes.insert(path, bytes);
+    }
+    if stage["registrations"] != Value::Object(registrations) {
+        return Err("owner stage execution registrations differ".into());
+    }
+    if let Some(homes) = policy.get("host_environment") {
+        if stage["host_environment"] != *homes {
+            return Err("owner stage host environment differs".into());
+        }
+        for (key, path) in homes.as_object().ok_or("owner stage host environment")? {
+            let path = path.as_str().ok_or("owner stage host environment path")?;
+            relative_path(path)?;
+            if !path.starts_with(".chrono-harness/") {
+                return Err("owner stage host environment must be a host path".into());
+            }
+            if stage["environment"][key] != value!(root.join(path)) {
+                return Err(format!(
+                    "owner stage producer host environment differs: {key}"
+                ));
+            }
+        }
+    }
+    let registry_bindings;
+    let bindings = if let Some(path) = policy.get("tool_bindings_registry") {
+        if policy.get("tool_bindings").is_some() || policy.get("native_platform").is_some() {
+            return Err("conflicting owner stage binding declarations".into());
+        }
+        let path = path.as_str().ok_or("owner stage toolchain registry")?;
+        if !path.starts_with(".chrono-harness/ci/") {
+            return Err("owner stage toolchain registry must be a CI path".into());
+        }
+        let registry = json(
+            registration_bytes
+                .get(path)
+                .ok_or("owner stage registry input")?,
+        )?;
+        if registry["schema"] != "chrono-bootstrap-toolchains/v1"
+            || registry["rust_toolchain"] != policy["rust_toolchain"]
+        {
+            return Err("owner stage toolchain registry differs".into());
+        }
+        let system = match std::env::consts::OS {
+            "macos" => "Darwin",
+            "linux" => "Linux",
+            _ => return Err("unsupported owner stage native platform".into()),
+        };
+        let machine = match (std::env::consts::OS, std::env::consts::ARCH) {
+            ("macos", "aarch64") => "arm64",
+            (_, arch) => arch,
+        };
+        let tools = registry["platforms"][format!("{system}/{machine}")]["tools"]
+            .as_object()
+            .ok_or("missing owner stage native toolchain registration")?;
+        registry_bindings = Value::Object(
+            tools
+                .iter()
+                .map(|(name, item)| {
+                    (
+                        name.clone(),
+                        value!({
+            "sha256":item["sha256"],"version":item["version"],"allow_relocation":true}),
+                    )
+                })
+                .collect(),
+        );
+        Some(&registry_bindings)
+    } else {
+        if policy["require_tool_bindings"] == true {
+            let system = match std::env::consts::OS {
+                "macos" => "Darwin",
+                "linux" => "Linux",
+                _ => "unsupported",
+            };
+            let machine = match (std::env::consts::OS, std::env::consts::ARCH) {
+                ("macos", "aarch64") => "arm64",
+                (_, arch) => arch,
+            };
+            if policy.get("tool_bindings").is_none()
+                || policy["native_platform"] != value!({"system":system,"machine":machine})
+            {
+                return Err("missing owner stage native binding declarations".into());
+            }
+        }
+        policy.get("tool_bindings")
+    };
+    let mut selected = BTreeMap::new();
+    if let Some(bindings) = bindings {
+        let object = bindings
+            .as_object()
+            .ok_or("owner stage executable bindings")?;
+        let rows = stage["executables"]
+            .as_array()
+            .ok_or("owner stage executable observations")?;
+        if object.len() != 2
+            || !object.contains_key("cargo")
+            || !object.contains_key("rustc")
+            || rows.len() != 2
+        {
+            return Err("owner stage requires exactly Cargo and rustc bindings".into());
+        }
+        for (name, row) in ["cargo", "rustc"].into_iter().zip(rows) {
+            let binding = &bindings[name];
+            let fields = binding
+                .as_object()
+                .ok_or("owner stage executable binding")?;
+            let digest = binding["sha256"]
+                .as_str()
+                .ok_or("owner stage executable digest")?;
+            if fields.keys().any(|key| {
+                !["path", "sha256", "version", "allow_relocation"].contains(&key.as_str())
+            }) || digest.len() != 64
+                || !digest
+                    .bytes()
+                    .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+                || binding["version"].as_str().is_none()
+                || binding.get("path").is_some_and(|v| !v.is_string())
+                || (binding.get("path").is_none() && policy.get("tool_bindings_registry").is_none())
+                || binding
+                    .get("allow_relocation")
+                    .is_some_and(|v| !v.is_boolean())
+            {
+                return Err("invalid owner stage executable binding".into());
+            }
+            let path = row["path"].as_str().ok_or("owner stage executable path")?;
+            if !Path::new(path).is_absolute()
+                || row["sha256"] != binding["sha256"]
+                || row["version"] != binding["version"]
+            {
+                return Err(format!("owner stage executable binding differs: {name}"));
+            }
+            if binding["allow_relocation"] != true {
+                let declared = binding["path"]
+                    .as_str()
+                    .ok_or("owner stage declared executable path")?;
+                if root.join(declared) != Path::new(path) {
+                    return Err("owner stage executable relocation is not permitted".into());
+                }
+            }
+            selected.insert(name, path);
+        }
+        if stage["selection"]
+            != value!({"cargo":selected["cargo"],"rustc":selected["rustc"],
+            "toolchain":policy["rust_toolchain"],"compiler":selected["rustc"]})
+            || stage["versions"]
+                != value!({"cargo":bindings["cargo"]["version"],"rustc":bindings["rustc"]["version"]})
+        {
+            return Err("owner stage executable selection differs".into());
+        }
+        let mut environment = value!({"RUSTUP_TOOLCHAIN":policy["rust_toolchain"],"RUSTC":selected["rustc"],"RUSTC_WRAPPER":"","RUSTC_WORKSPACE_WRAPPER":""});
+        if let Some(incremental) = policy.get("rust_incremental") {
+            environment["CARGO_INCREMENTAL"] = value!(if incremental
+                .as_bool()
+                .ok_or("owner stage incremental declaration")?
+            {
+                "1"
+            } else {
+                "0"
+            });
+        }
+        for (key, value) in environment.as_object().unwrap() {
+            if stage["environment"][key] != *value {
+                return Err(format!("owner stage compiler environment differs: {key}"));
+            }
+        }
+    }
+    let projects = json(
+        registration_bytes
+            .get(projects_path)
+            .ok_or("owner stage projects input")?,
+    )?;
+    let mut actions = BTreeMap::new();
+    for owner in projects["projects"]
+        .as_array()
+        .ok_or("owner stage projects")?
+        .iter()
+        .chain(
+            projects["scripts"]
+                .as_array()
+                .ok_or("owner stage scripts")?,
+        )
+    {
+        for action in owner["actions"]
+            .as_object()
+            .ok_or("owner stage actions")?
+            .values()
+        {
+            let name = action["operation"]
+                .as_str()
+                .ok_or("owner stage operation")?;
+            if actions.insert(name, action).is_some() {
+                return Err(format!("duplicate owner stage operation: {name}"));
+            }
+        }
+    }
+    let mut sequence = Vec::new();
+    if let Some(prerequisites) = policy.get("prerequisites") {
+        sequence.extend(
+            prerequisites
+                .as_array()
+                .ok_or("owner stage prerequisites")?
+                .iter(),
+        );
+    }
+    sequence.extend(
+        policy["operations"]
+            .as_array()
+            .ok_or("owner stage operations")?
+            .iter(),
+    );
+    let mut unique = std::collections::BTreeSet::new();
+    for name in &sequence {
+        let name = name.as_str().ok_or("owner stage operation name")?;
+        if name.is_empty() || !unique.insert(name) {
+            return Err("duplicate or empty owner stage operation".into());
+        }
+    }
+    let actual = stage["operations"]
+        .as_array()
+        .ok_or("owner stage original operations")?;
+    if actual
+        .iter()
+        .map(|row| &row["operation"])
+        .collect::<Vec<_>>()
+        != sequence
+    {
+        return Err("owner stage producer operations differ".into());
+    }
+    let mut streams = std::collections::BTreeSet::new();
+    for row in actual {
+        let name = row["operation"]
+            .as_str()
+            .ok_or("owner stage operation name")?;
+        let action = actions
+            .get(name)
+            .ok_or("owner stage operation is not registered")?;
+        let tool = action["tool"]
+            .as_str()
+            .ok_or("owner stage operation tool")?;
+        let program = match selected.get(tool) {
+            Some(path) => *path,
+            None => policy["tools"][tool]
+                .as_str()
+                .ok_or("owner stage operation executable")?,
+        };
+        let program = if !Path::new(program).is_absolute() && program.contains('/') {
+            root.join(program)
+                .to_str()
+                .ok_or("owner stage executable UTF-8")?
+                .to_owned()
+        } else {
+            program.to_owned()
+        };
+        let mut argv = vec![value!(program)];
+        argv.extend(
+            action["argv"]
+                .as_array()
+                .ok_or("owner stage operation argv")?
+                .iter()
+                .cloned(),
+        );
+        if row["tool"] != action["tool"]
+            || row["argv"] != value!(argv)
+            || row["cwd"] != value!(root)
+            || row["exit_code"].as_i64() != Some(0)
+            || row["pid"].as_u64().unwrap_or(0) == 0
+        {
+            return Err(format!(
+                "owner stage producer operation execution differs: {name}"
+            ));
+        }
+        if selected.contains_key(tool)
+            && row["executable_sha256"] != bindings.unwrap()[tool]["sha256"]
+        {
+            return Err("owner stage operation executable differs".into());
+        }
+        for channel in ["stdout", "stderr"] {
+            let reference = &row[channel];
+            let path = reference["path"]
+                .as_str()
+                .ok_or("owner stage original stream path")?;
+            let bytes = crate::recovery::state_bytes(root, path)?;
+            if !streams.insert(path)
+                || reference["sha256"] != sha256(&bytes)
+                || reference["size"].as_u64() != Some(bytes.len() as u64)
+            {
+                return Err(format!(
+                    "owner stage original process stream differs: {path}"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn publication_original(path: &Path, value: &Value) -> Result<(), String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !metadata.is_file() || json(&fs::read(path).map_err(|e| e.to_string())?)? != *value {
+                return Err("owner publication original collision".into());
+            }
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            write_json(path, value, true).map(|_| ())
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
+    let staged_path = record["staged"]["path"]
+        .as_str()
+        .ok_or("owner stage executable path")?;
+    let staged = no_symlink_parents(root, staged_path)?;
+    let selected_path = record["selected"].as_str().ok_or("selected owner path")?;
+    if !selected_path.starts_with(".chrono-harness/bin/") {
+        return Err("selected owner must be a retained executable".into());
+    }
+    let selected = no_symlink_parents(root, selected_path)?;
+    let mut binding = executable_binding(&staged)?;
+    binding["path"] = value!(staged_path);
+    if binding != record["staged"] {
+        return Err("retained owner stage changed before publication".into());
+    }
+    let directory = staged.parent().ok_or("owner stage directory")?;
+    let previous = directory.join("previous-owner");
+    let intent = directory.join("publication-intent.json");
+    let next = directory.join("publication-next-owner");
+    let result = directory.join("publication-result.json");
+    match fs::symlink_metadata(&previous) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            if executable_binding(&selected)? != record["previous"] {
+                return Err("selected owner changed before original preservation".into());
+            }
+            fs::hard_link(&selected, &previous).map_err(|e| e.to_string())?;
+        }
+        Err(error) => return Err(error.to_string()),
+    }
+    if executable_binding(&previous)? != record["previous"] {
+        return Err("retained original owner changed".into());
+    }
+    let planned = match fs::symlink_metadata(&intent) {
+        Ok(metadata) => {
+            if !metadata.is_file() {
+                return Err("owner publication intent must be a physical regular file".into());
+            }
+            let planned = json(&fs::read(&intent).map_err(|e| e.to_string())?)?;
+            if planned.as_object().map(|v| v.len()) != Some(3)
+                || planned["schema"] != "chrono-bootstrap-owner-publication-intent/v1"
+                || planned["stage"] != *record
+            {
+                return Err("owner publication intent binding differs".into());
+            }
+            planned
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let mut output = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&next)
+                .map_err(|e| e.to_string())?;
+            output
+                .write_all(&fs::read(&staged).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                output
+                    .set_permissions(fs::Permissions::from_mode(0o755))
+                    .map_err(|e| e.to_string())?;
+            }
+            output.sync_all().map_err(|e| e.to_string())?;
+            let planned = value!({"schema":"chrono-bootstrap-owner-publication-intent/v1","stage":record,"replacement":executable_binding(&next)?});
+            publication_original(&intent, &planned)?;
+            planned
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    let current = executable_binding(&selected)?;
+    if current == record["previous"] {
+        if executable_binding(&next)? != planned["replacement"] {
+            return Err("prepared publication owner changed".into());
+        }
+        fs::rename(&next, &selected).map_err(|e| e.to_string())?;
+    } else if current != planned["replacement"] {
+        return Err("selected owner drifted after publication intent".into());
+    }
+    let installed = executable_binding(&selected)?;
+    if installed != planned["replacement"]
+        || installed["sha256"] != record["staged"]["sha256"]
+        || executable_binding(&previous)? != record["previous"]
+    {
+        return Err("installed owner verification failed".into());
+    }
+    let publication = value!({"schema":"chrono-bootstrap-owner-publication/v1","stage":record,"installed":installed,"adoption":"not-claimed","task_completion":"not-claimed"});
+    publication_original(&result, &publication)?;
+    Ok(publication)
+}
+
 impl Manager {
     pub(super) fn deploy_owner(
         &mut self,
@@ -128,10 +580,7 @@ impl Manager {
         };
         stable(r)?;
         let head = r.oid(root, "HEAD")?;
-        let mut command = bootstrap_command(r, root, &self.inputs.registrations, profile)?;
-        let profile_bytes =
-            fs::read(no_symlink_parents(root, profile)?).map_err(|e| e.to_string())?;
-        let policy = json(&profile_bytes)?;
+        let policy = bootstrap_policy(r, root, &self.inputs.registrations, profile)?;
         let declaration = &policy["owner_stage"];
         if !stage_path.starts_with(".chrono-harness/state/bootstrap-") {
             return Err("owner deployment requires an original retained bootstrap report".into());
@@ -150,6 +599,7 @@ impl Manager {
         {
             return Err("owner deployment stage source/configuration differs".into());
         }
+        validate_stage(r, root, &head, profile, &policy, &stage)?;
         let record = &stage["owner_stage"];
         if record["selected"] != declaration["selected"] {
             return Err("owner deployment destination differs from declaration".into());
@@ -185,29 +635,11 @@ impl Manager {
                 "enrollment":{"path":entry.ownership.as_ref().unwrap().path,"id":lease.id()}
             })).collect::<Vec<_>>()});
         report["owner_deployment_identity"] = owner_identity.clone();
-        command.args.extend([
-            "--owner-publication".into(),
-            stage_path.into(),
-            stage_sha.into(),
-        ]);
-        command
-            .env
-            .insert("CHRONO_WORKTREE_OWNER_DEPLOYMENT".into(), stage_sha.into());
         stable(r)?;
-        let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
-        let process = chrono_harness::prepared::process_identities(
-            chrono_harness::run_process_observed(root, &command, &[], &digest)?,
-        );
-        report["managed_process"] = chrono_harness::full::compact_process(&value!(&process))?;
+        let publication = publish_owner(root, record)?;
+        // Native IO has no managed child process. Keep its immutable result even
+        // when a subsequent capability or enrollment check rejects adoption.
         stable(r)?;
-        if process.failure.is_some() || process.exit_code != 0 {
-            report["managed_command_failed"] = value!(true);
-            return Err(format!(
-                "owner publication failed with original exit {}: {:?}",
-                process.exit_code, process.failure
-            ));
-        }
-        let publication = json(&process.stdout_bytes)?;
         if publication["schema"] != "chrono-bootstrap-owner-publication/v1"
             || publication["stage"] != *record
             || publication["installed"] != executable_binding(&selected)?

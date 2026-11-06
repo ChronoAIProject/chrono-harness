@@ -1,4 +1,4 @@
-"""Behavioral checks for the bootstrap byte owner; lifecycle exclusion is Rust-owned."""
+"""Behavioral checks for construction and producer data; deployment tests are Rust-owned."""
 import json
 import hashlib
 import os
@@ -24,7 +24,7 @@ def retained_process(stdout=b"", stderr=b"", **metadata):
     return process
 
 
-class OwnerPublication(unittest.TestCase):
+class OwnerConstruction(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix="bootstrap-owner-")
         self.addCleanup(self.directory.cleanup)
@@ -43,56 +43,7 @@ class OwnerPublication(unittest.TestCase):
                        "staged": dict(owner.file_binding(self.staged),
                                       path=self.staged.relative_to(self.root).as_posix())}
 
-    def test_publication_preserves_original_inode_and_reentry_is_idempotent(self):
-        previous = self.record["previous"]
-        result = owner.publish_bytes(self.root, self.record)
-        self.assertEqual(self.selected.read_bytes(), b"source-built correction")
-        retained = self.staged.parent / "previous-owner"
-        self.assertEqual(owner.file_binding(retained), previous)
-        self.assertEqual(owner.publish_bytes(self.root, self.record), result)
-
-    def test_interrupted_after_atomic_replace_recovers_from_original_intent(self):
-        replace = os.replace
-        def interrupt(source, target):
-            replace(source, target)
-            if Path(target) == self.selected:
-                raise OSError("original publication interruption")
-        with mock.patch.object(owner.os, "replace", side_effect=interrupt):
-            with self.assertRaisesRegex(OSError, "original publication interruption"):
-                owner.publish_bytes(self.root, self.record)
-        self.assertFalse((self.staged.parent / "publication-result.json").exists())
-        result = owner.publish_bytes(self.root, self.record)
-        self.assertEqual(result["installed"], owner.file_binding(self.selected))
-        self.assertEqual((self.staged.parent / "previous-owner").read_bytes(),
-                         b"original installed owner")
-
-    def test_changed_selected_or_stage_and_foreign_retention_refuse_before_replacement(self):
-        for changed in (self.selected, self.staged, self.staged.parent / "previous-owner"):
-            with self.subTest(changed=changed):
-                original = changed.read_bytes() if changed.exists() else None
-                changed.write_bytes(b"foreign bytes")
-                before = self.selected.read_bytes()
-                with self.assertRaises(ValueError):
-                    owner.publish_bytes(self.root, self.record)
-                self.assertEqual(self.selected.read_bytes(), before)
-                if original is None:
-                    changed.unlink()
-                else:
-                    changed.write_bytes(original)
-
-    def test_reentry_refuses_same_bytes_from_a_different_published_inode(self):
-        owner.publish_bytes(self.root, self.record)
-        foreign = self.selected.parent / "foreign-same-bytes"
-        foreign.write_bytes(self.selected.read_bytes())
-        os.replace(foreign, self.selected)
-        with self.assertRaisesRegex(ValueError, "drifted after publication intent"):
-            owner.publish_bytes(self.root, self.record)
-
-    def test_symlink_and_marker_without_capabilities_refuse(self):
-        self.staged.unlink()
-        self.staged.symlink_to(self.selected)
-        with self.assertRaises(ValueError):
-            owner.publish_bytes(self.root, self.record)
+    def test_construction_requires_original_capabilities(self):
         with mock.patch.object(bootstrap, "PASS_FDS", ()):
             with self.assertRaisesRegex(ValueError, "ownership descriptors"):
                 owner.require_capabilities(self.root)
@@ -243,7 +194,21 @@ class ProducerSource(unittest.TestCase):
             bootstrap.main()
         original = fixture.root / profile["report_path"]
         stage = json.loads(original.read_bytes())
-        publication = owner.publish_bytes(fixture.root, stage["owner_stage"])
+        # Explicit publication-reader fixture. This supplies fixed input data;
+        # the Rust deployment suite exercises actual publication and recovery.
+        record = stage["owner_stage"]
+        staged = fixture.root / record["staged"]["path"]
+        os.link(selected, staged.parent / "previous-owner")
+        replacement = staged.parent / "reader-fixture-owner"
+        replacement.write_bytes(staged.read_bytes())
+        os.replace(replacement, selected)
+        installed = owner.file_binding(selected)
+        publication = {"schema": "chrono-bootstrap-owner-publication/v1", "stage": record,
+                       "installed": installed, "adoption": "not-claimed", "task_completion": "not-claimed"}
+        intent = {"schema": "chrono-bootstrap-owner-publication-intent/v1", "stage": record,
+                  "replacement": installed}
+        host.write_json(staged.parent / "publication-intent.json", intent)
+        host.write_json(staged.parent / "publication-result.json", publication)
         adoption = {"schema": "chrono-worktree-owner-adoption/v1", "source_commit": stage["source"]["commit"],
                     "stage_result": profile["report_path"], "stage_sha256": owner.shared.digest(original.read_bytes()),
                     "installed": publication["installed"], "original_owner": stage["owner_stage"]["previous"],

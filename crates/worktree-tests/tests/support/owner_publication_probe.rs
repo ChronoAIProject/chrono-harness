@@ -1,44 +1,9 @@
 //! Real external interpreter adapter; all fixture assertions are Rust.
 use std::{
-    fs,
     io::{self, Read, Write},
     path::Path,
     process::{Command, ExitCode},
 };
-fn excluded(root: &Path) {
-    let dir = root.join(".chrono-harness/state/automatic-cleanup");
-    assert!(
-        chrono_harness::ownership::Lease::acquire(
-            &dir.join("deployment.lease"),
-            None,
-            false,
-            true,
-            None,
-        )
-        .unwrap()
-        .is_none(),
-        "original executable deployment must remain exclusive"
-    );
-    for item in fs::read_dir(dir.join("enrollments")).unwrap() {
-        let file = item.unwrap().path().join("ledger.json");
-        let ledger: serde_json::Value = serde_json::from_slice(&fs::read(file).unwrap()).unwrap();
-        for e in ledger["entries"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|e| e["status"] != "disposed")
-        {
-            let path = root.join(e["ownership"]["path"].as_str().unwrap());
-            assert!(
-                chrono_harness::ownership::Lease::acquire(&path, None, false, true, None)
-                    .unwrap()
-                    .is_none(),
-                "original EX must remain held at {}",
-                path.display()
-            );
-        }
-    }
-}
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--version"] {
@@ -63,7 +28,6 @@ fn main() -> ExitCode {
         io::stdin().read_exact(&mut byte).unwrap();
         return ExitCode::SUCCESS;
     }
-    let publication = args.iter().any(|a| a == "--owner-publication");
     let root = Path::new(&args[1]);
     if root
         .join(".chrono-harness/state/owner-probe-unavailable")
@@ -72,23 +36,9 @@ fn main() -> ExitCode {
         eprintln!("construction interpreter unavailable");
         return ExitCode::from(42);
     }
-    if publication {
-        excluded(root);
-    }
     let mut child = Command::new("/usr/bin/python3");
     child.args(&args);
     chrono_harness::process_fds::forward_command(&mut child, &[]).unwrap();
     let status = child.status().unwrap();
-    if publication {
-        excluded(root);
-        if root
-            .join(".chrono-harness/state/owner-probe-drift")
-            .exists()
-        {
-            let lease = root.join(".chrono-harness/state/automatic-cleanup/deployment.lease");
-            fs::rename(&lease, lease.with_extension("original-lease")).unwrap();
-            fs::write(lease, "different physical input").unwrap();
-        }
-    }
     ExitCode::from(u8::try_from(status.code().unwrap_or(1)).unwrap_or(1))
 }
