@@ -34,3 +34,9 @@ name = "chrono-test-verus-interface"
 path = "tests/support/verus_interface.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-test-scoped-git"
+path = "../ci-tests/tests/support/git.rs"
+test = false
+bench = false
