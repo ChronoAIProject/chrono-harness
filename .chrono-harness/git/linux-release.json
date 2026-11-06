@@ -374,6 +374,12 @@
         "location": "/usr/bin/git",
         "presence": "present",
         "sha256": "824d5b2fffef332ec7ba053e579659bb12f26a0b4747da6f9c6dc0e71d36f235"
+      },
+      {
+        "id": "bootstrap-native-toolchains",
+        "location": ".chrono-harness/ci/bootstrap-toolchains.json",
+        "presence": "present",
+        "sha256": "d2f9ab496397c9e56109a255b8bd31230a480e8c07ee808b81c060344efcad35"
       }
     ]
   },

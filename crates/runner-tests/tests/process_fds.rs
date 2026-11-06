@@ -264,6 +264,71 @@ fn reserved_descriptor_helper() {
 }
 
 #[test]
+fn first_launch_descriptor_helper() {
+    let Ok(mode) = std::env::var("CHRONO_FIRST_LAUNCH_DESCRIPTOR") else {
+        return;
+    };
+    let (socket, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+    assert_ne!(socket.as_raw_fd(), 198);
+    assert_eq!(unsafe { libc::dup2(socket.as_raw_fd(), 198) }, 198);
+    let flags = if mode == "cloexec" {
+        libc::FD_CLOEXEC
+    } else {
+        0
+    };
+    assert_eq!(unsafe { libc::fcntl(198, libc::F_SETFD, flags) }, 0);
+    let dir = tempfile::tempdir().unwrap();
+    let command = spec("/usr/bin/true", vec![]);
+    let result = run_process_observed(
+        dir.path(),
+        &command,
+        &[],
+        &sha256(&fs::read(&command.program).unwrap()),
+    );
+    if mode == "cloexec" {
+        let result = result.unwrap();
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failure.is_none(), "{:?}", result.failure);
+    } else {
+        assert_eq!(result.unwrap_err(), "process ownership descriptor read");
+    }
+    assert_eq!(unsafe { libc::fcntl(198, libc::F_GETFD) }, flags);
+    assert_eq!(unsafe { libc::close(198) }, 0);
+}
+
+#[test]
+fn first_launch_distinguishes_local_cloexec_socket_from_inherited_transport() {
+    use std::os::unix::process::CommandExt;
+    for mode in ["cloexec", "inherited"] {
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args(["--exact", "first_launch_descriptor_helper", "--nocapture"])
+            .env("CHRONO_FIRST_LAUNCH_DESCRIPTOR", mode)
+            .env_remove("CHRONO_PROCESS_FDS");
+        unsafe {
+            command.pre_exec(|| {
+                for fd in [198, 199, 200] {
+                    if libc::close(fd) < 0 {
+                        let error = std::io::Error::last_os_error();
+                        if error.raw_os_error() != Some(libc::EBADF) {
+                            return Err(error);
+                        }
+                    }
+                }
+                Ok(())
+            });
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{mode}: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn forwarded_capabilities_preserve_identity_across_reserved_descriptor_slots() {
     for slot in [198, 199, 200] {
         // Isolate this namespace experiment from the enclosing launch tree.

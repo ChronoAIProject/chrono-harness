@@ -360,6 +360,13 @@ fn inherited() -> Result<Option<(Arc<Tree>, usize, usize)>, ProcessFailure> {
     INHERITED
         .get_or_init(|| {
             (|| -> Result<_, ProcessFailure> {
+                // Transport descriptors survive exec. A CLOEXEC descriptor at
+                // this number was opened by this process, possibly before its
+                // first engine call; it is not an inherited ownership tree.
+                let flags = unsafe { libc::fcntl(TREE_FD, libc::F_GETFD) };
+                if flags >= 0 && flags & libc::FD_CLOEXEC != 0 {
+                    return Ok(None);
+                }
                 let mut magic = 0u64;
                 let n = unsafe { libc::pread(TREE_FD, (&mut magic as *mut u64).cast(), 8, 0) };
                 if n < 0 {
