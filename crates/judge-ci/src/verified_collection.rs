@@ -217,14 +217,17 @@ pub fn result_ids<'a>(values: &'a Vec<CheckResult>) -> (ids: Vec<&'a str>)
     ids
 }
 
+pub open spec fn report_id_member(actual: Seq<CheckResult>, id: Seq<char>) -> bool {
+    exists|j: int| 0 <= j < actual.len() && (#[trigger] actual[j]).id@ == id
+}
+
 pub open spec fn report_result_membership(
     actual: Seq<CheckResult>, expected: Seq<Seq<char>>,
 ) -> bool {
     (forall|i: int| 0 <= i < actual.len() ==>
         character_member(expected, (#[trigger] actual[i]).id@))
         && (forall|i: int| 0 <= i < expected.len() ==>
-            exists|j: int| 0 <= j < actual.len()
-                && (#[trigger] actual[j]).id@ == expected[i])
+            report_id_member(actual, #[trigger] expected[i]))
 }
 
 proof fn report_membership_representation(
@@ -240,8 +243,7 @@ proof fn report_membership_representation(
                 assert(actual[i].id@ == ids[i]@);
             }
         assert forall|i: int| 0 <= i < expected.len() implies
-            exists|j: int| 0 <= j < actual.len()
-                && (#[trigger] actual[j]).id@ == expected[i] by {
+            report_id_member(actual, #[trigger] expected[i]) by {
                 let j = choose|j: int| 0 <= j < ids.len()
                     && (#[trigger] ids[j])@ == expected[i];
                 assert(actual[j].id@ == expected[i]);
