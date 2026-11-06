@@ -1229,8 +1229,14 @@ pub(super) fn custody_nested_consumers(owned_directory: bool) {
     assert!(!root.join("legacy-copy").exists());
     assert!(!nested_root.join("copy").exists());
     if owned_directory {
-        assert!(!root.exists(), "released nested fixture directory accumulated");
-        assert_eq!(json(&old_intent).unwrap()["producer_outcome"], "not-established");
+        assert!(
+            !root.exists(),
+            "released nested fixture directory accumulated"
+        );
+        assert_eq!(
+            json(&old_intent).unwrap()["producer_outcome"],
+            "not-established"
+        );
         return;
     }
     assert_eq!(

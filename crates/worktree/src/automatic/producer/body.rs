@@ -899,7 +899,10 @@ fn protect_source(
     Ok(())
 }
 
-pub(super) fn directory_guards(directory: &Path, object: &Object) -> Result<Option<Vec<Lease>>, String> {
+pub(super) fn directory_guards(
+    directory: &Path,
+    object: &Object,
+) -> Result<Option<Vec<Lease>>, String> {
     let allocation = directory.join(&object.path);
     let mut guards: BTreeMap<String, Lease> = BTreeMap::new();
     for (member, body) in &object.bodies {
@@ -912,7 +915,10 @@ pub(super) fn directory_guards(directory: &Path, object: &Object) -> Result<Opti
             || intent["identity"] != object.identity
             || intent["member"] != *member
             || intent["leases"] != value!(body.leases)
-            || intent.get("nested_consumers").cloned().unwrap_or_else(|| value!([]))
+            || intent
+                .get("nested_consumers")
+                .cloned()
+                .unwrap_or_else(|| value!([]))
                 != value!(body.nested_consumers)
         {
             return Err("owned directory nested consumer intent differs".into());
@@ -926,8 +932,14 @@ pub(super) fn directory_guards(directory: &Path, object: &Object) -> Result<Opti
             }
             let Some(held) = Lease::acquire(
                 &no_symlink_parents(&allocation, &binding.path)?,
-                Some(&binding.id), false, true, None,
-            )? else { return Ok(None); };
+                Some(&binding.id),
+                false,
+                true,
+                None,
+            )?
+            else {
+                return Ok(None);
+            };
             guards.insert(binding.path.clone(), held);
         }
         if !nested_released(&allocation, member, &body.nested_consumers, &body.leases)? {

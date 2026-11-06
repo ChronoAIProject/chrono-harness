@@ -2159,7 +2159,8 @@ impl ProducerPolicy {
                 && let Some(lease) = cache_guard.as_ref()
             {
                 drop(store.take());
-                match retirement::retire_owned_directory(self, inputs, r, &directory, object, lease) {
+                match retirement::retire_owned_directory(self, inputs, r, &directory, object, lease)
+                {
                     Ok(retirement) => {
                         if retirement["status"] == "failed" {
                             failures.push(retirement["error"].to_string());
