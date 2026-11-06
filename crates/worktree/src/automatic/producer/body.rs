@@ -108,15 +108,13 @@ fn publish_claim(
     claim_guard.stable()?;
     let claim_path =
         no_symlink_parents(&claims, &format!("{}.json", sha256(allocation.as_bytes())))?;
-    match fs::read(&claim_path) {
-        Ok(bytes) if json(&bytes)? == claim => (),
+    let publish = match fs::read(&claim_path) {
+        Ok(bytes) if json(&bytes)? == claim => false,
         Ok(_) => return Err("shared copied-input claim differs; preserve original".into()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            write_json(&claim_path, &claim, true)?;
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
         Err(e) => return Err(e.to_string()),
-    }
-    if let Some(context) = Context::for_allocation(&directory.join(allocation))? {
+    };
+    let _read = if let Some(context) = Context::for_allocation(&directory.join(allocation))? {
         if let Some(inventory) =
             chrono_harness::retained_artifacts::retention::Inventory::adopted(&context.root)?
         {
@@ -126,15 +124,47 @@ fn publish_claim(
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("original UTF-8")?;
-            let _read =
-                chrono_harness::retained_artifacts::retention::read_guard(&context.root, relative)?;
+            let read = match chrono_harness::retained_artifacts::retention::read_guard(
+                &context.root,
+                relative,
+            ) {
+                Ok(read) => read,
+                Err(original_error) => {
+                    // A previous final consumer may have released this same
+                    // digest into bounded retirement. Join that exact owner
+                    // once before publishing a new claim; never bypass an
+                    // unavailable original or retry an unbounded cleanup loop.
+                    let recovery =
+                        inventory
+                            .maintain_paths(&[relative.into()])
+                            .map_err(|error| {
+                                format!("{original_error}; addressed original retirement: {error}")
+                            })?;
+                    chrono_harness::retained_artifacts::retention::read_guard(
+                        &context.root,
+                        relative,
+                    )
+                    .map_err(|error| {
+                        format!("{original_error}; addressed original retirement: {recovery}; original still unavailable: {error}")
+                    })?
+                }
+            };
             if inventory.enrolled(relative)? {
                 inventory.reference_paths(
                     &format!("fixture-input:{}:{digest}", sha256(allocation.as_bytes())),
                     &[relative.into()],
                 )?;
             }
+            read
+        } else {
+            None
         }
+    } else {
+        None
+    };
+    claim_guard.stable()?;
+    if publish {
+        write_json(&claim_path, &claim, true)?;
     }
     Ok(())
 }

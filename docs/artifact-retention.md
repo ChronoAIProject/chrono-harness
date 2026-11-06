@@ -46,6 +46,13 @@ The real-bootstrap fixture's cache-attempt reentry consumes every original strea
 
 Fixture custody and final-original retention have separate release meanings. The current fixture recovery adapter names its already declared nested Git hosts and effect paths, then declares its exact effect paths and holds their addressed removal capability across the effect. Enrollment admission is released before physical IO; only overlapping publication is refused. Any overlapping enrolled original blocks that fixture effect until the final-original owner retires it. Copied bodies use the same guard and shared entry-unlink implementation. This is explicit registry membership, not directory discovery. Ordinary publication cannot silently enroll an existing custody body: addressed legacy reuse verifies bytes and preserves its existing ownership; historical enrollment needs its exact owner evidence and exclusion. Final cross-lane composition and surviving-coordinator acceptance remain separate obligations.
 
+A new copied-input claim first acquires the shared original's actual protection.
+If a previous release has made that address unavailable, the copy owner invokes
+one bounded addressed retirement pass and retries protection once. An unfinished
+or refused retirement preserves the original error and maintenance result and
+publishes no new claim. Once retirement succeeds, the copy recreates the original
+from its still-owned source under the existing digest and identity checks.
+
 Fixture allocation metadata is partitioned at its actual producer. The immutable
 `objects.json` namespace binds the physical directory and `producer-records/`
 namespace; it contains no mutable member list. An ordinary allocation opens only
