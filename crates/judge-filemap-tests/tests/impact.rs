@@ -768,6 +768,68 @@ fn indexed_closure_preserves_shortest_ties_edge_kinds_and_seed_identity() {
 }
 
 #[test]
+fn predecessor_state_roundtrips_the_actual_sparse_json_and_cloned_witnesses() {
+    let parents = json!({
+        "": null,
+        "a": {"from":"", "kind":"compile", "to":"a"},
+        "根\0": {"from":"a", "kind":"test-execution", "to":"根\0"}
+    });
+    let value = json!({"reached":{}, "predecessors":{"seed\0":parents}, "traversed":[]});
+    let state: graph::Closure = serde_json::from_value(value.clone()).unwrap();
+    let expected = vec![
+        Edge {
+            from: "".into(),
+            kind: EdgeKind::Compile,
+            to: "a".into(),
+        },
+        Edge {
+            from: "a".into(),
+            kind: EdgeKind::TestExecution,
+            to: "根\0".into(),
+        },
+    ];
+    assert_eq!(state.witness("seed\0", "根\0"), Some(expected.clone()));
+    assert_eq!(state.clone().witness("seed\0", "根\0"), Some(expected));
+    assert_eq!(state.witness("seed\0", ""), Some(vec![]));
+    assert_eq!(state.witness("missing", ""), None);
+    assert_eq!(state.witness("seed\0", "missing"), None);
+    assert_eq!(serde_json::to_value(&state).unwrap(), value);
+    let text = serde_json::to_string(&state).unwrap();
+    let decoded: graph::Closure = serde_json::from_str(&text).unwrap();
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), value);
+}
+
+#[test]
+fn predecessor_witness_rejects_serialized_cycles_missing_rows_and_wrong_targets() {
+    for parents in [
+        json!({"a":{"from":"a", "kind":"compile", "to":"a"}}),
+        json!({"a":{"from":"b", "kind":"compile", "to":"a"},
+               "b":{"from":"a", "kind":"runtime-input", "to":"b"}}),
+        json!({"a":{"from":"missing", "kind":"compile", "to":"a"}}),
+        json!({"":null, "a":{"from":"", "kind":"compile", "to":"wrong"}}),
+    ] {
+        let state: graph::Closure = serde_json::from_value(json!({
+            "reached":{}, "predecessors":{"s":parents}, "traversed":[]
+        }))
+        .unwrap();
+        assert_eq!(state.witness("s", "a"), None, "{state:?}");
+    }
+    for parents in [
+        json!([]),
+        json!(null),
+        json!({"a":42}),
+        json!({"a":{"from":"", "kind":"unknown", "to":"a"}}),
+    ] {
+        assert!(
+            serde_json::from_value::<graph::Closure>(json!({
+                "reached":{}, "predecessors":{"s":parents}, "traversed":[]
+            }))
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn loader_missing_malformed_inputs_are_errors_not_empty_impact() {
     let mut a = values();
     a.remove(FM);

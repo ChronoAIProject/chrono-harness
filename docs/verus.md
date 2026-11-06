@@ -330,6 +330,43 @@ existing whole-crate roots, flags, dependencies, interfaces and budgets. The
 four comparison stages and O(S) temporary root references retain the existing
 bounds; measured total runtime/build/CI/storage costs remain unknown.
 
+The actual sparse predecessor state now belongs to `PredecessorTree` in the same
+proof root. Private rows and a proved type invariant preserve strict complete-byte
+node order. Its constructor accepts exactly ordered, distinct names, including
+independently allocated strings; Clone preserves every row. Exact binary lookup
+uses the existing byte comparator without a repository assumption or a borrowed
+String-key map contract. `predecessors_from_search` proves an exact record set:
+only reached nodes, actual node-name bytes and the original typed parent slots.
+Production closure calls this constructor and stores the resulting tree directly.
+
+The actual witness query terminates for arbitrary admitted trees, including
+cyclic data obtained through JSON. Success is equivalent to existence of a finite
+continuous chain ending at a null/root row. Every returned edge is the parent
+stored at its target, in root-to-target order. A separate semantic path predicate
+proves soundness and completeness; valid root paths have no repeated nodes and
+fewer edges than rows, so the row budget loses no valid chain. Missing rows,
+wrong edge targets, cycles and self loops return None. The old unrestricted loop
+could fail to terminate on cyclic public state and could return an edge whose
+target did not match its row. JSON/debug adapters and the outer seed-ID map remain
+unproved; this does not complete the shortest-path-to-output composition proof.
+
+Independent proof examples cover empty state, Unicode/NUL roots, clones, exact
+edge kinds and order, unsorted and duplicate names, cycles/self loops, missing
+parents, wrong targets, and sparse reached-node/parallel-slot projection. Runtime
+cases exercise the actual JSON object schema and cloned witnesses, malformed
+data and all the prior shortest-tie/duplicate-seed regressions. Disabling the
+target-byte check is rejected by the chain invariant (118 verified / 1 error);
+correct source is restored by SHA-256 before canonical verification.
+
+No dependency, trusted interface, verification operation or budget is added.
+Construction scans the existing V-node distance vector and validates the R reached
+rows once, replacing R string-map insertions. Stored parent rows remain sparse,
+O(R). A query takes O(L log R) complete-byte comparisons and holds O(L) temporary
+edge references before cloning the successful L-edge output once. The temporary
+references are additional storage; no performance saving is claimed. Complete
+runtime/build/CI/storage costs remain unmeasured. Cause merging, selection, adapter
+composition and all remaining whole-file obligations stay enforced.
+
 The current distribution interface uses a generated shell installer. Its
 argument parsing, platform selection, integrity decisions and cleanup are
 repository program logic, as is its Rust transport test fixture. Both files

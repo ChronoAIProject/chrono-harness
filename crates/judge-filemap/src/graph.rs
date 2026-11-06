@@ -2,7 +2,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use crate::verified_graph::{Edge, EdgeKind, Origin, Seed, UnionEdge, union};
+pub use crate::verified_graph::{
+    Edge, EdgeKind, Origin, Predecessor, PredecessorTree, Seed, UnionEdge, union,
+};
 
 impl std::fmt::Debug for EdgeKind {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -144,6 +146,34 @@ impl<'de> Deserialize<'de> for Seed {
         SeedFields::deserialize(deserializer)
     }
 }
+impl std::fmt::Debug for PredecessorTree {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_map()
+            .entries(self.entries().iter().map(|row| (&row.node, &row.parent)))
+            .finish()
+    }
+}
+impl Serialize for PredecessorTree {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.entries().len()))?;
+        for row in self.entries() {
+            map.serialize_entry(&row.node, &row.parent)?;
+        }
+        map.end()
+    }
+}
+impl<'de> Deserialize<'de> for PredecessorTree {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let rows = BTreeMap::<String, Option<Edge>>::deserialize(deserializer)?
+            .into_iter()
+            .map(|(node, parent)| Predecessor { node, parent })
+            .collect();
+        Self::new(rows)
+            .ok_or_else(|| serde::de::Error::custom("predecessor nodes must be strictly ordered"))
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TraversedEdge {
     pub edge: Edge,
@@ -153,7 +183,7 @@ pub struct TraversedEdge {
 pub struct Closure {
     pub reached: BTreeMap<String, BTreeSet<String>>,
     /// One deterministic shortest predecessor per (seed, node); null denotes the seed root.
-    pub predecessors: BTreeMap<String, BTreeMap<String, Option<Edge>>>,
+    pub predecessors: BTreeMap<String, PredecessorTree>,
     /// All traversed edges and contributing seeds, including alternate paths and cycle edges.
     pub traversed: Vec<TraversedEdge>,
 }
@@ -172,16 +202,12 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
     for (seed, root) in seeds.iter().zip(indices.roots) {
         let search = crate::verified_graph::breadth_first(&indices.rows, root)
             .expect("seed index belongs to the explicit node inventory");
-        let mut parents = BTreeMap::new();
+        let parents = crate::verified_graph::predecessors_from_search(&nodes, &edge_rows, &search);
         for node in search.order {
             out.reached
                 .entry(nodes[node].to_owned())
                 .or_default()
                 .insert(seed.id.clone());
-            parents.insert(
-                nodes[node].to_owned(),
-                search.parents[node].map(|(from, slot)| edge_rows[from][slot].clone()),
-            );
             for edge in &edge_rows[node] {
                 traversed
                     .entry((*edge).clone())
@@ -206,14 +232,6 @@ impl Closure {
             .collect()
     }
     pub fn witness(&self, seed: &str, node: &str) -> Option<Vec<Edge>> {
-        let parents = self.predecessors.get(seed)?;
-        let mut node = node;
-        let mut path = vec![];
-        while let Some(edge) = parents.get(node)? {
-            path.push(edge.clone());
-            node = &edge.from;
-        }
-        path.reverse();
-        Some(path)
+        self.predecessors.get(seed)?.witness(node)
     }
 }

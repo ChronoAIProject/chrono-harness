@@ -1322,4 +1322,149 @@ fn seed_roots_and_topology_preserve_actual_nodes_and_duplicate_positions() {
     assert(graph.names@[graph.indices.roots@[2] as int].spec_bytes() == "".spec_bytes());
 }
 
+fn predecessor(node: &str, parent: Option<policy::Edge>) -> (out: policy::Predecessor)
+    ensures out.name() == node.spec_bytes(), out.parent == parent,
+{
+    policy::Predecessor { node: node.to_owned(), parent }
+}
+
+proof fn predecessor_ascii_order()
+    ensures policy::byte_lt("".spec_bytes(), "a".spec_bytes()),
+        policy::byte_lt("".spec_bytes(), "b".spec_bytes()),
+        policy::byte_lt("a".spec_bytes(), "b".spec_bytes()),
+        "a".spec_bytes() == seq![97u8], "b".spec_bytes() == seq![98u8],
+        "z".spec_bytes() == seq![122u8], "".spec_bytes() == Seq::<u8>::empty(),
+{
+    reveal_strlit(""); reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("z");
+    vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+    vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+    vstd::utf8::is_ascii_chars_encode_utf8("z"@);
+    reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    assert(policy::byte_prefix("a".spec_bytes(), "b".spec_bytes(), 0));
+    assert(policy::byte_prefix("".spec_bytes(), "a".spec_bytes(), 0));
+    assert(policy::byte_prefix("".spec_bytes(), "b".spec_bytes(), 0));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn predecessor_tree_preserves_empty_unicode_root_and_missing_boundaries() {
+    let rows: Vec<policy::Predecessor> = vec![];
+    let tree = policy::PredecessorTree::new(rows).unwrap();
+    proof { reveal(policy::predecessor_chain); }
+    let missing = tree.witness("");
+    assert(missing.is_none());
+    let rows = vec![predecessor("根\0", None)];
+    let tree = policy::PredecessorTree::new(rows).unwrap();
+    proof {
+        policy::predecessor_unique(tree.view(), "根\0".spec_bytes(), 0);
+        reveal(policy::predecessor_chain);
+    }
+    let root = tree.witness("根\0");
+    assert(root.is_some() && root.unwrap().len() == 0);
+    let cloned = tree.clone();
+    let root = cloned.witness("根\0");
+    assert(root.is_some() && root.unwrap().len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn predecessor_tree_returns_exact_root_to_target_order_and_edge_kinds() {
+    proof { predecessor_ascii_order(); }
+    let first = edge("", policy::EdgeKind::Compile, "a");
+    let last = edge("a", policy::EdgeKind::TestExecution, "b");
+    let rows = vec![predecessor("", None), predecessor("a", Some(first.clone())), predecessor("b", Some(last.clone()))];
+    assert(policy::ordered_predecessors(rows@));
+    let tree = policy::PredecessorTree::new(rows).unwrap();
+    proof {
+        policy::predecessor_unique(tree.view(), "".spec_bytes(), 0);
+        policy::predecessor_unique(tree.view(), "a".spec_bytes(), 1);
+        policy::predecessor_unique(tree.view(), "b".spec_bytes(), 2);
+        reveal_with_fuel(policy::predecessor_chain, 4);
+    }
+    let path = tree.witness("b").unwrap();
+    assert(path.len() == 2);
+    assert(path@[0].key() == first.key() && path@[1].key() == last.key());
+    assert(policy::predecessor_path(tree.view(), "b".spec_bytes(), policy::owned_edge_keys(path@)));
+    let prefix = tree.witness("a").unwrap();
+    assert(prefix.len() == 1 && prefix@[0].key() == first.key());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn predecessor_tree_rejects_unsorted_and_independently_allocated_duplicate_names() {
+    proof { predecessor_ascii_order(); }
+    let rows = vec![predecessor("b", None), predecessor("a", None)];
+    assert(!policy::ordered_predecessors(rows@));
+    let rejected = policy::PredecessorTree::new(rows);
+    assert(rejected.is_none());
+    let rows = vec![predecessor("a", None), predecessor("a", None)];
+    assert(!policy::ordered_predecessors(rows@));
+    let rejected = policy::PredecessorTree::new(rows);
+    assert(rejected.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn predecessor_tree_rejects_cycles_and_self_loops_with_a_finite_budget() {
+    proof { predecessor_ascii_order(); }
+    let forward = edge("a", policy::EdgeKind::Compile, "b");
+    let backward = edge("b", policy::EdgeKind::RuntimeInput, "a");
+    let rows = vec![predecessor("a", Some(backward)), predecessor("b", Some(forward))];
+    let tree = policy::PredecessorTree::new(rows).unwrap();
+    proof {
+        policy::predecessor_unique(tree.view(), "a".spec_bytes(), 0);
+        policy::predecessor_unique(tree.view(), "b".spec_bytes(), 1);
+        reveal_with_fuel(policy::predecessor_chain, 4);
+    }
+    let rejected = tree.witness("a");
+    assert(rejected.is_none());
+    let rejected = tree.witness("b");
+    assert(rejected.is_none());
+    let rows = vec![predecessor("a", Some(edge("a", policy::EdgeKind::Compile, "a")))];
+    let tree = policy::PredecessorTree::new(rows).unwrap();
+    proof {
+        policy::predecessor_unique(tree.view(), "a".spec_bytes(), 0);
+        reveal_with_fuel(policy::predecessor_chain, 3);
+    }
+    let rejected = tree.witness("a");
+    assert(rejected.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn predecessor_tree_rejects_a_missing_parent_and_a_mismatched_target() {
+    proof { predecessor_ascii_order(); }
+    let rows = vec![predecessor("b", Some(edge("a", policy::EdgeKind::Compile, "b")))];
+    let tree = policy::PredecessorTree::new(rows).unwrap();
+    proof {
+        policy::predecessor_unique(tree.view(), "b".spec_bytes(), 0);
+        reveal_with_fuel(policy::predecessor_chain, 3);
+    }
+    let rejected = tree.witness("b");
+    assert(rejected.is_none());
+    let rows = vec![predecessor("a", None), predecessor("b", Some(edge("a", policy::EdgeKind::Compile, "z")))];
+    let tree = policy::PredecessorTree::new(rows).unwrap();
+    proof {
+        policy::predecessor_unique(tree.view(), "b".spec_bytes(), 1);
+        reveal_with_fuel(policy::predecessor_chain, 3);
+    }
+    let rejected = tree.witness("b");
+    assert(rejected.is_none());
+    let missing = tree.witness("z");
+    assert(missing.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn sparse_predecessors_keep_exact_reached_nodes_and_typed_search_slots() {
+    proof { predecessor_ascii_order(); }
+    let first = edge("", policy::EdgeKind::Compile, "a");
+    let parallel = edge("", policy::EdgeKind::TestExecution, "a");
+    let names = vec!["", "a", "b"];
+    let edges = vec![vec![&first, &parallel], vec![], vec![]];
+    let search = policy::Search { distances: vec![0, 1, 3], parents: vec![None, Some((0, 1)), None], order: vec![0, 1] };
+    let tree = policy::predecessors_from_search(&names, &edges, &search);
+    assert(policy::predecessor_keys(tree.view()).to_set() =~=
+        set![("".spec_bytes(), None::<policy::EdgeKey>), ("a".spec_bytes(), Some(parallel.key()))]);
+    assert(policy::ordered_predecessors(tree.view()));
+    let entries = tree.entries();
+    assert forall|i: int| 0 <= i < entries.len() implies (#[trigger] entries@[i]).name() != "b".spec_bytes() by {
+        assert(policy::predecessor_keys(entries@).to_set().contains(policy::predecessor_keys(entries@)[i]));
+    }
+}
+
 }
