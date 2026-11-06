@@ -114,8 +114,9 @@ fn generator_projects_independent_workflows_with_exact_scoped_commands() {
     assert!(!b.contains("explicit-a.sh"));
     assert!(!a.contains("needs:"));
     assert!(!b.contains("needs:"));
-    assert!(summary.contains("gather"));
-    assert!(summary.contains("'--collect' '.chrono-harness/state/collection/manifest.json'"));
+    assert!(summary.contains("'check' '--collect'\n"));
+    assert!(!summary.contains(" gather "));
+    assert!(!a.contains("--base"));
     assert!(summary.contains("actions: read"));
 }
 
@@ -159,125 +160,6 @@ fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
         }
     }
     assert_eq!(diagnostics, configured.units.len());
-}
-
-#[test]
-fn generated_unit_workflow_cli_adoption_uses_the_local_canonical_command() {
-    let (host, base, candidate) = consumer();
-    let root = host.path();
-    let event_path = ".chrono-harness/state/generated-event.json";
-    json_file(
-        root,
-        event_path,
-        &json!({
-            "ref": "refs/heads/dev",
-            "before": base,
-            "after": candidate,
-            "created": false,
-            "deleted": false
-        }),
-    );
-    let output_path = root.join(".chrono-harness/state/generated-output");
-    let workflow = fs::read_to_string(root.join(".github/workflows/alpha.yml")).unwrap();
-    // This is the literal generated command. The values supplied by the event
-    // are intentionally variables; the command shape must remain the same as
-    // the local argv recorded by prepare.
-    assert!(workflow.contains(
-        "'.chrono-harness/bin/chrono-harness' 'check' '--config' '.chrono-harness/ci/check.json' '--base' \"$CHRONO_BASE\" '--candidate' \"$CHRONO_CANDIDATE\" '--unit' 'alpha'"
-    ));
-
-    let prepare_line = workflow
-        .lines()
-        .find(|line| {
-            line.contains(" prepare --host-root . --config '.chrono-harness/ci/units.json'")
-        })
-        .expect("generated workflow must contain its prepare command")
-        .trim();
-    let check_line = workflow
-        .lines()
-        .find(|line| {
-            line.contains("chrono-harness' 'check'")
-                && line.contains("'--base'")
-                && line.contains("'--unit' 'alpha'")
-        })
-        .expect("generated workflow must contain its unit check command")
-        .trim();
-    assert!(root.join(".chrono-harness/bin/chrono-ci").is_file());
-    assert!(root.join(".chrono-harness/bin/chrono-harness").is_file());
-    let prepared = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
-        .current_dir(root)
-        .env("GITHUB_EVENT_NAME", "push")
-        .env("GITHUB_EVENT_PATH", root.join(event_path))
-        .env("CHRONO_WORKFLOW_REVISION", &candidate)
-        .env("GITHUB_OUTPUT", &output_path)
-        .env("CHRONO_BASE", &base)
-        .env("CHRONO_CANDIDATE", &candidate)
-        .env("CHRONO_INITIAL", "false")
-        .args([
-            "prepare",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/ci/units.json",
-            "--event",
-            "push",
-            "--payload",
-            event_path,
-            "--workflow-revision",
-            &candidate,
-            "--unit",
-            "alpha",
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        prepared.status.success(),
-        "prepare={prepare_line}\nstdout={}\nstderr={}",
-        String::from_utf8_lossy(&prepared.stdout),
-        String::from_utf8_lossy(&prepared.stderr)
-    );
-    let context: Value = serde_json::from_slice(
-        &fs::read(root.join(".chrono-harness/state/alpha/context.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(context["candidate"], candidate);
-    assert_eq!(context["base"], base);
-    assert_eq!(context["workflow_source_revision"], candidate);
-    assert_eq!(
-        context["canonical_argv"],
-        json!([
-            ".chrono-harness/bin/chrono-harness",
-            "check",
-            "--config",
-            ".chrono-harness/ci/check.json",
-            "--base",
-            base,
-            "--candidate",
-            candidate,
-            "--unit",
-            "alpha"
-        ])
-    );
-
-    // The generated check line and local execution use the same argv recorded
-    // by the event preparation context.
-    assert!(check_line.contains("'--base' \"$CHRONO_BASE\""));
-    let local = execute_context(root, &context, 0);
-    assert_eq!(local["response"]["status"], "passed");
-    let report: Value = serde_json::from_slice(
-        &fs::read(root.join(".chrono-harness/state/alpha/check.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(report["response"]["status"], "passed");
-    assert_eq!(
-        report["response"]["evidence"]["scope"],
-        "chrono-ci-check/v3"
-    );
-    let executed = report["response"]["evidence"]["executed"]
-        .as_array()
-        .unwrap();
-    assert_eq!(executed.len(), 1);
-    assert_eq!(executed[0]["operation"], "test.a");
 }
 
 #[test]
@@ -433,9 +315,9 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
     assert!(result.stderr.starts_with(b"E_REQUEST: "));
 }
 
-fn consumer() -> (tempfile::TempDir, String, String) {
-    let (host, base, candidate) = consumer_source();
-    install(host.path());
+fn consumer() -> (short::ShortHost, String, String) {
+    let host = short::ShortHost::new();
+    let (base, candidate) = (host.base.clone(), host.candidate.clone());
     (host, base, candidate)
 }
 
@@ -443,6 +325,7 @@ fn consumer() -> (tempfile::TempDir, String, String) {
 fn consumer_source() -> (tempfile::TempDir, String, String) {
     let d = fixture();
     let root = d.path();
+    tools::write_event_facts(root);
     fs::write(
         root.join(".gitignore"),
         ".chrono-harness/state/\n.chrono-harness/bin/\n",
@@ -475,6 +358,7 @@ fn consumer_source() -> (tempfile::TempDir, String, String) {
     let mut files = vec![];
     for path in [
         ".gitignore",
+        ".chrono-harness/event-facts.json",
         "a.txt",
         "b.txt",
         "a.case",
@@ -529,60 +413,6 @@ fn unit_context(root: &Path, b: &str, c: &str, unit: Option<&str>) -> Value {
     .unwrap()
 }
 
-#[cfg(unix)]
-#[test]
-fn legacy_scoped_operations_accept_inherited_ownership() {
-    use std::os::fd::AsFd;
-    let (host, base, candidate) = consumer();
-    let root = fs::canonicalize(host.path()).unwrap();
-    let lease = tempfile::tempfile().unwrap();
-    let _scope = chrono_harness::process_fds::Scope::new(&[lease.as_fd()]).unwrap();
-    let binary = root.join(".chrono-harness/bin/chrono-harness");
-    let command = chrono_harness::CommandSpec {
-        program: binary.to_str().unwrap().into(),
-        args: vec![
-            "check".into(),
-            "--config".into(),
-            ".chrono-harness/ci/check.json".into(),
-            "--base".into(),
-            base,
-            "--candidate".into(),
-            candidate,
-        ],
-        env: std::env::vars()
-            .filter(|(key, _)| matches!(key.as_str(), "HOME" | "PATH"))
-            .collect(),
-        timeout_seconds: 30,
-        output_limit_bytes: 1048576,
-    };
-    let result = chrono_harness::run_process_observed(
-        &root,
-        &command,
-        &[],
-        &chrono_harness::sha256(&fs::read(binary).unwrap()),
-    )
-    .unwrap();
-    assert_eq!(result.exit_code, 0, "{} {}", result.stdout, result.stderr);
-    assert!(result.failure.is_none());
-    let report: Value = serde_json::from_str(&result.stdout).unwrap();
-    assert_eq!(report["response"]["status"], "passed", "{report}");
-    assert_eq!(
-        report["response"]["evidence"]["executed"]
-            .as_array()
-            .unwrap()
-            .len(),
-        2
-    );
-    assert_eq!(
-        fs::read(root.join(".chrono-harness/state/calls-a")).unwrap(),
-        b"alpha"
-    );
-    assert_eq!(
-        fs::read(root.join(".chrono-harness/state/calls-b")).unwrap(),
-        b"beta"
-    );
-}
-
 #[test]
 fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
     let (host, b, c) = consumer();
@@ -597,6 +427,14 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
             &["clone", "-q", host.path().to_str().unwrap(), "."],
         );
         install(copy.path());
+        install_tools(
+            copy.path(),
+            &[("worktree", "chrono-worktree", ToolProbe::Version)],
+        );
+        git(
+            copy.path(),
+            &["remote", "set-url", "origin", host.remote.to_str().unwrap()],
+        );
         copies.push(copy);
     }
     let reports = std::thread::scope(|threads| {
@@ -628,18 +466,19 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
             .exists()
     );
     assert!(!host.path().join(".chrono-harness/state/calls-a").exists());
-    let mut inputs = vec![];
-    for (unit, report) in ["alpha", "beta"].iter().zip(&reports) {
-        let path = format!(".chrono-harness/state/imported-{unit}.json");
-        json_file(host.path(), &path, report);
-        inputs.push(json!({"unit":unit,"path":path,"sha256":chrono_harness::file_identity(&host.path().join(path)).unwrap().0,
-            "runner_sha256":report["runner"]["sha256"],"judge_sha256":report["judge"]["sha256"]}));
+    for ((unit, report), copy) in ["alpha", "beta"].iter().zip(&reports).zip(&copies) {
+        assert_eq!(report["response"]["status"], "passed");
+        let directory = format!(".chrono-harness/state/{unit}");
+        short::copy_artifacts(&copy.path().join(&directory), &host.path().join(&directory));
+        short::copy_artifacts(
+            &copy.path().join(".chrono-harness/state/preparation"),
+            &host.path().join(".chrono-harness/state/preparation"),
+        );
+        short::copy_artifacts(
+            &copy.path().join(".chrono-harness/state/worktrees"),
+            &host.path().join(".chrono-harness/state/worktrees"),
+        );
     }
-    json_file(
-        host.path(),
-        ".chrono-harness/state/collection/manifest.json",
-        &json!({"schema":"chrono-ci-collection/v1","reports":inputs}),
-    );
     let report = execute_context(host.path(), &unit_context(host.path(), &b, &c, None), 0);
     assert_eq!(
         report["response"]["evidence"]["reports"]
@@ -684,15 +523,15 @@ fn install_mock_transport(root: &Path, mode: &str, c: &str) {
     assert_eq!(ready.stdout, b"chrono-ci-test-provider/v1\n");
 }
 
-fn gather_host(mode: &str) -> (tempfile::TempDir, String, String) {
+fn gather_host(mode: &str) -> (short::ShortHost, String, String) {
     gather_host_config(mode, |_| {})
 }
 
 fn gather_host_config(
     mode: &str,
     configure: impl FnOnce(&mut Value),
-) -> (tempfile::TempDir, String, String) {
-    let (host, b, _) = consumer();
+) -> (short::ShortHost, String, String) {
+    let (mut host, b, _) = consumer();
     let root = host.path();
     let mut cfg = config_value();
     configure_mock_transport(&mut cfg);
@@ -702,6 +541,8 @@ fn gather_host_config(
     git(root, &["add", "."]);
     git(root, &["commit", "-qm", "transport fixture"]);
     let c = git(root, &["rev-parse", "HEAD"]);
+    host.candidate = c.clone();
+    let root = host.path();
     install_mock_transport(root, mode, &c);
     for unit in ["alpha", "beta"] {
         let mut context = unit_context(root, &b, &c, Some(unit));
@@ -996,16 +837,12 @@ fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
         fs::read_to_string(host.path().join(".chrono-harness/state/calls-b")).unwrap(),
         "beta"
     );
+    let retained = gather["retained_report"].as_str().unwrap();
+    let original = fs::read(host.path().join(retained)).unwrap();
     let again = gather_cli(host.path());
-    assert!(!again.status.success());
-    assert_eq!(
-        fs::read(
-            host.path()
-                .join(".chrono-harness/state/collection/gather.json")
-        )
-        .unwrap(),
-        bytes
-    );
+    assert!(again.status.success(), "{again:?}");
+    assert_eq!(fs::read(host.path().join(retained)).unwrap(), original);
+    assert_ne!(gathered(host.path())["retained_report"], retained);
 }
 
 #[test]
@@ -1186,4 +1023,48 @@ fn migration_retires_renamed_units_and_rejects_host_edits_before_writes() {
         assert_eq!(fs::read(root.join(source)).unwrap(), source_bytes);
         assert!(root.join(prior).is_file());
     }
+}
+
+fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
+    // A copied-host fixture owns its receipt policy too. The source checkout's
+    // deployed Git binding is host policy, not a native test-platform input.
+    let owner = retained_receipts::Owner::new();
+    let argv: Vec<String> = serde_json::from_value(context["canonical_argv"].clone()).unwrap();
+    assert_eq!(argv[1], "check");
+    let output = Command::new(root.join(&argv[0]))
+        .args(&argv[1..])
+        .current_dir(root)
+        // This fixture consumes its own local endpoints, including inside native CI.
+        .env_remove(chrono_harness::prepared::SOURCE)
+        .output()
+        .unwrap();
+    let receipt = retain_expected_command_result(
+        &owner.root,
+        root,
+        &argv,
+        context,
+        &output,
+        Some(expected_exit),
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(expected_exit),
+        "root {}; argv {argv:?}; status {}; stdout {}; stderr {}",
+        root.display(),
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let unit = context["scope"]["unit"].as_str();
+    let report = short::published_report(root, unit, &output);
+    assert!(report.get("transport_failure").is_none(), "{report}");
+    if let Some(receipt) = receipt {
+        receipt
+            .release(
+                "command-assertion",
+                "expected exit and original response consumed",
+            )
+            .unwrap();
+    }
+    report
 }
