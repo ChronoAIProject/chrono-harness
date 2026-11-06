@@ -303,16 +303,73 @@ fn check_profile(c: &Config, initial: bool) -> &str {
     &c.check_config
 }
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
-    render_extended(c, config_path, None, "", "", "chrono-check", false, false)
+    render_extended(c, config_path, None, "chrono-check", false, false)
 }
 fn render_extended(
     c: &Config,
     config_path: &str,
     scope: Option<&chrono_harness::units::Scope>,
-    prepare_suffix: &str,
-    pre_check: &str,
     artifact_prefix: &str,
     read_actions: bool,
+    full_policy: bool,
+) -> Result<String, String> {
+    let job = render_job(c, config_path, scope, artifact_prefix, full_policy)?;
+    let header = render_header(c, scope, read_actions, MARKER);
+    Ok(format!("{header}jobs:\n  check:\n{job}"))
+}
+
+fn render_header(
+    c: &Config,
+    scope: Option<&chrono_harness::units::Scope>,
+    read_actions: bool,
+    marker: &str,
+) -> String {
+    let manual_dispatch = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
+        ""
+    } else {
+        r#"  workflow_dispatch:
+    inputs:
+      base:
+        description: Full base commit OID (omit only with initial)
+        required: false
+        type: string
+      candidate:
+        description: Full candidate commit OID
+        required: true
+        type: string
+      initial:
+        description: Explicit parentless initial inventory
+        required: true
+        default: false
+        type: boolean
+"#
+    };
+    let permissions = if read_actions {
+        "  actions: read\n"
+    } else {
+        ""
+    };
+    format!(
+        r#"{marker}name: {name}
+on:
+  push:
+    branches: {push}
+  pull_request:
+    branches: {pr}
+{manual_dispatch}permissions:
+  contents: read
+{permissions}"#,
+        name = scalar(&c.name),
+        push = serde_json::to_string(&c.push_branches).unwrap(),
+        pr = serde_json::to_string(&c.pull_request_branches).unwrap(),
+    )
+}
+
+fn render_job(
+    c: &Config,
+    config_path: &str,
+    scope: Option<&chrono_harness::units::Scope>,
+    artifact_prefix: &str,
     full_policy: bool,
 ) -> Result<String, String> {
     validate_policy(c, full_policy)?;
@@ -347,11 +404,26 @@ fn render_extended(
             shell(&c.runner)
         )
     } else {
+        let prepare_suffix = match scope {
+            Some(chrono_harness::units::Scope::Unit { unit }) => {
+                format!(" --unit {}", shell(unit))
+            }
+            _ => String::new(),
+        };
         let prepare = format!(
             "{} prepare --host-root . --config {} --event \"$GITHUB_EVENT_NAME\" --payload \"$GITHUB_EVENT_PATH\" --workflow-revision \"$CHRONO_WORKFLOW_REVISION\" --github-output \"$GITHUB_OUTPUT\"",
             shell(&c.generator),
             shell(config_path)
-        ) + prepare_suffix;
+        ) + &prepare_suffix;
+        let pre_check = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
+            format!(
+                "      - name: Gather independent unit reports\n        shell: bash\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {} gather --host-root . --config {} --repository \"$GITHUB_REPOSITORY\"\n",
+                shell(&c.generator),
+                shell(config_path)
+            )
+        } else {
+            String::new()
+        };
         let suffix = scope
             .map(|s| {
                 s.argv()
@@ -387,49 +459,13 @@ fn render_extended(
             normal = invoke(c, false) + &suffix,
         )
     };
-    let manual_dispatch = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
-        ""
-    } else {
-        r#"  workflow_dispatch:
-    inputs:
-      base:
-        description: Full base commit OID (omit only with initial)
-        required: false
-        type: string
-      candidate:
-        description: Full candidate commit OID
-        required: true
-        type: string
-      initial:
-        description: Explicit parentless initial inventory
-        required: true
-        default: false
-        type: boolean
-"#
-    };
     let job_name = if scope.is_some() {
         format!("    name: {}\n", scalar(&c.name))
     } else {
         String::new()
     };
-    let permissions = if read_actions {
-        "  actions: read\n"
-    } else {
-        ""
-    };
-
     let rendered = format!(
-        r#"{MARKER}name: {name}
-on:
-  push:
-    branches: {push}
-  pull_request:
-    branches: {pr}
-{manual_dispatch}permissions:
-  contents: read
-{permissions}jobs:
-  check:
-{job_name}    if: ${{{{ github.event.deleted != true }}}}
+        r#"{job_name}    if: ${{{{ github.event.deleted != true }}}}
     runs-on: {runs_on}
     timeout-minutes: {timeout}
     steps:
@@ -452,9 +488,6 @@ on:
           path: {artifacts}
           if-no-files-found: error
 {hidden_files}"#,
-        name = scalar(&c.name),
-        push = serde_json::to_string(&c.push_branches).unwrap(),
-        pr = serde_json::to_string(&c.pull_request_branches).unwrap(),
         runs_on = scalar(&c.runs_on),
         timeout = c.timeout_minutes,
         checkout = c.checkout_action,
