@@ -466,18 +466,11 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
             .exists()
     );
     assert!(!host.path().join(".chrono-harness/state/calls-a").exists());
-    let mut inputs = vec![];
-    for (unit, report) in ["alpha", "beta"].iter().zip(&reports) {
-        let path = format!(".chrono-harness/state/imported-{unit}.json");
-        json_file(host.path(), &path, report);
-        inputs.push(json!({"unit":unit,"path":path,"sha256":chrono_harness::file_identity(&host.path().join(path)).unwrap().0,
-            "runner_sha256":report["runner"]["sha256"],"judge_sha256":report["judge"]["sha256"]}));
+    for ((unit, report), copy) in ["alpha", "beta"].iter().zip(&reports).zip(&copies) {
+        assert_eq!(report["response"]["status"], "passed");
+        let directory = format!(".chrono-harness/state/{unit}");
+        short::copy_artifacts(&copy.path().join(&directory), &host.path().join(&directory));
     }
-    json_file(
-        host.path(),
-        ".chrono-harness/state/collection/manifest.json",
-        &json!({"schema":"chrono-ci-collection/v1","reports":inputs}),
-    );
     let report = execute_context(host.path(), &unit_context(host.path(), &b, &c, None), 0);
     assert_eq!(
         report["response"]["evidence"]["reports"]

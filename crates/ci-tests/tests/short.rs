@@ -1592,7 +1592,7 @@ fn local_collection_shared_obligations_require_each_assigned_unit() {
     );
 }
 
-fn copy_artifacts(source: &Path, target: &Path) {
+pub(super) fn copy_artifacts(source: &Path, target: &Path) {
     fs::create_dir_all(target).unwrap();
     for item in fs::read_dir(source).unwrap() {
         let item = item.unwrap();

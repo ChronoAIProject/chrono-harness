@@ -98,6 +98,7 @@ fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
     )
     .unwrap();
     assert_eq!(initial["canonical_argv"], json!([c["runner"], "check"]));
+    assert_eq!(initial["initial"], true);
     assert!(initial["base"].is_null());
     let normal = prepare(
         host.path(),

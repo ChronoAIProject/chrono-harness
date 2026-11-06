@@ -1,6 +1,6 @@
 # 生成发布工作流
 
-`chrono-ci` 按配置中的 schema 选择生成规则。`chrono-github-ci/v1`、v2、v3 生成检查工作流，`chrono-github-release/v1` 生成原生发布构建工作流。生成器只处理明确登记的数据；项目、语言、平台和发布资产都须由宿主列出。它不执行构建或发布。
+`chrono-ci` 按配置中的 schema 选择生成规则。当前 scoped 检查来源为 `chrono-github-ci/v4`；旧 v1／v2／v3 已退役。`chrono-github-release/v1` 生成原生发布构建工作流。生成器只处理明确登记的数据；项目、语言、平台和发布资产都须由宿主列出。它不执行构建或发布。
 
 ## 登记与生成
 

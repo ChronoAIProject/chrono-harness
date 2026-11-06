@@ -905,6 +905,8 @@ pub(super) fn gather(
     c: &units::Config,
     repository: &str,
 ) -> Result<String, String> {
+    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let root = root.as_path();
     let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(root)?;
     units::validate(c)?;
     let parts: Vec<_> = repository.split('/').collect();
