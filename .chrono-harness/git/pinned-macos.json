@@ -137,6 +137,15 @@
         "--version"
       ],
       "expected_version": "chrono-judge-cargo 0.1.0"
+    },
+    {
+      "id": "verus",
+      "program": ".chrono-harness/bin/verus/verus",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "Verus\n  Version: 0.2026.04.24.f8e1704\n  Profile: release\n  Platform: macos_aarch64\n  Toolchain: 1.95.0-aarch64-apple-darwin"
     }
   ],
   "protocol": {

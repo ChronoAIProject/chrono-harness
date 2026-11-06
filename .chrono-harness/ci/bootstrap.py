@@ -253,6 +253,9 @@ def binding_declarations(root, config, read_input=None):
 
 def registration_paths(config_path, config):
     paths = [config_path, config["projects"], ".chrono-harness/ci/bootstrap.py"]
+    if any(name.startswith("host.verus-") for name in config.get("operations", [])):
+        paths.extend([".chrono-harness/ci/bootstrap-verus.json",
+                      ".chrono-harness/ci/verus_bootstrap.py"])
     if "tool_bindings_registry" in config:
         paths.append(config["tool_bindings_registry"])
     if "owner_upgrade" in config or "owner_stage" in config:

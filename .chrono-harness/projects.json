@@ -157,6 +157,42 @@
             "crates/runner/Cargo.toml",
             ".chrono-harness/cache/runner-vendor"
           ]
+        },
+        "verify_identifiers": {
+          "operation": "verify.runner-identifiers",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-identifiers.rlib,dep-info=.chrono-harness/state/verify.runner-identifiers.rlib.d",
+            "crates/runner/src/verified_identifiers.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-identifiers.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "verify_paths": {
+          "operation": "verify.runner-paths",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-paths.rlib,dep-info=.chrono-harness/state/verify.runner-paths.rlib.d",
+            "crates/runner/src/verified_paths.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-paths.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -296,6 +332,42 @@
             "crates/runner-tests/Cargo.toml",
             "--test",
             "retention"
+          ]
+        },
+        "verify_identifiers": {
+          "operation": "verify.runner-identifiers-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-identifiers-tests.rlib,dep-info=.chrono-harness/state/verify.runner-identifiers-tests.rlib.d",
+            "crates/runner-tests/tests/verified_identifiers.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-identifiers-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "verify_paths": {
+          "operation": "verify.runner-paths-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.runner-paths-tests.rlib,dep-info=.chrono-harness/state/verify.runner-paths-tests.rlib.d",
+            "crates/runner-tests/tests/verified_paths.rs",
+            "-o",
+            ".chrono-harness/state/verify.runner-paths-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },
@@ -4229,6 +4301,39 @@
             ".",
             ".chrono-harness/ci/bootstrap-owner-verification.json"
           ]
+        },
+        "verus-download": {
+          "operation": "host.verus-download",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/verus_bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus.json",
+            "download"
+          ]
+        },
+        "verus-checksum": {
+          "operation": "host.verus-checksum",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/verus_bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus.json",
+            "verify"
+          ]
+        },
+        "verus-extract": {
+          "operation": "host.verus-extract",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/verus_bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus.json",
+            "extract"
+          ]
         }
       }
     },
@@ -4280,6 +4385,14 @@
             ".chrono-harness/ci/bootstrap-tests.py",
             "--lifecycle-program",
             "crates/worktree/target/debug/chrono-worktree"
+          ]
+        },
+        "verus": {
+          "operation": "host.bootstrap-verus-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/verus_bootstrap_tests.py"
           ]
         }
       }
