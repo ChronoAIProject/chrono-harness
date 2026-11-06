@@ -562,6 +562,15 @@ three inventory checks plus directly affected owner tests and exhaustive group r
 
 ## Report and evidence retention target (§10.1)
 
+The current target uses an owned directory with one lifecycle as the cleanup
+unit. Generated members do not each need an independent cleanup record;
+report integrity still verifies the original bytes. Target/cache disposal already
+uses declared directories. Runtime output retention still maintains per-output
+records, and fixture state mixes source, shared inputs and disposable outputs.
+Separating those lifetimes, migrating actual consumers and reclaiming complete
+eligible task directories remain unimplemented; bounded record traversal does
+not satisfy this directory cleanup target.
+
 The existing PR121 target is carried in SPEC §10.1. Runtime coverage remains
 partial: current cache-only cleanup protects lifecycle users and recovery
 originals, but does not implement general producer intents/output enrollment,
