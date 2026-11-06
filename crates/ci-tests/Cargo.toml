@@ -37,20 +37,7 @@ name = "cache"
 path = "tests/cache.rs"
 
 [[test]]
-name = "inventory"
-path = "tests/inventory.rs"
 
-[[bin]]
-name = "chrono-ci-test-transport"
-path = "tests/support/transport.rs"
-test = false
-bench = false
-
-[[bin]]
-name = "chrono-ci-test-git"
-path = "tests/support/git.rs"
-test = false
-bench = false
-
-[profile.dev.package.sha2]
-opt-level = 3
+[[test]]
+name = "native"
+path = "tests/native.rs"

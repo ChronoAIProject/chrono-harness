@@ -78,14 +78,12 @@ registration／input 统一负责真实单元验证、`chrono-inputs capture --u
 
 ## 可选的原生输入准备扩展
 
-使用条件父工作流的 full units/v2 可明确选择 schema `chrono-native-adoption/v1` 的 `native_adoption`，省略保留原生成行为。采用前须安装兼容发布生成器。产品拥有嵌入模板 `assets/ci/native.py` 及其输出更新，宿主拥有以下扩展值和登记操作：
+使用条件父工作流的 full units/v2 可明确选择 schema `chrono-native-adoption/v2` 的 `native_adoption`，省略保留原生成行为。采用前须安装兼容发布生成器。产品由已安装的 Rust `chrono-ci native-adoption` 执行输入准备、传输和转发；生成器只输出工作流。宿主拥有以下扩展值和登记操作：
 
 ```json
 "native_adoption": {
-  "schema": "chrono-native-adoption/v1",
+  "schema": "chrono-native-adoption/v2",
   "lineage": {"path": ".chrono-harness/ci/lineage.json", "sha256": "ORIGINAL_BIRTH_SHA256"},
-  "adapter_path": ".chrono-harness/ci/native.py",
-  "interpreter": "/usr/bin/python3",
   "inputs_program": ".chrono-harness/bin/chrono-inputs",
   "seed_directory": ".chrono-harness/state/shared-seed/",
   "seed_artifact": "chrono-context",
@@ -107,11 +105,11 @@ CI 生产者另记真实当前观察，不改原上下文；只有 workflow 判�
 
 bootstrap 接收宿主登记 argv。hook 如需该 revision，须明确在 bootstrap 登记 argv 前缀 `["env", "CHRONO_WORKFLOW_REVISION=${{ github.workflow_sha }}", ...]`，生成器保留这个宿主选择。
 
-用已有解释器工具将适配器登记为唯一 `canonical_check.inputs.ci`，argv 为 `[adapter_path, "forward", "--config", PROVIDER_PATH]`，恰好一个 provider `--config` 对绑定所选上传合同。
+将已安装的 `chrono-ci` 工具登记为唯一 `canonical_check.inputs.ci`，argv 为 `["native-adoption", "forward", "--host-root", ".", "--config", PROVIDER_PATH]`，恰好一个 provider `--config` 对绑定所选上传合同。不生成适配器，也不要求宿主安装 Python。
 
 从业务继承移除只用于获取的 `GITHUB_EVENT_NAME`、`GITHUB_EVENT_PATH`、`CHRONO_WORKFLOW_REVISION`、`GITHUB_REPOSITORY`，保留 `CHRONO_CHECK_SOURCE`、实际业务变量和已有凭据合同。转发读取真实保留获取记录，将实际具名环境值交给 `chrono-ci check-inputs`。
 
-内部 CI bridge 把有限子进程执行委托给已有 Rust 传输，保留 stdin／stdout／stderr、执行物身份和进程结果。它用于处理不在业务继承内的事件字段及凭据；适配器没有第二套子进程 runner。外层生产回执仍记录自身真实环境。
+原生输入准备直接复用已有 Rust 有界进程传输，保留 stdin／stdout／stderr、执行物身份和进程结果。它处理不在业务继承内的事件字段及凭据；无需跨进程桥接协议。外层生产回执仍记录自身真实环境。
 
 汇总先转发 gather，再调用输入模块组合，之后才返回完整执行。原 detector 治理对和所选单元贡献提供汇总输入。`composition_sources` 给种子准备提供原基线快照／对；汇总从传递种子消费已验证治理投影，出处中保留来源字节，因此其他检出不必仍有 detector 原路径。
 
@@ -121,7 +119,7 @@ FILEMAP／routes 继续负责 DELTA 选择；registration 按两端分配投影�
 
 可选 `integration_transport: {source_directory, directory}` 将生产原上传根连到交付下载根，含最终报告及嵌套数据。宿主 bootstrap 获取明确完成的凭据／报告依赖证据，扩展不加调度器。workflow 保留九项凭据绑定，影响选中 integration 时要求匹配的最终生产者。普通 feature 准备可带 null，仍由 workflow 决定是否足够。
 
-lineage、适配器、解释器、inputs 二进制、bootstrap 输入、provider、组合原件都须登记到宿主 FILEMAP／输入／依赖。种子、单元、汇总、下载根互不重叠。已有输出预检保留宿主定制，拒绝无所有权覆盖。这些源码合同不自动启用主仓或示例；公开发布及真实 push／PR／dev 采用仍归调用方。
+lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原件都须登记到宿主 FILEMAP／输入／依赖。种子、单元、汇总、下载根互不重叠。已有输出预检保留宿主定制，拒绝无所有权覆盖。这些源码合同不自动启用主仓或示例；公开发布及真实 push／PR／dev 采用仍归调用方。
 
 <a id="conditional-jobs-and-the-required-aggregate"></a>
 

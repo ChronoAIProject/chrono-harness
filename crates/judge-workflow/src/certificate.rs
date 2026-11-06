@@ -423,7 +423,7 @@ fn artifact_transport(
     if provider["native_adoption"].is_null() {
         return Ok(None);
     }
-    if provider["native_adoption"]["schema"] != "chrono-native-adoption/v1" {
+    if provider["native_adoption"]["schema"] != "chrono-native-adoption/v2" {
         return Err("certificate transport extension schema".into());
     }
     serde_json::from_value(provider["native_adoption"]["integration_transport"].clone())

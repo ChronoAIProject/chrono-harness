@@ -1,6 +1,6 @@
 mod provider;
 
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
@@ -308,6 +308,25 @@ fn inventory_listing() {
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("native-child") {
+        match std::env::args().nth(2).as_deref() {
+            Some("echo") => {
+                let mut input = Vec::new();
+                io::stdin().read_to_end(&mut input).unwrap();
+                io::stdout().write_all(b"\0\xff").unwrap();
+                io::stdout().write_all(&input).unwrap();
+                io::stderr().write_all(b"original stderr").unwrap();
+            }
+            Some("exit") => {
+                io::stderr().write_all(b"real failure").unwrap();
+                std::process::exit(7);
+            }
+            Some("overflow") => io::stdout().write_all(&[b'x'; 4096]).unwrap(),
+            Some("timeout") => std::thread::sleep(Duration::from_secs(2)),
+            other => panic!("unknown native child mode: {other:?}"),
+        }
+        return;
+    }
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
             "units" => {
