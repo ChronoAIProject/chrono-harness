@@ -218,6 +218,36 @@ fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment
     );
 }
 
+fn reclaim_reports(root: &Path, paths: &[String], mut round: Value) {
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
+        .unwrap()
+        .unwrap();
+    let mut rounds = Vec::new();
+    // Real maintenance has a wall deadline, including under concurrent tests.
+    // Exercise its bounded continuation instead of demanding one-round disposal.
+    for attempt in 0..8 {
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+        assert!(
+            round["verified_bytes"].as_u64().unwrap() <= 1048576,
+            "{round}"
+        );
+        rounds.push(round);
+        if paths.iter().all(|path| !root.join(path).exists()) {
+            return;
+        }
+        if attempt < 7 {
+            round = inventory.maintain().unwrap();
+        } else {
+            break;
+        }
+    }
+    panic!("bounded maintenance did not reclaim unrooted reports {paths:?}: {rounds:?}");
+}
+
 #[test]
 fn caller_report_consumer_protects_primary_and_coordinator_publication() {
     if !super::isolated_capability::isolated_capability_test(
@@ -382,14 +412,15 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
             serde_json::from_value(report["report_consumer"]["originals"].clone()).unwrap();
         i.release_consumer(consumer, &originals, &"1".repeat(64), &"2".repeat(64))
             .unwrap();
-        let retirement = i.maintain().unwrap();
-        assert!(!path.exists(), "{retirement}");
-        for (path, _) in dependencies {
-            assert!(
-                !path.exists(),
-                "released referenced original was not reclaimed: {retirement}"
-            );
-        }
+        let mut released = vec![report["report_path"].as_str().unwrap().to_owned()];
+        released.extend(dependencies.iter().map(|(path, _)| {
+            path.strip_prefix(&h.root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        }));
+        reclaim_reports(&h.root, &released, i.maintain().unwrap());
         if let Some((path, bytes)) = managed_receipt {
             assert_eq!(
                 fs::read(path).unwrap(),
@@ -404,36 +435,6 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
 
 #[test]
 fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
-    fn reclaim_reports(root: &Path, paths: &[String], mut round: Value) {
-        let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
-            .unwrap()
-            .unwrap();
-        let mut rounds = Vec::new();
-        // Real maintenance has a wall deadline, including under concurrent tests.
-        // Exercise its bounded continuation instead of demanding one-round disposal.
-        for attempt in 0..8 {
-            assert!(
-                round["accounting_errors"].as_array().unwrap().is_empty(),
-                "{round}"
-            );
-            assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
-            assert!(
-                round["verified_bytes"].as_u64().unwrap() <= 1048576,
-                "{round}"
-            );
-            rounds.push(round);
-            if paths.iter().all(|path| !root.join(path).exists()) {
-                return;
-            }
-            if attempt < 7 {
-                round = inventory.maintain().unwrap();
-            } else {
-                break;
-            }
-        }
-        panic!("bounded maintenance did not reclaim unrooted reports {paths:?}: {rounds:?}");
-    }
-
     let h = Host::new("payload");
     h.kernel_cleanup();
     let cleanup = h.root.join(AUTO_POLICY);
@@ -1381,7 +1382,7 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     assert_eq!(h.invoke("feature", "descendants", &target).0, 0);
     output(&target);
     let mut child = wrapper(&h, &target);
-    child.await_file(&target.join(".chrono-harness/state/parent"));
+    child.await_managed_file(&target.join(".chrono-harness/state/parent"));
     await_file(&target.join(".chrono-harness/state/grandchild"));
     let _group =
         OwnedGroup(fs::read_to_string(target.join(".chrono-harness/state/parent")).unwrap());
@@ -1445,33 +1446,21 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
         &h.root,
     );
     second.release_on_drop(state.join("release"));
-    let began = Instant::now();
-    while h.ledger()["entries"][0]["uses"].as_array().unwrap().len() != 2
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        thread::sleep(Duration::from_millis(20));
-    }
+    // The same registered operation has two live callers. Each child names
+    // its ready marker with its actual wrapper PID; no ledger/directory polling.
+    let ready = [
+        format!("ready-{}", first.child.id()),
+        format!("ready-{}", second.child.id()),
+    ];
+    first.await_managed_file(&state.join(&ready[0]));
+    second.await_managed_file(&state.join(&ready[1]));
     assert_eq!(
         h.ledger()["entries"][0]["uses"].as_array().unwrap().len(),
         2
     );
-    while fs::read_dir(&state)
-        .map(|rows| {
-            rows.filter_map(Result::ok)
-                .filter(|e| e.file_name().to_string_lossy().starts_with("ready-"))
-                .count()
-        })
-        .unwrap_or(0)
-        != 2
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        thread::sleep(Duration::from_millis(10));
-    }
-    let _groups: Vec<_> = fs::read_dir(&state)
-        .unwrap()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_name().to_string_lossy().starts_with("ready-"))
-        .map(|e| OwnedGroup(fs::read_to_string(e.path()).unwrap()))
+    let _groups: Vec<_> = ready
+        .iter()
+        .map(|name| OwnedGroup(fs::read_to_string(state.join(name)).unwrap()))
         .collect();
     assert_eq!(_groups.len(), 2);
     first.kill().unwrap();
@@ -1497,7 +1486,7 @@ fn fixture_setup_panic_releases_and_joins_a_live_managed_consumer() {
     let state = target.join(".chrono-harness/state");
     let mut child = wrapper(&h, &target);
     child.release_on_drop(state.join("release"));
-    child.await_file(&state.join("ready"));
+    child.await_managed_file(&state.join("ready"));
     assert_eq!(
         h.ledger()["entries"][0]["uses"].as_array().unwrap().len(),
         1
@@ -2187,12 +2176,16 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
 }
 
 #[test]
-fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
+fn registered_consumers_forward_leases_after_both_wrappers_die() {
     use std::os::unix::fs::symlink;
     for route in ["bootstrap", "workflow-inventory"] {
         let h = Host::new("payload");
         h.kernel_cleanup();
-        let script = source().join(format!(".chrono-harness/ci/{route}.py"));
+        let script = if route == "workflow-inventory" {
+            fs::canonicalize(source().join("crates/ci/target/debug/chrono-ci")).unwrap()
+        } else {
+            source().join(".chrono-harness/ci/bootstrap.py")
+        };
         let consumer = env!("CARGO_BIN_EXE_chrono-worktree-test-consumer");
         let tools = h.parent.join("python-tools");
         fs::create_dir(&tools).unwrap();
@@ -2286,7 +2279,7 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
         assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(
             target.join("output λ/cache").exists(),
-            "{route}: subprocess child must retain lease after Python and worktree wrappers die"
+            "{route}: subprocess child must retain lease after consumer and worktree wrappers die"
         );
         fs::write(
             target.join(".chrono-harness/state/python-release"),
