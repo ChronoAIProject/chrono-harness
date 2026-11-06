@@ -110,6 +110,8 @@ registration 清单保留每条定义及其身份，例如 `project:t` 与 `scri
 
 ## 图计算的范围
 
+实际内核使用同源 Verus 保全类型边、两端来源、精确名称和槽位、FIFO 最短前驱、有限原因链、传播行及有序原因集合；当前证明边界与执行入口见 [Verus 实施范围](verus.md)。外层 seed／原因关联、JSON 适配及选测仍待证明。
+
 当前消费者只需要两端合并图和有限影响传播，保留有类型边、所有起点、不同路径及环。程序不再额外计算强连通分组、缩点图深度、关系数量、跨负责人排名或执行冲突汇总，因为这些结果没有现役生产消费者。
 
 **产品与政策曾同步修改：**SPEC §5.2 不再要求每次影响计算都附这些观察，对应的报告自检和两项专用测试随之移除。已有环／分叉汇合／多起点回归仍检查真实边和原因链，runner 消费者仍核对影响和选测。执行 DAG、资源及输出占用声明归 routes，相关检查及执行回执自诊断仍为必需。普通影响格式与权威选测字段不变。
@@ -132,6 +134,6 @@ CI 证据增加 `selection_explanation`，范围为 `chrono-ci-check/v1-adapter`
 
 共享清单回归直接核对不同定义和安全的唯一解析。真实消费者回归覆盖 project／script 同 ID、不同 ID 成功、受影响与无关历史冲突、空变更、仅别名变化、两端记录目标、仅基线歧义，以及 SPEC 要求的协议字段，包含尚未获准移除的必需测试。
 
-构建前置是登记的 `build.runner`、`build.judge-registration`、`build.judge-filemap`、`build.judge-routes`、`build.judge-projects`，之后运行 `cargo test --locked --manifest-path crates/judge-filemap-tests/Cargo.toml`。CI 绑定明确列出这些前置。测试使用本地合成提交，目标候选的生命周期仍由调用方负责。
+先执行登记的 `verify.filemap-graph`、`verify.filemap-graph-tests`，完成整 crate 证明及编译。随后构建前置是登记的 `build.runner`、`build.judge-registration`、`build.judge-filemap`、`build.judge-routes`、`build.judge-projects`，之后运行 `cargo test --locked --manifest-path crates/judge-filemap-tests/Cargo.toml`。CI 绑定明确列出这些前置。测试使用本地合成提交，目标候选的生命周期仍由调用方负责。
 
 impact v2 新增工作流选测，v1 不执行这些要求；消费者拒绝不支持的结果格式。Git 中 FILEMAP 登记仍为 schema 2，历史解码不变。共用 mixed 分类和固定对象读取在制定执行计划前完成，无效的已选含义输入会阻止后续操作。`workflow_selection`、`workflow_consumer` 通过真实进程验证这些要求。
