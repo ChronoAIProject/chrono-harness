@@ -57,6 +57,37 @@ fn registry(directory: &Path) -> Value {
     owner["objects"] = json!(objects);
     owner
 }
+// Resolving an authorized route binds its context before command publication.
+fn assert_context(owner: &Owner, directory: &Path) {
+    let context: Value =
+        serde_json::from_slice(&fs::read(directory.join("producer-context.json")).unwrap())
+            .unwrap();
+    assert_eq!(context["schema"], "chrono-fixture-producer-context/v1");
+    assert_eq!(context["root"], owner.root.to_str().unwrap());
+    assert_eq!(context["directory"], directory.to_str().unwrap());
+    assert_eq!(context["config_path"], ".chrono-harness/worktree.json");
+    assert_eq!(context["policy_path"], ".chrono-harness/cleanup.json");
+    assert_eq!(
+        context["policy_sha256"],
+        chrono_harness::sha256(&fs::read(owner.root.join(".chrono-harness/cleanup.json")).unwrap())
+    );
+    assert_eq!(context["producer"], "ci-command-result");
+    assert_eq!(context["generated_outputs"], json!(GENERATED));
+}
+
+fn assert_retiring(report: &Value, count: usize) {
+    let rows = producer_objects(report);
+    let rows = rows.as_array().unwrap();
+    assert_eq!(rows.len(), count);
+    for row in rows {
+        assert_eq!(row["status"], "retiring", "{row}");
+        assert_eq!(row["owner"], "output-retention/v2");
+        assert_eq!(row["physical_absence"], "pending");
+        assert_eq!(row["producer_outcome"], "unchanged");
+        assert!(!row["retention_paths"].as_array().unwrap().is_empty());
+    }
+}
+
 fn object_record(directory: &Path, allocation: &Path) -> PathBuf {
     {
         let digest = chrono_harness::sha256(allocation.file_name().unwrap().as_encoded_bytes());
@@ -107,6 +138,7 @@ impl Owner {
         let workflow = ".chrono-harness/workflow.json";
         let worktree = ".chrono-harness/worktree.json";
         let cleanup = ".chrono-harness/cleanup.json";
+        let retention = ".chrono-harness/retention.json";
         fs::create_dir_all(root.join(".chrono-harness")).unwrap();
         for (path, value) in [
             (
@@ -122,7 +154,7 @@ impl Owner {
             ),
             (
                 fm,
-                json!({"schema_version":1,"status":"proposed","files":([config,fm,projects,judges,workflow,worktree,cleanup,".gitignore"].iter().map(|p|json!({"path":p,"owner":"host","surface":"product","cost":"unknown","edges":[]})).collect::<Vec<_>>()),
+                json!({"schema_version":1,"status":"proposed","files":([config,fm,projects,judges,workflow,worktree,cleanup,retention,".gitignore"].iter().map(|p|json!({"path":p,"owner":"host","surface":"product","cost":"unknown","edges":[]})).collect::<Vec<_>>()),
                 "project_edges":[],"cost_models":{"unknown":{"cpu_ms":null,"wall_ms":null,"peak_rss_bytes":null,"io_bytes":null,"basis":"unmeasured fixture"}},"test_costs":[]}),
             ),
             (
@@ -144,6 +176,16 @@ impl Owner {
                 json!({"schema":"chrono-worktree-config/v1","automatic_cleanup":cleanup,"host_config":config,"remote":"origin",
                 "git":{"program":fixture_git(),"expected_version":null,"sha256":null},"environment":{"inherit":["PATH"],"values":{}},
                 "timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/"}),
+            ),
+            // These assertions consume originals after generated-cache release.
+            // Adopt the real owner with a finite one-hour content window.
+            (
+                retention,
+                json!({"schema":"chrono-output-retention/v2",
+                "producers":{"fixture-retirement":[FAMILY]},
+                "keep_seconds":3600,"metadata_keep_seconds":86400,
+                "max_related_outputs":512,"max_summaries":128,"max_nodes_per_round":256,
+                "max_bytes_per_round":67108864,"max_millis_per_round":25}),
             ),
             (
                 cleanup,
@@ -312,10 +354,7 @@ fn linked_default_wrapper_reclaims_released_copies_on_explicit_maintenance() {
     assert!(producer_objects(&reentered).as_array().unwrap().is_empty());
     let (code, maintained) = owner.drain();
     assert_eq!(code, 0, "{maintained}");
-    assert_eq!(
-        producer_objects(&maintained)[0]["status"],
-        "already-disposed"
-    );
+    assert_retiring(&maintained, 1);
 }
 
 #[test]
@@ -451,7 +490,10 @@ fn producer_wrapper_refuses_unknown_destination_before_publication() {
         "unknown legacy bytes"
     );
     assert_eq!(fs::read_dir(&unknown).unwrap().count(), 1);
-    assert!(!owner.root.join(FAMILY).exists());
+    let family = owner.root.join(FAMILY);
+    assert_context(&owner, &family);
+    assert_eq!(fs::read_dir(&family).unwrap().count(), 1);
+    assert!(!family.join("objects.json").exists());
     assert_eq!(
         fs::read(
             execution
@@ -596,10 +638,9 @@ fn real_receipt_producer_expected_failure_diagnostic_release_and_legacy_unknown(
             fs::read_to_string(legacy.join("unknown")).unwrap(),
             "historical evidence"
         );
-        assert_eq!(
-            producer_objects(&owner.drain().1)[0]["status"],
-            "already-disposed"
-        );
+        let (code, retiring) = owner.drain();
+        assert_eq!(code, 0, "{retiring}");
+        assert_retiring(&retiring, 1);
         assert!(
             receipt
                 .acquire("late", "requires already reclaimed generated bytes")
@@ -714,10 +755,9 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
             .unwrap()
             .contains("unexpected-command-exit")
     );
-    assert_eq!(
-        producer_objects(&owner.drain().1)[0]["status"],
-        "already-disposed"
-    );
+    let (code, retiring) = owner.drain();
+    assert_eq!(code, 0, "{retiring}");
+    assert_retiring(&retiring, 1);
 }
 
 #[test]
@@ -937,11 +977,7 @@ fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
         .err()
         .unwrap();
         assert!(
-            error.contains(if replaced {
-                "identity differs"
-            } else {
-                "No such file"
-            }),
+            error.contains("producer owner identity/layout differs; explicit producer partition migration required; preserve objects"),
             "{error}"
         );
         assert_eq!(fs::read(directory.join("objects.json")).unwrap(), original);
@@ -1116,13 +1152,7 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
     verify_originals();
     let (code, report) = owner.drain();
     assert_eq!(code, 0, "{report}");
-    assert!(
-        producer_objects(&report)
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|o| o["status"] == "already-disposed")
-    );
+    assert_retiring(&report, 2);
     verify_originals();
 }
 
@@ -1202,10 +1232,20 @@ fn producer_registry_birth_preserves_unknown_preexisting_lease_and_registry() {
         for path in GENERATED {
             assert!(copy.join(path).exists());
         }
-        assert_eq!(
-            fs::read_dir(&directory).unwrap().count(),
-            if registry_kind == "absent" { 2 } else { 3 }
-        );
+        assert_context(&owner, &directory);
+        let mut expected = std::collections::BTreeSet::from([
+            "registry.lease".to_owned(),
+            "producer-context.json".to_owned(),
+            copy.file_name().unwrap().to_str().unwrap().to_owned(),
+        ]);
+        if registry.is_some() {
+            expected.insert("objects.json".to_owned());
+        }
+        let actual = fs::read_dir(&directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_str().unwrap().to_owned())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(actual, expected);
     }
 }
 

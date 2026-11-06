@@ -2167,6 +2167,8 @@ fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
     drop(command);
     assert_eq!(original.status.code(), Some(7));
     let record = producer_record_path(&store, host.path());
+    let original_record = json(&fs::read(&record).unwrap()).unwrap();
+    let original_identity = original_record["object"]["identity"].clone();
     host.finish().unwrap();
     assert!(
         host.path().exists(),
@@ -2193,11 +2195,23 @@ fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
     .unwrap_err();
     assert!(error.contains("original lifetime released"), "{error}");
     assert_eq!(capture_count(), before, "retired capture created output");
+    let mut observed_retirement = false;
     for _ in 0..16 {
         if !record.exists() {
             break;
         }
         let report = host.finish().unwrap();
+        for row in report["producer_objects"].as_array().unwrap() {
+            if row["status"] == "retiring" {
+                observed_retirement = true;
+                assert_eq!(row["producer"], "test-allocation");
+                assert_eq!(
+                    row["path"],
+                    host.path().strip_prefix(&h.root).unwrap().to_str().unwrap()
+                );
+                assert_eq!(row["identity"], original_identity);
+            }
+        }
         assert!(
             !report["original_retention"].as_array().unwrap().is_empty(),
             "ordinary reentry did not consume its declared retirement paths"
@@ -2207,6 +2221,10 @@ fn capacity_partial_retirement_keeps_its_record_until_originals_are_absent() {
             "continuation disappeared before original container"
         );
     }
+    assert!(
+        observed_retirement,
+        "bounded reentry lost the allocation's retirement identity"
+    );
     assert!(
         !host.path().exists(),
         "bounded ordinary recovery did not advance"

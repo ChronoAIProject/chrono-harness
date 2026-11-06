@@ -759,7 +759,7 @@ class RealAttempt:
             raise ValueError("managed producer failure lacks a joined original")
         # Release only the cache-attempt admission slot after exclusive disposal.
         # Failed originals and their consumers keep their outcomes and identities.
-        cls.verify_disposal(root, custody["declared_outputs"], json.loads(released))
+        cls.verify_disposal(root, custody["declared_outputs"], json.loads(released), report)
 
     @classmethod
     def require_consumer_completion(cls, evidence, result):
@@ -1009,6 +1009,8 @@ class RealAttempt:
     def retain_receipt_closure(self, root, report):
         """Only the typed receipt members consumed by custody assertions."""
         custody = self.result["custody"]
+        if report.get("post_use_cleanup"):
+            self.retain_receipt_closure(root, report["post_use_cleanup"])
         for key in ("recovery_intent", "fetch_intent", "cache_intent", "main_cache_release"):
             if report.get(key):
                 relative = report[key]
@@ -1053,8 +1055,8 @@ class RealAttempt:
                     self.original(command[channel])
             for descriptor in custody.get("required_originals", []):
                 self.original(descriptor)
-            self.original(custody["managed_report"])
-            self.verify_disposal(self.root, self.outputs, json.loads(self.original(custody["release_report"])))
+            managed = json.loads(self.original(custody["managed_report"]))
+            self.verify_disposal(self.root, self.outputs, json.loads(self.original(custody["release_report"])), managed)
         releases = {}
         def binding(path):
             raw = path.read_bytes()
@@ -1129,7 +1131,8 @@ class RealAttempt:
             if setup_only:
                 self.verify_setup_release(self.root, self.outputs, json.loads(self.original(released)), self.result["source"])
             else:
-                self.verify_disposal(self.root, self.outputs, json.loads(self.original(released)))
+                self.verify_disposal(self.root, self.outputs, json.loads(self.original(released)),
+                                     json.loads(self.original(custody["managed_report"])))
         except Exception as error:
             custody["error"] = repr(error)
             self.publish()
@@ -1140,23 +1143,31 @@ class RealAttempt:
         self.publish()
 
     @classmethod
-    def verify_disposal(cls, root, outputs, report):
+    def verify_disposal(cls, root, outputs, report, managed):
         if report.get("status") != "finished" or not report.get("main_cache_release"):
             raise ValueError("missing actual main-cache release receipt")
         def receipt(descriptor):
             return json.loads(cls.original(descriptor, root))
         receipt(report["main_cache_release"])
         effects = {}
-        for item in report.get("drain", []):
-            if item.get("path") != str(root) or "receipt" not in item:
-                continue
-            original = receipt(item["receipt"])
-            if original.get("status") != "cleaned" or original.get("protected_historical_artifacts"):
-                raise ValueError("owner has not disposed all freshly owned outputs")
-            intent = receipt(original["cache_intent"])
-            if set(intent["binding"]["artifacts"]) != set(outputs):
-                raise ValueError("owner output ownership differs")
-            effects.update({row["path"]: row for row in original["artifact_disposals"]})
+        # Ordinary use may already have disposed the cache before finish.
+        # Consume that original receipt as well; finish still proves exclusive
+        # release and every declared output must be physically absent now.
+        for cleanup in (managed.get("post_use_cleanup", {}), report):
+            for item in cleanup.get("drain", []):
+                if item.get("path") != str(root) or "receipt" not in item:
+                    continue
+                original = receipt(item["receipt"])
+                if original.get("status") != "cleaned" or original.get("protected_historical_artifacts"):
+                    if cleanup is not report:
+                        # An earlier refusal remains a refusal. A later verified
+                        # disposal can settle the current absence obligation.
+                        continue
+                    raise ValueError("owner has not disposed all freshly owned outputs")
+                intent = receipt(original["cache_intent"])
+                if set(intent["binding"]["artifacts"]) != set(outputs):
+                    raise ValueError("owner output ownership differs")
+                effects.update({row["path"]: row for row in original["artifact_disposals"]})
         if set(effects) != set(outputs) or any(
                 row["status"] not in ("verified-absent", "already-absent") or row["bytes_after"] != 0
                 or (root / name).exists() or (root / name).is_symlink()

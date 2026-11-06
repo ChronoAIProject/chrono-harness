@@ -2018,10 +2018,15 @@ impl ProducerPolicy {
             visited += 1;
             if snapshot.retiring {
                 match retirement::resume_retirement(inputs, &directory, snapshot) {
-                    Ok(value) => report["producer_objects"]
-                        .as_array_mut()
-                        .unwrap()
-                        .push(value),
+                    Ok(mut value) => {
+                        value["producer"] = value!(self.id);
+                        value["path"] = value!(format!("{}{}", self.directory, snapshot.path));
+                        value["identity"] = value!(snapshot.identity);
+                        report["producer_objects"]
+                            .as_array_mut()
+                            .unwrap()
+                            .push(value);
+                    }
                     Err(error) => {
                         failures.push(error.clone());
                         report["producer_objects"].as_array_mut().unwrap().push(value!({"producer":self.id,"path":snapshot.path,"status":"failed","error":error}));
