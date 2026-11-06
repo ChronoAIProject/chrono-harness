@@ -374,6 +374,11 @@ fn directory_cleanup_keeps_shared_input_until_its_last_directory_releases() {
     );
 }
 
+#[test]
+fn directory_cleanup_preserves_nested_live_and_diagnostic_consumers() {
+    super::fixture_body::custody_nested_consumers(true);
+}
+
 // Re-enter the real producer rather than assuming that one bounded retention
 // round can remove an entire original/metadata relationship. Preserve the final
 // physical-absence assertions and reject every error except honest capacity

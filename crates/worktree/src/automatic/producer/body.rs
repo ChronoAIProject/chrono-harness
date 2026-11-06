@@ -899,7 +899,7 @@ fn protect_source(
     Ok(())
 }
 
-pub(super) fn directory_guards(directory: &Path, object: &Object) -> Result<Vec<Lease>, String> {
+pub(super) fn directory_guards(directory: &Path, object: &Object) -> Result<Option<Vec<Lease>>, String> {
     let allocation = directory.join(&object.path);
     let mut guards: BTreeMap<String, Lease> = BTreeMap::new();
     for (member, body) in &object.bodies {
@@ -924,17 +924,17 @@ pub(super) fn directory_guards(directory: &Path, object: &Object) -> Result<Vec<
                 }
                 continue;
             }
-            let held = Lease::acquire(
+            let Some(held) = Lease::acquire(
                 &no_symlink_parents(&allocation, &binding.path)?,
                 Some(&binding.id), false, true, None,
-            )?.ok_or("owned directory has a live nested consumer")?;
+            )? else { return Ok(None); };
             guards.insert(binding.path.clone(), held);
         }
         if !nested_released(&allocation, member, &body.nested_consumers, &body.leases)? {
-            return Err("owned directory has an unreleased nested diagnostic consumer".into());
+            return Ok(None);
         }
     }
-    Ok(guards.into_values().collect())
+    Ok(Some(guards.into_values().collect()))
 }
 
 pub(super) fn drain(

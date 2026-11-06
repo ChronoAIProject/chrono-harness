@@ -1104,7 +1104,18 @@ fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_sibli
 
 #[test]
 fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcome() {
+    custody_nested_consumers(false);
+}
+
+pub(super) fn custody_nested_consumers(owned_directory: bool) {
     let h = host();
+    if owned_directory {
+        let path = h.root.join(".chrono-harness/cleanup.json");
+        let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+        policy["retained_producers"][0]["disposable_directory"] = value!(true);
+        fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        commit(&h.root);
+    }
     let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 0, "{report} {error}");
     let (store, allocation) = allocation(&h);
@@ -1157,7 +1168,7 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     let registry = producer_state(&store);
     let object = &registry["objects"][0];
     let old_intent = fs::read(store.join(object["intent"]["path"].as_str().unwrap())).unwrap();
-    let plan = value!({"schema":"chrono-fixture-body-custody/v1", "head":git(&h.root,&["rev-parse","HEAD"]),
+    let mut plan = value!({"schema":"chrono-fixture-body-custody/v1", "head":git(&h.root,&["rev-parse","HEAD"]),
         "current_consumers_released":true,"reason":"This test has joined its actual legacy copy consumer",
         "objects":[{"producer":"test-allocation","allocation":object["path"],"identity":object["identity"],"intent":object["intent"],
         "members":[{"path":"legacy-copy","sha256":sha256(b"real copied input"),"length":17,"git_root":".","recipe":"recipe.rs"},
@@ -1166,6 +1177,9 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
         "nested_consumers":[{"directory":nested_directory,"producer":"nested-fixture",
         "registry_identity":nested_registry["directory_id"],"allocation":nested_object["path"],
         "identity":nested_object["identity"],"intent":nested_object["intent"]}]}]}]});
+    if owned_directory {
+        plan["objects"][0]["release_originals"] = value!(true);
+    }
     let plan_path = ".chrono-harness/state/body-custody.json";
     fs::write(h.root.join(plan_path), serde_json::to_vec(&plan).unwrap()).unwrap();
     let (code, report, error) = h.auto(
@@ -1214,6 +1228,11 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!root.join("legacy-copy").exists());
     assert!(!nested_root.join("copy").exists());
+    if owned_directory {
+        assert!(!root.exists(), "released nested fixture directory accumulated");
+        assert_eq!(json(&old_intent).unwrap()["producer_outcome"], "not-established");
+        return;
+    }
     assert_eq!(
         fs::read(store.join(object["intent"]["path"].as_str().unwrap())).unwrap(),
         old_intent

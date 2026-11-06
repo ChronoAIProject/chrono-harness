@@ -610,7 +610,10 @@ fn dispose_owned_directory(
     }
     let allocation = no_symlink_parents(directory, &object.path)?;
     let nested_guards = if allocation.exists() {
-        body::directory_guards(directory, object)?
+        let Some(guards) = body::directory_guards(directory, object)? else {
+            return Ok(value!({"status":"protected","reason":"live nested consumer or unreleased nested diagnostic"}));
+        };
+        guards
     } else {
         vec![]
     };

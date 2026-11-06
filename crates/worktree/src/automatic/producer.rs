@@ -2158,7 +2158,7 @@ impl ProducerPolicy {
                 drop(store.take());
                 match retirement::retire_owned_directory(self, inputs, r, &directory, object, lease) {
                     Ok(retirement) => {
-                        row["status"] = value!("disposed");
+                        row["status"] = retirement["status"].clone();
                         row["original_retirement"] = retirement;
                     }
                     Err(error) => {

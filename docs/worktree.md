@@ -1574,11 +1574,10 @@ handoff accepts `adopt_directory: true` with `release_originals: true` and empty
 receipt binds the original intent and physical identity without rewriting that
 intent. The current policy must adopt directory ownership; active capabilities,
 unreleased diagnostics, changed identities and allocations already handed to
-output retention refuse the transfer. Migration itself does no disposal. Old
+output retention refuse the transfer. Migration itself does no disposal.
 The exact transferred directory enters the existing pending set so the next
 ordinary maintenance entry need not wait for a historical sweep to wrap around.
-Old
-per-output retirement must finish under its existing owner before those remaining
+Old per-output retirement must finish under its existing owner before those remaining
 directories can transfer; the new option does not bypass that owner.
 The direct behavioral acceptance is
 `test.worktree.directory-cleanup`, covering a failed command, diagnostic release,
