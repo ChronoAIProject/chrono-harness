@@ -26,6 +26,11 @@ pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
+#[allow(unexpected_cfgs)]
+pub mod verified_identifiers;
+#[allow(unexpected_cfgs)]
+pub mod verified_paths;
+pub use verus_builtin_macros::verus;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]
@@ -275,12 +280,7 @@ pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
     copy_hashed(file, std::io::sink())
 }
 pub fn relative_path(value: &str) -> Result<(), String> {
-    if value.is_empty()
-        || value.contains(['\0', '\n', '\r', '\\'])
-        || Path::new(value)
-            .components()
-            .any(|c| !matches!(c, Component::Normal(_)))
-    {
+    if !verified_paths::valid_relative_path(value.as_bytes()) {
         return Err(format!("invalid relative path: {value:?}"));
     }
     Ok(())
@@ -2324,25 +2324,20 @@ fn execute_check(
     } else {
         None
     };
-    let collected_originals: Vec<String> =
-        if matches!(report["request"]["scope"]["kind"].as_str(), Some("collect")) {
-            report["response"]["evidence"]["retained_originals"]
-                .as_array()
-                .map(|paths| {
-                    paths
-                        .iter()
-                        .map(|p| {
-                            p.as_str()
-                                .ok_or_else(|| "collection original path".to_owned())
-                                .map(str::to_owned)
-                        })
-                        .collect::<Result<Vec<_>, String>>()
+    let response_originals: Vec<String> = report["response"]["evidence"]["retained_originals"]
+        .as_array()
+        .map(|paths| {
+            paths
+                .iter()
+                .map(|p| {
+                    p.as_str()
+                        .ok_or_else(|| "response original path".to_owned())
+                        .map(str::to_owned)
                 })
-                .transpose()?
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+                .collect::<Result<Vec<_>, String>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
     let console = if retained_streams {
         let projection = serde_json::json!({
             "retained_report": report["retained_report"],
@@ -2381,7 +2376,7 @@ fn execute_check(
             file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
         }
         let preparation = &report["request"]["observations"]["preparation"];
-        let mut originals = collected_originals;
+        let mut originals = response_originals;
         for values in [
             &preparation["result"]["originals"],
             &preparation["receipts"],

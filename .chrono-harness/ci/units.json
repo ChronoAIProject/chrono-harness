@@ -41,11 +41,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/runner/context.json",
       "artifact_directory": ".chrono-harness/state/units/runner/"
@@ -57,11 +55,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/instructions/context.json",
       "artifact_directory": ".chrono-harness/state/units/instructions/"
@@ -73,11 +69,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-ci/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-ci/"
@@ -89,11 +83,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/ci/context.json",
       "artifact_directory": ".chrono-harness/state/units/ci/"
@@ -105,11 +97,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-registration/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-registration/"
@@ -121,11 +111,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-filemap/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-filemap/"
@@ -137,11 +125,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-routes/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-routes/"
@@ -153,11 +139,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-projects/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-projects/"
@@ -169,11 +153,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-cost/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-cost/"
@@ -185,11 +167,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-mixed/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-mixed/"
@@ -201,11 +181,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow/"
@@ -217,11 +195,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/inputs/context.json",
       "artifact_directory": ".chrono-harness/state/units/inputs/"
@@ -233,11 +209,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/distribution/context.json",
       "artifact_directory": ".chrono-harness/state/units/distribution/"
@@ -249,11 +223,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-cargo/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-cargo/"
@@ -265,11 +237,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/worktree/context.json",
       "artifact_directory": ".chrono-harness/state/units/worktree/"
@@ -281,11 +251,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-units/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-units/"
@@ -297,11 +265,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-short/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-short/"
@@ -313,11 +279,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/workflow-inventory/context.json",
       "artifact_directory": ".chrono-harness/state/units/workflow-inventory/"
@@ -329,11 +293,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/release-build/context.json",
       "artifact_directory": ".chrono-harness/state/units/release-build/"
@@ -345,11 +307,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/release-build-integration/context.json",
       "artifact_directory": ".chrono-harness/state/units/release-build-integration/"
@@ -361,11 +321,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/worktree-adoption/context.json",
       "artifact_directory": ".chrono-harness/state/units/worktree-adoption/"
@@ -391,11 +349,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/host-bootstrap/context.json",
       "artifact_directory": ".chrono-harness/state/units/host-bootstrap/"
@@ -407,11 +363,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/cache/context.json",
       "artifact_directory": ".chrono-harness/state/units/cache/"

@@ -44,6 +44,8 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 .chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
 
+该 profile 也委托登记的固定 macOS arm64 Verus 包获取。下载、SHA-256 校验和完整解包都走已有 bootstrap 操作执行器。新鲜原生单元先验证导入的 core 工具，再调用同一包 profile，然后检查。外部接口、成本及剩余缺口见 [Verus 所有者](verus.md)。
+
 提交修改、确保候选检出干净后，本地和生成 CI 使用同一标准判断命令：
 
 ```sh

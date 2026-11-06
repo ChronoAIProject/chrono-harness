@@ -9,6 +9,79 @@ const CONFIG: &str = ".chrono-harness/ci/check.json";
 const OPERATION_TOOL: &str = env!("CARGO_BIN_EXE_chrono-test-ci-diagnostics");
 
 #[test]
+fn verus_coverage_rejects_unmigrated_logic_without_skipping_independent_checks() {
+    let h = Host::new();
+    let base = h.head();
+    h.json(
+        ".chrono-harness/verus.json",
+        &json!({
+            "schema":"chrono-verus/v1", "tool":"verus",
+            "version":"fixture", "commit":"fixture",
+            "external_interfaces":{"os":"explicit fixture interface"}
+        }),
+    );
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["files"].as_array_mut().unwrap().push(json!({
+            "path":".chrono-harness/verus.json", "owner":"host",
+            "surface":"judge-policy", "cost":"unmeasured", "edges":[]
+        }));
+        for file in v["files"].as_array_mut().unwrap() {
+            file["verification"] = json!({"kind":"data","roots":[]});
+            if file["path"] == "src.txt" {
+                file["verification"] = json!({"kind":"program","roots":[]});
+            }
+            if file["path"] == "doc.txt" {
+                file["verification"] = json!({"kind":"specification","roots":[]});
+            }
+        }
+    });
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["verus"] = json!(".chrono-harness/verus.json");
+        v["policy"]["tools"]["verus"] = json!("/usr/bin/false");
+        v["policy"]["required_inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(".chrono-harness/verus.json"));
+    });
+    h.write("src.txt", "changed logic\n");
+    let candidate = h.commit();
+    let r = h.check(&base, &candidate);
+    assert_eq!(r.status, Status::Failed, "{r:?}");
+    assert_eq!(
+        h.calls(),
+        1,
+        "coverage failure must preserve independent execution"
+    );
+    assert_eq!(r.evidence["verus"]["complete"], false);
+    let missing = r.evidence["verus"]["missing"].as_array().unwrap();
+    for obligation in [
+        "unit:lib:language=verus",
+        "file:src.txt:verification-roots",
+        "file:doc.txt:verification-roots",
+    ] {
+        assert!(missing.contains(&json!(obligation)), "{r:?}");
+    }
+    assert!(
+        r.results
+            .iter()
+            .any(|r| r.id == "ci.verus-coverage" && r.cause.contains("E_VERUS_COVERAGE"))
+    );
+    h.change_registry(CONFIG, |v| {
+        v["policy"].as_object_mut().unwrap().remove("verus");
+    });
+    let retired = h.commit();
+    let r = h.check(&candidate, &retired);
+    assert_eq!(r.status, Status::Failed);
+    assert!(
+        r.results
+            .iter()
+            .any(|r| r.cause.contains("E_VERUS_RETIRED")),
+        "{r:?}"
+    );
+    assert_eq!(h.calls(), 1);
+}
+
+#[test]
 fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_output_bound() {
     let h = Host::new();
     h.change_registry(CONFIG, |v| {

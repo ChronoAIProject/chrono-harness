@@ -10,7 +10,8 @@
   ],
   "operations": [
     "build.judge-cargo",
-    "host.bootstrap-diagnostics-inputs"
+    "host.bootstrap-diagnostics-inputs",
+    "host.bootstrap-verus"
   ],
   "install": [
     {

@@ -36,7 +36,9 @@ planner 准备身份；GitHub provider 在原 bootstrap 和检查／发布命令
 
 每份计划记录准备它的 `chrono-cache` 精确摘要和版本。报告前与当前执行物比较，不符即拒绝发布传输证据。当前传输要求主 Git 检出；linked worktree 需要贯穿恢复／保存的租约，尚不支持。
 
-本宿主标准检查 action 明确设 `CARGO_INCREMENTAL=1`。core、full、cache seed bootstrap 和 v5 发布配方设 `rust_incremental: true`，原构建调用收到对应环境值，包含 release 构建和 Rust 验证单元。发布配方通过明确 `rust_toolchain` 把设置限制在 Rust 消费者；非 Rust 单元保留自身环境。
+本宿主标准检查 action 明确设 `CARGO_INCREMENTAL=1`。full、cache seed bootstrap 和 v5 发布配方设 `rust_incremental: true`，原构建调用收到对应环境值，包含 release 构建和 Rust 验证单元。发布配方通过明确 `rust_toolchain` 把设置限制在 Rust 消费者；非 Rust 单元保留自身环境。
+
+core bootstrap 和 owner 构建阶段都明确设 `rust_incremental: false`。普通缓存回收后，独立重建的生命周期执行物仍须与已发布 owner 逐字节相同。macOS 增量编译的调试映射可能含随机 codegen 对象名，仅源码和工具版本相同不能满足该字节合同。这里保留原构建、发布路径及精确身份检查；总构建时间和存储影响未测，也不据此声称普遍可复现构建或完整输入绑定。
 
 bootstrap／发布回执记录传给子进程的值。发布导入／汇总与登记选择比较，并纳入生产者工具链指纹。省略设置保留原环境行为，格式错误在构建工具启动前失败。这些观察不证明缓存传输、实际编译器复用、构建输入完整或原生验收。Rust profile、标志、编译器和 SDK 身份仍须纳入持久缓存兼容合同。
 

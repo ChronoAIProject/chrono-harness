@@ -3,7 +3,8 @@
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
   "tools": {
-    "chrono-inputs": "crates/inputs/target/debug/chrono-inputs"
+    "chrono-inputs": "crates/inputs/target/debug/chrono-inputs",
+    "python3": "/usr/bin/python3"
   },
   "operations": [
     "build.runner",
@@ -20,7 +21,8 @@
     "build.distribution",
     "build.judge-cargo",
     "build.worktree",
-    "inputs.acquire-macos"
+    "inputs.acquire-macos",
+    "host.bootstrap-verus"
   ],
   "install": [
     {

@@ -1,5 +1,375 @@
 use super::*;
 
+fn verus_report_host() -> Host {
+    let h = Host::new();
+    fs::remove_file(h.root().join("check.case")).unwrap();
+    h.json(".chrono-harness/verus.json", &json!({
+        "schema":"chrono-verus/v1", "tool":"verus", "version":"fixture",
+        "commit":"fixture-commit", "external_interfaces":{"fixture":"synthetic compiler interface for admission behavior only"}
+    }));
+    let verifier = |root: &str, output: &str| {
+        json!({
+            "operation":format!("verify.{root}"),"tool":"verus","argv":[
+                "--crate-type=lib","--no-cheating","--no-external-by-default",
+                "--num-threads","2","--output-json","--compile",
+                format!("--emit=link={output},dep-info={output}.d"), root,"-o",output,
+                "-Zchecksum-hash-algorithm=sha256"
+            ]
+        })
+    };
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        v["projects"][0]["language"] = json!("verus");
+        v["projects"][0]["actions"] =
+            json!({"verify":verifier("src.txt", ".chrono-harness/state/source.rlib")});
+        v["projects"][1]["language"] = json!("verus");
+        v["projects"][1]["actions"] =
+            json!({"execute":verifier("doc.txt", ".chrono-harness/state/spec.rlib")});
+    });
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        let files = v["files"].as_array_mut().unwrap();
+        files.retain(|f| f["path"] != "check.case");
+        files.push(json!({"path":".chrono-harness/verus.json","owner":"host",
+            "surface":"judge-policy","cost":"unmeasured","edges":[]}));
+        for f in files {
+            f["verification"] = if f["path"] == "src.txt" {
+                json!({"kind":"program","roots":["src.txt"]})
+            } else if f["path"] == "doc.txt" {
+                json!({"kind":"specification","roots":["doc.txt"]})
+            } else {
+                json!({"kind":"data","roots":[]})
+            };
+        }
+    });
+    h.change_registry(CONFIG, |v| {
+        v["schema"] = json!("chrono-ci-check/v3");
+        v["judge"] = json!({"program":"/bin/cat","args":[".chrono-harness/state/producer.json"],"timeout_seconds":5,"output_limit_bytes":1048576});
+        v["policy"]["verus"] = json!(".chrono-harness/verus.json");
+        v["policy"]["tools"] = json!({"verus":env!("CARGO_BIN_EXE_chrono-test-verus-interface")});
+        v["policy"]["required_inputs"] = json!([CONFIG,".chrono-harness/verus.json"]);
+        v["policy"]["bindings"] = json!({"test:suite":["verify.src.txt","verify.doc.txt"]});
+        v["policy"]["units"] = json!({"alpha":{"tests":["test:suite"],"report_path":".chrono-harness/state/alpha/check.json"}});
+        v["policy"]["shared_operations"] = json!({});
+        v["policy"]["operation_output_limit_bytes"] = json!(1048576);
+    });
+    h.commit();
+    h
+}
+
+#[test]
+fn changed_verus_specification_requires_its_proof_in_the_explicit_delta_closure() {
+    let h = verus_report_host();
+    let base = h.head();
+    h.write("doc.txt", "changed specification without a consumer edge\n");
+    let candidate = h.commit();
+    for response in [
+        unit(&h, &base, &candidate, "alpha"),
+        collect(&h, &base, &candidate, json!([])),
+    ] {
+        fail(&response, "file:doc.txt:root:doc.txt:delta-proof");
+        assert_eq!(response.evidence["verus"]["complete"], false);
+        assert_eq!(response.evidence["executed"], json!([]));
+        assert_eq!(response.evidence["global_selected"], json!([]));
+    }
+    // Repair the explicit registration. Coverage must consume its real route;
+    // it must never infer a test selection from the root declaration.
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        let file = v["files"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|f| f["path"] == "doc.txt")
+            .unwrap();
+        file["edges"] = json!([{"kind":"compile","to":"project:lib"}]);
+    });
+    let repaired = h.commit();
+    let reference = write_report(&h, &candidate, &repaired, "alpha");
+    let original = h.read(reference["path"].as_str().unwrap());
+    assert_eq!(original["response"]["status"], "passed", "{original:#}");
+    assert_eq!(
+        original["response"]["evidence"]["global_selected"],
+        json!(["test:suite"])
+    );
+    assert_eq!(
+        original["response"]["evidence"]["verus"]["compiler_evidence"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    pass(&collect(&h, &candidate, &repaired, json!([reference])));
+}
+
+#[test]
+fn changed_verus_file_declarations_require_their_roots_without_source_byte_changes() {
+    for previous in [
+        json!({"kind":"data","roots":[]}),
+        json!({"kind":"specification","roots":["src.txt"]}),
+    ] {
+        let h = verus_report_host();
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            let file = v["files"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|f| f["path"] == "doc.txt")
+                .unwrap();
+            file["verification"] = previous;
+        });
+        let base = h.commit();
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            let file = v["files"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|f| f["path"] == "doc.txt")
+                .unwrap();
+            file["verification"] = json!({"kind":"specification","roots":["doc.txt"]});
+        });
+        let candidate = h.commit();
+        for response in [
+            unit(&h, &base, &candidate, "alpha"),
+            collect(&h, &base, &candidate, json!([])),
+        ] {
+            assert_eq!(
+                response.evidence["changed_paths"],
+                json!([".chrono-harness/FILEMAP.json"])
+            );
+            fail(&response, "file:doc.txt:root:doc.txt:delta-proof");
+            assert_eq!(response.evidence["executed"], json!([]));
+            assert_eq!(response.evidence["global_selected"], json!([]));
+        }
+        // The same metadata-only transition passes only through its explicit
+        // consumer and admitted original proof, without fabricating source edits.
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            let file = v["files"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|f| f["path"] == "doc.txt")
+                .unwrap();
+            file["edges"] = json!([{"kind":"compile","to":"project:lib"}]);
+        });
+        let repaired = h.commit();
+        let reference = write_report(&h, &candidate, &repaired, "alpha");
+        let original = h.read(reference["path"].as_str().unwrap());
+        assert_eq!(original["response"]["status"], "passed", "{original:#}");
+        pass(&collect(&h, &candidate, &repaired, json!([reference])));
+    }
+}
+
+#[test]
+fn verus_root_proofs_follow_assigned_units_and_join_only_at_collection() {
+    let h = verus_report_host();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        let action = v["projects"][0]["actions"]["verify"].take();
+        v["projects"][0]["actions"] = json!({"execute":action});
+    });
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"from":"project:lib","kind":"test-execution","to":"test:lib"}));
+    });
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["bindings"] = json!({
+            "test:suite":["verify.doc.txt"],"test:lib":["verify.src.txt"]
+        });
+        v["policy"]["units"]["beta"] = json!({
+            "tests":["test:lib"],"report_path":".chrono-harness/state/beta/check.json"
+        });
+    });
+    let base = h.commit();
+    h.write("src.txt", "both explicitly related proof consumers\n");
+    let candidate = h.commit();
+    let mut references = Vec::new();
+    for (unit, operation) in [("alpha", "verify.doc.txt"), ("beta", "verify.src.txt")] {
+        let reference = write_report(&h, &base, &candidate, unit);
+        let original = h.read(reference["path"].as_str().unwrap());
+        assert_eq!(original["response"]["status"], "passed", "{original:#}");
+        assert_eq!(
+            original["response"]["evidence"]["operations"],
+            json!([operation])
+        );
+        assert_eq!(
+            original["response"]["evidence"]["verus"]["compiler_evidence"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        references.push(reference);
+    }
+    let combined = collect(&h, &base, &candidate, json!(references));
+    pass(&combined);
+    assert_eq!(combined.evidence["executed"], json!([]));
+    assert_eq!(
+        combined.evidence["verus"]["compiler_evidence"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn verus_root_declarations_reject_ambiguous_operations_after_independent_execution() {
+    let h = verus_report_host();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        let mut other = v["projects"][0]["actions"]["verify"].clone();
+        other["operation"] = json!("verify.other");
+        let output = ".chrono-harness/state/other.rlib";
+        other["argv"][7] = json!(format!("--emit=link={output},dep-info={output}.d"));
+        other["argv"][10] = json!(output);
+        v["projects"][0]["actions"]["verify_other"] = other;
+    });
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["bindings"]["test:suite"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("verify.other"));
+    });
+    let base = h.commit();
+    h.write("src.txt", "ambiguous proof owner\n");
+    let candidate = h.commit();
+    let response = unit(&h, &base, &candidate, "alpha");
+    fail(&response, "file:src.txt:verification-roots");
+    fail(&response, "root:src.txt:selected-proof");
+    assert_eq!(response.evidence["executed"].as_array().unwrap().len(), 3);
+}
+
+#[test]
+fn collected_verus_sources_readmit_original_bytes_and_reject_rehashed_semantic_changes() {
+    let h = verus_report_host();
+    let base = h.head();
+    h.write("src.txt", "candidate source bytes\n");
+    let candidate = h.commit();
+    let reference = write_report(&h, &base, &candidate, "alpha");
+    let path = reference["path"].as_str().unwrap();
+    let original = h.read(path);
+    assert_eq!(original["response"]["status"], "passed", "{original:#}");
+    // Collection must use addressed originals, even when local compiler outputs
+    // are absent. The external compiler is not executed by collection.
+    for output in ["source.rlib", "spec.rlib"] {
+        fs::remove_file(h.root().join(format!(".chrono-harness/state/{output}"))).unwrap();
+        fs::remove_file(h.root().join(format!(".chrono-harness/state/{output}.d"))).unwrap();
+    }
+    pass(&collect(&h, &base, &candidate, json!([reference])));
+    let publish = |report: &mut Value| {
+        let stdout = serde_json::to_vec(&report["response"]).unwrap();
+        report["judge"]["stdout_bytes"] = json!(stdout);
+        report["judge"]["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+        report["judge"]["stdout_sha256"] = json!(sha256(&stdout));
+        h.json(path, report);
+        let mut changed = reference.clone();
+        changed["sha256"] = json!(sha256(&fs::read(h.root().join(path)).unwrap()));
+        changed
+    };
+    for mode in [
+        "candidate",
+        "root",
+        "library",
+        "dependency",
+        "inventory",
+        "missing",
+        "duplicate",
+        "extra",
+        "checksum",
+        "proof",
+    ] {
+        let mut report = original.clone();
+        let rows = &mut report["response"]["evidence"]["verus"]["compiler_evidence"];
+        match mode {
+            "candidate" => rows[0]["sources"]["candidate"] = json!("0".repeat(40)),
+            "root" => rows[0]["sources"]["root"] = json!("doc.txt"),
+            "library" | "dependency" => {
+                rows[0]["sources"][mode]["path"] = json!(".chrono-harness/state/other.rlib")
+            }
+            "inventory" => rows[0]["sources"]["sources"][0]["byte_length"] = json!(0),
+            "missing" => {
+                rows.as_array_mut().unwrap().pop();
+            }
+            "duplicate" | "extra" => {
+                let mut row = rows[0].clone();
+                if mode == "extra" {
+                    row["operation"] = json!("verify.absent");
+                }
+                rows.as_array_mut().unwrap().push(row);
+            }
+            "checksum" => {
+                let artifact = &mut rows[0]["sources"]["dependency"];
+                let raw = fs::read(
+                    h.root()
+                        .join(artifact["original"]["path"].as_str().unwrap()),
+                )
+                .unwrap();
+                let mut text = String::from_utf8(raw).unwrap();
+                let start = text.find("# checksum:sha256=").unwrap() + "# checksum:sha256=".len();
+                text.replace_range(
+                    start..start + 1,
+                    if &text[start..start + 1] == "0" {
+                        "1"
+                    } else {
+                        "0"
+                    },
+                );
+                artifact["original"] = json!(
+                    chrono_harness::prepared::retain_original(
+                        h.root(),
+                        ".chrono-harness/state/",
+                        "changed-dependency",
+                        text.as_bytes(),
+                    )
+                    .unwrap()
+                );
+                artifact["byte_length"] = json!(text.len());
+            }
+            "proof" => {
+                let receipt = &mut report["response"]["evidence"]["executed"][0]["receipt"];
+                let mut process =
+                    chrono_harness::full::expand_process(&receipt["process"]).unwrap();
+                let raw: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+                let mut proof: Value = serde_json::from_slice(&raw).unwrap();
+                proof["verification-results"]["verified"] = json!(0);
+                let stdout = serde_json::to_vec(&proof).unwrap();
+                process["stdout_bytes"] = json!(stdout);
+                process["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+                process["stdout_sha256"] = json!(sha256(&stdout));
+                let mut identity = receipt.clone();
+                identity["process"] = process.clone();
+                identity.as_object_mut().unwrap().remove("digest");
+                receipt["digest"] = json!(chrono_harness::wire::digest(&identity).unwrap());
+                receipt["process"] = chrono_harness::full::compact_process(&process).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let changed = publish(&mut report);
+        let expected = match mode {
+            "candidate" | "root" | "library" | "dependency" => {
+                "source candidate, root or artifact path mismatch"
+            }
+            "inventory" => "source inventory differs from fixed candidate bytes",
+            "missing" => "compiler evidence does not cover original operations",
+            "duplicate" => "duplicate compiler evidence",
+            "extra" => "extra compiler evidence without original operation",
+            "checksum" => "compiler checksums differ",
+            "proof" => "original compiler result or route was not admitted",
+            _ => unreachable!(),
+        };
+        fail(&collect(&h, &base, &candidate, json!([changed])), expected);
+    }
+    h.json(path, &original);
+    let accepted = collect(&h, &base, &candidate, json!([reference]));
+    pass(&accepted);
+    assert_eq!(accepted.evidence["executed"], json!([]));
+    assert_eq!(
+        accepted.evidence["verus"]["compiler_evidence"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
 fn host() -> Host {
     let h = Host::new();
     h.write("other.txt", "one\n");
@@ -544,6 +914,65 @@ fn collection_verifies_complete_reports_without_executing_tests() {
         "other"
     );
     pass(&collect(&h, &c, &c, json!([])));
+    assert_eq!(h.calls(), 1);
+}
+
+#[test]
+fn collection_retains_validated_unit_execution_rows_without_reexecution() {
+    let h = report_host();
+    let b = h.head();
+    h.write("src.txt", "two");
+    let c = h.commit();
+    let input = write_report(&h, &b, &c, "alpha");
+    let original = h.read(input["path"].as_str().unwrap());
+    let rows = original["response"]["evidence"]["executed"].clone();
+    let r = collect(&h, &b, &c, json!([input.clone()]));
+    pass(&r);
+    assert_eq!(r.evidence["executed"], json!([]));
+    assert_eq!(
+        r.evidence["collected_executions"],
+        json!([{"unit":"alpha",
+            "report":{"path":input["path"],"sha256":input["sha256"]},
+            "response_source":"original judge stdout",
+            "rows":[{"operation":"test.suite",
+                "receipt_digest":rows[0]["receipt"]["digest"],
+                "response_pointer":"/evidence/executed/0"}]}])
+    );
+    let reference = &r.evidence["collected_executions"][0];
+    let retained = h.read(reference["report"]["path"].as_str().unwrap());
+    assert_eq!(
+        retained["response"]
+            .pointer(reference["rows"][0]["response_pointer"].as_str().unwrap())
+            .unwrap(),
+        &rows[0]
+    );
+    assert_eq!(h.calls(), 1);
+}
+
+#[test]
+fn collection_rejects_duplicate_result_identities_even_with_matching_report_digests() {
+    let h = report_host();
+    let b = h.head();
+    h.write("src.txt", "two");
+    let c = h.commit();
+    let mut input = write_report(&h, &b, &c, "alpha");
+    let path = input["path"].as_str().unwrap().to_owned();
+    let mut report = h.read(&path);
+    let duplicate = report["response"]["results"][0].clone();
+    report["response"]["results"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate);
+    let stdout = serde_json::to_vec(&report["response"]).unwrap();
+    report["judge"]["stdout_bytes"] = json!(stdout);
+    report["judge"]["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+    report["judge"]["stdout_sha256"] = json!(sha256(&stdout));
+    h.json(&path, &report);
+    input["sha256"] = json!(sha256(&fs::read(h.root().join(&path)).unwrap()));
+    fail(
+        &collect(&h, &b, &c, json!([input])),
+        "invalid/duplicate judge result",
+    );
     assert_eq!(h.calls(), 1);
 }
 

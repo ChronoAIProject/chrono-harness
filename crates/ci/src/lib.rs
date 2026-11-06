@@ -95,10 +95,7 @@ fn shell(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
 }
 fn full_oid(s: &str) -> bool {
-    matches!(s.len(), 40 | 64)
-        && s.bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        && !s.bytes().all(|b| b == b'0')
+    chrono_harness::verified_identifiers::valid_oid(s.as_bytes())
 }
 fn action(s: &str, repo: &str) -> Result<(), String> {
     let prefix = format!("{repo}@");

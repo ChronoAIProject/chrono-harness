@@ -1,41 +1,178 @@
 //! Finite union/closure mechanics. Callers own endpoint validation, seeds and extra selections.
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum EdgeKind {
-    Compile,
-    BuildInput,
-    RuntimeInput,
-    TestExecution,
-    JudgeTrigger,
+pub use crate::verified_graph::{
+    Edge, EdgeKind, Origin, Predecessor, PredecessorTree, Seed, UnionEdge, union,
+};
+
+impl std::fmt::Debug for EdgeKind {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Compile => "Compile",
+            Self::BuildInput => "BuildInput",
+            Self::RuntimeInput => "RuntimeInput",
+            Self::TestExecution => "TestExecution",
+            Self::JudgeTrigger => "JudgeTrigger",
+        })
+    }
 }
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Edge {
-    pub from: String,
-    pub kind: EdgeKind,
-    pub to: String,
+impl Serialize for EdgeKind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.wire_name())
+    }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Origin {
+impl<'de> Deserialize<'de> for EdgeKind {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct KindVisitor;
+        impl serde::de::Visitor<'_> for KindVisitor {
+            type Value = EdgeKind;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a canonical FILEMAP edge kind")
+            }
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<EdgeKind, E> {
+                EdgeKind::from_wire(value)
+                    .ok_or_else(|| E::invalid_value(serde::de::Unexpected::Str(value), &self))
+            }
+        }
+        deserializer.deserialize_str(KindVisitor)
+    }
+}
+impl std::fmt::Debug for Edge {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Edge")
+            .field("from", &self.from)
+            .field("kind", &self.kind)
+            .field("to", &self.to)
+            .finish()
+    }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Edge", rename = "Edge")]
+struct EdgeFields {
+    from: String,
+    kind: EdgeKind,
+    to: String,
+}
+impl Serialize for Edge {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        EdgeFields::serialize(self, serializer)
+    }
+}
+impl<'de> Deserialize<'de> for Edge {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        EdgeFields::deserialize(deserializer)
+    }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Origin", rename_all = "lowercase")]
+enum OriginFields {
     Base,
     Candidate,
     Both,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UnionEdge {
-    #[serde(flatten)]
-    pub edge: Edge,
-    pub origin: Origin,
+impl Serialize for Origin {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        OriginFields::serialize(self, serializer)
+    }
 }
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Seed {
-    pub id: String,
-    pub node: String,
-    pub reference: String,
-    pub reason: String,
+impl<'de> Deserialize<'de> for Origin {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        OriginFields::deserialize(deserializer)
+    }
+}
+impl std::fmt::Debug for Origin {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Base => "Base",
+            Self::Candidate => "Candidate",
+            Self::Both => "Both",
+        })
+    }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "UnionEdge", rename = "UnionEdge")]
+struct UnionEdgeFields {
+    #[serde(flatten)]
+    edge: Edge,
+    origin: Origin,
+}
+impl Serialize for UnionEdge {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        UnionEdgeFields::serialize(self, serializer)
+    }
+}
+impl<'de> Deserialize<'de> for UnionEdge {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        UnionEdgeFields::deserialize(deserializer)
+    }
+}
+impl std::fmt::Debug for UnionEdge {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("UnionEdge")
+            .field("edge", &self.edge)
+            .field("origin", &self.origin)
+            .finish()
+    }
+}
+impl std::fmt::Debug for Seed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Seed")
+            .field("id", &self.id)
+            .field("node", &self.node)
+            .field("reference", &self.reference)
+            .field("reason", &self.reason)
+            .finish()
+    }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Seed", rename = "Seed")]
+struct SeedFields {
+    id: String,
+    node: String,
+    reference: String,
+    reason: String,
+}
+impl Serialize for Seed {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        SeedFields::serialize(self, serializer)
+    }
+}
+impl<'de> Deserialize<'de> for Seed {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        SeedFields::deserialize(deserializer)
+    }
+}
+impl std::fmt::Debug for PredecessorTree {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_map()
+            .entries(self.entries().iter().map(|row| (&row.node, &row.parent)))
+            .finish()
+    }
+}
+impl Serialize for PredecessorTree {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.entries().len()))?;
+        for row in self.entries() {
+            map.serialize_entry(&row.node, &row.parent)?;
+        }
+        map.end()
+    }
+}
+impl<'de> Deserialize<'de> for PredecessorTree {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let rows = BTreeMap::<String, Option<Edge>>::deserialize(deserializer)?
+            .into_iter()
+            .map(|(node, parent)| Predecessor { node, parent })
+            .collect();
+        Self::new(rows)
+            .ok_or_else(|| serde::de::Error::custom("predecessor nodes must be strictly ordered"))
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TraversedEdge {
@@ -46,21 +183,9 @@ pub struct TraversedEdge {
 pub struct Closure {
     pub reached: BTreeMap<String, BTreeSet<String>>,
     /// One deterministic shortest predecessor per (seed, node); null denotes the seed root.
-    pub predecessors: BTreeMap<String, BTreeMap<String, Option<Edge>>>,
+    pub predecessors: BTreeMap<String, PredecessorTree>,
     /// All traversed edges and contributing seeds, including alternate paths and cycle edges.
     pub traversed: Vec<TraversedEdge>,
-}
-pub fn union(base: &BTreeSet<Edge>, candidate: &BTreeSet<Edge>) -> Vec<UnionEdge> {
-    base.union(candidate)
-        .map(|edge| UnionEdge {
-            edge: edge.clone(),
-            origin: match (base.contains(edge), candidate.contains(edge)) {
-                (true, true) => Origin::Both,
-                (true, false) => Origin::Base,
-                _ => Origin::Candidate,
-            },
-        })
-        .collect()
 }
 pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
     let mut out = Closure {
@@ -68,31 +193,24 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
         predecessors: BTreeMap::new(),
         traversed: vec![],
     };
-    let mut adjacency: BTreeMap<&str, BTreeSet<&Edge>> = BTreeMap::new();
-    for e in edges {
-        adjacency.entry(&e.edge.from).or_default().insert(&e.edge);
-    }
+    let topology = crate::verified_graph::seed_topology(edges, seeds);
     let mut traversed: BTreeMap<Edge, BTreeSet<String>> = BTreeMap::new();
-    for seed in seeds {
-        let mut parents = BTreeMap::from([(seed.node.clone(), None)]);
-        let mut queue = VecDeque::from([seed.node.clone()]);
-        while let Some(node) = queue.pop_front() {
+    for (seed, &root) in seeds.iter().zip(&topology.indices.roots) {
+        let propagation = crate::verified_graph::propagate(&topology, root);
+        for row in propagation.rows {
             out.reached
-                .entry(node.clone())
+                .entry(row.node.to_owned())
                 .or_default()
                 .insert(seed.id.clone());
-            for edge in adjacency.get(node.as_str()).into_iter().flatten() {
+            for edge in row.outgoing {
                 traversed
                     .entry((*edge).clone())
                     .or_default()
                     .insert(seed.id.clone());
-                if !parents.contains_key(&edge.to) {
-                    parents.insert(edge.to.clone(), Some((*edge).clone()));
-                    queue.push_back(edge.to.clone());
-                }
             }
         }
-        out.predecessors.insert(seed.id.clone(), parents);
+        out.predecessors
+            .insert(seed.id.clone(), propagation.predecessors);
     }
     out.traversed = traversed
         .into_iter()
@@ -109,14 +227,6 @@ impl Closure {
             .collect()
     }
     pub fn witness(&self, seed: &str, node: &str) -> Option<Vec<Edge>> {
-        let parents = self.predecessors.get(seed)?;
-        let mut node = node;
-        let mut path = vec![];
-        while let Some(edge) = parents.get(node)? {
-            path.push(edge.clone());
-            node = &edge.from;
-        }
-        path.reverse();
-        Some(path)
+        self.predecessors.get(seed)?.witness(node)
     }
 }

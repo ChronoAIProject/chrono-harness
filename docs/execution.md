@@ -282,6 +282,8 @@ Python 源码导入检查归已有 bootstrap 和 workflow-inventory Python 测�
 
 原 inventory 测试源码到两个 Rust worktree 组的边随导入检查迁移而移除，两端变更仍覆盖这些已删关系。验证和总成本节省未测。每个真实 Cargo workflow 样本也在登记状态目录下给准备和业务操作声明专有 Cargo home，不用调用方共享包缓存；离线构建在原限制内编译并测试真实 Rust 生产／测试配对。
 
+竞争回执发布者测试通过自己持有的阶段通道等待。进入命名空间准入前复制保留 Cargo 状态，没有五秒延迟合同。每个作用域内的发布者持有自己的 sender，提前退出会关闭通道；父断言展开时丢弃作用域内 resume sender，也会释放暂停的创建者。两个发布者仍须全部 join 后，才核排除、命名空间身份未变以及两个命令的原始回执。登记操作上限和生产准入期限不变。
+
 发布渲染测试用已有 Rust 传输样本执行生成 Bash，保留字面参数、原失败和依赖元数据。Rust YAML 消费者核对固定 download action、artifact-ID 输入、目的路径、merge-multiple，以及没有 name／pattern 选择器。解释器 PATH 遮蔽和生产者启动前漂移也使用同一 Rust 辅助程序；漂移仅在版本输出后替换自己的私有可执行文件，仍核对真实摘要拒绝和原获取证据。
 
 随产品提供的 Python 原生适配器有独立 Python 脚本／测试配对，保留原内嵌驱动的 UTC 小数、可执行解析、原 IO、凭据排除、未声明调用、非零退出、输出限制和超时断言。子样本与 provider 独立登记。原 `build.ci` 前置提供真实 Rust 桥，私有样本根链接未修改工具，失败保留至诊断／验收完成；成功时先等待子进程并核完原件，再删样本。
@@ -297,6 +299,8 @@ registration 的 Git 事实测试也编译同一 Rust 辅助程序，以明确�
 **测试实现与宿主登记同改：**FILEMAP 为现有源码增加 registration 测试项目的第三条编译边，合成宿主同步登记实际 profile、mode 和真实 Git 的环境输入及绑定。各项目沿原未过滤 Cargo 测试操作验收；未增加依赖或测试入口，其他跨语言逻辑及完整 SPEC 验收仍未完成，总成本未测。
 
 **外部接口样本与宿主登记同改：**分发安装／升级测试的六份静态外部执行资产独立存放并由 FILEMAP 编译边连接 `distribution-tests`。Rust 驱动以 `include_bytes!` 使用原字节，保留 alpha／beta 两版输出、安装器退出 0／23、摘要／长度、完整性拒绝和打包的原断言。样本仅提供真实外部接口，不承载测试驱动或断言；没有增加测试入口或依赖，总验证成本未测。
+
+**Verus 覆盖登记同步：**这六份仓内 Shell 可执行源码仍是 program，各自保留空证明根及未满足义务；外部接口样本用途不授予仓内代码受信豁免。既有程序／证明登记保留，共用 Git helper 的四条编译边连接 CI、scoped、registration 和 projects 测试。新增 Cargo 编译器 helper 同样登记为 program 并保留空证明根；runner 准备清单是由既有解释程序消费的数据，不豁免该解释程序的证明义务。
 
 projects 的 scoped adapter 测试也编译同一 Git helper，沿现有 `scoped` profile 转交真实 Git。原四个用例及其断言保留：唯一版本观察、逐调用轨迹、实际两流摘要、规范 argv 拒绝、直接／选择后的 full 登记及文档局部性。执行物副本通过既有 fixture 保管方法登记和原生复制，合成宿主明确绑定实际 profile、mode、真实 Git 路径及轨迹环境；FILEMAP 只新增该测试项目的第四条编译边。测试实现与登记同改，不新增依赖或执行入口；候选／原生及完整 SPEC 验收和总成本仍须实际核验。
 

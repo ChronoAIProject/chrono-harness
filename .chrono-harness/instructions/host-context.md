@@ -6,6 +6,8 @@
 
 本宿主以当前规范为合同，无需兼容历史版本、格式、接口或执行路径。变更时，同步迁移当前使用方和登记，移除只为历史兼容保留的实现与测试。旧版本材料仅保留其事实用途，不产生继续支持的义务。固定基线 DELTA、必要原件和正在使用的对象，仍按当前合同保护。
 
+本仓强制所有 SPEC 和仓内决策、状态逻辑使用 Verus；唯一允许的受信假设是 `.chrono-harness/verus.json` 列明的外部接口。FILEMAP 的 `verification` 是逐文件角色与证明根的真源，同一 check 的覆盖门保留所有未迁移缺口并失败。不得用语言标签、Cargo 绿色或外部 Lean 模型代替实际证明；迁移范围、工具与证据归 [Verus 所有者](../../docs/verus.md)。当前完成覆盖记录的初始化／追加／消费状态、精确有序缺口列表、编译证明结果接纳、字节身份比较、OID 与标识符谓词的同源证明，完整迁移未完成。
+
 本仓维护 Rust harness 产品，以及独立的宿主采用数据。[SPEC](../../SPEC.md) 是产品合同，尚未全部实现；当前结果和缺口见[覆盖表](../../docs/spec-coverage.md)。每个生产项目及其专属测试项目都有独立的 manifest、lock 和 target，没有根 workspace。独立 Python 脚本与测试也明确登记配对。
 
 产品默认数据归 `assets/instructions/catalog.json` 和 `assets/instructions/default-manifest.json` 维护。本宿主的选择归本目录的 [catalog](catalog.json)、[manifest](manifest.json) 和本文件维护。产品资产用于编译和测试；宿主数据及现有生成副本用于运行。升级二进制或重复 init 不会覆盖宿主选择。采用新默认时，要比较所选产品版本的 catalog／default-manifest，保留定制，再编辑宿主源并 generate；步骤见[新默认的宿主采用边界](../../docs/instructions.md#新默认的宿主采用边界)，没有自动更新。CLAUDE.md 是生成的中文根指南；AGENTS.md 是目标字面值为 `CLAUDE.md` 的相对符号链接，不手改生成内容。

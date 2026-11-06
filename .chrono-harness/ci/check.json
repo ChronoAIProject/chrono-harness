@@ -17,7 +17,11 @@
       "chrono-inputs": ".chrono-harness/bin/chrono-inputs",
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
       "python3": "/usr/bin/python3",
-      "rustup": "rustup"
+      "rustup": "rustup",
+      "verus": ".chrono-harness/bin/verus/verus",
+      "curl": "/usr/bin/curl",
+      "shasum": "/usr/bin/shasum",
+      "tar": "/usr/bin/tar"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -74,7 +78,8 @@
       ".chrono-harness/ci/bootstrap_shared.py",
       ".chrono-harness/ci/bootstrap-shared.json",
       ".chrono-harness/ci/bootstrap-cache.json",
-      ".chrono-harness/ci/bootstrap-toolchains.json"
+      ".chrono-harness/ci/bootstrap-toolchains.json",
+      ".chrono-harness/verus.json"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,
@@ -397,10 +402,16 @@
           "evidence": {
             "test": "test:host-bootstrap-tests",
             "operation": "host.bootstrap-real-consumer"
+          },
+          "preparation": {
+            "operation": "host.bootstrap-unit",
+            "config": ".chrono-harness/ci/bootstrap-unit.json",
+            "verifier": "host.bootstrap-shared-verify-core"
           }
         }
       ]
     },
-    "execution_diagnostics": "chrono-log-stderr/v1"
+    "execution_diagnostics": "chrono-log-stderr/v1",
+    "verus": ".chrono-harness/verus.json"
   }
 }

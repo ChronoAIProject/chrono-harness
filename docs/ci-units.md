@@ -153,7 +153,7 @@ lineage、适配器、解释器、inputs 二进制、bootstrap 输入、provider
 
 本仓 detector 为单元／汇总生产登记核心启动工具。缓存准备构建 `chrono-cache`，bootstrap 调已有 core profile 一次，发布声明安装工具。当前 core 声明六项工具，增加标准清单需要的 Cargo 保护程序和输入生产者；合格 source51 原生 startup 只有原五项执行物，不证明新 profile。
 
-消费者验证并安装所选 profile，再在原 cache／core 准备位置 verify。diagnostics 使用 `host.bootstrap-diagnostics-guard`：先以 bootstrap `prerequisites` 明确验证导入 core，再运行已有 `build.judge-cargo`，委托 `host.bootstrap-diagnostics-inputs`，最后安装候选 `chrono-judge-cargo`。
+消费者验证并安装所选 profile。登记的 `bootstrap-unit.json` 准备先以前置验证导入 core，再调用 `host.bootstrap-verus`，获取并校验完整的固定 Verus 包。包内非执行物库和 vstd 资源通过这个已有 bootstrap 组合获取，共享执行物传输格式不变。部署要求和剩余验收归 [Verus 所有者](verus.md)。diagnostics 使用 `host.bootstrap-diagnostics-guard`：先以 bootstrap `prerequisites` 明确验证导入 core，再运行已有 `build.judge-cargo`，委托 `host.bootstrap-diagnostics-inputs` 并安装候选 `chrono-judge-cargo`，也委托同一 Verus 获取 profile。
 
 保护／观察器源码构建明确选普通原生 Cargo home，允许为各自锁定 manifest 获取输入。普通检查配置保留 dev 环境，只有原受保护 diagnostics action 选独立配置及私有离线 home。委托生产者构建候选观察器，在单元原上传目录下 `.chrono-harness/state/diagnostics-native/` 保留有限源码／工具／配置观察及四份目录原件。
 

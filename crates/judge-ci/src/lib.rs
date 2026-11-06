@@ -12,6 +12,9 @@ use std::path::Path;
 mod collect;
 pub use collect::{UnitOriginals, unit_originals};
 mod units;
+mod verus;
+#[allow(unexpected_cfgs)]
+pub mod verus_policy;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum ExecutionDiagnostics {
@@ -38,6 +41,8 @@ impl Default for CollectionLimits {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verus: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_diagnostics: Option<ExecutionDiagnostics>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -106,21 +111,13 @@ fn strings(v: &Value) -> Result<Vec<String>, String> {
         .collect()
 }
 fn id(s: &str) -> Result<(), String> {
-    if s.is_empty()
-        || !s
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
-    {
+    if !verus_policy::valid_id(s.as_bytes()) {
         return Err(format!("invalid ID {s:?}"));
     }
     Ok(())
 }
 pub fn full_oid(s: &str) -> Result<(), String> {
-    if !matches!(s.len(), 40 | 64)
-        || s.bytes()
-            .any(|b| !b.is_ascii_digit() && !(b'a'..=b'f').contains(&b))
-        || s.bytes().all(|b| b == b'0')
-    {
+    if !verus_policy::valid_oid(s.as_bytes()) {
         return Err(format!("expected full nonzero lowercase OID: {s}"));
     }
     Ok(())
@@ -543,17 +540,34 @@ fn changed<T: PartialEq>(a: &BTreeMap<String, T>, b: &BTreeMap<String, T>) -> BT
         .cloned()
         .collect()
 }
+struct ScopedImpact {
+    paths: BTreeSet<String>,
+    verification_paths: BTreeSet<String>,
+    selected: BTreeSet<String>,
+    explanation: Value,
+    affected: BTreeSet<String>,
+}
+
 // Scoped CI owns legacy seeds and selections; it consumes only shared union/closure mechanics.
-fn ci_impact(
-    old: Option<&Snapshot>,
-    new: &Snapshot,
-) -> (BTreeSet<String>, BTreeSet<String>, Value, BTreeSet<String>) {
+fn ci_impact(old: Option<&Snapshot>, new: &Snapshot) -> ScopedImpact {
     let paths = if let Some(old) = old {
         changed(&old.tree, &new.tree)
     } else {
         new.tree.keys().cloned().collect()
     };
-    let mut seeds: BTreeSet<_> = paths.iter().map(|p| format!("file:{p}")).collect();
+    // File declarations can change without changing their source bytes. Share
+    // this exact endpoint delta between graph seeds and proof obligations, while
+    // retaining the byte-level meaning of the published changed_paths.
+    let mut verification_paths = paths.clone();
+    if let Some(old) = old {
+        verification_paths.extend(changed(&old.files, &new.files));
+    } else {
+        verification_paths.extend(new.files.keys().cloned());
+    }
+    let mut seeds: BTreeSet<_> = verification_paths
+        .iter()
+        .map(|p| format!("file:{p}"))
+        .collect();
     let mut extras: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     if let Some(old) = old {
         // Adopting a new document contract affects every declared owner, even
@@ -565,9 +579,6 @@ fn ci_impact(
                     .chain(new.owner_nodes.values())
                     .cloned(),
             );
-        }
-        for path in changed(&old.files, &new.files) {
-            seeds.insert(format!("file:{path}"));
         }
         for p in changed(&old.projects, &new.projects) {
             for snapshot in [old, new] {
@@ -755,7 +766,13 @@ fn ci_impact(
             affected.extend(bindings.into_iter().map(|binding| binding.owner));
         }
     }
-    (paths, selected, explanation, affected)
+    ScopedImpact {
+        paths,
+        verification_paths,
+        selected,
+        explanation,
+        affected,
+    }
 }
 
 pub fn judge(req: &Request) -> Response {
@@ -858,6 +875,7 @@ struct Inventory {
     new: Snapshot,
     previous: String,
     paths: BTreeSet<String>,
+    verification_paths: BTreeSet<String>,
     selected: BTreeSet<String>,
     global_selected: BTreeSet<String>,
     selection_explanation: Value,
@@ -1230,7 +1248,22 @@ fn inventory_profile(
         Some(snapshot(reader, root, base, op)?)
     };
     let new = snapshot(reader, root, &req.candidate, p.clone())?;
-    let (paths, mut selected, mut selection_explanation, affected) = ci_impact(old.as_ref(), &new);
+    if old
+        .as_ref()
+        .is_some_and(|previous| previous.policy.verus.is_some())
+        && p.verus.is_none()
+    {
+        return Err(
+            "E_VERUS_RETIRED: the adopted Verus requirement cannot be silently removed".into(),
+        );
+    }
+    let ScopedImpact {
+        paths,
+        verification_paths,
+        mut selected,
+        explanation: mut selection_explanation,
+        affected,
+    } = ci_impact(old.as_ref(), &new);
     let consumption = chrono_judge_registration::consumption::check_scoped(
         reader,
         root,
@@ -1498,6 +1531,7 @@ fn inventory_profile(
         new,
         previous,
         paths,
+        verification_paths,
         selected,
         global_selected,
         selection_explanation,
@@ -1625,6 +1659,7 @@ fn evaluate(
         new,
         previous,
         paths,
+        verification_paths,
         mut selected,
         global_selected,
         selection_explanation,
@@ -1649,8 +1684,9 @@ fn evaluate(
         if !blocked.is_empty() {
             return Err(format!("blocked global obligations: {blocked:?}"));
         }
-        let mut response = collect::collect(
+        let (mut response, compiler_admissions) = collect::collect(
             req,
+            reader,
             manifest,
             &config,
             &new,
@@ -1664,6 +1700,17 @@ fn evaluate(
         response.evidence["selection_explanation"] = selection_explanation;
         response.evidence["removed"] = object!(removed);
         response.evidence["retirement_context"] = retirement_context;
+        verus::apply(
+            req,
+            reader,
+            &p,
+            &new,
+            &verification_paths,
+            &global_selected,
+            &global_selected,
+            &mut response,
+            compiler_admissions,
+        )?;
         return Ok(response);
     }
     if let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope {
@@ -1794,5 +1841,16 @@ fn evaluate(
         evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"retirement_context":retirement_context,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
+    verus::apply(
+        req,
+        reader,
+        &p,
+        &new,
+        &verification_paths,
+        &selected,
+        &global_selected,
+        &mut response,
+        Vec::new(),
+    )?;
     Ok(response)
 }

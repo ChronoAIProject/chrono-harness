@@ -395,7 +395,7 @@ class SharedStartup(unittest.TestCase):
                          [bindings[name]["sha256"] for name in ["cargo", "rustc"]])
 
     def prepare_diagnostics_composition(self):
-        """Use production install/main/verify; fixtures replace external builds only.
+        """Use production install/main/verify; fixtures replace external commands.
 
         Core's current selection is inherited independently. The enclosing guard
         and nested observer must use their declared ordinary online domain, even
@@ -412,10 +412,14 @@ class SharedStartup(unittest.TestCase):
                            RUSTC_WORKSPACE_WRAPPER="", CARGO_NET_OFFLINE="false")
         guard = json.loads((SOURCE / "bootstrap-diagnostics-guard.json").read_bytes())
         observer = json.loads((SOURCE / "bootstrap-diagnostics-inputs.json").read_bytes())
+        verus = json.loads((SOURCE / "bootstrap-verus.json").read_bytes())
         for name, profile, output in [("bootstrap-diagnostics-guard.json", guard, "guard-domain"),
-                                      ("bootstrap-diagnostics-inputs.json", observer, "observer-domain")]:
+                                      ("bootstrap-diagnostics-inputs.json", observer, "observer-domain"),
+                                      ("bootstrap-verus.json", verus, "verus-domain")]:
             profile.update(projects=self.host.config["projects"], tools=dict(
-                               python3=sys.executable, **{name: bindings[name]["path"]
+                               python3=sys.executable, curl=sys.executable,
+                               shasum=sys.executable, tar=sys.executable,
+                               **{name: bindings[name]["path"]
                                                          for name in ("cargo", "rustc")}),
                            tool_bindings=bindings, environment=environment,
                            native_platform={"system": platform.system(), "machine": platform.machine()},
@@ -437,10 +441,20 @@ class SharedStartup(unittest.TestCase):
             "observer-build": {"operation": "build.inputs", "tool": "python3",
                                "argv": [fixture.OPERATION, "environment", "observer-domain", *keys]},
             "observe": {"operation": "inputs.observe-diagnostics", "tool": "python3",
-                        "argv": [fixture.OPERATION, "write", "observer-prepared", "prepared"]}})
+                        "argv": [fixture.OPERATION, "write", "observer-prepared", "prepared"]},
+            "verus-bootstrap": {"operation": "host.bootstrap-verus", "tool": "python3",
+                                "argv": [".chrono-harness/ci/bootstrap.py", ".",
+                                         ".chrono-harness/ci/bootstrap-verus.json"]},
+            "verus-download": {"operation": "host.verus-download", "tool": "curl",
+                               "argv": [fixture.OPERATION, "write", "verus-downloaded", "archive"]},
+            "verus-checksum": {"operation": "host.verus-checksum", "tool": "shasum",
+                               "argv": [fixture.OPERATION, "write", "verus-checked", "digest"]},
+            "verus-extract": {"operation": "host.verus-extract", "tool": "tar",
+                              "argv": [fixture.OPERATION, "environment", "verus-domain", *keys]}})
         self.host.write_json(self.host.registry, actions)
         (self.root / ".gitignore").write_text((self.root / ".gitignore").read_text() +
-                                              "/guard-domain\n/observer-domain\n/observer-prepared\n/mock-tools-*/\n")
+                                              "/guard-domain\n/observer-domain\n/observer-prepared\n/mock-tools-*/\n"
+                                              "/verus-domain\n/verus-downloaded\n/verus-checked\n")
         self.host.git("add", ".")
         self.host.git("commit", "-qm", "registered diagnostics composition fixture")
         self.environment.update(CARGO_HOME=str(self.host.tools / "private-cargo"),
@@ -464,15 +478,19 @@ class SharedStartup(unittest.TestCase):
         self.prepare_diagnostics_composition()
         self.host.succeeded(self.invoke_diagnostics_composition())
         self.assert_composition_originals()
-        for name in ("guard-domain", "observer-domain"):
+        for name in ("guard-domain", "observer-domain", "verus-domain"):
             self.assertEqual(json.loads((self.root / ".chrono-harness/bin" / name).read_bytes()),
                              self.ordinary_environment)
         self.assertEqual((self.root / "observer-prepared").read_bytes(), b"prepared")
         report = json.loads((self.root / ".chrono-harness/state/guard-domain.json").read_bytes())
         self.assertEqual([row["operation"] for row in report["operations"]],
                          ["host.bootstrap-shared-verify-core", "build.judge-cargo",
-                          "host.bootstrap-diagnostics-inputs"])
+                          "host.bootstrap-diagnostics-inputs", "host.bootstrap-verus"])
         self.assertTrue(all(row["exit_code"] == 0 for row in report["operations"]))
+        package = json.loads((self.root / ".chrono-harness/state/verus-domain.json").read_bytes())
+        self.assertEqual([row["operation"] for row in package["operations"]],
+                         ["host.verus-download", "host.verus-checksum", "host.verus-extract"])
+        self.assertTrue(all(row["exit_code"] == 0 for row in package["operations"]))
         import bootstrap_shared
         profile = json.loads((self.host.ci / "bootstrap-diagnostics-guard.json").read_bytes())
         bootstrap_shared.validate_execution(self.root, profile, report)

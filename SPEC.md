@@ -1,6 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
+所有 SPEC 和仓内程序逻辑强制使用 Verus（§2.1）；完整迁移尚未完成。
 当前已有 v1 外部判官传输、七个独立判官（registration／filemap／routes／projects／cost／mixed／workflow）、限定范围 CI 和宿主指令生成器。它们只实现了部分要求，实际范围见 §14、§16 和 docs/spec-coverage.md。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
@@ -115,16 +116,37 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 
 自举时 `crates/runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。产品构建不会自动启用宿主规则、安装 hook、修改全局配置或访问参考仓库。
 
-### 2.1 形式化真源与实现对应
+### 2.1 Verus 规格与程序逻辑（强制）
 
-chrono-harness 所需的通用形式化定义与证明统一归入 trureturing，按数学主题组织并优先复用已有结果；不建立独立 chrono-harness-trureturing 库，不为本产品复制证明或新增仅包装已有定理的数学声明。
-chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归用例，以及 SPEC 子句到形式模型的对应说明。两库独立构建；宿主使用 harness 二进制不因此需要 Lean、trureturing checkout 或特定宿主语言／目录结构。
+本仓所有规范性 SPEC 和程序逻辑统一使用 Verus。规范以 `spec fn`、`proof fn`、
+`requires`、`ensures`、循环不变式和终止度量表达；执行同一份源码擦除证明后的程序。
+Markdown 负责导航、解释、外部接口假设和未完成状态，不是另一套可独立裁决的规格。
+所有仓内解析政策、判断、选择、状态维护、错误处理、判官、生成器、自举及测试驱动
+均在迁移范围内；现存 Rust/Python、脚本、测试和生成工作流没有历史豁免。
 
-形式化工作 使用 trureturing 的独立 worktree 与 PR 交付，其数学准入、编译及验证遵循该库现役规范。对应说明须固定所引用修订和声明，列明对象、参数、假设、结论与实际消费者；已找到、已编译、已证明模型命题、已检验实现对应是不同状态。未完成部分如实保留，不以引用或 CI 绿色冒领全部形式化。
+唯一允许的受信假设是宿主 `.chrono-harness/verus.json` 明确列出的外部接口。
+操作系统、Git/Cargo、编译器／Verus／求解器和第三方库接口可以作为假设；仓内根据
+这些输入作出的决定与状态转换仍须证明。不得把仓内函数标为 external、external_body，
+或用 assume、admit、禁用验证／擦除检查、选择部分函数来制造通过。
+纯逻辑根必须使用登记的 Verus 二进制以及 `--no-cheating --no-external-by-default`。
+外部接口的具体签名、假设和调用对应仍须逐项建立；列出名称不证明封装正确。
 
-形式模型与反例可以推动 SPEC 演进：发现缺失前提、错误推论或实现不符时，分别修订适用的模型、产品合同或实现，并验证受影响义务。不得为匹配当前实现而静默缩小用户目标或改写旧结论的适用范围。Lean 核验只证明其形式陈述；Rust 实现符合模型仍需单独的对应证据，完整依赖登记、局部性与确定性等现实前提也不能由图闭包或一次通过自动取得。
+FILEMAP 在每个文件的 `verification` 中显式登记 `kind: program | specification | data`
+及 `roots: string[]`。执行器只消费登记，不从目录、扩展名或源码扫描推断角色或选测。
+程序与规格须有非空证明根；数据不得伪装承重逻辑。每个生产／测试单元须声明
+`language: verus`，并把根的正式 Verus 操作接入其独立执行计划。
+仅改语言标签、登记根或运行 Cargo 不构成证明。实际消费保留候选工具、参数、源码身份、
+原始 stdout/stderr/退出和 Verus 的完整 crate 判定；未知、缺证明或失败均不得报成功。
+
+本宿主通过同一 canonical check 采用 `chrono-verus/v1` 覆盖门。覆盖失败保留具体义务，
+独立已选检查继续执行；不删功能、放宽目标或隐藏未迁移部分来换绿。
+外部 Lean/trureturing 材料只保留历史研究用途，不再承担本仓 SPEC 或实现准入权威。
+完整迁移以所有仓内逻辑和全部 SPEC 的实际 Verus 证明及真实消费者验收为准；
+[覆盖表](docs/spec-coverage.md) 和 [Verus 所有者说明](docs/verus.md) 如实记录缺口。
 
 ### 2.2 实现与测试使用同一种语言
+
+本仓在下述一般宿主配对合同之上，强制采用 §2.1 的 Verus 约束；原 Rust/Python 声明仅记录未迁移事实，不形成当前准入豁免。
 
 用什么语言实现，就用什么语言测试。生产单元的行为测试、断言、测试驱动及承载测试逻辑的子进程 helper 必须使用该单元的实现语言：Rust 用 Rust 测，Go 用 Go 测，TypeScript 用 TypeScript 测，Python 用 Python 测。Shell 脚本（包括 sh、bash）允许用 Python 测试。
 
@@ -148,7 +170,7 @@ Config 接受明确的 `schema_version: 1 | 2 | 3 | 4`；projects 接受 1／2�
 
 已知缺输入、未解决的必需依赖、缺绑定／快照及漂移仍须失败，不能以声明或手写成功清除。null 摘要只允许 draft；不能被解释为“任意二进制都已通过验证”。类型表按各登记的现役 schema 描述；registration 严格验证结构。明确支持的历史 scoped 遗留项先由候选解释器转换并保留原始事实（见 §14），不作为第二套当前登记。对象未列出的字段、重复 JSON key、重复 ID、悬空引用由 registration 判官报错。
 
-路径是仓库根相对 UTF-8 POSIX 路径，不含 `..` 或隐式 glob；environment.inputs.location 可显式指定外部绝对路径。所有文件逐个登记；目录条目只用于明确生成物，不允许替代源文件登记。
+路径是仓库根相对 UTF-8 POSIX 路径，不含 `..` 或隐式 glob；environment.inputs.location 可显式指定外部绝对路径。共享 runner 的词法相对路径判法由 `crates/runner/src/verified_paths.rs` 的 Verus 合同与同源执行实现承载；规范写法、glob、符号链接及实际文件身份仍由相应消费者另行约束。其余本节规则尚未全部迁入 Verus。所有文件逐个登记；目录条目只用于明确生成物，不允许替代源文件登记。
 
 | config 字段 | 类型与约束 |
 | --- | --- |
@@ -468,33 +490,79 @@ compile/build-input/runtime-input 可沿显式项目 compile 边继续传播，�
 未改动、无影响的历史缺登记留给后续明确 migration DELTA；不假造全库已经合规。
 schema 不可解析影响本轮输入时是错误；不能以“历史问题”忽略无法构图。
 
-### 5.1 形式对应与保留义务
+### 5.1 Verus 形式对应与保留义务
 
-以下对应固定引用 trureturing 修订 `5cd5558013f6e02612a617b2ba5b03db7a6de0f6` 的 [TwoStateLocalityIncrementalPreservation.lean](https://github.com/the-omega-institute/trureturing/blob/5cd5558013f6e02612a617b2ba5b03db7a6de0f6/D5/S3/ConceptDynamics/Governance/TwoStateLocalityIncrementalPreservation.lean)。
+第 5 节的两端 union、变更种子、类型化正向闭包、逐种子解释、旧执行边、测试选择、
+成本与退休义务须在对应生产者的 Verus 源码内表达并证明。只证明可达节点集合相等，
+不能替代边类型、路径或测试选择；零长度路径、环、删边和重接仍是必需边界。
 
-模型只承载下述条件结论，不提升 Rust 实现、宿主登记或实际执行的验证状态。
+未受影响结论的保留必须明确两个端点的值（含缺失态）、声明依赖、实际读取与局部性前提；
+身份摘要和图闭合本身不证明这些语义前提，也不证明任意判官确定性。
+历史 trureturing 模型、Lean 编译及既有 Rust 回归仍可作研究或反例数据；
+它们不满足当前 Verus 合同，不执行旧判官或把旧模型绿色状态记为实现证明。
 
-| SPEC 对象／义务 | 形式对象与结论 | 仍须履行的实现义务 |
-| --- | --- | --- |
-| 未受影响对象的旧结论可保留 | `TwoStateLocalityIncrementalPreservation.two_state_locality_yields_incremental_preservation`：若属性具两状态局部性，声明依赖包含两端实际读取，对象自身及这些依赖值均未变化，则两端属性等价 | 状态须包括政策、执行物、工具链、配置、环境及实际外部输入；缺失值须与空值区分。真实读取的包含关系和局部性仍是前提，FILEMAP 格式正确、哈希存在或图闭合均不证明它们 |
-
-`State` 对应固定端点，`Artifact` 对应受检查对象及其输入，`bytes` 对应包含缺失态的输入值；`reads` 是两端实际读取，`dep` 是宿主声明的依赖上界，`property` 是要保留的判定属性。使用 `Option String` 的精确应用已编译，可区分不存在与空字节。实际读取集合、局部性和依赖包含关系仍由宿主履行，不能把 `Local` 假设当作自动取得的结论。不另造仅包装既有结论的定理。
-
-已合并的 trureturing [PR #10868](https://github.com/the-omega-institute/trureturing/pull/10868) 在修订 `168e85c372e38d926a25892a5f752c3f9ad8a173` 的 [TYPED_GOVERNANCE_ADMISSION.md §Theorem 6](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/docs/develop/theory/TYPED_GOVERNANCE_ADMISSION.md#L190) 交付种子边更新的节点集合推论，并登记对应的 [atom](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/Meta/Digestion/atoms/sha256/e041845285be68b9a306b63e427dfde5f58b09e7b8c977c1099c760f214c432e) 与[吸收映射](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/Meta/Digestion/backfill/typed-governance-admission/absorbed-closed/e041845285be68b9a306b63e427dfde5f58b09e7b8c977c1099c760f214c432e.yaml)。
-
-它复用修订 `64b78db1ad18a8a90b42e13a412dfc281d5c0922` 中已冻结的 [ConsequenceClosure.lean](https://github.com/the-omega-institute/trureturing/blob/64b78db1ad18a8a90b42e13a412dfc281d5c0922/D5/S3/ConceptDynamics/DagCompletion/ConsequenceClosure.lean) 的 `ConsequenceClosure.consequenceClosure_least`、`ConsequenceClosure.consequenceClosure_successorClosed`、`ConsequenceClosure.subset_consequenceClosure`；该 PR 未新增命名 Lean 定理或冻结条目。
-
-Theorem 6 的派生结论是：给定任意顶点类型、两端有向关系及同一个种子集合，若每条新增或删除的关系边的终点都在种子中，则并集图、base 图、candidate 图从这些种子可达的节点集合相等。它允许环和无限顶点类型，路径仍是有限路径且允许零长度。证明遇到某端缺失的边时，从其已登记为种子的终点重新出发，因此不保留原来的起始种子。
-
-与 FILEMAP 的对应是：顶点取显式节点 ID，关系取“存在某种 kind 的登记边”，种子取本轮变更种子的节点集合。第 5 节要求变更边两端进入种子，强于该推论仅要求变更关系边终点的前提；从 Rust 的有类型登记变化到该前提的实现对应仍须核验。此结果不授权删除旧边，也不授权把逐种子解释、路径、边类型、测试选择或成本替换为节点集合。精确有类型边投影应用及下述删边反例的既有编译证据不构成 Rust 算法的形式验证。
-
-第 5 节的删边例子也给出实现对应的边界：把有类型边投影为“存在某个 kind 的边”，或只保留可达节点，会丢掉测试选择需要的信息。`project:p` 和 `test:t` 同为种子、唯一测试执行边被删除时，两图的可达节点均为这两个节点；candidate 图没有执行边，并集图保留旧执行边。因此任何只证明节点集合相等的结果都不足以替代旧边、逐种子解释、路径、测试选择、成本或退役义务。
-
-当前对应限于上述参数映射、冻结声明与派生推论、精确应用及反例的既有编译证据与现有行为回归。
-
-相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。
-
-没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
+当前 `crates/judge-ci/src/verus_policy.rs` 的覆盖聚合、完整有序缺口列表、编译证明结果接纳、
+字节身份比较、OID 与标识符谓词具有同源 Verus 规格；
+`crates/judge-filemap/src/verified_graph.rs` 另承载索引邻接表的逐种子 FIFO 遍历：
+输入索引校验、精确可达闭包、实际前驱边、严格递减的前驱距离、最短跳数及终止性均有源码合同。
+同源 `fifo` 合同另固定完整距离、前驱槽和队列结果，执行循环证明按 FIFO 与邻接槽顺序首次发现且不覆盖。
+同一源码还证明完整 UTF-8 字节的字典序比较、名称库存严格有序且无重复的精确校验，
+以及有序库存中二分查找的精确名称／槽位对应与缺失结果。同源归并构造器证明输出严格有序、
+无重复，字节成员集合与所供名称精确相同，长度等于不同名称数，并证明数组安全和终止性。
+实际闭包通过同源 `graph_names` 提取每条类型边的完整源／目标名称，并纳入所供根名，
+再调用该构造器。证明输出严格有序、集合精确等于全部边端点与所供根名的并集，
+长度等于不同名称数量；空图、孤立根、重复边／根、kind 和来源均不改变合同。
+该实现替代独立的迭代提取与 BTreeSet 名称排序／去重。
+同源索引构造器逐槽保留所供邻接名称行和种子顺序，证明行／槽数量、名称字节与索引精确对应、
+所有目标及根索引在界内；行数不符或任一所供名称缺失时且仅在这些条件下拒绝。
+实际闭包调用该构造器，替代独立目标／种子查找及随后重复索引校验。
+同源 `EdgeKind` 以 compile、build-input、runtime-input、test-execution、judge-trigger
+的顺序定义五种边，手写相等／全序／偏序实现证明与该顺序一致；相等精确对应同一变体，
+严格序具有反向对应与传递性。线名只接受上述五个完整字节串，不折叠大小写、不修剪、
+不接受前后缀或别名；名称与变体一一对应。实际类型化边排序使用这些已证明的比较方法，
+JSON 字符串的读写适配调用同源名称产生／解析函数；非字符串输入拒绝。
+实际 `Edge` 类型也归该证明根，克隆保留全部字段；手写比较按 from 的完整 UTF-8 字节、
+边种类序、to 的完整 UTF-8 字节依次比较。相等精确对应三个字段的相同字节／变体，
+严格序具有反向对应与传递性，并满足 vstd 的完整比较律。实际邻接行通过同源构造器
+提取现有 BTreeSet：返回精确成员集合、不同成员数量、无重复且严格递增的边引用序列。
+该构造器复用已登记的 vstd 有序迭代合同，不另设排序器或外部假设。
+同源 `index_edges` 直接消费所供类型化边行，证明逐行逐槽保留目标字段的完整字节与索引对应，
+保持重复目标、空行、种子位置及所有索引边界；行数不符或任一目标／种子名称缺失时且仅在这些条件下拒绝。
+实际闭包调用该函数，替代未证明的目标名称投影。同源 `source_rows` 还把任意输入顺序的
+类型化边按源名称归组，按所供严格有序节点清单构造行：行数与节点数一致，每行键集
+精确等于该源的完整 from／kind／to 键集，严格排序、无重复，长度等于不同键数量。
+空行、重复边、独立构造的相同字节及 Unicode 保留此合同；拒绝恰好是源名缺失，
+目标名是否存在仍由后续索引构造判断。实际闭包调用该实现，替代独立字符串映射分组与行收集。
+同源 `topology` 进一步组合名称构造、源行归组及目标／根索引：对任意所供类型边与根名，
+证明全部名称准入、精确名称并集与基数、逐行精确源键集、逐槽目标对应及有效索引图。
+两次内部查找必定成功，实际闭包因此不再用未证明条件的 `expect` 组合这三步。
+同源实际 `Seed` 的克隆保留 id、node、reference、reason 四字段，显式相等／全序／偏序
+按这四字段的完整 UTF-8 字节依次比较，证明精确相等、逆序、传递性及完整 vstd 比较律。
+同源 `seed_roots` 提取实际 node 字段，证明完整字节、精确名称集合、数量与每个位置，保留重复。
+`seed_topology` 把该提取直接接入拓扑构造，证明精确端点／Seed 节点并集与基数、源行、目标索引、
+有效图，以及每个根索引精确对应同位置 Seed 的实际 node；生产闭包调用该构造器。
+`EdgeKind` 的显式克隆也证明变体保全。种子构造、原因合并、周边组合、测试选择、
+JSON／诊断适配、真实输入对应、其他承重逻辑与本节完整义务仍待迁移。
+实际前驱状态现由同源 `PredecessorTree` 独占有序稀疏行；构造时且仅在节点完整字节乱序或重复时拒绝，
+克隆保全全部行，查找精确对应节点字节。`predecessors_from_search` 只保留 Search 标为已达的节点，
+记录集合精确对应实际名称及原类型化前驱槽，不补入未达节点或替换平行边。
+原因链查询对任意合法构造或反序列化的树均终止，成功当且仅当存有到空前驱根的有限连续链；
+输出按根到目标排序，每条边精确等于其目标行的前驱。有效根链不重复节点，边数严格小于树行数，
+因此行数预算不漏链；缺失前驱、错误目标、环与自环返回失败。JSON 对象传输及起点 ID 到树的
+外层映射仍待证明；生产查询直接调用上述实现，原最短路与闭包组合的完整对应义务继续保留。
+同源 `propagate` 进一步组合实际 FIFO 遍历、稀疏前驱构造及消费者行投影，证明内部遍历必成功，
+返回行按 FIFO 的每个位置对应实际完整名称字节及原类型化出边行，逐槽保全平行边、环和自环。
+返回名称集合当且仅当存在从根出发的有限索引路径，前驱记录集精确等于 FIFO 的已达节点及首发现槽。
+生产闭包直接消费这些借用行与前驱树，移除遍历成功的未证明 `expect` 及证明根外的索引投影循环。
+每个 seed 增加 O(R) 临时借用行，不克隆出边；总实测成本未知。
+逐 seed 调用、原因合并、seed-ID 映射、选测和最终输出的完整组合仍未证明，不能据此宣称第 5 节完成。
+实际 `Origin`、`UnionEdge` 及两端类型化并集也归同一 Verus 根：从现有 BTreeSet
+提取严格有序库存，再用双游标归并。输出按完整 from／种类／to 键严格递增，
+键集合精确等于两端并集，每个键只出现一次，长度等于不同键数量；来源精确对应
+仅 base、仅 candidate 或两端都有。克隆保留边和来源。空端点、重复插入及
+分别构造但字节相同的边不改变这些合同；全部循环的边界和终止性均证明。
+JSON／诊断适配仍保留未迁移义务，不因类型迁移而豁免。
+程序须报告未迁移，不手填成功。
 
 ### 5.2 按实际消费者重构依赖
 
