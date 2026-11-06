@@ -260,9 +260,7 @@
     }
   ],
   "environment": {
-    "credential_environment": [
-      "GH_TOKEN"
-    ],
+    "credential_environment": [],
     "inherit": [
       "PATH",
       "HOME"

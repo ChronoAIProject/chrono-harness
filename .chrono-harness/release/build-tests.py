@@ -165,6 +165,20 @@ class ReleaseUnits(unittest.TestCase):
         self.assertEqual(process['exit_code'],0)
         self.assertEqual((output/process['stdout']['path']).read_bytes(),b'rustc different-version\n')
         self.assertFalse(any(p['phase']=='build' for p in report['processes']))
+    def test_git_packaging_can_differ_but_selected_compilers_must_match(self):
+        f=self.f;f.builds()
+        git=f.root/'tools/git'
+        git.write_bytes(git.read_bytes()+b'\n# independently packaged Git\n')
+        result,output=f.run('verify_first');self.passed(result)
+        receipt=json.loads((output/'receipt.json').read_text())
+        self.assertEqual(receipt['toolchain']['tools']['git']['sha256'],sha(git))
+        compiler=f.root/'tools/rustc'
+        compiler.write_bytes(compiler.read_bytes()+b'\n# changed compiler bytes, same version\n')
+        result,output=f.run('verify_second')
+        self.assertEqual(result.returncode,2,result.stderr)
+        receipt=json.loads((output/'receipt.json').read_text())
+        self.assertIn('toolchain differs',receipt['failure']['message'])
+        self.assertFalse(any(p['phase']=='verification' for p in receipt['processes']))
     def test_local_full_driver_uses_isolated_roots_declared_handoffs_and_same_units(self):
         f=self.f;output=Path(f.temp.name)/'full-output'
         p=subprocess.run([sys.executable,str(SCRIPT),str(f.root),str(output)],env=dict(os.environ,CALLS=str(f.calls)),capture_output=True)
