@@ -32,9 +32,9 @@ Rust、发布资产和验证操作由该宿主入口及配方管理，生成器�
 
 真实 CLI 和 shell 消费者测试覆盖字面参数、失败原件、定制保留、无写入复用、漂移、错误登记和输出归属；旧检查工作流测试保留各版本语义。原 v1 扩展已在 beta.10 发布。本仓生成工作流的[固定源码原生构建](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944)在两平台各通过 371 项登记测试，匿名下载的 macOS CI 二进制另核过发布投影。这些证据只覆盖实际消费者，不能证明其他宿主构建、full 工作流执行、完整输入或确定性同判。
 
-当前本宿主采用 `chrono-github-release/v2` 和 `chrono-release-build/v5`：每平台有 16 个 build、22 个 verification，以及一个 `always()` collector/package。每个 job 和整个平台均受登记的 45 分钟时限约束。Rust 验证仍跑原始未过滤操作；Python inventory、宿主 bootstrap、native adapter、配方单元测试和真实打包集成测试各有独立验证单元。
+当前本宿主采用 `chrono-github-release/v2` 和 `chrono-release-build/v5`：每平台的 build、verification 和 `always()` collector/package 均逐项登记。每个 job 和整个平台均受登记的 45 分钟时限约束。Rust 验证仍跑原始未过滤操作；测试清单与原生输入适配的验证归 Rust `ci-tests`，宿主 bootstrap、配方单元测试和真实打包集成测试继续各自登记。
 
-每个验证只登记实际消费的构建子集。instructions、routes、diagnostics 不消费发布二进制，`needs` 为空且 `rust_toolchain=true`，可独立启动。native adapter 的 Python 验证跑原始未过滤 `test.ci-native-adapter`，只依赖 `build_ci` 提供真实桥程序，登记 `rust_toolchain=false` 和 `chrono-ci` release asset；失败 fixture 保存在原发布证据路径。新增验证／传输成本未测，原生两平台验收和公开发行须核对应候选的实际结果。
+每个验证只登记实际消费的构建子集。instructions、routes、diagnostics 不消费发布二进制，`needs` 为空且 `rust_toolchain=true`，可独立启动。原生输入准备的行为验证归 Rust `ci-tests`，随原始未过滤 `test.ci-tests` 执行，复用其既有构建和发布资产依赖，不再单独启动 Python 验证 job。原 IO、执行物解析、凭据省略、纳秒时间顺序和有界失败回执均在 Rust 配对测试中核对；完整种子和转发链仍由 workflow 测试验证。新增验证／传输成本未测，原生两平台验收和公开发行须核对应候选的实际结果。
 
 ## v2 的依赖与传输
 

@@ -43,13 +43,11 @@
     "test.judge-routes-tests",
     "test.judge-cost-tests",
     "test.judge-mixed-tests",
-    "workflow.inventory-tests",
     "release.tests.units",
     "release.tests.integration",
     "test.diagnostics-tests",
     "host.bootstrap-tests",
-    "test.cache-tests",
-    "test.ci-native-adapter"
+    "test.cache-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -491,14 +489,6 @@
       "rust_toolchain": true
     },
     {
-      "id": "verify_workflow_inventory_tests",
-      "kind": "verify",
-      "operation": "workflow.inventory-tests",
-      "needs": [],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_workflow_inventory_tests",
-      "rust_toolchain": false
-    },
-    {
       "id": "verify_release_build_tests",
       "kind": "verify",
       "operation": "release.tests.units",
@@ -553,16 +543,6 @@
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_cache_tests",
       "rust_toolchain": true
-    },
-    {
-      "id": "verify_ci_native_adapter_tests",
-      "kind": "verify",
-      "operation": "test.ci-native-adapter",
-      "needs": [
-        "build_ci"
-      ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_native_adapter_tests",
-      "rust_toolchain": false
     }
   ],
   "collector": {
@@ -598,14 +578,12 @@
       "verify_judge_routes_tests",
       "verify_judge_cost_tests",
       "verify_judge_mixed_tests",
-      "verify_workflow_inventory_tests",
       "verify_release_build_tests",
       "verify_release_build_integration",
       "verify_diagnostics_tests",
       "verify_host_bootstrap_tests",
       "build_cache",
-      "verify_cache_tests",
-      "verify_ci_native_adapter_tests"
+      "verify_cache_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -644,14 +622,12 @@
       "verify_judge_cost_tests": "linux_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "linux_verify_judge_mixed_tests",
       "package": "linux_package",
-      "verify_workflow_inventory_tests": "linux_verify_workflow_inventory_tests",
       "verify_release_build_tests": "linux_verify_release_build_tests",
       "verify_release_build_integration": "linux_verify_release_build_integration",
       "verify_diagnostics_tests": "linux_verify_diagnostics_tests",
       "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests",
       "build_cache": "linux_build_cache",
-      "verify_cache_tests": "linux_verify_cache_tests",
-      "verify_ci_native_adapter_tests": "linux_verify_ci_native_adapter_tests"
+      "verify_cache_tests": "linux_verify_cache_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -685,14 +661,12 @@
       "verify_judge_cost_tests": "macos_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "macos_verify_judge_mixed_tests",
       "package": "macos_package",
-      "verify_workflow_inventory_tests": "macos_verify_workflow_inventory_tests",
       "verify_release_build_tests": "macos_verify_release_build_tests",
       "verify_release_build_integration": "macos_verify_release_build_integration",
       "verify_diagnostics_tests": "macos_verify_diagnostics_tests",
       "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests",
       "build_cache": "macos_build_cache",
-      "verify_cache_tests": "macos_verify_cache_tests",
-      "verify_ci_native_adapter_tests": "macos_verify_ci_native_adapter_tests"
+      "verify_cache_tests": "macos_verify_cache_tests"
     }
   },
   "unit_costs": {
@@ -727,14 +701,12 @@
     "verify_judge_cost_tests": "unmeasured",
     "verify_judge_mixed_tests": "unmeasured",
     "package": "unmeasured",
-    "verify_workflow_inventory_tests": "unmeasured",
     "verify_release_build_tests": "unmeasured",
     "verify_release_build_integration": "unmeasured",
     "verify_diagnostics_tests": "unmeasured",
     "verify_host_bootstrap_tests": "unmeasured",
     "build_cache": "unmeasured",
-    "verify_cache_tests": "unmeasured",
-    "verify_ci_native_adapter_tests": "unmeasured"
+    "verify_cache_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
@@ -759,9 +731,6 @@
     ],
     "release.tests.integration": [
       ".chrono-harness/state/release-test-failures/"
-    ],
-    "test.ci-native-adapter": [
-      ".chrono-harness/state/native-adapter-tests/"
     ]
   },
   "verification_consumers": {
@@ -788,7 +757,7 @@
       ]
     },
     "verify_runner_tests": {
-      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project\u2019s Rust fixture executables.",
+      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
       "release_assets": [
         "chrono-harness"
       ]
@@ -894,7 +863,7 @@
       ]
     },
     "verify_judge_mixed_tests": {
-      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host\u2019s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture\u2019s actual cost invocation.",
+      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-registration",
@@ -909,10 +878,6 @@
         "chrono-distribution",
         "chrono-cache"
       ]
-    },
-    "verify_workflow_inventory_tests": {
-      "need": "The original workflow.inventory-tests Python action checks explicit inventory parsing, disjoint group membership and subprocess failures with isolated fixtures, without release executables.",
-      "release_assets": []
     },
     "verify_release_build_tests": {
       "need": "The original release.tests.units Python action checks the release recipe, handoff contracts, failures and host projection with synthetic tools and receipts; real packaging belongs to the separate integration group.",
@@ -933,12 +898,6 @@
       "need": "The original test.cache-tests Rust suite runs the candidate chrono-cache CLI and checks its registered key/output behavior.",
       "release_assets": [
         "chrono-cache"
-      ]
-    },
-    "verify_ci_native_adapter_tests": {
-      "need": "The dedicated Python native adapter tests call the actual chrono-ci native-process bridge and check original IO, executable resolution, credential omission and bounded failure receipts. The staged chrono-ci release asset supplies that existing bridge.",
-      "release_assets": [
-        "chrono-ci"
       ]
     }
   },

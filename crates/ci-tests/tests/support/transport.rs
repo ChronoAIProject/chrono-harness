@@ -1,6 +1,6 @@
 mod provider;
 
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
@@ -254,7 +254,79 @@ fn mutating_producer() {
     std::fs::rename(replacement, executable).unwrap();
 }
 
+fn inventory_listing() {
+    let args: Vec<_> = std::env::args().collect();
+    let (mode, action) = (args[2].as_str(), args[3].as_str());
+    if mode == "failed" && action == "right" {
+        eprintln!("original failure");
+        std::process::exit(7);
+    }
+    if mode == "timeout" {
+        eprintln!("original timeout");
+        std::thread::sleep(Duration::from_secs(8));
+    }
+    if mode == "overflow" {
+        println!("{}", "x".repeat(8192));
+        return;
+    }
+    let mut names = match action {
+        "all" => vec!["a", "b"],
+        "left" => vec!["a"],
+        "right" => vec!["b"],
+        _ => panic!("unknown listing action"),
+    };
+    if args.iter().any(|arg| arg == "--ignored") {
+        names = if mode == "ignored" { vec!["a"] } else { vec![] };
+    } else if action == "right" {
+        match mode {
+            "empty" => names.clear(),
+            "overlap" => names = vec!["a", "b"],
+            _ => {}
+        }
+    } else if mode == "omit" && action == "all" {
+        names.push("c");
+    }
+    if mode == "duplicate" {
+        names = vec!["a", "a"];
+    }
+    let binary = if mode == "binary" {
+        "undeclared"
+    } else {
+        "cases"
+    };
+    eprintln!("Running tests/cases.rs (target/{binary}-123abc)");
+    for name in &names {
+        println!("{name}: test");
+    }
+    match mode {
+        "truncated" => {}
+        "count" => println!("0 tests, 0 benchmarks"),
+        "bench" => println!("{} tests, 1 benchmark", names.len()),
+        "unexpected" => println!("unexpected listing"),
+        _ => println!("{} tests, 0 benchmarks", names.len()),
+    }
+}
+
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("native-child") {
+        match std::env::args().nth(2).as_deref() {
+            Some("echo") => {
+                let mut input = Vec::new();
+                io::stdin().read_to_end(&mut input).unwrap();
+                io::stdout().write_all(b"\0\xff").unwrap();
+                io::stdout().write_all(&input).unwrap();
+                io::stderr().write_all(b"original stderr").unwrap();
+            }
+            Some("exit") => {
+                io::stderr().write_all(b"real failure").unwrap();
+                std::process::exit(7);
+            }
+            Some("overflow") => io::stdout().write_all(&[b'x'; 4096]).unwrap(),
+            Some("timeout") => std::thread::sleep(Duration::from_secs(2)),
+            other => panic!("unknown native child mode: {other:?}"),
+        }
+        return;
+    }
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
             "units" => {
@@ -300,6 +372,10 @@ fn main() {
         _ => {}
     }
     let mode = std::env::args().nth(1).expect("transport mode");
+    if mode == "inventory-listing" {
+        inventory_listing();
+        return;
+    }
     if mode == "--version" {
         println!("chrono-ci-test-transport 1");
         return;

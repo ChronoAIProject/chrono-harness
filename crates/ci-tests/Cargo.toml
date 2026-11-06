@@ -36,6 +36,14 @@ path = "tests/release.rs"
 name = "cache"
 path = "tests/cache.rs"
 
+[[test]]
+name = "inventory"
+path = "tests/inventory.rs"
+
+[[test]]
+name = "native"
+path = "tests/native.rs"
+
 [[bin]]
 name = "chrono-ci-test-transport"
 path = "tests/support/transport.rs"

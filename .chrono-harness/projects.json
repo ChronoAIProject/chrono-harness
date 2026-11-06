@@ -33,8 +33,6 @@
     "judge-cargo-tests",
     "worktree",
     "worktree-tests",
-    "workflow-inventory",
-    "workflow-inventory-tests",
     "release-build",
     "release-build-tests",
     "diagnostics",
@@ -42,9 +40,7 @@
     "host-bootstrap",
     "host-bootstrap-tests",
     "cache",
-    "cache-tests",
-    "ci-native-adapter",
-    "ci-native-adapter-tests"
+    "cache-tests"
   ],
   "projects": [
     {
@@ -858,6 +854,28 @@
             ".",
             "--config",
             ".chrono-harness/ci/release.json"
+          ]
+        },
+        "inventory": {
+          "operation": "workflow.inventory",
+          "tool": "chrono-ci",
+          "argv": [
+            "test-inventory",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/workflow-inventory.json"
+          ]
+        },
+        "worktree_inventory": {
+          "operation": "worktree.inventory",
+          "tool": "chrono-ci",
+          "argv": [
+            "test-inventory",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/worktree-inventory.json"
           ]
         }
       },
@@ -3262,7 +3280,7 @@
             "--skip",
             "interrupted_cleanup::adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease",
             "--skip",
-            "interrupted_cleanup::registered_python_consumers_forward_leases_after_both_wrappers_die",
+            "interrupted_cleanup::registered_consumers_forward_leases_after_both_wrappers_die",
             "--skip",
             "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
             "--skip",
@@ -3282,7 +3300,7 @@
             "interrupted_cleanup::public_participating_check_preserves_zero_and_nonzero_stderr_results",
             "interrupted_cleanup::returned_use_without_token_still_protects_detached_python_child",
             "interrupted_cleanup::adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease",
-            "interrupted_cleanup::registered_python_consumers_forward_leases_after_both_wrappers_die",
+            "interrupted_cleanup::registered_consumers_forward_leases_after_both_wrappers_die",
             "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
             "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect"
           ]
@@ -3785,50 +3803,6 @@
   ],
   "scripts": [
     {
-      "id": "workflow-inventory",
-      "language": "python",
-      "path": ".chrono-harness/ci/workflow-inventory.py",
-      "test_script": "workflow-inventory-tests",
-      "actions": {
-        "execute": {
-          "operation": "workflow.inventory",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/workflow-inventory.py",
-            ".",
-            ".chrono-harness/ci/workflow-inventory.json"
-          ]
-        },
-        "worktree": {
-          "operation": "worktree.inventory",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/workflow-inventory.py",
-            ".",
-            ".chrono-harness/ci/worktree-inventory.json"
-          ]
-        }
-      }
-    },
-    {
-      "id": "workflow-inventory-tests",
-      "language": "python",
-      "path": ".chrono-harness/ci/workflow-inventory-tests.py",
-      "tests_for": "workflow-inventory",
-      "actions": {
-        "execute": {
-          "operation": "workflow.inventory-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/workflow-inventory-tests.py"
-          ]
-        }
-      }
-    },
-    {
       "id": "host-bootstrap",
       "language": "python",
       "path": ".chrono-harness/ci/bootstrap.py",
@@ -4112,18 +4086,6 @@
             "unit_judge-workflow-short"
           ]
         },
-        "shared-install-unit_workflow-inventory": {
-          "operation": "host.bootstrap-shared-install-unit_workflow-inventory",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap_shared.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_workflow-inventory"
-          ]
-        },
         "shared-install-unit_release-build": {
           "operation": "host.bootstrap-shared-install-unit_release-build",
           "tool": "python3",
@@ -4318,45 +4280,6 @@
             ".chrono-harness/ci/bootstrap-tests.py",
             "--lifecycle-program",
             "crates/worktree/target/debug/chrono-worktree"
-          ]
-        }
-      }
-    },
-    {
-      "id": "ci-native-adapter",
-      "language": "python",
-      "path": "assets/ci/native.py",
-      "test_script": "ci-native-adapter-tests",
-      "actions": {
-        "forward": {
-          "operation": "ci.native.forward",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            "assets/ci/native.py",
-            "forward",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/ci/units.json"
-          ]
-        }
-      }
-    },
-    {
-      "id": "ci-native-adapter-tests",
-      "language": "python",
-      "path": ".chrono-harness/ci/native-adapter-tests.py",
-      "tests_for": "ci-native-adapter",
-      "actions": {
-        "execute": {
-          "operation": "test.ci-native-adapter",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/native-adapter-tests.py",
-            "--interpreter",
-            "/usr/bin/python3"
           ]
         }
       }

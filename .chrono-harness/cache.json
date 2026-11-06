@@ -6972,19 +6972,19 @@
     "release.linux_verify_diagnostics_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/33/operation"
+        "pointer": "/units/32/operation"
       }
     ],
     "release.linux_build_cache": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/35/id"
+        "pointer": "/units/34/id"
       }
     ],
     "release.linux_verify_cache_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/36/operation"
+        "pointer": "/units/35/operation"
       }
     ],
     "release.macos_build_runner": [
@@ -7170,19 +7170,19 @@
     "release.macos_verify_diagnostics_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/33/operation"
+        "pointer": "/units/32/operation"
       }
     ],
     "release.macos_build_cache": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/35/id"
+        "pointer": "/units/34/id"
       }
     ],
     "release.macos_verify_cache_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/36/operation"
+        "pointer": "/units/35/operation"
       }
     ]
   },

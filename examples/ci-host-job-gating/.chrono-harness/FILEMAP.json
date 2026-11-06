@@ -123,7 +123,7 @@
       ]
     },
     {
-      "path": ".chrono-harness/ci/install.py",
+      "path": ".chrono-harness/ci/install.sh",
       "owner": "host",
       "surface": "product",
       "cost": "unmeasured",
@@ -135,7 +135,7 @@
       ]
     },
     {
-      "path": ".chrono-harness/ci/verify.py",
+      "path": ".chrono-harness/ci/verify.sh",
       "owner": "host",
       "surface": "product",
       "cost": "unmeasured",

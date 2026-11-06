@@ -2,17 +2,27 @@
 
 `chrono-ci-check/v3` 明确把每个登记测试计划分配给一个单元。按范围 `chrono-github-units/v1` 和完整 `/v2` 可明确选择 `job_gating`。本产品宿主已采用：一个父工作流内运行一个检测 job、按需运行的独立单元 job、始终运行的汇总。各单元仍有独立检出、名称、runner、bootstrap、超时、上下文、上传和重跑；产品不解释宿主语言或布局。
 
+## 显式测试清单
+
+```sh
+chrono-ci test-inventory --host-root HOST --config CONFIG
+```
+
+宿主登记 `chrono-workflow-inventory/v1` 配置。`projects` 和 `project` 点名项目登记及唯一项目；`unfiltered_action` 点名未过滤 action，`groups` 将分组 ID 对应到 action，并须与项目的 `test_groups` 相同。`binaries` 为每个 action 声明测试二进制的名称和顺序，`tools` 明确绑定 action 使用的工具。程序只执行这些 action 的 `--list`，另外列举未过滤 action 的 ignored 清单，不从清单推导依赖或选测。
+
+`timeout_seconds`、`output_limit_bytes` 约束既有 Rust 进程执行器；子进程继承调用方环境，租约描述符由执行器传递。`report_directory` 接收各次列举的 stdout／stderr 原字节和 `receipts.json`，保留 argv、原退出、失败、耗时及流摘要。全部校验通过后写 `inventory.json`，绑定配置／项目原字节摘要、完整清单和各分组。退出 0 并输出数量摘要表示本次验证成功；配置、列举或覆盖失败时输出 `E_CI` 并退出 1。成功报告须结合本次退出与摘要消费。
+
 ## 本仓如何划分测试
 
 本仓 workflow 专属测试项目明确登记三组，分别分配给 `judge-workflow`（核心）、`judge-workflow-units`（直接完整单元测试）、`judge-workflow-short`（完整短命令测试）。action 明确选择成员，清单保护核覆盖范围，不推断依赖。三组合计覆盖原两个测试二进制，保留 fixture、profile 和业务限制。发布仍使用不带过滤的 `actions.execute`／原 `test.judge-workflow-tests`，旧测试身份通过 `test_groups` 绑定独立的核心过滤 action。
 
-各组保留构建前置，并运行宿主 `.chrono-harness/ci/workflow-inventory.py`。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤、ignored、过滤后的 libtest 清单须非空、互不相交、合计精确覆盖；列举失败保留原退出和输出。保护程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。
+各组保留构建前置，并通过登记的 `workflow.inventory` 操作运行 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤清单及各分组须非空，各组互不相交且合计精确覆盖；ignored 清单须为空；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
 
 共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
 
-worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名六项宿主入口集成测试：参与式检查、脱离父进程的 Python 消费者、短检查、登记 Python 消费者、原生 Cargo 子进程、独立 bootstrap。核心组排除同样六个名称。两组保留原测试 ID、断言、期限、默认 libtest 线程，发布仍用原未过滤 action。
+worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名六项宿主入口集成测试：参与式检查、脱离父进程的 Python 消费者、短检查、登记的 bootstrap 与 Rust 清单消费者、原生 Cargo 子进程、独立 bootstrap。核心组排除同样六个名称。两组保留原测试 ID、断言、期限、默认 libtest 线程，发布仍用原未过滤 action。
 
-`worktree.inventory` 用同一独立 Python 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
+`worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
 
 projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。固定历史宿主解码器／迁移测试已退役，原 `judge-projects-migration` 和双组清单移除。当前 `consumer`、`execution`、`languages` 二进制保留断言、默认并发及 900 秒上限，新测试二进制由未过滤 action 纳入。CI／发布消费同一 action；旧断言明确退役，不能拿剩余测试证明旧行为。
 
@@ -68,14 +78,12 @@ registration／input 统一负责真实单元验证、`chrono-inputs capture --u
 
 ## 可选的原生输入准备扩展
 
-使用条件父工作流的 full units/v2 可明确选择 schema `chrono-native-adoption/v1` 的 `native_adoption`，省略保留原生成行为。采用前须安装兼容发布生成器。产品拥有嵌入模板 `assets/ci/native.py` 及其输出更新，宿主拥有以下扩展值和登记操作：
+使用条件父工作流的 full units/v2 可明确选择 schema `chrono-native-adoption/v2` 的 `native_adoption`，省略保留原生成行为。采用前须安装兼容发布生成器。产品由已安装的 Rust `chrono-ci native-adoption` 执行输入准备、传输和转发；生成器只输出工作流。宿主拥有以下扩展值和登记操作：
 
 ```json
 "native_adoption": {
-  "schema": "chrono-native-adoption/v1",
+  "schema": "chrono-native-adoption/v2",
   "lineage": {"path": ".chrono-harness/ci/lineage.json", "sha256": "ORIGINAL_BIRTH_SHA256"},
-  "adapter_path": ".chrono-harness/ci/native.py",
-  "interpreter": "/usr/bin/python3",
   "inputs_program": ".chrono-harness/bin/chrono-inputs",
   "seed_directory": ".chrono-harness/state/shared-seed/",
   "seed_artifact": "chrono-context",
@@ -97,11 +105,11 @@ CI 生产者另记真实当前观察，不改原上下文；只有 workflow 判�
 
 bootstrap 接收宿主登记 argv。hook 如需该 revision，须明确在 bootstrap 登记 argv 前缀 `["env", "CHRONO_WORKFLOW_REVISION=${{ github.workflow_sha }}", ...]`，生成器保留这个宿主选择。
 
-用已有解释器工具将适配器登记为唯一 `canonical_check.inputs.ci`，argv 为 `[adapter_path, "forward", "--config", PROVIDER_PATH]`，恰好一个 provider `--config` 对绑定所选上传合同。
+将已安装的 `chrono-ci` 工具登记为唯一 `canonical_check.inputs.ci`，argv 为 `["native-adoption", "forward", "--host-root", ".", "--config", PROVIDER_PATH]`，恰好一个 provider `--config` 对绑定所选上传合同。不生成适配器，也不要求宿主安装 Python。
 
 从业务继承移除只用于获取的 `GITHUB_EVENT_NAME`、`GITHUB_EVENT_PATH`、`CHRONO_WORKFLOW_REVISION`、`GITHUB_REPOSITORY`，保留 `CHRONO_CHECK_SOURCE`、实际业务变量和已有凭据合同。转发读取真实保留获取记录，将实际具名环境值交给 `chrono-ci check-inputs`。
 
-内部 CI bridge 把有限子进程执行委托给已有 Rust 传输，保留 stdin／stdout／stderr、执行物身份和进程结果。它用于处理不在业务继承内的事件字段及凭据；适配器没有第二套子进程 runner。外层生产回执仍记录自身真实环境。
+原生输入准备直接复用已有 Rust 有界进程传输，保留 stdin／stdout／stderr、执行物身份和进程结果。它处理不在业务继承内的事件字段及凭据；无需跨进程桥接协议。外层生产回执仍记录自身真实环境。
 
 汇总先转发 gather，再调用输入模块组合，之后才返回完整执行。原 detector 治理对和所选单元贡献提供汇总输入。`composition_sources` 给种子准备提供原基线快照／对；汇总从传递种子消费已验证治理投影，出处中保留来源字节，因此其他检出不必仍有 detector 原路径。
 
@@ -111,7 +119,7 @@ FILEMAP／routes 继续负责 DELTA 选择；registration 按两端分配投影�
 
 可选 `integration_transport: {source_directory, directory}` 将生产原上传根连到交付下载根，含最终报告及嵌套数据。宿主 bootstrap 获取明确完成的凭据／报告依赖证据，扩展不加调度器。workflow 保留九项凭据绑定，影响选中 integration 时要求匹配的最终生产者。普通 feature 准备可带 null，仍由 workflow 决定是否足够。
 
-lineage、适配器、解释器、inputs 二进制、bootstrap 输入、provider、组合原件都须登记到宿主 FILEMAP／输入／依赖。种子、单元、汇总、下载根互不重叠。已有输出预检保留宿主定制，拒绝无所有权覆盖。这些源码合同不自动启用主仓或示例；公开发布及真实 push／PR／dev 采用仍归调用方。
+lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原件都须登记到宿主 FILEMAP／输入／依赖。种子、单元、汇总、下载根互不重叠。已有输出预检保留宿主定制，拒绝无所有权覆盖。这些源码合同不自动启用主仓或示例；公开发布及真实 push／PR／dev 采用仍归调用方。
 
 <a id="conditional-jobs-and-the-required-aggregate"></a>
 

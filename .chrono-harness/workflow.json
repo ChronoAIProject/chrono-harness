@@ -335,6 +335,30 @@
       "id": "artifact-members-tests",
       "replacement": null,
       "reason": "Joint retirement with artifact-members and its dedicated ZIP fixture; range transport is no longer a supported operation. Existing Rust collection tests preserve original report, stream, identity, retry and budget acceptance."
+    },
+    {
+      "kind": "script",
+      "id": "workflow-inventory",
+      "replacement": null,
+      "reason": "The explicit libtest inventory validator is implemented by chrono-ci test-inventory; current workflow and worktree actions use the Rust owner."
+    },
+    {
+      "kind": "test",
+      "id": "workflow-inventory-tests",
+      "replacement": "ci-tests",
+      "reason": "Rust paired tests preserve explicit group coverage, malformed listings and original subprocess failures. Python import/bytecode assertions retire with the removed Python implementation."
+    },
+    {
+      "kind": "script",
+      "id": "ci-native-adapter",
+      "replacement": null,
+      "reason": "原生 CI 上下文与证据转交已迁入 chrono-ci，退役 Python 适配器和跨语言进程桥。"
+    },
+    {
+      "kind": "test",
+      "id": "ci-native-adapter-tests",
+      "replacement": "ci-tests",
+      "reason": "原专属测试的纳秒时间边界、原始字节、工具解析、凭据省略、非零退出、超时和输出上限由 ci-tests 的 native Rust 测试覆盖；full-short 保留真实发布、获取、转交及汇总集成验证。"
     }
   ],
   "migrations": [],

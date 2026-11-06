@@ -115,6 +115,14 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 
 自举时 `crates/runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。产品构建不会自动启用宿主规则、安装 hook、修改全局配置或访问参考仓库。
 
+### 自身实现语言与分批重构
+
+harness 自身的产品逻辑和工程控制逻辑使用 Rust；首次取得或构建原生入口时，可以使用薄 sh。shell 只负责固定参数、平台选择、下载校验、临时目录和启动原生工具；JSON 解释、依赖规划、状态维护、回执判断、重试及生命周期逻辑由 Rust 的实际所有者维护。宿主政策和本仓构建、发布配方继续归宿主登记，不写死在通用产品中。
+
+普通宿主采用 harness 不应因此额外安装 Python。真实 Python 业务、外部 Python 接口和解释器自身配置探测，可以按实际使用方保留；不能仅为保留已迁移的 harness 实现而继续要求解释器。实现迁移时，同步迁移现役使用方、专属行为测试、工具绑定和输入登记，退役失去使用方的桥接、兼容路径及测试。
+
+该重构按可独立验收的范围分批提交 PR 至 dev。每批保留原成功、失败、边界和证据消费要求，核对实际落地与适用后验，再开展依赖后续批次。已落地的 shell 安装器和 artifact 下载复用保持当前职责；剩余工作依次处理原生 CI 适配、本仓 bootstrap／共享启动／发布／测试库存，最后清理伴生依赖。运行、构建及迁移总成本未测，不预先宣称性能收益；阶段完成不表示全部迁移完成。
+
 ### 2.1 形式化真源与实现对应
 
 chrono-harness 所需的通用形式化定义与证明统一归入 trureturing，按数学主题组织并优先复用已有结果；不建立独立 chrono-harness-trureturing 库，不为本产品复制证明或新增仅包装已有定理的数学声明。
@@ -138,7 +146,7 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 projects schema v2 要求每个 project／script 显式登记非空 `language`；projects 判官只核 DELTA 影响的专属配对，要求语言 ID 相同，唯一额外准入为生产 `shell`、测试 `python`。这两个保留 ID 由宿主显式选择，sh／bash 可登记为 `shell`；其它 ID 是不作推断、不归一化的字面值。schema v1 保留旧合同，不因升级二进制自动取得语言约束。
 
-配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓采用 v2 声明；scoped CI 与 projects 判官共用配对和语言规则，scoped v1 登记保留旧解释。Python workflow-inventory、宿主 bootstrap 及各自专属 Python 测试独立登记并由独立 CI 单元执行。示例的 v2 采用、剩余跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
+配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓采用 v2 声明；scoped CI 与 projects 判官共用配对和语言规则，scoped v1 登记保留旧解释。显式测试清单由 Rust `chrono-ci test-inventory` 读取宿主 `chrono-workflow-inventory/v1` 配置，核对登记的 Cargo/libtest 未过滤、ignored 与分组列表：未过滤清单及各分组须非空，各组互不相交，合计精确覆盖未过滤清单，ignored 清单须为空；不据此推导依赖或选测；行为验证归 `ci-tests`。宿主 bootstrap 及其专属 Python 测试仍独立登记并由独立 CI 单元执行。示例的 v2 采用、剩余跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
 
 ## 3. 登记格式与字段合同
 
