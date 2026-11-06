@@ -3440,7 +3440,7 @@ impl<'t, 'a> Iterator for SeedPropagations<'t, 'a> {
         let root = self.topology.indices.roots[at];
         let propagation = propagate(self.topology, root);
         let item = SeedPropagation { seed: &self.seeds[at], propagation };
-        self.next += 1;
+        self.next = at + 1;
         Some(item)
     }
 }
