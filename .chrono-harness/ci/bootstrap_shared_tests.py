@@ -1375,7 +1375,8 @@ class ManagedAttemptCustody(unittest.TestCase):
         self.assertEqual(report["tool"]["sha256"], hashlib.sha256(Path("/usr/bin/git").read_bytes()).hexdigest())
         version = subprocess.run(["/usr/bin/git", "--version"], capture_output=True, check=True,
                                  pass_fds=fixture.PASS_FDS)
-        self.assertEqual(report["tool"]["version"]["stdout"].encode(), version.stdout)
+        import bootstrap
+        self.assertEqual(bootstrap.retained_process(report["tool"]["version"])["stdout_bytes"], version.stdout)
         assertions = json.loads((root / ".chrono-harness/state/custody-assertions.json").read_bytes())
         self.assertEqual(assertions["python_executable"], sys.executable)
         self.assertEqual(report["managed_process"]["argv"][0], sys.executable)
@@ -1671,6 +1672,7 @@ class ManagedAttemptCustody(unittest.TestCase):
                 attempt.release_consumers()
 
     def assert_producer_streams(self, attempt, process):
+        import bootstrap
         process = bootstrap.retained_process(process)
         self.assertEqual(process["argv"][0], sys.executable)
         for channel in ("stdout", "stderr"):

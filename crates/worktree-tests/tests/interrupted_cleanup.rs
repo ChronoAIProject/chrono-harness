@@ -831,7 +831,10 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         let raw = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
         assert_eq!(receipt["sha256"], sha256(&raw));
         assert!(!String::from_utf8_lossy(&raw).contains("inert managed authentication λ"));
-        assert_eq!(json(&raw).unwrap()["process"], *process);
+        assert_eq!(
+            chrono_harness::full::expand_process(&json(&raw).unwrap()["process"]).unwrap(),
+            *process
+        );
         let report = fs::read(h.root.join(owner["report_path"].as_str().unwrap())).unwrap();
         assert!(!String::from_utf8_lossy(&report).contains("inert managed authentication λ"));
         assert_eq!(process["failure"], Value::Null);
