@@ -17,8 +17,8 @@
     "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
     "timeout_minutes": 45,
     "bootstrap": [
-      "/usr/bin/python3",
-      ".chrono-harness/ci/install.py",
+      "/bin/sh",
+      ".chrono-harness/ci/install.sh",
       ".",
       "/opt/chrono-tools"
     ],
@@ -42,8 +42,8 @@
       "runs_on": "self-hosted",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/install.py",
+        "/bin/sh",
+        ".chrono-harness/ci/install.sh",
         ".",
         "/opt/chrono-tools"
       ],
@@ -56,8 +56,8 @@
       "runs_on": "self-hosted",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/install.py",
+        "/bin/sh",
+        ".chrono-harness/ci/install.sh",
         ".",
         "/opt/chrono-tools"
       ],
@@ -90,8 +90,8 @@
       "runs_on": "self-hosted",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/install.py",
+        "/bin/sh",
+        ".chrono-harness/ci/install.sh",
         ".",
         "/opt/chrono-tools"
       ],

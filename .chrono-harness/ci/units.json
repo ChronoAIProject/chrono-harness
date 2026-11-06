@@ -300,22 +300,6 @@
       "context_path": ".chrono-harness/state/units/judge-workflow-short/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-short/"
     },
-    "workflow-inventory": {
-      "workflow_path": ".github/workflows/chrono-ci-workflow-inventory.yml",
-      "name": "chrono / workflow-inventory",
-      "runs_on": "macos-26",
-      "timeout_minutes": 45,
-      "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
-        ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
-      ],
-      "context_path": ".chrono-harness/state/units/workflow-inventory/context.json",
-      "artifact_directory": ".chrono-harness/state/units/workflow-inventory/"
-    },
     "release-build": {
       "workflow_path": ".github/workflows/chrono-ci-release-build.yml",
       "name": "chrono / release-build",
@@ -833,18 +817,6 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "unit_judge-workflow-short"
-          ]
-        },
-        "unit_workflow-inventory": {
-          "need": "Run the current candidate canonical check and its registered preparation.",
-          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
-          "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_workflow-inventory"
           ]
         },
         "unit_release-build": {

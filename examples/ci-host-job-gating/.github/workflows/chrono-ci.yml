@@ -35,7 +35,7 @@ jobs:
       - name: Bootstrap registered detector tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/install.py' '.' '/opt/chrono-tools'
+          '/bin/sh' '.chrono-harness/ci/install.sh' '.' '/opt/chrono-tools'
       - name: Detect required units from fixed Git endpoints
         id: detect
         shell: bash
@@ -62,7 +62,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/install.py' '.' '/opt/chrono-tools'
+          '/bin/sh' '.chrono-harness/ci/install.sh' '.' '/opt/chrono-tools'
       - name: Canonical harness check
         shell: bash
         env:
@@ -102,7 +102,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/install.py' '.' '/opt/chrono-tools'
+          '/bin/sh' '.chrono-harness/ci/install.sh' '.' '/opt/chrono-tools'
       - name: Canonical harness check
         shell: bash
         env:
@@ -140,7 +140,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/install.py' '.' '/opt/chrono-tools'
+          '/bin/sh' '.chrono-harness/ci/install.sh' '.' '/opt/chrono-tools'
       - name: Canonical harness check
         shell: bash
         env:

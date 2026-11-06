@@ -95,7 +95,8 @@ fn main() -> ExitCode {
         }
         "shared-holder" => {
             let pid = std::process::id().to_string();
-            mark(&format!("ready-{pid}"), &pid);
+            let ready = format!("ready-{}", std::os::unix::process::parent_id());
+            mark(&ready, &pid);
             wait("release");
             print!("completed");
         }
@@ -125,6 +126,17 @@ fn main() -> ExitCode {
             )
             .unwrap();
             mark("python-wrapper", std::process::id().to_string());
+            if config["route"] == "workflow-inventory" {
+                let mut inventory = Command::new(config["script"].as_str().unwrap());
+                inventory.env("PATH", path).args([
+                    "test-inventory",
+                    "--host-root",
+                    ".",
+                    "--config",
+                    ".chrono-harness/state/list-config.json",
+                ]);
+                exec(inventory);
+            }
             let mut python = Command::new("/usr/bin/python3");
             python.env("PATH", path).args([
                 "-B",
