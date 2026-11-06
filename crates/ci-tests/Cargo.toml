@@ -44,6 +44,10 @@ path = "tests/inventory.rs"
 name = "native"
 path = "tests/native.rs"
 
+[[test]]
+name = "verified_literals"
+path = "tests/verified_literals.rs"
+
 [[bin]]
 name = "chrono-ci-test-transport"
 path = "tests/support/transport.rs"

@@ -32,6 +32,8 @@ pub mod verified_identifiers;
 pub mod verified_paths;
 #[allow(unexpected_cfgs)]
 pub mod verified_limits;
+#[allow(unexpected_cfgs)]
+pub mod verified_literals;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]

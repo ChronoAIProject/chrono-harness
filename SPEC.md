@@ -1,7 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前已有 v1 外部判官传输、七个独立判官（registration／filemap／routes／projects／cost／mixed／workflow）、限定范围 CI 和宿主指令生成器。Verus 规范性权威是目标合同；当前候选已把 runner 标识、路径和执行资源上限接入 Verus，但尚未在 `dev` 启用全仓覆盖。现有 Rust／Python 判官不能因测试通过而冒充已证明。实际范围见 §14、§16 和 docs/spec-coverage.md。
+当前已有 v1 外部判官传输、七个独立判官（registration／filemap／routes／projects／cost／mixed／workflow）、限定范围 CI 和宿主指令生成器。Verus 规范性权威是目标合同；当前候选已把 runner 标识、路径、执行资源上限以及 full CI／release literal admission 接入 Verus，但尚未在 `dev` 启用全仓覆盖。现有 Rust／Python 判官不能因测试通过而冒充已证明。实际范围见 §14、§16 和 docs/spec-coverage.md。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
 为便于阅读，本文沿用几个代码术语：
@@ -144,7 +144,7 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 ### 2.1.1 Verus 规范性权威
 
-仓库内会影响裁决、选择、错误分类、状态迁移或生命周期结果的逻辑，最终必须由同一份 Verus 源码定义并证明。范围包括解析后的字段约束、登记与必要性链、DELTA／影响选择、路由与项目准入、CI 汇总、缓存／报告／工作树状态、生成器和 bootstrap 的政策决策，以及这些逻辑的测试 oracle。Rust 可以承载 IO、进程、Git、CI provider 和 JSON 编解码等边界适配，但适配器只能把实际输入映射到已证明的 Verus 函数并保留其结果；在 Rust、Python、Shell 或 YAML 中另写一份会改变结果的判断，就不属于权威实现。
+仓库内会影响裁决、选择、错误分类、状态迁移或生命周期结果的逻辑，最终必须由同一份 Verus 源码定义并证明。范围包括解析后的字段约束、登记与必要性链、DELTA／影响选择、路由与项目准入、CI 汇总、缓存／报告／工作树状态、生成器和 bootstrap 的政策决策，以及这些逻辑的测试 oracle。当前已迁移的 literal admission 只规定 full CI／release 配置值不得含 NUL、CR、LF 或 `${{` 起始串；它不替代其余配置解析和政策判断。Rust 可以承载 IO、进程、Git、CI provider 和 JSON 编解码等边界适配，但适配器只能把实际输入映射到已证明的 Verus 函数并保留其结果；在 Rust、Python、Shell 或 YAML 中另写一份会改变结果的判断，就不属于权威实现。
 
 采用 Verus 有一个当前不可替代的消费理由：`chrono-harness check` 的真实消费者需要知道“通过／拒绝／未知”来自已证明的规范性谓词，而不是某个测试样例或未证明的 wrapper。移除该证明会使检查无法对当前 SPEC 的核心决策正确性给出可观察保证，因此 coverage gate 必须把 proof result、源码根和实际调用的对应关系作为输入。这个理由只适用于规范性逻辑；纯传输、外部接口观察和没有影响裁决的 fixture 不因仓库使用 Verus 而强行迁移。
 
