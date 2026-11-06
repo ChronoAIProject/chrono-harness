@@ -1556,7 +1556,11 @@ creation. Once the responsible original consumer releases, every diagnostic
 consumer releases, and the kernel lease excludes live users, retirement uses the
 existing whole-directory disposal operation. One durable retiring allocation
 record preserves recovery; its members need no independent cleanup declarations
-or deletion manifest. This temporary owner's release authorizes reclamation;
+or deletion manifest. It does not first dispose copied members one by one or
+require their synthetic bytes to remain unchanged. Explicit nested capabilities
+and diagnostic references still exclude removal. The shared input claims release
+after this directory is physically absent, preserving other directories' inputs.
+This temporary owner's release authorizes reclamation;
 diagnostic consumers retain required failures until they actually release them.
 Source/index checks at the real host and original result identities still apply;
 links inside the directory are unlinked without following their targets.
@@ -1571,6 +1575,9 @@ receipt binds the original intent and physical identity without rewriting that
 intent. The current policy must adopt directory ownership; active capabilities,
 unreleased diagnostics, changed identities and allocations already handed to
 output retention refuse the transfer. Migration itself does no disposal. Old
+The exact transferred directory enters the existing pending set so the next
+ordinary maintenance entry need not wait for a historical sweep to wrap around.
+Old
 per-output retirement must finish under its existing owner before those remaining
 directories can transfer; the new option does not bypass that owner.
 The direct behavioral acceptance is

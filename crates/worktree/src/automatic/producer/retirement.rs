@@ -609,6 +609,11 @@ fn dispose_owned_directory(
         return Err("owned directory retirement record changed".into());
     }
     let allocation = no_symlink_parents(directory, &object.path)?;
+    let nested_guards = if allocation.exists() {
+        body::directory_guards(directory, object)?
+    } else {
+        vec![]
+    };
     let metadata = no_symlink_parents(directory, &metadata_name(&object.path))?;
     let binding = object
         .cache_lease
@@ -682,6 +687,11 @@ fn dispose_owned_directory(
                 lease.stable()?;
             }
             if allocation.exists() {
+                for guard in &nested_guards {
+                    guard.stable()?;
+                }
+            }
+            if allocation.exists() {
                 allocation_gate
                     .as_ref()
                     .ok_or("owned directory exclusion missing")?
@@ -707,6 +717,9 @@ fn dispose_owned_directory(
     )?;
     if let Some(lease) = lease {
         lease.stable()?;
+        for (digest, length) in &object.shared_originals {
+            body::release_original(inputs, r, directory, object, digest, *length, lease)?;
+        }
     }
     if lease_path.exists() {
         fs::remove_file(&lease_path).map_err(|e| e.to_string())?;
@@ -739,6 +752,36 @@ fn dispose_owned_directory(
     }
     Ok(result)
 }
+
+pub(super) fn retire_owned_directory(
+    policy: &ProducerPolicy,
+    inputs: &PolicyInputs,
+    r: &mut Runner,
+    directory: &Path,
+    object: &Object,
+    lease: &Lease,
+) -> Result<Value, String> {
+    if !policy.temporary || !policy.disposable_directory || !object.owns_directory()
+        || object.original_release.is_none() || object.consumers.values().any(|c| !c.released)
+    {
+        return Err("owned directory requires current ownership and actual consumer release".into());
+    }
+    let mut store = Store::open(directory, &policy.id, false)?;
+    store.load(&object.path)?;
+    let current = store.state.objects[0].clone();
+    store.stable(&current)?;
+    if value!(current) != value!(object) {
+        return Err("owned directory changed before retirement".into());
+    }
+    inputs.stable(r)?;
+    lease.stable()?;
+    Arc::make_mut(&mut store.state.objects[0]).retiring = true;
+    store.save(0)?;
+    let retiring = store.state.objects[0].clone();
+    drop(store);
+    dispose_owned_directory(inputs, r, directory, &retiring, Some(lease))
+}
+
 pub(super) fn retire(
     policy: &ProducerPolicy,
     inputs: &PolicyInputs,

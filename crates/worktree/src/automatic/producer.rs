@@ -2150,6 +2150,26 @@ impl ProducerPolicy {
             let mut row = value!({"producer":self.id,"path":format!("{}{}",self.directory,object.path),
                 "retention_reason":object.retention_reason,"consumers":object.consumers,
                 "registered_generated_objects":object.generated.len(),"evidence":"retained"});
+            if object.owns_directory()
+                && object.original_release.is_some()
+                && object.consumers.values().all(|consumer| consumer.released)
+                && let Some(lease) = cache_guard.as_ref()
+            {
+                drop(store.take());
+                match retirement::retire_owned_directory(self, inputs, r, &directory, object, lease) {
+                    Ok(retirement) => {
+                        row["status"] = value!("disposed");
+                        row["original_retirement"] = retirement;
+                    }
+                    Err(error) => {
+                        failures.push(error.clone());
+                        row["status"] = value!("failed");
+                        row["original_retirement"] = value!({"status":"failed","error":error});
+                    }
+                }
+                report["producer_objects"].as_array_mut().unwrap().push(row);
+                continue;
+            }
             // Body recovery has its own membership and receipts. A historical
             // Cargo disposal bit cannot settle a subsequently adopted body.
             if !object.bodies.is_empty() {
