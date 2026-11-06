@@ -121,7 +121,7 @@
 | 59 受影响消费者缺失／退役／不符 | 待实现：§1 | 针对 DELTA 报精确引用／证据失败，不猜消费者、不因无关问题拒绝全仓 |
 | 60 成功报告／fixture 释放过期 | 部分：原 worktree 维护做有限当前保管文件退役，精确副本／保留原件、内核排除、独立同步 journal、真实部分重试 | 生产结束后普通入口自动退役、原生／交付验收 |
 | 61 无当前根的历史引用环 | 有限实现：runner-tests/tests/retention.rs::current_references_protect_closure_and_released_historical_cycles_are_not_roots 在有根时保护 A→B→A，有限轮次回收无根环，保留原退出 0／9；当前 Darwin 原件确认执行 | 完整宿主／原生采用、输入完整 |
-| 62 报告／流／下载重复字节 | 部分：寻址传输去重声明原件，v2 进程无损压缩，retained-reference/v2 避免报告路径复制正文，原生 gather 保留原依赖 | 已登记生产者间唯一内容实体、独立操作结果／异常关系；压缩／引用不等于路径退役 |
+| 62 报告／流／下载重复字节 | 部分：寻址传输去重声明原件，v2 进程无损压缩，retained-reference/v2 避免报告路径复制正文，原生 gather 保留原依赖。生命周期 Git／版本／托管流复用同一编码；显式 recover／cleanup-fetch 只引用原失败报告，父报告按现有逐输出依赖保护原件。worktree 行为测试覆盖原件保留／释放及缺失、改写、错绑和符号链接拒绝 | 其余报告生产者的重复输入表示、生产者间唯一内容实体、独立操作结果／异常关系；压缩／引用不等于路径退役，完整生命周期成本未知 |
 | 63 state 内嵌套 SDK／构建／增量 | 有限实现：runner-tests/tests/retention.rs::ordinary_entry_reclaims_completed_nested_outputs_with_real_savings 登记真实 SDK target/incremental，普通维护回收恰好 2097152 逻辑字节，保留退出 7，物理收益未知；当前 Darwin 原件确认 | 所有真实 SDK／fixture 生产者明确采用，目录位置不授予权限 |
 | 64 发布／回收中断 | 部分：worktree intent／内核租约；runner-tests/tests/retention.rs::no_finish_preserves_live_producer_then_recovers_unknown_partial_publication 保护活发布，能力关闭后无需 finish 回收真实部分树，保留 completion not-established、拒绝已退役原件消费；Darwin 原件确认 | 通用中断及完整宿主恢复采用仍有限 |
 | 65 活消费／恢复下数量字节超限 | 部分：候选 per_relation_capacity_preserves_independent_outputs_and_recovers_pending_record 要求关系集上限 1 时独立发布、恢复点名 pending；执行待完成 | 字节／未知占用组合、完整生产／恢复采用 |
