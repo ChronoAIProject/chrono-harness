@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import selectors
+import time
 import subprocess
 import sys
 import tarfile
@@ -513,6 +515,43 @@ class UnitFailureRetention(unittest.TestCase):
                 self.assertEqual(retained['status'],'unavailable')
                 self.assertEqual(bytes(retained['bytes']),raw)
         return execution.report,stderr_capture.buffer.getvalue()
+
+    def test_original_streams_arrive_before_child_completion(self):
+        fixture = SCRIPT.parent / 'fixtures/tool.py'
+        process = subprocess.Popen([sys.executable, str(fixture), 'stream-driver',
+                                    str(SCRIPT), str(self.root), str(self.output)],
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        expected = {'stdout': b'live stdout\xff\n', 'stderr': b'live stderr\xfe\n'}
+        observed = {name: b'' for name in expected}
+        selector = selectors.DefaultSelector()
+        for name in expected:
+            selector.register(getattr(process, name), selectors.EVENT_READ, name)
+        deadline = time.monotonic() + 5
+        try:
+            while any(observed[name] != raw for name, raw in expected.items()):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                for key, _ in selector.select(remaining):
+                    raw = os.read(key.fileobj.fileno(), 4096)
+                    if raw:
+                        observed[key.data] += raw
+                    else:
+                        selector.unregister(key.fileobj)
+        finally:
+            selector.close()
+            process.stdin.write(b'x'); process.stdin.flush()
+            process.stdin.close(); process.stdin = None
+            stdout, stderr = process.communicate(timeout=15)
+        self.assertEqual(process.returncode, 73, stderr)
+        self.assertEqual(observed, expected, 'original streams were withheld until child completion')
+        self.assertEqual(stdout, b'')
+        receipt = json.loads((self.output / 'receipt.json').read_text())
+        self.assertEqual(receipt['failure']['exit_code'], 73)
+        for name, raw in expected.items():
+            stream = receipt['processes'][0][name]
+            self.assertEqual((self.output / stream['path']).read_bytes(), raw)
+            self.assertEqual(stream['sha256'], hashlib.sha256(raw).hexdigest())
 
     def test_native_failure_retention_preserves_directory_and_byte_boundaries(self):
         retain, bound = self.recipe.retain_failure_evidence, self.recipe.EVIDENCE_BOUND

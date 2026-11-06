@@ -149,6 +149,19 @@
             "crates/runner/Cargo.toml"
           ]
         },
+        "inputs_vendor": {
+          "operation": "inputs.vendor.runner",
+          "tool": "cargo",
+          "argv": [
+            "vendor",
+            "--locked",
+            "--offline",
+            "--versioned-dirs",
+            "--manifest-path",
+            "crates/runner/Cargo.toml",
+            ".chrono-harness/cache/runner-vendor"
+          ]
+        },
         "verify_identifiers": {
           "operation": "verify.runner-identifiers",
           "tool": "verus",
