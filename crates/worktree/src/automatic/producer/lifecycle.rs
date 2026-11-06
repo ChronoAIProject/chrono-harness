@@ -66,7 +66,7 @@ pub(super) struct Context {
     pub(super) directory: PathBuf,
     pub(super) producer: String,
     pub(super) generated_outputs: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_false")]
     pub(super) disposable_directory: bool,
     pub(super) capacity: Capacity,
 }

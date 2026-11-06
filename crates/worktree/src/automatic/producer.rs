@@ -93,8 +93,12 @@ struct Object {
     metadata_identity: Option<String>,
     #[serde(default)]
     born_nanos: u64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_false")]
     disposable_directory: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -1459,7 +1463,8 @@ impl RetainedArtifact {
 }
 
 /// One prospectively enrolled temporary allocation. Source and originals stay
-/// in place after Drop or interruption; only its declared outputs enter drain.
+/// in place after Drop or interruption. An explicitly owned temporary directory
+/// can be reclaimed as a whole after its actual original consumers release.
 /// Native consumers use bind_command; engine consumers inherit the same Scope.
 pub struct TemporaryHost {
     path: PathBuf,
