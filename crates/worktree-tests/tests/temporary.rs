@@ -241,10 +241,8 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
     let adopted = json(&fs::read(&record).unwrap()).unwrap();
     assert!(adopted["object"]["directory_custody"].is_object());
     assert_ne!(adopted["object"]["disposable_directory"], true);
-    let mut next =
-        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "new-owned-")
-            .unwrap();
-    next.finish().unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
     assert!(
         !root.exists() && !record.exists(),
         "adopted old directory accumulated"
