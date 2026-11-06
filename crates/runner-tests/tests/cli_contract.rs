@@ -10,6 +10,31 @@ use tempfile::TempDir;
 const CHILD: &str = env!("CARGO_BIN_EXE_chrono-test-cli-child");
 
 #[test]
+fn ci_result_status_keeps_exact_wire_names_and_variant_identity() {
+    let cases = [
+        (Status::Passed, "passed"),
+        (Status::Failed, "failed"),
+        (Status::NotRequired, "not-required"),
+        (Status::Blocked, "blocked"),
+    ];
+    for (i, (status, name)) in cases.iter().enumerate() {
+        assert_eq!(serde_json::to_value(status).unwrap(), json!(name));
+        let decoded: Status = serde_json::from_value(json!(name)).unwrap();
+        assert_eq!(&decoded, status);
+        assert_eq!(&status.clone(), status);
+        for (j, (other, _)) in cases.iter().enumerate() {
+            assert_eq!(status == other, i == j);
+        }
+    }
+    for invalid in ["pass", "Passed", "not_required", "", "blocked "] {
+        assert!(serde_json::from_value::<Status>(json!(invalid)).is_err());
+    }
+    for invalid in [Value::Null, json!(0), json!(["passed"])] {
+        assert!(serde_json::from_value::<Status>(invalid).is_err());
+    }
+}
+
+#[test]
 fn report_reference_publication_is_an_explicit_scoped_v3_contract() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("check.json");
