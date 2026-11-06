@@ -111,7 +111,7 @@ fn oracle_edges(rows: &[(&str, EdgeKind, &str)]) -> BTreeSet<Edge> {
 // Witness oracle takes independently specified endpoint edges; it never parses producer strings.
 fn witnesses(i: &Impact, allowed: &BTreeSet<Edge>) {
     for (node, seeds) in &i.closure.reached {
-        for id in seeds {
+        for id in seeds.entries() {
             let s = i.seed_causes.iter().find(|s| &s.id == id).unwrap();
             let mut at = s.node.clone();
             for e in i.closure.witness(id, node).unwrap() {
@@ -453,6 +453,514 @@ fn shared_graph_does_not_need_full_registration_and_only_execution_edges_select(
         c.selected_tests().is_empty(),
         "nonexecution edges cannot select tests"
     );
+}
+
+#[test]
+fn edge_kind_json_adapters_use_exact_canonical_strings() {
+    let pairs = [
+        ("compile", EdgeKind::Compile),
+        ("build-input", EdgeKind::BuildInput),
+        ("runtime-input", EdgeKind::RuntimeInput),
+        ("test-execution", EdgeKind::TestExecution),
+        ("judge-trigger", EdgeKind::JudgeTrigger),
+    ];
+    for (name, kind) in pairs {
+        let value = json!(name);
+        assert_eq!(serde_json::to_value(kind).unwrap(), value);
+        assert_eq!(serde_json::from_value::<EdgeKind>(value).unwrap(), kind);
+        let text = format!("\"{name}\"");
+        assert_eq!(serde_json::from_str::<EdgeKind>(&text).unwrap(), kind);
+    }
+    assert_eq!(
+        serde_json::from_str::<EdgeKind>(r#""\u0063ompile""#).unwrap(),
+        EdgeKind::Compile
+    );
+    for value in [
+        json!(""),
+        json!("Compile"),
+        json!("compil"),
+        json!("compilex"),
+        json!("build_input"),
+        json!(" compile"),
+        json!("compile\0"),
+        json!("编译"),
+        json!(null),
+        json!(0),
+        json!(true),
+        json!([]),
+        json!({"compile": null}),
+    ] {
+        assert!(
+            serde_json::from_value::<EdgeKind>(value.clone()).is_err(),
+            "{value}"
+        );
+        assert!(
+            serde_json::from_str::<EdgeKind>(&value.to_string()).is_err(),
+            "{value}"
+        );
+    }
+}
+
+#[test]
+fn complete_edge_order_and_inventory_match_the_declared_field_order() {
+    let expected: Vec<Edge> = [
+        ("", EdgeKind::JudgeTrigger, "根"),
+        ("a", EdgeKind::Compile, ""),
+        ("a", EdgeKind::Compile, "a"),
+        ("a", EdgeKind::Compile, "a\0"),
+        ("a", EdgeKind::Compile, "aa"),
+        ("a", EdgeKind::Compile, "é"),
+        ("a", EdgeKind::Compile, "根"),
+        ("a", EdgeKind::BuildInput, ""),
+        ("a", EdgeKind::RuntimeInput, ""),
+        ("a", EdgeKind::TestExecution, ""),
+        ("a", EdgeKind::JudgeTrigger, ""),
+        ("aa", EdgeKind::Compile, ""),
+        ("é", EdgeKind::Compile, ""),
+        ("根", EdgeKind::Compile, ""),
+    ]
+    .into_iter()
+    .map(|(from, kind, to)| Edge {
+        from: from.into(),
+        kind,
+        to: to.into(),
+    })
+    .collect();
+    for (i, a) in expected.iter().enumerate() {
+        for (j, b) in expected.iter().enumerate() {
+            assert_eq!(a.cmp(b), i.cmp(&j), "indices {i}, {j}");
+            assert_eq!(a.partial_cmp(b), Some(i.cmp(&j)), "indices {i}, {j}");
+            assert_eq!(a == b, i == j, "indices {i}, {j}");
+        }
+        assert_eq!(a.clone(), *a);
+    }
+    let row: BTreeSet<&Edge> = expected.iter().rev().chain(expected.iter()).collect();
+    let actual = chrono_judge_filemap::verified_graph::edge_inventory(&row);
+    assert_eq!(actual, expected.iter().collect::<Vec<_>>());
+}
+
+#[test]
+fn edge_json_adapters_preserve_fields_and_report_invalid_inputs() {
+    let edge = Edge {
+        from: "根\0".into(),
+        kind: EdgeKind::BuildInput,
+        to: "é".into(),
+    };
+    let expected = json!({"from": "根\0", "kind": "build-input", "to": "é"});
+    assert_eq!(serde_json::to_value(&edge).unwrap(), expected);
+    assert_eq!(serde_json::from_value::<Edge>(expected).unwrap(), edge);
+    let text = r#"{"to":"\u00e9","kind":"build-input","from":"根\u0000"}"#;
+    assert_eq!(serde_json::from_str::<Edge>(text).unwrap(), edge);
+    assert_eq!(
+        format!("{edge:?}"),
+        "Edge { from: \"根\\0\", kind: BuildInput, to: \"é\" }"
+    );
+    for value in [
+        json!({"from": "a", "kind": "compile"}),
+        json!({"kind": "compile", "to": "b"}),
+        json!({"from": "a", "to": "b"}),
+        json!({"from": 1, "kind": "compile", "to": "b"}),
+        json!({"from": "a", "kind": "Compile", "to": "b"}),
+        json!({"from": "a", "kind": "compile", "to": null}),
+    ] {
+        assert!(serde_json::from_value::<Edge>(value.clone()).is_err());
+        assert!(serde_json::from_str::<Edge>(&value.to_string()).is_err());
+    }
+}
+
+#[test]
+fn complete_seed_order_matches_all_four_fields_and_preserves_btree_members() {
+    let expected: Vec<Seed> = [
+        ("", "z", "z", "z"),
+        ("a", "", "z", "z"),
+        ("a", "a", "", "z"),
+        ("a", "a", "a", ""),
+        ("a", "a", "a", "\0"),
+        ("a", "a", "a", "a"),
+        ("a", "a", "a", "a\0"),
+        ("a", "a", "a", "aa"),
+        ("a", "a", "a", "é"),
+        ("a", "a", "a", "根"),
+        ("a", "a", "b", ""),
+        ("a", "b", "", ""),
+        ("b", "", "", ""),
+        ("根", "", "", ""),
+    ]
+    .into_iter()
+    .map(|(id, node, reference, reason)| Seed {
+        id: id.into(),
+        node: node.into(),
+        reference: reference.into(),
+        reason: reason.into(),
+    })
+    .collect();
+    for (i, a) in expected.iter().enumerate() {
+        for (j, b) in expected.iter().enumerate() {
+            assert_eq!(a.cmp(b), i.cmp(&j), "indices {i}, {j}");
+            assert_eq!(a.partial_cmp(b), Some(i.cmp(&j)), "indices {i}, {j}");
+            assert_eq!(a == b, i == j, "indices {i}, {j}");
+        }
+        assert_eq!(a.clone(), *a);
+    }
+    let actual: BTreeSet<Seed> = expected
+        .iter()
+        .rev()
+        .chain(expected.iter())
+        .cloned()
+        .collect();
+    assert_eq!(actual.into_iter().collect::<Vec<_>>(), expected);
+}
+
+#[test]
+fn seed_json_adapters_preserve_each_field_and_reject_missing_or_nonstring_fields() {
+    let seed = Seed {
+        id: "id\0".into(),
+        node: "根".into(),
+        reference: "é".into(),
+        reason: "".into(),
+    };
+    let expected = json!({"id":"id\0","node":"根","reference":"é","reason":""});
+    assert_eq!(serde_json::to_value(&seed).unwrap(), expected);
+    assert_eq!(
+        serde_json::from_value::<Seed>(expected.clone()).unwrap(),
+        seed
+    );
+    let text = r#"{"reason":"","reference":"\u00e9","node":"根","id":"id\u0000"}"#;
+    assert_eq!(serde_json::from_str::<Seed>(text).unwrap(), seed);
+    assert_eq!(
+        format!("{seed:?}"),
+        "Seed { id: \"id\\0\", node: \"根\", reference: \"é\", reason: \"\" }"
+    );
+    for field in ["id", "node", "reference", "reason"] {
+        let mut missing = expected.clone();
+        missing.as_object_mut().unwrap().remove(field);
+        let mut nonstring = expected.clone();
+        nonstring[field] = json!(null);
+        for value in [missing, nonstring] {
+            assert!(serde_json::from_value::<Seed>(value.clone()).is_err());
+            assert!(serde_json::from_str::<Seed>(&value.to_string()).is_err());
+        }
+    }
+}
+
+#[test]
+fn typed_union_preserves_full_order_exact_origins_and_flat_json_transport() {
+    let expected = [
+        ("", EdgeKind::JudgeTrigger, "根", Origin::Candidate),
+        ("a", EdgeKind::Compile, "", Origin::Base),
+        ("a", EdgeKind::Compile, "a\0", Origin::Both),
+        ("a", EdgeKind::Compile, "aa", Origin::Candidate),
+        ("a", EdgeKind::BuildInput, "", Origin::Base),
+        ("a", EdgeKind::JudgeTrigger, "根", Origin::Both),
+        ("é", EdgeKind::Compile, "", Origin::Candidate),
+        ("根", EdgeKind::Compile, "", Origin::Base),
+    ];
+    let mut base = BTreeSet::new();
+    let mut candidate = BTreeSet::new();
+    for (from, kind, to, origin) in expected.into_iter().rev() {
+        let edge = Edge {
+            from: from.into(),
+            kind,
+            to: to.into(),
+        };
+        if origin != Origin::Candidate {
+            base.insert(edge.clone());
+            base.insert(edge.clone());
+        }
+        if origin != Origin::Base {
+            candidate.insert(edge.clone());
+            candidate.insert(edge);
+        }
+    }
+    let out = graph::union(&base, &candidate);
+    assert_eq!(out.len(), expected.len());
+    for (entry, (from, kind, to, origin)) in out.iter().zip(expected) {
+        assert_eq!(
+            (
+                &*entry.edge.from,
+                entry.edge.kind,
+                &*entry.edge.to,
+                entry.origin
+            ),
+            (from, kind, to, origin)
+        );
+        let wire_origin = match origin {
+            Origin::Base => "base",
+            Origin::Candidate => "candidate",
+            Origin::Both => "both",
+        };
+        let value = json!({"from": from, "kind": kind, "to": to, "origin": wire_origin});
+        assert_eq!(serde_json::to_value(entry).unwrap(), value);
+        for decoded in [
+            serde_json::from_value::<graph::UnionEdge>(value.clone()).unwrap(),
+            serde_json::from_str::<graph::UnionEdge>(&value.to_string()).unwrap(),
+            entry.clone(),
+        ] {
+            assert_eq!(decoded.edge, entry.edge);
+            assert_eq!(decoded.origin, origin);
+        }
+        assert_eq!(
+            format!("{entry:?}"),
+            format!("UnionEdge {{ edge: {:?}, origin: {origin:?} }}", entry.edge)
+        );
+    }
+    for value in [
+        json!({"from":"a","kind":"compile","to":"b"}),
+        json!({"from":"a","kind":"compile","to":"b","origin":"Both"}),
+        json!({"from":"a","kind":"compile","to":"b","origin":null}),
+        json!({"from":"a","kind":"compile","origin":"both"}),
+    ] {
+        assert!(serde_json::from_value::<graph::UnionEdge>(value.clone()).is_err());
+        assert!(serde_json::from_str::<graph::UnionEdge>(&value.to_string()).is_err());
+    }
+}
+
+#[test]
+fn indexed_closure_preserves_shortest_ties_edge_kinds_and_seed_identity() {
+    let rows = [
+        ("根", EdgeKind::RuntimeInput, "a"),
+        ("根", EdgeKind::Compile, "z"),
+        ("根", EdgeKind::Compile, "a"),
+        ("a", EdgeKind::Compile, "end"),
+        ("z", EdgeKind::Compile, "end"),
+        ("end", EdgeKind::TestExecution, "test:t"),
+        ("test:t", EdgeKind::RuntimeInput, "根"),
+    ];
+    let seed = |id: &str, node: &str| Seed {
+        id: id.into(),
+        node: node.into(),
+        reference: "explicit".into(),
+        reason: "boundary".into(),
+    };
+    let seeds = [seed("s", "根"), seed("other", "z"), seed("isolated", "孤")];
+    let allowed = oracle_edges(&rows);
+    let mut edges = graph::union(&BTreeSet::new(), &allowed);
+    // Input order and repeated identical edges cannot change adjacency ordering.
+    edges.reverse();
+    edges.push(edges[0].clone());
+    let closure = graph::closure(&edges, &seeds);
+    let expected = vec![
+        Edge {
+            from: "根".into(),
+            kind: EdgeKind::Compile,
+            to: "a".into(),
+        },
+        Edge {
+            from: "a".into(),
+            kind: EdgeKind::Compile,
+            to: "end".into(),
+        },
+    ];
+    assert_eq!(closure.witness("s", "end"), Some(expected));
+    assert_eq!(closure.witness("other", "end").unwrap().len(), 1);
+    assert_eq!(closure.witness("isolated", "孤"), Some(vec![]));
+    assert_eq!(closure.witness("isolated", "end"), None);
+    assert_eq!(closure.selected_tests(), BTreeSet::from(["test:t".into()]));
+    assert_eq!(closure.traversed.len(), allowed.len());
+    assert!(closure.traversed.iter().all(|edge| {
+        allowed.contains(&edge.edge)
+            && edge
+                .seeds
+                .entries()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                == ["other", "s"]
+    }));
+    // Existing shared-ID behavior: reached causes merge, the last tree owns that ID.
+    let duplicate = graph::closure(&edges, &[seed("same", "根"), seed("same", "孤")]);
+    assert!(duplicate.reached["end"].contains("same"));
+    assert_eq!(duplicate.witness("same", "end"), None);
+    assert_eq!(duplicate.witness("same", "孤"), Some(vec![]));
+}
+
+#[test]
+fn cause_state_merges_exact_ids_clones_independently_and_keeps_json_arrays() {
+    use graph::CauseSet;
+    let mut causes = CauseSet::default();
+    assert_eq!(causes.len(), 0);
+    assert_eq!(causes.first(), None);
+    for name in ["z", "根\0", "a\0", "é", "", "a", "e\u{301}"] {
+        assert!(causes.insert(name));
+        assert!(causes.contains(name));
+        let before = serde_json::to_value(&causes).unwrap();
+        assert!(!causes.insert(&String::from(name)));
+        assert_eq!(serde_json::to_value(&causes).unwrap(), before);
+    }
+    let expected = json!(["", "a", "a\0", "e\u{301}", "z", "é", "根\0"]);
+    assert_eq!(causes.len(), 7);
+    assert_eq!(causes.first().map(String::as_str), Some(""));
+    assert_eq!(serde_json::to_value(&causes).unwrap(), expected);
+    for missing in ["a\0x", "根", "É", "missing"] {
+        assert!(!causes.contains(missing));
+    }
+    let mut copy = causes.clone();
+    assert!(copy.insert("new"));
+    assert!(!causes.contains("new"));
+    assert_eq!(serde_json::to_value(&causes).unwrap(), expected);
+    let decoded: CauseSet = serde_json::from_value(json!([
+        "根\0", "é", "z", "a\0", "a", "", "e\u{301}", "a", "根\0"
+    ]))
+    .unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), expected);
+    assert_eq!(
+        serde_json::to_value(serde_json::from_str::<CauseSet>("[]").unwrap()).unwrap(),
+        json!([])
+    );
+    for invalid in [json!(null), json!({}), json!(["a", 1]), json!([null])] {
+        assert!(serde_json::from_value::<CauseSet>(invalid).is_err());
+    }
+}
+
+#[test]
+fn propagation_projects_fifo_names_and_complete_typed_rows_into_the_actual_consumer() {
+    use chrono_judge_filemap::verified_graph::{propagate, seed_topology};
+    let allowed = oracle_edges(&[
+        ("根\0", EdgeKind::Compile, "a"),
+        ("根\0", EdgeKind::RuntimeInput, "a"),
+        ("根\0", EdgeKind::TestExecution, "é"),
+        ("a", EdgeKind::BuildInput, "é"),
+        ("é", EdgeKind::Compile, "é"),
+        ("é", EdgeKind::JudgeTrigger, "根\0"),
+        ("孤", EdgeKind::TestExecution, "unreachable"),
+    ]);
+    let edges = graph::union(&BTreeSet::new(), &allowed);
+    let seed = |id: &str, node: &str| Seed {
+        id: id.into(),
+        node: node.into(),
+        reference: "explicit".into(),
+        reason: "projection".into(),
+    };
+    let seeds = [seed("s", "根\0"), seed("isolated", "")];
+    let topology = seed_topology(&edges, &seeds);
+    let output = propagate(&topology, topology.indices.roots[0]);
+    let actual: Vec<_> = output
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.node,
+                row.outgoing
+                    .iter()
+                    .map(|edge| (edge.from.as_str(), edge.kind, edge.to.as_str()))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        actual,
+        vec![
+            (
+                "根\0",
+                vec![
+                    ("根\0", EdgeKind::Compile, "a"),
+                    ("根\0", EdgeKind::RuntimeInput, "a"),
+                    ("根\0", EdgeKind::TestExecution, "é")
+                ]
+            ),
+            ("a", vec![("a", EdgeKind::BuildInput, "é")]),
+            (
+                "é",
+                vec![
+                    ("é", EdgeKind::Compile, "é"),
+                    ("é", EdgeKind::JudgeTrigger, "根\0")
+                ]
+            ),
+        ]
+    );
+    assert_eq!(
+        output.predecessors.witness("é").unwrap(),
+        vec![Edge {
+            from: "根\0".into(),
+            kind: EdgeKind::TestExecution,
+            to: "é".into(),
+        }]
+    );
+    assert_eq!(output.predecessors.witness("unreachable"), None);
+    let isolated = propagate(&topology, topology.indices.roots[1]);
+    assert_eq!(isolated.rows.len(), 1);
+    assert_eq!(isolated.rows[0].node, "");
+    assert!(isolated.rows[0].outgoing.is_empty());
+    assert_eq!(isolated.predecessors.witness(""), Some(vec![]));
+
+    let closure = graph::closure(&edges, &seeds);
+    assert_eq!(
+        serde_json::to_value(&closure.reached).unwrap(),
+        json!({"": ["isolated"], "a": ["s"], "é": ["s"], "根\0": ["s"]})
+    );
+    assert_eq!(closure.traversed.len(), 6);
+    assert!(closure.traversed.iter().all(|row| {
+        row.seeds
+            .entries()
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            == ["s"]
+    }));
+    assert_eq!(closure.selected_tests(), BTreeSet::from(["é".into()]));
+    assert_eq!(closure.witness("s", "é"), output.predecessors.witness("é"));
+}
+
+#[test]
+fn predecessor_state_roundtrips_the_actual_sparse_json_and_cloned_witnesses() {
+    let parents = json!({
+        "": null,
+        "a": {"from":"", "kind":"compile", "to":"a"},
+        "根\0": {"from":"a", "kind":"test-execution", "to":"根\0"}
+    });
+    let value = json!({"reached":{}, "predecessors":{"seed\0":parents}, "traversed":[]});
+    let state: graph::Closure = serde_json::from_value(value.clone()).unwrap();
+    let expected = vec![
+        Edge {
+            from: "".into(),
+            kind: EdgeKind::Compile,
+            to: "a".into(),
+        },
+        Edge {
+            from: "a".into(),
+            kind: EdgeKind::TestExecution,
+            to: "根\0".into(),
+        },
+    ];
+    assert_eq!(state.witness("seed\0", "根\0"), Some(expected.clone()));
+    assert_eq!(state.clone().witness("seed\0", "根\0"), Some(expected));
+    assert_eq!(state.witness("seed\0", ""), Some(vec![]));
+    assert_eq!(state.witness("missing", ""), None);
+    assert_eq!(state.witness("seed\0", "missing"), None);
+    assert_eq!(serde_json::to_value(&state).unwrap(), value);
+    let text = serde_json::to_string(&state).unwrap();
+    let decoded: graph::Closure = serde_json::from_str(&text).unwrap();
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), value);
+}
+
+#[test]
+fn predecessor_witness_rejects_serialized_cycles_missing_rows_and_wrong_targets() {
+    for parents in [
+        json!({"a":{"from":"a", "kind":"compile", "to":"a"}}),
+        json!({"a":{"from":"b", "kind":"compile", "to":"a"},
+               "b":{"from":"a", "kind":"runtime-input", "to":"b"}}),
+        json!({"a":{"from":"missing", "kind":"compile", "to":"a"}}),
+        json!({"":null, "a":{"from":"", "kind":"compile", "to":"wrong"}}),
+    ] {
+        let state: graph::Closure = serde_json::from_value(json!({
+            "reached":{}, "predecessors":{"s":parents}, "traversed":[]
+        }))
+        .unwrap();
+        assert_eq!(state.witness("s", "a"), None, "{state:?}");
+    }
+    for parents in [
+        json!([]),
+        json!(null),
+        json!({"a":42}),
+        json!({"a":{"from":"", "kind":"unknown", "to":"a"}}),
+    ] {
+        assert!(
+            serde_json::from_value::<graph::Closure>(json!({
+                "reached":{}, "predecessors":{"s":parents}, "traversed":[]
+            }))
+            .is_err()
+        );
+    }
 }
 
 #[test]

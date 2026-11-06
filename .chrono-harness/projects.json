@@ -1342,6 +1342,24 @@
             "--manifest-path",
             "crates/judge-filemap/Cargo.toml"
           ]
+        },
+        "verify_graph": {
+          "operation": "verify.filemap-graph",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.filemap-graph.rlib,dep-info=.chrono-harness/state/verify.filemap-graph.rlib.d",
+            "crates/judge-filemap/src/verified_graph.rs",
+            "-o",
+            ".chrono-harness/state/verify.filemap-graph.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -1455,6 +1473,24 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        },
+        "verify_graph": {
+          "operation": "verify.filemap-graph-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.filemap-graph-tests.rlib,dep-info=.chrono-harness/state/verify.filemap-graph-tests.rlib.d",
+            "crates/judge-filemap-tests/tests/verified_graph.rs",
+            "-o",
+            ".chrono-harness/state/verify.filemap-graph-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },

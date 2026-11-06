@@ -18,6 +18,10 @@ name = "impact"
 path = "tests/impact.rs"
 
 [[test]]
+name = "verified_graph"
+path = "tests/verified_graph.rs"
+
+[[test]]
 name = "consumer"
 path = "tests/consumer.rs"
 

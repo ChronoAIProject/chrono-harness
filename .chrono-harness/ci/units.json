@@ -117,11 +117,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-filemap/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-filemap/"
