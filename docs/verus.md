@@ -101,7 +101,7 @@ five complete byte names, returning that variant. No case folding, trimming,
 prefix acceptance or alias is present. Serde adapters in `graph.rs` delegate
 JSON string serialization/parsing to these functions and reject nonstrings.
 Those adapters and diagnostic formatting remain unproved in their empty-root
-owner; input name/seed extraction and the remaining closure composition still require proof.
+owner; Seed-to-root extraction and the remaining closure composition still require proof.
 Independent Verus examples check all 25 kind pairs, exact names and roundtrips,
 and noncanonical boundaries. Runtime tests additionally exercise both owned
 JSON values and text, escaped strings and wrong JSON types. An always-Equal
@@ -130,7 +130,7 @@ NUL-containing names, Unicode, cloning, empty rows and duplicate insertions.
 Runtime consumer cases require all 196 pairs of a separately declared 14-edge
 inventory and exercise JSON field transport/errors. JSON/diagnostic adapter
 implementations remain outside the proof root with their obligation retained.
-Name/seed extraction and the remaining closure/selection logic still require proof.
+Seed-to-root extraction and the remaining closure/selection logic still require proof.
 
 The same root now owns the actual `Origin` and `UnionEdge` types and the production
 two-endpoint typed `union`. Origin equality preserves variant identity, and both
@@ -178,10 +178,10 @@ and deduplication. Its contract proves strict byte order, exactly the supplied
 byte-name set, and a length equal to that set's cardinality. Merge admits each
 next value only after all preceding output values and consumes equal names from
 both sides together. Bounds, integer safety and termination are proved. The
-actual closure supplies its collected edge/seed names to this constructor,
+actual closure calls `graph_names` below to supply edge endpoints and root names to this constructor,
 replacing BTreeSet name sorting/deduplication and the subsequent validation scan.
-Extracting those names from typed edges/seeds remains an adapter obligation;
-every name actually supplied to the constructor is preserved. Independent
+Extracting root names from Seed objects remains an adapter obligation;
+every supplied typed endpoint and root name is preserved. Independent
 examples cover empty and repeated-singleton inputs, descending duplicates with
 exact expected slots, and a mixed prefix/Unicode inventory.
 
@@ -222,7 +222,7 @@ targets, empty rows and duplicate roots preserve their supplied positions;
 failure means exactly a row-count mismatch or a missing target/root name. The
 actual closure calls this implementation, replacing its unproved iterator-based
 target-name projection. Source grouping and row construction use the proved
-`source_rows` owner below; name/seed extraction and adapter composition remain obligations.
+`source_rows` owner below; Seed-to-root extraction and adapter composition remain obligations.
 
 Independent Verus examples require exact indices for parallel targets, cycles,
 reordered slots, empty/Unicode names, empty rows and duplicate roots. Missing
@@ -243,7 +243,7 @@ and endpoint origins do not change those row contracts. Empty/isolated rows and
 Unicode/NUL names are covered. The result is absent exactly when a source name
 is missing; target-name admission remains the subsequent index owner's job.
 The actual closure calls this function, replacing its independent string-map
-entry grouping and row collection. Name/seed extraction, the surrounding adapter
+entry grouping and row collection. Seed-to-root extraction, the surrounding adapter
 and the graph's whole-file obligation remain unproved.
 
 The implementation reuses exact name lookup and the supported standard integer
@@ -261,6 +261,33 @@ missing sources and an allowed missing target. A mutation grouping by destinatio
 instead of source fails the source-admission assertions; correct source bytes are
 restored by SHA-256 before canonical validation. Existing runtime closure cases
 consume the same implementation for typed ties, cycles and merged causes.
+
+The same root's `graph_names` now extracts both complete endpoint byte values
+from every actual UnionEdge and includes every supplied root name. It calls the
+existing name inventory constructor and proves strict byte order, exact union
+of endpoint/root byte sets, distinct-name cardinality and admission of every
+source name. Kind, origin, duplicate edges/roots, empty graphs and isolated roots
+do not change the contract. Bounds and termination are proved. Production calls
+this implementation instead of its independent flat-map/chain collection. One
+Seed-to-root reference vector feeds both name construction and indexing and is
+released before traversal; that Seed field extraction remains unproved.
+
+Independent proofs require an exact empty result, isolated/repeated roots,
+Unicode/NUL, both typed endpoints, different kinds/origins and an exact four-name
+set/cardinality. Appending the source twice instead of the destination fails the
+endpoint-set loop invariant; correct source is restored by SHA-256. Existing
+roots, flags and vstd contracts suffice, with no new operation, dependency or
+trusted interface. Extraction appends O(E + S) references for E edges/S supplied
+roots; sorting N = 2E + S names retains O(N log N) byte comparisons and O(N)
+reference storage. Total measured costs remain unknown; no saving is claimed.
+Seed construction, cause merging, surrounding composition, JSON/debug adapters,
+selection and complete SPEC correspondence still retain their obligations.
+
+The current distribution interface uses a generated shell installer. Its
+argument parsing, platform selection, integrity decisions and cleanup are
+repository program logic, as is its Rust transport test fixture. Both files
+retain explicit program roles with empty proof roots; shell execution is not a
+trusted external-interface exemption.
 
 The same source owns indexed graph validation and
 per-root FIFO traversal. `valid_indices` accepts exactly graphs whose destination

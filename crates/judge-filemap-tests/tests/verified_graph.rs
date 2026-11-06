@@ -1016,5 +1016,86 @@ fn source_rows_group_unsorted_duplicate_edges_into_exact_typed_slots() {
     assert(rows[2][0].key() == cycle.key());
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn graph_names_preserve_empty_inputs() {
+    let edges: Vec<policy::UnionEdge> = vec![];
+    let roots: Vec<&str> = vec![];
+    assert(policy::endpoint_names(edges@) =~= Set::<Seq<u8>>::empty());
+    assert(policy::name_members(roots@) =~= Set::<Seq<u8>>::empty());
+    assert((policy::endpoint_names(edges@) + policy::name_members(roots@)) =~= Set::<Seq<u8>>::empty());
+    assert(Set::<Seq<u8>>::empty().len() == 0);
+    let names = policy::graph_names(&edges, &roots);
+    assert(names.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn graph_names_preserve_duplicate_isolated_unicode_and_empty_roots() {
+    proof {
+        reveal_strlit("x"); reveal_strlit("q"); reveal_strlit("根\0");
+        reveal_strlit("");
+        vstd::utf8::is_ascii_chars_encode_utf8("x"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("q"@);
+        assert(vstd::utf8::encode_scalar(26681) == seq![230u8, 160, 185]) by (compute);
+        assert(vstd::utf8::encode_scalar(0) == seq![0u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+        assert("x".spec_bytes() == seq![120u8]);
+        assert("q".spec_bytes() == seq![113u8]);
+        assert("根\0".spec_bytes() == seq![230u8, 160, 185, 0]);
+        assert("".spec_bytes() == Seq::<u8>::empty());
+    }
+    let edges: Vec<policy::UnionEdge> = vec![];
+    let roots = vec!["x", "", "x", "根\0"];
+    assert(policy::endpoint_names(edges@) =~= Set::<Seq<u8>>::empty());
+    assert(policy::name_members(roots@) =~= set!["x".spec_bytes(), "".spec_bytes(), "根\0".spec_bytes()]);
+    let names = policy::graph_names(&edges, &roots);
+    assert(policy::name_members(names@) =~= set!["x".spec_bytes(), "".spec_bytes(), "根\0".spec_bytes()]);
+    assert(!policy::name_members(names@).contains("q".spec_bytes()));
+    let absent = policy::name_index(&names, "q");
+    if let Some(i) = absent {
+        assert(policy::name_members(names@).contains(names@[i as int].spec_bytes()));
+    }
+    assert(absent.is_none());
+    let valid = policy::valid_names(&names);
+    assert(valid);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn graph_names_preserve_both_endpoints_duplicate_kinds_origins_and_roots() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("q"); reveal_strlit("z");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("q"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("z"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 2);
+        assert("a".spec_bytes() == seq![97u8]);
+        assert("b".spec_bytes() == seq![98u8]);
+        assert("q".spec_bytes() == seq![113u8]);
+        assert("z".spec_bytes() == seq![122u8]);
+    }
+    let first = edge("z", policy::EdgeKind::Compile, "b");
+    let second = edge("b", policy::EdgeKind::RuntimeInput, "a");
+    let duplicate = edge("z", policy::EdgeKind::JudgeTrigger, "b");
+    let edges = vec![
+        policy::UnionEdge { edge: first, origin: policy::Origin::Base },
+        policy::UnionEdge { edge: second, origin: policy::Origin::Both },
+        policy::UnionEdge { edge: duplicate, origin: policy::Origin::Candidate },
+    ];
+    let roots = vec!["q", "a", "q"];
+    assert(roots@[0].spec_bytes() == seq![113u8]);
+    assert(roots@[1].spec_bytes() == seq![97u8]);
+    assert(roots@[2].spec_bytes() == seq![113u8]);
+    assert(policy::endpoint_names(edges@) =~= set![seq![122u8], seq![98u8], seq![97u8]]);
+    assert(policy::name_members(roots@) =~= set![seq![113u8], seq![97u8]]);
+    assert((policy::endpoint_names(edges@) + policy::name_members(roots@)) =~=
+        set![seq![97u8], seq![98u8], seq![113u8], seq![122u8]]);
+    assert(set![seq![97u8], seq![98u8], seq![113u8], seq![122u8]].len() == 4);
+    let names = policy::graph_names(&edges, &roots);
+    assert(names.len() == 4);
+    assert(policy::name_members(names@) =~= set![seq![97u8], seq![98u8], seq![113u8], seq![122u8]]);
+    assert(policy::source_names_present(names@, edges@));
+    let valid = policy::valid_names(&names);
+    assert(valid);
+}
 
 }

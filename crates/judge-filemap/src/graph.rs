@@ -141,19 +141,13 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
         predecessors: BTreeMap::new(),
         traversed: vec![],
     };
-    let supplied_names: Vec<&str> = edges
-        .iter()
-        .flat_map(|e| [e.edge.from.as_str(), e.edge.to.as_str()])
-        .chain(seeds.iter().map(|s| s.node.as_str()))
-        .collect();
-    let nodes = crate::verified_graph::name_inventory(&supplied_names);
+    let seed_names: Vec<&str> = seeds.iter().map(|seed| seed.node.as_str()).collect();
+    let nodes = crate::verified_graph::graph_names(edges, &seed_names);
     let edge_rows = crate::verified_graph::source_rows(&nodes, edges)
         .expect("edge sources belong to the explicit node inventory");
-    let indices = {
-        let seed_names: Vec<&str> = seeds.iter().map(|seed| seed.node.as_str()).collect();
-        crate::verified_graph::index_edges(&nodes, &edge_rows, &seed_names)
-            .expect("edge destinations and seeds belong to the explicit node inventory")
-    };
+    let indices = crate::verified_graph::index_edges(&nodes, &edge_rows, &seed_names)
+        .expect("edge destinations and seeds belong to the explicit node inventory");
+    drop(seed_names);
     let mut traversed: BTreeMap<Edge, BTreeSet<String>> = BTreeMap::new();
     for (seed, root) in seeds.iter().zip(indices.roots) {
         let search = crate::verified_graph::breadth_first(&indices.rows, root)

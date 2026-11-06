@@ -2082,4 +2082,88 @@ pub fn breadth_first(g: &[Vec<usize>], root: usize) -> (result: Option<Search>)
     Some(Search { distances: d, parents: p, order: q })
 }
 
+/// Every complete endpoint byte value, independent of kind, origin or duplication.
+pub open spec fn endpoint_names(edges: Seq<UnionEdge>) -> Set<Seq<u8>> {
+    Set::new(|key: Seq<u8>| exists|i: int| 0 <= i < edges.len()
+        && ((#[trigger] edges[i]).edge.from_bytes() == key || edges[i].edge.to_bytes() == key))
+}
+
+proof fn endpoint_names_push(edges: Seq<UnionEdge>, next: UnionEdge)
+    ensures endpoint_names(edges.push(next))
+        == endpoint_names(edges).insert(next.edge.from_bytes()).insert(next.edge.to_bytes()),
+{
+    assert forall|key: Seq<u8>| endpoint_names(edges.push(next)).contains(key)
+        == endpoint_names(edges).insert(next.edge.from_bytes()).insert(next.edge.to_bytes()).contains(key) by {
+        if endpoint_names(edges.push(next)).contains(key) {
+            let i = choose|i: int| 0 <= i < edges.push(next).len()
+                && (edges.push(next)[i].edge.from_bytes() == key || edges.push(next)[i].edge.to_bytes() == key);
+            if i < edges.len() { assert(endpoint_names(edges).contains(key)); }
+        }
+        if endpoint_names(edges).contains(key) {
+            let i = choose|i: int| 0 <= i < edges.len()
+                && (edges[i].edge.from_bytes() == key || edges[i].edge.to_bytes() == key);
+            assert(edges.push(next)[i] == edges[i]);
+        }
+        if key == next.edge.from_bytes() || key == next.edge.to_bytes() {
+            assert(edges.push(next)[edges.len() as int] == next);
+        }
+    }
+}
+
+/// Extract both actual typed endpoints and supplied roots, then sort and deduplicate.
+pub fn graph_names<'a>(edges: &'a [UnionEdge], roots: &[&'a str]) -> (out: Vec<&'a str>)
+    ensures ordered_names(out@),
+        name_members(out@) == endpoint_names(edges@) + name_members(roots@),
+        (endpoint_names(edges@) + name_members(roots@)).finite(),
+        out.len() == (endpoint_names(edges@) + name_members(roots@)).len(),
+        source_names_present(out@, edges@),
+{
+    let mut supplied: Vec<&str> = Vec::new();
+    let mut at: usize = 0;
+    assert(endpoint_names(edges@.take(0)) =~= Set::<Seq<u8>>::empty());
+    assert(name_members(supplied@) =~= Set::<Seq<u8>>::empty());
+    while at < edges.len()
+        invariant at <= edges.len(),
+            name_members(supplied@) == endpoint_names(edges@.take(at as int)),
+        decreases edges.len() - at,
+    {
+        let edge = &edges[at].edge;
+        let from = edge.from.as_str();
+        let to = edge.to.as_str();
+        proof {
+            endpoint_names_push(edges@.take(at as int), edges@[at as int]);
+            assert(edges@.take(at as int + 1) =~= edges@.take(at as int).push(edges@[at as int]));
+            name_members_push(supplied@, from);
+        }
+        supplied.push(from);
+        proof { name_members_push(supplied@, to); }
+        supplied.push(to);
+        at += 1;
+    }
+    assert(edges@.take(at as int) =~= edges@);
+    let mut at: usize = 0;
+    assert(name_members(roots@.take(0)) =~= Set::<Seq<u8>>::empty());
+    while at < roots.len()
+        invariant at <= roots.len(),
+            name_members(supplied@) == endpoint_names(edges@) + name_members(roots@.take(at as int)),
+        decreases roots.len() - at,
+    {
+        proof {
+            name_members_step(roots@, at as int);
+            name_members_push(supplied@, roots@[at as int]);
+            assert((endpoint_names(edges@) + name_members(roots@.take(at as int))).insert(roots@[at as int].spec_bytes())
+                =~= endpoint_names(edges@) + name_members(roots@.take(at as int + 1)));
+        }
+        supplied.push(roots[at]);
+        at += 1;
+    }
+    assert(roots@.take(at as int) =~= roots@);
+    let out = name_inventory(&supplied);
+    assert forall|i: int| 0 <= i < edges.len() implies
+        name_members(out@).contains((#[trigger] edges@[i]).edge.from_bytes()) by {
+        assert(endpoint_names(edges@).contains(edges@[i].edge.from_bytes()));
+    }
+    out
+}
+
 }
