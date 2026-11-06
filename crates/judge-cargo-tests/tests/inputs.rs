@@ -1988,20 +1988,20 @@ fn shared_directory_ancestors_recheck_every_file_and_parent_after_the_consumer()
 }
 
 // Explicit host experiment, separate from the portable fixture suite. The
-// registered production consumer and all its input/guard bounds remain intact.
+// registered runner preparation and all its input/guard bounds remain intact.
 #[test]
-#[ignore = "requires the host's selected isolated toolchain and SDK inventories"]
-fn isolated_production_within_joinable_observation_window() {
-    observe_q1_consumer(false);
+#[ignore = "requires the host's selected toolchain and SDK inventories"]
+fn runner_preparation_within_joinable_observation_window() {
+    observe_runner_consumer(false);
 }
 
 #[test]
-#[ignore = "requires the host's selected isolated toolchain and SDK inventories"]
-fn isolated_guard_within_joinable_observation_window() {
-    observe_q1_consumer(true);
+#[ignore = "requires the host's selected toolchain and SDK inventories"]
+fn runner_guard_within_joinable_observation_window() {
+    observe_runner_consumer(true);
 }
 
-fn observe_q1_consumer(guard_only: bool) {
+fn observe_runner_consumer(guard_only: bool) {
     let root = source();
     let evidence_root = root.join(".chrono-harness/state/input-q1-repair");
     fs::create_dir_all(&evidence_root).unwrap();
@@ -2041,7 +2041,7 @@ fn observe_q1_consumer(guard_only: bool) {
     let operation = if guard_only {
         "guard.check.runner"
     } else {
-        "inputs.provision-isolated"
+        "inputs.prepare-runner"
     };
     let action = projects["projects"]
         .as_array()
