@@ -15,5 +15,11 @@ tempfile = "3"
 name = "installation"
 path = "tests/installation.rs"
 
+[[bin]]
+name = "distribution-transport-fixture"
+path = "tests/support/transport.rs"
+test = false
+bench = false
+
 [profile.dev.package.sha2]
 opt-level = 3
