@@ -1,7 +1,7 @@
 //! Fixed full-governance context transport; the configured judges own admission.
 use super::{action, full_oid, output_preflight, scalar, shell, write_file};
 use chrono_harness::{
-    canonical_argv, decode,
+    decode,
     facts::Reader,
     file_identity, no_symlink_parents, relative_path, sha256,
     units::{self, Scope},
@@ -10,8 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use std::{fs, io::Write, path::Path};
 
-pub const SCHEMA: &str = "chrono-github-full-ci/v1";
-pub const SHORT_SCHEMA: &str = "chrono-github-full-ci/v2";
+pub const SCHEMA: &str = "chrono-github-full-ci/v2";
 const MARKER: &str = "# chrono-ci: owned github-full-ci/v1\n";
 const ADOPTED: &str = ".chrono-harness/ci/full.json";
 
@@ -33,7 +32,6 @@ pub struct Config {
     pub timeout_minutes: u32,
     pub bootstrap: Vec<String>,
     pub runner: String,
-    pub generator: String,
     pub check_config: String,
     #[serde(
         default,
@@ -65,7 +63,7 @@ fn overlap(a: &str, b: &str) -> bool {
 }
 
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
-    if !matches!(c.schema.as_str(), SCHEMA | SHORT_SCHEMA)
+    if c.schema != SCHEMA
         || c.name.is_empty()
         || c.runs_on.is_empty()
         || c.timeout_minutes == 0
@@ -82,7 +80,6 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
     let files = [
         &c.workflow_path,
         &c.runner,
-        &c.generator,
         &c.check_config,
         &c.context_path,
         &c.preparation_path,
@@ -110,35 +107,18 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
         || [&c.context_path, &c.preparation_path]
             .iter()
             .any(|p| !Path::new(p).starts_with(artifact) || Path::new(p) == artifact)
-        || [&c.workflow_path, &c.runner, &c.generator, &c.check_config]
+        || [&c.workflow_path, &c.runner, &c.check_config]
             .iter()
             .any(|p| Path::new(p).starts_with(artifact))
     {
         return Err("invalid full CI policy/artifact ownership".into());
-    }
-    for name in ["prepare.stdout.json", "prepare.stderr"] {
-        let output = format!("{}{name}", c.artifact_directory);
-        if [&c.context_path, &c.preparation_path]
-            .iter()
-            .any(|p| overlap(p, &output))
-        {
-            return Err("full CI context/report overlaps preparation process output".into());
-        }
     }
     match &c.scope {
         Some(Scope::Unit { unit }) => units::id(unit)?,
         Some(Scope::Collect { manifest }) => {
             units::artifact_path(manifest)?;
             literal(manifest)?;
-            if artifact.starts_with(manifest)
-                || files.iter().any(|p| overlap(manifest, p))
-                || ["prepare.stdout.json", "prepare.stderr"]
-                    .iter()
-                    .any(|name| {
-                        let output = format!("{}{name}", c.artifact_directory);
-                        overlap(manifest, &output)
-                    })
-            {
+            if artifact.starts_with(manifest) || files.iter().any(|p| overlap(manifest, p)) {
                 return Err("full CI collection manifest overlaps owned input/output paths".into());
             }
         }
@@ -160,7 +140,6 @@ fn source_path(c: &Config, path: &str) -> Result<(), String> {
         || [
             &c.workflow_path,
             &c.runner,
-            &c.generator,
             &c.check_config,
             &c.context_path,
             &c.preparation_path,
@@ -173,18 +152,10 @@ fn source_path(c: &Config, path: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn argv(c: &Config, base: &str, candidate: &str) -> Vec<String> {
-    if c.schema == SHORT_SCHEMA {
-        let mut args = vec![c.runner.clone(), "check".into()];
-        if let Some(scope) = &c.scope {
-            args.extend(scope.short_argv());
-        }
-        return args;
-    }
-    let mut args = canonical_argv(&c.runner, &c.check_config, Some(base), candidate, false);
-    args.extend(["--context".into(), c.context_path.clone()]);
+pub fn argv(c: &Config) -> Vec<String> {
+    let mut args = vec![c.runner.clone(), "check".into()];
     if let Some(scope) = &c.scope {
-        args.extend(scope.argv());
+        args.extend(scope.short_argv());
     }
     args
 }
@@ -192,26 +163,13 @@ pub fn argv(c: &Config, base: &str, candidate: &str) -> Vec<String> {
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
     validate(c)?;
     source_path(c, config_path)?;
-    let args = argv(c, "$CHRONO_BASE", "$CHRONO_CANDIDATE");
-    let check = args
+    let check = argv(c)
         .iter()
-        .enumerate()
-        .map(|(i, v)| {
-            if i > 0 && matches!(args[i - 1].as_str(), "--base" | "--candidate") {
-                format!("\"{v}\"")
-            } else {
-                shell(v)
-            }
-        })
+        .map(|arg| shell(arg))
         .collect::<Vec<_>>()
         .join(" ");
-    let prepare = format!(
-        "{} 'prepare' '--host-root' '.' '--config' {} '--event' \"$GITHUB_EVENT_NAME\" '--payload' \"$GITHUB_EVENT_PATH\" '--workflow-revision' \"$CHRONO_WORKFLOW_REVISION\" '--github-output' \"$GITHUB_OUTPUT\"",
-        shell(&c.generator),
-        shell(config_path)
-    );
     let marker = marker(config_path);
-    let rendered = format!(
+    Ok(format!(
         r#"{marker}name: {name}
 on:
   workflow_dispatch:
@@ -237,20 +195,11 @@ jobs:
         shell: bash
         run: |
           {bootstrap}
-      - name: Preserve fixed full context
-        id: inputs
-        shell: bash
-        env:
-          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}
-        run: |
-          mkdir -p -- {artifact_dir}
-          set -o noclobber
-          {prepare} > {prepare_stdout} 2> {prepare_stderr}
       - name: Canonical full harness check
         shell: bash
         env:
-          CHRONO_BASE: ${{{{ steps.inputs.outputs.base }}}}
-          CHRONO_CANDIDATE: ${{{{ steps.inputs.outputs.candidate }}}}
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}
         run: |
           {check}
       - name: Preserve original full check evidence
@@ -274,34 +223,7 @@ jobs:
             .collect::<Vec<_>>()
             .join(" "),
         artifacts = scalar(&c.artifact_directory),
-        artifact_dir = shell(&c.artifact_directory),
-        prepare_stdout = shell(&format!("{}prepare.stdout.json", c.artifact_directory)),
-        prepare_stderr = shell(&format!("{}prepare.stderr", c.artifact_directory))
-    );
-    if c.schema == SHORT_SCHEMA {
-        let start = rendered
-            .find("      - name: Preserve fixed full context")
-            .ok_or("full prepare section")?;
-        let end = rendered
-            .find("      - name: Preserve original full check evidence")
-            .ok_or("full artifact section")?;
-        let check = format!(
-            "      - name: Canonical full harness check\n        shell: bash\n        env:\n          CHRONO_CHECK_SOURCE: ci\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n        run: |\n          {}\n",
-            argv(c, "", "")
-                .iter()
-                .map(|arg| shell(arg))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-        Ok(format!(
-            "{}{}{}",
-            &rendered[..start],
-            check,
-            &rendered[end..]
-        ))
-    } else {
-        Ok(rendered)
-    }
+    ))
 }
 
 fn scope_preflight(root: &Path, c: &Config) -> Result<(), String> {
@@ -352,35 +274,13 @@ pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     Ok(!existing || !same)
 }
 
-fn matching_output(root: &Path, path: &str, bytes: &[u8], replace: bool) -> Result<bool, String> {
+fn matching_output(root: &Path, path: &str, bytes: &[u8]) -> Result<bool, String> {
     match fs::read(no_symlink_parents(root, path)?) {
         Ok(current) if current == bytes => Ok(true),
-        Ok(_) if replace => Ok(false),
-        Ok(_) => Err(format!("full CI output collision: {path}")),
+        Ok(_) => Ok(false),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(e.to_string()),
     }
-}
-
-fn preparation_identity(report: &Value) -> Value {
-    let mut identity = report.clone();
-    if let Some(processes) = identity
-        .get_mut("git_facts")
-        .and_then(|facts| facts.get_mut("processes"))
-        .and_then(Value::as_array_mut)
-    {
-        for process in processes {
-            if let Some(fields) = process.as_object_mut() {
-                // Invocation identities and the lease carrier describe the
-                // actual attempt, not the prepared input. Keep them in the
-                // original reports while comparing all semantic observations.
-                fields.remove("ownership_fds");
-                fields.remove("launcher_pid");
-                fields.remove("child_pid");
-            }
-        }
-    }
-    identity
 }
 
 /// The dispatch and automatic units consumers share exact full context parsing.
@@ -460,19 +360,8 @@ pub fn prepare(
     source_path(c, path)?;
     scope_preflight(root, c)?;
     let ctx = context_input(context)?;
-    if ctx["schema_version"] != 2
-        || !matches!(ctx["run_kind"].as_str(), Some("integration" | "delivery"))
-    {
-        return Err("full CI requires explicit context v2 and integration/delivery role".into());
-    }
-    let base = ctx["base"]
-        .as_str()
-        .filter(|s| full_oid(s))
-        .ok_or("full context base OID required")?;
-    let candidate = ctx["candidate"]
-        .as_str()
-        .filter(|s| full_oid(s))
-        .ok_or("full context candidate OID required")?;
+    let base = ctx["base"].as_str().unwrap();
+    let candidate = ctx["candidate"].as_str().unwrap();
     if !full_oid(workflow_revision) {
         return Err("workflow source revision must be full OID".into());
     }
@@ -512,7 +401,7 @@ pub fn prepare(
         let report = json!({"schema":"chrono-full-ci-inputs/v1","status":"prepared",
             "workflow_source_revision":workflow_revision,"config_path":path,"config_sha256":sha256(&source),
             "base":base,"candidate":candidate,"context":{"path":c.context_path,"sha256":sha256(context),"input_bytes":context},
-            "canonical_argv":argv(c,base,candidate),"governance":"not-evaluated","parity":"unestablished"});
+            "canonical_argv":argv(c),"governance":"not-evaluated","parity":"unestablished"});
         Ok(report)
     })();
     let mut report: Value = result.map_err(|message: String| {
@@ -521,43 +410,23 @@ pub fn prepare(
             json!({"message":message,"git_facts":facts.observation()})
         )
     })?;
-    if c.schema == SHORT_SCHEMA {
-        let original = chrono_harness::prepared::retain_original(
-            root,
-            &format!("{}preparation/", c.artifact_directory),
-            "native-context",
-            context,
-        )?;
-        report["context"]["current_path"] = json!(c.context_path);
-        report["context"]["path"] = json!(original.path);
-        report["originals"] = json!([original]);
-    }
+    let original = chrono_harness::prepared::retain_original(
+        root,
+        &format!("{}preparation/", c.artifact_directory),
+        "native-context",
+        context,
+    )?;
+    report["context"]["current_path"] = json!(c.context_path);
+    report["context"]["path"] = json!(original.path);
+    report["originals"] = json!([original]);
     report["git_facts"] = facts.observation();
     if fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())? != source {
         return Err("full CI source changed during preparation".into());
     }
     let report_bytes =
         (serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n").into_bytes();
-    let replace = c.schema == SHORT_SCHEMA;
-    let context_same = matching_output(root, &c.context_path, context, replace)?;
-    if !replace
-        && context_same
-        && let Ok(saved) = fs::read(no_symlink_parents(root, &c.preparation_path)?)
-        && saved != report_bytes
-        && let Ok(previous) = decode::<Value>(&saved)
-        && preparation_identity(&previous) == preparation_identity(&report)
-    {
-        // The original preparation remains authoritative. Preserve this call's
-        // actual carrier observations separately, without replacing either one.
-        chrono_harness::prepared::retain_original(
-            root,
-            &format!("{}preparation/", c.artifact_directory),
-            "native-attempt",
-            &report_bytes,
-        )?;
-        return Ok(previous);
-    }
-    let report_same = matching_output(root, &c.preparation_path, &report_bytes, replace)?;
+    let context_same = matching_output(root, &c.context_path, context)?;
+    let report_same = matching_output(root, &c.preparation_path, &report_bytes)?;
     if !context_same {
         write_file(root, &c.context_path, context)?;
     }
