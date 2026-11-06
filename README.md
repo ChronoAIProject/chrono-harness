@@ -88,7 +88,7 @@ chrono-instructions generate --host-root "/path/to/existing-host"
 | [混合语言示例](https://github.com/ChronoAIProject/chrono-harness-examples-mix) | Go、TypeScript 和独立 Python 脚本，通过明确依赖连接共享数据 |
 | [首次接入示例](https://github.com/ChronoAIProject/chrono-harness-examples-initial) | 只有文档，登记首次文件清单检查和后续变更检查 |
 
-这四个仓库用于验证安装、本地检查和真实 CI；采用版本、证据和限制见[示例索引](docs/examples.md)。本仓另有可复制的[基础 CI 示例](examples/ci-host/README.md)和[按条件启动单元的示例](examples/ci-host-job-gating/README.md)。旧示例保留各自的命令和版本，不把尚未发生的迁移写成完成。
+这四个仓库用于验证安装、本地检查和真实 CI；采用版本、证据和限制见[示例索引](docs/examples.md)。本仓提供可复制的[当前 CI 宿主示例](examples/ci-host-job-gating/README.md)，使用已安装工具和按需运行的独立单元。
 
 ## 源码和工具分工
 
