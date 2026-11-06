@@ -1518,7 +1518,12 @@ fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_
     drop(allocation);
     let mut command = h.auto_command(
         "use",
-        &["--path", h.root.to_str().unwrap(), "--operation", "use.consumer"],
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
     );
     let maintenance = std::thread::spawn(move || command.output().unwrap());
     let (mut stream, _) = listener.accept().unwrap();
@@ -1538,9 +1543,17 @@ fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_
     let concurrent_ledger = independent_admitted.then(|| {
         let result = h.auto(
             "use",
-            &["--path", h.root.to_str().unwrap(), "--operation", "use.consumer"],
+            &[
+                "--path",
+                h.root.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
         );
-        (result, json(&fs::read(h.ledger_path(&h.root)).unwrap()).unwrap())
+        (
+            result,
+            json(&fs::read(h.ledger_path(&h.root)).unwrap()).unwrap(),
+        )
     });
     let unrelated = chrono_worktree::TemporaryHost::allocate(
         &store,
@@ -1571,10 +1584,15 @@ fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_
     let concurrent = &concurrent_ledger["entries"][0];
     assert_eq!(current["enrollment"], concurrent["enrollment"]);
     assert_eq!(current["attachment"], concurrent["attachment"]);
-    assert_eq!(current["ownership"]["path"], concurrent["ownership"]["path"]);
+    assert_eq!(
+        current["ownership"]["path"],
+        concurrent["ownership"]["path"]
+    );
     assert_eq!(current["ownership"]["id"], concurrent["ownership"]["id"]);
-    assert!(current["ownership"]["generation"].as_u64().unwrap()
-        > concurrent["ownership"]["generation"].as_u64().unwrap());
+    assert!(
+        current["ownership"]["generation"].as_u64().unwrap()
+            > concurrent["ownership"]["generation"].as_u64().unwrap()
+    );
     assert_eq!(current["uses"], value!([]));
     assert!(!root.join("cache 空白").exists());
     assert_eq!(
