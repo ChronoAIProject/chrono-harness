@@ -204,7 +204,7 @@ pub fn result_ids<'a>(values: &'a Vec<CheckResult>) -> (ids: Vec<&'a str>)
     ensures ids.len() == values.len(),
         forall|i: int| 0 <= i < values.len() ==> (#[trigger] ids[i])@ == values[i].id@,
 {
-    let mut ids = Vec::new();
+    let mut ids: Vec<&'a str> = Vec::new();
     let mut i = 0;
     while i < values.len()
         invariant 0 <= i <= values.len(), ids.len() == i,
