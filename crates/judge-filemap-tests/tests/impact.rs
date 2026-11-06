@@ -768,6 +768,98 @@ fn indexed_closure_preserves_shortest_ties_edge_kinds_and_seed_identity() {
 }
 
 #[test]
+fn propagation_projects_fifo_names_and_complete_typed_rows_into_the_actual_consumer() {
+    use chrono_judge_filemap::verified_graph::{propagate, seed_topology};
+    let allowed = oracle_edges(&[
+        ("根\0", EdgeKind::Compile, "a"),
+        ("根\0", EdgeKind::RuntimeInput, "a"),
+        ("根\0", EdgeKind::TestExecution, "é"),
+        ("a", EdgeKind::BuildInput, "é"),
+        ("é", EdgeKind::Compile, "é"),
+        ("é", EdgeKind::JudgeTrigger, "根\0"),
+        ("孤", EdgeKind::TestExecution, "unreachable"),
+    ]);
+    let edges = graph::union(&BTreeSet::new(), &allowed);
+    let seed = |id: &str, node: &str| Seed {
+        id: id.into(),
+        node: node.into(),
+        reference: "explicit".into(),
+        reason: "projection".into(),
+    };
+    let seeds = [seed("s", "根\0"), seed("isolated", "")];
+    let topology = seed_topology(&edges, &seeds);
+    let output = propagate(&topology, topology.indices.roots[0]);
+    let actual: Vec<_> = output
+        .rows
+        .iter()
+        .map(|row| {
+            (
+                row.node,
+                row.outgoing
+                    .iter()
+                    .map(|edge| (edge.from.as_str(), edge.kind, edge.to.as_str()))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        actual,
+        vec![
+            (
+                "根\0",
+                vec![
+                    ("根\0", EdgeKind::Compile, "a"),
+                    ("根\0", EdgeKind::RuntimeInput, "a"),
+                    ("根\0", EdgeKind::TestExecution, "é")
+                ]
+            ),
+            ("a", vec![("a", EdgeKind::BuildInput, "é")]),
+            (
+                "é",
+                vec![
+                    ("é", EdgeKind::Compile, "é"),
+                    ("é", EdgeKind::JudgeTrigger, "根\0")
+                ]
+            ),
+        ]
+    );
+    assert_eq!(
+        output.predecessors.witness("é").unwrap(),
+        vec![Edge {
+            from: "根\0".into(),
+            kind: EdgeKind::TestExecution,
+            to: "é".into(),
+        }]
+    );
+    assert_eq!(output.predecessors.witness("unreachable"), None);
+    let isolated = propagate(&topology, topology.indices.roots[1]);
+    assert_eq!(isolated.rows.len(), 1);
+    assert_eq!(isolated.rows[0].node, "");
+    assert!(isolated.rows[0].outgoing.is_empty());
+    assert_eq!(isolated.predecessors.witness(""), Some(vec![]));
+
+    let closure = graph::closure(&edges, &seeds);
+    assert_eq!(
+        closure.reached,
+        BTreeMap::from([
+            ("".into(), BTreeSet::from(["isolated".into()])),
+            ("a".into(), BTreeSet::from(["s".into()])),
+            ("é".into(), BTreeSet::from(["s".into()])),
+            ("根\0".into(), BTreeSet::from(["s".into()])),
+        ])
+    );
+    assert_eq!(closure.traversed.len(), 6);
+    assert!(
+        closure
+            .traversed
+            .iter()
+            .all(|row| row.seeds == BTreeSet::from(["s".into()]))
+    );
+    assert_eq!(closure.selected_tests(), BTreeSet::from(["é".into()]));
+    assert_eq!(closure.witness("s", "é"), output.predecessors.witness("é"));
+}
+
+#[test]
 fn predecessor_state_roundtrips_the_actual_sparse_json_and_cloned_witnesses() {
     let parents = json!({
         "": null,

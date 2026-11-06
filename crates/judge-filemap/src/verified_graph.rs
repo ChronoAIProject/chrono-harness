@@ -2963,4 +2963,137 @@ pub fn predecessors_from_search(names: &[&str], edge_rows: &[Vec<&Edge>], search
     PredecessorTree::new(rows).unwrap()
 }
 
+/// One FIFO-discovered node and its complete original typed adjacency row.
+pub struct ReachedRow<'t, 'a> {
+    pub node: &'a str,
+    pub outgoing: &'t Vec<&'a Edge>,
+}
+
+pub struct Propagation<'t, 'a> {
+    pub rows: Vec<ReachedRow<'t, 'a>>,
+    pub predecessors: PredecessorTree,
+}
+
+pub open spec fn propagation_rows(
+    rows: Seq<ReachedRow>, names: Seq<&str>, edge_rows: Seq<Vec<&Edge>>, order: Seq<usize>,
+) -> bool {
+    rows.len() == order.len()
+        && forall|at: int| 0 <= at < rows.len() ==> {
+            let node = #[trigger] order[at];
+            node < names.len() && node < edge_rows.len()
+                && rows[at].node.spec_bytes() == names[node as int].spec_bytes()
+                && rows[at].outgoing@ == edge_rows[node as int]@
+        }
+}
+
+pub open spec fn propagation_names(rows: Seq<ReachedRow>) -> Set<Seq<u8>> {
+    Set::new(|name: Seq<u8>| exists|at: int| 0 <= at < rows.len()
+        && (#[trigger] rows[at]).node.spec_bytes() == name)
+}
+
+pub open spec fn reachable_name(
+    names: Seq<&str>, graph: Seq<Vec<usize>>, root: usize, name: Seq<u8>,
+) -> bool {
+    exists|v: usize| v < names.len() && names[v as int].spec_bytes() == name
+        && exists|path: Seq<usize>| walk(graph, path) && path[0] == root && path.last() == v
+}
+
+pub open spec fn fifo_predecessors(
+    names: Seq<&str>, edge_rows: Seq<Vec<&Edge>>, graph: Seq<Vec<usize>>, root: usize,
+) -> Set<PredecessorKey> {
+    let state = fifo(graph, root);
+    Set::new(|entry: PredecessorKey| exists|v: int| 0 <= v < names.len()
+        && state.0[v] < names.len() && entry == (
+            (#[trigger] names[v]).spec_bytes(), slot_key(edge_rows, state.1[v]),
+        ))
+}
+
+/// Compose the actual traversal, sparse typed predecessors and consumer rows.
+/// The topology constructor supplies these exact row/target relationships.
+pub fn propagate<'t, 'a>(topology: &'t Topology<'a>, root: usize) -> (out: Propagation<'t, 'a>)
+    requires ordered_names(topology.names@),
+        topology.names.len() == topology.edge_rows.len(),
+        topology.names.len() == topology.indices.rows.len(),
+        valid_graph(topology.indices.rows@), root < topology.names.len(),
+        forall|row: int| 0 <= row < topology.edge_rows.len()
+            ==> edge_indices_match(topology.names@, topology.edge_rows@[row]@,
+                #[trigger] topology.indices.rows@[row]@),
+    ensures propagation_rows(out.rows@, topology.names@, topology.edge_rows@,
+            fifo(topology.indices.rows@, root).2),
+        forall|name: Seq<u8>| propagation_names(out.rows@).contains(name)
+            == reachable_name(topology.names@, topology.indices.rows@, root, name),
+        predecessor_keys(out.predecessors.view()).to_set()
+            == fifo_predecessors(topology.names@, topology.edge_rows@, topology.indices.rows@, root),
+        out.rows.len() <= topology.names.len(),
+{
+    let search = breadth_first(&topology.indices.rows, root).unwrap();
+    proof {
+        reveal(complete);
+        assert forall|v: int| 0 <= v < topology.names.len()
+            && search.distances@[v] < topology.names.len()
+            implies match #[trigger] search.parents@[v] {
+                Some((from, slot)) => from < topology.edge_rows.len()
+                    && slot < topology.edge_rows[from as int].len(),
+                None => true,
+            } by {
+            if let Some((from, slot)) = search.parents@[v] {
+                assert(slot < topology.indices.rows@[from as int].len());
+                assert(edge_indices_match(topology.names@, topology.edge_rows@[from as int]@,
+                    topology.indices.rows@[from as int]@));
+            }
+        }
+    }
+    let predecessors = predecessors_from_search(&topology.names, &topology.edge_rows, &search);
+    let mut rows: Vec<ReachedRow> = Vec::with_capacity(search.order.len());
+    let mut at: usize = 0;
+    while at < search.order.len()
+        invariant at <= search.order.len(), rows.len() == at,
+            topology.names.len() == topology.edge_rows.len(),
+            topology.names.len() == topology.indices.rows.len(),
+            complete(topology.indices.rows@, root, search),
+            forall|i: int| 0 <= i < rows.len() ==> {
+                let node = #[trigger] search.order@[i];
+                node < topology.names.len() && node < topology.edge_rows.len()
+                    && rows@[i].node.spec_bytes() == topology.names@[node as int].spec_bytes()
+                    && rows@[i].outgoing@ == topology.edge_rows@[node as int]@
+            },
+        decreases search.order.len() - at,
+    {
+        proof { reveal(complete); }
+        let node = search.order[at];
+        let name = topology.names[node];
+        assert(name.spec_bytes() == topology.names@[node as int].spec_bytes());
+        rows.push(ReachedRow { node: name, outgoing: &topology.edge_rows[node] });
+        at += 1;
+    }
+    proof {
+        reveal(complete);
+        bounded_queue(search.order@, topology.names.len());
+        assert forall|name: Seq<u8>| propagation_names(rows@).contains(name)
+            == reachable_name(topology.names@, topology.indices.rows@, root, name) by {
+            if propagation_names(rows@).contains(name) {
+                let i = choose|i: int| 0 <= i < rows.len() && rows@[i].node.spec_bytes() == name;
+                let node = search.order@[i];
+                let path = tree_path(topology.indices.rows@, root, search.distances@, search.parents@, node);
+                assert(reachable_name(topology.names@, topology.indices.rows@, root, name));
+            }
+            if reachable_name(topology.names@, topology.indices.rows@, root, name) {
+                let node = choose|v: usize| v < topology.names.len()
+                    && topology.names@[v as int].spec_bytes() == name
+                    && exists|path: Seq<usize>| walk(topology.indices.rows@, path)
+                        && path[0] == root && path.last() == v;
+                let path = choose|path: Seq<usize>| walk(topology.indices.rows@, path)
+                    && path[0] == root && path.last() == node;
+                assert(search.distances@[node as int] < topology.names.len());
+                assert(search.order@.contains(node));
+                let i = choose|i: int| 0 <= i < search.order.len() && search.order@[i] == node;
+                assert(rows@[i].node.spec_bytes() == name);
+            }
+        }
+        assert(searched_predecessors(topology.names@, topology.edge_rows@, search, topology.names.len() as int)
+            =~= fifo_predecessors(topology.names@, topology.edge_rows@, topology.indices.rows@, root));
+    }
+    Propagation { rows, predecessors }
+}
+
 }

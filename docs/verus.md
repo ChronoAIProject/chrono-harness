@@ -398,12 +398,30 @@ work. This adds ghost specifications and proof bookkeeping, with the same
 executable traversal and no new trusted interface. Additional proof/compiler
 cost remains unmeasured.
 
-The actual `graph::closure` calls the proved name-inventory, source-row and index
-constructors, then calls the traversal for each seed.
-It uses returned indices to construct the existing reached causes, predecessor
-maps and traversed typed edges. The
-remaining adapter composition, seed production, serialization and test selection
-remain unproved;
+The actual `graph::closure` now calls `seed_topology` and, for each seed,
+the same proof root's `propagate`. This composes the executable FIFO search,
+sparse typed predecessor construction and the actual consumer-row projection.
+The search is proved to succeed. Every returned position has exactly the name
+bytes and complete original typed outgoing row of that FIFO position, preserving
+every parallel, cycle and self-loop slot. Returned names are exactly those with
+a finite root walk, and the sparse predecessor set equals the FIFO's reached
+nodes and first-discovery parent slots. The consumer directly uses those rows
+and the returned tree; the old unproved search `expect` and index-to-row loop
+are removed. This adds O(R) temporary borrowed rows per seed without cloning
+outgoing edges; measured total cost is unknown.
+
+Independent proofs require exact FIFO names, original typed slots, sparse parents,
+unreachable exclusion, shortest direct parents and isolated Unicode/NUL roots.
+A runtime case consumes actual projected rows and checks the resulting closure's
+causes, typed traversals and test selection. Replacing each projected name with
+the root name fails its explicit byte-projection assertion (121 verified / 1 error);
+correct source is restored by SHA-256 before verification. The initial mutation
+without that assertion exhausted the loop proof's resource limit; that result
+is retained separately and is not reported as a semantic assertion failure.
+No dependency, trusted interface, operation or proof budget is added.
+
+The remaining per-seed adapter composition, cause merging, seed-ID map, seed
+production, serialization and test selection remain unproved;
 the adapter's empty-root obligation is retained. Independent Verus examples cover
 empty graphs, invalid roots/destinations, self cycles, disconnected nodes, diamonds
 and parallel edges. Expected shortest distances use independently supplied paths

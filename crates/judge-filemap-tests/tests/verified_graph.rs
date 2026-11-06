@@ -1134,6 +1134,16 @@ fn topology_preserves_isolated_duplicate_unicode_nul_roots() {
     assert(graph.indices.rows.len() == 1 && graph.indices.rows[0].len() == 0);
     assert(graph.indices.roots.len() == 2);
     assert(graph.indices.roots[0] == 0 && graph.indices.roots[1] == 0);
+    let propagation = policy::propagate(&graph, graph.indices.roots[0]);
+    proof {
+        reveal_with_fuel(policy::fifo_nodes, 3);
+        reveal_with_fuel(policy::ordered_slots, 2);
+    }
+    assert(propagation.rows.len() == 1);
+    assert(propagation.rows[0].node.spec_bytes() == "根\0".spec_bytes());
+    assert(propagation.rows[0].outgoing.len() == 0);
+    assert(policy::predecessor_keys(propagation.predecessors.view()).to_set()
+        =~= set![("根\0".spec_bytes(), None::<policy::EdgeKey>)]);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -1207,6 +1217,91 @@ fn topology_preserves_exact_parallel_cycle_self_loop_and_root_slots() {
     assert(graph.indices.rows[1][0] == 0 && graph.indices.rows[1][1] == 1);
     assert(graph.indices.roots.len() == 3);
     assert(graph.indices.roots[0] == 1 && graph.indices.roots[1] == 0 && graph.indices.roots[2] == 1);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn propagation_preserves_fifo_source_names_parallel_slots_cycles_and_self_loops() {
+    use policy::EdgeKind::*;
+    proof { predecessor_ascii_order(); }
+    let forward = edge("a", RuntimeInput, "b");
+    let parallel = edge("a", TestExecution, "b");
+    let backward = edge("b", Compile, "a");
+    let self_loop = edge("b", Compile, "b");
+    let graph = policy::Topology {
+        names: vec!["a", "b"],
+        edge_rows: vec![vec![&forward, &parallel], vec![&backward, &self_loop]],
+        indices: policy::NameIndices { rows: vec![vec![1, 1], vec![0, 1]], roots: vec![1] },
+    };
+    assert(policy::ordered_names(graph.names@));
+    assert(policy::valid_graph(graph.indices.rows@));
+    let propagation = policy::propagate(&graph, graph.indices.roots[0]);
+    proof {
+        reveal_with_fuel(policy::fifo_nodes, 4);
+        reveal_with_fuel(policy::ordered_slots, 4);
+        assert(policy::fifo(graph.indices.rows@, 1).2[0] == 1);
+        assert(policy::fifo(graph.indices.rows@, 1).2[1] == 0);
+    }
+    assert(propagation.rows.len() == 2);
+    assert(propagation.rows[0].node.spec_bytes() == "b".spec_bytes());
+    assert(propagation.rows[1].node.spec_bytes() == "a".spec_bytes());
+    assert(propagation.rows[0].outgoing.len() == 2);
+    assert(propagation.rows[1].outgoing.len() == 2);
+    assert(propagation.rows[0].outgoing[0].key() == backward.key());
+    assert(propagation.rows[0].outgoing[1].key() == self_loop.key());
+    assert(propagation.rows[1].outgoing[0].key() == forward.key());
+    assert(propagation.rows[1].outgoing[1].key() == parallel.key());
+    assert(policy::predecessor_keys(propagation.predecessors.view()).to_set()
+        =~= set![("b".spec_bytes(), None::<policy::EdgeKey>),
+            ("a".spec_bytes(), Some(backward.key()))]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn propagation_omits_unreachable_rows_and_keeps_first_parallel_and_shortest_parents() {
+    use policy::EdgeKind::*;
+    proof { predecessor_ascii_order(); }
+    let first = edge("", Compile, "a");
+    let parallel = edge("", RuntimeInput, "a");
+    let direct = edge("", TestExecution, "b");
+    let longer = edge("a", BuildInput, "b");
+    let backward = edge("b", JudgeTrigger, "");
+    let self_loop = edge("b", Compile, "b");
+    let graph = policy::Topology {
+        names: vec!["", "a", "b", "z"],
+        edge_rows: vec![vec![&first, &parallel, &direct], vec![&longer], vec![&backward, &self_loop], vec![]],
+        indices: policy::NameIndices { rows: vec![vec![1, 1, 2], vec![2], vec![0, 2], vec![]], roots: vec![0, 3] },
+    };
+    proof {
+        assert forall|i: int, j: int| 0 <= i < j < graph.names.len()
+            implies policy::byte_lt(#[trigger] graph.names@[i].spec_bytes(), #[trigger] graph.names@[j].spec_bytes()) by {
+            assert(policy::byte_prefix(graph.names@[i].spec_bytes(), graph.names@[j].spec_bytes(), 0));
+        }
+    }
+    assert(policy::valid_graph(graph.indices.rows@));
+    let propagation = policy::propagate(&graph, graph.indices.roots[0]);
+    proof {
+        reveal_with_fuel(policy::fifo_nodes, 5);
+        reveal_with_fuel(policy::ordered_slots, 5);
+        assert(policy::fifo(graph.indices.rows@, 0).2[0] == 0);
+        assert(policy::fifo(graph.indices.rows@, 0).2[1] == 1);
+        assert(policy::fifo(graph.indices.rows@, 0).2[2] == 2);
+    }
+    assert(propagation.rows.len() == 3);
+    assert(propagation.rows[0].node.spec_bytes() == "".spec_bytes());
+    assert(propagation.rows[1].node.spec_bytes() == "a".spec_bytes());
+    assert(propagation.rows[2].node.spec_bytes() == "b".spec_bytes());
+    assert(propagation.rows[0].outgoing.len() == 3);
+    assert(propagation.rows[1].outgoing.len() == 1);
+    assert(propagation.rows[2].outgoing.len() == 2);
+    assert(propagation.rows[1].outgoing[0].key() == longer.key());
+    assert(policy::predecessor_keys(propagation.predecessors.view()).to_set()
+        =~= set![("".spec_bytes(), None::<policy::EdgeKey>),
+            ("a".spec_bytes(), Some(first.key())), ("b".spec_bytes(), Some(direct.key()))]);
+    let isolated = policy::propagate(&graph, graph.indices.roots[1]);
+    assert(isolated.rows.len() == 1);
+    assert(isolated.rows[0].node.spec_bytes() == "z".spec_bytes());
+    assert(isolated.rows[0].outgoing.len() == 0);
+    assert(policy::predecessor_keys(isolated.predecessors.view()).to_set()
+        =~= set![("z".spec_bytes(), None::<policy::EdgeKey>)]);
 }
 
 fn seed(id: &str, node: &str, reference: &str, reason: &str) -> (out: policy::Seed)

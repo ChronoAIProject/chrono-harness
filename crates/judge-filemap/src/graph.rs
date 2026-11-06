@@ -193,29 +193,24 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
         predecessors: BTreeMap::new(),
         traversed: vec![],
     };
-    let crate::verified_graph::Topology {
-        names: nodes,
-        edge_rows,
-        indices,
-    } = crate::verified_graph::seed_topology(edges, seeds);
+    let topology = crate::verified_graph::seed_topology(edges, seeds);
     let mut traversed: BTreeMap<Edge, BTreeSet<String>> = BTreeMap::new();
-    for (seed, root) in seeds.iter().zip(indices.roots) {
-        let search = crate::verified_graph::breadth_first(&indices.rows, root)
-            .expect("seed index belongs to the explicit node inventory");
-        let parents = crate::verified_graph::predecessors_from_search(&nodes, &edge_rows, &search);
-        for node in search.order {
+    for (seed, &root) in seeds.iter().zip(&topology.indices.roots) {
+        let propagation = crate::verified_graph::propagate(&topology, root);
+        for row in propagation.rows {
             out.reached
-                .entry(nodes[node].to_owned())
+                .entry(row.node.to_owned())
                 .or_default()
                 .insert(seed.id.clone());
-            for edge in &edge_rows[node] {
+            for edge in row.outgoing {
                 traversed
                     .entry((*edge).clone())
                     .or_default()
                     .insert(seed.id.clone());
             }
         }
-        out.predecessors.insert(seed.id.clone(), parents);
+        out.predecessors
+            .insert(seed.id.clone(), propagation.predecessors);
     }
     out.traversed = traversed
         .into_iter()
