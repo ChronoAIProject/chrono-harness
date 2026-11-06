@@ -320,11 +320,7 @@ pub fn full_execution_units(
 }
 
 pub fn id(s: &str) -> Result<(), String> {
-    if s.is_empty()
-        || !s
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
-    {
+    if !crate::verified_identifiers::valid_id(s.as_bytes()) {
         return Err(format!("invalid CI unit ID: {s:?}"));
     }
     Ok(())

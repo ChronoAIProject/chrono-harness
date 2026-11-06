@@ -5,6 +5,8 @@ mod input_coverage;
 pub mod inputs;
 mod registrations;
 mod transition;
+#[allow(unexpected_cfgs)]
+pub mod verified_consumption;
 pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, interpret_scheduling_with_reader,
     interpret_with_reader, replacements, retirement_declaration, retirement_requests, reused_tools,
