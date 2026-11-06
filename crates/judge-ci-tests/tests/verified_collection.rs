@@ -85,6 +85,10 @@ fn registered_inventory_requires_the_marker_and_both_declared_lists() {
     let operations = vec!["build"];
     let not_required = vec!["test:other"];
     let reordered = vec!["test:other", "ci.inventory", "build"];
+    assert(policy::text_values(operations@) =~= seq!["build"@]);
+    assert(policy::text_values(not_required@) =~= seq!["test:other"@]);
+    assert(policy::expected_result_ids(operations@, not_required@)
+        =~= seq!["ci.inventory"@, "build"@, "test:other"@]);
     let accepted = policy::matches_result_ids(&reordered, &operations, &not_required);
     assert(accepted);
     let no_inventory = vec!["build", "test:other"];
@@ -110,6 +114,9 @@ fn registered_inventory_preserves_empty_lists_and_exact_declared_names() {
     }
     let empty: Vec<&str> = Vec::new();
     let marker = vec!["ci.inventory"];
+    assert(marker[0]@ == "ci.inventory"@);
+    assert(policy::expected_result_ids(empty@, empty@) =~= seq!["ci.inventory"@]);
+    assert(policy::expected_result_ids(empty@, empty@)[0] == "ci.inventory"@);
     let inventory_only = policy::matches_result_ids(&marker, &empty, &empty);
     assert(inventory_only);
     let no_marker = policy::matches_result_ids(&empty, &empty, &empty);
@@ -117,6 +124,10 @@ fn registered_inventory_preserves_empty_lists_and_exact_declared_names() {
     let operations = vec!["é", "é"];
     let not_required = vec!["a\0b", "é"];
     let actual = vec!["a\0b", "ci.inventory", "é"];
+    assert(policy::text_values(operations@) =~= seq!["é"@, "é"@]);
+    assert(policy::text_values(not_required@) =~= seq!["a\0b"@, "é"@]);
+    assert(policy::expected_result_ids(operations@, not_required@)
+        =~= seq!["ci.inventory"@, "é"@, "é"@, "a\0b"@, "é"@]);
     let exact_set = policy::matches_result_ids(&actual, &operations, &not_required);
     assert(exact_set);
 }
