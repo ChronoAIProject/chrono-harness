@@ -93,7 +93,7 @@ fn cloning_the_actual_report_result_preserves_every_field() {
     let cloned = original.clone();
     assert(cloned.id@ == "build"@);
     assert(cloned.status == Status::Blocked);
-    assert(cloned.exit_code == Some(-7));
+    assert(cloned.exit_code == Some(-7i32));
     assert(cloned.cause@ == "original report"@);
 }
 
