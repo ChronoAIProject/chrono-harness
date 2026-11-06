@@ -1564,6 +1564,12 @@ This temporary owner's release authorizes reclamation;
 diagnostic consumers retain required failures until they actually release them.
 Source/index checks at the real host and original result identities still apply;
 links inside the directory are unlinked without following their targets.
+Checkpoints measure all members of an owned allocation from its directory root,
+including scratch files without individual declarations. An observed excess
+blocks fresh allocations as well as further controlled production. The existing
+consumer can reduce its own bytes and checkpoint that exact directory again to
+clear the obligation; observing it does not create additional output or release
+any consumer. Other producers continue to measure their declared outputs.
 
 **Product/policy cochange:** whole-directory disposal is appropriate for owned
 synthetic test hosts; real worktrees continue to preserve their source and unique
@@ -1586,6 +1592,8 @@ symlink, preservation without custody and exact historical directory custody.
 It also verifies that a subsequent shared-input custody failure preserves the
 already verified directory-disposal receipts, reports failure and retains its
 continuation and original bytes.
+Its eight cases include the whole-directory capacity boundary, refusal of fresh
+allocation IDs during excess and recovery by the original consumer's checkpoint.
 The five temporary test producers adopt directory ownership for new allocations;
 the non-temporary command-result producer keeps its own lifetime. Actual
 coordinator adoption remains separate from declaring this option.
