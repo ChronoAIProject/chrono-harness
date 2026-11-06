@@ -1,6 +1,8 @@
 # 可选的 Cargo 项目检查
 
-本机 diagnostics 采用还把包源码位置绑定到所选私有 Cargo home。实际 metadata 拒绝指出了旧 home 的 `cfg-if` manifest。核对所选文件与原预期摘要一致后，才迁移其余 1,127 条包路径，未改任何包预期摘要。Rustup settings 也迁到所选 home，保留原摘要。这些修改只修复已声明输入的位置；受保护构建、标准检查和原生采用仍须各自取得真实结果。
+本机 diagnostics 与 runner 通过同一份 `.chrono-harness/cargo/runner-vendor.toml` 读取当前工作树的 Cargo vendor 来源。diagnostics 的 26 个锁定包复用已有的 1,113 个输入身份，包含 1,087 份共有源码和 26 份 Cargo 校验清单；配置另有明确绑定。它不再单独登记同一批包的 1,127 个 registry 文件。包版本、锁文件 checksum 和共有源码摘要保持原值；原生 diagnostics 继续消费其独立登记的来源。
+
+**可见宿主政策与消费者修改：**本机 diagnostics 的 metadata、离线 build、配置清单、输入绑定和配置级 FILEMAP 边一起选择现有 vendor 来源。Cargo 未复制的 26 个解包完成标记、13 份 `.gitignore`（含嵌套文件）及一份 `.gitattributes` 不再属于此消费者输入。准备仍使用 `inputs.prepare-runner` 中现有的 fetch／vendor，不增加共享缓存、发现器或兼容分支；源码、SDK／工具链和每次子进程后的复核仍适用。该修改须由实际受保护构建、标准 DELTA 及原生检查验收，运行、CI 和存储收益尚未测量。
 
 `judge-cargo`／`judge-cargo-tests` 是独立的生产／测试项目对。通用 registration、projects 不依赖它或 TOML。宿主通过登记二进制、参数、政策输入和 FILEMAP 边采用此适配器。Go／TS／脚本宿主不会因为出现类似 Cargo 的文件或目录名，就必须采用 Cargo 政策。
 
@@ -57,7 +59,7 @@ chrono-judge-cargo run --host-root HOST --config .chrono-harness/config.json \
 
 保护程序沿消费者明确的 `compile` 源码依赖，以及这些源码的直接文件、工具、环境和输入关系确定输入范围。提供运行时或构建产物的项目，不会把制造该产物所需的输入带给消费者。产物、工具绑定和前置回执仍由各自登记的执行负责人核验；源码依赖及所选配置、工具链、包输入仍保留原有前后身份检查。
 
-**产品与宿主政策同步修改：**这个边界使本地 diagnostics 不再经运行时工具引入 1,533 项无关构建输入，它自身的 1,138 项文件输入仍保留。同语言回归要求运行时／构建生产者关系下的真实 Cargo 操作成功，同时继续拒绝 compile 依赖中的输入变化。候选 bootstrap、标准变更和真实 CI 验证仍须完成；总运行及存储收益未测，完整宿主输入范围仍未闭合。
+**产品与宿主政策曾同步修改：**这个边界移除了本地 diagnostics 经运行时工具引入的无关构建输入。当前本机消费者绑定自身的 1,125 项文件输入，包含现有 vendor 文件、明确配置和工具链输入。同语言回归要求运行时／构建生产者关系下的真实 Cargo 操作成功，同时继续拒绝 compile 依赖中的输入变化。候选 bootstrap、标准变更和真实 CI 验证仍须完成；总运行及存储收益未测，完整宿主输入范围仍未闭合。
 
 受保护的 `run` 通过共享登记获取模块，接受直接宿主配置及已有 `chrono-git-configs/v1`、`v2` 选择器。登记 action 仍须精确点名调用入口。`registry_binding` 报告该入口、实际直接政策及选择结果。两个文件原字节及取得的登记，都在启动子进程前、metadata 后、消费者后检查。选择器不能证明另一宿主的工具链或输入合格；未知身份、选择或绑定不符，都在 Cargo 启动前失败。
 
@@ -204,7 +206,7 @@ v5 以 `chrono-cargo-run/v3` 报告工具链证据和链接器工具观察；v2�
 
 这从重复保护验证中移除 52,036 条文件、1,455 条目录记录，不改前后复核，也不宣称输入完整。macOS SDK 清单范围不变，Xcode 构建子集见下文。运行、CI、存储收益须以同口径消费者测量确认。
 
-同一本地消费者用显式 `--config .chrono-harness/cargo/runner-vendor.toml` 选择 Cargo 目录来源，metadata 与 check 参数一致。50 个包逐文件绑定已取得的源码和 Cargo 生成校验清单，包 checksum 与锁文件不变；原 101 项 registry 缓存输入已从 runner 消费范围退役。准备时仍由现有 Cargo fetch 和 vendor 获取原料、产生来源，不自研包解析器或共享缓存。diagnostics 的现用 registry 来源及原输入身份保留，具体迁移与成本见[本机 runner 输入政策](inputs.md#本机-runner-的输入政策)。
+同一本地消费者用显式 `--config .chrono-harness/cargo/runner-vendor.toml` 选择 Cargo 目录来源，metadata 与 check 参数一致。50 个包逐文件绑定已取得的源码和 Cargo 生成校验清单，包 checksum 与锁文件不变；原 101 项 registry 缓存输入已从 runner 消费范围退役。准备时仍由现有 Cargo fetch 和 vendor 获取原料、产生来源，不自研包解析器或共享缓存。本机 diagnostics 复用其中明确需要的 26 个包及现有输入身份，原生 diagnostics 保持自己的登记；具体迁移与成本见[本机 runner 输入政策](inputs.md#本机-runner-的输入政策)。
 
 当前 `inputs.prepare-runner` 沿用所选宿主环境，只获取 runner 根锁文件的依赖，再调用登记的 Cargo vendor 和原 `guard.check.runner`；准备及保护消费者须实际核对当前工作树 Cargo home 和共享只读工具链／SDK，通用行为用例保留在专属 Rust 测试中。Cargo 保护是可选能力：对应 PR163 的当前 95 个方法，保留 94 个直接 Cargo 配方，以及一个通过 `.chrono-harness/cargo/diagnostics-config.json`、`diagnostics.json` 运行的普通 `build.diagnostics`。普通按范围操作不要求恢复历史并行保护别名，底层方法、断言和输入义务仍保留。
 
@@ -214,4 +216,4 @@ v5 以 `chrono-cargo-run/v3` 报告工具链证据和链接器工具观察；v2�
 
 精确 51 原生 run `41021444210/1` 确认了对应 37 项操作，包括 diagnostics 的 27 节点锁定／离线 metadata 及受保护离线构建。其余 58 个方法仍已登记，但这批没有执行证据。这个原生 diagnostics 范围不能证明普通兄弟包输入、本地 diagnostics 选择或隔离 runner home 合格。完整宿主绑定、输入完整和候选验收仍分别处理；[输入保管说明](input-source-custody.md)记录保留来源及其余各消费者前置条件。
 
-macOS 27 提案配置现已绑定连到两个本地保护消费者的全部既有文件输入节点。runner 在原有 18 项绑定旁补充 2,653 项文件；diagnostics 绑定 1,138 项文件。它们使用公共 FILEMAP 边及这个精确配置的声明边。保护程序本就会在准备和各次子进程前后读取、复核这些输入；本次迁移不增加文件读取、包声明、依赖选择或保护入口，也不补齐缺失快照、完整宿主范围或启用完整检查。验证继续使用候选 bootstrap、标准变更及已有保护／真实 CI 消费者，总成本未测。
+macOS 27 提案配置把现有文件输入连到两个本地保护消费者。本机 diagnostics 的文件绑定为 1,125 项，复用 runner 已登记的 vendor 文件和来源配置，不重复登记包内容。它们使用公共 FILEMAP 边及这个精确配置的声明边。保护程序继续在准备和各次子进程前后读取、复核所选输入。此迁移不补齐其他消费者、完整宿主范围或启用完整检查；验证仍由候选 bootstrap、标准变更及已有保护／真实 CI 消费者承担，总成本未测。
