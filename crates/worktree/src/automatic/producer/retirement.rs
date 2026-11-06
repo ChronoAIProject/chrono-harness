@@ -112,7 +112,9 @@ impl Context {
         )
     }
     pub(super) fn checkpoint(&self, allocation: &Path) -> Result<Value, String> {
-        self.production_admission()?;
+        // Observing this exact allocation produces no new fixture bytes. It
+        // must be able to settle its own excess after its consumer reduces it;
+        // fresh allocation/copy/capture still requires production admission.
         self.observe_capacity(allocation, false)
     }
     pub(super) fn observe_capacity(
@@ -141,12 +143,17 @@ impl Context {
                 || object.consumers.values().any(|c| !c.released));
         let path = self.blocker_path(name)?;
         if usage.is_err() {
-            let mut paths = self
-                .generated_outputs
-                .iter()
-                .map(|p| format!("{name}/{}", p.trim_end_matches('/')))
-                .collect::<Vec<_>>();
-            paths.extend(object.captures.keys().map(|p| format!("{name}/{p}")));
+            let mut paths = if object.owns_directory() {
+                vec![name.to_owned()]
+            } else {
+                let mut paths = self
+                    .generated_outputs
+                    .iter()
+                    .map(|p| format!("{name}/{}", p.trim_end_matches('/')))
+                    .collect::<Vec<_>>();
+                paths.extend(object.captures.keys().map(|p| format!("{name}/{p}")));
+                paths
+            };
             paths.extend(object.metadata_directory.iter().cloned());
             let blocker = Blocker {
                 schema: "chrono-fixture-capacity-obligation/v1".into(),

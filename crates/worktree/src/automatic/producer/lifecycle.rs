@@ -435,11 +435,14 @@ impl Context {
             return Err("fixture original lifetime released; further production refused".into());
         }
         store.stable(record)?;
-        let mut paths = self
-            .generated_outputs
-            .iter()
-            .map(|p| no_symlink_parents(allocation, p.trim_end_matches('/')))
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut paths = if record.owns_directory() {
+            vec![allocation.to_owned()]
+        } else {
+            self.generated_outputs
+                .iter()
+                .map(|p| no_symlink_parents(allocation, p.trim_end_matches('/')))
+                .collect::<Result<Vec<_>, _>>()?
+        };
         let began = Instant::now();
         let mut entries = 0;
         let mut bytes = 0u64;
@@ -505,7 +508,8 @@ impl Context {
             "metadata_logical_bytes":metadata_bytes,"metadata_entries":metadata_entries,
             "capture_count":record.captures.len(),"max_captures":self.capacity.max_captures,
             "max_generated_bytes":self.capacity.max_generated_bytes,"max_capture_bytes":self.capacity.max_capture_bytes,
-            "scope":"exact allocation and declared outputs","producer_outcome":"unchanged"});
+            "scope":if record.owns_directory(){"owned allocation directory"}else{"exact allocation and declared outputs"},
+            "producer_outcome":"unchanged"});
         if metadata_bytes > self.capacity.max_metadata_bytes_per_round
             || bytes > self.capacity.max_generated_bytes
             || capture_accounted_bytes > self.capacity.max_capture_bytes
