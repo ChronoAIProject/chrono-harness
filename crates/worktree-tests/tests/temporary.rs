@@ -1570,7 +1570,7 @@ fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams
     );
     let capture = capture_directory(h._dir.path());
     assert_eq!(
-        json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap(),
+        super::report_view(json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap()),
         report
     );
     assert!(fs::read(capture.join("stderr.bytes")).unwrap().is_empty());
