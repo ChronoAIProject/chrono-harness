@@ -1034,6 +1034,8 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
     let output = Command::new(root.join(&argv[0]))
         .args(&argv[1..])
         .current_dir(root)
+        // This fixture consumes its own local endpoints, including inside native CI.
+        .env_remove(chrono_harness::prepared::SOURCE)
         .output()
         .unwrap();
     let receipt = retain_expected_command_result(
