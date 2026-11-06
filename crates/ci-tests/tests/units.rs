@@ -474,6 +474,10 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
             &copy.path().join(".chrono-harness/state/preparation"),
             &host.path().join(".chrono-harness/state/preparation"),
         );
+        short::copy_artifacts(
+            &copy.path().join(".chrono-harness/state/worktrees"),
+            &host.path().join(".chrono-harness/state/worktrees"),
+        );
     }
     let report = execute_context(host.path(), &unit_context(host.path(), &b, &c, None), 0);
     assert_eq!(
