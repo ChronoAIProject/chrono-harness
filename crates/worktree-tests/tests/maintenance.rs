@@ -158,7 +158,7 @@ fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it
             &[],
         )
         .unwrap();
-    inventory.maintain().unwrap();
+    let retained_round = inventory.maintain().unwrap();
     assert_eq!(fs::read(h.root.join(original_path)).unwrap(), bytes);
     assert_eq!(retained_report(&recovered["prior_report"]), original);
     assert!(
@@ -170,9 +170,15 @@ fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it
     inventory
         .reference_paths("caller:recovered-report", &[])
         .unwrap();
-    inventory.maintain().unwrap();
-    assert!(!h.root.join(recovered_path).exists());
-    assert!(!h.root.join(original_path).exists());
+    let released_round = inventory.maintain().unwrap();
+    assert!(
+        !h.root.join(recovered_path).exists(),
+        "recovered report remained after caller release: retained={retained_round}; released={released_round}"
+    );
+    assert!(
+        !h.root.join(original_path).exists(),
+        "failed original remained after caller release: retained={retained_round}; released={released_round}"
+    );
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), original["base"]);
 }
 
