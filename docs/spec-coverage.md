@@ -569,12 +569,18 @@ uses declared directories. Runtime output retention still maintains per-output
 records, and fixture state mixes source, shared inputs and disposable outputs.
 The candidate now binds prospective `disposable_directory` ownership at the
 existing temporary allocation owner and disposes that complete directory
-after actual consumers release. Five direct Rust regressions passed on Darwin,
+after actual consumers release. Seven direct Rust regressions passed on Darwin,
 including exact historical directory custody through the existing migration
 owner, immutable intent preservation, live/diagnostic exclusion, staged source,
-external links and shared originals. The host policy selects the five temporary
-test producers. Real coordinator adoption, already-retiring historical output
-handoffs and the remaining report/stream directory layout are pending. Bounded
+external links, shared originals and retention of verified disposal effects when
+later input custody fails (64.91 test seconds / 106.74 managed seconds).
+The candidate host selects the five temporary test producers and has adopted
+four existing producer contexts; nine exact historical directories transferred
+through the current custodian entry are now physically absent. Historical shared
+input custody and already-disposing output references still cause maintenance
+failures; directory absence does not establish their retirement. Main coordinator
+deployment, already-retiring historical output handoffs and the remaining
+report/stream directory layout are pending. Bounded
 record traversal alone does not satisfy this target.
 
 The existing PR121 target is carried in SPEC §10.1. Runtime coverage remains

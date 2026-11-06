@@ -1583,6 +1583,9 @@ The direct behavioral acceptance is
 `test.worktree.directory-cleanup`, covering a failed command, diagnostic release,
 a synthetic committed repository, unregistered scratch members, an external
 symlink, preservation without custody and exact historical directory custody.
+It also verifies that a subsequent shared-input custody failure preserves the
+already verified directory-disposal receipts, reports failure and retains its
+continuation and original bytes.
 The five temporary test producers adopt directory ownership for new allocations;
 the non-temporary command-result producer keeps its own lifetime. Actual
 coordinator adoption remains separate from declaring this option.
