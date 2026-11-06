@@ -1376,7 +1376,11 @@ fn traversed(from: &str, kind: policy::EdgeKind, to: &str, cause: &str) -> (out:
 fn selection_rejects_every_nonexecution_kind_and_empty_inventory() {
     let empty: Vec<policy::TraversedEdge> = vec![];
     let no_targets = policy::selected_test_targets(&empty);
-    proof { reveal(policy::selected_target_keys); reveal(policy::cause_keys); }
+    proof {
+        reveal_with_fuel(policy::selected_target_keys, 6);
+        assert(policy::selected_target_keys(empty@) == Set::<Seq<u8>>::empty());
+        empty_target_keys_mean_no_names(no_targets@);
+    }
     assert(no_targets.len() == 0);
     let rows = vec![
         traversed("test:source", policy::EdgeKind::Compile, "test:t", "cause"),
@@ -1385,12 +1389,23 @@ fn selection_rejects_every_nonexecution_kind_and_empty_inventory() {
         traversed("test:source", policy::EdgeKind::JudgeTrigger, "test:t", "cause"),
     ];
     let targets = policy::selected_test_targets(&rows);
-    proof { reveal(policy::selected_target_keys); }
-    assert(targets.len() == 0) by {
-        reveal(policy::cause_keys);
-        if targets.len() > 0 {
-            assert(policy::cause_keys(targets@).to_set().contains(policy::cause_keys(targets@)[0]));
-        }
+    proof {
+        reveal_with_fuel(policy::selected_target_keys, 6);
+        assert(policy::selected_target_keys(rows@) == Set::<Seq<u8>>::empty());
+        empty_target_keys_mean_no_names(targets@);
+    }
+    assert(targets.len() == 0);
+}
+
+proof fn empty_target_keys_mean_no_names(names: Seq<String>)
+    requires policy::cause_keys(names).to_set() == Set::<Seq<u8>>::empty(),
+    ensures names.len() == 0,
+{
+    reveal(policy::cause_keys);
+    let keys = policy::cause_keys(names);
+    assert(keys.len() == names.len());
+    if names.len() > 0 {
+        assert(keys.to_set().contains(keys[0]));
     }
 }
 
@@ -1408,7 +1423,7 @@ fn selection_is_sorted_unique_and_keeps_complete_unicode_nul_targets() {
         traversed("test:ignored", policy::EdgeKind::Compile, "not-selected", "cause"),
     ];
     let targets = policy::selected_test_targets(&rows);
-    proof { reveal(policy::selected_target_keys); }
+    proof { reveal_with_fuel(policy::selected_target_keys, 8); reveal(policy::cause_keys); }
     let expected = vec!["".to_owned(), "z".to_owned(), "é".to_owned(), "根\0".to_owned()];
     let normalized = policy::CauseSet::from_names(&expected);
     assert(policy::cause_keys(targets@).to_set() == normalized.keys().to_set());
