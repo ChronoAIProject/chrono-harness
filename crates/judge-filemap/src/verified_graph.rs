@@ -3434,7 +3434,7 @@ impl<'t, 'a> Iterator for SeedPropagations<'t, 'a> {
             out matches Some(item) ==> seed_propagation_matches(
                 item, old(self).graph(), old(self).seed_values(), old(self).cursor() as int),
     {
-        proof { use_type_invariant(self); }
+        proof { use_type_invariant(&*self); }
         if self.next == self.seeds.len() { return None; }
         let at = self.next;
         let root = self.topology.indices.roots[at];
