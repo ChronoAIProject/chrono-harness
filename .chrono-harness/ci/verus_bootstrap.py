@@ -2,8 +2,8 @@
 """Fetch, verify, and install the registered Verus distribution.
 
 The bootstrap owner invokes each phase as a separate registered operation.  The
-archive and digest are inputs from bootstrap-verus.json; this script never
-discovers a latest release or accepts a caller-supplied URL.
+archive and digest are inputs from the single verus.json policy; this script
+never discovers a latest release or accepts a caller-supplied URL.
 """
 import hashlib
 import json
