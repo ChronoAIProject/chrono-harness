@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Minimal external compiler/package interfaces for the release recipe tests."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,27 @@ import sys
 def main():
     executable = Path(sys.argv[0]).resolve()
     args = sys.argv[1:]
-    if executable.name in ('cargo', 'rustc') and args == ['--version']:
+    if args[:1] == ['stream-child']:
+        sys.stdout.buffer.write(b'live stdout\xff\n'); sys.stdout.buffer.flush()
+        sys.stderr.buffer.write(b'live stderr\xfe\n'); sys.stderr.buffer.flush()
+        if sys.stdin.buffer.read(1) != b'x':
+            raise ValueError('stream consumer did not release child')
+        sys.exit(73)
+    elif args[:1] == ['stream-driver']:
+        recipe = Path(args[1])
+        spec = importlib.util.spec_from_file_location('stream_recipe', recipe)
+        module = importlib.util.module_from_spec(spec)
+        exec(compile(recipe.read_bytes(), str(recipe), 'exec'), module.__dict__)
+        root, output = Path(args[2]), Path(args[3])
+        cfg = {'limits': {'unit_seconds': 15}, 'rust_toolchain': 'unused'}
+        execution = module.UnitExecution(root, output, cfg, {},
+                                         {'id': 'stream', 'kind': 'verify', 'rust_toolchain': False})
+        try:
+            execution.run('verification', [sys.executable, str(executable), 'stream-child'])
+        except subprocess.CalledProcessError as error:
+            sys.exit(execution.save(error))
+        sys.exit(execution.save())
+    elif executable.name in ('cargo', 'rustc') and args == ['--version']:
         print(executable.name + ' 1.94.0 (fixture)')
     elif executable.name == 'rustup' and args[:1] == ['which']:
         print(executable.parent / args[-1])
