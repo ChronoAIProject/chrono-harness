@@ -16,6 +16,30 @@ pub fn fixture_git() -> PathBuf {
     chrono_harness::resolve_program(&source, program, None).unwrap()
 }
 
+/// Event fixtures commit this policy before either endpoint is created.
+pub fn write_event_facts(root: &Path) {
+    let program = fixture_git();
+    let version = std::process::Command::new(&program)
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(version.status.success());
+    let facts = serde_json::json!({"schema_version":3,
+        "facts_git":{"tool":"git","input":"git-bytes"},
+        "tools":[{"id":"git","program":program,"resolution":"PATH-once",
+            "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
+        "environment":{"inherit":["PATH"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
+            "inputs":[{"id":"git-bytes","presence":"present","location":program,
+                "sha256":chrono_harness::sha256(&std::fs::read(&program).unwrap())}]},
+        "protocol":{"timeout_seconds":10,"stdout_limit_bytes":1048576}});
+    std::fs::create_dir_all(root.join(".chrono-harness")).unwrap();
+    std::fs::write(
+        root.join(".chrono-harness/event-facts.json"),
+        serde_json::to_vec_pretty(&facts).unwrap(),
+    )
+    .unwrap();
+}
+
 /// Only explicitly selected executing fixtures use the retained producer.
 pub fn temporary_host(prefix: &str) -> FixtureDirectory {
     let (directory, outputs) = temporary_store();

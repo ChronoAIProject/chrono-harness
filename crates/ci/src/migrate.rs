@@ -13,10 +13,10 @@ fn source_path(path: &str) -> Result<(), String> {
 fn previous(projection: &Projection, source: &str) -> Result<BTreeMap<String, String>, String> {
     match projection {
         Projection::Units(c) => units::render(c, source),
-        Projection::Check(c) if c.schema == "chrono-github-ci/v1" || c.initial_inventory.is_some() => {
+        Projection::Check(c) => {
             Ok(BTreeMap::from([(c.workflow_path.clone(), render(c, source)?)]))
         }
-        _ => Err("migration supports scoped v1, explicit standalone initial and unit sources; full/release contracts require their own explicit migration".into()),
+        _ => Err("migration supports current scoped standalone and unit sources; full/release contracts require their own explicit migration".into()),
     }
 }
 
@@ -50,9 +50,7 @@ pub fn migrate(root: &Path, input: &str, old_source: &str, source: &str) -> Resu
             units::profile(root, &next)?;
             units::render(&next, source)?
         }
-        Projection::Check(next)
-            if next.schema == "chrono-github-ci/v4" && prior_inventory.is_some() =>
-        {
+        Projection::Check(next) if prior_inventory.is_some() => {
             let inventory = inventory_output(&next)?.map(|(p, b)| (p.to_owned(), b));
             if inventory != prior_inventory {
                 return Err("standalone short migration must preserve the exact initial inventory declaration".into());
