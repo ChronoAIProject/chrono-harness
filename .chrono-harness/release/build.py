@@ -492,7 +492,33 @@ class UnitExecution:
     def run(self, phase, argv, operation=None):
         self.phase = phase
         before = time.time_ns()
-        process = subprocess.run(argv, cwd=self.root, env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # Forward each original stream while it is produced. Waiting for the
+        # child before publication hides the evidence needed to diagnose a
+        # native job that reaches its registered deadline.
+        auxiliary_errors = []
+        def forward(pipe, stream, name):
+            chunks = []
+            failed = False
+            with pipe:
+                while True:
+                    raw = pipe.read1(65536)
+                    if not raw:
+                        break
+                    chunks.append(raw)
+                    if not failed:
+                        try:
+                            stream.buffer.write(raw); stream.buffer.flush()
+                        except (OSError, UnicodeError) as error:
+                            auxiliary_errors.append((name + ' forwarding', error))
+                            failed = True
+            return b''.join(chunks)
+        with subprocess.Popen(argv, cwd=self.root, env=self.env,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE) as child:
+            with ThreadPoolExecutor(max_workers=2) as streams:
+                stdout = streams.submit(forward, child.stdout, sys.stdout, 'stdout')
+                stderr = streams.submit(forward, child.stderr, sys.stderr, 'stderr')
+                code = child.wait()
+                process = subprocess.CompletedProcess(argv, code, stdout.result(), stderr.result())
         record = {'phase': phase, 'operation': operation, 'argv': argv, 'cwd': str(self.root),
                   'started_ns': before, 'finished_ns': time.time_ns(), 'exit_code': process.returncode}
         prefix = 'processes/' + str(len(self.report['processes']))
@@ -501,13 +527,8 @@ class UnitExecution:
             self.child_failure = (phase, original)
         # The child outcome is already observed. Auxiliary IO cannot replace it.
         self.report['processes'].append(record)
-        auxiliary_errors = []
-        for name, raw, stream in [('stdout', process.stdout, sys.stdout), ('stderr', process.stderr, sys.stderr)]:
+        for name, raw in [('stdout', process.stdout), ('stderr', process.stderr)]:
             record[name] = {'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
-            try:
-                stream.buffer.write(raw); stream.buffer.flush()
-            except (OSError, UnicodeError) as error:
-                auxiliary_errors.append((name + ' forwarding', error))
         for name, raw in [('stdout', process.stdout), ('stderr', process.stderr)]:
             file = self.output / (prefix + '.' + name)
             try:
