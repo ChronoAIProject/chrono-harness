@@ -1121,8 +1121,11 @@ The record contains only successive physical attachments of that exact address.
 Ordinary updates never rewrite another worktree's record. Cleanup keeps this
 local metadata exclusion and the target's exclusive enrollment capability through
 its physical effect and original-result publication. There is no aggregate
-`ledger.json`, global admission lease, or release/reload merge around independent
-IO. An unrelated owner's busy or damaged record is preserved and reported;
+`ledger.json` or global admission lease. Independent output-retention and retained
+producer work releases the invoking enrollment's metadata exclusion while keeping
+deployment protection. It reacquires the same metadata identity and reloads the
+current record before further updates; it never merges an old snapshot over
+concurrent work. An unrelated owner's busy or damaged record is preserved and reported;
 it does not refuse a valid target's admission. Explicit maintenance still reports
 these failures and continues available independent owners.
 
@@ -1592,8 +1595,10 @@ symlink, preservation without custody and exact historical directory custody.
 It also verifies that a subsequent shared-input custody failure preserves the
 already verified directory-disposal receipts, reports failure and retains its
 continuation and original bytes.
-Its eight cases include the whole-directory capacity boundary, refusal of fresh
+Its nine cases include the whole-directory capacity boundary, refusal of fresh
 allocation IDs during excess and recovery by the original consumer's checkpoint.
+They also exercise an actual paused source check, concurrent coordinator use and
+preservation of that use's original enrollment when the first operation resumes.
 The five temporary test producers adopt directory ownership for new allocations;
 the non-temporary command-result producer keeps its own lifetime. Actual
 coordinator adoption remains separate from declaring this option.
@@ -1693,11 +1698,15 @@ An ordinary drain attempts allocation metadata exclusion without waiting. An
 allocation being updated remains protected with its original state, while
 independent registrations continue. The thirty-second producer admission bound
 still applies to actual publication and reference updates for that allocation.
-Explicit retained-producer maintenance keeps only the invoking enrollment's
-metadata exclusion. Independent enrollments have separate records and locks; no
-release/reload merge is needed around physical IO. Actual regression and
-coordinator/native acceptance are required; the report publication owner still
-has its own separate concurrency limitations.
+Explicit retained-producer maintenance keeps deployment protection and releases
+the invoking enrollment's metadata exclusion during independent producer IO.
+The ordinary managed-operation path uses the same boundary and fully reloads its
+current enrollment on return, retaining the original producer failure if reload
+also fails. Operations without declared fixture producers skip this work.
+Independent enrollments retain separate records and locks. The separate traversal
+of those enrollments still holds the invoking metadata exclusion; this change
+does not establish independence for every nonlocal IO path. Actual coordinator
+adoption and full canonical acceptance remain required.
 
 `migrate --path COORDINATOR --partition-producer ID` is the sole explicit data
 cutover for an adopted retained producer. It consumes the exact v1 bytes under

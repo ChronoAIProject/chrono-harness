@@ -569,14 +569,19 @@ uses declared directories. Runtime output retention still maintains per-output
 records, and fixture state mixes source, shared inputs and disposable outputs.
 The candidate now binds prospective `disposable_directory` ownership at the
 existing temporary allocation owner and disposes that complete directory
-after actual consumers release. Eight direct Rust regressions passed on Darwin,
+after actual consumers release. Nine direct Rust regressions passed on Darwin,
 including exact historical directory custody through the existing migration
 owner, immutable intent preservation, live/diagnostic exclusion, staged source,
 external links, shared originals and retention of verified disposal effects when
 later input custody fails. Directory checkpoints also count unregistered scratch
 members, refuse fresh allocations on observed excess, and recover after the
-original consumer reduces its bytes (95.70 test seconds / 134.66 managed seconds
-at candidate `33ed392c`). This is checkpoint admission, not a filesystem quota.
+original consumer reduces its bytes. Independent producer IO releases the
+coordinator's unrelated metadata exclusion; an actual concurrent managed use
+retains its enrollment and advances its generation after reload (217.60 test
+seconds / 275.11 managed seconds at candidate `4ee29587`). This is checkpoint
+admission, not a filesystem quota or an aggregate producer-directory/project
+capacity bound. The latter still needs implementation at the coarse directory
+owner; per-allocation limits alone do not prevent aggregate accumulation.
 The candidate host selects the five temporary test producers and has adopted
 four existing producer contexts; nine exact historical directories transferred
 through the current custodian entry are now physically absent. Historical shared
