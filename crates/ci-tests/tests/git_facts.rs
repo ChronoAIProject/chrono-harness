@@ -88,7 +88,7 @@ impl Host {
         fs::copy(helper, shadow.join("git")).unwrap();
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut source = read(&repo, ".chrono-harness/ci/units.json")["collection"].clone();
-        source["schema"] = "chrono-github-ci/v3".into();
+        source["schema"] = "chrono-github-ci/v4".into();
         source["facts_config"] = FACTS.into();
         source["push_baselines"] = json!([]);
         write(&root, SOURCE, &source);
@@ -117,7 +117,7 @@ impl Host {
         }
     }
     fn config(&self) -> Config {
-        load(&self.root.join(SOURCE)).expect("explicit v3 source must be accepted")
+        load(&self.root.join(SOURCE)).expect("current v4 source must be accepted")
     }
     fn push(&self, base: &str) -> Result<Value, String> {
         prepare(
@@ -177,13 +177,7 @@ fn event_binding_is_versioned_explicit_and_generation_preserves_customization() 
     assert!(!init(&h.root, &h.root.join(SOURCE)).unwrap());
     assert_eq!(load(&h.root.join(SOURCE)).unwrap().name, c.name);
     for case in [
-        "v1-field",
-        "v1-null",
-        "v2-field",
-        "v3-missing",
-        "v3-null",
-        "v3-outside",
-        "v3-state",
+        "v1-field", "v1-null", "v2-field", "missing", "null", "outside", "state",
     ] {
         let mut bad = read(&h.root, SOURCE);
         match case {
@@ -194,11 +188,11 @@ fn event_binding_is_versioned_explicit_and_generation_preserves_customization() 
                 }
             }
             "v2-field" => bad["schema"] = "chrono-github-ci/v2".into(),
-            "v3-missing" => {
+            "missing" => {
                 bad.as_object_mut().unwrap().remove("facts_config");
             }
-            "v3-null" => bad["facts_config"] = Value::Null,
-            "v3-outside" => bad["facts_config"] = "elsewhere.json".into(),
+            "null" => bad["facts_config"] = Value::Null,
+            "outside" => bad["facts_config"] = "elsewhere.json".into(),
             _ => bad["facts_config"] = ".chrono-harness/state/temporary.json".into(),
         }
         write(&h.root, ".chrono-harness/ci/bad.json", &bad);
@@ -230,13 +224,7 @@ fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
     }
     assert_eq!(
         report["canonical_argv"],
-        json!(chrono_harness::canonical_argv(
-            &h.config().runner,
-            &h.config().check_config,
-            Some(&h.candidate),
-            &h.candidate,
-            false
-        ))
+        json!([h.config().runner, "check"])
     );
 }
 
@@ -312,13 +300,7 @@ fn native_platform_policy_serves_real_push_and_pr_cli_acquisition() {
         );
         assert_eq!(
             report["canonical_argv"],
-            json!(chrono_harness::canonical_argv(
-                &h.config().runner,
-                &h.config().check_config,
-                Some(&base),
-                &h.candidate,
-                false
-            ))
+            json!([h.config().runner, "check"])
         );
         let trace = h.trace();
         let mut drift = read(&h.root, FACTS);
@@ -436,7 +418,10 @@ fn initial_pr_and_configured_baseline_routes_share_the_declared_reader() {
         &h.candidate,
     )
     .unwrap();
-    assert_eq!(initial["canonical_argv"][3], ".chrono-harness/ci/root.json");
+    assert_eq!(
+        initial["canonical_argv"],
+        json!([h.config().runner, "check"])
+    );
     assert!(h.trace().contains("cat-file commit"));
     let (_remote, base) = h.remote();
     let mut configured = h.config();
@@ -519,25 +504,6 @@ fn binding_source_and_executable_failures_precede_network_observation() {
             assert!(h.trace().is_empty());
         }
     }
-}
-
-#[test]
-fn legacy_event_profile_remains_unbound() {
-    let h = Host::new("pass");
-    let mut source = read(&h.root, SOURCE);
-    source["schema"] = "chrono-github-ci/v1".into();
-    source.as_object_mut().unwrap().remove("facts_config");
-    let c: Config = serde_json::from_value(source).unwrap();
-    let report = prepare(
-        &h.root,
-        &c,
-        "push",
-        &json!({"before":h.candidate,"after":h.candidate}),
-        &h.candidate,
-    )
-    .unwrap();
-    assert!(report.get("git_facts").is_none());
-    assert!(h.trace().is_empty());
 }
 
 #[test]
