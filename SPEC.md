@@ -90,7 +90,7 @@ crates/                         独立 Cargo 项目的目录分组
   instructions-tests/           指令生成器专属测试
 assets/instructions/            产品双语 catalog 与默认输出计划，编译输入
 docs/                           合同说明、来源、许可与生成文档
-examples/ci-host/               可复制的宿主采用实例
+examples/ci-host-job-gating/    当前可复制的宿主采用实例
 skills/                         本仓生成并采用的 skill
 AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 .chrono-harness/                本仓采用的独立宿主数据
