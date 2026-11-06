@@ -493,8 +493,8 @@ pub(super) fn collect(
         }
         // Successful replacement markers are not emitted by the scoped producer.
         if !verified_collection::matches_result_states(&response.results, &not_required_ids)
-            || !verified_collection::matches_result_ids(
-                &response.results.iter().map(|r| r.id.as_str()).collect(),
+            || !verified_collection::matches_report_result_ids(
+                &response.results,
                 &expected_ops.iter().map(String::as_str).collect(),
                 &not_required_ids,
             )

@@ -98,6 +98,57 @@ fn cloning_the_actual_report_result_preserves_every_field() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn actual_report_id_projection_preserves_order_duplicates_unicode_and_nul() {
+    let values = vec![
+        result("é", Status::Blocked, Some(-7)),
+        result("a\0b", Status::Passed, None),
+        result("é", Status::NotRequired, Some(0)),
+    ];
+    let ids = policy::result_ids(&values);
+    assert(ids.len() == 3);
+    assert(ids[0]@ == "é"@);
+    assert(ids[1]@ == "a\0b"@);
+    assert(ids[2]@ == "é"@);
+    let empty = Vec::new();
+    let no_ids = policy::result_ids(&empty);
+    assert(no_ids.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn actual_report_coverage_uses_the_original_record_ids() {
+    proof {
+        reveal_strlit("ci.inventory"); reveal_strlit("build"); reveal_strlit("test");
+        assert("ci.inventory"@.len() != "build"@.len());
+        assert("ci.inventory"@.len() != "test"@.len());
+        assert("build"@.len() != "test"@.len());
+    }
+    let operations = vec!["build"];
+    let unrequired = vec!["test"];
+    assert(policy::text_values(operations@) =~= seq!["build"@]);
+    assert(policy::text_values(unrequired@) =~= seq!["test"@]);
+    assert(policy::expected_result_ids(operations@, unrequired@)
+        =~= seq!["ci.inventory"@, "build"@, "test"@]);
+    let values = vec![
+        result("test", Status::NotRequired, None),
+        result("ci.inventory", Status::Passed, None),
+        result("build", Status::Passed, Some(0)),
+    ];
+    let accepted = policy::matches_report_result_ids(&values, &operations, &unrequired);
+    assert(accepted);
+    let missing_operation = vec![
+        result("test", Status::NotRequired, None),
+        result("ci.inventory", Status::Passed, None),
+    ];
+    let missing = policy::matches_report_result_ids(&missing_operation, &operations, &unrequired);
+    assert(!missing);
+    let undeclared = policy::matches_report_result_ids(&values, &operations, &Vec::new());
+    assert(!undeclared);
+    let empty = Vec::new();
+    let absent = policy::matches_report_result_ids(&empty, &operations, &unrequired);
+    assert(!absent);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn result_membership_preserves_permutations_and_rejects_missing_or_extra_ids() {
     proof {
         reveal_strlit("ci.inventory"); reveal_strlit("build"); reveal_strlit("test");

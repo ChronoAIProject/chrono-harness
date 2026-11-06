@@ -199,6 +199,87 @@ pub open spec fn expected_result_ids(
     seq!["ci.inventory"@] + text_values(operations) + text_values(not_required)
 }
 
+pub open spec fn report_ids(values: Seq<CheckResult>) -> Seq<Seq<char>> {
+    values.map(|i: int, value: CheckResult| value.id@)
+}
+
+/// 借用真实报告字段，逐项保留原顺序、重复及完整字符串身份。
+pub fn result_ids<'a>(values: &'a Vec<CheckResult>) -> (ids: Vec<&'a str>)
+    ensures text_values(ids@) == report_ids(values@),
+{
+    let mut ids = Vec::new();
+    let mut i = 0;
+    while i < values.len()
+        invariant 0 <= i <= values.len(),
+            text_values(ids@) == report_ids(values@).take(i as int),
+        decreases values.len() - i,
+    {
+        let ghost before = text_values(ids@);
+        ids.push(values[i].id.as_str());
+        proof {
+            assert(text_values(ids@) =~= before.push(values@[i as int].id@));
+            assert(report_ids(values@).take(i + 1)
+                =~= report_ids(values@).take(i as int).push(values@[i as int].id@));
+        }
+        i += 1;
+    }
+    ids
+}
+
+pub open spec fn report_result_membership(
+    actual: Seq<CheckResult>, expected: Seq<Seq<char>>,
+) -> bool {
+    (forall|i: int| 0 <= i < actual.len() ==>
+        character_member(expected, (#[trigger] actual[i]).id@))
+        && (forall|i: int| 0 <= i < expected.len() ==>
+            character_member(report_ids(actual), #[trigger] expected[i]))
+}
+
+proof fn report_membership_representation(
+    actual: Seq<CheckResult>, ids: Seq<&str>, expected: Seq<Seq<char>>,
+)
+    requires text_values(ids) == report_ids(actual),
+    ensures result_membership(ids, expected) <==> report_result_membership(actual, expected),
+{
+    assert(ids.len() == actual.len());
+    if result_membership(ids, expected) {
+        assert forall|i: int| 0 <= i < actual.len() implies
+            character_member(expected, (#[trigger] actual[i]).id@) by {
+                assert(actual[i].id@ == ids[i]@);
+            }
+        assert forall|i: int| 0 <= i < expected.len() implies
+            character_member(report_ids(actual), #[trigger] expected[i]) by {
+                text_member_representation(ids, expected[i]);
+            }
+    }
+    if report_result_membership(actual, expected) {
+        assert forall|i: int| 0 <= i < ids.len() implies
+            character_member(expected, (#[trigger] ids[i])@) by {
+                assert(ids[i]@ == actual[i].id@);
+            }
+        assert forall|i: int| 0 <= i < expected.len() implies
+            text_member(ids, #[trigger] expected[i]) by {
+                text_member_representation(ids, expected[i]);
+            }
+    }
+}
+
+/// 直接从真实报告取得 ID；调用方无需提供未经证明的字段投影。
+pub fn matches_report_result_ids(
+    actual: &Vec<CheckResult>, operations: &Vec<&str>, not_required: &Vec<&str>,
+) -> (matches: bool)
+    ensures matches <==> report_result_membership(
+        actual@, expected_result_ids(operations@, not_required@)),
+{
+    let ids = result_ids(actual);
+    let matches = matches_result_ids(&ids, operations, not_required);
+    proof {
+        report_membership_representation(
+            actual@, ids@, expected_result_ids(operations@, not_required@));
+    }
+    matches
+}
+
 /// 期望结果恰为库存、登记操作和未要求测试；不从实际结果补期望。
 pub fn matches_result_ids(
     actual: &Vec<&str>, operations: &Vec<&str>, not_required: &Vec<&str>,
