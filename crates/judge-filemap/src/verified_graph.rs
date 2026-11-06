@@ -3386,7 +3386,7 @@ pub struct SeedPropagation<'t, 'a> {
 pub open spec fn seed_propagation_matches(
     item: SeedPropagation, topology: &Topology, seeds: Seq<Seed>, at: int,
 ) -> bool {
-    0 <= at < seeds.len() && item.seed.key() == seeds[at].key()
+    0 <= at < seeds.len() && *item.seed == seeds[at]
         && propagation_rows(item.propagation.rows@, topology.names@, topology.edge_rows@,
             fifo(topology.indices.rows@, topology.indices.roots@[at]).2)
         && (forall|name: Seq<u8>| propagation_names(item.propagation.rows@).contains(name)
