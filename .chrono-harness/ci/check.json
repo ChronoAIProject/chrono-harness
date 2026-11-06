@@ -110,8 +110,7 @@
       },
       "ci": {
         "tests": [
-          "test:ci-tests",
-          "test:ci-native-adapter-tests"
+          "test:ci-tests"
         ],
         "report_path": ".chrono-harness/state/units/ci/check.json"
       },

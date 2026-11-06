@@ -396,6 +396,8 @@ I3 实测失败修复加入明确的配置级 FILEMAP 边投影和可选 scoped-
 
 PR #221 落地为 `3b605cf80aa9e96a6442b2e54991602713acca31`，树与受验候选相同。随后 PR #227 落地为 `2ec6e5ce6c16cd6e56433729a06db7a4cab3ba49`，落地原生 `41965898150` 核过全部 13 项选中汇总结果。原主检出的九项登记已完成受保护状态拆分及共用 owner 部署；普通 bootstrap 通过。无关旧 worktree 的 metadata EX 租约持续持有至完成时，另一个 linked start 仍成功。该 linked 检出的同端 canonical check 未选业务测试，不能重复证明早前 worktree 测试结果。旧原件及两份独立独有提交保留；其他协调者仍须各自受保护切换。完整 SPEC 交付和运行／CI／存储总收益未建立。
 
+原生 CI 输入准备迁入 Rust `chrono-ci native-adoption`，扩展改为 `chrono-native-adoption/v2`，不生成 Python 适配器、不要求解释器。原时间、传输与有界失败预期迁至 `ci-tests` 的 Rust 配对用例，完整 seed／转发／交付消费者同步采用。Python 模板、专属脚本登记和重复发布验证 job 退役；真实 Python 业务／外部接口与其余 bootstrap、shared、release、inventory 迁移不在这一批完成。源码与政策同时改变，候选 canonical、两平台原生结果及 dev 落地仍须实际核验。
+
 ## runner 的 Verus 分批迁移
 
 实际完整 OID、CI 单元 ID 与相对词法路径判断已迁到同源 Verus，生产调用方直接使用；
