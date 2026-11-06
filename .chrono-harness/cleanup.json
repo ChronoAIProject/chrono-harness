@@ -205,12 +205,13 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     },
     {
@@ -238,12 +239,13 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     },
     {
@@ -275,12 +277,13 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     },
     {
@@ -309,12 +312,13 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     },
     {
@@ -340,12 +344,13 @@
         "max_copy_bytes": 1073741824,
         "max_capture_bytes": 67108864,
         "max_captures": 256,
-        "min_available_bytes": 536870912,
+        "min_available_bytes": 8589934592,
         "max_records_per_round": 16,
         "max_record_snapshot": 16384,
         "max_millis_per_round": 2000,
         "max_entries_per_checkpoint": 65536,
-        "max_metadata_bytes_per_round": 67108864
+        "max_metadata_bytes_per_round": 67108864,
+        "max_directory_bytes": 8589934592
       }
     }
   ],
