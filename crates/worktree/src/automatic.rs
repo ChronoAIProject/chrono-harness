@@ -2334,7 +2334,7 @@ impl Manager {
             {
                 let mut attempt =
                     value!({"producer":producer.id,"operation":operation,"producer_objects":[]});
-                if let Err(error) = producer.drain_selected(inputs, r, &mut attempt, None, true) {
+                if let Err(error) = producer.drain_selected(inputs, r, &mut attempt, None) {
                     attempt["error"] = value!(error);
                 }
                 observations.push(attempt);
