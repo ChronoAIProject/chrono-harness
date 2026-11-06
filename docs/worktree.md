@@ -1511,8 +1511,10 @@ and after the actual command, retaining its original exit and streams on failure
 
 **Product and host policy change warning:** `capacity`, operation relationships,
 record layout and original retirement change together. The selected allocation
-limits are 2 GiB generated logical bytes, 1 GiB copied members, 64 MiB raw streams,
-256 captures, and a 512 MiB filesystem admission reserve. Recovery processes at
+defaults are 2 GiB generated logical bytes, 1 GiB copied members, 64 MiB raw
+streams, 256 captures, and a 512 MiB filesystem admission reserve. This candidate
+host selects an 8 GiB aggregate directory limit and an 8 GiB filesystem reserve
+for each of its five temporary test producers. Recovery processes at
 most 16 records / 64 MiB per page; checkpoints inspect at most 65536 entries.
 The 2000 ms checkpoint limit is checked between entries/objects; existing Git
 checks and an individual physical deletion may overrun it. These defaults respond
@@ -1607,13 +1609,18 @@ symlink, preservation without custody and exact historical directory custody.
 It also verifies that a subsequent shared-input custody failure preserves the
 already verified directory-disposal receipts, reports failure and retains its
 continuation and original bytes.
-Its nine cases include the whole-directory capacity boundary, refusal of fresh
+Its cases include the whole-directory capacity boundary, refusal of fresh
 allocation IDs during excess and recovery by the original consumer's checkpoint.
 They also exercise an actual paused source check, concurrent coordinator use and
 preservation of that use's original enrollment when the first operation resumes.
 The five temporary test producers adopt directory ownership for new allocations;
 the non-temporary command-result producer keeps its own lifetime. Actual
-coordinator adoption remains separate from declaring this option.
+coordinator adoption remains separate from declaring this option. The candidate's
+four existing contexts have migrated to the selected directory limits; the fifth
+producer directory does not yet exist. Policy-only migration preserves original
+retiring records whose released capabilities were already removed, while live
+allocation capabilities still exclude migration. Original outcomes and removed
+capabilities are never reconstructed as success.
 
 Metadata writes have finite byte/node admission. Released output and metadata
 retirement use retention.json's finite content/metadata windows, per-round work
