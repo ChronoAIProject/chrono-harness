@@ -494,7 +494,9 @@ Theorem 6 的派生结论是：给定任意顶点类型、两端有向关系及�
 
 相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。
 
-没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
+上述外部数学模型不构成 Rust 相对模型的机械精化，也没有证明真实输入登记完整或任意判官确定性。
+
+实际图内核现由同源 Verus 实现类型比较、两端并集及来源、精确名称和槽位索引、FIFO 首次发现与最短前驱、稀疏前驱树、有限原因链、传播行投影及有序原因集合。`graph::closure` 直接消费这些结果；原因集合的成员、新增／重复、长度、克隆和归一化均保全完整字节身份。外层逐 seed 调用、节点／边与原因关联、seed-ID 映射、JSON／诊断适配、测试选择及完整 SPEC 对应仍待证明，范围见 [Verus 实施说明](docs/verus.md)。
 
 ### 5.2 按实际消费者重构依赖
 
