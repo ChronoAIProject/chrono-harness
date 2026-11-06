@@ -65,6 +65,13 @@ fn main() -> ExitCode {
     }
     let publication = args.iter().any(|a| a == "--owner-publication");
     let root = Path::new(&args[1]);
+    if root
+        .join(".chrono-harness/state/owner-probe-unavailable")
+        .exists()
+    {
+        eprintln!("construction interpreter unavailable");
+        return ExitCode::from(42);
+    }
     if publication {
         excluded(root);
     }

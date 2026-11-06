@@ -117,6 +117,23 @@ fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, St
     h.received(h.native_output(&mut actual))
 }
 #[test]
+fn owner_deployment_publishes_without_the_construction_interpreter() {
+    let (h, exe, path, sha) = fixture();
+    fs::write(
+        h.root.join(".chrono-harness/state/owner-probe-unavailable"),
+        "construction interpreter is no longer available",
+    )
+    .unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(report.get("managed_process").is_none(), "{report}");
+    assert_eq!(
+        fs::read(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap(),
+        fs::read(exe).unwrap()
+    );
+    assert_eq!(report["owner_deployment"]["task_completion"], "not-claimed");
+}
+#[test]
 fn owner_deployment_retains_original_ex_through_publication_and_adoption() {
     let (h, exe, path, sha) = fixture();
     let before = h.ledger()["entries"][0].clone();
