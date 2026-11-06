@@ -53,6 +53,35 @@ fn capacity_host(change: impl FnOnce(&mut Value)) -> Host {
     h
 }
 
+// Re-enter the real producer rather than assuming that one bounded retention
+// round can remove an entire original/metadata relationship. Preserve the final
+// physical-absence assertions and reject every error except honest capacity
+// deferral while its released predecessor still has work to retire.
+fn capacity_reenter_after_release(
+    store: &Path,
+    outputs: &[String],
+    predecessor: &Path,
+) -> chrono_worktree::TemporaryHost {
+    let record = producer_record_path(store, predecessor);
+    for _ in 0..20 {
+        match chrono_worktree::TemporaryHost::allocate(
+            store,
+            "test-allocation",
+            outputs,
+            "released-reentry-",
+        ) {
+            Ok(mut next) => {
+                if !record.exists() {
+                    return next;
+                }
+                next.finish().unwrap();
+            }
+            Err(error) => assert!(error.contains("capacity unmet"), "{error}"),
+        }
+    }
+    panic!("released predecessor did not retire through bounded ordinary reentry");
+}
+
 #[test]
 fn capacity_generated_boundary_and_explicit_finish_preserve_source_and_diagnostic() {
     let h = capacity_host(|_| {});
@@ -96,12 +125,11 @@ fn capacity_generated_boundary_and_explicit_finish_preserve_source_and_diagnosti
             "test consumer inspected the original and needs no further cache input",
         )
         .unwrap();
-    let next =
-        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recover-")
-            .unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, allocation.path());
     assert!(!cache.exists());
     assert_eq!(fs::read(&source).unwrap(), b"unique source");
     assert!(next.path().exists());
+    next.finish().unwrap();
 }
 
 #[test]
@@ -1578,11 +1606,10 @@ fn capacity_fresh_allocation_cannot_escape_protected_excess() {
     );
     assert!(cache.exists());
     diagnostic.release("reader", "original consumed").unwrap();
-    let next =
-        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "released-")
-            .unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, first.path());
     assert!(!cache.exists());
     assert!(next.path().exists());
+    next.finish().unwrap();
 }
 
 #[test]
@@ -1723,13 +1750,7 @@ fn capacity_native_failure_originals_and_metadata_retire_after_diagnostic_releas
             "actual consumer inspected original failed result and streams",
         )
         .unwrap();
-    let mut next = chrono_worktree::TemporaryHost::allocate(
-        &store,
-        "test-allocation",
-        &outputs,
-        "after-release-",
-    )
-    .unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, host.path());
     next.finish().unwrap();
     assert!(!capture.exists(), "released native originals accumulated");
     assert!(!metadata.exists(), "released producer receipts accumulated");
@@ -1825,6 +1846,8 @@ fn capacity_interrupted_copy_claim_retires_without_inventing_original_bytes() {
     assert_eq!(state["object"]["copy_intents"]["copy"], 7);
     assert!(state["object"]["original_release"].is_null());
     host.finish().unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, host.path());
+    next.finish().unwrap();
     assert!(!original.exists(), "recovery invented original bytes");
     assert!(!claims.exists(), "released pending-copy claims accumulated");
     assert!(

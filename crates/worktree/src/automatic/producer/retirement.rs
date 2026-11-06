@@ -179,51 +179,73 @@ impl Context {
             }
             let mut store = Store::open(&self.directory, &self.producer, false)?;
             if store.contains(&blocker.object)? {
-                if !store.load_available(&blocker.object)? {
-                    return Err(
-                        "fixture capacity unmet; obligation metadata busy, production deferred"
-                            .into(),
-                    );
-                }
-                let object = store.state.objects[0].clone();
-                if object.identity != blocker.identity {
+                let record = store.decode_record(&no_symlink_parents(
+                    &self.directory,
+                    &Store::record_name(&blocker.object)?,
+                )?)?;
+                if record.identity != blocker.identity {
                     return Err("capacity obligation allocation changed; preserve original".into());
                 }
-                if !object.retiring {
-                    let binding = object
-                        .cache_lease
-                        .as_ref()
-                        .ok_or("capacity obligation lease missing")?;
-                    let excluded = Lease::acquire(
-                        &no_symlink_parents(&self.directory, &binding.path)?,
-                        Some(&binding.id),
-                        false,
-                        true,
-                        None,
-                    )?;
-                    let stale = excluded.is_some();
-                    let recover = stale && object.consumers.values().all(|c| c.released);
+                // Retirement can remove the allocation before its continuation
+                // record. Its remaining work no longer owns a directory gate at
+                // that now-absent allocation address.
+                if record.retiring {
                     drop(store);
-                    drop(excluded);
-                    if recover {
-                        self.entry(Some(&blocker.object))?;
+                    self.entry(Some(&blocker.object))?;
+                } else {
+                    if !store.load_available(&blocker.object)? {
+                        return Err(
+                            "fixture capacity unmet; obligation metadata busy, production deferred"
+                                .into(),
+                        );
                     }
-                    if !Store::open(&self.directory, &self.producer, false)?
-                        .contains(&blocker.object)?
-                    {
-                        if path.exists() {
-                            fs::remove_file(&path).map_err(|e| e.to_string())?;
+                    let object = store.state.objects[0].clone();
+                    if object.identity != blocker.identity {
+                        return Err(
+                            "capacity obligation allocation changed; preserve original".into()
+                        );
+                    }
+                    if !object.retiring {
+                        let binding = object
+                            .cache_lease
+                            .as_ref()
+                            .ok_or("capacity obligation lease missing")?;
+                        let excluded = Lease::acquire(
+                            &no_symlink_parents(&self.directory, &binding.path)?,
+                            Some(&binding.id),
+                            false,
+                            true,
+                            None,
+                        )?;
+                        let stale = excluded.is_some();
+                        let recover = stale && object.consumers.values().all(|c| c.released);
+                        drop(store);
+                        drop(excluded);
+                        if recover {
+                            self.entry(Some(&blocker.object))?;
                         }
-                        continue;
+                        let current = Store::open(&self.directory, &self.producer, false)?;
+                        if !current.contains(&blocker.object)? {
+                            if path.exists() {
+                                fs::remove_file(&path).map_err(|e| e.to_string())?;
+                            }
+                            continue;
+                        }
+                        let current = current.decode_record(&no_symlink_parents(
+                            &self.directory,
+                            &Store::record_name(&blocker.object)?,
+                        )?)?;
+                        if !current.retiring {
+                            self.observe_capacity(&self.directory.join(&blocker.object), stale)?;
+                            if !path.exists() {
+                                continue;
+                            }
+                            return Err(format!(
+                                "fixture capacity unmet; original obligation remains: {}",
+                                blocker.object
+                            ));
+                        }
                     }
-                    self.observe_capacity(&self.directory.join(&blocker.object), stale)?;
-                    if !path.exists() {
-                        continue;
-                    }
-                    return Err(format!(
-                        "fixture capacity unmet; original obligation remains: {}",
-                        blocker.object
-                    ));
                 }
             }
             // Retention's physical effect, not enrollment or a terminal wrapper,
@@ -392,6 +414,14 @@ pub(super) fn resume_retirement(
         .to_owned();
     let role = format!("fixture-retirement:{}", sha256(object.path.as_bytes()));
     let mut paths = retained_paths(directory, object)?;
+    let mut remaining = false;
+    for path in paths.iter().filter(|path| *path != &record) {
+        match fs::symlink_metadata(path) {
+            Ok(_) => remaining = true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+            Err(error) => return Err(error.to_string()),
+        }
+    }
     // Keep the resumable producer record until every declared effect is done.
     // Its temporary root also protects interrupted enrollment/link publication.
     paths.sort_by_key(|path| path != &record);
@@ -407,7 +437,7 @@ pub(super) fn resume_retirement(
             continue;
         }
         if inventory.enrolled(relative)? {
-            if path == record {
+            if path == record && remaining {
                 inventory.reference_paths(&role, &[record_relative.clone()])?;
             }
             continue;
@@ -453,7 +483,7 @@ pub(super) fn resume_retirement(
         }
         let publication=Inventory::adopted(&inputs.policy.coordinator_root)?.unwrap().begin("fixture-retirement",relative,
             value!({"producer_outcome":"unchanged","original_consumer_release":object.original_release,"operation":"fixture-original-retirement"}))?;
-        if path == record {
+        if path == record && remaining {
             inventory.reference_paths(&role, &[record_relative.clone()])?;
         }
         publication.complete(value!({"producer_outcome":"unchanged","original_consumer_release":object.original_release,"operation":"fixture-original-retirement"}))?;
@@ -473,7 +503,22 @@ pub(super) fn resume_retirement(
             inventory.dependencies_paths(path, &[record_relative.clone()])?;
         }
     }
-    inventory.reference(&role, &[])?;
+    // A bounded pass can remove a capture container before its metadata. Keep
+    // the immutable continuation rooted until every other declared path is
+    // absent; a later ordinary entry can then retire the record itself.
+    let remaining = selected.iter().try_fold(false, |remaining, path| {
+        if path == &record_relative {
+            return Ok::<_, String>(remaining);
+        }
+        match fs::symlink_metadata(no_symlink_parents(&inputs.policy.coordinator_root, path)?) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(remaining),
+            Err(error) => Err(error.to_string()),
+        }
+    })?;
+    if !remaining {
+        inventory.reference(&role, &[])?;
+    }
     Ok(
         value!({"status":"retiring","owner":"output-retention/v2","physical_absence":"pending","producer_outcome":"unchanged","retention_paths":selected}),
     )
