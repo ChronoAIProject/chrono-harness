@@ -354,7 +354,7 @@ v2 的 `report_bytes` 约束每单元原报告 metadata 加 stdout／stderr 总�
 
 | 部分 | 声明内容 |
 | --- | --- |
-| `collection` | 已有 `chrono-github-ci/v1` 或 v3 provider，含共同事件、action、runner、generator、检查 profile，以及汇总的路径／名称／bootstrap／runner／产物 |
+| `collection` | 当前 `chrono-github-ci/v4` provider，含共同事件、action、runner、generator、检查 profile，以及汇总的路径／名称／bootstrap／runner／产物 |
 | `units` | 键与检查 profile 完全相同；每项声明 `workflow_path`、`name`、`runs_on`、`timeout_minutes`、`bootstrap`、`context_path`、`artifact_directory` |
 | `gather` | GitHub CLI `program`、`inherit_environment`、`credential_environment`、字面 `environment`、进程 `timeout_seconds`／`output_limit_bytes`、总体 `wait_seconds`／`poll_seconds`，以及明确 `manifest_path`／`download_directory`／`report_path` |
 
@@ -462,7 +462,7 @@ chrono-ci migrate --host-root . \
   --config .chrono-harness/ci/units.json
 ```
 
-旧来源可为 scoped v1 或 units，目标须明确配置 units。写入前验证全部旧生成文件及新冲突，精确保留目标 JSON，写新输出，只删过时旧工作流；旧来源地址不同且字节匹配明确输入时才退役它。旧生成结果被手改或新路径冲突，均在写入前失败；无关文件保留。
+前一来源可为当前 scoped v4（无初始清单）或 units，目标须明确配置 units。写入前验证全部旧生成文件及新冲突，精确保留目标 JSON，写新输出，只删过时旧工作流；旧来源地址不同且字节匹配明确输入时才退役它。旧生成结果被手改或新路径冲突，均在写入前失败；无关文件保留。
 
 初始清单不能迁入单元汇总。同一所有者支持[独立 v4 保留清单迁移](ci.md#standalone-initial-host-transition)，仍拒绝完整治理和发布 provider 迁移。
 

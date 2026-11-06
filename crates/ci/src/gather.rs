@@ -534,22 +534,11 @@ fn inner(
     if context["check_config_sha256"] != file_identity(&root.join(&c.collection.check_config))?.0 {
         return Err("collection check profile changed".into());
     }
-    let mut canonical = canonical_argv(
-        &c.collection.runner,
-        &c.collection.check_config,
-        context["base"].as_str(),
-        candidate,
-        context["initial"] == true,
-    );
-    if c.collection.schema == "chrono-github-ci/v4" {
-        canonical = vec![
-            c.collection.runner.clone(),
-            "check".into(),
-            "--collect".into(),
-        ];
-    } else {
-        canonical.extend(c.scope(None).argv());
-    }
+    let canonical = vec![
+        c.collection.runner.clone(),
+        "check".into(),
+        "--collect".into(),
+    ];
     if context["canonical_argv"] != json!(canonical) {
         return Err("collection command context mismatch".into());
     }
@@ -625,7 +614,7 @@ fn inner(
     };
     let mut reports = vec![];
     let mut identities = vec![];
-    let download_prefix = if c.collection.schema == "chrono-github-ci/v4" {
+    let download_prefix = {
         let parent = no_symlink_parents(root, &c.gather.download_directory)?;
         fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
         let retained =
@@ -656,8 +645,6 @@ fn inner(
                 .to_str()
                 .ok_or("download path UTF-8")?
         )
-    } else {
-        c.gather.download_directory.clone()
     };
     // Parent jobs share a completed artifact inventory and immutable workflow
     // revision. Reuse those observations only within this one acquisition.
@@ -758,23 +745,12 @@ fn inner(
                 .map_err(|e| e.to_string())?,
         )?;
         let scope = c.scope(Some(&unit));
-        let mut expected = canonical_argv(
-            &c.collection.runner,
-            &c.collection.check_config,
-            context["base"].as_str(),
-            candidate,
-            context["initial"] == true,
-        );
-        if c.collection.schema == "chrono-github-ci/v4" {
-            expected = vec![
-                c.collection.runner.clone(),
-                "check".into(),
-                "--unit".into(),
-                unit.clone(),
-            ];
-        } else {
-            expected.extend(scope.argv());
-        }
+        let expected = vec![
+            c.collection.runner.clone(),
+            "check".into(),
+            "--unit".into(),
+            unit.clone(),
+        ];
         if [
             "event",
             "base",
@@ -841,7 +817,7 @@ fn inner(
         let report_path = downloaded(&registered[&unit].report_path)?;
         let mut input = json!({"unit":unit,"path":report_path,"sha256":file_identity(&no_symlink_parents(root,&report_path)?)?.0,
             "runner_sha256":unit_context["executables"]["runner_sha256"],"judge_sha256":unit_context["executables"]["judge_sha256"],
-            "artifacts":if c.collection.schema=="chrono-github-ci/v4" {json!({"source_directory":w.artifact_directory,"directory":format!("{destination}/")})} else {Value::Null}});
+            "artifacts":{"source_directory":w.artifact_directory,"directory":format!("{destination}/")}});
         if c.schema == units::FULL_SCHEMA {
             if unit_context["full_context"]["semantic_digest"]
                 != context["full_context"]["semantic_digest"]
@@ -907,24 +883,17 @@ fn inner(
     }
     let manifest = json!({"schema":if c.schema==units::FULL_SCHEMA {"chrono-full-collection/v1"}else{"chrono-ci-collection/v1"},"reports":reports});
     let manifest_path = no_symlink_parents(root, &c.gather.manifest_path)?;
-    if manifest_path.exists() && c.collection.schema != "chrono-github-ci/v4" {
-        return Err("collection manifest already exists; previous evidence retained".into());
-    }
     write_file(
         root,
         &c.gather.manifest_path,
         &serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?,
     )?;
-    let manifest_original = if c.collection.schema == "chrono-github-ci/v4" {
-        json!(chrono_harness::prepared::retain_original(
-            root,
-            &format!("{}preparation/", c.collection.artifact_directory),
-            "manifest",
-            &fs::read(&manifest_path).map_err(|e| e.to_string())?
-        )?)
-    } else {
-        Value::Null
-    };
+    let manifest_original = json!(chrono_harness::prepared::retain_original(
+        root,
+        &format!("{}preparation/", c.collection.artifact_directory),
+        "manifest",
+        &fs::read(&manifest_path).map_err(|e| e.to_string())?
+    )?);
     Ok(
         json!({"status":"gathered-unjudged","base":context["base"],"candidate":candidate,"units":identities,"manifest_path":c.gather.manifest_path,"manifest_sha256":file_identity(&manifest_path)?.0,"manifest_original":manifest_original}),
     )
@@ -936,6 +905,8 @@ pub(super) fn gather(
     c: &units::Config,
     repository: &str,
 ) -> Result<String, String> {
+    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let root = root.as_path();
     let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(root)?;
     units::validate(c)?;
     let parts: Vec<_> = repository.split('/').collect();
@@ -948,10 +919,6 @@ pub(super) fn gather(
         })
     {
         return Err("repository must be explicit owner/name".into());
-    }
-    let target = no_symlink_parents(root, &c.gather.report_path)?;
-    if target.exists() && c.collection.schema != "chrono-github-ci/v4" {
-        return Err("gather report exists; original evidence retained".into());
     }
     let mut transport = Transport::new(root, &c.gather)?;
     let result = inner(root, path, c, repository, &mut transport);
@@ -968,52 +935,41 @@ pub(super) fn gather(
             report["resources"]["summary"] = summary;
         }
     }
-    if c.collection.schema == "chrono-github-ci/v4" {
-        report["retained_report"] = json!(
-            chrono_harness::prepared::retain_original(
-                root,
-                &format!("{}preparation/", c.collection.artifact_directory),
-                "native-gather",
-                &serde_json::to_vec(&report).map_err(|e| e.to_string())?
-            )?
-            .path
-        );
-    }
-    let gather_original = report["retained_report"].as_str().map(str::to_owned);
+    let gather_original = chrono_harness::prepared::retain_original(
+        root,
+        &format!("{}preparation/", c.collection.artifact_directory),
+        "native-gather",
+        &serde_json::to_vec(&report).map_err(|e| e.to_string())?,
+    )?
+    .path;
+    report["retained_report"] = json!(gather_original);
     if result.is_err() || storage_result.is_err() {
-        if let (Some(inventory), Some(original)) = (
-            chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?,
-            &gather_original,
-        ) {
+        if let Some(inventory) =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+        {
             inventory.protect_path_consumer(
-                &format!("gather-recheck:{}", sha256(original.as_bytes())),
-                original,
+                &format!("gather-recheck:{}", sha256(gather_original.as_bytes())),
+                &gather_original,
             )?;
         }
     }
-    let _slot = if let Some(original) = &gather_original {
-        chrono_harness::retained_artifacts::retention::reference_report(
-            root,
-            &c.gather.report_path,
-            original,
-            &acquisition_path.into_iter().collect::<Vec<_>>(),
-            None,
-        )?
-    } else {
-        None
-    };
+    let _slot = chrono_harness::retained_artifacts::retention::reference_report(
+        root,
+        &c.gather.report_path,
+        &gather_original,
+        &acquisition_path.into_iter().collect::<Vec<_>>(),
+        None,
+    )?;
     write_file(
         root,
         &c.gather.report_path,
         &serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?,
     )?;
-    if let Some(original) = gather_original {
-        chrono_harness::retained_artifacts::retention::settle_report(
-            root,
-            &c.gather.report_path,
-            &original,
-        )?;
-    }
+    chrono_harness::retained_artifacts::retention::settle_report(
+        root,
+        &c.gather.report_path,
+        &gather_original,
+    )?;
     result?;
     storage_result?;
     Ok(serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n")
