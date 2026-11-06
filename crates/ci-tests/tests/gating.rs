@@ -1432,13 +1432,26 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
         fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
         fs::copy(source.join(path), root.join(path)).unwrap();
     }
-    install(&root);
-    install_parent_provider(&root);
+    let distribution = dir.path().join("existing tools distribution");
+    fs::create_dir(&distribution).unwrap();
+    install(&distribution);
     fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
-        root.join(".chrono-harness/bin/chrono-worktree"),
+        distribution.join(".chrono-harness/bin/chrono-worktree"),
     )
     .unwrap();
+    let installed = Command::new("/bin/sh")
+        .arg(root.join(".chrono-harness/ci/install.sh"))
+        .arg(&root)
+        .arg(distribution.join(".chrono-harness/bin"))
+        .output()
+        .unwrap();
+    assert!(
+        installed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&installed.stderr)
+    );
+    install_parent_provider(&root);
     let git_bin = fixture_git();
     let version = Command::new(&git_bin).arg("--version").output().unwrap();
     let mut cfg: Value =
