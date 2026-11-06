@@ -12,12 +12,51 @@ import sys
 import tempfile
 import threading
 import time
+import zlib
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from process_fds import inherited_fds
 
 PASS_FDS = inherited_fds()
+
+
+def retained_process(original):
+    """Consume the lifecycle owner's single lossless stream representation."""
+    process = dict(original)
+    encoding = process.get("encoding")
+    if encoding not in ("chrono-retained-process/v1", "chrono-retained-process/v2"):
+        raise ValueError("unsupported lifecycle process encoding")
+    for stream in ("stdout", "stderr"):
+        if stream in process or stream + "_bytes" in process:
+            raise ValueError("conflicting lifecycle stream aliases")
+        compressed = encoding == "chrono-retained-process/v2"
+        key = stream + ("_zlib_hex" if compressed else "_hex")
+        if compressed and stream + "_hex" in process or not compressed and (
+                stream + "_zlib_hex" in process or stream + "_length" in process):
+            raise ValueError("conflicting lifecycle stream encodings")
+        hex_bytes = process.get(key)
+        if (not isinstance(hex_bytes, str) or len(hex_bytes) > 128 * 1024 * 1024
+                or len(hex_bytes) % 2 or re.fullmatch(r"[0-9a-f]*", hex_bytes) is None):
+            raise ValueError("lifecycle stream encoding/bound")
+        packed = bytes.fromhex(hex_bytes)
+        if compressed:
+            size = process.get(stream + "_length")
+            if type(size) is not int or not 0 <= size <= 64 * 1024 * 1024:
+                raise ValueError("lifecycle original stream bound/length")
+            decoder = zlib.decompressobj()
+            try:
+                raw = decoder.decompress(packed, size + 1)
+            except zlib.error as error:
+                raise ValueError("lifecycle compressed stream differs") from error
+            if len(raw) != size or not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+                raise ValueError("lifecycle compressed stream/length differs")
+        else:
+            raw = packed
+        if hashlib.sha256(raw).hexdigest() != process.get(stream + "_sha256"):
+            raise ValueError("lifecycle original stream digest differs")
+        process[stream + "_bytes"] = raw
+    return process
 
 
 def host_path(root, declared, prefix=".chrono-harness/"):
@@ -114,7 +153,7 @@ def participate(root, config_path, config):
     result = subprocess.run([str(owner), "bootstrap", "--host-root", str(root), "--config", adoption["config"], "--bootstrap-config", config_path.as_posix()], pass_fds=PASS_FDS, capture_output=True)
     try:
         report = json.loads(result.stdout)
-        process = report["managed_process"]
+        process = retained_process(report["managed_process"])
     except (ValueError, KeyError):
         raise ValueError("bootstrap ownership refused: " + result.stdout.decode("utf-8", "replace") + result.stderr.decode("utf-8", "replace"))
     sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
