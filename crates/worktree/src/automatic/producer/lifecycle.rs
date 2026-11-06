@@ -169,22 +169,63 @@ impl Context {
             ));
         }
         let mut metadata = vec![];
+        let mut retiring_records = vec![];
+        let mut retiring_leases = vec![];
         for object in &objects {
-            let guard = DirectoryGate::available(&directory.join(&object.path))?
-                .ok_or("context migration metadata busy")?;
+            let allocation = no_symlink_parents(directory, &object.path)?;
+            if object.retiring {
+                if object.original_release.is_none()
+                    || object.consumers.values().any(|c| !c.released)
+                    || object.cache_lease.is_none()
+                {
+                    return Err("context migration preserves an unreleased retirement".into());
+                }
+                let path = no_symlink_parents(directory, &Store::record_name(&object.path)?)?;
+                let original = fs::read(&path).map_err(|e| e.to_string())?;
+                if json(&original)?["object"] != value!(&**object) {
+                    return Err("context migration retirement record changed".into());
+                }
+                retiring_records.push((path, original));
+            }
+            let guard = match fs::symlink_metadata(&allocation) {
+                Ok(_) => {
+                    if object.retiring && directory_id(&allocation)? != object.identity {
+                        return Err("context migration retiring allocation changed".into());
+                    }
+                    Some(
+                        DirectoryGate::available(&allocation)?
+                            .ok_or("context migration metadata busy")?,
+                    )
+                }
+                Err(error) if object.retiring && error.kind() == std::io::ErrorKind::NotFound => {
+                    None
+                }
+                Err(error) => return Err(error.to_string()),
+            };
             if let Some(binding) = &object.cache_lease {
-                let lease = Lease::acquire(
-                    &no_symlink_parents(directory, &binding.path)?,
-                    Some(&binding.id),
-                    false,
-                    true,
-                    None,
-                )?
-                .ok_or("context migration has active allocation consumers")?;
+                let path = no_symlink_parents(directory, &binding.path)?;
+                match fs::symlink_metadata(&path) {
+                    Err(error)
+                        if object.retiring && error.kind() == std::io::ErrorKind::NotFound =>
+                    {
+                        // Retirement already excludes production. Binding a new
+                        // context neither resumes its old lease nor mutates its
+                        // continuation; the original retention owner still ends it.
+                        metadata.push(guard);
+                        continue;
+                    }
+                    Err(error) => return Err(error.to_string()),
+                    Ok(_) => (),
+                }
+                let lease = Lease::acquire(&path, Some(&binding.id), false, true, None)?
+                    .ok_or("context migration has active allocation consumers")?;
                 lease.stable()?;
                 // Every new consumer of this existing allocation first enters
                 // its metadata gate. Retain that EX gate after proving current
                 // cache holders quiescent; a second retained FD adds no exclusion.
+                if guard.is_none() {
+                    retiring_leases.push(lease);
+                }
             }
             metadata.push(guard);
         }
@@ -270,8 +311,18 @@ impl Context {
                 ));
             }
         }
-        for guard in &metadata {
+        for guard in metadata.iter().flatten() {
             guard.stable()?;
+        }
+        for lease in &retiring_leases {
+            lease.stable()?;
+        }
+        for (path, original) in &retiring_records {
+            if fs::read(path).map_err(|e| e.to_string())? != *original {
+                return Err(
+                    "context migration retirement record changed before publication".into(),
+                );
+            }
         }
         store.owner_stable()?;
         inputs.stable(r)?;

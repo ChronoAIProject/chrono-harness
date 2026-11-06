@@ -173,6 +173,83 @@ fn directory_cleanup_budget_refuses_unknown_usage_without_creating_an_allocation
 }
 
 #[test]
+fn directory_cleanup_context_migration_preserves_retiring_objects_after_lease_retirement() {
+    let h = capacity_host(|capacity| capacity["max_capture_bytes"] = value!(4096));
+    let retention = h.root.join(".chrono-harness/retention.json");
+    let mut policy = json(&fs::read(&retention).unwrap()).unwrap();
+    policy["max_nodes_per_round"] = value!(1);
+    fs::write(retention, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let live =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "alive-")
+            .unwrap();
+    let mut retiring =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "retiring-")
+            .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command.arg("capture-once");
+    let original = retiring.capture_output(&mut command).unwrap();
+    drop(command);
+    assert_eq!(original.status.code(), Some(7));
+    retiring.finish().unwrap();
+    let record = producer_record_path(&store, retiring.path());
+    let original_record = fs::read(&record).unwrap();
+    let object = json(&original_record).unwrap()["object"].clone();
+    assert_eq!(object["retiring"], true);
+    assert!(object["original_release"].is_string());
+    // Reproduce the observed partial retention state: its producer-written
+    // continuation survives after the original capability file is retired.
+    let lease = store.join(object["cache_lease"]["path"].as_str().unwrap());
+    if lease.exists() {
+        fs::remove_file(&lease).unwrap();
+    }
+    let context_path = store.join("producer-context.json");
+    let previous = fs::read(&context_path).unwrap();
+    let cleanup = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&cleanup).unwrap()).unwrap();
+    policy["retained_producers"][0]["capacity"]["max_directory_bytes"] = value!(1048576);
+    fs::write(cleanup, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let migrate = || {
+        h.auto(
+            "migrate",
+            &[
+                "--path",
+                h.root.to_str().unwrap(),
+                "--partition-producer",
+                "test-allocation",
+            ],
+        )
+    };
+    let (code, report, error) = migrate();
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report.to_string().contains("active allocation consumers"),
+        "{report}"
+    );
+    assert_eq!(fs::read(&context_path).unwrap(), previous);
+    drop(live);
+    let (code, report, error) = migrate();
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(fs::read(&record).unwrap(), original_record);
+    assert_eq!(
+        fs::read(store.join(format!(
+            "producer-context-source-{}.json",
+            sha256(&previous)
+        )))
+        .unwrap(),
+        previous
+    );
+    let current = json(&fs::read(&context_path).unwrap()).unwrap();
+    assert_eq!(current["capacity"]["max_directory_bytes"], 1048576);
+    assert!(!lease.exists(), "migration recreated a retired capability");
+    assert_eq!(original.status.code(), Some(7));
+}
+
+#[test]
 fn directory_cleanup_accounts_all_scratch_and_blocks_fresh_allocations_on_excess() {
     let h = capacity_host(|_| {});
     adopt_directory_cleanup(&h);
