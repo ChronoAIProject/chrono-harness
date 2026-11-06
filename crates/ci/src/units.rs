@@ -408,8 +408,8 @@ pub(super) struct Profile {
     pub judge: Option<chrono_harness::CommandSpec>,
 }
 pub(super) fn profile(root: &Path, c: &Config) -> Result<Profile, String> {
-    let raw = chrono_harness::load_selected_config(root, &c.collection.check_config)?;
     let profile = if c.schema == FULL_SCHEMA {
+        let raw = chrono_harness::load_selected_config(root, &c.collection.check_config)?;
         let block = chrono_harness::units::full_execution_units(&raw)?
             .ok_or("full provider requires registered full units")?;
         Profile {
