@@ -379,6 +379,54 @@ fn directory_cleanup_preserves_nested_live_and_diagnostic_consumers() {
     super::fixture_body::custody_nested_consumers(true);
 }
 
+#[test]
+fn directory_cleanup_reports_disposal_even_when_shared_input_custody_is_missing() {
+    let h = host();
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let source = h.parent.join("original-input.rs");
+    fs::write(&source, b"required original bytes").unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "partial-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    let destination = root.join("copied.rs");
+    let original = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        &source,
+        &destination,
+        None,
+        "actual fixture input",
+    )
+    .unwrap();
+    fs::copy(&source, &destination).unwrap();
+    let record = producer_record_path(&store, &root);
+    // A historical allocation may have original bytes but no claim namespace.
+    // It cannot establish a new release, yet its owned directory can be gone.
+    fs::remove_dir_all(
+        store.join("body-input-claims").join(original.file_stem().unwrap()),
+    )
+    .unwrap();
+    let report = allocation.finish().unwrap();
+    assert!(!root.exists(), "owned directory was not disposed: {report}");
+    assert!(record.exists(), "incomplete retirement lost its continuation");
+    assert_eq!(fs::read(&original).unwrap(), b"required original bytes");
+    assert!(!report["recovery_error"].is_null(), "{report}");
+    let row = report["producer_objects"].as_array().unwrap().iter()
+        .find(|row| row["path"].as_str().is_some_and(|p| p.ends_with(root.file_name().unwrap().to_str().unwrap())))
+        .unwrap();
+    assert_eq!(row["status"], "failed", "{report}");
+    let result = &row["original_retirement"];
+    assert!(result["error"].as_str().unwrap().contains("claim namespace unknown"));
+    assert_eq!(result["physical_absence"], "verified", "{report}");
+    assert!(result["artifact_disposals"].as_array().unwrap().iter()
+        .any(|effect| effect["status"] == "verified-absent" && effect["bytes_before"].as_u64().unwrap() > 0),
+        "actual disposal was lost when shared input release failed: {report}");
+}
+
 // Re-enter the real producer rather than assuming that one bounded retention
 // round can remove an entire original/metadata relationship. Preserve the final
 // physical-absence assertions and reject every error except honest capacity
