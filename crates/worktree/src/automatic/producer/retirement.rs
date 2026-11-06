@@ -664,6 +664,14 @@ fn dispose_owned_directory(
     fs::remove_file(record).map_err(|e| e.to_string())?;
     result["status"] = value!("disposed");
     result["physical_absence"] = value!("verified");
+    // Shared originals have a different lifetime from this directory. Forward
+    // their existing exact addresses to the content owner after releasing our
+    // claims; other directories' claims still protect the same bytes.
+    result["retention_paths"] = value!(object.shared_originals.keys().map(|digest| {
+        directory.join(format!("body-inputs/{digest}.bin"))
+            .strip_prefix(&inputs.policy.coordinator_root).map_err(|e| e.to_string())?
+            .to_str().map(str::to_owned).ok_or("shared original path UTF-8".into())
+    }).collect::<Result<Vec<_>, String>>()?);
     Ok(result)
 }
 pub(super) fn retire(

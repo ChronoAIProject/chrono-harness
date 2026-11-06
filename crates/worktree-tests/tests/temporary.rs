@@ -236,19 +236,42 @@ fn directory_cleanup_keeps_shared_input_until_its_last_directory_releases() {
     let mut originals = vec![];
     for allocation in [&first, &second] {
         let destination = allocation.path().join("copied.rs");
-        originals.push(chrono_worktree::TemporaryHost::register_copy(
-            &store, "test-allocation", &source, &destination, None, "actual fixture input",
-        ).unwrap());
+        originals.push(
+            chrono_worktree::TemporaryHost::register_copy(
+                &store,
+                "test-allocation",
+                &source,
+                &destination,
+                None,
+                "actual fixture input",
+            )
+            .unwrap(),
+        );
         fs::copy(&source, &destination).unwrap();
     }
     assert_eq!(originals[0], originals[1]);
     let report = first.finish().unwrap();
-    assert!(!first.path().exists(), "released first directory accumulated: {report}");
-    assert!(originals[0].is_file(), "second directory lost its shared input");
+    assert!(
+        !first.path().exists(),
+        "released first directory accumulated: {report}"
+    );
+    assert!(
+        originals[0].is_file(),
+        "second directory lost its shared input"
+    );
     let report = second.finish().unwrap();
-    assert!(!second.path().exists(), "released second directory accumulated: {report}");
-    assert!(!originals[0].exists(), "last released shared input accumulated: {report}");
-    assert_eq!(fs::read(&source).unwrap(), b"real source outside temporary directories");
+    assert!(
+        !second.path().exists(),
+        "released second directory accumulated: {report}"
+    );
+    assert!(
+        !originals[0].exists(),
+        "last released shared input accumulated: {report}"
+    );
+    assert_eq!(
+        fs::read(&source).unwrap(),
+        b"real source outside temporary directories"
+    );
 }
 
 // Re-enter the real producer rather than assuming that one bounded retention
