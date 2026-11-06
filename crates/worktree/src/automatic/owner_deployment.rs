@@ -606,6 +606,7 @@ impl Manager {
         {
             return Err("owner deployment stage source/configuration differs".into());
         }
+        start::cleanliness_at(r, root, &head, self.inputs.registrations.config())?;
         validate_stage(r, root, &head, profile, &policy, &stage)?;
         let record = &stage["owner_stage"];
         if record["selected"] != declaration["selected"] {

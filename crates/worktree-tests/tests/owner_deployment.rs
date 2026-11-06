@@ -592,6 +592,7 @@ fn owner_deployment_preserves_bytes_on_stage_original_or_execution_drift() {
         "staged",
         "compiler",
         "environment",
+        "dirty-source",
     ] {
         let (h, exe, path, _) = fixture();
         let target = h.root.join(".chrono-harness/bin/chrono-worktree");
@@ -613,6 +614,9 @@ fn owner_deployment_preserves_bytes_on_stage_original_or_execution_drift() {
             "staged" => stage["owner_stage"]["staged"]["sha256"] = value!("0".repeat(64)),
             "compiler" => stage["executables"][1]["sha256"] = value!("0".repeat(64)),
             "environment" => stage["environment"]["RUSTC"] = value!("foreign compiler"),
+            "dirty-source" => {
+                fs::write(h.root.join("payload"), "changed source after construction").unwrap()
+            }
             _ => unreachable!(),
         }
         let bytes = serde_json::to_vec_pretty(&stage).unwrap();
