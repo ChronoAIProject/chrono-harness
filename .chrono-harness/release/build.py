@@ -805,7 +805,7 @@ def verify_toolchain(receipt, cfg):
 
 def toolchain_fingerprint(receipt):
     value = receipt['toolchain']
-    return json.dumps({'versions': value['versions'], 'incremental': receipt.get('environment', {}).get('CARGO_INCREMENTAL'), 'tools': {n: {k: i[k] for k in ['sha256', 'size', 'mode']} for n, i in value['tools'].items() if n in {'git', 'rustup', 'cargo', 'rustc'}}, 'active_compilers': {n: {k: i[k] for k in ['sha256', 'size', 'mode']} for n, i in value['active_compilers'].items()}}, sort_keys=True)
+    return json.dumps({'versions': value['versions'], 'incremental': receipt.get('environment', {}).get('CARGO_INCREMENTAL'), 'tools': {n: {k: i[k] for k in ['sha256', 'size', 'mode']} for n, i in value['tools'].items() if n in {'rustup', 'cargo', 'rustc'}}, 'active_compilers': {n: {k: i[k] for k in ['sha256', 'size', 'mode']} for n, i in value['active_compilers'].items()}}, sort_keys=True)
 
 
 def import_build(execution, unit, selection, plan):

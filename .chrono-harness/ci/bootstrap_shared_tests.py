@@ -1201,7 +1201,10 @@ class RealAttempt:
         if size > row["output_limit_bytes"]:
             raise AssertionError("real-consumer original streams exceed registered output bound")
         if process.returncode:
-            raise AssertionError(name + ": " + stderr.read_text(errors="replace")[-3000:])
+            raise AssertionError(
+                f"{name}: exit_code={process.returncode}\n"
+                f"stdout ({stdout}):\n{stdout.read_text(errors='replace')[-3000:]}\n"
+                f"stderr ({stderr}):\n{stderr.read_text(errors='replace')[-3000:]}")
 
     def retain_streams(self, row, stdout, stderr):
         for channel, path in (("stdout", stdout), ("stderr", stderr)):
@@ -1225,8 +1228,14 @@ class AttemptCustody(unittest.TestCase):
                     attempt.run("command", argv, Path(directory), dict(os.environ))
                     attempt.finish("passed")
                 else:
-                    with self.assertRaises((AssertionError, subprocess.TimeoutExpired)):
+                    with self.assertRaises((AssertionError, subprocess.TimeoutExpired)) as failure:
                         attempt.run("command", argv, Path(directory), dict(os.environ))
+                    if status == "failed":
+                        message = str(failure.exception)
+                        self.assertIn("exit_code=7", message)
+                        for channel in ("stdout", "stderr"):
+                            self.assertIn(str(attempt.evidence / ("command." + channel)), message)
+                            self.assertIn("failure " + channel, message)
                     attempt.finish("failed")
                 result = json.loads((attempt.evidence / "result.json").read_bytes())
                 row = result["commands"][0]
@@ -1416,7 +1425,7 @@ class ManagedAttemptCustody(unittest.TestCase):
                     # A missing owner original must not replace the real nonzero
                     # command, just as empty stdout must not do so on native CI.
                     with fixture.mock.patch.object(attempt, "owner_report", side_effect=FileNotFoundError("missing owner original")):
-                        with self.assertRaisesRegex(AssertionError, "managed-use: E_WORKTREE: Git executable digest mismatch") as failed:
+                        with self.assertRaisesRegex(AssertionError, r"managed-use: exit_code=2[\s\S]*E_WORKTREE: Git executable digest mismatch") as failed:
                             with attempt:
                                 attempt.managed("fixture.custody")
                 else:
