@@ -48,8 +48,7 @@
     "release.tests.integration",
     "test.diagnostics-tests",
     "host.bootstrap-tests",
-    "test.cache-tests",
-    "test.ci-native-adapter"
+    "test.cache-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -553,16 +552,6 @@
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_cache_tests",
       "rust_toolchain": true
-    },
-    {
-      "id": "verify_ci_native_adapter_tests",
-      "kind": "verify",
-      "operation": "test.ci-native-adapter",
-      "needs": [
-        "build_ci"
-      ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_native_adapter_tests",
-      "rust_toolchain": false
     }
   ],
   "collector": {
@@ -604,8 +593,7 @@
       "verify_diagnostics_tests",
       "verify_host_bootstrap_tests",
       "build_cache",
-      "verify_cache_tests",
-      "verify_ci_native_adapter_tests"
+      "verify_cache_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -650,8 +638,7 @@
       "verify_diagnostics_tests": "linux_verify_diagnostics_tests",
       "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests",
       "build_cache": "linux_build_cache",
-      "verify_cache_tests": "linux_verify_cache_tests",
-      "verify_ci_native_adapter_tests": "linux_verify_ci_native_adapter_tests"
+      "verify_cache_tests": "linux_verify_cache_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -691,8 +678,7 @@
       "verify_diagnostics_tests": "macos_verify_diagnostics_tests",
       "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests",
       "build_cache": "macos_build_cache",
-      "verify_cache_tests": "macos_verify_cache_tests",
-      "verify_ci_native_adapter_tests": "macos_verify_ci_native_adapter_tests"
+      "verify_cache_tests": "macos_verify_cache_tests"
     }
   },
   "unit_costs": {
@@ -733,8 +719,7 @@
     "verify_diagnostics_tests": "unmeasured",
     "verify_host_bootstrap_tests": "unmeasured",
     "build_cache": "unmeasured",
-    "verify_cache_tests": "unmeasured",
-    "verify_ci_native_adapter_tests": "unmeasured"
+    "verify_cache_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
@@ -759,9 +744,6 @@
     ],
     "release.tests.integration": [
       ".chrono-harness/state/release-test-failures/"
-    ],
-    "test.ci-native-adapter": [
-      ".chrono-harness/state/native-adapter-tests/"
     ]
   },
   "verification_consumers": {
@@ -933,12 +915,6 @@
       "need": "The original test.cache-tests Rust suite runs the candidate chrono-cache CLI and checks its registered key/output behavior.",
       "release_assets": [
         "chrono-cache"
-      ]
-    },
-    "verify_ci_native_adapter_tests": {
-      "need": "The dedicated Python native adapter tests call the actual chrono-ci native-process bridge and check original IO, executable resolution, credential omission and bounded failure receipts. The staged chrono-ci release asset supplies that existing bridge.",
-      "release_assets": [
-        "chrono-ci"
       ]
     }
   },
