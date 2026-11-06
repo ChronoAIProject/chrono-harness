@@ -1627,9 +1627,13 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertEqual((root / ".chrono-harness/state/custody-original").read_bytes(), b"original evidence")
                 released = json.loads(Path(custody["release_report"]["path"]).read_bytes())
                 self.assertTrue(released["main_cache_release"])
-                effects = [effect for row in released["drain"] if "receipt" in row
+                effects = [effect
+                           for cleanup in (managed.get("post_use_cleanup", {}), released)
+                           for row in cleanup.get("drain", [])
+                           if row.get("path") == str(root) and "receipt" in row
                            for effect in json.loads(attempt.original(row["receipt"], root)).get("artifact_disposals", [])]
-                effect = next(row for row in effects if row["path"] == "crates/runner/target/")
+                effect = next(row for row in effects
+                              if row["path"] == "crates/runner/target/" and row["status"] == "verified-absent")
                 self.assertEqual(effect["status"], "verified-absent")
                 self.assertGreater(effect["bytes_before"], 0)
                 self.assertEqual(effect["bytes_after"], 0)

@@ -1902,3 +1902,14 @@ HEAD, index tree and source DELTA. It removes only that package's reconstructibl
 compiler outputs, not source, Git objects, diagnostic originals or other targets.
 Then use `build.worktree` unchanged. A successful rebuild establishes a new
 candidate CLI binding; it does not establish the cause of an earlier linker error.
+
+### Stored Git process streams
+
+Lifecycle reports encode Git stdout and stderr once with the existing
+`chrono-retained-process/v2` lossless codec. Process identity, environment, exit,
+failure and stream digests remain unchanged; readers use the shared
+`chrono_harness::full::expand_process` decoder for transient text/byte views.
+The stored report carries neither complete text aliases nor numeric byte arrays
+for those streams. Managed command streams and historical recovery payloads are
+separate remaining storage obligations. This representation does not release
+consumers or extend the existing finite original/metadata retention policy.

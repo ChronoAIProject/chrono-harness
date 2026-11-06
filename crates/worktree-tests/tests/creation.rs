@@ -17,6 +17,32 @@ const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 
+// Decode only the declared Git-process members for transient assertions.
+// Original report bytes and their receipt digests are verified before this view.
+fn report_view(mut report: Value) -> Value {
+    if let Some(rows) = report["processes"].as_array_mut() {
+        for row in rows {
+            if row["process"].is_object() {
+                for alias in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+                    assert!(
+                        row["process"].get(alias).is_none(),
+                        "duplicated inline Git stream"
+                    );
+                }
+                assert!(row["process"]["encoding"].as_str().is_some());
+                row["process"] = chrono_harness::full::expand_process(&row["process"]).unwrap();
+            }
+        }
+    }
+    if let Some(prior) = report
+        .get_mut("prior_report")
+        .and_then(|p| p.get_mut("report"))
+    {
+        *prior = report_view(std::mem::take(prior));
+    }
+    report
+}
+
 // Consume the current producer's exact addressed original.
 fn drain_report(entry: &Value) -> Value {
     let input = &entry["input"];
@@ -33,7 +59,7 @@ fn drain_report(entry: &Value) -> Value {
     let report = json(&bytes).unwrap();
     assert_eq!(entry["status"], report["status"]);
     assert_eq!(entry["error"], report["error"]);
-    report
+    report_view(report)
 }
 fn producer_objects(report: &Value) -> Value {
     value!(
@@ -412,7 +438,7 @@ impl Host {
                 "policy_sha256":sha256(&fs::read(self.root.join(POLICY)).unwrap())
             })).unwrap()).unwrap();
         }
-        let report = json(&out.stdout).unwrap_or(Value::Null);
+        let mut report = json(&out.stdout).unwrap_or(Value::Null);
         if !report.is_null() {
             // CLI JSON carries complete process evidence within consumer stream
             // bounds; pretty-printing byte arrays multiplies its transport cost.
@@ -443,6 +469,7 @@ impl Host {
                     .get("UNDECLARED_WORKTREE_ENV")
                     .is_none()
             );
+            report = report_view(report);
             for row in report["processes"].as_array().unwrap() {
                 if row["process"].is_null() {
                     continue;

@@ -64,7 +64,7 @@ fn assert_context(owner: &Owner, directory: &Path) {
             .unwrap();
     assert_eq!(context["schema"], "chrono-fixture-producer-context/v1");
     assert_eq!(context["root"], owner.root.to_str().unwrap());
-    assert_eq!(context["directory"], directory.to_str().unwrap());
+    assert_eq!(Path::new(context["directory"].as_str().unwrap()), directory);
     assert_eq!(context["config_path"], ".chrono-harness/worktree.json");
     assert_eq!(context["policy_path"], ".chrono-harness/cleanup.json");
     assert_eq!(
@@ -977,7 +977,11 @@ fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
         .err()
         .unwrap();
         assert!(
-            error.contains("producer owner identity/layout differs; explicit producer partition migration required; preserve objects"),
+            error.contains(if replaced {
+                "producer owner identity/layout differs; explicit producer partition migration required; preserve objects"
+            } else {
+                "No such file"
+            }),
             "{error}"
         );
         assert_eq!(fs::read(directory.join("objects.json")).unwrap(), original);
