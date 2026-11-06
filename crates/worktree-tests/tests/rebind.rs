@@ -320,7 +320,7 @@ fn metadata_rebind_failed_attachment_uses_existing_reconciled_recovery() {
     let plan = h.recovery(&failed, &target);
     let (code, recovered, error) = h.maintain("recover", plan);
     assert_eq!(code, 0, "{recovered} {error}");
-    assert_eq!(recovered["prior_report"]["report"], failed);
+    assert_eq!(retained_report(&recovered["prior_report"]), failed);
     assert_eq!(
         fs::read(h.root.join(failed["report_path"].as_str().unwrap())).unwrap(),
         original
