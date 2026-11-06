@@ -459,6 +459,7 @@ pub(super) fn collect(
             .iter()
             .map(|o| o.method.operation.clone())
             .collect();
+        let not_required_ids = not_required.iter().map(String::as_str).collect();
         let executed = e["executed"].as_array().ok_or("unit executions missing")?;
         if e["operations"] != object!(expected_ops) || executed.len() != operations.len() {
             return Err("unit execution coverage missing or extra".into());
@@ -480,29 +481,23 @@ pub(super) fn collect(
             if row["operation"] != operation.method.operation
                 || receipt.process.exit_code != 0
                 || receipt.process.failure.is_some()
-                || !response.results.iter().any(|r| {
-                    r.id == operation.method.operation
-                        && r.status == Status::Passed
-                        && r.exit_code == Some(0)
-                })
+                || !verified_collection::has_result(
+                    &response.results,
+                    &operation.method.operation,
+                    &Status::Passed,
+                    Some(0),
+                )
             {
                 return Err("unit operation original evidence failed or disagrees".into());
             }
         }
         // Successful replacement markers are not emitted by the scoped producer.
-        if !response
-            .results
-            .iter()
-            .any(|r| r.id == "ci.inventory" && r.status == Status::Passed && r.exit_code.is_none())
+        if !verified_collection::matches_result_states(&response.results, &not_required_ids)
             || !verified_collection::matches_result_ids(
                 &response.results.iter().map(|r| r.id.as_str()).collect(),
                 &expected_ops.iter().map(String::as_str).collect(),
-                &not_required.iter().map(String::as_str).collect(),
+                &not_required_ids,
             )
-            || response
-                .results
-                .iter()
-                .any(|r| not_required.contains(&r.id) && r.status != Status::NotRequired)
         {
             return Err("unit result coverage differs from plan".into());
         }

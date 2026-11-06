@@ -11,7 +11,74 @@ mod identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 use identifiers::equal_text;
 
+#[cfg(verus_keep_ghost)]
+#[path = "../../runner/src/verified_status.rs"]
+pub mod result_types;
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_harness::verified_status as result_types;
+use result_types::{CheckResult, Status};
+
 verus! {
+
+pub open spec fn matching_result(
+    values: Seq<CheckResult>, id: Seq<char>, status: Status, exit_code: Option<i32>,
+) -> bool {
+    exists|i: int| 0 <= i < values.len() && (#[trigger] values[i]).id@ == id
+        && values[i].status == status && values[i].exit_code == exit_code
+}
+
+/// 同一条实际结果必须同时满足精确 ID、状态与退出码。
+pub fn has_result(
+    values: &Vec<CheckResult>, id: &str, status: &Status, exit_code: Option<i32>,
+) -> (found: bool)
+    ensures found <==> matching_result(values@, id@, *status, exit_code),
+{
+    let mut i = 0;
+    while i < values.len()
+        invariant 0 <= i <= values.len(),
+            forall|j: int| 0 <= j < i ==> !(
+                (#[trigger] values[j]).id@ == id@ && values[j].status == *status
+                    && values[j].exit_code == exit_code),
+        decreases values.len() - i,
+    {
+        let value = &values[i];
+        if equal_text(value.id.as_str(), id) && value.status.eq(status)
+            && value.exit_code == exit_code {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+pub open spec fn valid_result_states(values: Seq<CheckResult>, not_required: Seq<&str>) -> bool {
+    matching_result(values, "ci.inventory"@, Status::Passed, None)
+        && forall|i: int| 0 <= i < values.len()
+            && text_member(not_required, (#[trigger] values[i]).id@)
+                ==> values[i].status == Status::NotRequired
+}
+
+/// 库存标记要求 Passed/None；未要求结果只约束状态，保留原退出码合同。
+pub fn matches_result_states(values: &Vec<CheckResult>, not_required: &Vec<&str>) -> (valid: bool)
+    ensures valid <==> valid_result_states(values@, not_required@),
+{
+    if !has_result(values, "ci.inventory", &Status::Passed, None) { return false; }
+    let mut i = 0;
+    while i < values.len()
+        invariant 0 <= i <= values.len(),
+            matching_result(values@, "ci.inventory"@, Status::Passed, None),
+            forall|j: int| 0 <= j < i
+                && text_member(not_required@, (#[trigger] values[j]).id@)
+                    ==> values[j].status == Status::NotRequired,
+        decreases values.len() - i,
+    {
+        let value = &values[i];
+        if contains_text(not_required, value.id.as_str())
+            && !value.status.eq(&Status::NotRequired) { return false; }
+        i += 1;
+    }
+    true
+}
 
 pub open spec fn text_member(values: Seq<&str>, target: Seq<char>) -> bool {
     exists|i: int| 0 <= i < values.len() && (#[trigger] values[i])@ == target

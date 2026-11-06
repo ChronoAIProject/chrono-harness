@@ -49,4 +49,27 @@ impl PartialEq for Status {
 
 impl Eq for Status {}
 
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct CheckResult {
+    pub id: String,
+    pub status: Status,
+    pub cause: String,
+    pub exit_code: Option<i32>,
+}
+
+impl Clone for CheckResult {
+    fn clone(&self) -> (out: Self)
+        ensures out.id@ == self.id@, out.status == self.status,
+            out.cause@ == self.cause@, out.exit_code == self.exit_code,
+    {
+        Self {
+            id: self.id.clone(),
+            status: self.status.clone(),
+            cause: self.cause.clone(),
+            exit_code: self.exit_code,
+        }
+    }
+}
+
 }

@@ -4,10 +4,98 @@
 mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
+use policy::result_types::{CheckResult, Status};
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
 verus! {
+
+fn result(id: &str, status: Status, exit_code: Option<i32>) -> (out: CheckResult)
+    ensures out.id@ == id@, out.status == status, out.exit_code == exit_code,
+        out.cause@ == "original report"@,
+{
+    CheckResult {
+        id: id.to_string(), status, cause: "original report".to_string(), exit_code,
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn operation_success_requires_all_fields_on_one_exact_result() {
+    proof {
+        reveal_strlit("build"); reveal_strlit("other");
+        assert("build"@[0] != "other"@[0]);
+    }
+    let values = vec![result("build", Status::Passed, Some(0))];
+    let accepted = policy::has_result(&values, "build", &Status::Passed, Some(0));
+    assert(accepted);
+    let wrong_id = policy::has_result(&values, "other", &Status::Passed, Some(0));
+    assert(!wrong_id);
+    let wrong_status = policy::has_result(&values, "build", &Status::Failed, Some(0));
+    assert(!wrong_status);
+    let wrong_exit = policy::has_result(&values, "build", &Status::Passed, Some(7));
+    assert(!wrong_exit);
+    let absent_exit = policy::has_result(&values, "build", &Status::Passed, None);
+    assert(!absent_exit);
+    let empty = Vec::new();
+    let missing = policy::has_result(&empty, "build", &Status::Passed, Some(0));
+    assert(!missing);
+    let split = vec![
+        result("build", Status::Failed, Some(0)),
+        result("other", Status::Passed, Some(0)),
+        result("build", Status::Passed, Some(7)),
+        result("build", Status::NotRequired, Some(0)),
+        result("build", Status::Blocked, Some(0)),
+    ];
+    let cannot_combine = policy::has_result(&split, "build", &Status::Passed, Some(0));
+    assert(!cannot_combine);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_and_unrequired_states_preserve_their_distinct_exit_contracts() {
+    proof {
+        reveal_strlit("ci.inventory"); reveal_strlit("test");
+        assert("ci.inventory"@.len() != "test"@.len());
+    }
+    let unrequired = vec!["test"];
+    let valid = vec![
+        result("test", Status::NotRequired, Some(7)),
+        result("ci.inventory", Status::Passed, None),
+    ];
+    let accepted = policy::matches_result_states(&valid, &unrequired);
+    assert(accepted);
+    let no_inventory = vec![result("test", Status::NotRequired, None)];
+    let missing = policy::matches_result_states(&no_inventory, &unrequired);
+    assert(!missing);
+    let exited_inventory = vec![result("ci.inventory", Status::Passed, Some(0))];
+    let forbidden_exit = policy::matches_result_states(&exited_inventory, &unrequired);
+    assert(!forbidden_exit);
+    let failed_inventory = vec![result("ci.inventory", Status::Failed, None)];
+    let failed = policy::matches_result_states(&failed_inventory, &unrequired);
+    assert(!failed);
+    let wrong_unrequired = vec![
+        result("ci.inventory", Status::Passed, None),
+        result("test", Status::Passed, None),
+    ];
+    let wrong_status = policy::matches_result_states(&wrong_unrequired, &unrequired);
+    assert(!wrong_status);
+    let empty = Vec::new();
+    let absent = policy::matches_result_states(&empty, &unrequired);
+    assert(!absent);
+    // ID 的完整覆盖由独立集合合同承担；状态合同不补造缺少的结果。
+    let marker_only = vec![result("ci.inventory", Status::Passed, None)];
+    let states_only = policy::matches_result_states(&marker_only, &unrequired);
+    assert(states_only);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cloning_the_actual_report_result_preserves_every_field() {
+    let original = result("build", Status::Blocked, Some(-7));
+    let cloned = original.clone();
+    assert(cloned.id@ == "build"@);
+    assert(cloned.status == Status::Blocked);
+    assert(cloned.exit_code == Some(-7));
+    assert(cloned.cause@ == "original report"@);
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn result_membership_preserves_permutations_and_rejects_missing_or_extra_ids() {
