@@ -175,6 +175,8 @@ fn directory_cleanup_budget_refuses_unknown_usage_without_creating_an_allocation
 #[test]
 fn directory_cleanup_context_migration_preserves_retiring_objects_after_lease_retirement() {
     let h = capacity_host(|capacity| capacity["max_capture_bytes"] = value!(4096));
+    let (code, report, error) = h.auto("import", &[]);
+    assert_eq!(code, 0, "{report} {error}");
     let retention = h.root.join(".chrono-harness/retention.json");
     let mut policy = json(&fs::read(&retention).unwrap()).unwrap();
     policy["max_nodes_per_round"] = value!(1);

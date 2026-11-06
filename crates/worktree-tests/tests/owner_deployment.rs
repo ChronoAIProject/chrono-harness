@@ -271,6 +271,68 @@ fn owner_deployment_does_not_exclude_an_unrelated_physical_coordinator() {
     );
 }
 #[test]
+fn owner_deployment_preserves_unmanaged_git_checkout_with_a_cwd_consumer() {
+    let (h, exe, path, sha) = fixture();
+    let target = h.parent.join("unmanaged linked checkout");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            target.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            "independent owner",
+            target.to_str().unwrap(),
+        ],
+    );
+    let before_ledger = h.ledger();
+    let before_gitfile = fs::read(target.join(".git")).unwrap();
+    let before_head = git(&target, &["rev-parse", "HEAD"]);
+    let mut child = Command::new(env!(
+        "CARGO_BIN_EXE_chrono-worktree-owner-publication-probe"
+    ))
+    .args(["--hold-descendants", "1"])
+    .current_dir(&target)
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .spawn()
+    .unwrap();
+    let mut ready = String::new();
+    BufReader::new(child.stdout.take().unwrap())
+        .read_line(&mut ready)
+        .unwrap();
+    assert_eq!(ready, "ready\n");
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    join_holder(child);
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(
+        h.ledger(),
+        before_ledger,
+        "an unrelated checkout is not enrolled"
+    );
+    assert_eq!(fs::read(target.join(".git")).unwrap(), before_gitfile);
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), before_head);
+    assert!(
+        git(&h.root, &["worktree", "list", "--porcelain"]).contains("locked independent owner")
+    );
+    assert!(
+        report["owner_deployment_identity"]["enrollments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|e| e["path"] != value!(target))
+    );
+}
+#[test]
 fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
     for fault in ["unknown", "ownership", "lease", "attachment"] {
         let (h, exe, path, sha) = fixture();
