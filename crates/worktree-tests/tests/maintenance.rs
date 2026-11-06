@@ -114,8 +114,11 @@ fn maintenance_recovers_failed_hook_without_rewriting_original_failure() {
     let (code, recovered, error) = h.maintain("recover", h.recovery(&original, &target));
     assert_eq!(code, 0, "{recovered} {error}");
     assert_eq!(recovered["status"], "recovered");
-    assert_eq!(recovered["prior_report"]["sha256"], sha256(&bytes));
-    assert_eq!(recovered["prior_report"]["report"], original);
+    assert_eq!(
+        recovered["prior_report"]["receipt"]["sha256"],
+        sha256(&bytes)
+    );
+    assert_eq!(retained_report(&recovered["prior_report"]), original);
     assert_eq!(fs::read(path).unwrap(), bytes);
     assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains("locked"));
     assert!(
@@ -125,6 +128,51 @@ fn maintenance_recovers_failed_hook_without_rewriting_original_failure() {
             .iter()
             .all(|r| !r["argv"].as_array().unwrap().contains(&value!("hook")))
     );
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), original["base"]);
+}
+
+#[test]
+fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = Host::new("payload");
+    adopt_lifecycle_retention(&h);
+    h.hook(value!({"stderr":"original-hook-failure\n","exit":17}));
+    let target = h.parent.join("retained-recovery");
+    let (code, original, _) = h.invoke("feature", "retained-recovery", &target);
+    assert_ne!(code, 0);
+    let original_path = original["report_path"].as_str().unwrap();
+    let bytes = fs::read(h.root.join(original_path)).unwrap();
+    let (code, recovered, error) = h.maintain("recover", h.recovery(&original, &target));
+    assert_eq!(code, 0, "{recovered} {error}");
+    let recovered_path = recovered["report_path"].as_str().unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths("caller:recovered-report", &[recovered_path.into()])
+        .unwrap();
+    inventory
+        .reference(
+            &format!(
+                "consumer:lifecycle-recheck:{}",
+                sha256(original_path.as_bytes())
+            ),
+            &[],
+        )
+        .unwrap();
+    inventory.maintain().unwrap();
+    assert_eq!(fs::read(h.root.join(original_path)).unwrap(), bytes);
+    assert_eq!(retained_report(&recovered["prior_report"]), original);
+    assert!(
+        serde_json::to_vec(&recovered["prior_report"])
+            .unwrap()
+            .len()
+            < bytes.len() / 4
+    );
+    inventory
+        .reference_paths("caller:recovered-report", &[])
+        .unwrap();
+    inventory.maintain().unwrap();
+    assert!(!h.root.join(recovered_path).exists());
+    assert!(!h.root.join(original_path).exists());
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), original["base"]);
 }
 
@@ -160,12 +208,17 @@ fn maintenance_recovers_reconciled_conflict_with_explicit_index_tree() {
     assert_eq!(recovered["context"]["candidate"], Value::Null);
     assert_eq!(fs::read(target.join("payload")).unwrap(), b"reconciled\n");
     assert_eq!(git(&h.root, &["rev-parse", "HEAD"]), candidate);
-    assert_eq!(recovered["prior_report"]["report"]["status"], "failed");
+    assert_eq!(
+        retained_report(&recovered["prior_report"])["status"],
+        "failed"
+    );
 }
 
 #[test]
 fn maintenance_recovery_rejects_identity_lock_receipt_and_unresolved_state() {
-    for fault in ["digest", "head", "tree", "lock", "unstaged", "unknown"] {
+    for fault in [
+        "digest", "missing", "modified", "symlink", "head", "tree", "lock", "unstaged", "unknown",
+    ] {
         let h = Host::new("payload");
         h.hook(value!({"exit":17}));
         let target = h.parent.join("failed");
@@ -173,6 +226,20 @@ fn maintenance_recovery_rejects_identity_lock_receipt_and_unresolved_state() {
         let mut plan = h.recovery(&original, &target);
         match fault {
             "digest" => plan["receipt"]["sha256"] = value!("0".repeat(64)),
+            "missing" => {
+                fs::remove_file(h.root.join(plan["receipt"]["path"].as_str().unwrap())).unwrap()
+            }
+            "modified" => fs::write(
+                h.root.join(plan["receipt"]["path"].as_str().unwrap()),
+                b"changed original",
+            )
+            .unwrap(),
+            "symlink" => {
+                let path = h.root.join(plan["receipt"]["path"].as_str().unwrap());
+                let original = h.parent.join("preserved-original");
+                fs::rename(&path, &original).unwrap();
+                std::os::unix::fs::symlink(original, path).unwrap();
+            }
             "head" => plan["head"] = value!("0".repeat(40)),
             "tree" => plan["index_tree"] = value!("0".repeat(40)),
             "lock" => {
@@ -493,7 +560,10 @@ fn maintenance_recovers_cleanup_lock_after_retention_race() {
     let (code, recovered, error) = h.maintain("recover", h.recovery(&original, &target));
     assert_eq!(code, 0, "{recovered} {error}");
     assert_eq!(recovered["status"], "recovered");
-    assert_eq!(recovered["prior_report"]["report"]["operation"], "cleanup");
+    assert_eq!(
+        retained_report(&recovered["prior_report"])["operation"],
+        "cleanup"
+    );
     assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains("locked"));
     let (code, cleaned, error) = h.maintain("cleanup", h.cleanup(&target));
     assert_eq!(code, 0, "{cleaned} {error}");
@@ -587,8 +657,8 @@ fn fetch_cleanup_removes_retained_receipt_ref_and_supports_explicit_retry() {
         assert_eq!(r["status"], "cleaned");
         assert_eq!(r["fetch_ref_removed"], true);
         assert_eq!(r["fetch_ref_removal"], "verified-absent");
-        assert_eq!(r["prior_report"]["report"], original);
-        assert_eq!(r["prior_report"]["sha256"], sha256(&bytes));
+        assert_eq!(retained_report(&r["prior_report"]), original);
+        assert_eq!(r["prior_report"]["receipt"]["sha256"], sha256(&bytes));
         assert_eq!(fs::read(&path).unwrap(), bytes);
         assert_eq!(git(&h.root, &["rev-parse", unrelated]), expected);
         assert_eq!(git(&h.root, &["diff", "--binary"]), source_diff);
