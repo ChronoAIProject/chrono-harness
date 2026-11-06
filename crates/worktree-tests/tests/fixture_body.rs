@@ -63,8 +63,9 @@ fn copied_input_reenters_retirement_without_publishing_an_unprotected_claim() {
     fs::create_dir_all(original.parent().unwrap()).unwrap();
     fs::copy(&source, &original).unwrap();
     let relative = original.strip_prefix(&h.root).unwrap().to_str().unwrap();
-    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-    inventory
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
         .begin("fixture-retirement", relative, value!(null))
         .unwrap()
         .complete(value!({"prior_original_consumer":"released"}))
@@ -73,7 +74,11 @@ fn copied_input_reenters_retirement_without_publishing_an_unprotected_claim() {
     // A real staged-source refusal leaves the owner in its durable disposing
     // phase. No test writes a lifecycle phase or releases that protection.
     git(&h.root, &["add", "-f", "--", relative]);
-    let round = inventory.maintain_paths(&[relative.into()]).unwrap();
+    let round = Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .maintain_paths(&[relative.into()])
+        .unwrap();
     assert!(
         round["protected"]
             .as_array()
