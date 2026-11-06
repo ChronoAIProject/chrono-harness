@@ -572,8 +572,11 @@ fn failed_report(
         return Err("original report digest mismatch".into());
     }
     let original = json(&bytes)?;
-    report["prior_report"] =
-        value!({"path":receipt.path,"sha256":receipt.sha256,"input_bytes":bytes,"report":original});
+    recovery::verify_inputs(root, &original)?;
+    report["prior_report"] = value!({
+        "receipt":{"path":receipt.path,"sha256":receipt.sha256},
+        "input":recovery::retained_input(root, &receipt.path, &bytes, "receipt")
+    });
     if original["schema"] != "chrono-worktree-report/v1"
         || original["status"] != "failed"
         || !original["operation"]

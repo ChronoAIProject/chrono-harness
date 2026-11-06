@@ -41,15 +41,14 @@ fn expand_lifecycle_report(report: &mut Value) -> Result<(), String> {
                 }
             }
         }
-        if report["prior_report"]["report"].is_object() {
-            expand_lifecycle_report(&mut report["prior_report"]["report"])?;
-        }
     }
     Ok(())
 }
 
 // Consume the current producer's exact addressed original.
-fn drain_report(entry: &Value) -> Value {
+fn retained_report(entry: &Value) -> Value {
+    assert!(entry.get("input_bytes").is_none());
+    assert!(entry.get("report").is_none());
     let input = &entry["input"];
     assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
     assert_eq!(input["format"], "receipt");
@@ -61,7 +60,10 @@ fn drain_report(entry: &Value) -> Value {
     .unwrap();
     assert_eq!(bytes.len(), input["byte_length"].as_u64().unwrap() as usize);
     assert_eq!(sha256(&bytes), input["sha256"]);
-    let report = json(&bytes).unwrap();
+    json(&bytes).unwrap()
+}
+fn drain_report(entry: &Value) -> Value {
+    let report = retained_report(entry);
     assert_eq!(entry["status"], report["status"]);
     assert_eq!(entry["error"], report["error"]);
     report
@@ -1932,10 +1934,8 @@ fn artifact_directory_names_do_not_hide_tracked_changes_files_or_symlinks() {
     }
 }
 
-#[test]
-fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_consumer() {
-    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
-    let h = Host::new("payload");
+fn adopt_lifecycle_retention(h: &Host) {
+    use chrono_harness::retained_artifacts::retention::POLICY_PATH;
     let policy = value!({"schema":"chrono-output-retention/v2","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},"keep_seconds":0,"max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000});
     fs::write(
         h.root.join(POLICY_PATH),
@@ -1949,6 +1949,13 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
         .push(file(POLICY_PATH, value!([])));
     fs::write(h.root.join(FM), serde_json::to_vec(&filemap).unwrap()).unwrap();
     commit(&h.root);
+}
+
+#[test]
+fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_consumer() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = Host::new("payload");
+    adopt_lifecycle_retention(&h);
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     let activity = inventory.read_scope().unwrap();
     let occupied = h.parent.join("occupied-for-failure");

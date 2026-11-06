@@ -254,16 +254,6 @@ struct Receipt {
     path: String,
     sha256: String,
 }
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RetainedInput {
-    schema: String,
-    source_root: PathBuf,
-    path: String,
-    sha256: String,
-    byte_length: usize,
-    format: String,
-}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Attempt {
@@ -1448,17 +1438,7 @@ impl Manager {
         Ok(b)
     }
     fn retained_input(&self, path: &str, bytes: &[u8], format: &str) -> Value {
-        Self::retained_input_at(&self.inputs.policy.coordinator_root, path, bytes, format)
-    }
-    fn retained_input_at(root: &Path, path: &str, bytes: &[u8], format: &str) -> Value {
-        value!(RetainedInput {
-            schema: "chrono-worktree-retained-input/v1".into(),
-            source_root: root.to_owned(),
-            path: path.into(),
-            sha256: sha256(bytes),
-            byte_length: bytes.len(),
-            format: format.into(),
-        })
+        crate::recovery::retained_input(&self.inputs.policy.coordinator_root, path, bytes, format)
     }
     /// Preserve partial/unsealed bytes independently of their mutable source.
     fn retain_bytes(&self, bytes: &[u8]) -> Result<Value, String> {
@@ -1483,80 +1463,8 @@ impl Manager {
         }
         Ok(self.retained_input(&path, bytes, "bytes"))
     }
-    /// Follow only the reference-bearing fields of the lifecycle contract.
-    fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(), String> {
-        {
-            for pointer in [
-                "/terminal_input",
-                "/prior_report/input",
-                "/prior_cache_attempt/intent_input",
-                "/prior_cache_attempt/result/input",
-                "/original_report/result/input",
-                "/unreferenced_original_receipt/input",
-                "/original_result/input",
-            ] {
-                if let Some(input) = report.pointer(pointer) {
-                    inputs.push(serde_json::from_value(input.clone()).map_err(|e| {
-                        format!("invalid retained lifecycle input at {pointer}: {e}")
-                    })?);
-                }
-            }
-            if let Some(rows) = report.get("migration_inputs").and_then(Value::as_array) {
-                for row in rows {
-                    if let Some(input) = row.get("input") {
-                        inputs.push(
-                            serde_json::from_value(input.clone())
-                                .map_err(|e| format!("invalid retained migration input: {e}"))?,
-                        );
-                    }
-                }
-            }
-            if let Some(drain) = report.get("drain").and_then(Value::as_array) {
-                for entry in drain {
-                    if let Some(input) = entry.get("input") {
-                        inputs.push(
-                            serde_json::from_value(input.clone())
-                                .map_err(|e| format!("invalid retained drain input: {e}"))?,
-                        );
-                    }
-                }
-                if drain.iter().any(|entry| entry.get("report").is_some()) {
-                    return Err(
-                        "inline lifecycle drain reports are not the current contract".into(),
-                    );
-                }
-            }
-        }
-        Ok(())
-    }
     fn verify_inputs(&self, report: &Value) -> Result<(), String> {
-        let mut inputs = Vec::new();
-        let mut checked = BTreeSet::new();
-        Self::collect_inputs(report, &mut inputs)?;
-        while let Some(input) = inputs.pop() {
-            if input.schema != "chrono-worktree-retained-input/v1"
-                || input.source_root != self.inputs.policy.coordinator_root
-                || !matches!(input.format.as_str(), "bytes" | "receipt")
-            {
-                return Err("invalid retained lifecycle input binding".into());
-            }
-            if !checked.insert((
-                input.path.clone(),
-                input.sha256.clone(),
-                input.byte_length,
-                input.format.clone(),
-            )) {
-                continue;
-            }
-            let bytes = crate::recovery::state_bytes(&input.source_root, &input.path)?;
-            if bytes.len() != input.byte_length || sha256(&bytes) != input.sha256 {
-                return Err("original lifecycle receipt changed: retained input mismatch".into());
-            }
-            if input.format == "receipt" {
-                Self::collect_inputs(&json(&bytes)?, &mut inputs)?;
-            }
-        }
-        Ok(())
+        crate::recovery::verify_inputs(&self.inputs.policy.coordinator_root, report)
     }
     fn lease(&self, e: &Entry, exclusive: bool) -> Result<Option<Lease>, String> {
         let owner = e
@@ -2040,7 +1948,7 @@ impl Manager {
             let bytes = crate::recovery::state_bytes(root, path)?;
             report["producer_drains"].as_array_mut().unwrap().push(value!({"producer":producer.id,
                 "status":result["status"],"error":result["error"],"receipt":{"path":path,"sha256":sha256(&bytes)},
-                "input":Self::retained_input_at(root, path, &bytes, "receipt")}));
+                "input":crate::recovery::retained_input(root, path, &bytes, "receipt")}));
         }
         Ok(failures)
         })?;
