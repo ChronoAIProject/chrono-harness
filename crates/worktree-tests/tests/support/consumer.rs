@@ -95,7 +95,8 @@ fn main() -> ExitCode {
         }
         "shared-holder" => {
             let pid = std::process::id().to_string();
-            mark(&format!("ready-{pid}"), &pid);
+            let ready = format!("ready-{}", std::os::unix::process::parent_id());
+            mark(&ready, &pid);
             wait("release");
             print!("completed");
         }

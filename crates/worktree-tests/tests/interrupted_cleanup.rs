@@ -1381,7 +1381,7 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     assert_eq!(h.invoke("feature", "descendants", &target).0, 0);
     output(&target);
     let mut child = wrapper(&h, &target);
-    child.await_file(&target.join(".chrono-harness/state/parent"));
+    child.await_managed_file(&target.join(".chrono-harness/state/parent"));
     await_file(&target.join(".chrono-harness/state/grandchild"));
     let _group =
         OwnedGroup(fs::read_to_string(target.join(".chrono-harness/state/parent")).unwrap());
@@ -1445,33 +1445,21 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
         &h.root,
     );
     second.release_on_drop(state.join("release"));
-    let began = Instant::now();
-    while h.ledger()["entries"][0]["uses"].as_array().unwrap().len() != 2
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        thread::sleep(Duration::from_millis(20));
-    }
+    // The same registered operation has two live callers. Each child names
+    // its ready marker with its actual wrapper PID; no ledger/directory polling.
+    let ready = [
+        format!("ready-{}", first.child.id()),
+        format!("ready-{}", second.child.id()),
+    ];
+    first.await_managed_file(&state.join(&ready[0]));
+    second.await_managed_file(&state.join(&ready[1]));
     assert_eq!(
         h.ledger()["entries"][0]["uses"].as_array().unwrap().len(),
         2
     );
-    while fs::read_dir(&state)
-        .map(|rows| {
-            rows.filter_map(Result::ok)
-                .filter(|e| e.file_name().to_string_lossy().starts_with("ready-"))
-                .count()
-        })
-        .unwrap_or(0)
-        != 2
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        thread::sleep(Duration::from_millis(10));
-    }
-    let _groups: Vec<_> = fs::read_dir(&state)
-        .unwrap()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_name().to_string_lossy().starts_with("ready-"))
-        .map(|e| OwnedGroup(fs::read_to_string(e.path()).unwrap()))
+    let _groups: Vec<_> = ready
+        .iter()
+        .map(|name| OwnedGroup(fs::read_to_string(state.join(name)).unwrap()))
         .collect();
     assert_eq!(_groups.len(), 2);
     first.kill().unwrap();
@@ -1497,7 +1485,7 @@ fn fixture_setup_panic_releases_and_joins_a_live_managed_consumer() {
     let state = target.join(".chrono-harness/state");
     let mut child = wrapper(&h, &target);
     child.release_on_drop(state.join("release"));
-    child.await_file(&state.join("ready"));
+    child.await_managed_file(&state.join("ready"));
     assert_eq!(
         h.ledger()["entries"][0]["uses"].as_array().unwrap().len(),
         1

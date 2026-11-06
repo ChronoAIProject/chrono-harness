@@ -16,7 +16,7 @@ chrono-ci test-inventory --host-root HOST --config CONFIG
 
 本仓 workflow 专属测试项目明确登记三组，分别分配给 `judge-workflow`（核心）、`judge-workflow-units`（直接完整单元测试）、`judge-workflow-short`（完整短命令测试）。action 明确选择成员，清单保护核覆盖范围，不推断依赖。三组合计覆盖原两个测试二进制，保留 fixture、profile 和业务限制。发布仍使用不带过滤的 `actions.execute`／原 `test.judge-workflow-tests`，旧测试身份通过 `test_groups` 绑定独立的核心过滤 action。
 
-各组保留构建前置，并通过登记的 `workflow.inventory` 操作运行 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤、ignored、过滤后的 libtest 清单须非空、互不相交、合计精确覆盖；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
+各组保留构建前置，并通过登记的 `workflow.inventory` 操作运行 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤清单及各分组须非空，各组互不相交且合计精确覆盖；ignored 清单须为空；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
 
 共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
 
