@@ -220,7 +220,7 @@ pub(super) fn collect(
         return Err("missing required CI unit report".into());
     }
     // Nonselected units may report successful inventory too; unknown or duplicate reports never pass.
-    let not_required: BTreeSet<_> = snapshot
+    let not_required: Vec<_> = snapshot
         .plans
         .keys()
         .filter(|t| !selected.contains(*t))
