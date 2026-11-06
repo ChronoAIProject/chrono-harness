@@ -26,6 +26,7 @@ pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
+pub use verus_builtin_macros::verus;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]
