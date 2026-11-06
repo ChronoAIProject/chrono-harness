@@ -387,7 +387,7 @@ pub(super) fn resume_retirement(
     directory: &Path,
     object: &Object,
 ) -> Result<Value, String> {
-    if object.disposable_directory {
+    if object.owns_directory() {
         return dispose_owned_directory(inputs, r, directory, object, None);
     }
     let allocation = no_symlink_parents(directory, &object.path)?;
@@ -534,6 +534,31 @@ pub(super) fn resume_retirement(
 // This producer owns the complete temporary directory. Its existing kernel
 // capability and one durable retiring record protect the whole operation; no
 // per-member output registrations or deletion manifest are needed.
+pub(super) fn directory_custody_stable(
+    directory: &Path,
+    producer: &str,
+    object: &Object,
+) -> Result<(), String> {
+    let Some(receipt) = &object.directory_custody else {
+        return Ok(());
+    };
+    let bytes = fs::read(no_symlink_parents(directory, &receipt.path)?)
+        .map_err(|e| e.to_string())?;
+    let custody = json(&bytes)?;
+    if object.disposable_directory
+        || sha256(&bytes) != receipt.sha256
+        || custody["schema"] != "chrono-fixture-directory-custody/v1"
+        || custody["producer"] != producer
+        || custody["path"] != object.path
+        || custody["identity"] != object.identity
+        || custody["original_intent"] != value!(object.intent)
+        || custody["historical_outcome"] != "unchanged"
+    {
+        return Err("owned directory custody differs; preserve allocation".into());
+    }
+    Ok(())
+}
+
 fn dispose_owned_directory(
     inputs: &PolicyInputs,
     r: &mut Runner,
@@ -585,11 +610,13 @@ fn dispose_owned_directory(
         None
     };
     if metadata.exists() {
+        directory_custody_stable(directory, &context.producer, object)?;
         let bytes = fs::read(no_symlink_parents(directory, &object.intent.path)?)
             .map_err(|e| e.to_string())?;
         let intent = json(&bytes)?;
         if sha256(&bytes) != object.intent.sha256
-            || intent["disposable_directory"] != true
+            || intent["disposable_directory"].as_bool().unwrap_or(false)
+                != object.disposable_directory
             || intent["identity"] != object.identity
             || intent["path"] != object.path
             || intent["producer"] != context.producer
@@ -695,7 +722,7 @@ pub(super) fn retire(
     lease: Option<&Lease>,
     row: &Value,
 ) -> Result<Value, String> {
-    if object.disposable_directory && (!policy.temporary || !policy.disposable_directory) {
+    if object.owns_directory() && (!policy.temporary || !policy.disposable_directory) {
         return Err("whole-directory disposal is no longer adopted; preserve allocation".into());
     }
     if object.original_release.is_none() {
@@ -766,7 +793,7 @@ pub(super) fn retire(
     store.save(0)?;
     let retiring = store.state.objects[0].clone();
     drop(store);
-    if retiring.disposable_directory {
+    if retiring.owns_directory() {
         dispose_owned_directory(inputs, r, directory, &retiring, lease)
     } else {
         resume_retirement(inputs, r, directory, &retiring)

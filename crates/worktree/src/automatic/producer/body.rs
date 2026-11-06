@@ -633,6 +633,8 @@ struct Selection {
     members: Vec<Member>,
     #[serde(default)]
     release_originals: bool,
+    #[serde(default)]
+    adopt_directory: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -721,6 +723,16 @@ impl Manager {
                 if object.consumers.values().any(|c| !c.released) {
                     return Err("fixture allocation has an unreleased diagnostic consumer".into());
                 }
+                if selected.adopt_directory
+                    && (!policy.temporary
+                        || !policy.disposable_directory
+                        || !selected.release_originals
+                        || !selected.members.is_empty()
+                        || object.disposable_directory
+                        || object.retiring)
+                {
+                    return Err("directory custody requires adopted temporary ownership, exact original release and no member transfer or retirement".into());
+                }
                 drop(store);
                 let allocation = directory.join(&selected.allocation);
                 for member in selected.members {
@@ -799,6 +811,17 @@ impl Manager {
                         || object.consumers.values().any(|c| !c.released)
                     {
                         return Err("original release binding or consumers changed".into());
+                    }
+                    if selected.adopt_directory && object.directory_custody.is_none() {
+                        let receipt = store.receipt(
+                            "producer-directory-custody",
+                            &value!({"schema":"chrono-fixture-directory-custody/v1",
+                                "producer":selected.producer,"path":object.path,
+                                "identity":object.identity,"original_intent":object.intent,
+                                "custody":custody,"candidate":self.inputs.anchor_head,
+                                "reason":plan.reason,"historical_outcome":"unchanged"}),
+                        )?;
+                        Arc::make_mut(&mut store.state.objects[0]).directory_custody = Some(receipt);
                     }
                     Arc::make_mut(&mut store.state.objects[0]).original_release = Some(format!(
                         "current custodian released exact originals: {}; custody {}",

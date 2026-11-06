@@ -95,6 +95,14 @@ struct Object {
     born_nanos: u64,
     #[serde(default, skip_serializing_if = "is_false")]
     disposable_directory: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    directory_custody: Option<Receipt>,
+}
+
+impl Object {
+    fn owns_directory(&self) -> bool {
+        self.disposable_directory || self.directory_custody.is_some()
+    }
 }
 
 fn is_false(value: &bool) -> bool {
@@ -886,6 +894,7 @@ impl Store {
         {
             return Err("producer intent changed; preserve object".into());
         }
+        retirement::directory_custody_stable(directory, producer, object)?;
         if object.sealed {
             let publication = object
                 .publication
@@ -1296,6 +1305,7 @@ impl RetainedArtifact {
             },
             born_nanos: retirement::now_nanos()?,
             disposable_directory: false,
+            directory_custody: None,
         }));
         store.save(store.state.objects.len() - 1)?;
         Ok(Self {
@@ -1565,6 +1575,7 @@ impl TemporaryHost {
             metadata_directory: Some(metadata_directory),
             born_nanos: retirement::now_nanos()?,
             disposable_directory: context.disposable_directory,
+            directory_custody: None,
         }));
         store.save(store.state.objects.len() - 1)?;
         Ok(Self {
