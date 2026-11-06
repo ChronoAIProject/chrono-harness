@@ -489,18 +489,15 @@ pub(super) fn collect(
                 return Err("unit operation original evidence failed or disagrees".into());
             }
         }
-        let expected_results: Vec<_> = std::iter::once("ci.inventory")
-            .chain(expected_ops.iter().map(String::as_str))
-            .chain(not_required.iter().map(String::as_str))
-            .collect();
         // Successful replacement markers are not emitted by the scoped producer.
         if !response
             .results
             .iter()
             .any(|r| r.id == "ci.inventory" && r.status == Status::Passed && r.exit_code.is_none())
-            || !verified_collection::matches_text_membership(
+            || !verified_collection::matches_result_ids(
                 &response.results.iter().map(|r| r.id.as_str()).collect(),
-                &expected_results,
+                &expected_ops.iter().map(String::as_str).collect(),
+                &not_required.iter().map(String::as_str).collect(),
             )
             || response
                 .results

@@ -74,4 +74,51 @@ fn result_membership_preserves_exact_unicode_and_nul_identity() {
     assert(exact);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registered_inventory_requires_the_marker_and_both_declared_lists() {
+    proof {
+        reveal_strlit("ci.inventory"); reveal_strlit("build"); reveal_strlit("test:other");
+        assert("ci.inventory"@.len() != "build"@.len());
+        assert("ci.inventory"@.len() != "test:other"@.len());
+        assert("build"@.len() != "test:other"@.len());
+    }
+    let operations = vec!["build"];
+    let not_required = vec!["test:other"];
+    let reordered = vec!["test:other", "ci.inventory", "build"];
+    let accepted = policy::matches_result_ids(&reordered, &operations, &not_required);
+    assert(accepted);
+    let no_inventory = vec!["build", "test:other"];
+    let missing_marker = policy::matches_result_ids(&no_inventory, &operations, &not_required);
+    assert(!missing_marker);
+    let no_operation = vec!["ci.inventory", "test:other"];
+    let missing_operation = policy::matches_result_ids(&no_operation, &operations, &not_required);
+    assert(!missing_operation);
+    let no_unrequired = vec!["ci.inventory", "build"];
+    let missing_unrequired = policy::matches_result_ids(&no_unrequired, &operations, &not_required);
+    assert(!missing_unrequired);
+    let undeclared = policy::matches_result_ids(&reordered, &operations, &Vec::new());
+    assert(!undeclared);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registered_inventory_preserves_empty_lists_and_exact_declared_names() {
+    proof {
+        reveal_strlit("ci.inventory"); reveal_strlit("é"); reveal_strlit("a\0b");
+        assert("ci.inventory"@.len() != "é"@.len());
+        assert("ci.inventory"@.len() != "a\0b"@.len());
+        assert("é"@.len() != "a\0b"@.len());
+    }
+    let empty: Vec<&str> = Vec::new();
+    let marker = vec!["ci.inventory"];
+    let inventory_only = policy::matches_result_ids(&marker, &empty, &empty);
+    assert(inventory_only);
+    let no_marker = policy::matches_result_ids(&empty, &empty, &empty);
+    assert(!no_marker);
+    let operations = vec!["é", "é"];
+    let not_required = vec!["a\0b", "é"];
+    let actual = vec!["a\0b", "ci.inventory", "é"];
+    let exact_set = policy::matches_result_ids(&actual, &operations, &not_required);
+    assert(exact_set);
+}
+
 }
