@@ -218,6 +218,36 @@ fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment
     );
 }
 
+fn reclaim_reports(root: &Path, paths: &[String], mut round: Value) {
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
+        .unwrap()
+        .unwrap();
+    let mut rounds = Vec::new();
+    // Real maintenance has a wall deadline, including under concurrent tests.
+    // Exercise its bounded continuation instead of demanding one-round disposal.
+    for attempt in 0..8 {
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+        assert!(
+            round["verified_bytes"].as_u64().unwrap() <= 1048576,
+            "{round}"
+        );
+        rounds.push(round);
+        if paths.iter().all(|path| !root.join(path).exists()) {
+            return;
+        }
+        if attempt < 7 {
+            round = inventory.maintain().unwrap();
+        } else {
+            break;
+        }
+    }
+    panic!("bounded maintenance did not reclaim unrooted reports {paths:?}: {rounds:?}");
+}
+
 #[test]
 fn caller_report_consumer_protects_primary_and_coordinator_publication() {
     if !super::isolated_capability::isolated_capability_test(
@@ -382,14 +412,15 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
             serde_json::from_value(report["report_consumer"]["originals"].clone()).unwrap();
         i.release_consumer(consumer, &originals, &"1".repeat(64), &"2".repeat(64))
             .unwrap();
-        let retirement = i.maintain().unwrap();
-        assert!(!path.exists(), "{retirement}");
-        for (path, _) in dependencies {
-            assert!(
-                !path.exists(),
-                "released referenced original was not reclaimed: {retirement}"
-            );
-        }
+        let mut released = vec![report["report_path"].as_str().unwrap().to_owned()];
+        released.extend(dependencies.iter().map(|(path, _)| {
+            path.strip_prefix(&h.root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        }));
+        reclaim_reports(&h.root, &released, i.maintain().unwrap());
         if let Some((path, bytes)) = managed_receipt {
             assert_eq!(
                 fs::read(path).unwrap(),
@@ -404,36 +435,6 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
 
 #[test]
 fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
-    fn reclaim_reports(root: &Path, paths: &[String], mut round: Value) {
-        let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
-            .unwrap()
-            .unwrap();
-        let mut rounds = Vec::new();
-        // Real maintenance has a wall deadline, including under concurrent tests.
-        // Exercise its bounded continuation instead of demanding one-round disposal.
-        for attempt in 0..8 {
-            assert!(
-                round["accounting_errors"].as_array().unwrap().is_empty(),
-                "{round}"
-            );
-            assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
-            assert!(
-                round["verified_bytes"].as_u64().unwrap() <= 1048576,
-                "{round}"
-            );
-            rounds.push(round);
-            if paths.iter().all(|path| !root.join(path).exists()) {
-                return;
-            }
-            if attempt < 7 {
-                round = inventory.maintain().unwrap();
-            } else {
-                break;
-            }
-        }
-        panic!("bounded maintenance did not reclaim unrooted reports {paths:?}: {rounds:?}");
-    }
-
     let h = Host::new("payload");
     h.kernel_cleanup();
     let cleanup = h.root.join(AUTO_POLICY);

@@ -138,7 +138,7 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 projects schema v2 要求每个 project／script 显式登记非空 `language`；projects 判官只核 DELTA 影响的专属配对，要求语言 ID 相同，唯一额外准入为生产 `shell`、测试 `python`。这两个保留 ID 由宿主显式选择，sh／bash 可登记为 `shell`；其它 ID 是不作推断、不归一化的字面值。schema v1 保留旧合同，不因升级二进制自动取得语言约束。
 
-配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓采用 v2 声明；scoped CI 与 projects 判官共用配对和语言规则，scoped v1 登记保留旧解释。显式测试清单由 Rust `chrono-ci test-inventory` 读取宿主 `chrono-workflow-inventory/v1` 配置，核对登记的 Cargo/libtest 未过滤、ignored 与分组列表：未过滤清单及各分组须非空，各组须完整覆盖且互不相交，ignored 清单须为空；不据此推导依赖或选测；行为验证归 `ci-tests`。宿主 bootstrap 及其专属 Python 测试仍独立登记并由独立 CI 单元执行。示例的 v2 采用、剩余跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
+配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓采用 v2 声明；scoped CI 与 projects 判官共用配对和语言规则，scoped v1 登记保留旧解释。显式测试清单由 Rust `chrono-ci test-inventory` 读取宿主 `chrono-workflow-inventory/v1` 配置，核对登记的 Cargo/libtest 未过滤、ignored 与分组列表：未过滤清单及各分组须非空，各组互不相交，合计精确覆盖未过滤清单，ignored 清单须为空；不据此推导依赖或选测；行为验证归 `ci-tests`。宿主 bootstrap 及其专属 Python 测试仍独立登记并由独立 CI 单元执行。示例的 v2 采用、剩余跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
 
 ## 3. 登记格式与字段合同
 
