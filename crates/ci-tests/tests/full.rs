@@ -358,16 +358,20 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
             .any(|p| p["argv"].as_array().unwrap().contains(&json!("fetch")))
     );
     assert_eq!(git(&h.root, &["rev-parse", &base]), base);
-    // Fetch changes the observations. Never overwrite the original preparation report.
-    let saved = fs::read(h.root.join(config().preparation_path)).unwrap();
+    // The next observation uses the fetched base and replaces the current view.
+    let next = prepare(&h, &bytes).unwrap();
     assert!(
-        prepare(&h, &bytes)
-            .unwrap_err()
-            .contains("output collision")
+        !next["git_facts"]["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["argv"].as_array().unwrap().contains(&json!("fetch")))
     );
+    assert_eq!(next["context"], r["context"]);
+    assert_eq!(read(&h.root, &config().preparation_path), next);
     assert_eq!(
-        fs::read(h.root.join(config().preparation_path)).unwrap(),
-        saved
+        fs::read(h.root.join(r["context"]["path"].as_str().unwrap())).unwrap(),
+        bytes
     );
     let mut distinct = host("pass");
     let workflow = distinct.candidate.clone();

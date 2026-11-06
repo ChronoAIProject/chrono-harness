@@ -393,9 +393,17 @@ fn committed_unit_and_collector_cli_prepare_preserve_caller_bytes_and_canonical_
                 let retained = b"caller-owned manifest bytes; admission belongs to full core";
                 fs::create_dir_all(h.root.join(manifest).parent().unwrap()).unwrap();
                 fs::write(h.root.join(manifest), retained).unwrap();
+                let next = full::prepare(&h.root, path, &c, &bytes, &h.candidate).unwrap();
+                assert_eq!(next["context"], report["context"]);
+                assert_eq!(next["canonical_argv"], report["canonical_argv"]);
+                assert_ne!(
+                    next["git_facts"]["processes"][0]["child_pid"],
+                    report["git_facts"]["processes"][0]["child_pid"]
+                );
+                assert_eq!(next, read(&h.root, &c.preparation_path));
                 assert_eq!(
-                    full::prepare(&h.root, path, &c, &bytes, &h.candidate).unwrap(),
-                    report
+                    fs::read(h.root.join(report["context"]["path"].as_str().unwrap())).unwrap(),
+                    bytes
                 );
                 assert_eq!(fs::read(h.root.join(manifest)).unwrap(), retained);
             }
