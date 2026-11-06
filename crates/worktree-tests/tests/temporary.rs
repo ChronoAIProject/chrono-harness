@@ -175,7 +175,10 @@ fn directory_cleanup_preserves_live_capability_and_staged_source_then_resumes() 
     fs::write(root.join("source.rs"), b"staged host source").unwrap();
     let capability = allocation.capability().unwrap();
     let report = allocation.finish().unwrap();
-    assert!(root.is_dir(), "live capability lost its directory: {report}");
+    assert!(
+        root.is_dir(),
+        "live capability lost its directory: {report}"
+    );
     drop(capability);
 
     let source = root.join("source.rs");
@@ -183,8 +186,12 @@ fn directory_cleanup_preserves_live_capability_and_staged_source_then_resumes() 
     git(&h.root, &["add", "-f", "--", relative]);
     let rejected = allocation.finish().unwrap();
     let rows = rejected["producer_objects"].as_array().unwrap();
-    assert!(rows.iter().any(|r| r["original_retirement"]["error"]
-        .as_str().is_some_and(|e| e.contains("committed/index source"))), "{rejected}");
+    assert!(
+        rows.iter().any(|r| r["original_retirement"]["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("committed/index source"))),
+        "{rejected}"
+    );
     assert_eq!(fs::read(&source).unwrap(), b"staged host source");
     let record = producer_record_path(&store, &root);
     let before = fs::read(&record).unwrap();
@@ -192,14 +199,56 @@ fn directory_cleanup_preserves_live_capability_and_staged_source_then_resumes() 
     assert_eq!(object["object"]["retiring"], true);
     let intent = store.join(object["object"]["intent"]["path"].as_str().unwrap());
     let intent_bytes = fs::read(&intent).unwrap();
-    assert_eq!(json(&intent_bytes).unwrap()["producer_outcome"], "not-established");
+    assert_eq!(
+        json(&intent_bytes).unwrap()["producer_outcome"],
+        "not-established"
+    );
 
     git(&h.root, &["rm", "--cached", "-q", "--", relative]);
     let resumed = allocation.finish().unwrap();
     assert!(resumed["recovery_error"].is_null(), "{resumed}");
     assert!(!root.exists() && !record.exists());
-    assert_eq!(json(&intent_bytes).unwrap()["producer_outcome"], "not-established");
-    assert!(rows.iter().any(|r| r["original_retirement"]["status"] == "failed"));
+    assert_eq!(
+        json(&intent_bytes).unwrap()["producer_outcome"],
+        "not-established"
+    );
+    assert!(
+        rows.iter()
+            .any(|r| r["original_retirement"]["status"] == "failed")
+    );
+}
+
+#[test]
+fn directory_cleanup_keeps_shared_input_until_its_last_directory_releases() {
+    let h = host();
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let source = h.parent.join("real-input.rs");
+    fs::write(&source, b"real source outside temporary directories").unwrap();
+    let mut first =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "first-")
+            .unwrap();
+    let mut second =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "second-")
+            .unwrap();
+    let mut originals = vec![];
+    for allocation in [&first, &second] {
+        let destination = allocation.path().join("copied.rs");
+        originals.push(chrono_worktree::TemporaryHost::register_copy(
+            &store, "test-allocation", &source, &destination, None, "actual fixture input",
+        ).unwrap());
+        fs::copy(&source, &destination).unwrap();
+    }
+    assert_eq!(originals[0], originals[1]);
+    let report = first.finish().unwrap();
+    assert!(!first.path().exists(), "released first directory accumulated: {report}");
+    assert!(originals[0].is_file(), "second directory lost its shared input");
+    let report = second.finish().unwrap();
+    assert!(!second.path().exists(), "released second directory accumulated: {report}");
+    assert!(!originals[0].exists(), "last released shared input accumulated: {report}");
+    assert_eq!(fs::read(&source).unwrap(), b"real source outside temporary directories");
 }
 
 // Re-enter the real producer rather than assuming that one bounded retention
