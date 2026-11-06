@@ -1356,6 +1356,13 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
         p["git"]["program"] = value!(git);
         p["git"]["expected_version"] = value!(String::from_utf8(version.stdout).unwrap().trim());
         p["git"]["sha256"] = value!(sha256(&fs::read(&git).unwrap()));
+        // Promoting an admitted alternate to the fixture's primary identity
+        // must preserve the unique-identity contract.
+        let primary = p["git"]["sha256"].clone();
+        p["git"]["identities"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|identity| identity["sha256"] != primary);
     });
     let policy = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
     assert_eq!(
