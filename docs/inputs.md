@@ -31,6 +31,8 @@ v3 将输入范围标为 `declared-complete` 时，必须提供 `bindings`，每
 
 两项文件输入绑定现已把既有 runner 和 diagnostics Cargo 保护消费者连到它们所选的显式 FILEMAP 输入。runner 在原有 18 项文件绑定旁补充 2,653 项引用；diagnostics 绑定其声明的 1,138 项文件。因此政策中的全部 2,671 个文件输入节点都已出现在绑定内。它们属于现有包／缓存、配置／缺失、可执行／运行时和清单声明，没有发现或新增输入、依赖边或执行。diagnostics action 保留登记的配置与政策选择器，为绑定的本地 Git 选择 macOS 27 政策和 `cargo/diagnostics-local.json`。
 
+macOS 27 另在现有 `runner.sha256` 和七条判官的 `sha256` 中绑定实际安装文件。该政策通过 `registries.judges` 选择独立的 `.chrono-harness/judges-macos-27.json`；各判官的调用参数、顺序、版本和职责沿用当前登记。共享判官登记继续由其他配置选择，本机字节不作为其他构建或平台的预期。摘要取自本独立工作树的源码 bootstrap，并核对安装报告和实际文件；不重复添加同一执行物的文件输入。此采用保持 proposed／not-implemented／incomplete，完整输入和真实 full 验收仍待完成。
+
 其他消费者、原快照、完整编译器／SDK 输入和真实 CI 采用仍不齐，政策保持 `status: proposed`、`enforcement: not-implemented`、`input_closure.status: incomplete`。验证沿用候选 bootstrap、标准变更检查和真实 PR／落地检查，总验证及存储成本未测。
 
 可写 `CARGO_HOME` 现为当前工作树的 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与登记源码 bootstrap 一致。package／配置输入位置及本地 diagnostics Cargo 政策一同移动，预期摘要不变。HOME、TMPDIR 继承现有环境，不写其他工作树目录；独立工作树因此不共享可变 Cargo 缓存／配置，明确绑定的 Rust 工具链和 SDK 仍是共享只读输入。
