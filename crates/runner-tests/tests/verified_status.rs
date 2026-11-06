@@ -5,11 +5,11 @@
 mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_status as policy;
+use policy::Status;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
-use policy::Status;
 
 verus! {
 
