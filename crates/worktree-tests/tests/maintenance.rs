@@ -158,7 +158,7 @@ fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it
             &[],
         )
         .unwrap();
-    let retained_round = inventory.maintain().unwrap();
+    inventory.maintain().unwrap();
     assert_eq!(fs::read(h.root.join(original_path)).unwrap(), bytes);
     assert_eq!(retained_report(&recovered["prior_report"]), original);
     assert!(
@@ -170,15 +170,24 @@ fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it
     inventory
         .reference_paths("caller:recovered-report", &[])
         .unwrap();
-    let released_round = inventory.maintain().unwrap();
-    assert!(
-        !h.root.join(recovered_path).exists(),
-        "recovered report remained after caller release: retained={retained_round}; released={released_round}"
-    );
-    assert!(
-        !h.root.join(original_path).exists(),
-        "failed original remained after caller release: retained={retained_round}; released={released_round}"
-    );
+    let mut rounds = Vec::new();
+    // One bounded pass can retire the recovered report and leave its newly
+    // unreferenced original for the next pass. Perform actual maintenance;
+    // keep every round's existing node/byte bounds and both deletion checks.
+    for _ in 0..8 {
+        let round = inventory.maintain().unwrap();
+        assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+        assert!(
+            round["verified_bytes"].as_u64().unwrap() <= 1048576,
+            "{round}"
+        );
+        rounds.push(round);
+        if !h.root.join(recovered_path).exists() && !h.root.join(original_path).exists() {
+            break;
+        }
+    }
+    assert!(!h.root.join(recovered_path).exists(), "{rounds:?}");
+    assert!(!h.root.join(original_path).exists(), "{rounds:?}");
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), original["base"]);
 }
 

@@ -37,6 +37,10 @@ name = "cache"
 path = "tests/cache.rs"
 
 [[test]]
+name = "inventory"
+path = "tests/inventory.rs"
+
+[[test]]
 name = "native"
 path = "tests/native.rs"
 
