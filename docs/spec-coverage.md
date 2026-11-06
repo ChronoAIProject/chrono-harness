@@ -205,7 +205,7 @@ worktree 登记维护复用 Git／进程、严格登记加载器及产物分类�
 
 远端分支退役已有 `cleanup-remote` 消费者，复用登记 Git／进程及已保存工作检查。真实 CLI 测试覆盖唯一预期 push 端点、本地／远端目标绑定、精确分支 lease、squash 保留、脏工作保全、删除后失败退出、并发分支更新、目标／计划变化和明确缺失重试。beta.10 已发布；公开 macOS 二进制在核落地后退役发布及四个示例采用分支。远端事务、Git／委托输入、PR／merge／落地编排、full 治理和确定性同判仍未获证明。
 
-Full CI 上下文传输采用明确的 `chrono-github-full-ci/v1` 投影。CI 测试复用真实绑定 Git fixture，核精确字节、candidate／config／provider／workflow 绑定、缺历史、失败进程、输出冲突和生成 Bash 的字面内容。workflow 测试复用七判官 fixture，核本地及准备后的 integration／delivery 上下文，拒绝陈旧上下文。准备阶段仍报告治理 `not-evaluated`、同判 `unestablished`，见[采用和重试范围](full-ci.md)。消费者测试未启用产品 full 宿主，也未执行原生生成派发。
+Full CI 上下文传输采用 `chrono-github-full-ci/v2` 短投影，旧 v1 在发布前拒绝；长命令生成、旧准备步骤及重试归一化退役。CI 测试复用真实绑定 Git fixture，核精确字节、candidate／config／provider／workflow 绑定、缺历史、失败进程、原件保留／当前视图替换、输出归属和生成 Bash 的字面内容。workflow 测试保留显式 runner 的真实本地与路径消费者，迁移派发到 schema4 短入口，执行七判官的 integration／delivery 并拒绝陈旧上下文。准备阶段仍报告治理 `not-evaluated`、同判 `unestablished`，见[采用和重试范围](full-ci.md)。消费者测试未启用产品 full 宿主，也未执行原生生成派发。
 
 公开 beta.10 的 CI 消费使用匿名下载的 macOS 二进制，核 release／full 生成、漂移处理和精确上下文传输。四个[示例宿主](examples.md)通过真实本地／integration／PR／dev 检查采用固定公开版本，随后核 public-origin start、本地清理和带 lease 的远端退役。证据范围仅为产品和 scoped 宿主；full 生成派发采用、完整输入、启用、同判、AI 协调／PR／merge 编排及形式化细化仍未完成。
 
@@ -409,3 +409,11 @@ PR #221 落地为 `3b605cf80aa9e96a6442b2e54991602713acca31`，树与受验候�
 登记计划强制 runner 六项及启动准备两项整 crate 验证，
 再运行原 Rust 库存。范围和固定工具见 [Verus 实施范围](verus.md)。
 其他程序、调用适配器和全仓强制覆盖仍未完成，Python 实现暂缓。
+
+CI 离线汇总的实际结果 ID 集合比较及期望列表构造也已迁到同源 Verus，合同要求库存标记、登记操作与未要求测试的精确集合、双向成员关系和终止。
+同一根直接判断真实 `CheckResult` 的操作成功、库存状态及未要求状态；结果类型的克隆也逐字段保全。
+真实结果 ID 的借用提取逐项保留记录字段、顺序、重复及完整字符串身份，实际集合合同直接关联原记录。
+新增独立边界预期使用 Verus，覆盖状态、可选退出码、不同记录不能拼接成功及结果克隆。
+独立根声明排列、空集合、缺项、额外项、缺库存标记、重复集合语义和 Unicode／NUL 边界，
+Rust 回归从真实生产报告改写原 stdout，核排列通过、缺项／额外项及重复结果失败，且汇总不重执行业务。
+该范围仍须候选正式检查和原生验收；解码、登记列表的外层提取、适配和完整 CI／SPEC 证明未完成。

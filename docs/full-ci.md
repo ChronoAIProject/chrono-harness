@@ -1,28 +1,24 @@
 # 在 CI 中传递完整检查上下文
 
-`chrono-github-full-ci/v1` 生成明确的 GitHub 手动工作流，把调用方提供的完整上下文交给与本地相同的 runner 命令：
+`chrono-github-full-ci/v2` 生成显式完整上下文的 GitHub 手动工作流，调用宿主 schema4 登记的短入口：
 
 ```sh
-.chrono-harness/bin/chrono-harness check --config .chrono-harness/config.json \
-  --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID \
-  --context .chrono-harness/state/full/context.json
+.chrono-harness/bin/chrono-harness check
 ```
 
-公开 beta.10 已包含此扩展，但它不会启用产品宿主仍为 proposed 的完整登记，也不替换当前按范围检查的 CI。
+范围固定在 provider 源中；单元生成 `check --unit ID`，汇总生成无值 `check --collect`。同一 CI 输入 action 只选择一份 provider，必须精确匹配本次请求。自动 push／PR 的完整单元使用独立的 `chrono-github-units/v2`，见 [CI 单元](ci-units.md)。
 
-固定源码 beta.10 在 macOS arm64、Linux x86_64 运行过登记的 CI 和七程序消费者测试。匿名下载的 macOS CI 二进制也在真实 Git 样本中验证发布／完整工作流生成、漂移拒绝／重新生成，以及上下文和参数原样准备。这些分别是实际平台产品测试和本地公开二进制消费；生成的完整工作流尚未在 GitHub 实际执行，宿主全面启用也未完成，见[发布证据](distribution.md)。
+**产品与规范同步收窄：**旧 `chrono-github-full-ci/v1` 已退役，生成、init 和准备均拒绝旧声明。删除长命令投影、旧准备步骤、无实际消费者的 provider `generator` 字段、重复上下文检查及按 PID／所有权描述符归一化的重试分支。仍有实际消费者的显式 runner API 保留；固定历史输入与来源义务也保留。总构建、CI、存储和迁移成本未测。
 
-`chrono-github-full-ci/v2` 使用 schema4 短入口。生成和准备的参数保留所选范围：`check`、`check --unit ID` 或 `check --collect`。登记的 CI action 只有一条 provider 路径，所以此配置必须精确匹配请求选择。
-
-多个自动完整单元通过[CI 单元](ci-units.md)中的 `chrono-github-units/v2` 映射使用已有事件准备和真实 CI 汇总。本文手动工作流仍要求调用方提供精确上下文和准备好的清单证据，不自动收集。
+公开 beta.10 的旧投影在 macOS arm64、Linux x86_64 有登记产品测试及 macOS 公开二进制本地消费；这些历史观察不证明当前短入口已发布或生成的完整工作流已在 GitHub 执行。产品宿主全面启用、完整输入和同判仍未完成。
 
 ## 登记配置并采用
 
-提供如下 JSON，并把 bootstrap、平台替换成宿主明确登记的选择：
+宿主登记 provider、输出、bootstrap、工具、政策及实际消费者。下面的 bootstrap 和平台须替换成宿主明确选择：
 
 ```json
 {
-  "schema": "chrono-github-full-ci/v1",
+  "schema": "chrono-github-full-ci/v2",
   "workflow_path": ".github/workflows/full.yml",
   "name": "完整仓库检查",
   "runs_on": "ubuntu-24.04",
@@ -31,7 +27,6 @@
   "timeout_minutes": 30,
   "bootstrap": ["python3", ".chrono-harness/bootstrap.py", "."],
   "runner": ".chrono-harness/bin/chrono-harness",
-  "generator": ".chrono-harness/bin/chrono-ci",
   "check_config": ".chrono-harness/config.json",
   "context_path": ".chrono-harness/state/full/context.json",
   "preparation_path": ".chrono-harness/state/full/preparation.json",
@@ -39,102 +34,39 @@
 }
 ```
 
-`chrono-ci init --host-root H --config INPUT` 将其采用到 `.chrono-harness/ci/full.json`，保留已有定制。`generate` 和 `verify` 使用同一源和渲染器，verify 不修复漂移。
+`chrono-ci init --host-root H --config INPUT` 采用到 `.chrono-harness/ci/full.json`，保留当前宿主定制。`generate` 和 `verify` 使用同一源及渲染器，verify 不修漂移。每份投影的归属标记包含精确源路径；其他源、只有历史通用标记的输出和未归属输出均不能自动接管。
 
-每份当前完整工作流都带完整 provider 标记和精确源路径。共用输出预检直接核对完整标记，不解析旧工作流的准备命令来猜归属。其他源不能替换已有输出，即使原输出不分单元也一样；只有历史标记的旧输出不会自动接管。
-
-未归属输出、符号链接、重叠路径、未知字段、未固定提交的 action、含表达式的设置都会失败。设置是字面单行字符串，允许的参数中 shell 特殊字符保留原字节。源、工作流、bootstrap、政策和实际消费者都须明确登记到 FILEMAP。
-
-本次同步调整产品与规范，移除了旧归属推断和第二次工作流读取，也移除固定旧渲染字节的断言。当前定制、冲突、漂移、生成 Bash 和上下文准备行为仍有验证。运行及总验证节省未测。
-
-## 单元和汇总各用独立配置
-
-可选 `scope` 严格使用 `chrono_harness::units::Scope`：`{"kind":"unit","unit":"compile"}` 或 `{"kind":"collect","manifest":".chrono-harness/state/evidence/manifest.json"}`。省略时保留原不分单元 v1 的生成／准备行为，重新序列化也省略。`null`、未知种类／字段、无效单元 ID／清单路径，以及输入输出归属重叠都会失败。旧 provider 读取器拒绝新 `scope` 字段。
-
-每份源只选择一次范围，手动触发仅接收调用方上下文，不提供范围菜单。以下两份是配置示例，不代表产品宿主已经采用。各自登记自己的工作流、名称、bootstrap 和产物路径；共享 runner 和检查政策是宿主明确选择。
-
-`.chrono-harness/ci/full-compile.json`：
+完整 config 使用 schema4，并登记 `canonical_check.profile`、现有本地生产者及 CI 输入 action。CI action 的工具为 `chrono-ci`，参数为：
 
 ```json
-{
-  "schema": "chrono-github-full-ci/v1",
-  "workflow_path": ".github/workflows/full-compile.yml",
-  "name": "完整检查的编译单元",
-  "runs_on": "ubuntu-24.04",
-  "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
-  "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
-  "timeout_minutes": 30,
-  "bootstrap": ["/bin/sh", ".chrono-harness/provision-compile.sh", "."],
-  "runner": ".chrono-harness/bin/chrono-harness",
-  "generator": ".chrono-harness/bin/chrono-ci",
-  "check_config": ".chrono-harness/config.json",
-  "scope": {"kind": "unit", "unit": "compile"},
-  "context_path": ".chrono-harness/state/full-compile/context.json",
-  "preparation_path": ".chrono-harness/state/full-compile/preparation.json",
-  "artifact_directory": ".chrono-harness/state/full-compile/"
-}
+["check-inputs", "--config", ".chrono-harness/ci/full.json",
+ "--event-env", "GITHUB_EVENT_NAME", "--payload-env", "GITHUB_EVENT_PATH",
+ "--revision-env", "CHRONO_WORKFLOW_REVISION"]
 ```
 
-`.chrono-harness/ci/full-collect.json`：
+工具、环境和输入的实际消费者边须完整登记。宿主继承 `CHRONO_CHECK_SOURCE` 及上述三个事件变量；生成步骤设置 `CHRONO_CHECK_SOURCE=ci`、固定 workflow 修订，其余事件变量由 GitHub 提供。短入口在同一登记命令中获取输入并运行七判官；不手工串接另一套检查配方。
 
-```json
-{
-  "schema": "chrono-github-full-ci/v1",
-  "workflow_path": ".github/workflows/full-collect.yml",
-  "name": "完整检查汇总",
-  "runs_on": "ubuntu-24.04",
-  "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
-  "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
-  "timeout_minutes": 30,
-  "bootstrap": ["/bin/sh", ".chrono-harness/provision-collection.sh", "."],
-  "runner": ".chrono-harness/bin/chrono-harness",
-  "generator": ".chrono-harness/bin/chrono-ci",
-  "check_config": ".chrono-harness/config.json",
-  "scope": {"kind": "collect", "manifest": ".chrono-harness/state/full-collect/manifest.json"},
-  "context_path": ".chrono-harness/state/full-collect/context.json",
-  "preparation_path": ".chrono-harness/state/full-collect/preparation.json",
-  "artifact_directory": ".chrono-harness/state/full-collect/"
-}
-```
+未固定提交的 action、未知字段、表达式设置、符号链接、输入／输出归属重叠和非法路径都会失败。允许的设置是字面单行字符串，shell 特殊字符保留原字节。`check_config` 可使用严格一层原生选择器，稳定入口路径和选中配置绑定均保留。
 
-逐项使用已有生成和核对入口：
+## 单元与汇总
 
-```sh
-.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/full-compile.json
-.chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/full-compile.json
-.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/full-collect.json
-.chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/full-collect.json
-```
+可选 `scope` 为 `{"kind":"unit","unit":"compile"}` 或 `{"kind":"collect","manifest":".chrono-harness/state/evidence/manifest.json"}`，省略则全局 DELTA。`null`、未知字段／种类、非法单元或清单路径均失败。
 
-修改并重新生成其中一份，只更新它负责的工作流，保留另一工作流和两份宿主源。每份源、输出、bootstrap、清单／证据位置和消费者都须明确登记；生成不自动登记单元，也不推断依赖。汇总 bootstrap 或调用方负责准备清单及其原报告；provider 不编造清单、不获取报告，也不调度其他工作流。
+每份源各有明确工作流、名称、bootstrap、上下文／报告和上传根，生成及 init 只更新该源拥有的投影。清单须与其他输入／输出分离。修改其中一份不修改另一份；共享 runner 和政策是宿主明确选择。生成不登记单元、不推断依赖，也不创建或获取汇总清单。
 
-渲染和准备都在 runner／config／base／candidate／context 后追加同一 `Scope::argv()`。编译例在上方本地命令中使用编译上下文路径，再加 `--unit compile`；汇总例使用汇总上下文，再加 `--collect .chrono-harness/state/full-collect/manifest.json`。本地和 CI 仍只有同一标准检查方法。
+分范围执行要求所选 full-v4 政策有匹配的 `execution_units`。汇总调用方或 bootstrap 必须供应清单及其原报告；provider 准备只验证传输，范围与治理准入仍由七判官决定。上传目录须涵盖实际输出及必要原件，上传不发现目录外证据。
 
-provider 验证传输语法和归属，完整检查程序决定单元／汇总能否进入。分范围完整检查要求匹配的 full-v3／v4 `execution_units` 和封存范围请求实现。准备成功或记录命令样本不证明完整分范围执行或通过准入；生成工作流的真实执行和宿主启用仍须另行取得证据。
+## 上下文与执行
 
-完整配置须使用 v3 或 v4，并明确[绑定 Git](git-facts.md)。CI 不自动补工具、检查程序、完整输入、项目结构、语言或证据获取。bootstrap 参数须准备全部声明程序，以及上下文引用的保留输入、blob、集成证明和完成报告。缺证据仍由检查程序判失败。登记产物目录必须容纳所需输出，上传不会发现目录外证据。
+工作流只有一个 `workflow_dispatch` 字符串输入 `context`，其内容为完整 JSON。调用方提供 schema2、明确的 `integration`／`delivery`、完整 base／candidate OID，以及分支开始／观察时间、fork、dev tip、operation、保留输入引用和适用的集成证据。准备器不猜角色、时间或证明路径，不自动补工具、输入和证据。
 
-## 上下文和执行过程
+checkout 使用给定 candidate。候选绑定的 Git 核对 HEAD、完整配置、provider 源字节及指定 `github.workflow_sha` 的投影 blob。只有精确确认缺对象后才从 `origin` 获取固定基线或 workflow OID；失败保留原进程字节、摘要和退出。此绑定不独立认证 GitHub 来源、凭据、Git 配置或输入齐全。
 
-工作流只接收一个 `workflow_dispatch` 字符串输入 `context`，内容为完整 JSON。须提供 schema 2、明确的 `integration` 或 `delivery` 角色、完整基线／候选 OID，以及检查所需字段。分支开始／观察时间、fork、dev tip、operation、保留输入引用和集成证据都由调用方提供；不回退用当前时钟，不按分支名猜角色，不自动选证明文件。
+准备器原样保留 context 字符串的 UTF-8 字节，包括空白。`chrono-full-ci-inputs/v1` 报告含原上下文字节／哈希、固定源、Git 进程和短 `canonical_argv`；`prepared`、`governance: not-evaluated`、`parity: unestablished` 均不表示检查通过。陈旧时间等领域语义由实际判官裁决。
 
-checkout 选择给定候选。准备流程使用候选绑定的 Git 核对 HEAD、完整配置字节、provider 源字节，以及给定 `github.workflow_sha` 下生成工作流的 blob。只有精确探测确认缺对象后，才从 `origin` 获取缺失基线或工作流修订。探测／抓取失败保留原进程字节、摘要和退出。
+生成器直接生成短检查步骤。输入 action 保留不可变上下文、准备报告和原始进程结果；当前 context／preparation 文件只是可替换视图，原件以路径与摘要消费。重试保存实际本次观察，不归一化进程 PID 或所有权载体，也不复用旧报告冒充新观察。Git 获取会改变后续观察，但不覆盖已有不可变原件。
 
-这只核对给定 Git 身份，不独立认证 GitHub 来源、凭据、Git 配置或委托输入是否齐全。
-
-准备流程原样写出解码后 context 字符串的 UTF-8 字节，包括空白，另写 `chrono-full-ci-inputs/v1` 报告。报告含原上下文字节／哈希、源身份、观察到的 Git 进程和标准参数；状态为 `prepared`，`governance: not-evaluated`，`parity: unestablished`。准备器只验证传输字段，其他上下文含义和准入由检查程序负责；所以虚假的分支年龄声明可能准备成功，却在检查时失败。
-
-生成的 Bash 步骤把原准备 stdout／stderr 保存到产物目录下的 `prepare.stdout.json`、`prepare.stderr`，传递真实退出码。shell noclobber 在调用前拒绝已有输出流文件；这两个名称保留，不能与上下文／报告路径重叠。完整检查执行带 `--context` 及可选范围后缀的共用参数。上传用 `always()` 保留登记目录和失败证据；早期 bootstrap 失败可能只留下作业日志。
-
-## 发布和重试
-
-准备流程在写任何文件前先检查上下文、报告两个目的。已有字节完全相同可以复用。v1 中，若上下文字节及所有有实际含义的准备观察相同，仅 `launcher_pid`、`child_pid`、`ownership_fds` 不同，则复用原准备报告，并单独保留新尝试完整原报告。其他不同字节冲突，不覆盖。
-
-v2 保留不可变原件，再通过已有写入器替换声明的当前文件。Git 获取会改变后续观察，因此 fetch 后重跑可能与首份准备报告冲突。此时使用新的明确运行位置／工作树，并保留旧产物，不能删旧证据假装首次调用没发生。
-
-发布复用逐文件写入器，不是多文件崩溃事务，也不隔离并发写入者；IO 失败可能留下单个已发布输出。准备成功不是完整检查通过或同判证明。`check_config` 可使用与本地相同的严格一层原生选择器；准备保留入口路径、记录选中目标绑定，生成工作流的稳定入口参数不变。
-
-真实消费者、生成工作流执行、宿主启用、输入齐全和本地／CI 比较是不同证据要求。手动工作流不负责创建 PR、合并、发布 required check 或核对落地。
+上传使用 `always()` 保留登记根和失败证据，早期 bootstrap 失败可能只有作业日志。单文件写入不是多文件崩溃或并发事务。真实消费者测试、原生生成派发、公开发布、完整宿主启用和本地／CI 同判分别验收；此投影不创建 PR、合并、发布 required check 或核落地。
 
 ## 输入后续工作的范围与来源纠正
 

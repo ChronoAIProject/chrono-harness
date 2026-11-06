@@ -6,12 +6,12 @@ use chrono_ci::full::{self, Config as FullConfig};
 
 fn config() -> FullConfig {
     serde_json::from_value(json!({
-        "schema":"chrono-github-full-ci/v1", "name":"Full context λ",
+        "schema":"chrono-github-full-ci/v2", "name":"Full context λ",
         "workflow_path":".github/workflows/full.yml", "runs_on":"ubuntu-24.04",
         "checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
         "upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
         "timeout_minutes":20, "bootstrap":["/bin/sh",".chrono-harness/bootstrap.sh"],
-        "runner":".chrono-harness/bin/chrono-harness", "generator":".chrono-harness/bin/chrono-ci",
+        "runner":".chrono-harness/bin/chrono-harness",
         "check_config":FACTS, "context_path":".chrono-harness/state/full/context.json",
         "preparation_path":".chrono-harness/state/full/preparation.json",
         "artifact_directory":".chrono-harness/state/full/"
@@ -91,10 +91,7 @@ fn cli_preserves_context_bytes_and_separate_observations_from_another_cwd() {
     assert_eq!(r, read(&h.root, &config().preparation_path));
     assert_eq!(r["context"]["input_bytes"], json!(bytes));
     assert_eq!(r["context"]["sha256"], sha256(&bytes));
-    assert_eq!(
-        r["canonical_argv"],
-        json!(full::argv(&config(), &h.candidate, &h.candidate))
-    );
+    assert_eq!(r["canonical_argv"], json!(full::argv(&config())));
     assert_eq!(r["governance"], "not-evaluated");
     assert_eq!(r["parity"], "unestablished");
     assert_eq!(
@@ -104,91 +101,48 @@ fn cli_preserves_context_bytes_and_separate_observations_from_another_cwd() {
     assert!(r["git_facts"]["processes"].as_array().unwrap().len() > 5);
     assert!(!h.trace().contains(" fetch "));
     let again = prepare(&h, &bytes).unwrap();
-    assert_eq!(again, r);
+    assert_eq!(again["context"], r["context"]);
+    assert_eq!(again, read(&h.root, &config().preparation_path));
+    assert_eq!(
+        fs::read(h.root.join(r["context"]["path"].as_str().unwrap())).unwrap(),
+        bytes
+    );
 }
 
 #[cfg(unix)]
 #[test]
-fn repeated_preparation_retains_distinct_ownership_observations_without_rebinding_inputs() {
+fn repeated_preparation_replaces_current_views_and_preserves_original_contexts() {
     use std::os::fd::AsFd;
     let h = host("pass");
     let bytes = context(&h, &h.candidate);
     let first = prepare(&h, &bytes).unwrap();
-    let original = fs::read(h.root.join(config().preparation_path)).unwrap();
+    let original = first["context"]["path"].as_str().unwrap();
     let lease = tempfile::tempfile().unwrap();
     let _scope = chrono_harness::process_fds::Scope::new(&[lease.as_fd()]).unwrap();
-    assert_eq!(prepare(&h, &bytes).unwrap(), first);
-    assert_eq!(
-        fs::read(h.root.join(config().preparation_path)).unwrap(),
-        original
-    );
-    let attempts: Vec<_> = fs::read_dir(
-        h.root
-            .join(format!("{}preparation", config().artifact_directory)),
-    )
-    .unwrap()
-    .map(|entry| entry.unwrap().path())
-    .filter(|path| {
-        path.file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .starts_with("native-attempt-")
-    })
-    .collect();
-    assert_eq!(attempts.len(), 1);
-    let retained = fs::read(&attempts[0]).unwrap();
-    assert!(
-        attempts[0]
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .contains(&sha256(&retained))
-    );
-    let actual: Value = serde_json::from_slice(&retained).unwrap();
+    let second = prepare(&h, &bytes).unwrap();
+    assert_eq!(first["context"], second["context"]);
     assert_ne!(
-        actual["git_facts"]["processes"][0]["ownership_fds"],
-        first["git_facts"]["processes"][0]["ownership_fds"]
+        first["git_facts"]["processes"][0]["ownership_fds"],
+        second["git_facts"]["processes"][0]["ownership_fds"]
     );
     assert_ne!(
-        actual["git_facts"]["processes"][0]["child_pid"],
-        first["git_facts"]["processes"][0]["child_pid"]
+        first["git_facts"]["processes"][0]["child_pid"],
+        second["git_facts"]["processes"][0]["child_pid"]
     );
-    let mut stable = actual.clone();
-    let mut previous = first.clone();
-    for report in [&mut stable, &mut previous] {
-        for process in report["git_facts"]["processes"].as_array_mut().unwrap() {
-            process.as_object_mut().unwrap().remove("ownership_fds");
-            process.as_object_mut().unwrap().remove("launcher_pid");
-            process.as_object_mut().unwrap().remove("child_pid");
-        }
-    }
-    assert_eq!(stable, previous);
-    let mut changed = first;
-    changed["git_facts"]["processes"][0]["exit_code"] = json!(47);
-    write(&h.root, &config().preparation_path, &changed);
-    let changed_bytes = fs::read(h.root.join(config().preparation_path)).unwrap();
-    assert!(
-        prepare(&h, &bytes)
-            .unwrap_err()
-            .contains("output collision")
+    assert_eq!(second, read(&h.root, &config().preparation_path));
+    let changed = [bytes.as_slice(), b" "].concat();
+    let third = prepare(&h, &changed).unwrap();
+    assert_ne!(third["context"]["path"], first["context"]["path"]);
+    assert_eq!(fs::read(h.root.join(original)).unwrap(), bytes);
+    assert_eq!(
+        fs::read(h.root.join(third["context"]["path"].as_str().unwrap())).unwrap(),
+        changed
     );
     assert_eq!(
-        fs::read(h.root.join(config().preparation_path)).unwrap(),
-        changed_bytes
+        fs::read(h.root.join(config().context_path)).unwrap(),
+        changed
     );
-    assert_eq!(fs::read(attempts[0].as_path()).unwrap(), retained);
-    fs::write(h.root.join(config().preparation_path), b"42").unwrap();
-    assert!(
-        prepare(&h, &bytes)
-            .unwrap_err()
-            .contains("output collision")
-    );
-    assert_eq!(
-        fs::read(h.root.join(config().preparation_path)).unwrap(),
-        b"42"
-    );
+    assert_eq!(third, read(&h.root, &config().preparation_path));
 }
 
 #[test]
@@ -222,7 +176,8 @@ fn declaration_init_ownership_customization_and_verify_are_explicit() {
     assert!(!invoke("generate", adopted).status.success());
     for (key, value) in [
         ("unknown", json!(true)),
-        ("schema", json!("chrono-github-full-ci/v2")),
+        ("generator", json!(".chrono-harness/bin/chrono-ci")),
+        ("schema", json!("chrono-github-full-ci/v1")),
         ("check_config", json!(".chrono-harness/state/policy.json")),
         ("context_path", json!(c.preparation_path)),
         ("preparation_path", json!(c.context_path)),
@@ -235,8 +190,15 @@ fn declaration_init_ownership_customization_and_verify_are_explicit() {
     ] {
         let mut invalid = serde_json::to_value(&c).unwrap();
         invalid[key] = value;
-        write(root, "invalid.json", &invalid);
-        assert!(!invoke("init", "invalid.json").status.success(), "{key}");
+        let invalid_host = tempfile::tempdir().unwrap();
+        write(invalid_host.path(), "invalid.json", &invalid);
+        let rejected = cli(
+            invalid_host.path(),
+            &["init", "--host-root", ".", "--config", "invalid.json"],
+        );
+        assert!(!rejected.status.success(), "{key}");
+        assert!(!invalid_host.path().join(adopted).exists());
+        assert!(!invalid_host.path().join(&c.workflow_path).exists());
     }
 }
 
@@ -289,80 +251,11 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
             .unwrap()
             .lines()
             .collect::<Vec<_>>(),
-        full::argv(&c, "base fixed", "candidate fixed")[1..]
+        full::argv(&c)[1..]
     );
     assert!(yaml.contains("ref: ${{ fromJSON(inputs.context).candidate }}"));
     assert!(yaml.contains("if: ${{ always() }}"));
     assert!(!yaml.contains("pull_request:") && !yaml.contains("  push:"));
-}
-
-#[test]
-fn generated_preparation_step_keeps_original_failure_in_artifacts() {
-    let h = host("pass");
-    let c = config();
-    fs::create_dir_all(h.root.join(".chrono-harness/bin")).unwrap();
-    executable_alias(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"),
-        h.root.join(&c.generator),
-    );
-    let payload = h.root.join(".chrono-harness/state/payload.json");
-    write(
-        &h.root,
-        ".chrono-harness/state/payload.json",
-        &json!({"inputs":{"context":"{}"}}),
-    );
-    let run = || {
-        Command::new("/bin/bash")
-            .current_dir(&h.root)
-            .env("GITHUB_EVENT_NAME", "workflow_dispatch")
-            .env("GITHUB_EVENT_PATH", &payload)
-            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-            .env(
-                "GITHUB_OUTPUT",
-                h.root.join(".chrono-harness/state/github-output"),
-            )
-            .args([
-                "-e",
-                "-c",
-                &script(
-                    &full::render(&c, SOURCE).unwrap(),
-                    "Preserve fixed full context",
-                ),
-            ])
-            .output()
-            .unwrap()
-    };
-    let out = run();
-    assert_eq!(out.status.code(), Some(1));
-    assert!(out.stdout.is_empty() && out.stderr.is_empty());
-    assert!(
-        fs::read(
-            h.root
-                .join(format!("{}prepare.stdout.json", c.artifact_directory))
-        )
-        .unwrap()
-        .is_empty()
-    );
-    assert!(
-        fs::read_to_string(
-            h.root
-                .join(format!("{}prepare.stderr", c.artifact_directory))
-        )
-        .unwrap()
-        .contains("explicit context v2")
-    );
-    assert!(!h.root.join(&c.context_path).exists());
-    let failure_path = h
-        .root
-        .join(format!("{}prepare.stderr", c.artifact_directory));
-    let original = fs::read(&failure_path).unwrap();
-    let retry = run();
-    assert!(!retry.status.success());
-    assert_eq!(fs::read(failure_path).unwrap(), original);
-    assert!(String::from_utf8_lossy(&retry.stderr).contains("cannot overwrite existing file"));
-    let mut conflicting = c;
-    conflicting.context_path = format!("{}prepare.stderr", conflicting.artifact_directory);
-    assert!(full::render(&conflicting, SOURCE).is_err());
 }
 
 #[test]
@@ -465,16 +358,20 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
             .any(|p| p["argv"].as_array().unwrap().contains(&json!("fetch")))
     );
     assert_eq!(git(&h.root, &["rev-parse", &base]), base);
-    // Fetch changes the observations. Never overwrite the original preparation report.
-    let saved = fs::read(h.root.join(config().preparation_path)).unwrap();
+    // The next observation uses the fetched base and replaces the current view.
+    let next = prepare(&h, &bytes).unwrap();
     assert!(
-        prepare(&h, &bytes)
-            .unwrap_err()
-            .contains("output collision")
+        !next["git_facts"]["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["argv"].as_array().unwrap().contains(&json!("fetch")))
     );
+    assert_eq!(next["context"], r["context"]);
+    assert_eq!(read(&h.root, &config().preparation_path), next);
     assert_eq!(
-        fs::read(h.root.join(config().preparation_path)).unwrap(),
-        saved
+        fs::read(h.root.join(r["context"]["path"].as_str().unwrap())).unwrap(),
+        bytes
     );
     let mut distinct = host("pass");
     let workflow = distinct.candidate.clone();
@@ -520,24 +417,20 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
 }
 
 #[test]
-fn context_report_and_symlink_collisions_preserve_original_bytes() {
+fn context_and_report_symlinks_preserve_the_original_target() {
     for target in [config().context_path, config().preparation_path] {
         let h = host("pass");
         let path = h.root.join(&target);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, b"old evidence").unwrap();
+        let original = fs::read(&h.program).unwrap();
+        std::os::unix::fs::symlink(&h.program, &path).unwrap();
         assert!(
             prepare(&h, &context(&h, &h.candidate))
                 .unwrap_err()
-                .contains("output collision")
+                .contains("symlink")
         );
-        assert_eq!(fs::read(&path).unwrap(), b"old evidence");
-        if target == config().preparation_path {
-            assert!(!h.root.join(config().context_path).exists());
-        }
-        fs::remove_file(&path).unwrap();
-        std::os::unix::fs::symlink(&h.program, &path).unwrap();
-        assert!(prepare(&h, &context(&h, &h.candidate)).is_err());
+        assert_eq!(fs::read(&h.program).unwrap(), original);
+        assert!(fs::symlink_metadata(path).unwrap().file_type().is_symlink());
     }
 }
 
@@ -558,26 +451,6 @@ fn committed_cli_rejects_component_output_collisions_before_publication() {
             "preparation_path",
             ".chrono-harness/state/full/context.json/",
             "distinct ownership",
-        ),
-        (
-            "preparation_path",
-            ".chrono-harness/state/full//prepare.stdout.json",
-            "preparation process output",
-        ),
-        (
-            "preparation_path",
-            ".chrono-harness/state/full/./prepare.stderr",
-            "preparation process output",
-        ),
-        (
-            "context_path",
-            ".chrono-harness/state/full/./prepare.stdout.json",
-            "preparation process output",
-        ),
-        (
-            "context_path",
-            ".chrono-harness/state/full//prepare.stderr/child",
-            "preparation process output",
         ),
     ] {
         let mut h = host("pass");
@@ -663,13 +536,13 @@ fn current_source_cli_rejects_component_ownership_before_publication() {
         ),
         (
             SOURCE,
-            "generator",
+            "check_config",
             ".chrono-harness/bin//chrono-harness",
             "distinct ownership",
         ),
         (
             SOURCE,
-            "generator",
+            "check_config",
             ".chrono-harness/bin/./chrono-harness/child",
             "distinct ownership",
         ),
@@ -796,11 +669,12 @@ fn committed_cli_preserves_separate_component_spellings_and_customization() {
         );
         let report: Value = serde_json::from_slice(&out.stdout).unwrap();
         assert_eq!(report["status"], "prepared");
+        assert_eq!(report["canonical_argv"], json!(full::argv(&c)));
+        assert_eq!(report["context"]["current_path"], c.context_path);
         assert_eq!(
-            report["canonical_argv"],
-            json!(full::argv(&c, &h.candidate, &h.candidate))
+            fs::read(h.root.join(report["context"]["path"].as_str().unwrap())).unwrap(),
+            bytes
         );
-        assert_eq!(report["context"]["path"], c.context_path);
         assert_eq!(report["context"]["input_bytes"], json!(bytes));
         assert_eq!(report["config_sha256"], sha256(&source_bytes));
         assert_eq!(fs::read(h.root.join(&c.context_path)).unwrap(), bytes);

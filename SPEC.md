@@ -346,9 +346,9 @@ Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING
 
 报告的 report_path 指向后者；runner 将实际前序判官进程及 request_digest 传入 observations，供 workflow 核对执行身份与完成证据。CI 只负责准备工具、不可变输入并调用指令、保存报告和原样传播退出码。不得另写 CI 专属判官、skip 参数或本地宽松模式；现役生成 workflow 的 scoped 合同见 docs/ci.md；不设置虚假的绿色 workflow。
 
-`chrono-github-full-ci/v1` 是显式完整 context 的独立 dispatch 投影。调用方提供context 原始 UTF-8 JSON 字符串与所有引用证据；生成器不推断角色、时间、宿主布局或证据获取方式。候选 config v3 的 Git 绑定核对 HEAD、配置、provider 源和指定 workflow修订中的投影字节，只在精确缺对象读数后补取固定 OID。
+`chrono-github-full-ci/v2` 是显式完整 context 的独立 dispatch 投影，使用宿主 schema4 登记的短 check 入口，旧 provider v1 拒绝。调用方提供context 原始 UTF-8 JSON 字符串与所有引用证据；生成器不推断角色、时间、宿主布局或证据获取方式。候选配置的 Git 绑定核对 HEAD、配置、provider 源和指定 workflow修订中的投影字节，只在精确缺对象读数后补取固定 OID。
 
-准备阶段保留 context 原字节，另存 Git 观察、源身份和同一完整 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。输出冲突不得覆盖旧证据，原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
+准备阶段保留 context 原字节，另存 Git 观察、源身份和所选短 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。不可变上下文／准备原件按路径与摘要保留，当前输出可替换；原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
 
 字段、重试与采用边界见 [完整 CI 传输合同](docs/full-ci.md)。
 
@@ -1115,6 +1115,8 @@ Git main 的已登记历史可重建产物可经同一生命周期所有者 `mig
 ## Verus 实施要求
 
 所有 SPEC、仓内决策和状态逻辑必须使用 Verus 并完成证明；只允许明确列出的外部接口假设。
+新增规格、判断、状态维护及其独立边界预期必须直接使用 Verus，并登记整 crate 证明作为实际消费者的必需前置；
+不能先增加未证明逻辑再记作迁移缺口。既有缺口按批迁移，Python 相关迁移暂缓。
 实施按可独立验收的小批次推进，未迁移义务必须明确保留。当前实际 runner 的 OID、CI 单元 ID
 及相对词法路径判断已使用同源 Verus，执行结果与规格充要相等，且循环终止；
 其他逻辑、完整 SPEC 对应与全仓强制覆盖尚未完成。详见 [Verus 实施范围](docs/verus.md)。
