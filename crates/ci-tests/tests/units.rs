@@ -470,6 +470,10 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
         assert_eq!(report["response"]["status"], "passed");
         let directory = format!(".chrono-harness/state/{unit}");
         short::copy_artifacts(&copy.path().join(&directory), &host.path().join(&directory));
+        short::copy_artifacts(
+            &copy.path().join(".chrono-harness/state/preparation"),
+            &host.path().join(".chrono-harness/state/preparation"),
+        );
     }
     let report = execute_context(host.path(), &unit_context(host.path(), &b, &c, None), 0);
     assert_eq!(
