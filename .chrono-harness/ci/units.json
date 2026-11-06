@@ -1146,7 +1146,6 @@
         ],
         "consumer": "check.unit_judge-projects",
         "caches": [
-          "check.ci",
           "check.judge-ci",
           "check.judge-filemap",
           "check.judge-projects",
