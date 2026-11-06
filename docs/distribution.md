@@ -192,15 +192,17 @@ beta.17 原候选的原生 Linux 单元通过，当次汇总因报告读取上�
 
 产品与宿主登记同步变更：Python 启动模板及其路径登记迁移为 Shell，安装规则仍归 Rust；组合发布命令新增显式安装源。保留原安装测试，增加真实 Shell/安装器和 HTTPS 命令边界验证；验证、下载及维护的总成本尚未测量。
 
-包含本实现的发行须先上传组合目录中的 `install.sh`、`release.json` 及全部平台工具；已有旧版发行不因此获得新入口。将 `VERSION` 替换成所选固定版本，在宿主根运行：
+[beta.29](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.29) 提供 `install.sh`、`release.json` 和两个平台共 32 个工具二进制。安装支持 macOS arm64 和 Linux x86_64；在宿主根运行以下固定版本命令：
 
 ```sh
-curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/VERSION/install.sh | sh -s -- --host-root .
+curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v0.1.0-beta.29/install.sh | sh -s -- --host-root .
 ```
 
 脚本默认安装该发布清单中的全部工具；重复的 `--tool NAME` 可明确选择子集。脚本识别 macOS/Linux 及 arm64/aarch64/x86_64，取得并校验对应安装器和原清单，再调用 Rust `adopt`、`install`。选择已有不同配置时拒绝覆盖，显式升级使用 `--replace`。下载、校验、采用或安装失败均非零；已启动的 Rust 安装器的退出码原样传递。
 
 运行需要 POSIX `sh`、`uname`、`mktemp`、`cp`、`chmod`、`rm`、`wc`、`sha256sum` 或 `shasum -a 256`，HTTPS 源另需登记的 curl；无需 Python、Rust/Cargo、sudo 或修改全局配置。脚本来自所选固定版本，是首次信任入口；内嵌摘要固定字节，不单独认证发布者身份。临时下载在退出时清理，失败诊断留在原 stderr。
+
+beta.29 的全部 34 个公开资产已匿名核对摘要和大小。macOS arm64 已在仅提供所需系统工具的 PATH 中用上述命令安装全部 16 个工具，并验证同配置复用、配置变更拒绝、显式替换、生成的宿主入口和已安装的指南生成器。Linux x86_64 已通过原生构建和登记验证；公开安装的实际执行平台为 macOS。
 
 ## 宿主采用
 
