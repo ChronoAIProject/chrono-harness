@@ -162,7 +162,7 @@ def reuse_construction(root, config, result, observed):
     qualified_publication(root, current, selected)
     report, profile = stage_report(root, current["stage_result"], current["stage_sha256"])
     for field in ("projects", "rust_toolchain", "rust_incremental", "require_tool_bindings",
-                  "tool_bindings_registry", "tool_bindings", "native_platform", "tools",
+                  "tool_bindings_registry", "tool_bindings", "native_platform",
                   "host_environment", "environment", "toolchain_provision"):
         if profile.get(field) != config.get(field):
             raise ValueError("owner construction selection differs: " + field)
@@ -172,6 +172,9 @@ def reuse_construction(root, config, result, observed):
     rows = {row["operation"]: row for row in report["operations"]}
     if not set(names) <= set(rows):
         raise ValueError("owner construction is missing a declared operation")
+    for tool in sorted({rows[name]["tool"] for name in names}):
+        if profile.get("tools", {}).get(tool) != config.get("tools", {}).get(tool):
+            raise ValueError("owner construction selection differs: tool " + tool)
     source = shared.safe(root, report["owner_stage"]["staged"]["path"], STAGES)
     reused = {name: dict(rows[name], reused_from={"path": current["stage_result"],
                                                 "sha256": current["stage_sha256"]})
