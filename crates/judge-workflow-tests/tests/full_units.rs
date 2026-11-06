@@ -198,7 +198,7 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
     ]);
     fs::write(root.join(".gitignore"),".chrono-harness/bin/\n.chrono-harness/state/\np/target/\nt/target/\np2/target/\nt2/target/\n").unwrap();
     // Replace the old script fixture completely before fixing the Rust baseline.
-    for path in ["p/product.py", "t/check.py"] {
+    for path in ["p/product.py", "p/prepare.py", "t/check.py"] {
         fs::remove_file(root.join(path)).unwrap();
     }
     h.save();

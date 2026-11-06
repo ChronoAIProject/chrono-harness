@@ -234,6 +234,8 @@ Config v3 可显式采用版本化 `input_closure.coverage`，合同为`{schema:
 
 可选 Cargo guard 的配置合同必须显式登记每个查找位置的存在／缺失、命令行配置与递归 include；文件内容沿既有输入 ID 和 FILEMAP 边连接消费者。缺失也是有效输入，不能以未发现文件替代缺失声明。登记表按 Cargo 的固定版本查找规则核完整性，不因此取得自动补登记权。配置及其依赖完整不代表编译器、SDK、构建脚本或外部服务输入及其依赖的完整性。当前范围有限的实现及 v1→v2 迁移见同文档。
 
+Cargo guard 的输入范围沿当前消费者的 `compile` 源码依赖及各自直接登记的输入展开。project 的 `runtime-input`／`build-input` 关系消费其产物，不把该生产项目自身的构建输入递归并入本次 Cargo 输入范围；产物、工具及前置执行仍由其显式登记和实际回执核验。源码编译依赖、所选配置／工具链／包输入及操作前后身份核验继续适用。
+
 可选 guard v4 进一步显式绑定 Cargo 与 `RUSTC` 的输入 ID、文件身份、路径和版本，要求宿主登记唯一编译器选择环境，拒绝另一套 Cargo 配置／wrapper 选择来源。这只绑定被传给 Cargo 的执行入口，不证明其委托程序、编译器库、链接器或 SDK 闭包。v2/v3 保持原解释；v4 的支持命令与边界见同文档，不由通用 projects 判官推断语言工具链。
 
 可选 guard v5 保留 v4 字段并增加显式 `toolchain`：sysroot 使用`chrono-input-directory/v1` 文件清单且只能由精确 `RUSTFLAGS=--sysroot=...` 选择；backend 与 build-script 输入逐项连接 FILEMAP；linker 以独立工具、输入 ID 和环境变量绑定；每个 SDK 以目录清单和精确环境根绑定。目录文件、选择路径和外部输入在 Cargo前后重核，递归配置不得提供第二套 linker/sysroot 来源。
