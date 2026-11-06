@@ -170,9 +170,15 @@ fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it
     inventory
         .reference_paths("caller:recovered-report", &[])
         .unwrap();
-    inventory.maintain().unwrap();
-    assert!(!h.root.join(recovered_path).exists());
-    assert!(!h.root.join(original_path).exists());
+    let retirement = inventory.maintain().unwrap();
+    assert!(
+        !h.root.join(recovered_path).exists(),
+        "recovered report remains after consumer release: {retirement}"
+    );
+    assert!(
+        !h.root.join(original_path).exists(),
+        "failed original remains after consumer release: {retirement}"
+    );
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), original["base"]);
 }
 
