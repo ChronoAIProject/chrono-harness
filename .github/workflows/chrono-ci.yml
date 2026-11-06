@@ -2,9 +2,9 @@
 name: "chrono / collection"
 on:
   push:
-    branches: ["dev"]
+    branches: ["dev","integration/**"]
   pull_request:
-    branches: ["dev"]
+    branches: ["dev","integration/**"]
 permissions:
   contents: read
   actions: read
