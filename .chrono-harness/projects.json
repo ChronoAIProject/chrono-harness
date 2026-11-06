@@ -3467,6 +3467,21 @@
             "temporary::capacity_explicit_maintenance_advances_the_existing_bounded_cursor",
             "--test-threads=2"
           ]
+        },
+        "directory_cleanup": {
+          "operation": "test.worktree.directory-cleanup",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--test",
+            "creation",
+            "temporary::directory_cleanup_",
+            "--",
+            "--test-threads=1"
+          ]
         }
       },
       "tests_for": "worktree",

@@ -53,6 +53,91 @@ fn capacity_host(change: impl FnOnce(&mut Value)) -> Host {
     h
 }
 
+fn adopt_directory_cleanup(h: &Host) {
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["retained_producers"][0]["disposable_directory"] = value!(true);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+}
+
+#[test]
+fn directory_cleanup_reclaims_synthetic_repository_after_actual_consumers_release() {
+    use std::os::unix::fs::symlink;
+
+    let h = host();
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "owned-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    let record = producer_record_path(&store, &root);
+    let repo = root.join("synthetic repository");
+    fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "--initial-branch=dev", "-q"]);
+    fs::write(repo.join("fixture.rs"), b"synthetic fixture input").unwrap();
+    commit(&repo);
+    // No individual cleanup declarations for the repository or these members.
+    for index in 0..32 {
+        fs::write(root.join(format!("scratch-{index}")), b"temporary").unwrap();
+    }
+    let outside = h.parent.join("external-source.rs");
+    fs::write(&outside, b"real external source").unwrap();
+    symlink(&outside, root.join("external-link")).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command.arg("capture-once");
+    let output = allocation.capture_output(&mut command).unwrap();
+    drop(command);
+    assert_eq!(output.status.code(), Some(7));
+    let capture = capture_directory(&root);
+    let result = fs::read(capture.join("result.json")).unwrap();
+    let artifact =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    artifact.acquire("diagnostic", "inspect actual failed original").unwrap();
+    let report = allocation.finish().unwrap();
+    assert!(root.is_dir(), "released owner lost an active diagnostic: {report}");
+    assert_eq!(fs::read(capture.join("result.json")).unwrap(), result);
+    artifact.release("diagnostic", "original failure inspected").unwrap();
+    let mut next = capacity_reenter_after_release(&store, &outputs, &root);
+    next.finish().unwrap();
+    assert!(!root.exists(), "released owned fixture directory accumulated");
+    assert!(!record.exists(), "released directory registration accumulated");
+    assert_eq!(fs::read(&outside).unwrap(), b"real external source");
+    assert_eq!(json(&result).unwrap()["exit_code"], 7);
+}
+
+#[test]
+fn directory_cleanup_policy_does_not_reclassify_existing_source_directories() {
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "old-")
+            .unwrap();
+    let old = allocation.path().to_owned();
+    fs::write(old.join("unique-source.rs"), b"unsaved source").unwrap();
+    drop(allocation);
+    adopt_directory_cleanup(&h);
+    let (code, report, error) = h.auto("migrate", &[
+        "--path", h.root.to_str().unwrap(), "--partition-producer", "test-allocation",
+    ]);
+    assert_eq!(code, 0, "{report} {error}");
+    let mut next =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "new-")
+            .unwrap();
+    let new = next.path().to_owned();
+    fs::write(new.join("scratch"), b"temporary").unwrap();
+    next.finish().unwrap();
+    let mut reentry = capacity_reenter_after_release(&store, &outputs, &new);
+    reentry.finish().unwrap();
+    assert!(!new.exists(), "new directory ownership was not applied");
+    assert_eq!(fs::read(old.join("unique-source.rs")).unwrap(), b"unsaved source");
+}
+
 // Re-enter the real producer rather than assuming that one bounded retention
 // round can remove an entire original/metadata relationship. Preserve the final
 // physical-absence assertions and reject every error except honest capacity

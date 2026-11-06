@@ -66,6 +66,8 @@ pub(super) struct Context {
     pub(super) directory: PathBuf,
     pub(super) producer: String,
     pub(super) generated_outputs: Vec<String>,
+    #[serde(default)]
+    pub(super) disposable_directory: bool,
     pub(super) capacity: Capacity,
 }
 impl Context {
@@ -86,6 +88,7 @@ impl Context {
             directory: directory.into(),
             producer: producer.id.clone(),
             generated_outputs: producer.generated_outputs.clone(),
+            disposable_directory: producer.disposable_directory,
             capacity: producer.capacity.clone(),
         };
         let path = no_symlink_parents(directory, "producer-context.json")?;
@@ -125,6 +128,7 @@ impl Context {
             directory: directory.into(),
             producer: producer.id.clone(),
             generated_outputs: producer.generated_outputs.clone(),
+            disposable_directory: producer.disposable_directory,
             capacity: producer.capacity.clone(),
         };
         let current_bytes = serde_json::to_vec(&current).map_err(|e| e.to_string())?;
@@ -319,6 +323,7 @@ impl Context {
             .find(|p| p.id == self.producer)
             .ok_or("fixture context producer is not declared")?;
         if producer.capacity != self.capacity
+            || producer.disposable_directory != self.disposable_directory
             || producer.generated_outputs != self.generated_outputs
             || producer.directory(&self.root)? != self.directory
         {
@@ -369,6 +374,7 @@ impl Context {
                 if producer.directory(&inputs.policy.coordinator_root)? != self.directory
                     || producer.generated_outputs != self.generated_outputs
                     || producer.capacity != self.capacity
+                    || producer.disposable_directory != self.disposable_directory
                 {
                     return Err("fixture context differs from authoritative producer policy".into());
                 }

@@ -15,6 +15,10 @@ pub(super) struct ProducerPolicy {
     pub(super) generated_outputs: Vec<String>,
     #[serde(default)]
     pub(super) temporary: bool,
+    /// The producer owns every member, including synthetic repositories. Bound
+    /// prospectively at allocation; never inferred from a path or applied to old objects.
+    #[serde(default)]
+    pub(super) disposable_directory: bool,
     /// Exact Git roots within each allocation; no nested repository discovery.
     #[serde(default)]
     pub(super) source_roots: Vec<String>,
@@ -89,6 +93,8 @@ struct Object {
     metadata_identity: Option<String>,
     #[serde(default)]
     born_nanos: u64,
+    #[serde(default)]
+    disposable_directory: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -870,6 +876,8 @@ impl Store {
             || intent["path"] != object.path
             || intent["identity"] != object.identity
             || intent["producer"] != producer
+            || intent["disposable_directory"].as_bool().unwrap_or(false)
+                != object.disposable_directory
             || (object.cache_lease.is_some() && intent["cache_lease"] != value!(object.cache_lease))
         {
             return Err("producer intent changed; preserve object".into());
@@ -1283,6 +1291,7 @@ impl RetainedArtifact {
                 None
             },
             born_nanos: retirement::now_nanos()?,
+            disposable_directory: false,
         }));
         store.save(store.state.objects.len() - 1)?;
         Ok(Self {
@@ -1522,6 +1531,7 @@ impl TemporaryHost {
                 "schema":"chrono-temporary-host-intent/v1","producer":producer,
                 "path":object,"identity":identity,"generated_outputs":generated_outputs,
                 "cache_lease":binding,"metadata_directory":metadata_directory,
+                "disposable_directory":context.disposable_directory,
                 "original_lifetime":"explicit-consumer-release; interruption-is-unknown",
                 "producer_outcome":"not-established","task_completion":"not-claimed"
             }),
@@ -1549,6 +1559,7 @@ impl TemporaryHost {
             metadata_identity: Some(directory_id(&directory.join(&metadata_directory))?),
             metadata_directory: Some(metadata_directory),
             born_nanos: retirement::now_nanos()?,
+            disposable_directory: context.disposable_directory,
         }));
         store.save(store.state.objects.len() - 1)?;
         Ok(Self {
@@ -1788,6 +1799,9 @@ impl ProducerPolicy {
 
     pub(super) fn validate(&self, policy: &Policy) -> Result<(), String> {
         self.capacity.validate()?;
+        if self.disposable_directory && !self.temporary {
+            return Err("whole-directory disposal requires prospective temporary ownership".into());
+        }
         let mut operations = BTreeSet::new();
         if self
             .operations
