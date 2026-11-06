@@ -1261,44 +1261,44 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     let lineage_bytes = fs::read(lane.join(origin["birth_report"].as_str().unwrap())).unwrap();
     let lineage_path = ".chrono-harness/ci/lineage.json";
     fs::write(lane.join(lineage_path), &lineage_bytes).unwrap();
-    let system_python =
-        chrono_harness::resolve_program(&lane, "python3", Some("/usr/bin:/bin")).unwrap();
-    // Exercise the Linux layout even when the host's interpreter is a regular file.
-    let python_directory = fs::canonicalize(tools.path())
-        .unwrap()
-        .join("native-python");
-    fs::create_dir(&python_directory).unwrap();
-    let python_link = python_directory.join("python3");
-    std::os::unix::fs::symlink(&system_python, &python_link).unwrap();
-    assert!(fs::symlink_metadata(&python_link).unwrap().is_symlink());
-    let python =
-        chrono_harness::resolve_program(&lane, "python3", Some(python_directory.to_str().unwrap()))
-            .unwrap();
-    let link_version = host::capture_native(&lane, Command::new(&python).arg("--version"));
-    let link_digest = sha256(&fs::read(&python).unwrap());
+    let system_ci = fs::canonicalize(lane.join(".chrono-harness/bin/chrono-ci")).unwrap();
+    // Exercise the Linux layout even when the host's native executable is a regular file.
+    let native_directory = fs::canonicalize(tools.path()).unwrap().join("native-ci");
+    fs::create_dir(&native_directory).unwrap();
+    let native_link = native_directory.join("chrono-ci");
+    std::os::unix::fs::symlink(&system_ci, &native_link).unwrap();
+    assert!(fs::symlink_metadata(&native_link).unwrap().is_symlink());
+    let native_ci = chrono_harness::resolve_program(
+        &lane,
+        "chrono-ci",
+        Some(native_directory.to_str().unwrap()),
+    )
+    .unwrap();
+    let link_version = host::capture_native(&lane, Command::new(&native_ci).arg("--version"));
+    let link_digest = sha256(&fs::read(&native_ci).unwrap());
     // Ordinary file inputs require the actual regular executable, not its alias.
-    let python = fs::canonicalize(python).unwrap();
-    let version = host::capture_native(&lane, Command::new(&python).arg("--version"));
+    let native_ci = fs::canonicalize(native_ci).unwrap();
+    let version = host::capture_native(&lane, Command::new(&native_ci).arg("--version"));
     assert_eq!(version.status, link_version.status);
     assert_eq!(version.stdout, link_version.stdout);
     assert_eq!(version.stderr, link_version.stderr);
-    assert_eq!(sha256(&fs::read(&python).unwrap()), link_digest);
+    assert_eq!(sha256(&fs::read(&native_ci).unwrap()), link_digest);
     let cfg = h.values.get_mut(CONFIG).unwrap();
-    cfg["canonical_check"]["inputs"]["ci"] = json!({"operation":"prepare.ci","tool":"native-python","argv":[".chrono-harness/ci/native.py","forward","--config",PROVIDER]});
-    cfg["tools"].as_array_mut().unwrap().push(json!({"id":"native-python","program":python,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}));
-    cfg["environment"]["inputs"].as_array_mut().unwrap().push(json!({"id":"native-python","location":python,"presence":"present","sha256":sha256(&fs::read(&python).unwrap())}));
+    cfg["canonical_check"]["inputs"]["ci"] = json!({"operation":"prepare.ci","tool":"native-ci","argv":["native-adoption","forward","--host-root",".","--config",PROVIDER]});
+    cfg["tools"].as_array_mut().unwrap().push(json!({"id":"native-ci","program":native_ci,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}));
+    cfg["environment"]["inputs"].as_array_mut().unwrap().push(json!({"id":"native-ci","location":native_ci,"presence":"present","sha256":sha256(&fs::read(&native_ci).unwrap())}));
     cfg["input_closure"]["bindings"][0]["inputs"]
         .as_array_mut()
         .unwrap()
-        .extend([json!("tool:native-python"), json!("input:native-python")]);
+        .extend([json!("tool:native-ci"), json!("input:native-ci")]);
     h.values.get_mut(FM).unwrap()["project_edges"]
         .as_array_mut()
         .unwrap()
         .extend([
-            edge("tool:native-python", "runtime-input", "judge:registration"),
-            edge("input:native-python", "runtime-input", "judge:registration"),
+            edge("tool:native-ci", "runtime-input", "judge:registration"),
+            edge("input:native-ci", "runtime-input", "judge:registration"),
         ]);
-    for path in [lineage_path, ".chrono-harness/ci/native.py"] {
+    for path in [lineage_path] {
         let mut f = file(path, json!([]));
         f["surface"] = json!("documentation");
         h.values.get_mut(FM).unwrap()["files"]
@@ -1323,7 +1323,7 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
             )
         });
     write_values(&lane, &h.values);
-    provider["native_adoption"] = json!({"schema":"chrono-native-adoption/v1","lineage":{"path":lineage_path,"sha256":sha256(&lineage_bytes)},"adapter_path":".chrono-harness/ci/native.py","interpreter":python,"inputs_program":source().join("crates/inputs/target/debug/chrono-inputs"),"seed_directory":seed_directory,"seed_artifact":"chrono-context","retained_inputs":".chrono-harness/state/inputs.json","composition_sources":[],"push_roles":{"refs/heads/integration/":"integration","refs/heads/dev":"delivery"},"pull_request_role":"delivery","integration_evidence":null,"integration_evidence_path":".chrono-harness/state/integration.json","integration_transport":{"source_directory":".chrono-harness/state/collection/","directory":".chrono-harness/state/cert-download/"}});
+    provider["native_adoption"] = json!({"schema":"chrono-native-adoption/v2","lineage":{"path":lineage_path,"sha256":sha256(&lineage_bytes)},"inputs_program":source().join("crates/inputs/target/debug/chrono-inputs"),"seed_directory":seed_directory,"seed_artifact":"chrono-context","retained_inputs":".chrono-harness/state/inputs.json","composition_sources":[],"push_roles":{"refs/heads/integration/":"integration","refs/heads/dev":"delivery"},"pull_request_role":"delivery","integration_evidence":null,"integration_evidence_path":".chrono-harness/state/integration.json","integration_transport":{"source_directory":".chrono-harness/state/collection/","directory":".chrono-harness/state/cert-download/"}});
     provider["native_adoption"]["composition_sources"] =
         json!([{"path":base_original_path,"sha256":sha256(&base_original_raw)}]);
     let mock = tools.path().join("mock-gh");
@@ -1399,7 +1399,7 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     };
     let detected = detect(&lane, "900");
     let native = |root: &Path, operation: &str, unit: Option<&str>, run: &str| {
-        let mut c = Command::new(&python);
+        let mut c = Command::new(&native_ci);
         c.current_dir(root)
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")
@@ -1445,8 +1445,10 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
                 },
             )
             .args([
-                ".chrono-harness/ci/native.py",
+                "native-adoption",
                 operation,
+                "--host-root",
+                ".",
                 "--config",
                 PROVIDER,
             ]);

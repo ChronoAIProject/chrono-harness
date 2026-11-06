@@ -9,37 +9,25 @@ use chrono_harness::{
 };
 use std::{collections::BTreeMap, io::Read};
 
-/// The native adapter needs the genuine acquisition environment outside business
-/// inheritance. Reuse the runner's bounded transport rather than a Python runner.
-pub(crate) fn native_process(args: &[String]) -> Result<String, String> {
-    if args.len() != 5 || args[1] != "--host-root" || args[3] != "--config" {
-        return Err("native-process requires fixed host-root and config".into());
-    }
-    #[derive(Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct Child {
-        argv: Vec<String>,
-        stdin: Vec<u8>,
-        directory: String,
-        prefix: String,
-        timeout_seconds: f64,
-        output_limit_bytes: usize,
-    }
-    let root = Path::new(&args[2]);
-    let Projection::Units(c) = load_projection(&no_symlink_parents(root, &args[4])?)? else {
-        return Err("native-process requires unit provider".into());
-    };
-    units::validate(&c)?;
+/// Explicit native child inputs share the runner's bounded process owner.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeChild {
+    pub argv: Vec<String>,
+    pub stdin: Vec<u8>,
+    pub directory: String,
+    pub prefix: String,
+    pub timeout_seconds: f64,
+    pub output_limit_bytes: usize,
+}
+pub fn native_process(
+    root: &Path,
+    c: &units::Config,
+    child: &NativeChild,
+    environment: BTreeMap<String, String>,
+) -> Result<(Vec<u8>, Vec<Value>), String> {
+    units::validate(c)?;
     let a = c.native_adoption.as_ref().ok_or("native adoption absent")?;
-    let mut raw = Vec::new();
-    std::io::stdin()
-        .take(64 * 1024 * 1024 + 1)
-        .read_to_end(&mut raw)
-        .map_err(|e| e.to_string())?;
-    if raw.len() > 64 * 1024 * 1024 {
-        return Err("native-process input bound".into());
-    }
-    let child: Child = decode(&raw)?;
     let allowed = child.argv.first() == Some(&c.collection.generator)
         || child.argv.first() == Some(&a.inputs_program);
     if !allowed
@@ -54,7 +42,6 @@ pub(crate) fn native_process(args: &[String]) -> Result<String, String> {
     {
         return Err("native-process differs from registered acquisition operations/bounds".into());
     }
-    let environment: BTreeMap<String, String> = std::env::vars().collect();
     let executable = chrono_harness::resolve_program(
         root,
         &child.argv[0],
@@ -120,11 +107,12 @@ pub(crate) fn native_process(args: &[String]) -> Result<String, String> {
             receipt_ref.path
         ));
     }
-    Ok(serde_json::to_string(
-        &json!({"stdout":stdout,"originals":[stdin,stdout,stderr,receipt_ref]}),
-    )
-    .map_err(|e| e.to_string())?
-        + "\n")
+    let originals = [stdin, stdout, stderr, receipt_ref]
+        .into_iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok((process.stdout_bytes, originals))
 }
 
 pub(crate) fn publish(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
