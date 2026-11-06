@@ -67,14 +67,14 @@
       ".chrono-harness/ci/bootstrap-core.json",
       ".chrono-harness/ci/bootstrap-detector.json",
       ".github/workflows/chrono-ci.yml",
-      ".chrono-harness/ci/workflow-inventory.py",
-      ".chrono-harness/ci/workflow-inventory-tests.py",
       ".chrono-harness/ci/workflow-inventory.json",
       ".chrono-harness/process_fds.py",
       ".chrono-harness/ci/bootstrap_shared.py",
       ".chrono-harness/ci/bootstrap-shared.json",
       ".chrono-harness/ci/bootstrap-cache.json",
-      ".chrono-harness/ci/bootstrap-toolchains.json"
+      ".chrono-harness/ci/bootstrap-toolchains.json",
+      "crates/ci/src/inventory.rs",
+      "crates/ci-tests/tests/inventory.rs"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,
@@ -187,12 +187,6 @@
           "test:workflow-short"
         ],
         "report_path": ".chrono-harness/state/units/judge-workflow-short/check.json"
-      },
-      "workflow-inventory": {
-        "tests": [
-          "test:workflow-inventory-tests"
-        ],
-        "report_path": ".chrono-harness/state/units/workflow-inventory/check.json"
       },
       "release-build": {
         "tests": [
