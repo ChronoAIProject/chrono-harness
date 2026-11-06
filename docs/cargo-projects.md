@@ -206,7 +206,7 @@ v5 以 `chrono-cargo-run/v3` 报告工具链证据和链接器工具观察；v2�
 
 这从重复保护验证中移除 52,036 条文件、1,455 条目录记录，不改前后复核，也不宣称输入完整。macOS SDK 清单范围不变，Xcode 构建子集见下文。运行、CI、存储收益须以同口径消费者测量确认。
 
-同一本地消费者用显式 `--config .chrono-harness/cargo/runner-vendor.toml` 选择 Cargo 目录来源，metadata 与 check 参数一致。50 个包逐文件绑定已取得的源码和 Cargo 生成校验清单，包 checksum 与锁文件不变；原 101 项 registry 缓存输入已从 runner 消费范围退役。准备时仍由现有 Cargo fetch 和 vendor 获取原料、产生来源，不自研包解析器或共享缓存。本机 diagnostics 复用其中明确需要的 26 个包及现有输入身份，原生 diagnostics 保持自己的登记；具体迁移与成本见[本机 runner 输入政策](inputs.md#本机-runner-的输入政策)。
+同一本地消费者用显式 `--config .chrono-harness/cargo/runner-vendor.toml` 选择 Cargo 目录来源，metadata 与 check 参数一致。55 个包逐文件绑定已取得的源码和 Cargo 生成校验清单，包 checksum 与锁文件不变；原 101 项 registry 缓存输入已从 runner 消费范围退役。当前 Verus 宏依赖的五个包另有 289 项明确文件输入，包含 284 份源码和五份校验清单；解析 features 与依赖绑定当前实际 metadata。准备时仍由现有 Cargo fetch 和 vendor 获取原料、产生来源，不自研包解析器或共享缓存。本机 diagnostics 复用其中明确需要的 26 个包及现有输入身份，原生 diagnostics 保持自己的登记；具体迁移与成本见[本机 runner 输入政策](inputs.md#本机-runner-的输入政策)。
 
 当前 `inputs.prepare-runner` 沿用所选宿主环境，只获取 runner 根锁文件的依赖，再调用登记的 Cargo vendor 和原 `guard.check.runner`；准备及保护消费者须实际核对当前工作树 Cargo home 和共享只读工具链／SDK，通用行为用例保留在专属 Rust 测试中。Cargo 保护是可选能力：对应 PR163 的当前 95 个方法，保留 94 个直接 Cargo 配方，以及一个通过 `.chrono-harness/cargo/diagnostics-config.json`、`diagnostics.json` 运行的普通 `build.diagnostics`。普通按范围操作不要求恢复历史并行保护别名，底层方法、断言和输入义务仍保留。
 

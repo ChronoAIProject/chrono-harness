@@ -177,6 +177,8 @@ macOS 27 直接政策通过按配置选择的 FILEMAP 表，把 runner v6 每个
 
 **本机 diagnostics 的政策与消费者同步修改：**其 26 个锁定包现在复用现有 vendor 输入，删除 1,127 项重复 registry 文件声明。1,087 份共有源码的摘要和包 checksum 与原固定输入一致，另采用已有的 26 份 Cargo 校验清单；Cargo 排除的 40 份完成标记／ignore 文件不再绑定。metadata、离线 build、配置清单和配置级 FILEMAP 边同步选择同一来源，macOS 27 配置的输入声明由 3,678 项减至 2,551 项。准备仍走现有 fetch／vendor；普通 bootstrap 和原生 diagnostics 获取各自采用原登记。真实受保护构建、两端快照组合、标准 DELTA 和原生验收仍须完成，不据声明数或文件体积减少推定运行及存储收益。
 
+当前 runner 的 Verus 宏依赖另增加五个锁定包，通过同一 fetch／vendor 路径取得。284 份包文件和五份 Cargo 校验清单逐项绑定锁文件 checksum 与实际源码，新增 289 项输入及到 runner 的明确边；当前共有 55 个外部包、2,597 份包文件和 55 份校验清单，macOS 27 配置共有 2,840 项输入声明。现有包的文件身份保留，runner 的直接依赖及 proc-macro2／quote 的 feature 选择同步当前真实 metadata。本机 diagnostics 的 26 包消费范围保持其独立声明。实际保护、快照、标准 DELTA 和原生验收继续分别执行，完整输入与同判仍未建立。
+
 当前 Xcode 获取识别 Xcode 26.5／17F42。只登记 Developer 时，`usr/bin/altool` 别名指向兄弟 SharedFrameworks，因越出范围被拒绝。因此选中的目录清单改覆盖外层 `Xcode.app/Contents`，directory v3 检查不变；`DEVELOPER_DIR` 仍指 Developer，`CHRONO_XCODE_CONTENTS` 选择外层清单。当前本机 runner 和 diagnostics 的构建政策从原清单选择 `.chrono-harness/inputs/local-xcode-build.json`：声明的链接工具、四个发行库、clang 21 资源及别名，以及发行／工具链 metadata。文件摘要和精确父目录子项名不变。移动 SDK 和图形应用内容不属于此构建子集；完整 macOS SDK 仍单独绑定。[Cargo 说明](cargo-projects.md)记录了依赖审计和政策边界。SDK、Developer、配置、运行时范围仍明确。
 
 原拒绝获取和后续成功结果分别保留。生成 Rust、SDK、Xcode 清单是登记状态模块下的必需原输入，摘要在所选政策中；只有来源声明，不能提供或证明这些字节。
