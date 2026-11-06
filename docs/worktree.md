@@ -1480,8 +1480,10 @@ CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式�
 ### Prospective fixture custody and inventory observations
 
 The disk-capacity candidate binds each registered producer to its coordinator,
-committed cleanup policy and exact output declarations. Ordinary allocation and
-the declared `operations` run a bounded recovery page. Producer-written records
+committed cleanup policy and exact output declarations. Ordinary allocation,
+the declared `operations` and explicit `maintain` run the same bounded recovery
+page. Repeated maintenance resumes its durable cursor rather than traversing all
+historical allocations in one invocation. Producer-written records
 use sixteen SHA-256 partitions and a durable partition/lexical cursor; total
 history no longer has to fit one record snapshot. Active or corrupt rows preserve
 their original state while later rows and partitions advance. Unvisited ownership

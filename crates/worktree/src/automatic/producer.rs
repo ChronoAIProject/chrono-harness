@@ -1885,7 +1885,7 @@ impl ProducerPolicy {
         r: &mut Runner,
         report: &mut Value,
     ) -> Result<(), String> {
-        self.drain_selected(inputs, r, report, None, false)
+        self.drain_selected(inputs, r, report, None, true)
     }
 
     pub(super) fn drain_selected(
