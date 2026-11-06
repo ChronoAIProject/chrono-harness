@@ -502,7 +502,9 @@ Theorem 6 的派生结论是：给定任意顶点类型、两端有向关系及�
 
 相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。
 
-没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
+上述外部数学模型不构成 Rust 相对模型的机械精化，也没有证明真实输入登记完整或任意判官确定性。
+
+实际图内核现由同源 Verus 实现类型比较、两端并集及来源、精确名称和槽位索引、FIFO 首次发现与最短前驱、稀疏前驱树、有限原因链、传播行投影及有序原因集合。`graph::closure` 直接消费这些结果；原因集合的成员、新增／重复、长度、克隆和归一化均保全完整字节身份。外层逐 seed 调用、节点／边与原因关联、seed-ID 映射、JSON／诊断适配、测试选择及完整 SPEC 对应仍待证明，范围见 [Verus 实施说明](docs/verus.md)。
 
 ### 5.2 按实际消费者重构依赖
 
@@ -1109,3 +1111,10 @@ Git main 的已登记历史可重建产物可经同一生命周期所有者 `mig
 
 
 当前独立工作树的生命周期登记按物理工作树地址分别存储和互斥，不得使用跨工作树的可变成员账本或全局准入独占锁。一个工作树的登记占用、损坏或清理失败只阻断该目标及显式依赖，维护继续处理可用的独立目标。普通 start／reconstruct／use／check／bootstrap／finish 只维护本目标，不把其他工作树或 fixture producer 的清理作为前置；跨目标回收使用显式 maintain，继续处理可用的独立目标。共享执行程序的替换须排除其全部实际使用者；普通操作对该程序持共享保护。当前登记的历史格式不构成兼容义务，切换须保护并迁移仍在使用的原状态。详见 docs/worktree.md。
+
+## Verus 实施要求
+
+所有 SPEC、仓内决策和状态逻辑必须使用 Verus 并完成证明；只允许明确列出的外部接口假设。
+实施按可独立验收的小批次推进，未迁移义务必须明确保留。当前实际 runner 的 OID、CI 单元 ID
+及相对词法路径判断已使用同源 Verus，执行结果与规格充要相等，且循环终止；
+其他逻辑、完整 SPEC 对应与全仓强制覆盖尚未完成。详见 [Verus 实施范围](docs/verus.md)。

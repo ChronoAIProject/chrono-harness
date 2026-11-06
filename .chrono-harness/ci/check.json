@@ -17,7 +17,11 @@
       "chrono-inputs": ".chrono-harness/bin/chrono-inputs",
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
       "python3": "/usr/bin/python3",
-      "rustup": "rustup"
+      "rustup": "rustup",
+      "verus": ".chrono-harness/bin/verus/verus",
+      "curl": "/usr/bin/curl",
+      "shasum": "/usr/bin/shasum",
+      "tar": "/usr/bin/tar"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -390,6 +394,11 @@
           "evidence": {
             "test": "test:host-bootstrap-tests",
             "operation": "host.bootstrap-real-consumer"
+          },
+          "preparation": {
+            "operation": "host.bootstrap-unit",
+            "config": ".chrono-harness/ci/bootstrap-unit.json",
+            "verifier": "host.bootstrap-shared-verify-core"
           }
         }
       ]
