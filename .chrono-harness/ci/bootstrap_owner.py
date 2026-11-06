@@ -1,8 +1,8 @@
-"""Bootstrap construction and producer qualification under the worktree owner.
+"""Bootstrap construction and original qualification, under the worktree owner.
 
 This module never interprets a lifecycle ledger or acquires a lease. The worktree
 owner supplies construction SH and keeps its descriptors alive through this
-module's child processes. Rust owns exclusive byte publication and adoption.
+module's child processes. Rust owns stage validation, byte publication and adoption.
 """
 import json
 import os

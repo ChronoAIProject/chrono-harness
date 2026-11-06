@@ -1,4 +1,4 @@
-"""Behavioral checks for construction and producer data; deployment tests are Rust-owned."""
+"""Behavioral checks for bootstrap qualification and owner phase consumers."""
 import json
 import hashlib
 import os
@@ -24,7 +24,7 @@ def retained_process(stdout=b"", stderr=b"", **metadata):
     return process
 
 
-class OwnerConstruction(unittest.TestCase):
+class OwnerPhases(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix="bootstrap-owner-")
         self.addCleanup(self.directory.cleanup)
@@ -38,10 +38,6 @@ class OwnerConstruction(unittest.TestCase):
         self.staged = self.selected.parent / "owner-stages/one/chrono-worktree"
         self.staged.parent.mkdir(parents=True)
         self.staged.write_bytes(b"source-built correction")
-        self.record = {"selected": ".chrono-harness/bin/chrono-worktree",
-                       "previous": owner.file_binding(self.selected),
-                       "staged": dict(owner.file_binding(self.staged),
-                                      path=self.staged.relative_to(self.root).as_posix())}
 
     def test_construction_requires_original_capabilities(self):
         with mock.patch.object(bootstrap, "PASS_FDS", ()):
@@ -194,21 +190,16 @@ class ProducerSource(unittest.TestCase):
             bootstrap.main()
         original = fixture.root / profile["report_path"]
         stage = json.loads(original.read_bytes())
-        # Explicit publication-reader fixture. This supplies fixed input data;
-        # the Rust deployment suite exercises actual publication and recovery.
-        record = stage["owner_stage"]
-        staged = fixture.root / record["staged"]["path"]
-        os.link(selected, staged.parent / "previous-owner")
-        replacement = staged.parent / "reader-fixture-owner"
-        replacement.write_bytes(staged.read_bytes())
-        os.replace(replacement, selected)
-        installed = owner.file_binding(selected)
-        publication = {"schema": "chrono-bootstrap-owner-publication/v1", "stage": record,
-                       "installed": installed, "adoption": "not-claimed", "task_completion": "not-claimed"}
-        intent = {"schema": "chrono-bootstrap-owner-publication-intent/v1", "stage": record,
-                  "replacement": installed}
-        host.write_json(staged.parent / "publication-intent.json", intent)
-        host.write_json(staged.parent / "publication-result.json", publication)
+        # Synthetic external publication inputs test this Python reader only.
+        # Real byte production, inode retention and recovery are Rust CLI tests.
+        staged = fixture.root / stage["owner_stage"]["staged"]["path"]
+        selected.rename(staged.parent / "previous-owner")
+        shutil.copyfile(staged, selected)
+        layout = json.loads((Path(__file__).parent / "fixtures/owner-publication.json").read_bytes())
+        publication = dict(layout["result"], stage=stage["owner_stage"], installed=owner.file_binding(selected))
+        intent = dict(layout["intent"], stage=stage["owner_stage"], replacement=publication["installed"])
+        owner.shared.write_new(staged.parent / "publication-intent.json", owner.shared.encode(intent))
+        owner.shared.write_new(staged.parent / "publication-result.json", owner.shared.encode(publication))
         adoption = {"schema": "chrono-worktree-owner-adoption/v1", "source_commit": stage["source"]["commit"],
                     "stage_result": profile["report_path"], "stage_sha256": owner.shared.digest(original.read_bytes()),
                     "installed": publication["installed"], "original_owner": stage["owner_stage"]["previous"],
