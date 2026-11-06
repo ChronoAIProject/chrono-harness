@@ -578,10 +578,20 @@ members, refuse fresh allocations on observed excess, and recover after the
 original consumer reduces its bytes. Independent producer IO releases the
 coordinator's unrelated metadata exclusion; an actual concurrent managed use
 retains its enrollment and advances its generation after reload (217.60 test
-seconds / 275.11 managed seconds at candidate `4ee29587`). This is checkpoint
-admission, not a filesystem quota or an aggregate producer-directory/project
-capacity bound. The latter still needs implementation at the coarse directory
-owner; per-allocation limits alone do not prevent aggregate accumulation.
+seconds / 275.11 managed seconds at candidate `4ee29587`). The existing owner now
+also accepts `capacity.max_directory_bytes`: allocation, controlled copy/capture
+admission and checkpoints measure the declared producer directory, including
+sibling allocations, shared inputs and metadata. Logical bytes and observed
+allocated blocks must both fit the limit. This reuses the bounded tree walk;
+incomplete measurements refuse production without creating a new allocation or
+per-file cleanup records. Eleven direct cases passed at `3c14557b` (335.87 test
+seconds / 410.39 managed seconds), including individually compliant siblings
+whose sum exceeds the directory budget, recovery after reducing owned bytes,
+external symlinks and refusal on unknown aggregate usage. Source bootstrap and
+both affected format checks passed. The option is not yet selected or migrated
+in the real host's producer contexts; its whole-directory production cost and
+main-coordinator adoption remain unverified. This is admission/checkpoint
+enforcement, without a concurrent reservation or strict filesystem quota.
 The candidate host selects the five temporary test producers and has adopted
 four existing producer contexts; nine exact historical directories transferred
 through the current custodian entry are now physically absent. Historical shared
