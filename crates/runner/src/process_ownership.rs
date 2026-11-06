@@ -14,9 +14,9 @@ use std::{
 };
 const TREE_FD: i32 = 198;
 const CONTEXT_FD: i32 = 199;
-// V5 also requires lifecycle wake hints. An older observer cannot provide the
-// blocking wait contract, even though the shared slot layout is unchanged.
-const MAGIC: u64 = 0x4348524f4e4f5035;
+// V6 distinguishes kernel exit from reaping. Coupled nested engines must
+// agree on completion before an interrupted launcher can release its slot.
+const MAGIC: u64 = 0x4348524f4e4f5036;
 const OBSERVER_FD: i32 = 200;
 // Private copies must not alias the fixed inherited transport descriptors.
 pub(crate) const PRIVATE_FD_MIN: i32 = 202;
@@ -166,6 +166,7 @@ struct Slot {
     parent: AtomicUsize,
     generation: AtomicUsize,
     terminal: AtomicBool,
+    reaped: AtomicBool,
     terminal_observed_ns: AtomicU64,
     launcher_terminal: AtomicBool,
 }
@@ -304,6 +305,7 @@ impl Tree {
                     parent: AtomicUsize::new(CAPACITY),
                     generation: AtomicUsize::new(0),
                     terminal: AtomicBool::new(false),
+                    reaped: AtomicBool::new(false),
                     terminal_observed_ns: AtomicU64::new(0),
                     launcher_terminal: AtomicBool::new(false),
                 }),
@@ -491,6 +493,7 @@ impl Launch {
             Ordering::Release,
         );
         slot.terminal.store(false, Ordering::Release);
+        slot.reaped.store(false, Ordering::Release);
         slot.terminal_observed_ns.store(0, Ordering::Release);
         slot.launcher_terminal.store(false, Ordering::Release);
         slot.cancelled.store(false, Ordering::Release);
@@ -686,6 +689,7 @@ impl Launch {
                     "parent_slot":(parent < CAPACITY).then_some(parent),
                     "child_pid":slot.pid.load(Ordering::Acquire),
                     "terminal":slot.terminal.load(Ordering::Acquire),
+                    "reaped":slot.reaped.load(Ordering::Acquire),
                     "terminal_observed_ns":slot.terminal_observed_ns.load(Ordering::Acquire),
                     "launcher_terminal":slot.launcher_terminal.load(Ordering::Acquire),
                     "cancelled":slot.cancelled.load(Ordering::Acquire),
@@ -699,6 +703,7 @@ impl Launch {
                 "generation":slot.generation.load(Ordering::Acquire),
                 "cancelled":slot.cancelled.load(Ordering::Acquire),
                 "terminal":slot.terminal.load(Ordering::Acquire),
+                "reaped":slot.reaped.load(Ordering::Acquire),
             })
         });
         serde_json::json!({
@@ -708,6 +713,7 @@ impl Launch {
             "state":slot.state.load(Ordering::Acquire),
             "child_pid":slot.pid.load(Ordering::Acquire),
             "terminal":slot.terminal.load(Ordering::Acquire),
+            "reaped":slot.reaped.load(Ordering::Acquire),
             "terminal_observed_ns":slot.terminal_observed_ns.load(Ordering::Acquire),
             "observed_at_ns":monotonic_ns(),
             "launcher_terminal":slot.launcher_terminal.load(Ordering::Acquire),
@@ -754,32 +760,8 @@ impl Launch {
         // nested launches, including those waiting with no output activity.
         notify(self.tree.registration.as_raw_fd());
         let start = Instant::now();
-        let mut abandoned = Vec::new();
+        let mut forced = false;
         loop {
-            // Keep the existing one-second cleanup allowance. If an interrupted
-            // launcher still has a live child halfway through it, terminate that
-            // explicit group, then require its kernel exit acknowledgement in
-            // the remaining allowance. That abandoned-live-child outcome stays
-            // a failure even when cleanup establishes terminal completion.
-            if start.elapsed() >= Duration::from_millis(500) {
-                for (i, slot) in self.tree.slots().iter().enumerate() {
-                    if i != self.index
-                        && slot.state.load(Ordering::Acquire) == 2
-                        && self.tree.descendant(i, self.index)
-                        && slot.launcher_terminal.load(Ordering::Acquire)
-                        && !slot.terminal.load(Ordering::Acquire)
-                        && !abandoned.contains(&i)
-                    {
-                        abandoned.push(i);
-                        let pid = slot.pid.load(Ordering::Acquire);
-                        if pid > 0 {
-                            unsafe {
-                                libc::kill(-pid, libc::SIGKILL);
-                            }
-                        }
-                    }
-                }
-            }
             let descendants: Vec<_> = self
                 .tree
                 .slots()
@@ -798,17 +780,33 @@ impl Launch {
                 .iter()
                 .any(|s| s.state.load(Ordering::Acquire) == 1);
             if descendants.is_empty() && !initializing {
-                return abandoned.is_empty();
+                return !forced;
             }
-            if start.elapsed() >= Duration::from_secs(1) {
-                self.acknowledged.store(false, Ordering::Release);
-                for pid in descendants {
+            // Leave the second half of the existing one-second allowance for
+            // kernel completion. A suspended launcher cannot reap its child;
+            // terminate the known launch groups together so its child can be
+            // reparented and reaped. Forced cleanup remains a failure.
+            if !forced && !descendants.is_empty() && start.elapsed() >= Duration::from_millis(500) {
+                forced = true;
+                let slot = &self.tree.slots()[self.index];
+                if !slot.terminal.load(Ordering::Acquire) {
+                    let pid = slot.pid.load(Ordering::Acquire);
                     if pid > 0 {
                         unsafe {
                             libc::kill(-pid, libc::SIGKILL);
                         }
                     }
                 }
+                for pid in &descendants {
+                    if *pid > 0 {
+                        unsafe {
+                            libc::kill(-*pid, libc::SIGKILL);
+                        }
+                    }
+                }
+            }
+            if start.elapsed() >= Duration::from_secs(1) {
+                self.acknowledged.store(false, Ordering::Release);
                 return false;
             }
             let next = if start.elapsed() < Duration::from_millis(500) {
@@ -954,12 +952,14 @@ impl ExitObserver {
                         slot.state.load(Ordering::Acquire) != 0
                             && slot.generation.load(Ordering::Acquire) == *cookie / (CAPACITY * 2)
                     });
-                    identities.completed(|cookie| {
+                    identities.completed(|cookie, reaped| {
                         let index = (cookie / 2) % CAPACITY;
                         let generation = cookie / (CAPACITY * 2);
                         if shared.slots[index].generation.load(Ordering::Acquire) == generation {
                             changed = true;
-                            if cookie % 2 == 0 {
+                            if cookie % 2 == 0 && reaped {
+                                shared.slots[index].reaped.store(true, Ordering::Release);
+                            } else if cookie % 2 == 0 {
                                 if let Some(observed) = monotonic_ns() {
                                     shared.slots[index]
                                         .terminal_observed_ns
@@ -988,6 +988,7 @@ impl ExitObserver {
                             }
                             if slot.state.load(Ordering::Acquire) == 2
                                 && slot.terminal.load(Ordering::Acquire)
+                                && slot.reaped.load(Ordering::Acquire)
                                 && slot.launcher_terminal.load(Ordering::Acquire)
                                 && !shared.slots.iter().enumerate().any(|(child, child_slot)| {
                                     child != index
@@ -1140,7 +1141,7 @@ fn register_exit(
 }
 
 #[cfg(target_os = "macos")]
-struct ExitIdentities(Vec<(File, usize)>);
+struct ExitIdentities(Vec<(File, usize, i16)>);
 #[cfg(target_os = "macos")]
 impl ExitIdentities {
     fn new() -> Result<Self, ProcessFailure> {
@@ -1158,8 +1159,16 @@ impl ExitIdentities {
         let events = [(pid, cookie), (launcher, cookie + 1)].map(|(pid, cookie)| libc::kevent {
             ident: pid as _,
             filter: libc::EVFILT_PROC,
-            flags: libc::EV_ADD | libc::EV_ONESHOT,
-            fflags: libc::NOTE_EXIT,
+            flags: if cookie % 2 == 0 {
+                libc::EV_ADD
+            } else {
+                libc::EV_ADD | libc::EV_ONESHOT
+            },
+            fflags: if cookie % 2 == 0 {
+                libc::NOTE_EXIT | libc::NOTE_REAP
+            } else {
+                libc::NOTE_EXIT
+            },
             data: 0,
             udata: cookie as *mut libc::c_void,
         });
@@ -1176,21 +1185,21 @@ impl ExitIdentities {
         {
             return Err(std::io::Error::last_os_error());
         }
-        self.0.push((queue, cookie));
+        self.0.push((queue, cookie, libc::POLLIN));
         Ok(())
     }
     fn retain(&mut self, mut active: impl FnMut(usize) -> bool) {
-        self.0.retain(|(_, cookie)| active(*cookie));
+        self.0.retain(|(_, cookie, _)| active(*cookie));
     }
-    fn completed(&mut self, mut accept: impl FnMut(usize)) {
+    fn completed(&mut self, mut accept: impl FnMut(usize, bool)) {
         // One kernel readiness query for the declared handles; do not repeatedly
         // query every empty queue while unrelated fixture owners are running.
         let mut ready: Vec<_> = self
             .0
             .iter()
-            .map(|(queue, _)| libc::pollfd {
+            .map(|(queue, _, events)| libc::pollfd {
                 fd: queue.as_raw_fd(),
-                events: libc::POLLIN,
+                events: *events,
                 revents: 0,
             })
             .collect();
@@ -1201,7 +1210,7 @@ impl ExitIdentities {
             tv_sec: 0,
             tv_nsec: 0,
         };
-        for ((queue, _), ready) in self.0.iter().zip(ready) {
+        for ((queue, _, _), ready) in self.0.iter().zip(ready) {
             if ready.revents & libc::POLLIN == 0 {
                 continue;
             }
@@ -1217,26 +1226,35 @@ impl ExitIdentities {
                 )
             };
             for event in events.iter().take(n.max(0) as usize) {
-                if event.flags & libc::EV_ERROR == 0 && event.fflags & libc::NOTE_EXIT != 0 {
-                    accept(event.udata as usize);
+                if event.flags & libc::EV_ERROR != 0 {
+                    continue;
+                }
+                if event.fflags & libc::NOTE_EXIT != 0 {
+                    accept(event.udata as usize, false);
+                }
+                if event.fflags & libc::NOTE_REAP != 0 {
+                    accept(event.udata as usize, true);
                 }
             }
         }
     }
 }
 #[cfg(target_os = "linux")]
-struct ExitIdentities(Vec<(File, usize)>);
+struct ExitIdentities(Vec<(File, usize, i16)>);
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 impl ExitIdentities {
     fn wait(&self, registration: i32) {
-        let mut pending: Vec<_> = std::iter::once(registration)
-            .chain(self.0.iter().map(|(identity, _)| identity.as_raw_fd()))
-            .map(|fd| libc::pollfd {
-                fd,
-                events: libc::POLLIN,
-                revents: 0,
-            })
-            .collect();
+        let mut pending: Vec<_> = std::iter::once(libc::pollfd {
+            fd: registration,
+            events: libc::POLLIN,
+            revents: 0,
+        })
+        .chain(self.0.iter().map(|(identity, _, events)| libc::pollfd {
+            fd: identity.as_raw_fd(),
+            events: *events,
+            revents: 0,
+        }))
+        .collect();
         // Readiness is only a wake hint. completed() still obtains the actual
         // kernel event, checks its identity and records the observation time.
         // Stop, cancellation and slot recycling notify the same registration
@@ -1260,19 +1278,22 @@ impl ExitIdentities {
         };
         let child = open(pid)?;
         let owner = open(launcher)?;
-        self.0.extend([(child, cookie), (owner, cookie + 1)]);
+        self.0.extend([
+            (child, cookie, libc::POLLIN),
+            (owner, cookie + 1, libc::POLLIN),
+        ]);
         Ok(())
     }
     fn retain(&mut self, mut active: impl FnMut(usize) -> bool) {
-        self.0.retain(|(_, cookie)| active(*cookie));
+        self.0.retain(|(_, cookie, _)| active(*cookie));
     }
-    fn completed(&mut self, mut accept: impl FnMut(usize)) {
+    fn completed(&mut self, mut accept: impl FnMut(usize, bool)) {
         let mut ready: Vec<_> = self
             .0
             .iter()
-            .map(|(file, _)| libc::pollfd {
+            .map(|(file, _, events)| libc::pollfd {
                 fd: file.as_raw_fd(),
-                events: libc::POLLIN,
+                events: *events,
                 revents: 0,
             })
             .collect();
@@ -1280,13 +1301,24 @@ impl ExitIdentities {
             return;
         }
         let mut index = 0;
-        self.0.retain(|(_, cookie)| {
-            let terminal = ready[index].revents & libc::POLLIN != 0;
+        self.0.retain_mut(|(_, cookie, interests)| {
+            let events = ready[index].revents;
             index += 1;
+            let terminal = events & libc::POLLIN != 0;
+            let reaped = events & libc::POLLHUP != 0;
             if terminal {
-                accept(*cookie);
+                accept(*cookie, false);
             }
-            !terminal
+            if reaped {
+                accept(*cookie, true);
+            }
+            if *cookie % 2 != 0 {
+                return !terminal;
+            }
+            if terminal {
+                *interests = 0;
+            }
+            !reaped
         });
     }
 }
