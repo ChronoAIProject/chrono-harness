@@ -2,7 +2,7 @@
 
 本仓库的真实消费者是 `chrono-harness check` 及其本地／CI 汇总。它们必须对登记、选择、状态和失败结果给出可复查的语义。普通 Rust 测试只能执行有限样例，不能证明边界、组合和状态转移没有一条未覆盖的分支；因此影响这些结果的逻辑以 Verus 源码为权威，并由 coverage gate 检查证明和生产调用是否相连。
 
-当前首批实现已接入 runner 的三个实际边界：完整 commit OID、CI 单元 ID 和 POSIX 相对路径。`facts::full_oid`、`units::id`、`runner::relative_path` 直接调用同源 `verified_identifiers.rs`／`verified_paths.rs`；独立 Rust 测试通过 Verus 宏检查边界。Verus 的唯一规范入口是 `.chrono-harness/verus.json`；`.chrono-harness/ci/bootstrap-verus.json` 只引用它，`.chrono-harness/ci/verus_bootstrap.py` 下载并校验归档，归档和解压出的工具都属于可重建宿主状态，不入 Git。此批只证明这些局部谓词和调用接线，不证明 JSON 解码、Git／文件系统事实、registration、图选择或其它状态逻辑。
+当前实现已接入 runner 的实际边界：完整 commit OID、CI 单元 ID、POSIX 相对路径，以及 registration／routes 共用的执行资源上限。`facts::full_oid`、`units::id`、`runner::relative_path` 直接调用同源 `verified_identifiers.rs`／`verified_paths.rs`；`judge-registration::Bounds::valid` 与 `judge-routes::Execution::validate` 共同调用 `verified_limits.rs`。独立 Rust 测试通过 Verus 宏检查边界。Verus 的唯一规范入口是 `.chrono-harness/verus.json`；`.chrono-harness/ci/bootstrap-verus.json` 只引用它，`.chrono-harness/ci/verus_bootstrap.py` 下载并校验归档，归档和解压出的工具都属于可重建宿主状态，不入 Git。此批只证明这些局部谓词和调用接线，不证明 JSON 解码、Git／文件系统事实、registration 图选择或其它状态逻辑。
 
 这项要求有明确的终点：如果移除 Verus proof，check 仍可运行，却无法把通过／拒绝／未知绑定到已证明的规范谓词，当前 SPEC 的核心正确性就失去可观察保证。纯 IO、进程运输、Git／CI provider 观察和不改变裁决的 fixture 没有这个终点，不因项目使用 Rust 或存在 Cargo 文件而强行加入 Verus。
 
@@ -27,9 +27,9 @@ Rust、Python、Shell 和 YAML 可以实现外部接口适配。它们必须登�
 
 ## 分批迁移
 
-PR #286 先建立递归必要性链合同，本批将首个 Verus 谓词接入 runner 的真实使用方。Verus 工具固定为 `0.2026.04.24.f8e1704`，proof operation 使用整 crate、`--no-cheating`、`--no-external-by-default` 和编译／依赖输出；宿主 bootstrap 负责摘要校验和安装。coverage 仍是 `proposed`，不伪装当前 `dev` 已完成全仓采用。后续 PR 按真实消费者推进：
+PR #286 先建立递归必要性链合同，后续候选批次把 Verus 谓词接入 runner、registration 和 routes 的真实使用方。Verus 工具固定为 `0.2026.04.24.f8e1704`，proof operation 使用整 crate、`--no-cheating`、`--no-external-by-default` 和编译／依赖输出；宿主 bootstrap 负责摘要校验和安装。coverage 仍是 `proposed`，不伪装当前 `dev` 已完成全仓采用。后续 PR 按真实消费者推进：
 
-1. 固定 Verus 工具和宿主登记，接入一个现役 runner／registration 谓词及其同语言证明测试；
+1. 固定 Verus 工具和宿主登记，接入现役 runner／registration／routes 谓词及其同语言证明测试；
 2. 迁移组合选择、必要性链和状态判定，保留未完成 coverage 的真实失败；
 3. 迁移 CI、bootstrap、生成器和生命周期适配，核对原始输入／输出绑定；
 4. 只有所有受治理规范性对象的 proof root、调用对应、输入边界和适用行为验收闭合后，才评估把 coverage gate 从 `proposed` 切到 `active`。

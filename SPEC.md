@@ -1,7 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前已有 v1 外部判官传输、七个独立判官（registration／filemap／routes／projects／cost／mixed／workflow）、限定范围 CI 和宿主指令生成器。Verus 规范性权威是目标合同，尚未在当前 `dev` 启用；现有 Rust／Python 判官不能因测试通过而冒充已证明。实际范围见 §14、§16 和 docs/spec-coverage.md。
+当前已有 v1 外部判官传输、七个独立判官（registration／filemap／routes／projects／cost／mixed／workflow）、限定范围 CI 和宿主指令生成器。Verus 规范性权威是目标合同；当前候选已把 runner 标识、路径和执行资源上限接入 Verus，但尚未在 `dev` 启用全仓覆盖。现有 Rust／Python 判官不能因测试通过而冒充已证明。实际范围见 §14、§16 和 docs/spec-coverage.md。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
 为便于阅读，本文沿用几个代码术语：

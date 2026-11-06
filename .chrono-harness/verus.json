@@ -37,6 +37,18 @@
       "source": "crates/runner-tests/tests/verified_paths.rs",
       "consumer": "project:runner-tests",
       "operation": "verify.runner-paths-tests"
+    },
+    {
+      "id": "runner-limits",
+      "source": "crates/runner/src/verified_limits.rs",
+      "consumer": "project:runner",
+      "operation": "verify.runner-limits"
+    },
+    {
+      "id": "runner-limits-tests",
+      "source": "crates/runner-tests/tests/verified_limits.rs",
+      "consumer": "project:runner-tests",
+      "operation": "verify.runner-limits-tests"
     }
   ]
 }

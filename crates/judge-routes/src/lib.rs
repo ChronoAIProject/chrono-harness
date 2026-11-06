@@ -1,15 +1,16 @@
 //! Routes owns method planning and comparison with runner-produced observations.
 use chrono_harness::{
-    ProcessResult, facts,
+    facts,
     observation::{self, Tool},
     wire::{self, Finding, Request, Response, Status},
+    ProcessResult,
 };
 use chrono_judge_registration::{
-    Registrations,
     execution::{Method, Plan, Scheduling},
+    Registrations,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -52,9 +53,10 @@ impl Execution {
         for op in &self.operations {
             if !op.predecessors.is_subset(&preceding)
                 || !preceding.insert(op.method.operation.clone())
-                || op.timeout_seconds == 0
-                || op.output_limit_bytes == 0
-                || op.output_limit_bytes > 64 * 1024 * 1024
+                || !chrono_harness::verified_limits::valid_execution_bounds(&[
+                    op.timeout_seconds,
+                    op.output_limit_bytes as u64,
+                ])
             {
                 return Err(
                     "E_EXECUTION_PLAN: duplicate, unordered prerequisite or invalid bound".into(),

@@ -84,6 +84,10 @@ path = "tests/verified_identifiers.rs"
 name = "verified_paths"
 path = "tests/verified_paths.rs"
 
+[[test]]
+name = "verified_limits"
+path = "tests/verified_limits.rs"
+
 [[bin]]
 name = "chrono-test-retention-child"
 path = "tests/support/retention_child.rs"
