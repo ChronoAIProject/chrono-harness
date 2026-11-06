@@ -375,7 +375,7 @@ impl Context {
                 report["producer_objects"] = value!([]);
                 // Object failures remain actual failed rows. They do not veto
                 // unrelated allocations; owner/context failures still do.
-                if let Err(error) = producer.drain_selected(&inputs, r, report, object, true) {
+                if let Err(error) = producer.drain_selected(&inputs, r, report, object) {
                     report["recovery_error"] = value!(error);
                     return Err(report["recovery_error"].as_str().unwrap().into());
                 }

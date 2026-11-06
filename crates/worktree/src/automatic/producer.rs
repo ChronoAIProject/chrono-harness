@@ -1885,7 +1885,7 @@ impl ProducerPolicy {
         r: &mut Runner,
         report: &mut Value,
     ) -> Result<(), String> {
-        self.drain_selected(inputs, r, report, None, true)
+        self.drain_selected(inputs, r, report, None)
     }
 
     pub(super) fn drain_selected(
@@ -1894,7 +1894,6 @@ impl ProducerPolicy {
         r: &mut Runner,
         report: &mut Value,
         selected: Option<&str>,
-        bounded: bool,
     ) -> Result<(), String> {
         let root = &inputs.policy.coordinator_root;
         let directory = self.directory(root)?;
@@ -1908,7 +1907,7 @@ impl ProducerPolicy {
         let mut cursor_guard = None;
         let mut recovery = retirement::Recovery::default();
         let cursor = directory.join("recovery-state");
-        if bounded && selected.is_none() {
+        if selected.is_none() {
             fs::create_dir_all(&cursor).map_err(|e| e.to_string())?;
             cursor_guard = DirectoryGate::available(&cursor)?;
             if cursor_guard.is_none() {
@@ -1931,7 +1930,7 @@ impl ProducerPolicy {
                 recovery.round_started = retirement::now_nanos()?;
             }
         }
-        let pending_mode = bounded && selected.is_none() && !recovery.pending.is_empty();
+        let pending_mode = selected.is_none() && !recovery.pending.is_empty();
         let pending_count = recovery
             .pending
             .len()
@@ -1956,7 +1955,7 @@ impl ProducerPolicy {
                 }
             }
             (objects, errors, String::new(), false)
-        } else if bounded {
+        } else {
             let mut page = (vec![], vec![], String::new(), false);
             for _ in 0..16 {
                 page = opened.record_page(
@@ -1986,14 +1985,11 @@ impl ProducerPolicy {
                 }
             }
             page
-        } else {
-            let (objects, errors) = opened.records()?;
-            (objects, errors, String::new(), false)
         };
         let snapshot_count = objects.len();
         report["producer_recovery_scope"] = value!({"kind":if selected.is_some(){"exact-allocation"}else{"related-producer"},
             "snapshot_records":snapshot_count,"partition":recovery.bucket,"after":recovery.after,
-            "bounded":bounded,"remaining":Value::Null,"unvisited_partitions":"unknown",
+            "bounded":true,"remaining":Value::Null,"unvisited_partitions":"unknown",
             "max_records_per_round":self.capacity.max_records_per_round,"max_millis_per_round":self.capacity.max_millis_per_round});
         let mut visited = 0;
         let registry_id = opened.state.directory_id.clone();
@@ -2008,8 +2004,7 @@ impl ProducerPolicy {
         }
         let mut originals = BTreeMap::new();
         for snapshot in &objects {
-            if bounded
-                && visited > 0
+            if visited > 0
                 && (visited >= self.capacity.max_records_per_round
                     || began.elapsed().as_millis() >= self.capacity.max_millis_per_round as u128)
             {
