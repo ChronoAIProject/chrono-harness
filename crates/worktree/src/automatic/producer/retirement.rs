@@ -26,6 +26,32 @@ impl Recovery {
         Ok(())
     }
 }
+
+pub(super) fn prioritize(directory: &Path, object: &str) -> Result<(), String> {
+    Store::record_name(object)?;
+    let cursor = no_symlink_parents(directory, "recovery-state")?;
+    fs::create_dir_all(&cursor).map_err(|e| e.to_string())?;
+    let guard = DirectoryGate::available(&cursor)?.ok_or("producer recovery scheduling busy")?;
+    let path = no_symlink_parents(&cursor, "cursor.json")?;
+    let mut recovery: Recovery = match fs::read(&path) {
+        Ok(bytes) if bytes.len() <= 8 * 1024 * 1024 => decode(&bytes)?,
+        Ok(_) => return Err("producer recovery scheduling metadata exceeds capacity".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Recovery::default(),
+        Err(error) => return Err(error.to_string()),
+    };
+    recovery.validate()?;
+    recovery.pending.retain(|name| name != object);
+    recovery.pending.insert(0, object.into());
+    recovery.validate()?;
+    guard.stable()?;
+    write_bytes_staged(
+        &path,
+        &serde_json::to_vec(&recovery).map_err(|e| e.to_string())?,
+        false,
+        directory,
+    )
+}
+
 pub(super) fn metadata_name(object: &str) -> String {
     format!("producer-metadata/{}", sha256(object.as_bytes()))
 }

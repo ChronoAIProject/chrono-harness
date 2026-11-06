@@ -829,6 +829,9 @@ impl Manager {
                         plan.reason, custody.path
                     ));
                     store.save(0)?;
+                    if selected.adopt_directory {
+                        retirement::prioritize(&directory, &selected.allocation)?;
+                    }
                 }
                 Ok(())
             })();
