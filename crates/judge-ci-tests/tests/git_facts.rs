@@ -491,7 +491,7 @@ fn scoped_v2_bound_reader_preserves_checkout_and_index_guards() {
 #[test]
 fn scoped_v2_post_execution_rechecks_with_bound_reader() {
     let h = BoundHost::new("pass");
-    h.host.write("check.sh", "printf changed > src.txt\n");
+    h.host.write("check.case", "changed-input\n");
     let candidate = h.host.commit();
     let result = h.host.check(&h.base, &candidate);
     fail(&result, "dirty tracked");

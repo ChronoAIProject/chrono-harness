@@ -5,6 +5,12 @@ edition = "2024"
 publish = false
 autotests = false
 
+[[bin]]
+name = "chrono-test-cargo-compiler"
+path = "tests/support/compiler.rs"
+test = false
+bench = false
+
 [dev-dependencies]
 chrono-worktree = { path = "../worktree" }
 chrono-inputs = { path = "../inputs" }

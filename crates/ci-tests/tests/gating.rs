@@ -475,6 +475,40 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
                     .len(),
                 d["required_units"].as_array().unwrap().len()
             );
+            let gather: Value = serde_json::from_slice(
+                &fs::read(
+                    h.host
+                        .root
+                        .join(".chrono-harness/state/collection/gather.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let calls = gather["processes"].as_array().unwrap();
+            let requests =
+                |endpoint: &str| calls.iter().filter(|p| p["argv"][2] == endpoint).count();
+            let selected = !d["required_units"].as_array().unwrap().is_empty();
+            assert_eq!(
+                requests("repos/owner/host/actions/runs/101"),
+                if selected { 2 } else { 1 }
+            );
+            assert_eq!(
+                requests("repos/owner/host/actions/runs/101/jobs?filter=all&per_page=100"),
+                1
+            );
+            assert_eq!(
+                requests("repos/owner/host/actions/runs/101/artifacts?per_page=100"),
+                usize::from(selected)
+            );
+            assert_eq!(
+                calls
+                    .iter()
+                    .filter(|p| p["argv"][2]
+                        .as_str()
+                        .is_some_and(|a| a.contains("/contents/")))
+                    .count(),
+                usize::from(selected)
+            );
         }
         for (id, before) in ["a", "b"].iter().zip(counts) {
             assert_eq!(
@@ -494,6 +528,86 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
         assert!(!calls.contains("fixture-parent-secret"));
         if paths.len() == 1 {
             assert!(!calls.contains("chrono-unit-beta"));
+        }
+    }
+}
+
+#[test]
+fn shared_parent_observation_checks_every_artifact_and_final_attempt_before_publication() {
+    for mode in [
+        "artifact-missing-last",
+        "artifact-misbound-last",
+        "artifact-ambiguous-last",
+        "changed-attempt-after-downloads",
+    ] {
+        let mut h = GatedHost::new();
+        h.change(&["a.txt", "b.txt"]);
+        let d = h.detection();
+        h.units(&d);
+        h.mock(&d, mode);
+        let out = h
+            .command(&["check", "--collect"], &d, &needs(&h, &d))
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "accepted {mode}");
+        let report: Value = serde_json::from_slice(
+            &fs::read(
+                h.host
+                    .root
+                    .join(".chrono-harness/state/collection/gather.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(report["result"].is_null(), "{mode}");
+        assert!(
+            !h.host
+                .root
+                .join(".chrono-harness/state/collection/manifest.json")
+                .exists()
+        );
+        let processes = report["processes"].as_array().unwrap();
+        let downloads: Vec<_> = processes.iter().filter(|p| p["argv"][1] == "run").collect();
+        assert_eq!(
+            downloads.len(),
+            if mode == "changed-attempt-after-downloads" {
+                2
+            } else {
+                1
+            },
+            "{mode}: {report}"
+        );
+        assert!(
+            report["error"].as_str().unwrap().contains(
+                if mode == "changed-attempt-after-downloads" {
+                    "parent run/repository/event/source/attempt mismatch"
+                } else {
+                    "binding differs"
+                }
+            ),
+            "{mode}: {report}"
+        );
+        for download in downloads {
+            let argv = download["argv"].as_array().unwrap();
+            let index = argv.iter().position(|a| a == "--dir").unwrap();
+            let directory = h.host.root.join(argv[index + 1].as_str().unwrap());
+            let name = argv[argv.iter().position(|a| a == "--name").unwrap() + 1]
+                .as_str()
+                .unwrap();
+            let unit = name
+                .strip_prefix("chrono-unit-")
+                .unwrap()
+                .split('-')
+                .next()
+                .unwrap();
+            assert_eq!(
+                fs::read(directory.join("check.json")).unwrap(),
+                fs::read(h.host.root.join(format!(
+                    ".chrono-harness/state/mock-artifacts/{unit}/check.json"
+                )))
+                .unwrap(),
+                "{mode}: original {unit} report changed"
+            );
         }
     }
 }
@@ -1978,6 +2092,7 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
         "artifact-missing",
         "artifact-misbound",
         "artifact-deadline",
+        "final-parent-deadline",
         "artifact-stdout",
         "artifact-stderr",
     ] {
@@ -1987,10 +2102,10 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
             .len();
         if matches!(
             mode,
-            "artifact-deadline" | "artifact-stdout" | "artifact-stderr"
+            "artifact-deadline" | "final-parent-deadline" | "artifact-stdout" | "artifact-stderr"
         ) {
             h.host.modify(PROVIDER, |c| {
-                if mode == "artifact-deadline" {
+                if matches!(mode, "artifact-deadline" | "final-parent-deadline") {
                     c["gather"]["timeout_seconds"] = json!(2);
                 }
                 if mode == "artifact-stdout" {
@@ -2036,7 +2151,7 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
                     .contains("binding differs")
             );
             assert!(!processes.iter().any(|p| p["argv"][1] == "run"));
-        } else if mode == "artifact-deadline" {
+        } else if matches!(mode, "artifact-deadline" | "final-parent-deadline") {
             // Metadata, download and source checks share one deadline. A slow
             // earlier phase must reject too; reaching the source is not promised.
             assert_eq!(

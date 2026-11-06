@@ -2458,17 +2458,6 @@
             ".chrono-harness/state/inputs/provision-native.json"
           ]
         },
-        "provision_isolated": {
-          "operation": "inputs.provision-isolated",
-          "tool": "chrono-worktree",
-          "argv": [
-            "use",
-            "--operation",
-            "inputs.produce-admit-isolated",
-            "--path",
-            "."
-          ]
-        },
         "observe_macos": {
           "operation": "inputs.observe-macos",
           "tool": "chrono-inputs",
@@ -2493,19 +2482,6 @@
             ".chrono-harness/inputs/linux-observation.json",
             "--output",
             ".chrono-harness/state/inputs/observe-linux.json"
-          ]
-        },
-        "provision_isolated_body": {
-          "operation": "inputs.produce-admit-isolated",
-          "tool": "chrono-inputs",
-          "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/isolated-production.json",
-            "--output",
-            ".chrono-harness/state/isolated-rust/production.json"
           ]
         },
         "acquire_macos": {
@@ -2571,6 +2547,30 @@
             ".chrono-harness/inputs/diagnostics-observation.json",
             "--output",
             ".chrono-harness/state/diagnostics-native/observation.json"
+          ]
+        },
+        "prepare_runner": {
+          "operation": "inputs.prepare-runner",
+          "tool": "chrono-worktree",
+          "argv": [
+            "use",
+            "--operation",
+            "inputs.prepare-runner-body",
+            "--path",
+            "."
+          ]
+        },
+        "prepare_runner_body": {
+          "operation": "inputs.prepare-runner-body",
+          "tool": "chrono-inputs",
+          "argv": [
+            "observe",
+            "--host-root",
+            ".",
+            "--manifest",
+            ".chrono-harness/inputs/runner-preparation.json",
+            "--output",
+            ".chrono-harness/state/runner-preparation/observation.json"
           ]
         }
       },
@@ -3056,23 +3056,6 @@
             "crates/judge-cargo-tests/Cargo.toml"
           ]
         },
-        "observe_isolated": {
-          "operation": "test.judge-cargo-isolated-observation",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml",
-            "--test",
-            "inputs",
-            "--",
-            "--ignored",
-            "--exact",
-            "isolated_production_within_joinable_observation_window",
-            "--nocapture"
-          ]
-        },
         "observe_guard": {
           "operation": "test.judge-cargo-guard-observation",
           "tool": "cargo",
@@ -3086,7 +3069,24 @@
             "--",
             "--ignored",
             "--exact",
-            "isolated_guard_within_joinable_observation_window",
+            "runner_guard_within_joinable_observation_window",
+            "--nocapture"
+          ]
+        },
+        "observe_runner_preparation": {
+          "operation": "test.judge-cargo-runner-preparation-observation",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml",
+            "--test",
+            "inputs",
+            "--",
+            "--ignored",
+            "--exact",
+            "runner_preparation_within_joinable_observation_window",
             "--nocapture"
           ]
         }
@@ -4193,89 +4193,6 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "aggregate"
-          ]
-        },
-        "isolated": {
-          "operation": "host.bootstrap-isolated",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-isolated.json"
-          ]
-        },
-        "isolated-remove-components": {
-          "operation": "host.bootstrap-isolated-remove-components",
-          "tool": "rustup",
-          "argv": [
-            "component",
-            "remove",
-            "--toolchain",
-            "1.95.0",
-            "cargo",
-            "rust-docs",
-            "rust-std",
-            "rustfmt-preview",
-            "rustc"
-          ]
-        },
-        "isolated-add-cargo": {
-          "operation": "host.bootstrap-isolated-add-cargo",
-          "tool": "rustup",
-          "argv": [
-            "component",
-            "add",
-            "--toolchain",
-            "1.95.0",
-            "cargo"
-          ]
-        },
-        "isolated-add-rust-docs": {
-          "operation": "host.bootstrap-isolated-add-rust-docs",
-          "tool": "rustup",
-          "argv": [
-            "component",
-            "add",
-            "--toolchain",
-            "1.95.0",
-            "rust-docs"
-          ]
-        },
-        "isolated-add-rust-std": {
-          "operation": "host.bootstrap-isolated-add-rust-std",
-          "tool": "rustup",
-          "argv": [
-            "component",
-            "add",
-            "--toolchain",
-            "1.95.0",
-            "rust-std"
-          ]
-        },
-        "isolated-add-rustfmt": {
-          "operation": "host.bootstrap-isolated-add-rustfmt",
-          "tool": "rustup",
-          "argv": [
-            "component",
-            "add",
-            "--toolchain",
-            "1.95.0",
-            "rustfmt-preview"
-          ]
-        },
-        "isolated-complete-components": {
-          "operation": "host.bootstrap-isolated-complete-components",
-          "tool": "rustup",
-          "argv": [
-            "toolchain",
-            "install",
-            "1.95.0",
-            "--profile",
-            "default",
-            "--component",
-            "cargo,clippy-preview,rust-docs,rust-std,rustc,rustfmt-preview",
-            "--no-self-update"
           ]
         },
         "acquire-macos": {
