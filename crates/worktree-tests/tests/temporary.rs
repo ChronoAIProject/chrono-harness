@@ -62,6 +62,50 @@ fn adopt_directory_cleanup(h: &Host) {
 }
 
 #[test]
+fn directory_cleanup_accounts_all_scratch_and_blocks_fresh_allocations_on_excess() {
+    let h = capacity_host(|_| {});
+    adopt_directory_cleanup(&h);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let mut allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "bounded-")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    let scratch = root.join("unregistered scratch");
+    fs::create_dir(&scratch).unwrap();
+    let bytes = scratch.join("bytes");
+    fs::write(&bytes, b"12345678").unwrap();
+    let usage = allocation.checkpoint().unwrap();
+    assert_eq!(usage["generated_logical_bytes"], 8, "{usage}");
+    assert_eq!(usage["scope"], "owned allocation directory", "{usage}");
+
+    fs::write(&bytes, b"123456789").unwrap();
+    let error = allocation.checkpoint().unwrap_err();
+    assert!(error.contains("capacity unmet"), "{error}");
+    let error = match chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "cannot-bypass-",
+    ) {
+        Ok(_) => panic!("a fresh allocation bypassed an owned directory's excess"),
+        Err(error) => error,
+    };
+    assert!(error.contains("capacity unmet"), "{error}");
+    assert_eq!(fs::read(&bytes).unwrap(), b"123456789");
+
+    fs::write(&bytes, b"12345678").unwrap();
+    assert_eq!(allocation.checkpoint().unwrap()["generated_logical_bytes"], 8);
+    let mut next =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recovered-")
+            .unwrap();
+    next.finish().unwrap();
+    allocation.finish().unwrap();
+    assert!(!root.exists());
+}
+
+#[test]
 fn directory_cleanup_reclaims_synthetic_repository_after_actual_consumers_release() {
     use std::os::unix::fs::symlink;
 
