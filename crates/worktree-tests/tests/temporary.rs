@@ -193,8 +193,10 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
     fs::create_dir_all(store.join("recovery-state")).unwrap();
     fs::write(
         store.join("recovery-state/cursor.json"),
-        serde_json::to_vec(&value!({"bucket":0,"after":"","round_started":1,"pending":[]})).unwrap(),
-    ).unwrap();
+        serde_json::to_vec(&value!({"bucket":0,"after":"","round_started":1,"pending":[]}))
+            .unwrap(),
+    )
+    .unwrap();
     adopt_directory_cleanup(&h);
     let (code, report, error) = h.auto(
         "migrate",
@@ -349,7 +351,11 @@ fn directory_cleanup_keeps_shared_input_until_its_last_directory_releases() {
         fs::copy(&source, &destination).unwrap();
     }
     assert_eq!(originals[0], originals[1]);
-    fs::write(first.path().join("copied.rs"), b"synthetic fixture mutation").unwrap();
+    fs::write(
+        first.path().join("copied.rs"),
+        b"synthetic fixture mutation",
+    )
+    .unwrap();
     let report = first.finish().unwrap();
     assert!(
         !first.path().exists(),
@@ -407,24 +413,47 @@ fn directory_cleanup_reports_disposal_even_when_shared_input_custody_is_missing(
     // A historical allocation may have original bytes but no claim namespace.
     // It cannot establish a new release, yet its owned directory can be gone.
     fs::remove_dir_all(
-        store.join("body-input-claims").join(original.file_stem().unwrap()),
+        store
+            .join("body-input-claims")
+            .join(original.file_stem().unwrap()),
     )
     .unwrap();
     let report = allocation.finish().unwrap();
     assert!(!root.exists(), "owned directory was not disposed: {report}");
-    assert!(record.exists(), "incomplete retirement lost its continuation");
+    assert!(
+        record.exists(),
+        "incomplete retirement lost its continuation"
+    );
     assert_eq!(fs::read(&original).unwrap(), b"required original bytes");
     assert!(!report["recovery_error"].is_null(), "{report}");
-    let row = report["producer_objects"].as_array().unwrap().iter()
-        .find(|row| row["path"].as_str().is_some_and(|p| p.ends_with(root.file_name().unwrap().to_str().unwrap())))
+    let row = report["producer_objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| {
+            row["path"]
+                .as_str()
+                .is_some_and(|p| p.ends_with(root.file_name().unwrap().to_str().unwrap()))
+        })
         .unwrap();
     assert_eq!(row["status"], "failed", "{report}");
     let result = &row["original_retirement"];
-    assert!(result["error"].as_str().unwrap().contains("claim namespace unknown"));
+    assert!(
+        result["error"]
+            .as_str()
+            .unwrap()
+            .contains("claim namespace unknown")
+    );
     assert_eq!(result["physical_absence"], "verified", "{report}");
-    assert!(result["artifact_disposals"].as_array().unwrap().iter()
-        .any(|effect| effect["status"] == "verified-absent" && effect["bytes_before"].as_u64().unwrap() > 0),
-        "actual disposal was lost when shared input release failed: {report}");
+    assert!(
+        result["artifact_disposals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|effect| effect["status"] == "verified-absent"
+                && effect["bytes_before"].as_u64().unwrap() > 0),
+        "actual disposal was lost when shared input release failed: {report}"
+    );
 }
 
 // Re-enter the real producer rather than assuming that one bounded retention

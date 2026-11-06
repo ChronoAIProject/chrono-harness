@@ -611,7 +611,9 @@ fn dispose_owned_directory(
     let allocation = no_symlink_parents(directory, &object.path)?;
     let nested_guards = if allocation.exists() {
         let Some(guards) = body::directory_guards(directory, object)? else {
-            return Ok(value!({"status":"protected","reason":"live nested consumer or unreleased nested diagnostic"}));
+            return Ok(
+                value!({"status":"protected","reason":"live nested consumer or unreleased nested diagnostic"}),
+            );
         };
         guards
     } else {
@@ -737,7 +739,11 @@ fn dispose_owned_directory(
     // A later custody failure must not erase already verified directory effects.
     // Keep its continuation and report the failure alongside the original bytes
     // and footprint receipts; callers still fail the producer's recovery.
-    result["status"] = value!(if completion.is_ok() { "disposed" } else { "failed" });
+    result["status"] = value!(if completion.is_ok() {
+        "disposed"
+    } else {
+        "failed"
+    });
     result["physical_absence"] = value!("verified");
     if let Err(error) = completion {
         result["error"] = value!(error);
@@ -773,10 +779,15 @@ pub(super) fn retire_owned_directory(
     object: &Object,
     lease: &Lease,
 ) -> Result<Value, String> {
-    if !policy.temporary || !policy.disposable_directory || !object.owns_directory()
-        || object.original_release.is_none() || object.consumers.values().any(|c| !c.released)
+    if !policy.temporary
+        || !policy.disposable_directory
+        || !object.owns_directory()
+        || object.original_release.is_none()
+        || object.consumers.values().any(|c| !c.released)
     {
-        return Err("owned directory requires current ownership and actual consumer release".into());
+        return Err(
+            "owned directory requires current ownership and actual consumer release".into(),
+        );
     }
     let mut store = Store::open(directory, &policy.id, false)?;
     store.load(&object.path)?;
