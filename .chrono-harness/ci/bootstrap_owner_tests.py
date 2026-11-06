@@ -1,5 +1,6 @@
 """Behavioral checks for the bootstrap byte owner; lifecycle exclusion is Rust-owned."""
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -7,10 +8,20 @@ from pathlib import Path
 import tempfile
 import unittest
 import sys
+import zlib
 from unittest import mock
 
 import bootstrap
 import bootstrap_owner as owner
+
+
+def retained_process(stdout=b"", stderr=b"", **metadata):
+    process = dict(metadata, encoding="chrono-retained-process/v2")
+    for stream, raw in (("stdout", stdout), ("stderr", stderr)):
+        process[stream + "_zlib_hex"] = zlib.compress(raw, 1).hex()
+        process[stream + "_length"] = len(raw)
+        process[stream + "_sha256"] = hashlib.sha256(raw).hexdigest()
+    return process
 
 
 class OwnerPublication(unittest.TestCase):
@@ -94,8 +105,7 @@ class OwnerPublication(unittest.TestCase):
                        "originals": [{"id": "output-1", "path": path, "identity": "1:2:file"}]}
         report = {"status": "used" if code == 0 else "failed", "report_path": path,
                   "report_consumer": declaration,
-                  "managed_process": {"stdout_bytes": [], "stderr_bytes": [],
-                                      "failure": None, "exit_code": code}}
+                  "managed_process": retained_process(failure=None, exit_code=code)}
         return report
 
     def test_owner_phase_requests_native_consumer_and_retains_exact_handoff(self):
@@ -389,9 +399,9 @@ class ProducerSource(unittest.TestCase):
                         self.assertEqual(owner.shared.digest((directory / "selected-producer.json").read_bytes()),
                                          qualification["sha256"])
                     if name == "construction":
-                        return {"managed_process": {"stdout_bytes": list(
+                        return {"managed_process": retained_process(
                             b'chrono-owner-stage-result {"path":".chrono-harness/state/bootstrap-stage.json",'
-                            b'"sha256":"stage-fixture"}\n')}}
+                            b'"sha256":"stage-fixture"}\n')}
                     if name == "deployment":
                         self.assertEqual(program, staged)
                         selected.write_bytes(staged.read_bytes())

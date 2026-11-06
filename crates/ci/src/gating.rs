@@ -103,20 +103,13 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
     let artifact = unit
         .map(|u| format!("chrono-unit-{u}"))
         .unwrap_or("chrono-collection".into());
-    let rendered = super::render_extended(
+    let body = super::render_job(
         &w,
         path,
         Some(&scope),
-        "",
-        "",
         &artifact,
-        unit.is_none(),
         c.schema == units::FULL_SCHEMA,
     )?;
-    let body = rendered
-        .split_once("  check:\n")
-        .ok_or("unit job section missing")?
-        .1;
     let old_if = "    if: ${{ github.event.deleted != true }}\n";
     let condition = if let Some(unit) = unit {
         format!(
@@ -220,21 +213,7 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
 }
 pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, String>, String> {
     let g = c.job_gating.as_ref().ok_or("job gating missing")?;
-    let collection = super::render_extended(
-        &c.collection,
-        path,
-        Some(&c.scope(None)),
-        "",
-        "",
-        "chrono-collection",
-        true,
-        c.schema == units::FULL_SCHEMA,
-    )?;
-    let prefix = collection
-        .split_once("jobs:\n")
-        .ok_or("jobs missing")?
-        .0
-        .replacen(super::MARKER, MARKER, 1);
+    let prefix = super::render_header(&c.collection, Some(&c.scope(None)), true, MARKER);
     // Replace superseded PR work, while each push keeps its complete before/after
     // obligation. Grouping pushes by branch would discard queued DELTAs.
     let group = scalar(&format!(
@@ -618,7 +597,7 @@ pub(crate) fn production(args: &[String]) -> Result<String, String> {
     if c.job_gating.is_none() {
         return Err("production requires job gating".into());
     }
-    let (_, units) = units::profile(root, &c)?;
+    let units = units::profile(root, &c)?.units;
     let w = c.workflow(Some(unit))?;
     let context_raw =
         fs::read(no_symlink_parents(root, &w.context_path)?).map_err(|e| e.to_string())?;

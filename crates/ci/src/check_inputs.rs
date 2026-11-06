@@ -136,7 +136,7 @@ fn local_manifest(
     c: &units::Config,
     p: &PreparedCheck,
 ) -> Result<Value, String> {
-    let (_, registered) = units::profile(&req.host_root, c)?;
+    let registered = units::profile(&req.host_root, c)?.units;
     let full = c.schema == units::FULL_SCHEMA;
     let pins = if full {
         super::full::executable_pins(&req.host_root, &req.profile, &c.collection.runner)?
@@ -149,12 +149,12 @@ fn local_manifest(
         )?;
         json!({"runner_sha256":file_identity(&no_symlink_parents(&req.host_root,&c.collection.runner)?)?.0,"judge_sha256":file_identity(&judge)?.0})
     };
-    let requirements = if full {
+    let (requirements, report_limit) = if full {
         let cfg = chrono_harness::load_selected_config(&req.host_root, &req.profile)?;
         let limit = cfg["execution_units"]["collection_limits"]["report_bytes"]
             .as_u64()
             .ok_or("full report bound")?;
-        chrono_judge_ci::full_collection_requirements_with_inputs(
+        let requirements = chrono_judge_ci::full_collection_requirements_with_inputs(
             &req.host_root,
             &req.profile,
             p,
@@ -183,16 +183,20 @@ fn local_manifest(
                 }
                 Ok(originals)
             },
-        )?
+        )?;
+        (requirements, limit)
     } else {
-        chrono_judge_ci::collection_requirements(
-            &req.host_root,
-            &req.profile,
-            &c.gather.manifest_path,
-            p.base.clone(),
-            p.candidate.clone(),
-            p.initial,
-        )?
+        (
+            chrono_judge_ci::collection_requirements(
+                &req.host_root,
+                &req.profile,
+                &c.gather.manifest_path,
+                p.base.clone(),
+                p.candidate.clone(),
+                p.initial,
+            )?,
+            64 * 1024 * 1024,
+        )
     };
     let required: Vec<String> = serde_json::from_value(requirements["required_units"].clone())
         .map_err(|e| e.to_string())?;
@@ -201,16 +205,9 @@ fn local_manifest(
         let input = registered
             .get(&unit)
             .ok_or("required unit missing provider registration")?;
-        let limit = if full {
-            let cfg = chrono_harness::load_selected_config(&req.host_root, &req.profile)?;
-            cfg["execution_units"]["collection_limits"]["report_bytes"]
-                .as_u64()
-                .ok_or("full report bound")?
-        } else {
-            64 * 1024 * 1024
-        };
-        let raw = chrono_harness::units::read_bounded(&req.host_root, &input.report_path, limit)
-            .map_err(|e| {
+        let raw =
+            chrono_harness::units::read_bounded(&req.host_root, &input.report_path, report_limit)
+                .map_err(|e| {
                 format!(
                     "missing/invalid registered unit report {unit} at {}: {e}",
                     input.report_path
@@ -260,7 +257,7 @@ fn local_manifest(
         .values()
         .map(|u| u.report_path.clone())
         .collect::<Vec<_>>();
-    let (profile, _) = units::profile(&req.host_root, c)?;
+    let profile = units::profile(&req.host_root, c)?;
     chrono_harness::units::validate_collection_paths(
         &c.gather.manifest_path,
         &profile.report_path,

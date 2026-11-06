@@ -2,6 +2,8 @@
 mod short;
 use super::*;
 
+const UNIT_TOOL: &str = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
+
 fn config_value() -> Value {
     let mut common = serde_json::to_value(config()).unwrap();
     common["workflow_path"] = json!(".github/workflows/collection.yml");
@@ -448,21 +450,13 @@ fn consumer_source() -> (tempfile::TempDir, String, String) {
     .unwrap();
     fs::write(root.join("a.txt"), "one").unwrap();
     fs::write(root.join("b.txt"), "one").unwrap();
-    fs::write(
-        root.join("a.sh"),
-        "mkdir -p .chrono-harness/state\nprintf alpha >> .chrono-harness/state/calls-a\n",
-    )
-    .unwrap();
-    fs::write(
-        root.join("b.sh"),
-        "mkdir -p .chrono-harness/state\nprintf beta >> .chrono-harness/state/calls-b\n",
-    )
-    .unwrap();
+    fs::write(root.join("a.case"), "alpha\n").unwrap();
+    fs::write(root.join("b.case"), "beta\n").unwrap();
     let path = ".chrono-harness/ci/check.json";
     let mut check: Value = serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
     check["policy"]["filemap"] = json!(".chrono-harness/FILEMAP.json");
     check["policy"]["projects"] = json!(".chrono-harness/projects.json");
-    check["policy"]["tools"] = json!({"sh":"/bin/sh"});
+    check["policy"]["tools"] = json!({"unit-fixture":UNIT_TOOL});
     check["policy"]["bindings"] = json!({"test:a":["test.a"],"test:b":["test.b"]});
     check["policy"]["artifacts"] = json!([".chrono-harness/state/", ".chrono-harness/bin/"]);
     check["policy"]["required_inputs"] = json!([path]);
@@ -475,16 +469,16 @@ fn consumer_source() -> (tempfile::TempDir, String, String) {
         root,
         ".chrono-harness/projects.json",
         &json!({"schema_version":1,"owners":["host","a","b"],"projects":[
-        {"id":"a","actions":{"execute":{"operation":"test.a","tool":"sh","argv":["a.sh"]}}},
-        {"id":"b","actions":{"execute":{"operation":"test.b","tool":"sh","argv":["b.sh"]}}}],"scripts":[]}),
+        {"id":"a","actions":{"execute":{"operation":"test.a","tool":"unit-fixture","argv":["unit-operation","a.case"]}}},
+        {"id":"b","actions":{"execute":{"operation":"test.b","tool":"unit-fixture","argv":["unit-operation","b.case"]}}}],"scripts":[]}),
     );
     let mut files = vec![];
     for path in [
         ".gitignore",
         "a.txt",
         "b.txt",
-        "a.sh",
-        "b.sh",
+        "a.case",
+        "b.case",
         ".chrono-harness/projects.json",
         ".chrono-harness/FILEMAP.json",
         path,
@@ -494,8 +488,8 @@ fn consumer_source() -> (tempfile::TempDir, String, String) {
         ".github/workflows/collection.yml",
     ] {
         let edges = match path {
-            "a.txt" | "a.sh" => json!([{"kind":"test-execution","to":"test:a"}]),
-            "b.txt" | "b.sh" => json!([{"kind":"test-execution","to":"test:b"}]),
+            "a.txt" | "a.case" => json!([{"kind":"test-execution","to":"test:a"}]),
+            "b.txt" | "b.case" => json!([{"kind":"test-execution","to":"test:b"}]),
             _ => json!([]),
         };
         files.push(json!({"path":path,"owner":"host","surface":"product","cost":"unmeasured","edges":edges}));

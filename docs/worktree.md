@@ -86,6 +86,14 @@ Rust 获取回归可读明确登记的只读 `CHRONO_IMMUTABLE_INPUT_FIXTURE`，
 
 每次已观察尝试在配置 state 目录写唯一 `chrono-worktree-report/v1`，stdout 返回相同 JSON，包含源码身份、基线／tree、分支／目标、开始时间、配置摘要、继承／有效环境、Git 版本及真实子进程 argv、字节、摘要、退出、限制失败。
 
+Git 观察、版本探测、托管命令及其 use 回执复用 runner 的无损
+`chrono-retained-process` 编码：每条流只保存压缩十六进制、原长度及 SHA-256，
+容量边界上的不可压缩流使用现有 v1 十六进制回退，不再同时保存文本和数字字节数组。
+Rust 消费者先用 `full::expand_process` 展开；宿主 bootstrap 用
+`bootstrap.retained_process` 核编码、原长度及摘要后转发原 stdout／stderr。
+没有新增共享缓存或总清单，原进程身份、退出、失败和每流 64 MiB 上限不变。
+这只减少报告中的重复字节表示，不证明总生命周期时间或计费节省。
+
 工具观察／配置接纳前失败，非零诊断且不编造进程回执；观察后 status 为 `created` 或 `failed`，分别退出 0、2。`governance: not-evaluated`、`parity: unestablished`，部分 context 只是后续输入，不是完整检查上下文或集成凭据。
 
 新报告和对应 stdout 用紧凑 JSON，末尾一个换行；历史原件保留原表示和字节。完整进程捕获、字节数组、摘要、退出、上限仍在，避免缩进放大 Git 字节，同时保持存储／stdout 完全一致。
