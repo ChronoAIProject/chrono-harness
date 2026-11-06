@@ -597,7 +597,7 @@ pub(crate) fn production(args: &[String]) -> Result<String, String> {
     if c.job_gating.is_none() {
         return Err("production requires job gating".into());
     }
-    let (_, units) = units::profile(root, &c)?;
+    let units = units::profile(root, &c)?.units;
     let w = c.workflow(Some(unit))?;
     let context_raw =
         fs::read(no_symlink_parents(root, &w.context_path)?).map_err(|e| e.to_string())?;

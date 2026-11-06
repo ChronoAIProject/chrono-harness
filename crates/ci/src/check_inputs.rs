@@ -136,7 +136,7 @@ fn local_manifest(
     c: &units::Config,
     p: &PreparedCheck,
 ) -> Result<Value, String> {
-    let (_, registered) = units::profile(&req.host_root, c)?;
+    let registered = units::profile(&req.host_root, c)?.units;
     let full = c.schema == units::FULL_SCHEMA;
     let pins = if full {
         super::full::executable_pins(&req.host_root, &req.profile, &c.collection.runner)?
@@ -260,7 +260,7 @@ fn local_manifest(
         .values()
         .map(|u| u.report_path.clone())
         .collect::<Vec<_>>();
-    let (profile, _) = units::profile(&req.host_root, c)?;
+    let profile = units::profile(&req.host_root, c)?;
     chrono_harness::units::validate_collection_paths(
         &c.gather.manifest_path,
         &profile.report_path,

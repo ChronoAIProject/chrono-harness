@@ -407,10 +407,7 @@ pub(super) struct Profile {
     pub report_path: String,
     pub judge: Option<chrono_harness::CommandSpec>,
 }
-pub(super) fn profile(
-    root: &Path,
-    c: &Config,
-) -> Result<(Profile, BTreeMap<String, Unit>), String> {
+pub(super) fn profile(root: &Path, c: &Config) -> Result<Profile, String> {
     let raw = chrono_harness::load_selected_config(root, &c.collection.check_config)?;
     let profile = if c.schema == FULL_SCHEMA {
         let block = chrono_harness::units::full_execution_units(&raw)?
@@ -436,11 +433,11 @@ pub(super) fn profile(
             judge: Some(profile.judge),
         }
     };
-    let units = profile.units.clone();
+    let units = &profile.units;
     if units.keys().collect::<Vec<_>>() != c.units.keys().collect::<Vec<_>>() {
         return Err("workflow units differ from check profile assignments".into());
     }
-    for (id, unit) in &units {
+    for (id, unit) in units {
         chrono_harness::units::artifact_path(&unit.report_path)?;
         if !Path::new(&unit.report_path).starts_with(&c.units[id].artifact_directory)
             || chrono_harness::units::overlap(&unit.report_path, &c.units[id].context_path)
@@ -471,7 +468,7 @@ pub(super) fn profile(
             }
         }
     }
-    Ok((profile, units))
+    Ok(profile)
 }
 
 pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>, String> {
@@ -678,7 +675,7 @@ fn prepare_scope_inner(
     load_full_context: bool,
 ) -> Result<Value, String> {
     generate(root, path, c, true)?;
-    let (profile, _) = profile(root, c)?;
+    let profile = profile(root, c)?;
     let w = c.workflow(unit)?;
     let detection = if c.job_gating.is_some() {
         Some(super::gating::native_detection(
