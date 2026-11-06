@@ -98,6 +98,19 @@ fn cloning_the_actual_report_result_preserves_every_field() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn borrowed_registered_ids_preserve_order_duplicates_unicode_nul_and_empty() {
+    let values = vec!["é".to_string(), "a\0b".to_string(), "é".to_string()];
+    let texts = policy::borrow_texts(&values);
+    assert(texts.len() == 3);
+    assert(texts[0]@ == "é"@);
+    assert(texts[1]@ == "a\0b"@);
+    assert(texts[2]@ == "é"@);
+    let empty = Vec::new();
+    let no_texts = policy::borrow_texts(&empty);
+    assert(no_texts.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn actual_report_id_projection_preserves_order_duplicates_unicode_and_nul() {
     let values = vec![
         result("é", Status::Blocked, Some(-7)),
@@ -122,8 +135,10 @@ fn actual_report_coverage_uses_the_original_record_ids() {
         assert("ci.inventory"@.len() != "test"@.len());
         assert("build"@.len() != "test"@.len());
     }
-    let operations = vec!["build"];
-    let unrequired = vec!["test"];
+    let operation_names = vec!["build".to_string()];
+    let unrequired_names = vec!["test".to_string()];
+    let operations = policy::borrow_texts(&operation_names);
+    let unrequired = policy::borrow_texts(&unrequired_names);
     assert(policy::text_values(operations@) =~= seq!["build"@]);
     assert(policy::text_values(unrequired@) =~= seq!["test"@]);
     assert(policy::expected_result_ids(operations@, unrequired@)

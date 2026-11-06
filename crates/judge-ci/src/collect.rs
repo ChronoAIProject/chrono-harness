@@ -459,7 +459,8 @@ pub(super) fn collect(
             .iter()
             .map(|o| o.method.operation.clone())
             .collect();
-        let not_required_ids = not_required.iter().map(String::as_str).collect();
+        let expected_ids = verified_collection::borrow_texts(&expected_ops);
+        let not_required_ids = verified_collection::borrow_texts(&not_required);
         let executed = e["executed"].as_array().ok_or("unit executions missing")?;
         if e["operations"] != object!(expected_ops) || executed.len() != operations.len() {
             return Err("unit execution coverage missing or extra".into());
@@ -495,7 +496,7 @@ pub(super) fn collect(
         if !verified_collection::matches_result_states(&response.results, &not_required_ids)
             || !verified_collection::matches_report_result_ids(
                 &response.results,
-                &expected_ops.iter().map(String::as_str).collect(),
+                &expected_ids,
                 &not_required_ids,
             )
         {

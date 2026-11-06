@@ -199,6 +199,24 @@ pub open spec fn expected_result_ids(
     seq!["ci.inventory"@] + text_values(operations) + text_values(not_required)
 }
 
+/// 借用登记列表，逐项保留原顺序、重复及完整字符串身份。
+pub fn borrow_texts<'a>(values: &'a Vec<String>) -> (texts: Vec<&'a str>)
+    ensures texts.len() == values.len(),
+        forall|i: int| 0 <= i < values.len() ==> (#[trigger] texts[i])@ == values[i]@,
+{
+    let mut texts: Vec<&'a str> = Vec::new();
+    let mut i = 0;
+    while i < values.len()
+        invariant 0 <= i <= values.len(), texts.len() == i,
+            forall|j: int| 0 <= j < i ==> (#[trigger] texts[j])@ == values[j]@,
+        decreases values.len() - i,
+    {
+        texts.push(values[i].as_str());
+        i += 1;
+    }
+    texts
+}
+
 /// 借用真实报告字段，逐项保留原顺序、重复及完整字符串身份。
 pub fn result_ids<'a>(values: &'a Vec<CheckResult>) -> (ids: Vec<&'a str>)
     ensures ids.len() == values.len(),
