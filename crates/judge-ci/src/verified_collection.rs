@@ -199,28 +199,19 @@ pub open spec fn expected_result_ids(
     seq!["ci.inventory"@] + text_values(operations) + text_values(not_required)
 }
 
-pub open spec fn report_ids(values: Seq<CheckResult>) -> Seq<Seq<char>> {
-    values.map(|i: int, value: CheckResult| value.id@)
-}
-
 /// 借用真实报告字段，逐项保留原顺序、重复及完整字符串身份。
 pub fn result_ids<'a>(values: &'a Vec<CheckResult>) -> (ids: Vec<&'a str>)
-    ensures text_values(ids@) == report_ids(values@),
+    ensures ids.len() == values.len(),
+        forall|i: int| 0 <= i < values.len() ==> (#[trigger] ids[i])@ == values[i].id@,
 {
     let mut ids = Vec::new();
     let mut i = 0;
     while i < values.len()
-        invariant 0 <= i <= values.len(),
-            text_values(ids@) == report_ids(values@).take(i as int),
+        invariant 0 <= i <= values.len(), ids.len() == i,
+            forall|j: int| 0 <= j < i ==> (#[trigger] ids[j])@ == values[j].id@,
         decreases values.len() - i,
     {
-        let ghost before = text_values(ids@);
         ids.push(values[i].id.as_str());
-        proof {
-            assert(text_values(ids@) =~= before.push(values@[i as int].id@));
-            assert(report_ids(values@).take(i + 1)
-                =~= report_ids(values@).take(i as int).push(values@[i as int].id@));
-        }
         i += 1;
     }
     ids
@@ -232,24 +223,28 @@ pub open spec fn report_result_membership(
     (forall|i: int| 0 <= i < actual.len() ==>
         character_member(expected, (#[trigger] actual[i]).id@))
         && (forall|i: int| 0 <= i < expected.len() ==>
-            character_member(report_ids(actual), #[trigger] expected[i]))
+            exists|j: int| 0 <= j < actual.len()
+                && (#[trigger] actual[j]).id@ == expected[i])
 }
 
 proof fn report_membership_representation(
     actual: Seq<CheckResult>, ids: Seq<&str>, expected: Seq<Seq<char>>,
 )
-    requires text_values(ids) == report_ids(actual),
+    requires ids.len() == actual.len(),
+        forall|i: int| 0 <= i < actual.len() ==> (#[trigger] ids[i])@ == actual[i].id@,
     ensures result_membership(ids, expected) <==> report_result_membership(actual, expected),
 {
-    assert(ids.len() == actual.len());
     if result_membership(ids, expected) {
         assert forall|i: int| 0 <= i < actual.len() implies
             character_member(expected, (#[trigger] actual[i]).id@) by {
                 assert(actual[i].id@ == ids[i]@);
             }
         assert forall|i: int| 0 <= i < expected.len() implies
-            character_member(report_ids(actual), #[trigger] expected[i]) by {
-                text_member_representation(ids, expected[i]);
+            exists|j: int| 0 <= j < actual.len()
+                && (#[trigger] actual[j]).id@ == expected[i] by {
+                let j = choose|j: int| 0 <= j < ids.len()
+                    && (#[trigger] ids[j])@ == expected[i];
+                assert(actual[j].id@ == expected[i]);
             }
     }
     if report_result_membership(actual, expected) {
@@ -259,7 +254,9 @@ proof fn report_membership_representation(
             }
         assert forall|i: int| 0 <= i < expected.len() implies
             text_member(ids, #[trigger] expected[i]) by {
-                text_member_representation(ids, expected[i]);
+                let j = choose|j: int| 0 <= j < actual.len()
+                    && (#[trigger] actual[j]).id@ == expected[i];
+                assert(ids[j]@ == expected[i]);
             }
     }
 }
