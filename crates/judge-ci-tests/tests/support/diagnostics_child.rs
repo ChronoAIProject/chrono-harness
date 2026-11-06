@@ -2,6 +2,92 @@
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
+fn fixture_operation(path: &str) -> ExitCode {
+    let input = std::fs::read_to_string(path).unwrap();
+    let case = input.trim_end_matches('\n');
+    let state = std::path::Path::new(".chrono-harness/state");
+    match case {
+        "called" | "sleep-2-done" | "zeros-128-done" | "large-invalid-output" => {
+            std::fs::create_dir_all(state).unwrap();
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(state.join("calls"))
+                .unwrap()
+                .write_all(b"called\n")
+                .unwrap();
+            match case {
+                "sleep-2-done" => std::thread::sleep(std::time::Duration::from_secs(2)),
+                "zeros-128-done" => std::io::stdout().write_all(&[b'0'; 128]).unwrap(),
+                "large-invalid-output" => {
+                    std::io::stdout().write_all(&vec![b'0'; 80_000]).unwrap();
+                    std::io::stdout().write_all(&[255, 0]).unwrap();
+                    std::io::stdout().write_all("λ\n".as_bytes()).unwrap();
+                    std::io::stderr()
+                        .write_all(b"original diagnostic\n")
+                        .unwrap();
+                }
+                "called" => {}
+                _ => unreachable!(),
+            }
+            if matches!(case, "sleep-2-done" | "zeros-128-done") {
+                std::fs::write(state.join("done"), b"done").unwrap();
+            }
+        }
+        "other" => {
+            std::fs::create_dir_all(state).unwrap();
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(state.join("other"))
+                .unwrap()
+                .write_all(b"other")
+                .unwrap();
+        }
+        "failed-other" => {
+            std::fs::create_dir_all(state).unwrap();
+            std::fs::write(state.join("other"), b"failed").unwrap();
+            return ExitCode::from(19);
+        }
+        "extra" => {
+            std::fs::create_dir_all(state).unwrap();
+            std::fs::write(state.join("extra"), b"extra").unwrap();
+        }
+        "exit-19" => return ExitCode::from(19),
+        "dirty-input" => std::fs::write("src.txt", b"dirty").unwrap(),
+        "changed-input" => std::fs::write("src.txt", b"changed").unwrap(),
+        "require-good-tab-input" => {
+            if std::fs::read_to_string("source with\ttab.txt")
+                .unwrap()
+                .trim_end_matches('\n')
+                != "good"
+            {
+                return ExitCode::from(7);
+            }
+        }
+        "index-assume-unchanged" | "index-skip-worktree" => {
+            let flag = format!("--{}", case.strip_prefix("index-").unwrap());
+            assert!(
+                std::process::Command::new("git")
+                    .args(["update-index", &flag, "src.txt"])
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+            std::fs::write("src.txt", b"hidden").unwrap();
+        }
+        #[cfg(unix)]
+        "executable-input" => {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = std::fs::metadata("src.txt").unwrap().permissions();
+            permissions.set_mode(permissions.mode() | 0o111);
+            std::fs::set_permissions("src.txt", permissions).unwrap();
+        }
+        _ => panic!("unknown test stimulus: {case}"),
+    }
+    ExitCode::SUCCESS
+}
+
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args == ["--version"] {
@@ -12,6 +98,16 @@ fn main() -> ExitCode {
         }
         println!("chrono-test-ci-diagnostics/v1");
         return ExitCode::SUCCESS;
+    }
+    if args.first().map(String::as_str) == Some("fixture-operation") {
+        return fixture_operation(&args[1]);
+    }
+    if args == ["production"] {
+        print!("fixture-production");
+        return ExitCode::SUCCESS;
+    }
+    if args == ["fail-seven"] {
+        return ExitCode::from(7);
     }
     #[cfg(unix)]
     if args.first().map(String::as_str) == Some("infrastructure-operation") {
