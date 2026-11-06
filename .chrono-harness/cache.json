@@ -1139,7 +1139,6 @@
       "producer": "build.ci",
       "consumers": [
         "check.unit_ci",
-        "check.unit_judge-projects",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
         "check.unit_judge-workflow-units",
