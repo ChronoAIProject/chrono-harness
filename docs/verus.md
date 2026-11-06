@@ -46,20 +46,33 @@ FIFO 首次发现生成确定的最短跳数和前驱；传播行逐槽对应原
 外层节点／边关联、逐 seed 调用对应、seed-ID 映射、完整原因合并、JSON／诊断适配、
 测试选择和完整 SPEC 对应仍未证明。局部图证明不证明实际登记完整，也不代表全仓覆盖完成。
 
+## CI 离线汇总的结果集合
+
+`crates/judge-ci/src/verified_collection.rs` 是离线汇总实际消费的结果 ID 集合比较。
+返回真当且仅当实际 ID 与候选计划期望 ID 互相包含；两个方向的循环均证明终止，
+空集合、排列、缺项、额外项及完整 Unicode／NUL 身份由同源独立根核对。
+集合含义不依赖顺序或重复次数；响应协议继续单独拒绝重复结果 ID。
+实际汇总的库存状态、操作退出、未要求状态、原报告和流摘要检查保持各自义务，
+JSON 解码、借用字段提取、期望列表构造和外层组合仍待证明。
+
+比较使用借用字符串向量，不再为集合比较克隆和排序结果 ID。
+实际与期望长度为 A、E，最长键为 L 字节时，最坏比较成本为 O(AEL)，
+借用向量占 O(A+E)；完整运行、构建、验证、CI 和存储成本未测，不宣称性能收益。
+
 ## 固定执行入口
 
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
-`test:runner-tests` 先运行四项整 crate Verus 操作及编译，registration 与 filemap 各先运行两项，
+`test:runner-tests` 先运行四项整 crate Verus 操作及编译，registration、filemap 与 CI 汇总各先运行两项，
 再执行各自原 Rust 构建和未过滤测试。独立根直接读取生产源码，声明成功、失败和边界预期；
 Rust 测试另外验证真实消费者，不替代证明。
 
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
 现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
-三个证明单元先核共享 core，再安装工具；Python bootstrap 源码和测试无修改。
+四个证明单元先核共享 core，再安装工具；Python bootstrap 源码和测试无修改。
 当前归档只适用于 macOS arm64。
 
-**产品与宿主政策同时变更：**实际判断与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记八项证明。
+**产品与宿主政策同时变更：**实际判断与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十项证明。
 固定宏依赖通过 runner 传播到现役依赖方的独立 lockfile，没有升级其他包。
 runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` 定位需要 O(log C) 次字节比较，
 新增插入最多移动 C 个字符串句柄，存储为 O(C)。原图索引与遍历成本继续保留；

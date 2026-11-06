@@ -489,21 +489,19 @@ pub(super) fn collect(
                 return Err("unit operation original evidence failed or disagrees".into());
             }
         }
-        let expected_results: BTreeSet<_> = std::iter::once("ci.inventory".to_owned())
-            .chain(expected_ops)
-            .chain(not_required.iter().cloned())
+        let expected_results: Vec<_> = std::iter::once("ci.inventory")
+            .chain(expected_ops.iter().map(String::as_str))
+            .chain(not_required.iter().map(String::as_str))
             .collect();
         // Successful replacement markers are not emitted by the scoped producer.
         if !response
             .results
             .iter()
             .any(|r| r.id == "ci.inventory" && r.status == Status::Passed && r.exit_code.is_none())
-            || response
-                .results
-                .iter()
-                .map(|r| r.id.clone())
-                .collect::<BTreeSet<_>>()
-                != expected_results
+            || !verified_collection::matches_text_membership(
+                &response.results.iter().map(|r| r.id.as_str()).collect(),
+                &expected_results,
+            )
             || response
                 .results
                 .iter()
