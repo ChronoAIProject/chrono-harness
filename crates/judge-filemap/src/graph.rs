@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use crate::verified_graph::{
-    CauseSet, Edge, EdgeKind, Origin, Predecessor, PredecessorTree, Seed, UnionEdge, union,
+    CauseSet, Edge, EdgeKind, Origin, Predecessor, PredecessorTree, Seed, TraversedEdge, UnionEdge, union,
 };
 
 impl std::fmt::Debug for EdgeKind {
@@ -191,11 +191,6 @@ impl<'de> Deserialize<'de> for CauseSet {
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TraversedEdge {
-    pub edge: Edge,
-    pub seeds: CauseSet,
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Closure {
     pub reached: BTreeMap<String, CauseSet>,
     /// One deterministic shortest predecessor per (seed, node); null denotes the seed root.
@@ -236,11 +231,7 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
 }
 impl Closure {
     pub fn selected_tests(&self) -> BTreeSet<String> {
-        self.traversed
-            .iter()
-            .filter(|e| e.edge.kind == EdgeKind::TestExecution)
-            .map(|e| e.edge.to.clone())
-            .collect()
+        BTreeSet::from_iter(crate::verified_graph::selected_test_targets(&self.traversed))
     }
     pub fn witness(&self, seed: &str, node: &str) -> Option<Vec<Edge>> {
         self.predecessors.get(seed)?.witness(node)

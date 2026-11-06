@@ -3043,6 +3043,13 @@ impl CauseSet {
         &self.names
     }
 
+    pub fn into_names(self) -> (out: Vec<String>)
+        ensures out@ == self.view(), ordered_causes(out@),
+    {
+        proof { use_type_invariant(&self); }
+        self.names
+    }
+
     pub fn len(&self) -> (out: usize)
         ensures out == self.keys().len(),
     { proof { reveal(cause_keys); } self.names.len() }
@@ -3226,6 +3233,62 @@ impl Clone for CauseSet {
         }
         Self { names }
     }
+}
+
+/// 实际遍历记录；编码和诊断继续使用原外部派生接口。
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+pub struct TraversedEdge {
+    pub edge: Edge,
+    pub seeds: CauseSet,
+}
+
+impl Clone for TraversedEdge {
+    fn clone(&self) -> (out: Self)
+        ensures out.edge.key() == self.edge.key(), out.seeds.keys() == self.seeds.keys(),
+    {
+        Self { edge: self.edge.clone(), seeds: self.seeds.clone() }
+    }
+}
+
+#[verifier::opaque]
+pub open spec fn selected_target_keys(rows: Seq<TraversedEdge>) -> Set<Seq<u8>>
+    decreases rows.len(),
+{
+    if rows.len() == 0 { Set::empty() }
+    else {
+        let prior = selected_target_keys(rows.drop_last());
+        let edge = rows.last().edge;
+        if edge.kind == EdgeKind::TestExecution { prior.insert(edge.to_bytes()) }
+        else { prior }
+    }
+}
+
+/// 只由真实 test-execution 边选中目标，忽略其他类型和原因集合。
+pub fn selected_test_targets(rows: &[TraversedEdge]) -> (out: Vec<String>)
+    ensures ordered_causes(out@), cause_keys(out@).to_set() == selected_target_keys(rows@),
+{
+    proof { reveal(selected_target_keys); }
+    let mut targets = CauseSet::default();
+    let mut at: usize = 0;
+    while at < rows.len()
+        invariant at <= rows.len(),
+            targets.keys().to_set() == selected_target_keys(rows@.take(at as int)),
+        decreases rows.len() - at,
+    {
+        let edge = &rows[at].edge;
+        if let EdgeKind::TestExecution = edge.kind {
+            targets.insert(edge.to.as_str());
+        }
+        proof {
+            reveal(selected_target_keys);
+            let prefix = rows@.take(at as int + 1);
+            assert(prefix.drop_last() =~= rows@.take(at as int));
+            assert(prefix.last() == rows@[at as int]);
+        }
+        at += 1;
+    }
+    assert(rows@.take(at as int) =~= rows@);
+    targets.into_names()
 }
 
 /// One FIFO-discovered node and its complete original typed adjacency row.

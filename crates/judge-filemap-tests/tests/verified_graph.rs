@@ -1363,6 +1363,60 @@ fn cause_set_normalizes_unordered_unicode_nul_and_repeated_input() {
     assert(policy::ordered_causes(entries@));
 }
 
+fn traversed(from: &str, kind: policy::EdgeKind, to: &str, cause: &str) -> (out: policy::TraversedEdge)
+    ensures out.edge.key() == (from.spec_bytes(), kind.rank_spec(), to.spec_bytes()),
+        out.seeds.keys().to_set() == Set::<Seq<u8>>::empty().insert(cause.spec_bytes()),
+{
+    let mut seeds = policy::CauseSet::default();
+    seeds.insert(cause);
+    policy::TraversedEdge { edge: edge(from, kind, to), seeds }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_rejects_every_nonexecution_kind_and_empty_inventory() {
+    let empty: Vec<policy::TraversedEdge> = vec![];
+    let no_targets = policy::selected_test_targets(&empty);
+    proof { reveal(policy::selected_target_keys); reveal(policy::cause_keys); }
+    assert(no_targets.len() == 0);
+    let rows = vec![
+        traversed("test:source", policy::EdgeKind::Compile, "test:t", "cause"),
+        traversed("test:source", policy::EdgeKind::BuildInput, "test:t", "cause"),
+        traversed("test:source", policy::EdgeKind::RuntimeInput, "test:t", "cause"),
+        traversed("test:source", policy::EdgeKind::JudgeTrigger, "test:t", "cause"),
+    ];
+    let targets = policy::selected_test_targets(&rows);
+    proof { reveal(policy::selected_target_keys); }
+    assert(targets.len() == 0) by {
+        reveal(policy::cause_keys);
+        if targets.len() > 0 {
+            assert(policy::cause_keys(targets@).to_set().contains(policy::cause_keys(targets@)[0]));
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_is_sorted_unique_and_keeps_complete_unicode_nul_targets() {
+    let original = traversed("source\0", policy::EdgeKind::TestExecution, "根\0", "原因\0");
+    let copied = original.clone();
+    assert(copied.edge.key() == original.edge.key());
+    assert(copied.seeds.keys() == original.seeds.keys());
+    let rows = vec![original,
+        traversed("other", policy::EdgeKind::TestExecution, "z", ""),
+        traversed("other", policy::EdgeKind::TestExecution, "", "unrelated"),
+        traversed("other", policy::EdgeKind::TestExecution, "é", "cause"),
+        copied,
+        traversed("test:ignored", policy::EdgeKind::Compile, "not-selected", "cause"),
+    ];
+    let targets = policy::selected_test_targets(&rows);
+    proof { reveal(policy::selected_target_keys); }
+    let expected = vec!["".to_owned(), "z".to_owned(), "é".to_owned(), "根\0".to_owned()];
+    let normalized = policy::CauseSet::from_names(&expected);
+    assert(policy::cause_keys(targets@).to_set() == normalized.keys().to_set());
+    assert(policy::ordered_causes(targets@));
+    let roundtrip = normalized.into_names();
+    assert(policy::cause_keys(roundtrip@).to_set() == policy::cause_keys(targets@).to_set());
+}
+
 fn seed(id: &str, node: &str, reference: &str, reason: &str) -> (out: policy::Seed)
     ensures out.key() == (id.spec_bytes(), node.spec_bytes(), reference.spec_bytes(), reason.spec_bytes()),
         out.id@ == id@, out.node@ == node@, out.reference@ == reference@, out.reason@ == reason@,
