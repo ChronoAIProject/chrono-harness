@@ -123,6 +123,8 @@ v2 采集生成 `chrono-input-snapshot/v2`，普通文件仍用 blob，实际缺
 
 来源 `pair` 地址也可指另一端存在前采到的一份真实单端快照，由其 commit 决定所属端。两端仍须从明确来源取得完整覆盖。原快照／pair 字节保存在 `.chrono-harness/state/inputs/originals/`，独立 `chrono-input-composition-result/v1` 回执点名清单、组成项和输出。快照 v2／v3 形状不变，回执仍为 `completeness_proven: false`。
 
+**产品与宿主政策同步修改：**快照 v3 校验接受现役 Git v3 选择器生产的 `selection.registry_path`，要求它为有效相对路径；组合仍核对完整选择身份与固定端点登记，路径漂移继续拒绝。Rust 真实采集／配对／组合用例覆盖该字段及无效路径，真实本机两端组合另作验收。本机 diagnostics 同时迁到现有 vendor 输入；产品格式修复与宿主采用分别保留证据，完整输入／治理和同判仍未建立，新增验证总成本未测。
+
 `chrono-inputs capture-governance --host-root H --config P --base OID --candidate OID --manifest P --output P` 使用同一原来源清单提供基线检查程序输入投影，再单独观察已检出候选，不把候选字节当历史基线。必需输入来自 registration 已有的空业务计划投影。
 
 生成 pair、流式 blob 和 `OUTPUT.receipt.json` 保留源身份及原字节；缺基线观察／覆盖，或端点／配置／存在状态／blob 不符都会拒绝。真实 CI 发布在种子发布前，把 provider 明确的 `composition_sources` 交给此命令。原件由宿主登记 bootstrap 提供，日常检查命令不变。
