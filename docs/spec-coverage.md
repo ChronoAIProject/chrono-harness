@@ -398,3 +398,4 @@ PR #221 落地为 `3b605cf80aa9e96a6442b2e54991602713acca31`，树与受验候�
 
 原生 CI 输入准备迁入 Rust `chrono-ci native-adoption`，扩展改为 `chrono-native-adoption/v2`，不生成 Python 适配器、不要求解释器。原时间、传输与有界失败预期迁至 `ci-tests` 的 Rust 配对用例，完整 seed／转发／交付消费者同步采用。Python 模板、专属脚本登记和重复发布验证 job 退役；真实 Python 业务／外部接口与其余 bootstrap、shared、release 迁移尚未完成。源码与政策同时改变，候选 canonical、两平台原生结果及 dev 落地仍须实际核验。
 
+测试清单验证由 Rust `chrono-ci test-inventory` 负责，两个宿主配置继续显式绑定原 Cargo action、分组和二进制清单。Rust 配对测试保留完整／互斥覆盖、ignored、漂移、损坏清单、非零退出及有界失败原件；worktree 的真实后代租约消费者同步调用 Rust CLI。Python 实现、导入／字节码测试、独立 CI 单元和重复发布验证任务退役。程序与宿主政策同时改变；当前候选的正式检查、原生结果和 dev 落地分别需要实际证据。
