@@ -283,6 +283,26 @@ reference storage. Total measured costs remain unknown; no saving is claimed.
 Seed construction, cause merging, surrounding composition, JSON/debug adapters,
 selection and complete SPEC correspondence still retain their obligations.
 
+The same root's `topology` now composes name construction, typed source grouping
+and target/root indexing. For arbitrary supplied UnionEdges and root names, it
+proves exact endpoint/root membership and cardinality, exact sorted source-key
+rows, every target/root position and a valid bounded index graph. Each row key
+has an actual input-edge witness, so its destination is admitted by the endpoint
+inventory; every supplied root is admitted by the root-name inventory. Both
+internal Option results are therefore proved present. Production calls this
+constructor instead of combining the three steps through unproved `expect`
+conditions. Seed extraction and the remaining cause/traversal adapters retain
+their whole-file migration obligations.
+
+Independent examples require exact empty output, repeated isolated Unicode/NUL
+roots and exact indices for unordered duplicate edges, parallel kinds, cycles,
+self loops and repeated root positions. This composes existing implementations
+without new runtime loops, dependencies, trusted interfaces, operations or proof
+budgets. Clearing the supplied root positions at the actual indexing call is
+rejected by the topology root-correspondence postcondition; correct source is
+restored by SHA-256 before canonical verification. Existing construction/storage
+bounds still apply; measured total costs remain unknown.
+
 The current distribution interface uses a generated shell installer. Its
 argument parsing, platform selection, integrity decisions and cleanup are
 repository program logic, as is its Rust transport test fixture. Both files

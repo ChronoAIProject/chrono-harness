@@ -1098,4 +1098,115 @@ fn graph_names_preserve_both_endpoints_duplicate_kinds_origins_and_roots() {
     assert(valid);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn topology_preserves_the_exact_empty_graph() {
+    let edges: Vec<policy::UnionEdge> = vec![];
+    let roots: Vec<&str> = vec![];
+    assert(policy::endpoint_names(edges@) =~= Set::<Seq<u8>>::empty());
+    assert(policy::name_members(roots@) =~= Set::<Seq<u8>>::empty());
+    assert((policy::endpoint_names(edges@) + policy::name_members(roots@)) =~= Set::<Seq<u8>>::empty());
+    assert(Set::<Seq<u8>>::empty().len() == 0);
+    let graph = policy::topology(&edges, &roots);
+    assert(graph.names.len() == 0);
+    assert(graph.edge_rows.len() == 0);
+    assert(graph.indices.rows.len() == 0);
+    assert(graph.indices.roots.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn topology_preserves_isolated_duplicate_unicode_nul_roots() {
+    let edges: Vec<policy::UnionEdge> = vec![];
+    let roots = vec!["根\0", "根\0"];
+    assert(policy::endpoint_names(edges@) =~= Set::<Seq<u8>>::empty());
+    assert(policy::name_members(roots@) =~= Set::<Seq<u8>>::empty().insert("根\0".spec_bytes()));
+    assert((policy::endpoint_names(edges@) + policy::name_members(roots@)) =~=
+        Set::<Seq<u8>>::empty().insert("根\0".spec_bytes()));
+    assert(Set::<Seq<u8>>::empty().insert("根\0".spec_bytes()).len() == 1);
+    let graph = policy::topology(&edges, &roots);
+    assert(graph.names.len() == 1);
+    assert(policy::name_members(graph.names@).contains(graph.names@[0].spec_bytes()));
+    assert(graph.names@[0].spec_bytes() == "根\0".spec_bytes());
+    proof {
+        reveal(policy::source_row_matches);
+        assert(policy::source_edge_keys(edges@, "根\0".spec_bytes()) =~= Set::<policy::EdgeKey>::empty());
+    }
+    assert(graph.edge_rows.len() == 1 && graph.edge_rows[0].len() == 0);
+    assert(graph.indices.rows.len() == 1 && graph.indices.rows[0].len() == 0);
+    assert(graph.indices.roots.len() == 2);
+    assert(graph.indices.roots[0] == 0 && graph.indices.roots[1] == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn topology_preserves_exact_parallel_cycle_self_loop_and_root_slots() {
+    use policy::EdgeKind::*;
+    proof {
+        reveal_strlit("a"); reveal_strlit("b");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    }
+    let forward = edge("a", RuntimeInput, "b");
+    let parallel = edge("a", TestExecution, "b");
+    let backward = edge("b", Compile, "a");
+    let self_loop = edge("b", Compile, "b");
+    let edges = vec![
+        policy::UnionEdge { edge: self_loop.clone(), origin: policy::Origin::Both },
+        policy::UnionEdge { edge: parallel.clone(), origin: policy::Origin::Candidate },
+        policy::UnionEdge { edge: backward.clone(), origin: policy::Origin::Base },
+        policy::UnionEdge { edge: forward.clone(), origin: policy::Origin::Both },
+        policy::UnionEdge { edge: forward.clone(), origin: policy::Origin::Base },
+    ];
+    let roots = vec!["b", "a", "b"];
+    proof {
+        assert(policy::endpoint_names(edges@) =~= set![seq![97u8], seq![98u8]]);
+        assert(policy::name_members(roots@) =~= set![seq![97u8], seq![98u8]]);
+        assert((policy::endpoint_names(edges@) + policy::name_members(roots@)) =~= set![seq![97u8], seq![98u8]]);
+        assert(set![seq![97u8], seq![98u8]].len() == 2);
+        assert(policy::union_edge_keys(edges@) =~=
+            seq![self_loop.key(), parallel.key(), backward.key(), forward.key(), forward.key()]);
+        assert(policy::union_edge_keys(edges@).to_set() =~=
+            set![self_loop.key(), parallel.key(), backward.key(), forward.key()]);
+        assert(policy::source_edge_keys(edges@, "a".spec_bytes()) =~= set![forward.key(), parallel.key()]);
+        assert(policy::source_edge_keys(edges@, "b".spec_bytes()) =~= set![backward.key(), self_loop.key()]);
+        assert(set![forward.key(), parallel.key()].len() == 2);
+        assert(set![backward.key(), self_loop.key()].len() == 2);
+    }
+    let graph = policy::topology(&edges, &roots);
+    assert(graph.names.len() == 2);
+    assert(policy::name_members(graph.names@).contains(graph.names@[0].spec_bytes()));
+    assert(policy::name_members(graph.names@).contains(graph.names@[1].spec_bytes()));
+    assert(!policy::byte_lt(seq![98u8], seq![97u8]));
+    assert(!policy::byte_lt(seq![97u8], seq![97u8]));
+    assert(!policy::byte_lt(seq![98u8], seq![98u8]));
+    assert(graph.names@[0].spec_bytes() == seq![97u8]);
+    assert(graph.names@[1].spec_bytes() == seq![98u8]);
+    proof {
+        reveal(policy::source_row_matches);
+        reveal(policy::ordered_edges);
+    }
+    assert(graph.edge_rows.len() == 2);
+    assert(graph.edge_rows[0].len() == 2 && graph.edge_rows[1].len() == 2);
+    proof {
+        assert forall|slot: int| 0 <= slot < 2 implies {
+            let key = (#[trigger] graph.edge_rows@[1]@[slot]).key();
+            key == backward.key() || key == self_loop.key()
+        } by {
+            assert(policy::reference_edge_keys(graph.edge_rows@[1]@)[slot] == graph.edge_rows@[1]@[slot].key());
+            assert(policy::reference_edge_keys(graph.edge_rows@[1]@).to_set().contains(graph.edge_rows@[1]@[slot].key()));
+        }
+        policy::edge_order_laws(graph.edge_rows@[1]@[0], graph.edge_rows@[1]@[1], graph.edge_rows@[1]@[1]);
+        assert(graph.edge_rows@[1]@[0].key() == backward.key());
+        assert(graph.edge_rows@[1]@[1].key() == self_loop.key());
+        assert forall|slot: int| 0 <= slot < 2
+            implies (#[trigger] graph.edge_rows@[0]@[slot]).to_bytes() == seq![98u8] by {
+            assert(policy::reference_edge_keys(graph.edge_rows@[0]@)[slot] == graph.edge_rows@[0]@[slot].key());
+            assert(policy::reference_edge_keys(graph.edge_rows@[0]@).to_set().contains(graph.edge_rows@[0]@[slot].key()));
+        }
+    }
+    assert(graph.indices.rows[0][0] == 1 && graph.indices.rows[0][1] == 1);
+    assert(graph.indices.rows[1][0] == 0 && graph.indices.rows[1][1] == 1);
+    assert(graph.indices.roots.len() == 3);
+    assert(graph.indices.roots[0] == 1 && graph.indices.roots[1] == 0 && graph.indices.roots[2] == 1);
+}
+
 }

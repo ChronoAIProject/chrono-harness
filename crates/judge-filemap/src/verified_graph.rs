@@ -2166,4 +2166,50 @@ pub fn graph_names<'a>(edges: &'a [UnionEdge], roots: &[&'a str]) -> (out: Vec<&
     out
 }
 
+pub struct Topology<'a> {
+    pub names: Vec<&'a str>,
+    pub edge_rows: Vec<Vec<&'a Edge>>,
+    pub indices: NameIndices,
+}
+
+/// Compose exact name admission, typed source grouping and target/root indexing.
+/// Every supplied endpoint/root is admitted, so neither internal lookup can fail.
+pub fn topology<'a>(edges: &'a [UnionEdge], roots: &[&'a str]) -> (out: Topology<'a>)
+    ensures ordered_names(out.names@),
+        name_members(out.names@) == endpoint_names(edges@) + name_members(roots@),
+        (endpoint_names(edges@) + name_members(roots@)).finite(),
+        out.names.len() == (endpoint_names(edges@) + name_members(roots@)).len(),
+        out.edge_rows.len() == out.names.len(),
+        forall|row: int| 0 <= row < out.edge_rows.len()
+            ==> source_row_matches(#[trigger] out.edge_rows@[row]@, edges@, out.names@[row].spec_bytes()),
+        out.indices.rows.len() == out.names.len(),
+        valid_graph(out.indices.rows@),
+        forall|row: int| 0 <= row < out.edge_rows.len()
+            ==> edge_indices_match(out.names@, out.edge_rows@[row]@, #[trigger] out.indices.rows@[row]@),
+        name_indices_match(out.names@, roots@, out.indices.roots@),
+{
+    let names = graph_names(edges, roots);
+    let edge_rows = source_rows(&names, edges).unwrap();
+    proof {
+        assert forall|row: int, slot: int| 0 <= row < edge_rows.len() && 0 <= slot < edge_rows@[row].len()
+            implies name_members(names@).contains(#[trigger] edge_rows@[row]@[slot].to_bytes()) by {
+            reveal(source_row_matches);
+            let key = edge_rows@[row]@[slot].key();
+            assert(reference_edge_keys(edge_rows@[row]@)[slot] == key);
+            assert(reference_edge_keys(edge_rows@[row]@).to_set().contains(key));
+            assert(union_edge_keys(edges@).to_set().contains(key));
+            let at = choose|at: int| 0 <= at < edges.len() && union_edge_keys(edges@)[at] == key;
+            assert(edges@[at].edge.key() == key);
+            assert(endpoint_names(edges@).contains(edge_rows@[row]@[slot].to_bytes()));
+        }
+        assert forall|slot: int| 0 <= slot < roots.len()
+            implies name_members(names@).contains(#[trigger] roots@[slot].spec_bytes()) by {
+            assert(name_members(roots@).contains(roots@[slot].spec_bytes()));
+        }
+        assert(edge_names_present(names@, edge_rows@, roots@));
+    }
+    let indices = index_edges(&names, &edge_rows, roots).unwrap();
+    Topology { names, edge_rows, indices }
+}
+
 }
