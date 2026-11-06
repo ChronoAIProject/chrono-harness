@@ -11,7 +11,7 @@
 
 四者均采用宿主 `.chrono-harness/` 登记、生成的 `CLAUDE.md`、`AGENTS.md -> CLAUDE.md` 和生成的 GitHub Actions。
 
-产品当前公开测试版为 [v0.1.0-beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19)，四个示例的 `dev` 均已锁定 beta.19。
+四个示例的固定 `dev` 配置均锁定 [v0.1.0-beta.20](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.20)，按声明摘要和长度安装独立发布工具，不读取当前开发源码。这次只核实版本锁、安装脚本和发布清单；这些新端点的实际原生采用尚未核验。下文旧运行仍只证明各自固定版本的验收范围。
 
 宿主只保留版本锁、摘要、安装声明与入口，按公开 HTTPS 下载选定工具，不保存产品源码包或二进制，也不编译 Rust。
 
