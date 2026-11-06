@@ -2790,7 +2790,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                                     &digest,
                                 )?,
                             );
-                            report["managed_process"] = value!(process);
+                            report["managed_process"] =
+                                chrono_harness::full::compact_process(&value!(&process))?;
                             report["managed_process"]["environment_representation"] =
                                 value!("sha256");
                             if process.failure.is_some() || process.exit_code != 0 {
@@ -2877,7 +2878,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     let process = chrono_harness::prepared::process_identities(
                         chrono_harness::run_process_observed(target, &command, &[], &digest)?,
                     );
-                    report["managed_process"] = value!(process);
+                    report["managed_process"] =
+                        chrono_harness::full::compact_process(&value!(&process))?;
                     report["managed_process"]["environment_representation"] = value!("sha256");
                     let mut manager = Manager::open(
                         r,

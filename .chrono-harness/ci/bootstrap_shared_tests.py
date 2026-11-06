@@ -1671,6 +1671,7 @@ class ManagedAttemptCustody(unittest.TestCase):
                 attempt.release_consumers()
 
     def assert_producer_streams(self, attempt, process):
+        process = bootstrap.retained_process(process)
         self.assertEqual(process["argv"][0], sys.executable)
         for channel in ("stdout", "stderr"):
             expected = ("custody " + channel + "\n").encode()

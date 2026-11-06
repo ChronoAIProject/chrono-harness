@@ -4,7 +4,7 @@ mod isolated_capability;
 mod retention_state;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
-use chrono_harness::{json, sha256};
+use chrono_harness::sha256;
 use serde_json::{Value, json as value};
 use std::{
     fs,
@@ -16,6 +16,30 @@ const POLICY: &str = ".chrono-harness/worktree.json";
 const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
+
+// Decode the current lifecycle interface before exercising the original byte,
+// failure and identity assertions. Other documents keep their original view.
+fn json(bytes: &[u8]) -> Result<Value, String> {
+    let mut report = chrono_harness::json(bytes)?;
+    if report["schema"] == "chrono-worktree-report/v1" {
+        if report["tool"]["version"].is_object() {
+            report["tool"]["version"] =
+                chrono_harness::full::expand_process(&report["tool"]["version"])?;
+        }
+        if report["managed_process"].is_object() {
+            report["managed_process"] =
+                chrono_harness::full::expand_process(&report["managed_process"])?;
+        }
+        if let Some(rows) = report["processes"].as_array_mut() {
+            for row in rows {
+                if row["process"].is_object() {
+                    row["process"] = chrono_harness::full::expand_process(&row["process"])?;
+                }
+            }
+        }
+    }
+    Ok(report)
+}
 
 // Consume the current producer's exact addressed original.
 fn drain_report(entry: &Value) -> Value {
@@ -1951,6 +1975,41 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
         fs::read(occupied.join("original-source")).unwrap(),
         b"preserve existing target"
     );
+}
+
+#[test]
+fn lifecycle_report_retains_exact_failure_streams_without_duplicate_aliases() {
+    let h = Host::new("payload");
+    let diagnostic = "original failure detail\n".repeat(8192);
+    automatic::native_git(&h, "large-diagnostic", value!({"diagnostic":diagnostic}));
+    let target = h.parent.join("compact-failure");
+    let (code, report, error) = h.invoke("integration", "compact-failure", &target);
+    assert_ne!(code, 0, "{report} {error}");
+    let raw = fs::read(h.root.join(report["report_path"].as_str().unwrap())).unwrap();
+    let encoded = chrono_harness::json(&raw).unwrap();
+    let rows = encoded["processes"].as_array().unwrap();
+    for process in rows
+        .iter()
+        .map(|row| &row["process"])
+        .chain([&encoded["tool"]["version"]])
+    {
+        assert_eq!(process["encoding"], "chrono-retained-process/v2");
+        for key in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+            assert!(process.get(key).is_none(), "duplicate {key}");
+        }
+    }
+    let original = chrono_harness::full::expand_process(&rows.last().unwrap()["process"]).unwrap();
+    assert_eq!(original["exit_code"], 71);
+    assert_eq!(original["stderr_bytes"], value!(diagnostic.as_bytes()));
+    assert_eq!(original["stderr_sha256"], sha256(diagnostic.as_bytes()));
+    assert!(
+        serde_json::to_vec(&rows.last().unwrap()["process"])
+            .unwrap()
+            .len()
+            < diagnostic.len() / 8
+    );
+    assert_eq!(json(&raw).unwrap(), report);
+    assert!(!target.exists());
 }
 
 #[test]

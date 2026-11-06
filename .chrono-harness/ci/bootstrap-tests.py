@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 from unittest import mock
 
 sys.dont_write_bytecode = True
@@ -48,6 +49,68 @@ class SourceImports(unittest.TestCase):
             raise
         else:
             shutil.rmtree(root)
+
+
+class RetainedProcess(unittest.TestCase):
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("retained_bootstrap", SOURCE / "bootstrap.py")
+        self.bootstrap = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.bootstrap)
+
+    def encoded(self):
+        process = {"encoding": "chrono-retained-process/v2", "exit_code": 17,
+                   "failure": "original failure", "argv": ["actual-program"]}
+        for stream, raw in (("stdout", bytes(range(256))), ("stderr", b"error\x00\xff\n")):
+            process[stream + "_zlib_hex"] = zlib.compress(raw, 1).hex()
+            process[stream + "_length"] = len(raw)
+            process[stream + "_sha256"] = hashlib.sha256(raw).hexdigest()
+        return process
+
+    def test_exact_binary_failure_and_empty_streams_keep_identity(self):
+        encoded = self.encoded()
+        before = json.dumps(encoded, sort_keys=True)
+        process = self.bootstrap.retained_process(encoded)
+        self.assertEqual(process["stdout_bytes"], bytes(range(256)))
+        self.assertEqual(process["stderr_bytes"], b"error\x00\xff\n")
+        for field in ("argv", "exit_code", "failure"):
+            self.assertEqual(process[field], encoded[field])
+        self.assertEqual(json.dumps(encoded, sort_keys=True), before)
+        for stream in ("stdout", "stderr"):
+            encoded[stream + "_zlib_hex"] = zlib.compress(b"").hex()
+            encoded[stream + "_length"] = 0
+            encoded[stream + "_sha256"] = hashlib.sha256(b"").hexdigest()
+        process = self.bootstrap.retained_process(encoded)
+        self.assertEqual(process["stdout_bytes"], b"")
+        self.assertEqual(process["stderr_bytes"], b"")
+
+    def test_current_incompressible_hex_fallback_keeps_originals(self):
+        encoded = self.encoded()
+        encoded["encoding"] = "chrono-retained-process/v1"
+        for stream in ("stdout", "stderr"):
+            encoded[stream + "_hex"] = zlib.decompress(bytes.fromhex(encoded.pop(stream + "_zlib_hex"))).hex()
+            del encoded[stream + "_length"]
+        self.assertEqual(self.bootstrap.retained_process(encoded)["stdout_bytes"], bytes(range(256)))
+
+    def test_invalid_encoding_aliases_length_digest_and_inflation_are_rejected(self):
+        for mutate in (
+                lambda p: p.update(encoding="unknown"),
+                lambda p: p.update(stdout="duplicate"),
+                lambda p: p.update(stderr_bytes=[]),
+                lambda p: p.update(stdout_hex=""),
+                lambda p: p.update(stdout_length=64 * 1024 * 1024 + 1),
+                lambda p: p.update(stdout_length=-1),
+                lambda p: p.update(stdout_length=True),
+                lambda p: p.update(stdout_length=255),
+                lambda p: p.update(stdout_sha256="0" * 64),
+                lambda p: p.update(stdout_zlib_hex=p["stdout_zlib_hex"][:-2]),
+                lambda p: p.update(stdout_zlib_hex=p["stdout_zlib_hex"] + "00"),
+                lambda p: p.update(stdout_zlib_hex="gg"),
+                lambda p: p.update(stdout_zlib_hex=" " + p["stdout_zlib_hex"])):
+            with self.subTest(mutate=mutate):
+                encoded = self.encoded()
+                mutate(encoded)
+                with self.assertRaises(ValueError):
+                    self.bootstrap.retained_process(encoded)
 
 
 class NativeRuntimeLocations(unittest.TestCase):

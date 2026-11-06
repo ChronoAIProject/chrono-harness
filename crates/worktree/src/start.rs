@@ -85,7 +85,8 @@ impl Runner {
         };
         match result {
             Ok(process) => {
-                let mut record = value!({"root":root,"argv":argv,"process":process});
+                let mut record = value!({"root":root,"argv":argv,
+                    "process":chrono_harness::full::compact_process(&value!(&process))?});
                 if let Some(limit) = input_limit {
                     record["immutable_input_transport"] = value!({"stdout_limit_bytes":limit,
                         "stderr_limit_bytes":self.config.output_limit_bytes});
@@ -733,7 +734,9 @@ pub(crate) fn with_report_for_consumer(
         .write(true)
         .open(&output_path)
         .map_err(|e| e.to_string())?;
-    let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
+    let mut tool_record = value!(&tool);
+    tool_record["version"] = chrono_harness::full::compact_process(&tool_record["version"])?;
+    let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool_record,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
     let version_error = tool.version.failure.clone().or_else(|| {
         if tool.version.exit_code != 0 {
             Some(format!(

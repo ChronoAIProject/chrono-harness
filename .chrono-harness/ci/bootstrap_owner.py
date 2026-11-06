@@ -336,6 +336,7 @@ def run_owner(root, program, arguments, directory, name):
     shared.write_new(directory / (name + "-consumer.json"), shared.encode(declaration))
     process = report.get("managed_process")
     if process is not None:
+        process = bootstrap.retained_process(process)
         sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
         sys.stderr.buffer.write(bytes(process["stderr_bytes"]))
     if result.returncode or (process is not None and (process["failure"] is not None or process["exit_code"])):
@@ -397,7 +398,7 @@ def upgrade(root, config_path, config):
     run_owner(root, carrier, ["migrate", *common, "--path", str(root)], directory, "migration")
     built = run_owner(root, carrier, ["bootstrap", *common, "--bootstrap-config", declaration["stage_config"]],
                       directory, "construction")
-    stdout = bytes(built["managed_process"]["stdout_bytes"])
+    stdout = bootstrap.retained_process(built["managed_process"])["stdout_bytes"]
     prefix = b"chrono-owner-stage-result "
     last = stdout.splitlines()[-1]
     if not last.startswith(prefix):

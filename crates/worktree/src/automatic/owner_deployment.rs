@@ -198,7 +198,7 @@ impl Manager {
         let process = chrono_harness::prepared::process_identities(
             chrono_harness::run_process_observed(root, &command, &[], &digest)?,
         );
-        report["managed_process"] = value!(process);
+        report["managed_process"] = chrono_harness::full::compact_process(&value!(&process))?;
         stable(r)?;
         if process.failure.is_some() || process.exit_code != 0 {
             report["managed_command_failed"] = value!(true);

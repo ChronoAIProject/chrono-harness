@@ -370,6 +370,8 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
             )));
         }
     };
+    let inner = crate::full::expand_process(inner)
+        .map_err(|e| original_failure(format!("check process original streams: {e}")))?;
     if inner["failure"].as_str().is_some() {
         return Err(original_failure(format!(
             "check process failed: {}; original lifecycle report {}",
