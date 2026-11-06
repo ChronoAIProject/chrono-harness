@@ -1128,7 +1128,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
     assert_eq!(d["detection"]["base"], h.host.base);
     assert_eq!(d["detection"]["required_units"], json!(["alpha", "beta"]));
     assert!(!root.join("a.txt").exists());
-    assert!(!root.join("a.sh").exists());
+    assert!(!root.join("a.case").exists());
     assert!(!root.join("b.txt").exists());
     git(
         &root,
@@ -1249,7 +1249,7 @@ fn scoped_and_full_detection_refuse_decoder_history_before_interpreter_acquisiti
         h.payload["before"] = json!(h.host.base);
         json_file(&h.host.root, check_path, &check);
         for id in ["decoder", "decoder-tests"] {
-            current["files"].as_array_mut().unwrap().push(json!({"path":format!("{id}.sh"),"owner":id,"surface":"product","cost":"unmeasured","edges":[]}));
+            current["files"].as_array_mut().unwrap().push(json!({"path":format!("{id}.case"),"owner":id,"surface":"product","cost":"unmeasured","edges":[]}));
         }
         json_file(&h.host.root, ".chrono-harness/FILEMAP.json", &current);
         let mut wf: Value = serde_json::from_slice(
@@ -1265,22 +1265,15 @@ fn scoped_and_full_detection_refuse_decoder_history_before_interpreter_acquisiti
         .unwrap();
         for (id, pair) in [("decoder", "test_script"), ("decoder-tests", "tests_for")] {
             projects["owners"].as_array_mut().unwrap().push(json!(id));
-            projects["scripts"].as_array_mut().unwrap().push(json!({"id":id,"path":format!("{id}.sh"),pair:if id=="decoder" {"decoder-tests"}else{"decoder"},"actions":{"execute":{"operation":id,"tool":"sh","argv":[format!("{id}.sh")]}}}));
-            fs::write(
-                h.host.root.join(format!("{id}.sh")),
-                "printf launched >> .chrono-harness/state/decoder-launched\nexit 66\n",
-            )
-            .unwrap();
+            projects["scripts"].as_array_mut().unwrap().push(json!({"id":id,"path":format!("{id}.case"),pair:if id=="decoder" {"decoder-tests"}else{"decoder"},"actions":{"execute":{"operation":id,"tool":"unit-fixture","argv":["unit-operation",format!("{id}.case")]}}}));
+            fs::write(h.host.root.join(format!("{id}.case")), "decoder-launch\n").unwrap();
         }
         json_file(&h.host.root, ".chrono-harness/projects.json", &projects);
         let mut cfg: Value = serde_json::from_slice(
             &fs::read(h.host.root.join(".chrono-harness/config.json")).unwrap(),
         )
         .unwrap();
-        cfg["tools"][3]["version_argv"] = json!([
-            "-c",
-            "printf probed >> .chrono-harness/state/decoder-probed; printf shell"
-        ]);
+        cfg["tools"][3]["version_argv"] = json!(["decoder-probe"]);
         if full {
             cfg["execution_units"] = json!({"units":{"alpha":{"tests":["test:a"],"report_path":".chrono-harness/state/alpha/check.json"},"beta":{"tests":["test:b"],"report_path":".chrono-harness/state/beta/check.json"}},"shared_operations":{},"report_path":".chrono-harness/state/collection/check.json","collection_limits":{"manifest_bytes":1048576,"report_bytes":67108864}});
             let mut c: Value =

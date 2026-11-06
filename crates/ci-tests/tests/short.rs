@@ -172,7 +172,7 @@ impl ShortHost {
         let git_bin = fixture_git();
         let version = Command::new(&git_bin).arg("--version").output().unwrap();
         let native = json!({"operation":"prepare.check.ci","tool":"chrono-ci","argv":["check-inputs","--config",".chrono-harness/ci/units.json","--event-env","GITHUB_EVENT_NAME","--payload-env","GITHUB_EVENT_PATH","--revision-env","CHRONO_WORKFLOW_REVISION","--repository-env","GITHUB_REPOSITORY"]});
-        let cfg = json!({"schema_version":4,"status":"proposed","enforcement":"not-implemented","runner":{"path":".chrono-harness/bin/chrono-harness","version":"0.1.0","sha256":null},"registries":{"judges":".chrono-harness/judges.json","projects":".chrono-harness/projects.json","filemap":".chrono-harness/FILEMAP.json","workflow":".chrono-harness/workflow.json"},"canonical_check":{"operation":"validate.delta","argv":[".chrono-harness/bin/chrono-harness","check"],"profile":".chrono-harness/ci/check.json","inputs":{"local":{"operation":"prepare.check.local","tool":"chrono-worktree","argv":["check-inputs","--config",".chrono-harness/worktree.json"]},"ci":native}},"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":git_bin,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()},{"id":"chrono-worktree","program":".chrono-harness/bin/chrono-worktree","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-worktree 0.1.0"},{"id":"chrono-ci","program":".chrono-harness/bin/chrono-ci","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci 0.1.0"},{"id":"sh","program":"/bin/sh","resolution":"PATH-once","version_argv":["-c","printf shell"],"expected_version":"shell"}],"protocol":{"id":"chrono-judge/v1","timeout_seconds":30,"stdout_limit_bytes":67108864,"encoding":"UTF-8"},"environment":{"inherit":["PATH","HOME","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","GITHUB_REPOSITORY"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_bin,"presence":"present","sha256":sha256(&fs::read(&git_bin).unwrap())}]},"input_closure":{"status":"incomplete","unresolved":["fixture closure"]},"semantic_fields":[],"artifacts":[{"path":".chrono-harness/state/","owner":"host","kind":"evidence","tracked":false},{"path":".chrono-harness/bin/","owner":"host","kind":"executable","tracked":false}]});
+        let cfg = json!({"schema_version":4,"status":"proposed","enforcement":"not-implemented","runner":{"path":".chrono-harness/bin/chrono-harness","version":"0.1.0","sha256":null},"registries":{"judges":".chrono-harness/judges.json","projects":".chrono-harness/projects.json","filemap":".chrono-harness/FILEMAP.json","workflow":".chrono-harness/workflow.json"},"canonical_check":{"operation":"validate.delta","argv":[".chrono-harness/bin/chrono-harness","check"],"profile":".chrono-harness/ci/check.json","inputs":{"local":{"operation":"prepare.check.local","tool":"chrono-worktree","argv":["check-inputs","--config",".chrono-harness/worktree.json"]},"ci":native}},"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":git_bin,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()},{"id":"chrono-worktree","program":".chrono-harness/bin/chrono-worktree","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-worktree 0.1.0"},{"id":"chrono-ci","program":".chrono-harness/bin/chrono-ci","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci 0.1.0"},{"id":"unit-fixture","program":UNIT_TOOL,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci-test-transport 1"}],"protocol":{"id":"chrono-judge/v1","timeout_seconds":30,"stdout_limit_bytes":67108864,"encoding":"UTF-8"},"environment":{"inherit":["PATH","HOME","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","GITHUB_REPOSITORY"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_bin,"presence":"present","sha256":sha256(&fs::read(&git_bin).unwrap())}]},"input_closure":{"status":"incomplete","unresolved":["fixture closure"]},"semantic_fields":[],"artifacts":[{"path":".chrono-harness/state/","owner":"host","kind":"evidence","tracked":false},{"path":".chrono-harness/bin/","owner":"host","kind":"executable","tracked":false}]});
         let mut cfg = cfg;
         cfg["environment"]["values"]["TMPDIR"] = json!(dir.path());
         json_file(&root, ".chrono-harness/config.json", &cfg);
@@ -203,7 +203,7 @@ impl ShortHost {
             p["tests_for"] = json!(format!("{}-prod", p["id"].as_str().unwrap()));
         }
         for id in ["a", "b"] {
-            projects["projects"].as_array_mut().unwrap().push(json!({"id":format!("{id}-prod"),"kind":"production","test_project":id,"actions":{"execute":{"operation":format!("prod.{id}"),"tool":"sh","argv":["-c","exit 0"]}}}));
+            projects["projects"].as_array_mut().unwrap().push(json!({"id":format!("{id}-prod"),"kind":"production","test_project":id,"actions":{"execute":{"operation":format!("prod.{id}"),"tool":"unit-fixture","argv":["unit-noop"]}}}));
         }
         json_file(&root, ".chrono-harness/projects.json", &projects);
         let mut fm: Value =
@@ -662,11 +662,7 @@ fn scoped_stream_reports_reject_missing_or_modified_streams_without_business_rer
 #[test]
 fn scoped_stream_reports_keep_business_failure_and_transport_failure_originals() {
     let mut h = ShortHost::new();
-    fs::write(
-        h.root.join("a.sh"),
-        "printf original-business-failure >&2\nexit 19\n",
-    )
-    .unwrap();
+    fs::write(h.root.join("a.case"), "business-failure\n").unwrap();
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["report_publication"] = json!("retained-reference/v2")
     });
@@ -897,11 +893,7 @@ fn report_references_preserve_business_failure_and_original_read_limits() {
     for limited in [false, true] {
         let mut h = ShortHost::new();
         if !limited {
-            fs::write(
-                h.root.join("a.sh"),
-                "printf original-business-failure >&2\nexit 19\n",
-            )
-            .unwrap();
+            fs::write(h.root.join("a.case"), "business-failure\n").unwrap();
         }
         h.modify(".chrono-harness/ci/check.json", |c| {
             c["policy"]["report_publication"] = json!("retained-reference/v1");
@@ -951,7 +943,7 @@ fn report_references_preserve_business_failure_and_original_read_limits() {
 #[test]
 fn short_preserves_actual_business_and_producer_failures() {
     let mut h = ShortHost::new();
-    fs::write(h.root.join("a.sh"), "exit 7\n").unwrap();
+    fs::write(h.root.join("a.case"), "exit-7\n").unwrap();
     h.revise();
     let r = h.run(&["check"], 1);
     assert!(
@@ -1116,7 +1108,7 @@ fn local_collection_rejects_stale_failed_and_wrong_pin_reports_without_execution
     h.revise();
     h.run(&["check", "--collect"], 1);
     h.run(&["check", "--unit", "beta"], 0);
-    fs::write(h.root.join("a.sh"), "exit 9\n").unwrap();
+    fs::write(h.root.join("a.case"), "exit-9\n").unwrap();
     h.revise();
     h.run(&["check", "--unit", "alpha"], 1);
     h.run(&["check", "--unit", "beta"], 0);
@@ -2026,7 +2018,7 @@ fn published_report(root: &Path, unit: Option<&str>, out: &std::process::Output)
 fn short_console_large_original_success_has_constant_output_and_no_extra_operations() {
     let mut h = ShortHost::new();
     // A large genuine business process receipt must stay in the original report.
-    fs::write(h.root.join("a.sh"), format!("mkdir -p .chrono-harness/state\nprintf alpha >> .chrono-harness/state/calls-a\n'{}' large-original\n", env!("CARGO_BIN_EXE_chrono-ci-test-transport"))).unwrap();
+    fs::write(h.root.join("a.case"), "alpha-large-original\n").unwrap();
     h.modify(".chrono-harness/FILEMAP.json", |f| {
         f["execution_plans"]["test:a"]["output_limit_bytes"] = json!(2_000_000)
     });
