@@ -21,7 +21,10 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let host = tempdir().unwrap();
-        let release = tempdir().unwrap();
+        let release = tempfile::Builder::new()
+            .prefix("chrono release's $literal `literal` ")
+            .tempdir()
+            .unwrap();
         let mut tools = BTreeMap::new();
         for (name, body) in [
             ("chrono-distribution", b"#!/bin/sh\nexit 0\n".as_slice()),
@@ -238,7 +241,7 @@ fn adoption_is_explicit_and_preserves_customizations() {
     let f = Fixture::new();
     f.adopt();
     f.adopt();
-    let path = f.host.path().join(".chrono-harness/install.py");
+    let path = f.host.path().join(".chrono-harness/install.sh");
     fs::write(&path, "custom").unwrap();
     assert!(
         adopt(
@@ -271,8 +274,9 @@ fn bootstrap_rejects_corrupt_installer_and_propagates_real_exit() {
     save(&f.manifest, &r);
     f.adopt();
     let launch = || {
-        Command::new("python3")
-            .arg(f.host.path().join(".chrono-harness/install.py"))
+        Command::new("sh")
+            .arg(f.host.path().join(".chrono-harness/install.sh"))
+            .arg("--host-root")
             .arg(f.host.path())
             .current_dir("/")
             .output()
@@ -335,6 +339,8 @@ fn pack_and_assemble_bind_real_source_and_declared_members() {
     let combined = out.path().join("combined");
     run(&[
         "assemble".into(),
+        "--source-dir".into(),
+        packed.display().to_string(),
         "--input".into(),
         packed.display().to_string(),
         "--output".into(),
@@ -413,8 +419,9 @@ fn real_generated_bootstrap_installs_from_unrelated_cwd_and_spaced_host() {
         false,
     )
     .unwrap();
-    let result = Command::new("python3")
-        .arg(host.join(".chrono-harness/install.py"))
+    let result = Command::new("sh")
+        .arg(host.join(".chrono-harness/install.sh"))
+        .arg("--host-root")
         .arg(&host)
         .current_dir("/")
         .output()
@@ -460,6 +467,8 @@ fn assemble_rejects_different_sources_and_corrupt_members_without_output() {
         let target = output.path().join("release");
         let error = run(&[
             "assemble".into(),
+            "--source-dir".into(),
+            f.release.path().display().to_string(),
             "--input".into(),
             f.release.path().display().to_string(),
             "--input".into(),
@@ -478,4 +487,254 @@ fn assemble_rejects_different_sources_and_corrupt_members_without_output() {
         );
         assert!(!target.exists());
     }
+}
+
+fn real_installer(f: &Fixture) {
+    let installer = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../distribution/target/debug/chrono-distribution");
+    let target = f
+        .release
+        .path()
+        .join(format!("chrono-distribution-{}", platform()));
+    fs::copy(installer, &target).unwrap();
+    let (hash, size) = file_identity(&target).unwrap();
+    let mut r: Value = serde_json::from_slice(&fs::read(&f.manifest).unwrap()).unwrap();
+    r["platforms"][platform()]["chrono-distribution"]["sha256"] = json!(hash);
+    r["platforms"][platform()]["chrono-distribution"]["size"] = json!(size);
+    save(&f.manifest, &r);
+}
+
+#[test]
+fn assembled_shell_installs_selected_tools_from_stdin_without_python_or_rust() {
+    use std::process::Stdio;
+    let f = Fixture::new();
+    real_installer(&f);
+    let output = tempdir().unwrap();
+    let package = output.path().join("assembled");
+    run(&[
+        "assemble".into(),
+        "--input".into(),
+        f.release.path().display().to_string(),
+        "--output".into(),
+        package.display().to_string(),
+        "--source-dir".into(),
+        f.release.path().display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(package.join("release.json"), &f.manifest).unwrap();
+    let host = f.host.path().join("host's $literal with spaces");
+    fs::create_dir(&host).unwrap();
+    let tools = output.path().join("system-tools");
+    fs::create_dir(&tools).unwrap();
+    for tool in ["uname", "mktemp", "rm", "cp", "chmod", "wc", "shasum"] {
+        let executable = ["/usr/bin", "/bin"]
+            .iter()
+            .map(|d| Path::new(d).join(tool))
+            .find(|p| p.is_file())
+            .unwrap();
+        symlink(executable, tools.join(tool)).unwrap();
+    }
+    let launch = || {
+        Command::new("/bin/sh")
+            .args(["-s", "--", "--host-root"])
+            .arg(&host)
+            .args(["--tool", "alpha"])
+            .stdin(Stdio::from(
+                fs::File::open(package.join("install.sh")).unwrap(),
+            ))
+            .env("PATH", &tools)
+            .current_dir("/")
+            .output()
+            .unwrap()
+    };
+    for _ in 0..2 {
+        let result = launch();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    assert!(host.join(".chrono-harness/bin/alpha").is_file());
+    assert!(!host.join(".chrono-harness/bin/beta").exists());
+    assert!(host.join(".chrono-harness/install.sh").is_file());
+    assert!(!host.join(".chrono-harness/install.py").exists());
+    let lock: Value =
+        serde_json::from_slice(&fs::read(host.join(".chrono-harness/distribution.json")).unwrap())
+            .unwrap();
+    assert_eq!(lock["version"], "v0.1.0-beta.1");
+    assert_eq!(lock["install"].as_object().unwrap().len(), 1);
+}
+
+#[test]
+fn pinned_host_shell_rejects_lock_drift_and_bad_arguments() {
+    let f = Fixture::new();
+    real_installer(&f);
+    f.adopt();
+    let script = f.host.path().join(".chrono-harness/install.sh");
+    let launch = |args: &[&str]| {
+        Command::new("/bin/sh")
+            .arg(&script)
+            .arg("--host-root")
+            .arg(f.host.path())
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    for args in [
+        vec!["--unknown"],
+        vec!["--host-root"],
+        vec!["--tool", "alpha"],
+        vec!["--replace"],
+    ] {
+        let result = launch(&args);
+        assert!(!result.status.success());
+        assert!(!f.binary("alpha").exists());
+    }
+    f.edit_lock(|l| l["version"] = json!("v0.1.0-beta.2"));
+    let result = launch(&[]);
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("integrity mismatch"));
+    assert!(!f.binary("alpha").exists());
+}
+
+#[test]
+fn release_shell_checks_manifest_and_installer_before_adoption() {
+    for corrupt_manifest in [false, true] {
+        let f = Fixture::new();
+        real_installer(&f);
+        let out = tempdir().unwrap();
+        let package = out.path().join("package");
+        run(&[
+            "assemble".into(),
+            "--input".into(),
+            f.release.path().display().to_string(),
+            "--output".into(),
+            package.display().to_string(),
+            "--source-dir".into(),
+            f.release.path().display().to_string(),
+        ])
+        .unwrap();
+        fs::copy(package.join("release.json"), &f.manifest).unwrap();
+        let path = if corrupt_manifest {
+            f.manifest.clone()
+        } else {
+            f.release
+                .path()
+                .join(format!("chrono-distribution-{}", platform()))
+        };
+        fs::write(path, "corrupt").unwrap();
+        let result = Command::new("/bin/sh")
+            .arg(package.join("install.sh"))
+            .arg("--host-root")
+            .arg(f.host.path())
+            .output()
+            .unwrap();
+        assert!(!result.status.success());
+        assert!(String::from_utf8_lossy(&result.stderr).contains("integrity mismatch"));
+        assert!(
+            !f.host
+                .path()
+                .join(".chrono-harness/distribution.json")
+                .exists()
+        );
+    }
+}
+
+#[test]
+fn https_shell_uses_bound_transport_and_cleans_failed_downloads() {
+    let f = Fixture::new();
+    real_installer(&f);
+    let out = tempdir().unwrap();
+    let package = out.path().join("package");
+    run(&[
+        "assemble".into(),
+        "--input".into(),
+        f.release.path().display().to_string(),
+        "--output".into(),
+        package.display().to_string(),
+        "--base-url".into(),
+        "https://release.example.invalid/v1/".into(),
+        "--curl".into(),
+        env!("CARGO_BIN_EXE_distribution-transport-fixture").into(),
+    ])
+    .unwrap();
+    fs::copy(package.join("release.json"), &f.manifest).unwrap();
+    let downloads = out.path().join("downloads");
+    fs::create_dir(&downloads).unwrap();
+    let launch = |fail: bool| {
+        let mut command = Command::new("/bin/sh");
+        command
+            .arg(package.join("install.sh"))
+            .arg("--host-root")
+            .arg(f.host.path())
+            .env("CHRONO_FIXTURE_RELEASE", f.release.path())
+            .env("TMPDIR", &downloads);
+        if fail {
+            command.env("CHRONO_FIXTURE_CURL_FAILURE", "37");
+        }
+        command.output().unwrap()
+    };
+    let failed = launch(true);
+    assert_eq!(failed.status.code(), Some(37));
+    assert_eq!(fs::read_dir(&downloads).unwrap().count(), 0);
+    assert!(
+        !f.host
+            .path()
+            .join(".chrono-harness/distribution.json")
+            .exists()
+    );
+    let result = launch(false);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(fs::read_dir(&downloads).unwrap().count(), 0);
+    assert!(f.binary("alpha").is_file());
+    assert!(f.binary("beta").is_file());
+    assert!(f.binary("chrono-distribution").is_file());
+}
+
+#[test]
+fn release_shell_requires_explicit_replacement_and_preserves_host_customization() {
+    let f = Fixture::new();
+    real_installer(&f);
+    let out = tempdir().unwrap();
+    let package = out.path().join("package");
+    run(&[
+        "assemble".into(),
+        "--input".into(),
+        f.release.path().display().to_string(),
+        "--output".into(),
+        package.display().to_string(),
+        "--source-dir".into(),
+        f.release.path().display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(package.join("release.json"), &f.manifest).unwrap();
+    f.adopt();
+    let path = f.host.path().join(".chrono-harness/install.sh");
+    fs::write(&path, "host customization").unwrap();
+    let launch = |replace: bool| {
+        let mut c = Command::new("/bin/sh");
+        c.arg(package.join("install.sh"))
+            .arg("--host-root")
+            .arg(f.host.path());
+        if replace {
+            c.arg("--replace");
+        }
+        c.output().unwrap()
+    };
+    let rejected = launch(false);
+    assert!(!rejected.status.success());
+    assert_eq!(fs::read(&path).unwrap(), b"host customization");
+    let result = launch(true);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_ne!(fs::read(&path).unwrap(), b"host customization");
+    assert!(f.binary("alpha").is_file());
 }
