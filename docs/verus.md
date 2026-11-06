@@ -101,7 +101,7 @@ five complete byte names, returning that variant. No case folding, trimming,
 prefix acceptance or alias is present. Serde adapters in `graph.rs` delegate
 JSON string serialization/parsing to these functions and reject nonstrings.
 Those adapters and diagnostic formatting remain unproved in their empty-root
-owner; Seed-to-root extraction and the remaining closure composition still require proof.
+owner; the remaining closure composition still requires proof.
 Independent Verus examples check all 25 kind pairs, exact names and roundtrips,
 and noncanonical boundaries. Runtime tests additionally exercise both owned
 JSON values and text, escaped strings and wrong JSON types. An always-Equal
@@ -130,7 +130,7 @@ NUL-containing names, Unicode, cloning, empty rows and duplicate insertions.
 Runtime consumer cases require all 196 pairs of a separately declared 14-edge
 inventory and exercise JSON field transport/errors. JSON/diagnostic adapter
 implementations remain outside the proof root with their obligation retained.
-Seed-to-root extraction and the remaining closure/selection logic still require proof.
+The remaining closure/selection logic still requires proof.
 
 The same root now owns the actual `Origin` and `UnionEdge` types and the production
 two-endpoint typed `union`. Origin equality preserves variant identity, and both
@@ -180,8 +180,8 @@ next value only after all preceding output values and consumes equal names from
 both sides together. Bounds, integer safety and termination are proved. The
 actual closure calls `graph_names` below to supply edge endpoints and root names to this constructor,
 replacing BTreeSet name sorting/deduplication and the subsequent validation scan.
-Extracting root names from Seed objects remains an adapter obligation;
-every supplied typed endpoint and root name is preserved. Independent
+`seed_roots` below now connects actual Seed nodes to these supplied roots;
+every typed endpoint and root name is preserved. Independent
 examples cover empty and repeated-singleton inputs, descending duplicates with
 exact expected slots, and a mixed prefix/Unicode inventory.
 
@@ -222,7 +222,7 @@ targets, empty rows and duplicate roots preserve their supplied positions;
 failure means exactly a row-count mismatch or a missing target/root name. The
 actual closure calls this implementation, replacing its unproved iterator-based
 target-name projection. Source grouping and row construction use the proved
-`source_rows` owner below; Seed-to-root extraction and adapter composition remain obligations.
+`source_rows` owner below; the remaining adapter composition retains its obligation.
 
 Independent Verus examples require exact indices for parallel targets, cycles,
 reordered slots, empty/Unicode names, empty rows and duplicate roots. Missing
@@ -243,7 +243,7 @@ and endpoint origins do not change those row contracts. Empty/isolated rows and
 Unicode/NUL names are covered. The result is absent exactly when a source name
 is missing; target-name admission remains the subsequent index owner's job.
 The actual closure calls this function, replacing its independent string-map
-entry grouping and row collection. Seed-to-root extraction, the surrounding adapter
+entry grouping and row collection. The remaining surrounding adapter
 and the graph's whole-file obligation remain unproved.
 
 The implementation reuses exact name lookup and the supported standard integer
@@ -270,7 +270,7 @@ source name. Kind, origin, duplicate edges/roots, empty graphs and isolated root
 do not change the contract. Bounds and termination are proved. Production calls
 this implementation instead of its independent flat-map/chain collection. One
 Seed-to-root reference vector feeds both name construction and indexing and is
-released before traversal; that Seed field extraction remains unproved.
+released before traversal; `seed_roots` below proves that field extraction.
 
 Independent proofs require an exact empty result, isolated/repeated roots,
 Unicode/NUL, both typed endpoints, different kinds/origins and an exact four-name
@@ -291,8 +291,8 @@ has an actual input-edge witness, so its destination is admitted by the endpoint
 inventory; every supplied root is admitted by the root-name inventory. Both
 internal Option results are therefore proved present. Production calls this
 constructor instead of combining the three steps through unproved `expect`
-conditions. Seed extraction and the remaining cause/traversal adapters retain
-their whole-file migration obligations.
+conditions. The remaining cause/traversal adapters retain their
+whole-file migration obligations.
 
 Independent examples require exact empty output, repeated isolated Unicode/NUL
 roots and exact indices for unordered duplicate edges, parallel kinds, cycles,
@@ -302,6 +302,33 @@ budgets. Clearing the supplied root positions at the actual indexing call is
 rejected by the topology root-correspondence postcondition; correct source is
 restored by SHA-256 before canonical verification. Existing construction/storage
 bounds still apply; measured total costs remain unknown.
+
+The same root now owns the actual `Seed`. Its explicit Clone preserves all four
+fields. Equality, Ord and PartialOrd compare complete UTF-8 bytes in declaration
+order: id, node, reference, reason. Exact equality, reverse order, transitivity
+and the full vstd comparison laws are proved. `EdgeKind` also has an explicit,
+proved Clone instead of an ignored derived implementation.
+
+`seed_roots` projects each actual Seed's node field with exact bytes, set
+membership, count and position, including duplicates. `seed_topology` composes
+that projection with topology construction. It proves the exact endpoint/Seed
+node set and cardinality, sorted source rows, target indices and valid graph;
+every root index names the actual node of the Seed at that same position.
+Production closure calls this constructor directly. Its temporary root references
+are released before traversal. Seed construction, cause merging, the remaining
+adapter composition, JSON/debug adapters, selection and complete SPEC
+correspondence retain their obligations.
+
+Independent Verus examples require four-field precedence, prefix/NUL boundaries,
+clones, BTreeSet membership that distinguishes the final field, and exact empty
+and repeated Unicode/NUL node-to-root correspondence. Comparing reference again
+instead of reason is rejected by the comparison postcondition; correct source
+is restored by SHA-256 before candidate verification. Runtime cases independently
+specify all 196 pairs of a 14-Seed inventory, clones, sorted deduplication and
+four-field JSON transport with missing/nonstring rejection. These reuse the
+existing whole-crate roots, flags, dependencies, interfaces and budgets. The
+four comparison stages and O(S) temporary root references retain the existing
+bounds; measured total runtime/build/CI/storage costs remain unknown.
 
 The current distribution interface uses a generated shell installer. Its
 argument parsing, platform selection, integrity decisions and cleanup are
@@ -337,7 +364,7 @@ cost remains unmeasured.
 The actual `graph::closure` calls the proved name-inventory, source-row and index
 constructors, then calls the traversal for each seed.
 It uses returned indices to construct the existing reached causes, predecessor
-maps and traversed typed edges. Extraction of supplied edge/seed names, the
+maps and traversed typed edges. The
 remaining adapter composition, seed production, serialization and test selection
 remain unproved;
 the adapter's empty-root obligation is retained. Independent Verus examples cover

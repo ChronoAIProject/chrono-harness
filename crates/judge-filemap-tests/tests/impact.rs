@@ -569,6 +569,81 @@ fn edge_json_adapters_preserve_fields_and_report_invalid_inputs() {
 }
 
 #[test]
+fn complete_seed_order_matches_all_four_fields_and_preserves_btree_members() {
+    let expected: Vec<Seed> = [
+        ("", "z", "z", "z"),
+        ("a", "", "z", "z"),
+        ("a", "a", "", "z"),
+        ("a", "a", "a", ""),
+        ("a", "a", "a", "\0"),
+        ("a", "a", "a", "a"),
+        ("a", "a", "a", "a\0"),
+        ("a", "a", "a", "aa"),
+        ("a", "a", "a", "é"),
+        ("a", "a", "a", "根"),
+        ("a", "a", "b", ""),
+        ("a", "b", "", ""),
+        ("b", "", "", ""),
+        ("根", "", "", ""),
+    ]
+    .into_iter()
+    .map(|(id, node, reference, reason)| Seed {
+        id: id.into(),
+        node: node.into(),
+        reference: reference.into(),
+        reason: reason.into(),
+    })
+    .collect();
+    for (i, a) in expected.iter().enumerate() {
+        for (j, b) in expected.iter().enumerate() {
+            assert_eq!(a.cmp(b), i.cmp(&j), "indices {i}, {j}");
+            assert_eq!(a.partial_cmp(b), Some(i.cmp(&j)), "indices {i}, {j}");
+            assert_eq!(a == b, i == j, "indices {i}, {j}");
+        }
+        assert_eq!(a.clone(), *a);
+    }
+    let actual: BTreeSet<Seed> = expected
+        .iter()
+        .rev()
+        .chain(expected.iter())
+        .cloned()
+        .collect();
+    assert_eq!(actual.into_iter().collect::<Vec<_>>(), expected);
+}
+
+#[test]
+fn seed_json_adapters_preserve_each_field_and_reject_missing_or_nonstring_fields() {
+    let seed = Seed {
+        id: "id\0".into(),
+        node: "根".into(),
+        reference: "é".into(),
+        reason: "".into(),
+    };
+    let expected = json!({"id":"id\0","node":"根","reference":"é","reason":""});
+    assert_eq!(serde_json::to_value(&seed).unwrap(), expected);
+    assert_eq!(
+        serde_json::from_value::<Seed>(expected.clone()).unwrap(),
+        seed
+    );
+    let text = r#"{"reason":"","reference":"\u00e9","node":"根","id":"id\u0000"}"#;
+    assert_eq!(serde_json::from_str::<Seed>(text).unwrap(), seed);
+    assert_eq!(
+        format!("{seed:?}"),
+        "Seed { id: \"id\\0\", node: \"根\", reference: \"é\", reason: \"\" }"
+    );
+    for field in ["id", "node", "reference", "reason"] {
+        let mut missing = expected.clone();
+        missing.as_object_mut().unwrap().remove(field);
+        let mut nonstring = expected.clone();
+        nonstring[field] = json!(null);
+        for value in [missing, nonstring] {
+            assert!(serde_json::from_value::<Seed>(value.clone()).is_err());
+            assert!(serde_json::from_str::<Seed>(&value.to_string()).is_err());
+        }
+    }
+}
+
+#[test]
 fn typed_union_preserves_full_order_exact_origins_and_flat_json_transport() {
     let expected = [
         ("", EdgeKind::JudgeTrigger, "根", Origin::Candidate),

@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub use crate::verified_graph::{Edge, EdgeKind, Origin, UnionEdge, union};
+pub use crate::verified_graph::{Edge, EdgeKind, Origin, Seed, UnionEdge, union};
 
 impl std::fmt::Debug for EdgeKind {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -115,12 +115,34 @@ impl std::fmt::Debug for UnionEdge {
             .finish()
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Seed {
-    pub id: String,
-    pub node: String,
-    pub reference: String,
-    pub reason: String,
+impl std::fmt::Debug for Seed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Seed")
+            .field("id", &self.id)
+            .field("node", &self.node)
+            .field("reference", &self.reference)
+            .field("reason", &self.reason)
+            .finish()
+    }
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Seed", rename = "Seed")]
+struct SeedFields {
+    id: String,
+    node: String,
+    reference: String,
+    reason: String,
+}
+impl Serialize for Seed {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        SeedFields::serialize(self, serializer)
+    }
+}
+impl<'de> Deserialize<'de> for Seed {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        SeedFields::deserialize(deserializer)
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TraversedEdge {
@@ -141,13 +163,11 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
         predecessors: BTreeMap::new(),
         traversed: vec![],
     };
-    let seed_names: Vec<&str> = seeds.iter().map(|seed| seed.node.as_str()).collect();
     let crate::verified_graph::Topology {
         names: nodes,
         edge_rows,
         indices,
-    } = crate::verified_graph::topology(edges, &seed_names);
-    drop(seed_names);
+    } = crate::verified_graph::seed_topology(edges, seeds);
     let mut traversed: BTreeMap<Edge, BTreeSet<String>> = BTreeMap::new();
     for (seed, root) in seeds.iter().zip(indices.roots) {
         let search = crate::verified_graph::breadth_first(&indices.rows, root)

@@ -10,13 +10,19 @@ use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
-#[derive(Clone, Copy)]
+#[derive(Copy)]
 pub enum EdgeKind {
     Compile,
     BuildInput,
     RuntimeInput,
     TestExecution,
     JudgeTrigger,
+}
+
+impl Clone for EdgeKind {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    { *self }
 }
 
 impl EdgeKind {
@@ -2210,6 +2216,229 @@ pub fn topology<'a>(edges: &'a [UnionEdge], roots: &[&'a str]) -> (out: Topology
     }
     let indices = index_edges(&names, &edge_rows, roots).unwrap();
     Topology { names, edge_rows, indices }
+}
+
+pub struct Seed {
+    pub id: String,
+    pub node: String,
+    pub reference: String,
+    pub reason: String,
+}
+
+impl Seed {
+    pub open spec fn key(&self) -> (Seq<u8>, Seq<u8>, Seq<u8>, Seq<u8>) {
+        (vstd::utf8::encode_utf8(self.id@), vstd::utf8::encode_utf8(self.node@),
+            vstd::utf8::encode_utf8(self.reference@), vstd::utf8::encode_utf8(self.reason@))
+    }
+
+    pub open spec fn same(&self, other: &Self) -> bool { self.key() == other.key() }
+
+    pub open spec fn less(&self, other: &Self) -> bool {
+        let a = self.key();
+        let b = other.key();
+        byte_lt(a.0, b.0) || a.0 == b.0 && (
+            byte_lt(a.1, b.1) || a.1 == b.1 && (
+                byte_lt(a.2, b.2) || a.2 == b.2 && byte_lt(a.3, b.3)))
+    }
+
+    pub open spec fn order_spec(&self, other: &Self) -> Ordering {
+        if self.same(other) { Ordering::Equal }
+        else if self.less(other) { Ordering::Less }
+        else { Ordering::Greater }
+    }
+
+    pub fn compare(&self, other: &Self) -> (order: Ordering)
+        ensures order == self.order_spec(other),
+    {
+        proof { seed_order_laws(self, other, other); }
+        let id = compare_bytes(self.id.as_str().as_bytes(), other.id.as_str().as_bytes());
+        if id < 0 { return Ordering::Less; }
+        if id > 0 { return Ordering::Greater; }
+        let node = compare_bytes(self.node.as_str().as_bytes(), other.node.as_str().as_bytes());
+        if node < 0 { return Ordering::Less; }
+        if node > 0 { return Ordering::Greater; }
+        let reference = compare_bytes(self.reference.as_str().as_bytes(), other.reference.as_str().as_bytes());
+        if reference < 0 { return Ordering::Less; }
+        if reference > 0 { return Ordering::Greater; }
+        let reason = compare_bytes(self.reason.as_str().as_bytes(), other.reason.as_str().as_bytes());
+        if reason < 0 { Ordering::Less }
+        else if reason > 0 { Ordering::Greater }
+        else { Ordering::Equal }
+    }
+}
+
+proof fn byte_order_facts(a: Seq<u8>, b: Seq<u8>, c: Seq<u8>)
+    ensures a == b || byte_lt(a, b) || byte_lt(b, a),
+        byte_lt(a, b) ==> a != b && !byte_lt(b, a),
+        byte_lt(b, a) ==> b != a,
+        byte_lt(a, b) && byte_lt(b, c) ==> byte_lt(a, c),
+        byte_lt(a, c) ==> a != c,
+{
+    byte_trichotomy(a, b);
+    byte_lt_asymmetric(a, b);
+    if byte_lt(a, b) { byte_lt_strict(a, b); }
+    if byte_lt(b, a) { byte_lt_strict(b, a); }
+    if byte_lt(a, b) && byte_lt(b, c) { byte_lt_transitive(a, b, c); }
+    if byte_lt(a, c) { byte_lt_strict(a, c); }
+}
+
+pub proof fn seed_order_laws(a: &Seed, b: &Seed, c: &Seed)
+    ensures (a.order_spec(b) == Ordering::Equal) == a.same(b),
+        (a.order_spec(b) == Ordering::Less) == (b.order_spec(a) == Ordering::Greater),
+        a.order_spec(b) == Ordering::Less && b.order_spec(c) == Ordering::Less
+            ==> a.order_spec(c) == Ordering::Less,
+{
+    byte_order_facts(a.key().0, b.key().0, c.key().0);
+    byte_order_facts(a.key().1, b.key().1, c.key().1);
+    byte_order_facts(a.key().2, b.key().2, c.key().2);
+    byte_order_facts(a.key().3, b.key().3, c.key().3);
+}
+
+impl Clone for Seed {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    {
+        Self { id: self.id.clone(), node: self.node.clone(),
+            reference: self.reference.clone(), reason: self.reason.clone() }
+    }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for Seed {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { self.same(other) }
+}
+
+impl PartialEq for Seed {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == self.same(other),
+    {
+        match self.compare(other) { Ordering::Equal => true, _ => false }
+    }
+}
+
+impl Eq for Seed {}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::OrdSpecImpl for Seed {
+    open spec fn obeys_cmp_spec() -> bool { true }
+    open spec fn cmp_spec(&self, other: &Self) -> Ordering { self.order_spec(other) }
+}
+
+impl Ord for Seed {
+    fn cmp(&self, other: &Self) -> (order: Ordering)
+        ensures order == self.order_spec(other),
+    { self.compare(other) }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialOrdSpecImpl for Seed {
+    open spec fn obeys_partial_cmp_spec() -> bool { true }
+    open spec fn partial_cmp_spec(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order_spec(other))
+    }
+}
+
+impl PartialOrd for Seed {
+    fn partial_cmp(&self, other: &Self) -> (order: Option<Ordering>)
+        ensures order == Some(self.order_spec(other)),
+    { Some(self.compare(other)) }
+}
+
+pub proof fn seed_obeys_cmp()
+    ensures vstd::laws_cmp::obeys_cmp::<Seed>(),
+{
+    use vstd::std_specs::cmp::{PartialEqSpec, PartialOrdSpec, OrdSpec};
+    reveal(vstd::laws_eq::obeys_eq_spec_properties);
+    reveal(vstd::laws_cmp::obeys_partial_cmp_spec_properties);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    assert forall|a: Seed, b: Seed|
+        a.partial_cmp_spec(&b) == Some(Ordering::Less)
+            <==> b.partial_cmp_spec(&a) == Some(Ordering::Greater) by {
+        seed_order_laws(&a, &b, &b);
+    }
+    assert forall|a: Seed, b: Seed, c: Seed|
+        a.partial_cmp_spec(&b) == Some(Ordering::Less)
+            && b.partial_cmp_spec(&c) == Some(Ordering::Less)
+            implies a.partial_cmp_spec(&c) == Some(Ordering::Less) by {
+        seed_order_laws(&a, &b, &c);
+    }
+    assert forall|a: Seed, b: Seed, c: Seed|
+        a.partial_cmp_spec(&b) == Some(Ordering::Greater)
+            && b.partial_cmp_spec(&c) == Some(Ordering::Greater)
+            implies a.partial_cmp_spec(&c) == Some(Ordering::Greater) by {
+        seed_order_laws(&a, &b, &c);
+        seed_order_laws(&b, &c, &a);
+        seed_order_laws(&c, &b, &a);
+    }
+}
+
+/// Preserve the node field and position of every actual Seed, including duplicates.
+pub open spec fn seed_node_names(seeds: Seq<Seed>) -> Set<Seq<u8>> {
+    Set::new(|key: Seq<u8>| exists|at: int| 0 <= at < seeds.len()
+        && (#[trigger] seeds[at]).key().1 == key)
+}
+
+pub fn seed_roots<'a>(seeds: &'a [Seed]) -> (out: Vec<&'a str>)
+    ensures out.len() == seeds.len(),
+        forall|at: int| 0 <= at < out.len()
+            ==> (#[trigger] out@[at]).spec_bytes() == seeds@[at].key().1,
+        name_members(out@) == seed_node_names(seeds@),
+{
+    let mut out: Vec<&str> = Vec::with_capacity(seeds.len());
+    let mut at: usize = 0;
+    while at < seeds.len()
+        invariant at <= seeds.len(), out.len() == at,
+            forall|i: int| 0 <= i < at
+                ==> (#[trigger] out@[i]).spec_bytes() == seeds@[i].key().1,
+        decreases seeds.len() - at,
+    {
+        out.push(seeds[at].node.as_str());
+        at += 1;
+    }
+    assert forall|key: Seq<u8>| name_members(out@).contains(key)
+        == seed_node_names(seeds@).contains(key) by {
+        if name_members(out@).contains(key) {
+            let i = choose|i: int| 0 <= i < out.len() && out@[i].spec_bytes() == key;
+            assert(seeds@[i].key().1 == key);
+        }
+        if seed_node_names(seeds@).contains(key) {
+            let i = choose|i: int| 0 <= i < seeds.len() && seeds@[i].key().1 == key;
+            assert(out@[i].spec_bytes() == key);
+        }
+    }
+    out
+}
+
+/// Construct the actual graph directly from Seeds and preserve every root position.
+pub fn seed_topology<'a>(edges: &'a [UnionEdge], seeds: &'a [Seed]) -> (out: Topology<'a>)
+    ensures ordered_names(out.names@),
+        name_members(out.names@) == endpoint_names(edges@) + seed_node_names(seeds@),
+        (endpoint_names(edges@) + seed_node_names(seeds@)).finite(),
+        out.names.len() == (endpoint_names(edges@) + seed_node_names(seeds@)).len(),
+        out.edge_rows.len() == out.names.len(),
+        forall|row: int| 0 <= row < out.edge_rows.len()
+            ==> source_row_matches(#[trigger] out.edge_rows@[row]@, edges@, out.names@[row].spec_bytes()),
+        out.indices.rows.len() == out.names.len(),
+        valid_graph(out.indices.rows@),
+        forall|row: int| 0 <= row < out.edge_rows.len()
+            ==> edge_indices_match(out.names@, out.edge_rows@[row]@, #[trigger] out.indices.rows@[row]@),
+        out.indices.roots.len() == seeds.len(),
+        forall|at: int| 0 <= at < seeds.len() ==> {
+            let index = #[trigger] out.indices.roots@[at];
+            index < out.names.len() && out.names@[index as int].spec_bytes() == seeds@[at].key().1
+        },
+{
+    let roots = seed_roots(seeds);
+    let out = topology(edges, &roots);
+    assert forall|at: int| 0 <= at < seeds.len() implies {
+        let index = #[trigger] out.indices.roots@[at];
+        index < out.names.len() && out.names@[index as int].spec_bytes() == seeds@[at].key().1
+    } by {
+        assert(roots@[at].spec_bytes() == seeds@[at].key().1);
+    }
+    out
 }
 
 }

@@ -1209,4 +1209,117 @@ fn topology_preserves_exact_parallel_cycle_self_loop_and_root_slots() {
     assert(graph.indices.roots[0] == 1 && graph.indices.roots[1] == 0 && graph.indices.roots[2] == 1);
 }
 
+fn seed(id: &str, node: &str, reference: &str, reason: &str) -> (out: policy::Seed)
+    ensures out.key() == (id.spec_bytes(), node.spec_bytes(), reference.spec_bytes(), reason.spec_bytes()),
+        out.id@ == id@, out.node@ == node@, out.reference@ == reference@, out.reason@ == reason@,
+{
+    policy::Seed { id: id.to_owned(), node: node.to_owned(),
+        reference: reference.to_owned(), reason: reason.to_owned() }
+}
+
+fn seed_before(a: &policy::Seed, b: &policy::Seed)
+    requires a.less(b), !a.same(b),
+{
+    use core::cmp::Ordering;
+    proof { policy::seed_order_laws(a, b, b); }
+    let forward = a.cmp(b);
+    let reverse = b.cmp(a);
+    let partial = a.partial_cmp(b);
+    let equal = a == b;
+    assert(forward == Ordering::Less && reverse == Ordering::Greater);
+    assert(partial == Some(Ordering::Less));
+    assert(!equal);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn seed_order_uses_complete_id_node_reference_reason_in_that_order() {
+    proof {
+        reveal_strlit(""); reveal_strlit("a"); reveal_strlit("z"); reveal_strlit("a\0");
+        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("z"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a\0"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+        assert("".spec_bytes() == Seq::<u8>::empty());
+        assert("a".spec_bytes() == seq![97u8]);
+        assert("z".spec_bytes() == seq![122u8]);
+        assert("a\0".spec_bytes() == seq![97u8, 0]);
+        assert(policy::byte_prefix("".spec_bytes(), "a".spec_bytes(), 0));
+        assert(policy::byte_lt("".spec_bytes(), "a".spec_bytes()));
+        assert(policy::byte_prefix("a".spec_bytes(), "a\0".spec_bytes(), 1));
+        assert(policy::byte_lt("a".spec_bytes(), "a\0".spec_bytes()));
+    }
+    let low = seed("", "z", "z", "z");
+    let high = seed("a", "", "", "");
+    seed_before(&low, &high);
+    let low = seed("a", "", "z", "z");
+    let high = seed("a", "a", "", "");
+    seed_before(&low, &high);
+    let low = seed("a", "a", "", "z");
+    let high = seed("a", "a", "a", "");
+    seed_before(&low, &high);
+    let low = seed("a", "a", "a", "a");
+    let high = seed("a", "a", "a", "a\0");
+    seed_before(&low, &high);
+    let cloned = high.clone();
+    assert(cloned.key() == high.key());
+    let equal = cloned == high;
+    let order = cloned.cmp(&high);
+    assert(equal && order == core::cmp::Ordering::Equal);
+    let kind = policy::EdgeKind::TestExecution;
+    let cloned_kind = kind.clone();
+    assert(cloned_kind == kind);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn seed_btree_membership_distinguishes_the_last_field_and_repeated_values() {
+    use std::collections::BTreeSet;
+    proof { policy::seed_obeys_cmp(); }
+    let a = seed("same", "根\0", "ref", "");
+    let b = seed("same", "根\0", "ref", "\0");
+    let c = seed("same", "根\0", "ref", "\0x");
+    proof {
+        reveal_strlit(""); reveal_strlit("\0"); reveal_strlit("\0x");
+        vstd::utf8::is_ascii_chars_encode_utf8("\0"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("\0x"@);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+        assert(a.key().3 != b.key().3 && a.key().3 != c.key().3 && b.key().3 != c.key().3);
+    }
+    let mut values: BTreeSet<policy::Seed> = BTreeSet::new();
+    values.insert(c.clone()); values.insert(a.clone()); values.insert(b.clone()); values.insert(a.clone());
+    assert(values@ == Set::<policy::Seed>::empty().insert(c).insert(a).insert(b));
+    assert(values.len() == 3);
+    let present = values.contains(&a);
+    assert(present);
+    let present = values.contains(&b);
+    assert(present);
+    let present = values.contains(&c);
+    assert(present);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn seed_roots_and_topology_preserve_actual_nodes_and_duplicate_positions() {
+    let empty: Vec<policy::Seed> = vec![];
+    let roots = policy::seed_roots(&empty);
+    assert(roots.len() == 0);
+    let edges: Vec<policy::UnionEdge> = vec![];
+    assert(policy::endpoint_names(edges@) =~= Set::<Seq<u8>>::empty());
+    assert(policy::seed_node_names(empty@) =~= Set::<Seq<u8>>::empty());
+    assert((policy::endpoint_names(edges@) + policy::seed_node_names(empty@)) =~= Set::<Seq<u8>>::empty());
+    let graph = policy::seed_topology(&edges, &empty);
+    assert(graph.names.len() == 0 && graph.indices.roots.len() == 0);
+    let first = seed("id differs", "", "reference differs", "reason differs");
+    let next = seed("another id", "根\0", "another reference", "another reason");
+    let seeds = vec![first.clone(), next, first];
+    let roots = policy::seed_roots(&seeds);
+    assert(roots.len() == 3);
+    assert(roots@[0].spec_bytes() == "".spec_bytes());
+    assert(roots@[1].spec_bytes() == "根\0".spec_bytes());
+    assert(roots@[2].spec_bytes() == "".spec_bytes());
+    let graph = policy::seed_topology(&edges, &seeds);
+    assert(graph.indices.roots.len() == 3);
+    assert(graph.names@[graph.indices.roots@[0] as int].spec_bytes() == "".spec_bytes());
+    assert(graph.names@[graph.indices.roots@[1] as int].spec_bytes() == "根\0".spec_bytes());
+    assert(graph.names@[graph.indices.roots@[2] as int].spec_bytes() == "".spec_bytes());
+}
+
 }
