@@ -110,16 +110,19 @@ beta.11 新增显式元数据重建与原始 checkout 身份核对，并包含�
 
 ```sh
 chrono-distribution pack --root PRODUCT --plan PRODUCT/.chrono-harness/release/plan.json --output ABSENT_OUTPUT
-chrono-distribution assemble --input MAC_PACKAGE --input LINUX_PACKAGE --output ABSENT_RELEASE
+chrono-distribution assemble --input MAC_PACKAGE --input LINUX_PACKAGE --output ABSENT_RELEASE \
+  --base-url https://github.com/ChronoAIProject/chrono-harness/releases/download/VERSION --curl /usr/bin/curl
 ```
 
 `pack` 拒绝脏源码，固定实际 Git commit/tree；只复制明确列出的可执行文件，不扫描 crates。
 
-`assemble` 显式接收平台包，验证每个成员，拒绝源提交、树、版本或成员集不一致及重复平台。
+`assemble` 显式接收平台包及安装源，验证每个成员，拒绝源提交、树、版本或成员集不一致及重复平台。
 
 最终 `release.json` 使用 `chrono-release/v1`，包含 `version/source_commit/source_tree/platforms`。
 
 平台映射中每个具名工具有 `file/sha256/size`；文件名为 `NAME-OS-ARCH`，每个平台须提供 `chrono-distribution`。
+
+组合目录另有同版本的 `install.sh`，内嵌清单与各平台安装器的摘要和长度，随全部资产一起发布。
 
 该流程直接处理文件，不解压归档。
 
@@ -185,6 +188,20 @@ beta.17 原候选的原生 Linux 单元通过，当次汇总因报告读取上�
 
 输入及其依赖的完整性、完整宿主治理和确定性同判仍未认证。
 
+## 一键安装
+
+产品与宿主登记同步变更：Python 启动模板及其路径登记迁移为 Shell，安装规则仍归 Rust；组合发布命令新增显式安装源。保留原安装测试，增加真实 Shell/安装器和 HTTPS 命令边界验证；验证、下载及维护的总成本尚未测量。
+
+包含本实现的发行须先上传组合目录中的 `install.sh`、`release.json` 及全部平台工具；已有旧版发行不因此获得新入口。将 `VERSION` 替换成所选固定版本，在宿主根运行：
+
+```sh
+curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/VERSION/install.sh | sh -s -- --host-root .
+```
+
+脚本默认安装该发布清单中的全部工具；重复的 `--tool NAME` 可明确选择子集。脚本识别 macOS/Linux 及 arm64/aarch64/x86_64，取得并校验对应安装器和原清单，再调用 Rust `adopt`、`install`。选择已有不同配置时拒绝覆盖，显式升级使用 `--replace`。下载、校验、采用或安装失败均非零；已启动的 Rust 安装器的退出码原样传递。
+
+运行需要 POSIX `sh`、`uname`、`mktemp`、`cp`、`chmod`、`rm`、`wc`、`sha256sum` 或 `shasum -a 256`，HTTPS 源另需登记的 curl；无需 Python、Rust/Cargo、sudo 或修改全局配置。脚本来自所选固定版本，是首次信任入口；内嵌摘要固定字节，不单独认证发布者身份。临时下载在退出时清理，失败诊断留在原 stderr。
+
 ## 宿主采用
 
 取得固定发布清单和对应平台的 `chrono-distribution` 后，明确选择要安装的工具：
@@ -194,20 +211,28 @@ chrono-distribution adopt --host-root HOST --manifest release.json \
   --base-url https://github.com/ChronoAIProject/chrono-harness/releases/download/VERSION \
   --curl /usr/bin/curl --tool chrono-harness --tool chrono-judge-ci \
   --tool chrono-ci --tool chrono-instructions
-python3 HOST/.chrono-harness/install.py HOST
+sh HOST/.chrono-harness/install.sh --host-root HOST
 ```
 
-采用工具写出 `.chrono-harness/distribution.json` (`chrono-install/v1`) 及 `.chrono-harness/install.py`。
+采用工具写出 `.chrono-harness/distribution.json` (`chrono-install/v1`) 及 `.chrono-harness/install.sh`。
 
 登记含版本、HTTPS 源、清单摘要/长度、各平台注册 installer 摘要/长度、工具名称到 `.chrono-harness/bin/` 文件的显式映射。
+
+生成的 Shell 绑定该声明原字节的摘要和长度，修改声明须重新 adopt 生成入口。
 
 发布清单是采用时的受信任输入，调用者应从所选固定发布获得并核对；不使用会移动的 latest。
 
 首次采用者也须核验执行的安装器身份。
 
-本地和 CI 共用同一 `python3 .chrono-harness/install.py .`。生成入口验证已锁定 installer，执行该 Rust installer；Rust 验证锁定清单、版本、平台和所选资产。缺失平台/成员、摘要/长度不符、目的冲突、未知 schema 均非零。安装不读取宿主源码、语言 manifest、目录布局或测试配置。语言 SDK 继续由宿主自己的显式登记负责。
+本地和 CI 共用同一 `sh .chrono-harness/install.sh --host-root .`。生成入口验证安装声明和已锁定 installer，执行该 Rust installer；Rust 验证锁定清单、版本、平台和所选资产。缺失平台/成员、摘要/长度不符、目的冲突、未知 schema 均非零。安装不读取宿主源码、语言 manifest、目录布局或测试配置。语言 SDK 继续由宿主自己的显式登记负责。
 
-离线分发可以 `--source-dir ABSOLUTE_PACKAGE` 替代 HTTPS 参数，使用同一个校验/安装路径；本地绝对路径不适合提交给公共消费者。HTTPS 传输 是明确登记的 curl，禁读 curlrc，只允许 HTTPS（含重定向），检查实际下载退出码。Python 3 仅承担初始 installer 下载与调用；常规安装语义由 Rust 维护。
+离线分发在 assemble/adopt 时可以 `--source-dir ABSOLUTE_PACKAGE` 替代 HTTPS 参数，使用同一个校验/安装路径；本地绝对路径不适合提交给公共消费者。
+
+HTTPS 传输使用明确登记的 curl，禁读 curlrc，只允许 HTTPS（含重定向），检查实际下载退出码。
+
+Shell 只承担初始下载、字节校验和调用；常规安装语义由 Rust 维护。
+
+旧 Python 启动模板已退役；外部既有宿主的脚本和 CI 命令须随采用新版安装器明确迁移，不自动删除其定制文件。
 
 ## 更新及故障边界
 
