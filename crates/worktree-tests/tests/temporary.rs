@@ -86,17 +86,33 @@ fn directory_cleanup_budget_counts_siblings_without_individual_excess() {
     // Both allocations are individually within their bound. A fresh ID must
     // observe the producer directory even before either publishes an excess.
     let error = match chrono_worktree::TemporaryHost::allocate(
-        &store, "test-allocation", &outputs, "cannot-bypass-",
+        &store,
+        "test-allocation",
+        &outputs,
+        "cannot-bypass-",
     ) {
         Ok(_) => panic!("fresh allocation bypassed the aggregate directory budget"),
         Err(error) => error,
     };
-    assert!(error.contains("producer directory capacity unmet"), "{error}");
-    assert!(!fs::read_dir(&store).unwrap().any(|entry|
-        entry.unwrap().file_name().to_string_lossy().starts_with("cannot-bypass-")));
+    assert!(
+        error.contains("producer directory capacity unmet"),
+        "{error}"
+    );
+    assert!(!fs::read_dir(&store).unwrap().any(|entry| {
+        entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("cannot-bypass-")
+    }));
     assert_eq!(fs::metadata(&first_bytes).unwrap().len(), 600000);
     assert_eq!(fs::metadata(&second_bytes).unwrap().len(), 600000);
-    assert!(second.checkpoint().unwrap_err().contains("producer directory capacity unmet"));
+    assert!(
+        second
+            .checkpoint()
+            .unwrap_err()
+            .contains("producer directory capacity unmet")
+    );
 
     // Reducing our own scratch settles capacity without releasing a consumer
     // or deleting its protected sibling. External symlink targets are excluded.
@@ -105,7 +121,13 @@ fn directory_cleanup_budget_counts_siblings_without_individual_excess() {
     fs::write(&external, vec![b'x'; 1048576]).unwrap();
     std::os::unix::fs::symlink(&external, second.path().join("external-link")).unwrap();
     let usage = second.checkpoint().unwrap();
-    assert!(usage["producer_directory"]["logical_bytes"].as_u64().unwrap() < 1048576, "{usage}");
+    assert!(
+        usage["producer_directory"]["logical_bytes"]
+            .as_u64()
+            .unwrap()
+            < 1048576,
+        "{usage}"
+    );
     let mut next =
         chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "recovered-")
             .unwrap();
@@ -131,14 +153,22 @@ fn directory_cleanup_budget_refuses_unknown_usage_without_creating_an_allocation
         fs::write(allocation.path().join(format!("scratch-{index}")), b"a").unwrap();
     }
     let error = match chrono_worktree::TemporaryHost::allocate(
-        &store, "test-allocation", &outputs, "unknown-usage-",
+        &store,
+        "test-allocation",
+        &outputs,
+        "unknown-usage-",
     ) {
         Ok(_) => panic!("incomplete directory measurement admitted production"),
         Err(error) => error,
     };
     assert!(error.contains("usage unknown"), "{error}");
-    assert!(!fs::read_dir(&store).unwrap().any(|entry|
-        entry.unwrap().file_name().to_string_lossy().starts_with("unknown-usage-")));
+    assert!(!fs::read_dir(&store).unwrap().any(|entry| {
+        entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("unknown-usage-")
+    }));
     assert_eq!(fs::read_dir(allocation.path()).unwrap().count(), 128);
 }
 
