@@ -701,6 +701,24 @@
             "--manifest-path",
             "crates/judge-ci/Cargo.toml"
           ]
+        },
+        "verify_collection": {
+          "operation": "verify.ci-collection",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-collection.rlib,dep-info=.chrono-harness/state/verify.ci-collection.rlib.d",
+            "crates/judge-ci/src/verified_collection.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-collection.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -828,6 +846,24 @@
             "--test",
             "behavior",
             "retirement"
+          ]
+        },
+        "verify_collection": {
+          "operation": "verify.ci-collection-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-collection-tests.rlib,dep-info=.chrono-harness/state/verify.ci-collection-tests.rlib.d",
+            "crates/judge-ci-tests/tests/verified_collection.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-collection-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },
