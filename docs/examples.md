@@ -114,6 +114,6 @@ beta.8 的历史验证中，四个已合入宿主在本地 macOS arm64 使用当
 
 ## 按条件启动 CI 单元的源码示例
 
-[`examples/ci-host-job-gating`](../examples/ci-host-job-gating/README.md) 可以复制到新仓库，使用已安装工具、固定短命令和一个按条件启动单元的父工作流。它明确登记 detector／harness 工具的获取、两个单元设置，以及原报告汇总。
+[`examples/ci-host-job-gating`](../examples/ci-host-job-gating/README.md) 可以复制到新仓库，使用已安装工具、固定短命令和一个按条件启动单元的父工作流。它明确登记 detector／harness 工具的获取、两个单元设置，以及原报告汇总。安装和验证转发使用薄 Shell；Python 只供示例业务及其测试使用。
 
 上文公开 Go／TS／混合仓库的真实 CI 证据继续保留各自原版本。公开二进制发布、这些消费者的明确迁移，以及本次修正是否在真实 Actions 中采用，仍由调用方负责。
