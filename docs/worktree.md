@@ -758,7 +758,7 @@ Git main 工具缺失保留原 seed 行为；linked 缺协调者或不兼容，�
 
 内部 stage profile 构建 build.worktree，把独立执行物留在 `.chrono-harness/bin/owner-stages/`。构建失败不请求部署，原命令／后代全部等待结束后，stage 才请求 EX。
 
-core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候选部署后，core 消费原操作记录／流，以保留 stage 工具作为安装输入。复用前核当前 adoption、源码、声明、工具链、实测环境。原 PID／退出／流描述符不改，`reused_from` 点名 stage 报告，不假称第二次执行。首次 seed 或独立所有 linked 工具仍运行声明构建。
+core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候选部署后，core 消费原操作记录／流，以保留 stage 工具作为安装输入。复用前核当前 adoption、源码、声明、工具链、实测环境及这批操作实际使用的工具选择；core 其他操作新增工具槽不使原构建失效。原 PID／退出／流描述符不改，`reused_from` 点名 stage 报告，不假称第二次执行。首次 seed 或独立所有 linked 工具仍运行声明构建。
 
 **产品与宿主政策曾同步修改：**去掉已采用 main 的重复 owner 构建，避免临时重建替换部署字节。登记 bootstrap 测试覆盖复用、选择、原绑定拒绝，再验源码 bootstrap 及受影响标准／原生范围；总节时未测。
 

@@ -146,6 +146,42 @@
         "--version"
       ],
       "expected_version": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode_26.6.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin"
+    },
+    {
+      "id": "verus",
+      "program": ".chrono-harness/bin/verus/verus",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "Verus\n  Version: 0.2026.04.24.f8e1704\n  Profile: release\n  Platform: macos_aarch64\n  Toolchain: 1.95.0-aarch64-apple-darwin"
+    },
+    {
+      "id": "curl",
+      "program": "/usr/bin/curl",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": null
+    },
+    {
+      "id": "shasum",
+      "program": "/usr/bin/shasum",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": null
+    },
+    {
+      "id": "tar",
+      "program": "/usr/bin/tar",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": null
     }
   ],
   "protocol": {

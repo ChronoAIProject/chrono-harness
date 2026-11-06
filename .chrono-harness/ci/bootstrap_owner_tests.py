@@ -234,6 +234,21 @@ class ProducerSource(unittest.TestCase):
         owner.shared.original_report(fixture.root, {"config": ".chrono-harness/ci/reuse-core.json"},
                                      config, bootstrap.observe_source(fixture.root))
 
+    def test_construction_reuse_binds_only_the_reused_operations_tool_selection(self):
+        fixture, selected, adoption = self.published_fixture(reuse=True)
+        config = json.loads((fixture.root / ".chrono-harness/ci/reuse-core.json").read_bytes())
+        report = json.loads((fixture.root / adoption["stage_result"]).read_bytes())
+        observed = bootstrap.observe_source(fixture.root)
+        # Core's later Verus bootstrap needs Python; owner construction does not.
+        config["tools"]["python3"] = sys.executable
+        reused, source = owner.reuse_construction(fixture.root, config, report, observed)
+        self.assertEqual(set(reused), set(config["reuse_owner_operations"]))
+        self.assertEqual(source, fixture.root / report["owner_stage"]["staged"]["path"])
+        tool = report["operations"][0]["tool"]
+        config["tools"][tool] = "different-reused-tool"
+        with self.assertRaisesRegex(ValueError, "owner construction selection differs: tool " + tool):
+            owner.reuse_construction(fixture.root, config, report, observed)
+
     def test_construction_reuse_refuses_different_selection_observation_and_missing_operations(self):
         fixture, selected, adoption = self.published_fixture(reuse=True)
         config = json.loads((fixture.root / ".chrono-harness/ci/reuse-core.json").read_bytes())
