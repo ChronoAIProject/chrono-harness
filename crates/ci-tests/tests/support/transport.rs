@@ -5,6 +5,64 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
 
+fn large_original(stdout: &mut impl Write) {
+    stdout.write_all(b"large-original-evidence\n").unwrap();
+    let mut state = 0x12345678u32;
+    let mut bytes = vec![0; 1_100_000];
+    for byte in &mut bytes {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        *byte = (state >> 24) as u8;
+    }
+    stdout.write_all(&bytes).unwrap();
+    stdout.flush().unwrap();
+}
+
+fn unit_operation(path: &str) {
+    let input = std::fs::read_to_string(path).unwrap();
+    let case = input.trim_end_matches('\n');
+    match case {
+        "alpha" | "beta" | "alpha-large-original" => {
+            std::fs::create_dir_all(".chrono-harness/state").unwrap();
+            let (name, bytes): (_, &[u8]) = if case == "beta" {
+                ("b", b"beta")
+            } else {
+                ("a", b"alpha")
+            };
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(format!(".chrono-harness/state/calls-{name}"))
+                .unwrap()
+                .write_all(bytes)
+                .unwrap();
+            if case == "alpha-large-original" {
+                large_original(&mut io::stdout().lock());
+            }
+        }
+        "business-failure" => {
+            io::stderr()
+                .write_all(b"original-business-failure")
+                .unwrap();
+            std::process::exit(19);
+        }
+        "exit-7" => std::process::exit(7),
+        "exit-9" => std::process::exit(9),
+        "decoder-launch" => {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(".chrono-harness/state/decoder-launched")
+                .unwrap()
+                .write_all(b"launched")
+                .unwrap();
+            std::process::exit(66);
+        }
+        _ => panic!("unknown unit operation stimulus: {case}"),
+    }
+}
+
 fn provider_observation(phase: &str) {
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -246,6 +304,24 @@ fn main() {
         println!("chrono-ci-test-transport 1");
         return;
     }
+    if mode == "unit-operation" {
+        unit_operation(&std::env::args().nth(2).expect("unit operation case"));
+        return;
+    }
+    if mode == "unit-noop" {
+        return;
+    }
+    if mode == "decoder-probe" {
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(".chrono-harness/state/decoder-probed")
+            .unwrap()
+            .write_all(b"probed")
+            .unwrap();
+        println!("chrono-ci-test-transport 1");
+        return;
+    }
     if matches!(mode.as_str(), "diagnostic" | "deep") {
         diagnostic(&mode);
         return;
@@ -254,17 +330,7 @@ fn main() {
     let mut stdout = io::stdout().lock();
     match mode.as_str() {
         "large-original" => {
-            stdout.write_all(b"large-original-evidence\n").unwrap();
-            let mut state = 0x12345678u32;
-            let mut bytes = vec![0; 1_100_000];
-            for byte in &mut bytes {
-                state ^= state << 13;
-                state ^= state >> 17;
-                state ^= state << 5;
-                *byte = (state >> 24) as u8;
-            }
-            stdout.write_all(&bytes).unwrap();
-            stdout.flush().unwrap();
+            large_original(&mut stdout);
         }
         "timeout-partial" => {
             stdout.write_all(b"{\n").unwrap();
