@@ -1481,7 +1481,7 @@ fn declared_nested_git_root_preserves_committed_and_staged_source_under_outputs(
 }
 
 #[test]
-fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnostic() {
+fn directory_cleanup_source_check_allows_unrelated_publication_and_refuses_late_diagnostic() {
     use std::io::{Read, Write};
     let h = host();
     let path = h.root.join(".chrono-harness/cleanup.json");
@@ -1519,6 +1519,25 @@ fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnosti
     let maintenance = std::thread::spawn(move || command.output().unwrap());
     let (mut stream, _) = listener.accept().unwrap();
     stream.read_exact(&mut [0; 5]).unwrap();
+    let coordinator_metadata = chrono_harness::ownership::Lease::acquire(
+        &h.record_directory(&h.root).join("metadata.lease"),
+        None,
+        false,
+        true,
+        None,
+    )
+    .unwrap();
+    let independent_admitted = coordinator_metadata.is_some();
+    drop(coordinator_metadata);
+    // Always release and join the original maintenance before asserting its
+    // exclusion result. The failing implementation must not strand its child.
+    let concurrent_ledger = independent_admitted.then(|| {
+        let result = h.auto(
+            "use",
+            &["--path", h.root.to_str().unwrap(), "--operation", "use.consumer"],
+        );
+        (result, fs::read(h.ledger_path(&h.root)).unwrap())
+    });
     let unrelated = chrono_worktree::TemporaryHost::allocate(
         &store,
         "test-allocation",
@@ -1537,6 +1556,17 @@ fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnosti
     stream.write_all(b"r").unwrap();
     let output = maintenance.join().unwrap();
     assert!(output.status.success(), "{output:?}");
+    assert!(
+        independent_admitted,
+        "producer cleanup retained unrelated coordinator metadata exclusion"
+    );
+    let ((code, used, error), concurrent_ledger) = concurrent_ledger.unwrap();
+    assert_eq!(code, 0, "independent coordinator use: {used} {error}");
+    assert_eq!(
+        fs::read(h.ledger_path(&h.root)).unwrap(),
+        concurrent_ledger,
+        "producer recovery overwrote the concurrent coordinator enrollment"
+    );
     assert!(!root.join("cache 空白").exists());
     assert_eq!(
         fs::read(root.join("source.rs")).unwrap(),
