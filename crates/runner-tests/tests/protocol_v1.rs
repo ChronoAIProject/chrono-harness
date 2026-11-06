@@ -1984,7 +1984,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
 #[test]
 fn retained_originals_survive_enclosing_timeout_even_without_terminal_publication() {
     for case in ["stall", "pause-launcher"] {
-        let root = tempfile::tempdir().unwrap();
+        let mut root = tempfile::tempdir().unwrap();
         let exe = std::env::current_exe().unwrap();
         let spec = chrono_harness::CommandSpec {
             program: exe.to_string_lossy().into(),
@@ -2058,15 +2058,40 @@ fn retained_originals_survive_enclosing_timeout_even_without_terminal_publicatio
             .unwrap()
             .parse()
             .unwrap();
+        let presence = unsafe { libc::kill(pid, 0) };
+        let presence_error = std::io::Error::last_os_error();
+        if presence != -1 {
+            root.disable_cleanup(true);
+            eprintln!(
+                "retained failure ({case}), pid {pid}, originals: {}, result: {result:?}",
+                root.path().display()
+            );
+            #[cfg(target_os = "macos")]
+            {
+                let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+                let observed = unsafe {
+                    libc::proc_pidinfo(
+                        pid,
+                        libc::PROC_PIDTBSDINFO,
+                        0,
+                        (&mut info as *mut libc::proc_bsdinfo).cast(),
+                        std::mem::size_of_val(&info) as i32,
+                    )
+                };
+                eprintln!(
+                    "kernel process observation: bytes={observed}, status={}, parent={}, exit_status={}, error={}",
+                    info.pbi_status,
+                    info.pbi_ppid,
+                    info.pbi_xstatus,
+                    std::io::Error::last_os_error()
+                );
+            }
+        }
         assert_eq!(
-            unsafe { libc::kill(pid, 0) },
-            -1,
-            "owned child survived enclosing completion"
+            presence, -1,
+            "owned child survived enclosing completion ({case})"
         );
-        assert_eq!(
-            std::io::Error::last_os_error().raw_os_error(),
-            Some(libc::ESRCH)
-        );
+        assert_eq!(presence_error.raw_os_error(), Some(libc::ESRCH));
     }
 }
 
