@@ -288,6 +288,19 @@
             "--test",
             "retention"
           ]
+        },
+        "retention_addressed": {
+          "operation": "test.runner.retention-addressed",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--test",
+            "retention",
+            "cli_addressed_maintenance_"
+          ]
         }
       },
       "language": "rust"
@@ -3395,6 +3408,36 @@
             "age::",
             "--",
             "--test-threads=1"
+          ]
+        },
+        "report_originals": {
+          "operation": "test.worktree.report-originals",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--",
+            "--exact",
+            "check_inputs::generated_full_native_short_step_preserves_exact_context_bytes",
+            "maintenance::fetch_cleanup_rejects_receipt_identity_ref_and_retention_changes",
+            "temporary::retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams",
+            "--test-threads=2"
+          ]
+        },
+        "cargo_recovery": {
+          "operation": "test.worktree.cargo-recovery",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--",
+            "--exact",
+            "temporary::real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_output",
+            "--test-threads=2"
           ]
         }
       },
