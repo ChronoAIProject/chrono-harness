@@ -1083,7 +1083,7 @@
     },
     {
       "id": "macos_build_runner",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1100,7 +1100,7 @@
     },
     {
       "id": "macos_build_instructions",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1117,7 +1117,7 @@
     },
     {
       "id": "macos_build_judge_ci",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1134,7 +1134,7 @@
     },
     {
       "id": "macos_build_ci",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1151,7 +1151,7 @@
     },
     {
       "id": "macos_build_judge_registration",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1168,7 +1168,7 @@
     },
     {
       "id": "macos_build_judge_filemap",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1185,7 +1185,7 @@
     },
     {
       "id": "macos_build_judge_routes",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1202,7 +1202,7 @@
     },
     {
       "id": "macos_build_judge_projects",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1219,7 +1219,7 @@
     },
     {
       "id": "macos_build_judge_cost",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1236,7 +1236,7 @@
     },
     {
       "id": "macos_build_judge_mixed",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1253,7 +1253,7 @@
     },
     {
       "id": "macos_build_judge_workflow",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1270,7 +1270,7 @@
     },
     {
       "id": "macos_build_inputs",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1287,7 +1287,7 @@
     },
     {
       "id": "macos_build_distribution",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1304,7 +1304,7 @@
     },
     {
       "id": "macos_build_judge_cargo",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1321,7 +1321,7 @@
     },
     {
       "id": "macos_build_worktree",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1338,7 +1338,7 @@
     },
     {
       "id": "macos_verify_distribution_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1362,7 +1362,7 @@
     },
     {
       "id": "macos_verify_worktree_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1396,7 +1396,7 @@
     },
     {
       "id": "macos_verify_runner_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1420,7 +1420,7 @@
     },
     {
       "id": "macos_verify_inputs_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1484,7 +1484,7 @@
     },
     {
       "id": "macos_verify_ci_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1528,7 +1528,7 @@
     },
     {
       "id": "macos_verify_judge_ci_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1557,7 +1557,7 @@
     },
     {
       "id": "macos_verify_judge_registration_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1586,7 +1586,7 @@
     },
     {
       "id": "macos_verify_judge_projects_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1640,7 +1640,7 @@
     },
     {
       "id": "macos_verify_judge_workflow_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1714,7 +1714,7 @@
     },
     {
       "id": "macos_verify_judge_cargo_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1783,7 +1783,7 @@
     },
     {
       "id": "macos_verify_instructions_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1800,7 +1800,7 @@
     },
     {
       "id": "macos_verify_judge_filemap_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1844,7 +1844,7 @@
     },
     {
       "id": "macos_verify_judge_routes_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1861,7 +1861,7 @@
     },
     {
       "id": "macos_verify_judge_cost_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1900,7 +1900,7 @@
     },
     {
       "id": "macos_verify_judge_mixed_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -1944,7 +1944,7 @@
     },
     {
       "id": "macos_package",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2188,7 +2188,7 @@
     },
     {
       "id": "macos_verify_workflow_inventory_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2205,7 +2205,7 @@
     },
     {
       "id": "macos_verify_release_build_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2251,7 +2251,7 @@
     },
     {
       "id": "macos_verify_release_build_integration",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2297,7 +2297,7 @@
     },
     {
       "id": "macos_verify_diagnostics_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2338,7 +2338,7 @@
     },
     {
       "id": "macos_verify_host_bootstrap_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2403,7 +2403,7 @@
     },
     {
       "id": "macos_build_cache",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2420,7 +2420,7 @@
     },
     {
       "id": "macos_verify_cache_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2468,7 +2468,7 @@
     },
     {
       "id": "macos_verify_ci_native_adapter_tests",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
         "python3",
@@ -2996,7 +2996,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_cache_tests/cache-observations/"
       },
       "macos_build_runner": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3011,7 +3011,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_runner/cache-observations/"
       },
       "macos_build_instructions": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3026,7 +3026,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_instructions/cache-observations/"
       },
       "macos_build_judge_ci": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3041,7 +3041,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_ci/cache-observations/"
       },
       "macos_build_ci": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3056,7 +3056,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_ci/cache-observations/"
       },
       "macos_build_judge_registration": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3071,7 +3071,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_registration/cache-observations/"
       },
       "macos_build_judge_filemap": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3086,7 +3086,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_filemap/cache-observations/"
       },
       "macos_build_judge_routes": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3101,7 +3101,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_routes/cache-observations/"
       },
       "macos_build_judge_projects": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3116,7 +3116,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_projects/cache-observations/"
       },
       "macos_build_judge_cost": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3131,7 +3131,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cost/cache-observations/"
       },
       "macos_build_judge_mixed": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3146,7 +3146,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_mixed/cache-observations/"
       },
       "macos_build_judge_workflow": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3161,7 +3161,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_workflow/cache-observations/"
       },
       "macos_build_inputs": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3176,7 +3176,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_inputs/cache-observations/"
       },
       "macos_build_distribution": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3191,7 +3191,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_distribution/cache-observations/"
       },
       "macos_build_judge_cargo": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3206,7 +3206,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cargo/cache-observations/"
       },
       "macos_build_worktree": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3221,7 +3221,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_worktree/cache-observations/"
       },
       "macos_verify_distribution_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3236,7 +3236,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/"
       },
       "macos_verify_worktree_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3251,7 +3251,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/"
       },
       "macos_verify_runner_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3266,7 +3266,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_runner_tests/cache-observations/"
       },
       "macos_verify_inputs_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3281,7 +3281,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/"
       },
       "macos_verify_ci_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3296,7 +3296,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_ci_tests/cache-observations/"
       },
       "macos_verify_judge_ci_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3311,7 +3311,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/"
       },
       "macos_verify_judge_registration_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3326,7 +3326,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/"
       },
       "macos_verify_judge_projects_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3341,7 +3341,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/"
       },
       "macos_verify_judge_workflow_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3356,7 +3356,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/"
       },
       "macos_verify_judge_cargo_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3371,7 +3371,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cargo_tests/cache-observations/"
       },
       "macos_verify_instructions_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3386,7 +3386,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/"
       },
       "macos_verify_judge_filemap_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3401,7 +3401,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/"
       },
       "macos_verify_judge_routes_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3416,7 +3416,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/"
       },
       "macos_verify_judge_cost_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3431,7 +3431,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/"
       },
       "macos_verify_judge_mixed_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3446,7 +3446,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/"
       },
       "macos_verify_diagnostics_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3461,7 +3461,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/"
       },
       "macos_build_cache": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",
@@ -3476,7 +3476,7 @@
         "evidence_directory": ".chrono-harness/cache/release-results/build_cache/cache-observations/"
       },
       "macos_verify_cache_tests": {
-        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
           "python3",

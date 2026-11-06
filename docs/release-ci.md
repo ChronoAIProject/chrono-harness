@@ -79,3 +79,5 @@ v5 的 `verification_consumers` 为验证登记 `need`（实际调用位置、�
 缓存传输的 bootstrap 安装路径和发布验证的 staging 路径用途不同。`chrono-cache` 发布资产只暂存到 `crates/cache/target/debug/chrono-cache`，原 cache-tests 在那里调用；`.chrono-harness/bin/chrono-cache` 归 bootstrap，供外层 plan／recover／report 使用，发布 staging 不再替换它。源资产、摘要、生产者及前后观察仍按 v5 核验。
 
 Python 发布 integration 组保留真实 distribution pack，并加入真实 cache CLI 的 plan→recover→stage→consumer→report 回归。该组明确增加 `build_cache`，本地 FILEMAP、shared_operations、两原生 job 的 needs／downloads 同步登记，未新增独立单元。回归用同字节真实 CLI 检出 inode 替换，核传输摘要及 recovery／report；它不模拟原生后端、不同编译配置或完整外围 workflow。失败时将逐进程原 stdout／stderr／argv／退出及配置保留到登记 release-test-failures；原生 collector 仍要求全部真实单元成功。新增构建、下载、回归成本应分别实测，其他登记成本仍为 unmeasured。
+
+当前发布 macOS runner 采用主 CI 已使用的 `macos-26`；旧 `macos-14` 配置已被原生服务拒绝。Linux 发布中的缓存探测通过 `.chrono-harness/config.json` 选择 `.chrono-harness/git/linux-release.json`，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。该 Git 2.56.0 的精确摘要来自失败运行 `42183603167/1` 的原始 build receipt，原过程流已核摘要；工作树所有者同步登记此身份。未知 Git 字节继续在执行前拒绝，后续原生验证才证明候选可用。
