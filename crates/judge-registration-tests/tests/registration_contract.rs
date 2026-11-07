@@ -12,6 +12,56 @@ mod consumption;
 mod support;
 
 #[test]
+fn runtime_state_input_consumes_observation_manifest_and_rejects_drift() {
+    use chrono_judge_registration::inputs::{runtime_state_identity, runtime_state_source};
+
+    let host = TempDir::new().unwrap();
+    let root = host.path().canonicalize().unwrap();
+    let inventory = ".chrono-harness/state/diagnostics-native/guard-inputs/rust.json";
+    let observation = ".chrono-harness/state/diagnostics-native/observation.json";
+    fs::create_dir_all(root.join(inventory).parent().unwrap()).unwrap();
+    fs::create_dir_all(root.join(observation).parent().unwrap()).unwrap();
+    let bytes = b"runtime inventory\n";
+    fs::write(root.join(inventory), bytes).unwrap();
+    let digest = sha256(bytes);
+    fs::write(
+        root.join(observation),
+        serde_json::to_vec(&json!({
+            "schema": "chrono-input-observation-result/v2",
+            "status": "observed",
+            "directories": {
+                "rust": {
+                    "manifest": {"path": inventory, "sha256": digest.clone()}
+                }
+            }
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let input = json!({
+        "id": "toolchain.rust.inventory",
+        "location": inventory,
+        "presence": "present",
+        "source": {
+            "schema": "chrono-runtime-state/v1",
+            "manifest": observation,
+            "pointer": "directories.rust.manifest"
+        }
+    });
+
+    let source = runtime_state_source(&input).unwrap().unwrap();
+    assert_eq!(source.pointer, "directories.rust.manifest");
+    assert_eq!(
+        runtime_state_identity(&root, &input).unwrap(),
+        (digest.clone(), bytes.len() as u64)
+    );
+
+    fs::write(root.join(inventory), b"drifted inventory\n").unwrap();
+    let error = runtime_state_identity(&root, &input).unwrap_err();
+    assert!(error.contains("differs from live file"), "{error}");
+}
+
+#[test]
 fn schema_evolution_registers_conversion_tools_only_for_actual_data_conversion() {
     use chrono_judge_registration::Registrations;
     let mut values = support::values();

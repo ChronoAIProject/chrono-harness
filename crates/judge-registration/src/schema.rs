@@ -284,6 +284,31 @@ pub fn config(v: &Value) -> Result {
             choice(&i["presence"], &["present", "absent"])?;
             if i["presence"] == "absent" {
                 object(i, &["id", "location", "presence"], &[])?;
+            } else if i.get("source").is_some() {
+                object(i, &["id", "location", "presence", "source"], &[])?;
+                object(
+                    &i["source"],
+                    &["schema", "manifest", "pointer"],
+                    &[],
+                )?;
+                if i["source"]["schema"] != "chrono-runtime-state/v1" {
+                    return Err("unsupported runtime input source schema".into());
+                }
+                let manifest = string(&i["source"]["manifest"])?;
+                path(&i["source"]["manifest"])?;
+                if !manifest.starts_with(".chrono-harness/state/") {
+                    return Err("runtime input source manifest must be in host state".into());
+                }
+                let pointer = string(&i["source"]["pointer"])?;
+                if pointer.split('.').any(|part| {
+                    part.is_empty()
+                        || part == "."
+                        || part == ".."
+                        || part.contains('/')
+                        || part.contains('\\')
+                }) {
+                    return Err("runtime input source pointer must be a dotted literal".into());
+                }
             } else {
                 object(i, &["id", "location", "presence", "sha256"], &[])?;
                 hash(&i["sha256"])?;
