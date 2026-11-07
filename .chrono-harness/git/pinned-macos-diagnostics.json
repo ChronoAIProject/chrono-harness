@@ -7311,9 +7311,13 @@
       },
       {
         "id": "toolchain.developer.inventory",
-        "location": ".chrono-harness/inputs/diagnostics-xcode-build.json",
+        "location": ".chrono-harness/state/diagnostics-native/guard-inputs/xcode-contents.json",
         "presence": "present",
-        "sha256": "9ce139aec4d4390479096359abeb63aa1c602d229c294ed20ceba486fd8df383"
+        "source": {
+          "schema": "chrono-runtime-state/v1",
+          "manifest": ".chrono-harness/state/diagnostics-native/observation.json",
+          "pointer": "/directories/developer/manifest"
+        }
       },
       {
         "id": "toolchain.dsymutil",
@@ -7353,7 +7357,11 @@
         "id": "toolchain.sdk.inventory",
         "location": ".chrono-harness/state/diagnostics-native/guard-inputs/sdk.json",
         "presence": "present",
-        "sha256": "95337d9300b02f0e75bde2d6aec955d5a8f3a9fc1e8a951726c15c433f74221b"
+        "source": {
+          "schema": "chrono-runtime-state/v1",
+          "manifest": ".chrono-harness/state/diagnostics-native/observation.json",
+          "pointer": "/directories/sdk/manifest"
+        }
       }
     ]
   },
