@@ -375,7 +375,7 @@ fn configured_push_baseline_rejects_ambiguity_missing_refs_and_invalid_events() 
 }
 
 #[test]
-fn configured_push_baseline_preparation_fetches_the_pinned_missing_object_and_preserves_customization() {
+fn preparation_fetches_pinned_baseline_and_preserves_customization() {
     let (d, base, candidate) = repo();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--bare", "-q"]);
@@ -426,10 +426,9 @@ fn configured_push_baseline_preparation_fetches_the_pinned_missing_object_and_pr
     init(d.path(), &input).unwrap();
     write(&input, &config());
     assert!(!init(d.path(), &input).unwrap());
-    let saved: Config = serde_json::from_slice(
-        &fs::read(d.path().join(".chrono-harness/ci/github.json")).unwrap(),
-    )
-    .unwrap();
+    let saved: Config =
+        serde_json::from_slice(&fs::read(d.path().join(".chrono-harness/ci/github.json")).unwrap())
+            .unwrap();
     assert_eq!(
         serde_json::to_value(&saved).unwrap(),
         serde_json::to_value(&configured).unwrap()

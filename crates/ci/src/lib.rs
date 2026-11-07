@@ -889,7 +889,9 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                 .iter()
                 .any(|k| opts.contains_key(k))
             {
-                return Err("unexpected transport or migration option for prepare-endpoints".into());
+                return Err(
+                    "unexpected transport or migration option for prepare-endpoints".into(),
+                );
             }
             let Projection::Units(c) = load_projection(&no_symlink_parents(&root, config)?)? else {
                 return Err("early endpoints require full units".into());
