@@ -218,6 +218,29 @@ fn native_owner_stage_retains_actual_execution_and_selected_inode_then_validates
 }
 
 #[test]
+fn owner_stage_rejects_an_original_from_another_physical_host() {
+    let staged = Staged::new();
+    let foreign = tempfile::tempdir().unwrap();
+    let foreign_root = fs::canonicalize(foreign.path()).unwrap();
+    let mut report = staged.report.clone();
+    report["host_root"] = json!(foreign_root);
+    for operation in report["operations"].as_array_mut().unwrap() {
+        operation["cwd"] = json!(foreign_root);
+    }
+    let raw = serde_json::to_vec(&report).unwrap();
+    fs::write(staged.fixture.root.join(&staged.reference), &raw).unwrap();
+    let result = owner::stage_report(
+        &staged.fixture.root,
+        &staged.fixture.environment,
+        &native_platform().unwrap(),
+        &staged.reference,
+        Some(&chrono_harness::sha256(&raw)),
+        None,
+    );
+    assert!(result.is_err(), "a foreign host's stage original was accepted");
+}
+
+#[test]
 fn owner_stage_refuses_marker_without_descriptors_and_callbacks_without_exact_exclusive_binding() {
     let fixture = Staged::setup();
     for (marker, capabilities) in [(true, false), (false, true)] {
