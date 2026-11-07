@@ -300,9 +300,6 @@ pub fn config(v: &Value) -> Result {
             choice(&i["presence"], &["present", "absent"])?;
             if i["presence"] == "absent" {
                 object(i, &["id", "location", "presence"], &[])?;
-            } else if i.get("source").is_some() {
-                object(i, &["id", "location", "presence", "source"], &[])?;
-                crate::inputs::runtime_state_source(i)?;
             } else {
                 object(i, &["id", "location", "presence", "sha256"], &[])?;
                 hash(&i["sha256"])?;

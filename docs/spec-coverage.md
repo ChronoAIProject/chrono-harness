@@ -27,7 +27,7 @@
 | SPEC 章节 | 状态 | 生产者与直接证据 | 仍需完成 |
 | --- | --- | --- | --- |
 | 1 权威与边界 | 部分 | runner `full.rs` 的外部 DAG；R `dag_*` | 其余判官政策和生命周期 |
-| 1 真实消费者与用途 | 部分：带版本的内部共享启动消费合同 | registration 的 `chrono-internal-causal-consumption/v1`；本仓采用已有 runner-startup，复用 need／output_use、生产／调用 action、profile 安装对、claim、真实消费证据。标准 scoped 准入核两端受影响关系，要求原真实消费者测试；Rust 成功／失败／边界及固定 Git 端点回归。必要性链的递归终点与全对象适用仍待实现 | 是否有用仍由 AI 负责判断。`72b1d08`、`c515cd05` 已观察有限 Darwin detector／startup／install／当前 runner／collection 消费；Linux、外部／全消费者采用、完整路径执行尚缺。仅有测试／分发资产不构成真实消费者 |
+| 1 真实消费者与用途 | 部分：带版本的内部共享启动消费合同 | registration 的 `chrono-internal-causal-consumption/v1`；本仓采用已有 runner-startup，复用 need／output_use、生产／调用 action、profile 安装对、claim、真实消费证据。标准 scoped 准入核两端受影响关系，要求原真实消费者测试；Rust 成功／失败／边界及固定 Git 端点回归。这些关系检查不判断价值；全对象必要性继续由 AI 核查当前使用方和验收终点 | 是否有用仍由 AI 负责判断。`72b1d08`、`c515cd05` 已观察有限 Darwin detector／startup／install／当前 runner／collection 消费；Linux、外部／全消费者采用、完整路径执行尚缺。仅有测试／分发资产不构成真实消费者 |
 | 2 独立项目与采用 | 部分 | 独立 manifest／lock／bootstrap 构建登记；SPEC §2.1 将共享数学归 trureturing、运行／模型对应归 chrono-harness | 通用完整 bootstrap 来源及启用；源码归属不证明实现满足模型 |
 | 2.1.1 Verus 规范性权威 | 规范已明确；实现部分完成 | SPEC 统一定义真实使用方、证明与生产调用绑定及 `E_VERUS_COVERAGE`；现役局部证明和结果合同见 Verus 实施说明 | 全仓覆盖门、源码／编译结果／实际调用完整绑定、其余逻辑与 SPEC 对应仍未完成；不以当前 scoped 成功宣称本节已验收 |
 | 2.2 实现／测试语言 | 部分：指令、full／scoped projects v2 配对、原生 helper | 中英文 test.same-language 原子用于新宿主默认及本仓指南；项目／脚本明确语言，受影响配对须同 ID 或 shell→python。Rust schema／配对／语言 metadata DELTA 用例及登记 CI transport、context judge、protocol judge、CLI child、生命周期、Cargo、Git fault helper；本仓 v2、Rust 显式 workflow 清单及配对测试、worktree 核心／采用分组及完整覆盖。固定历史支持退役后 projects 保留原未过滤 action；owner 字节发布与 stage 原件核验迁入现有 Rust worktree 所有者，Python 保留构建／资格读取；Rust 用例覆盖原回调义务，候选验收另记。Python 构建配方／测试对不需 manifest，单元／真实二进制集成组独立 | 完整候选验收、示例采用；迁移剩余内嵌跨语言测试／helper，真实外部接口 fixture 单独登记。声明不能证明实际源码语言 |
@@ -70,7 +70,7 @@
 | 7 合法退役 | 有限实现：W 共同移除生产／测试、明确别名修复 | 完整原生启用 |
 | 8 移除必需测试 | 有限实现：W 明确成功替换或已验共同退役 | 完整原生启用 |
 | 9 配对不唯一／缺失 | 有限实现：projects 和真实消费者负例 | 完整原生启用 |
-| 10 manifest 依赖未声明 | 有限实现：可选 Cargo 明确政策、TOML 路径依赖、缺边拒绝；v4 绑定 Cargo／编译器，v5 增 sysroot／后端／链接器／SDK／脚本清单，有直接／完整／scoped 真实消费者；通用 runtime-state 输入合同及其自含漂移测试保留，diagnostics 的额外保护采用已退役 | 编译器库／后端／链接器／SDK 语义输入完整；其余运行时 inventory 迁移、受保护 registry／Git 解析、完整宿主启用 |
+| 10 manifest 依赖未声明 | 有限实现：可选 Cargo 明确政策、TOML 路径依赖、缺边拒绝；v4 绑定 Cargo／编译器，v5 增 sysroot／后端／链接器／SDK／脚本清单，有直接／完整／scoped 真实消费者；diagnostics 的额外保护采用及专属运行时来源输入模式已退役，保留普通文件的显式摘要、快照与漂移检查 | 编译器库／后端／链接器／SDK 语义输入完整；其余输入声明的必要性、受保护 registry／Git 解析、完整宿主启用 |
 | 11 已知缺输入／必需依赖未解决 | 有限实现：明确外部节点、必需项目边、declared-complete v3 回归、v5 清单、可选版本化输入范围，以及 proposed_and_incomplete_never_receive_governance_success | 本仓 Cargo／SDK／配置仍未完整，不发现依赖或证明普遍完整 |
 | 12 README 不全测 | 有限实现：F、C、projects 真实不执行无关历史缺陷 | 完整原生启用 |
 | 13 独立脚本测试 | 有限实现：真实完整链脚本对 | 完整原生启用 |
@@ -138,7 +138,7 @@
 
 ## 已实现范围与证据
 
-必要性方法入口已在产品默认和本宿主采用的 `goal.deliverable` 中补齐中英文规则，要求对所有对象逐跳追问当前使用方和验收终点；本仓根指南与完整指南由同一源生成。这里只交付可读方法，不证明 AI 遵守、已有对象的必要性链已补齐，或 `E_WHY_UNRESOLVED` 机器门已实现。上表相关项目仍保持待实现，运行事实迁移、全仓审计和完整验收继续单独推进。
+必要性方法入口已在产品默认和本宿主采用的 `goal.deliverable` 中补齐中英文规则，要求对所有对象逐跳追问当前使用方和验收终点；本仓根指南与完整指南由同一源生成。这里只交付可读方法，不证明 AI 遵守或已有对象的必要性链已补齐。SPEC 不再承诺独立的价值机器门；现有登记判官仍核其明确消费关系和原件。运行事实迁移、全仓审计和完整验收继续推进，不能将规则文字当作已完成审计。
 
 登记执行这批改动加入 routes／projects、FILEMAP v2 和固定端点输入，详见[执行合同与范围](execution.md)。routes 专属测试核有序计划、实际 argv／环境／工具绑定、回执篡改、PATH 遮蔽和字节替换。projects 专属测试在已提交的项目／脚本宿主上执行真实 runner→registration→filemap→routes→projects 链，覆盖唯一配对、无 manifest／自定义 action、显式输出隔离、保留输入失败、真实退出和副作用、依赖阻断、文档不执行和替代方法映射。删除测试的映射须执行当前替代计划并实际成功；缺声明在产生副作用前拒绝，生产者和测试一同退役时不执行已删方法。固定历史 scoped 宿主的解码器、fixture、对象获取和迁移测试已退役；当前通用转换使用登记的自含 workflow fixture。回归还覆盖整链继承环境变化（缺失／空值、覆盖和无关输入）、操作前拒绝中间 workspace、两种协议内嵌无效 UTF-8，以及任意操作字节。宿主解释器绑定是明确的 macOS 数据；原生失败原件及修复后的验证结果见 [CI 说明](ci.md)。
 
@@ -505,6 +505,8 @@ Rust 回归从真实生产报告改写原 stdout，核排列通过、缺项／�
 
 ## diagnostics 额外环境保护退役
 
-独立受保护构建的产物没有接入 diagnostics 的路径依赖使用方；当前需求由普通锁定 Cargo 构建和真实行为测试满足。恢复原构建操作，退役 13 个专属政策／快照／准备文件、1,125 项本机独占输入声明、3,430 条配置级边和专属组合／离线领域测试。通用 Cargo guard 产品行为、bootstrap 工具绑定及 runtime-state 输入合同测试保留。详细消费关系和政策影响见 [Cargo 所有者](cargo-projects.md#本仓已退役的额外保护链)。
+独立受保护构建的产物没有接入 diagnostics 的路径依赖使用方；当前需求由普通锁定 Cargo 构建和真实行为测试满足。恢复原构建操作，退役 13 个专属政策／快照／准备文件、1,125 项本机独占输入声明、3,430 条配置级边和专属组合／离线领域测试。专为该链引入、且没有其余跟踪宿主采用的运行时来源输入模式和专属合成测试一并移除。通用 Cargo guard 产品行为和 bootstrap 工具绑定保留，必要性继续单独审计。详细消费关系和政策影响见 [Cargo 所有者](cargo-projects.md#本仓已退役的额外保护链)。
 
-本批没有新增程序判断；独立边界预期不新增未证明逻辑，保留现役 Verus 前置。候选正式检查、原生 PR CI 和落地后验仍待完成。退役不证明历史验收通过、全仓必要性门已实现、输入完整或全局目标完成。
+端点快照绑定及其独立边界预期由现有两项 Verus 根承担，三种绑定义务和普通输入漂移检查保留。两项没有执行计划或工作流调用的本机观察入口及对应个人路径声明也已退役。当前实现范围见 [输入所有者](inputs.md#退役-diagnostics-的专属输入链)和 [Verus 范围](verus.md#full-准备状态)；退役不证明历史验收通过、全对象必要性已核清、输入完整或全局目标完成。
+
+macOS 27 的旧安装身份也不再随候选重建而写回政策：删除三个工具文件输入、三个绑定引用及配置边，移除仅七个安装摘要不同的专用判官清单，并将 runner 的旧安装摘要恢复为未绑定。当前安装身份沿现有 bootstrap／检查原件消费；工具、版本、调用、Git 绑定及其余实际输入保持原合同。该配置仍为 proposed／not-implemented／incomplete，full 原有身份校验没有放宽，也没有建立可通过的完整治理。此批仅修改数据和说明，正式 DELTA 检查、PR CI 及落地后验尚待完成；全对象必要性审计仍未完成。

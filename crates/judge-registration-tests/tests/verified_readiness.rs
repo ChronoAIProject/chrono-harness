@@ -1,4 +1,4 @@
-//! full 准备状态的独立边界预期，直接调用生产判断。
+//! 登记启用与端点快照准备的独立边界预期，直接调用生产判断。
 #![allow(unexpected_cfgs)]
 #[path = "../../judge-registration/src/verified_readiness.rs"]
 mod readiness;
@@ -88,6 +88,72 @@ fn empty_collection_does_not_make_mismatched_text_ready() {
     assert(!missing_text);
     let unicode = readiness::input_ready(Some("enabled"), Some("完整"), Some(&empty));
     assert(!unicode);
+}
+
+#[cfg(verus_keep_ghost)]
+fn every_declared_snapshot_dependency_requires_its_exact_endpoint(
+    schema_present: bool, files: usize, strict_environment: bool, inherited: usize,
+    actual: &str, expected: &str,
+)
+    requires schema_present || files > 0 || (strict_environment && inherited > 0),
+{
+    let same = readiness::endpoint_snapshot_matches(
+        schema_present, files, strict_environment, inherited, Some(expected), expected,
+    );
+    assert(same);
+    let missing = readiness::endpoint_snapshot_matches(
+        schema_present, files, strict_environment, inherited, None, expected,
+    );
+    assert(!missing);
+    let observed = readiness::endpoint_snapshot_matches(
+        schema_present, files, strict_environment, inherited, Some(actual), expected,
+    );
+    assert(observed == (actual@ == expected@));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_schema_files_and_strict_inheritance_each_require_a_commit() {
+    let schema = readiness::endpoint_snapshot_matches(true, 0, false, 0, None, "base");
+    assert(!schema);
+    let file = readiness::endpoint_snapshot_matches(false, 1, false, 0, None, "base");
+    assert(!file);
+    let environment = readiness::endpoint_snapshot_matches(false, 0, true, 1, None, "base");
+    assert(!environment);
+    let many_files = readiness::endpoint_snapshot_matches(false, usize::MAX, false, 0, None, "base");
+    assert(!many_files);
+    let many_variables = readiness::endpoint_snapshot_matches(false, 0, true, usize::MAX, None, "base");
+    assert(!many_variables);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn legacy_without_snapshot_dependencies_keeps_its_existing_optional_binding() {
+    let no_snapshot = readiness::endpoint_snapshot_matches(false, 0, false, 0, None, "base");
+    assert(no_snapshot);
+    let inherited_legacy = readiness::endpoint_snapshot_matches(false, 0, false, usize::MAX, None, "base");
+    assert(inherited_legacy);
+    let strict_empty = readiness::endpoint_snapshot_matches(false, 0, true, 0, None, "base");
+    assert(strict_empty);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_endpoint_text_is_exact_without_adding_identifier_restrictions() {
+    proof {
+        reveal_strlit("base"); reveal_strlit("base\0"); reveal_strlit("b");
+        reveal_strlit("é"); reveal_strlit("e\u{301}");
+        assert("base"@.len() != "base\0"@.len());
+        assert("base"@.len() != "b"@.len());
+        assert("é"@.len() != "e\u{301}"@.len());
+    }
+    let exact = readiness::endpoint_snapshot_matches(true, 0, false, 0, Some("base"), "base");
+    assert(exact);
+    let nul = readiness::endpoint_snapshot_matches(true, 0, false, 0, Some("base\0"), "base");
+    assert(!nul);
+    let prefix = readiness::endpoint_snapshot_matches(true, 0, false, 0, Some("b"), "base");
+    assert(!prefix);
+    let unicode = readiness::endpoint_snapshot_matches(true, 0, false, 0, Some("é"), "e\u{301}");
+    assert(!unicode);
+    let empty = readiness::endpoint_snapshot_matches(true, 0, false, 0, Some(""), "");
+    assert(empty);
 }
 
 }
