@@ -33,7 +33,7 @@ pub fn judge(req: &Request) -> Response {
                 .filter(|s| s.starts_with("E_"))
                 .unwrap_or("E_WORKFLOW_INPUT")
                 .to_string();
-            r.status = if matches!(
+            let severity = if matches!(
                 code.as_str(),
                 "E_BRANCH_STALE"
                     | "E_RETIREMENT"
@@ -45,13 +45,18 @@ pub fn judge(req: &Request) -> Response {
             } else {
                 Status::Error
             };
-            r.findings.push(Finding {
-                code,
-                level: "error".into(),
-                message,
-                delta_refs: vec!["/request/context".into()],
-                causes: vec![],
-            });
+            wire::append_finding(
+                &mut r.status,
+                &mut r.findings,
+                severity,
+                Finding {
+                    code,
+                    level: "error".into(),
+                    message,
+                    delta_refs: vec!["/request/context".into()],
+                    causes: vec![],
+                },
+            );
         }
     }
     r

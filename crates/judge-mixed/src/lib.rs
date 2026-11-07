@@ -281,28 +281,48 @@ pub fn judge(req: &Request) -> Response {
     match result {
         Ok((output, code)) => {
             if output["mixed"] == true {
-                response.status = Status::Warn;
-                response.findings.push(Finding {code,level:"warning".into(),
-                    message:format!("Rule and product changes share this DELTA. Rules: {}; products: {}. Before/after costs: outputs.rule_changes.costs; unknown coordinates remain unknown.",output["rule_paths"],output["product_paths"]),
-                    delta_refs:output["rule_paths"].as_array().unwrap().iter().chain(output["product_paths"].as_array().unwrap()).map(|v|v.as_str().unwrap().into()).collect(),
-                    causes:vec!["/outputs/rule_changes".into()]});
+                chrono_harness::wire::append_finding(
+                    &mut response.status,
+                    &mut response.findings,
+                    Status::Warn,
+                    Finding {
+                        code,
+                        level: "warning".into(),
+                        message: format!(
+                            "Rule and product changes share this DELTA. Rules: {}; products: {}. Before/after costs: outputs.rule_changes.costs; unknown coordinates remain unknown.",
+                            output["rule_paths"], output["product_paths"]
+                        ),
+                        delta_refs: output["rule_paths"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .chain(output["product_paths"].as_array().unwrap())
+                            .map(|v| v.as_str().unwrap().into())
+                            .collect(),
+                        causes: vec!["/outputs/rule_changes".into()],
+                    },
+                );
             }
             response.outputs.insert("rule_changes".into(), output);
         }
         Err(message) => {
-            response.status = Status::Error;
-            response.findings.push(Finding {
-                code: message
-                    .split(':')
-                    .next()
-                    .filter(|c| c.starts_with("E_"))
-                    .unwrap_or("E_INPUT")
-                    .into(),
-                level: "error".into(),
-                message,
-                delta_refs: vec!["/request".into()],
-                causes: vec![],
-            });
+            chrono_harness::wire::append_finding(
+                &mut response.status,
+                &mut response.findings,
+                Status::Error,
+                Finding {
+                    code: message
+                        .split(':')
+                        .next()
+                        .filter(|c| c.starts_with("E_"))
+                        .unwrap_or("E_INPUT")
+                        .into(),
+                    level: "error".into(),
+                    message,
+                    delta_refs: vec!["/request".into()],
+                    causes: vec![],
+                },
+            );
         }
     }
     response

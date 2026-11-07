@@ -148,6 +148,20 @@ pub struct Finding {
     pub causes: Vec<String>,
 }
 
+/// 记录已经分类的问题；调用方仍负责选择严重程度和字段。
+pub fn append_finding(
+    status: &mut WireStatus, findings: &mut Vec<Finding>, severity: WireStatus, finding: Finding,
+)
+    ensures
+        *status == (if old(status).rank_spec() >= severity.rank_spec() { *old(status) } else { severity }),
+        findings@ == old(findings)@.push(finding),
+{
+    if status.rank() < severity.rank() {
+        *status = severity;
+    }
+    findings.push(finding);
+}
+
 impl Clone for Finding {
     fn clone(&self) -> (out: Self)
         ensures out.code == self.code, out.level == self.level, out.message == self.message,
