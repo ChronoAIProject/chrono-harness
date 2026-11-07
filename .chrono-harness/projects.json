@@ -3982,6 +3982,15 @@
             "--manifest-path",
             "crates/diagnostics/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
         }
       },
       "test_project": "diagnostics-tests",
@@ -4072,6 +4081,15 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/diagnostics-tests/Cargo.toml"
           ]

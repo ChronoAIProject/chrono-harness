@@ -41,7 +41,7 @@ impl Policy {
             || !Path::new(&self.directory).components().all(|c| matches!(c, Component::Normal(_)))
             || Path::new(&self.directory).components().collect::<PathBuf>().to_str()
                 != Some(self.directory.trim_end_matches('/'))
-            || Path::new(&self.directory).components().count() < 4
+            || Path::new(&self.directory).components().count() < 3
             || self.max_bytes == 0 || self.max_bytes > 64 * 1024 * 1024
             || !(1..=crate::rolling::MAX_FILES).contains(&self.max_files)
         {
