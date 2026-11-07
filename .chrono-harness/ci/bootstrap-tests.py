@@ -354,6 +354,17 @@ class Bootstrap(unittest.TestCase):
     def succeeded(self, result):
         self.assertEqual(result.returncode, 0, result)
 
+    def test_requires_explicit_config_before_construction_effects(self):
+        result = subprocess.run(
+            [sys.executable, "-B", str(self.ci / "bootstrap.py"), str(self.root)],
+            cwd=tempfile.gettempdir(), env=self.environment,
+            pass_fds=PASS_FDS, capture_output=True)
+        self.assertNotEqual(result.returncode, 0, result)
+        self.assertIn(b"usage: bootstrap.py HOST_ROOT REGISTERED_CONFIG", result.stderr)
+        self.assertFalse(self.state_path.exists())
+        self.assertFalse((self.root / "built-tool").exists())
+        self.assertFalse((self.tools / "calls.json").exists())
+
     def test_subprocess_failure_diagnostic_preserves_command_exit_and_binary_streams(self):
         argv = [sys.executable, "-B", str(self.root / OPERATION), "fail", "7"]
         result = subprocess.run(argv, capture_output=True, pass_fds=PASS_FDS)
