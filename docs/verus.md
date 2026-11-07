@@ -156,6 +156,23 @@ String 借用／克隆及切片／Vec 索引沿用上列外部合同，可选文
 引用匹配不建立路径副本，最坏对 R 个引用各比较 D 个实际路径；完整构建、证明、运行、CI 和存储成本未测。
 JSON 解码、字段转发、登记记录指针归属、原件与完整响应组合仍有各自未完成义务。
 
+普通与初始库存的 `wire::validate_response_at` 直接把原响应字段、完整 finding 切片及实际 DELTA
+交给同源 `validate_response_fields`，并传播原 Result。
+`valid_response_findings` 对全部 finding 证明字段与引用条件的全称判断及终止；
+`response_fields_error` 明确错误顺序，实际实现证明成功充要条件和每个错误的完整文本：
+先返回 `E_PROTOCOL: response identity/status/exit mismatch`，再返回
+`E_PROTOCOL: invalid finding`，最后返回 `E_PROTOCOL: finding/status disagreement`。
+这包括字段与引用都有效后才检查状态的原行为，不接受调用方计算的有效标志。
+
+独立 Verus 预期核任意相同／不同头部、退出码边界、空／Unicode／NUL 文本、
+首／中／末非法 finding、空引用、普通／初始引用范围、四态成功与状态不一致，
+同时存在多种错误时仍保留上述优先级和完整错误文字。
+沿用原两个状态整 crate 证明、实际使用方和 FILEMAP，不增加项目、操作、依赖或证明预算。
+错误文本生成明确采用固定 vstd 的 `str::to_string` 完整字符合同；
+`wire` 的 `?` 直接返回同一个错误。成功路径只借用原列表，扫描使用常量额外状态；
+错误路径分配一条固定消息，不增加进程。完整构建、证明、运行、CI 和存储成本未知。
+后续 evidence 遍历与真实文件 IO 仍在原负责方；不据此前置组合主张完整响应已经证明。
+
 独立 Verus 根直接读取生产源码，声明成功、失败和边界预期。Cargo 消费同一源码并擦除 ghost；
 Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 SPEC 对应仍未证明。
 把错误长度的 OID 改为接受，会直接违反返回值后置条件（6 verified / 1 error）；
@@ -171,7 +188,7 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 实际 `wire::Status` 也归 `verified_status.rs`，保持 pass／warn／fail／error 的外部编码。
 身份比较、`pass < warn < fail < error` 的完整顺序、克隆和退出码 0／0／1／2 均由同源 Verus 证明；
 真实 `Finding` 的克隆保留 code、level、message 及两个引用数组的完整字符串、顺序和重复。
-`wire::validate_response_at` 和 `full::validate_record_response` 直接消费同一 `findings_match_status`，
+`wire::validate_response_at` 经上述前置校验、`full::validate_record_response` 直接消费同一 `findings_match_status`，
 只读取原 finding 的完整 level 字段：
 fail／error 当且仅当存在 `error`，pass 不允许 `warning`，warn 必须存在 `warning`。
 该循环证明完整列表的存在量词及终止，不由调用方提供预先计算的标志。
@@ -496,7 +513,7 @@ Rust 测试另外验证真实消费者，不替代证明。
 | 切片 `len`、`<[T] as Index<usize>>::index` 及 `<usize as SliceIndex<[T]>>::index` | 长度和逐项读取对应切片视图；本仓循环另行证明索引界限、完整遍历、返回条件及终止。`T` 在本批为 `u8` 或 `Finding`。 |
 | `<String as Clone>::clone` | 复制完整字符串；本仓 Finding 克隆证明各实际字符串字段均保留。 |
 | `<Vec<String> as Clone>::clone` | 保留长度和逐项克隆关系；本仓 Finding 克隆证明两个引用数组的完整字段、顺序和重复均保留。 |
-| `str::to_string` | 生成完整字符串；CI 结果 ID、原错误、默认原因及准入失败文字均保持完整字符／UTF-8 身份。 |
+| `str::to_string` | 生成完整字符串；CI 结果 ID、原错误、默认原因、准入失败及响应前置错误文字均保持完整字符／UTF-8 身份。 |
 | `Vec::new`、`Vec::push`、`Vec::len`、`Vec::as_slice`、`Vec` 的 `Index<usize>` | 空序列、追加后保全原前缀、长度、切片及逐项读取；本仓证明 CI 终态循环界限、完整遍历、记录对应、参数完整形状、字节拼接与终止。独立边界的 `Vec<String>` 索引赋值采用固定 vstd 的单槽更新合同。 |
 | `Option::as_ref`、`Option::map` | 无回执保持 None，有回执仅转发同一原记录的 `process.exit_code`；不在适配器中计算状态或选择退出。 |
 | `serde_json::from_slice::<CompilerReport>` 与该类型的 Serde `Deserialize` 派生 | 从本次调用传入的完整字节解码；必需字段、JSON 类型、整数范围和重复具名字段按固定 Serde 合同校验。未知的 Verus 统计字段忽略；所需字段不设默认值。此处明确采用外部解码合同，不声称本仓证明了 JSON 解析器。 |

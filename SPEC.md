@@ -679,6 +679,9 @@ pass 不允许 `warning`，warn 必须存在 `warning`；finding 克隆保留完
 当前实现的引用允许条件也由同源 Verus 逐项判断：普通请求接受以 `/` 字节开头的引用，
 或与本请求任一实际 `Delta.path` 完整相等的文本；初始库存只接受前一类。
 实际 DELTA 的克隆和比较保留六个字段，区分可选文本的缺失、空值和完整内容。
+普通与初始库存的响应前置校验直接调用同源 `validate_response_fields`：先核响应头和退出码，
+再逐项核完整 finding 数组的字段与引用，最后核 finding／状态一致性。
+失败分别保留原 `E_PROTOCOL` 完整消息及上述优先级；成功后仍须完成后续 evidence 检查。
 这些局部判断不证明登记记录指针的语法／目标归属、完整响应组合、JSON 或证据 IO，
 范围见 [Verus 实施说明](docs/verus.md)。
 
