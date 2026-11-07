@@ -1,4 +1,4 @@
-use chrono_diagnostics::{logging::Logger, rolling::RollingFile, runtime};
+use chrono_diagnostics::{rolling::RollingFile, runtime};
 use serde_json::{Value, json};
 use std::{
     fs,
