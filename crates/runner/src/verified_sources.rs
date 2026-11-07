@@ -1,152 +1,774 @@
-//! 编译器源码校验记录的字节语法及实际观察准入。
+//! 编译器依赖路径、规范化及完整源码 checksum 内容的同源规格和实现。
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
-#[cfg(verus_keep_ghost)]
-#[path = "verified_identifiers.rs"]
-pub mod identifiers;
-#[cfg(not(verus_keep_ghost))]
-use crate::verified_identifiers as identifiers;
+use super::{append_bytes, equal_bytes};
 
 verus! {
 
-pub struct SourceChecksum {
+/// Rust 1.95 的 dep-info 只转义 ASCII 空格。当前有界语法拒绝控制字节和
+/// 字面反斜杠，不额外解释 Make 语法。
+pub open spec fn dependency_byte(byte: u8) -> bool {
+    byte >= 32 && byte != 92 && byte != 127
+}
+
+pub open spec fn dependency_word(word: Seq<u8>) -> bool {
+    word.len() > 0 && forall|i: int| 0 <= i < word.len() ==> dependency_byte(#[trigger] word[i])
+}
+
+pub open spec fn dependency_escape(word: Seq<u8>) -> Seq<u8>
+    decreases word.len(),
+{
+    if word.len() == 0 { Seq::empty() }
+    else {
+        dependency_escape(word.drop_last())
+            + if word.last() == 32 { seq![92u8, 32u8] } else { seq![word.last()] }
+    }
+}
+
+pub open spec fn dependency_values(paths: Seq<Vec<u8>>) -> Seq<Seq<u8>> {
+    paths.map(|i: int, path: Vec<u8>| path@)
+}
+
+pub open spec fn dependency_encoding(paths: Seq<Seq<u8>>) -> Seq<u8>
+    decreases paths.len(),
+{
+    if paths.len() == 0 { Seq::empty() }
+    else {
+        dependency_encoding(paths.drop_last())
+            + if paths.len() == 1 { Seq::empty() } else { seq![32u8] }
+            + dependency_escape(paths.last())
+    }
+}
+
+pub open spec fn dependency_prefix(paths: Seq<Seq<u8>>, word: Seq<u8>) -> Seq<u8> {
+    if paths.len() == 0 { dependency_escape(word) }
+    else { dependency_encoding(paths) + seq![32u8] + dependency_escape(word) }
+}
+
+proof fn dependency_prefix_push(paths: Seq<Seq<u8>>, word: Seq<u8>, byte: u8)
+    ensures dependency_prefix(paths, word.push(byte)) == dependency_prefix(paths, word)
+        + if byte == 32 { seq![92u8, 32u8] } else { seq![byte] },
+{
+    assert(word.push(byte).drop_last() =~= word);
+}
+
+proof fn dependency_encoding_push(paths: Seq<Seq<u8>>, word: Seq<u8>)
+    ensures dependency_encoding(paths.push(word)) == dependency_prefix(paths, word),
+{
+    assert(paths.push(word).drop_last() =~= paths);
+    assert(paths.push(word).last() == word);
+    if paths.len() == 0 {
+        assert(paths =~= Seq::<Seq<u8>>::empty());
+        assert(dependency_encoding(paths) == Seq::<u8>::empty());
+    }
+}
+
+/// 明确规定首尾／重复分隔符及未知转义的失败结果；成功路径保留原顺序。
+pub open spec fn dependency_scan(
+    input: Seq<u8>, paths: Seq<Seq<u8>>, word: Seq<u8>,
+) -> Option<Seq<Seq<u8>>>
+    decreases input.len(),
+{
+    if input.len() == 0 {
+        if word.len() == 0 { None } else { Some(paths.push(word)) }
+    } else if input[0] == 32 {
+        if word.len() == 0 { None }
+        else { dependency_scan(input.drop_first(), paths.push(word), Seq::empty()) }
+    } else if input[0] == 92 {
+        if input.len() < 2 || input[1] != 32 { None }
+        else { dependency_scan(input.skip(2), paths, word.push(32u8)) }
+    } else if !dependency_byte(input[0]) {
+        None
+    } else {
+        dependency_scan(input.drop_first(), paths, word.push(input[0]))
+    }
+}
+
+pub fn parse_dependency_paths(input: &[u8]) -> (parsed: Option<Vec<Vec<u8>>>)
+    ensures
+        match parsed {
+            None => dependency_scan(input@, Seq::empty(), Seq::empty()).is_none(),
+            Some(paths) => {
+                let values = dependency_values(paths@);
+                dependency_scan(input@, Seq::empty(), Seq::empty()) == Some(values)
+                    && values.len() > 0
+                    && (forall|i: int| 0 <= i < values.len() ==> dependency_word(#[trigger] values[i]))
+                    && dependency_encoding(values) == input@
+            },
+        },
+{
+    let mut paths: Vec<Vec<u8>> = Vec::new();
+    let mut word: Vec<u8> = Vec::new();
+    let mut i = 0;
+    assert(dependency_values(paths@) =~= Seq::<Seq<u8>>::empty());
+    assert(input@.skip(0) =~= input@);
+    while i < input.len()
+        invariant
+            0 <= i <= input.len(),
+            dependency_scan(input@, Seq::empty(), Seq::empty())
+                == dependency_scan(input@.skip(i as int), dependency_values(paths@), word@),
+            dependency_prefix(dependency_values(paths@), word@) == input@.take(i as int),
+            forall|j: int| 0 <= j < paths.len() ==> dependency_word((#[trigger] paths[j])@),
+            forall|j: int| 0 <= j < word.len() ==> dependency_byte(#[trigger] word[j]),
+        decreases input.len() - i,
+    {
+        let ghost suffix = input@.skip(i as int);
+        let ghost previous_paths = dependency_values(paths@);
+        let ghost previous_word = word@;
+        let ghost previous_prefix = dependency_prefix(previous_paths, previous_word);
+        let byte = input[i];
+        if byte == 32 {
+            if word.len() == 0 { return None; }
+            let ghost previous = dependency_values(paths@);
+            let ghost last = word@;
+            paths.push(word);
+            word = Vec::new();
+            assert(dependency_values(paths@) =~= previous.push(last));
+            proof { dependency_encoding_push(previous, last); }
+            assert(dependency_prefix(dependency_values(paths@), word@)
+                == previous_prefix + seq![32u8]);
+            assert(input@.take(i + 1) =~= input@.take(i as int).push(byte));
+            assert(input@.skip(i + 1) =~= suffix.drop_first());
+            i += 1;
+        } else if byte == 92 {
+            if input.len() - i < 2 || input[i + 1] != 32 { return None; }
+            word.push(32u8);
+            proof { dependency_prefix_push(previous_paths, previous_word, 32u8); }
+            assert(input@.take(i + 2) =~= input@.take(i as int) + seq![92u8, 32u8]);
+            assert(input@.skip(i + 2) =~= suffix.skip(2));
+            i += 2;
+        } else {
+            if byte < 32 || byte == 127 { return None; }
+            word.push(byte);
+            proof { dependency_prefix_push(previous_paths, previous_word, byte); }
+            assert(input@.take(i + 1) =~= input@.take(i as int).push(byte));
+            assert(input@.skip(i + 1) =~= suffix.drop_first());
+            i += 1;
+        }
+    }
+    if word.len() == 0 { return None; }
+    let ghost previous = dependency_values(paths@);
+    let ghost last = word@;
+    assert(input@.skip(i as int) =~= Seq::<u8>::empty());
+    assert(input@.take(i as int) =~= input@);
+    paths.push(word);
+    assert(dependency_values(paths@) =~= previous.push(last));
+    proof { dependency_encoding_push(previous, last); }
+    assert(dependency_encoding(dependency_values(paths@)) == input@);
+    assert(dependency_scan(input@, Seq::empty(), Seq::empty())
+        == Some(dependency_values(paths@)));
+    assert forall|j: int| 0 <= j < paths.len()
+        implies dependency_word((#[trigger] paths[j])@) by {
+        if j < previous.len() { assert(paths@[j]@ == previous[j]); }
+        else { assert(paths@[j]@ == last); }
+    }
+    Some(paths)
+}
+
+pub open spec fn component_step(parts: Seq<Seq<u8>>, word: Seq<u8>) -> Option<Seq<Seq<u8>>> {
+    if word.len() == 0 || word == seq![46u8] { Some(parts) }
+    else if word == seq![46u8, 46u8] {
+        if parts.len() == 0 { None } else { Some(parts.drop_last()) }
+    } else { Some(parts.push(word)) }
+}
+
+pub open spec fn path_scan(
+    input: Seq<u8>, parts: Seq<Seq<u8>>, word: Seq<u8>,
+) -> Option<Seq<Seq<u8>>>
+    decreases input.len(),
+{
+    if input.len() == 0 { component_step(parts, word) }
+    else if !dependency_byte(input[0]) { None }
+    else if input[0] == 47 {
+        match component_step(parts, word) {
+            None => None,
+            Some(next) => path_scan(input.drop_first(), next, Seq::empty()),
+        }
+    } else { path_scan(input.drop_first(), parts, word.push(input[0])) }
+}
+
+pub open spec fn relative_components(input: Seq<u8>) -> Option<Seq<Seq<u8>>> {
+    if input.len() == 0 || input[0] == 47 { None }
+    else {
+        match path_scan(input, Seq::empty(), Seq::empty()) {
+            Some(parts) => if parts.len() == 0 { None } else { Some(parts) },
+            None => None,
+        }
+    }
+}
+
+pub open spec fn joined_components(parts: Seq<Seq<u8>>) -> Seq<u8>
+    decreases parts.len(),
+{
+    if parts.len() == 0 { Seq::empty() }
+    else {
+        joined_components(parts.drop_last())
+            + if parts.len() == 1 { Seq::empty() } else { seq![47u8] }
+            + parts.last()
+    }
+}
+
+pub open spec fn normal_component(word: Seq<u8>) -> bool {
+    dependency_word(word) && word != seq![46u8] && word != seq![46u8, 46u8]
+        && forall|i: int| 0 <= i < word.len() ==> (#[trigger] word[i]) != 47
+}
+
+pub fn finish_component(parts: &mut Vec<Vec<u8>>, word: Vec<u8>) -> (accepted: bool)
+    requires
+        forall|i: int| 0 <= i < old(parts).len() ==> normal_component((#[trigger] old(parts)[i])@),
+        forall|i: int| 0 <= i < word.len() ==> dependency_byte(#[trigger] word[i]) && word[i] != 47,
+    ensures
+        accepted <==> component_step(dependency_values(old(parts)@), word@).is_some(),
+        accepted ==> component_step(dependency_values(old(parts)@), word@)
+            == Some(dependency_values(parts@)),
+        !accepted ==> parts@ == old(parts)@,
+        forall|i: int| 0 <= i < parts.len() ==> normal_component((#[trigger] parts[i])@),
+{
+    if word.len() == 0 {
+        assert(word@ =~= Seq::<u8>::empty());
+        return true;
+    }
+    if word.len() == 1 && word[0] == 46 {
+        assert(word@ =~= seq![46u8]);
+        return true;
+    }
+    if word.len() == 2 && word[0] == 46 && word[1] == 46 {
+        assert(word@ =~= seq![46u8, 46u8]);
+        if parts.len() == 0 { return false; }
+        let ghost before = dependency_values(parts@);
+        let _ = parts.pop();
+        assert(dependency_values(parts@) =~= before.drop_last());
+    } else {
+        assert(word@ != seq![46u8] && word@ != seq![46u8, 46u8]);
+        let ghost before = dependency_values(parts@);
+        let ghost last = word@;
+        parts.push(word);
+        assert(dependency_values(parts@) =~= before.push(last));
+    }
+    true
+}
+
+/// 只做 POSIX 词法规范化。文件系统别名、符号链接及固定源码字节绑定
+/// 仍由实际获取接口和消费链负责。
+pub fn normalize_relative_path(input: &[u8]) -> (normalized: Option<Vec<u8>>)
+    ensures
+        match normalized {
+            None => relative_components(input@).is_none(),
+            Some(path) => relative_components(input@).is_some()
+                && path@ == joined_components(relative_components(input@).unwrap())
+                && path.len() > 0,
+        },
+{
+    if input.len() == 0 || input[0] == 47 { return None; }
+    let mut parts: Vec<Vec<u8>> = Vec::new();
+    let mut word: Vec<u8> = Vec::new();
+    let mut i = 0;
+    assert(dependency_values(parts@) =~= Seq::<Seq<u8>>::empty());
+    assert(input@.skip(0) =~= input@);
+    while i < input.len()
+        invariant
+            0 <= i <= input.len(), input.len() > 0, input@[0] != 47,
+            path_scan(input@, Seq::empty(), Seq::empty())
+                == path_scan(input@.skip(i as int), dependency_values(parts@), word@),
+            forall|j: int| 0 <= j < parts.len() ==> normal_component((#[trigger] parts[j])@),
+            forall|j: int| 0 <= j < word.len() ==> dependency_byte(#[trigger] word[j]) && word[j] != 47,
+        decreases input.len() - i,
+    {
+        let byte = input[i];
+        if byte < 32 || byte == 92 || byte == 127 { return None; }
+        if byte == 47 {
+            if !finish_component(&mut parts, word) { return None; }
+            word = Vec::new();
+        } else { word.push(byte); }
+        assert(input@.skip(i as int).drop_first() =~= input@.skip(i + 1));
+        i += 1;
+    }
+    assert(input@.skip(i as int) =~= Seq::<u8>::empty());
+    if !finish_component(&mut parts, word) || parts.len() == 0 { return None; }
+    assert(relative_components(input@) == Some(dependency_values(parts@)));
+    let mut path = Vec::new();
+    let mut j = 0;
+    assert(dependency_values(parts@.take(0)) =~= Seq::<Seq<u8>>::empty());
+    while j < parts.len()
+        invariant 0 <= j <= parts.len(), parts.len() > 0,
+            forall|k: int| 0 <= k < parts.len() ==> normal_component((#[trigger] parts[k])@),
+            path@ == joined_components(dependency_values(parts@.take(j as int))),
+        decreases parts.len() - j,
+    {
+        if j > 0 { path.push(47u8); }
+        append_bytes(&mut path, parts[j].as_slice());
+        proof {
+            let prefix = dependency_values(parts@.take(j + 1));
+            assert(prefix.drop_last() =~= dependency_values(parts@.take(j as int)));
+            assert(prefix.last() == parts@[j as int]@);
+        }
+        j += 1;
+    }
+    assert(parts@.take(j as int) =~= parts@);
+    assert(normal_component(parts@[parts.len() - 1]@));
+    assert(dependency_values(parts@).last() == parts@[parts.len() - 1]@);
+    Some(path)
+}
+
+pub open spec fn prefix_at(input: Seq<u8>, start: int, prefix: Seq<u8>) -> bool {
+    0 <= start <= input.len() && prefix.len() <= input.len() - start
+        && input.subrange(start, start + prefix.len()) == prefix
+}
+
+pub fn matches_at(input: &[u8], start: usize, prefix: &[u8]) -> (matched: bool)
+    ensures matched <==> prefix_at(input@, start as int, prefix@),
+{
+    if start > input.len() || prefix.len() > input.len() - start { return false; }
+    let mut i = 0;
+    while i < prefix.len()
+        invariant
+            start <= input.len(), prefix.len() <= input.len() - start,
+            0 <= i <= prefix.len(),
+            forall|j: int| 0 <= j < i ==> input@[start + j] == prefix@[j],
+        decreases prefix.len() - i,
+    {
+        if input[start + i] != prefix[i] { return false; }
+        i += 1;
+    }
+    assert(input@.subrange(start as int, start + prefix.len()) =~= prefix@);
+    true
+}
+
+pub fn copy_range(input: &[u8], start: usize, end: usize) -> (bytes: Vec<u8>)
+    requires start <= end <= input.len(),
+    ensures bytes@ == input@.subrange(start as int, end as int),
+{
+    let mut bytes = Vec::new();
+    let mut i = start;
+    while i < end
+        invariant start <= i <= end <= input.len(),
+            bytes@ == input@.subrange(start as int, i as int),
+        decreases end - i,
+    {
+        bytes.push(input[i]);
+        assert(input@.subrange(start as int, i + 1)
+            =~= input@.subrange(start as int, i as int).push(input[i as int]));
+        i += 1;
+    }
+    bytes
+}
+
+pub open spec fn next_byte(input: Seq<u8>, start: int, byte: u8) -> int
+    recommends 0 <= start <= input.len(),
+    decreases input.len() - start,
+{
+    if start >= input.len() || input[start] == byte { start }
+    else { next_byte(input, start + 1, byte) }
+}
+
+pub fn find_byte(input: &[u8], start: usize, byte: u8) -> (end: usize)
+    requires start <= input.len(),
+    ensures start <= end <= input.len(),
+        end == next_byte(input@, start as int, byte),
+        end < input.len() ==> input@[end as int] == byte,
+        forall|j: int| start <= j < end ==> input@[j] != byte,
+{
+    let mut i = start;
+    while i < input.len()
+        invariant start <= i <= input.len(),
+            next_byte(input@, start as int, byte) == next_byte(input@, i as int, byte),
+            forall|j: int| start <= j < i ==> input@[j] != byte,
+        decreases input.len() - i,
+    {
+        if input[i] == byte { return i; }
+        i += 1;
+    }
+    i
+}
+
+pub open spec fn decimal_text(value: nat) -> Seq<u8>
+    decreases value,
+{
+    if value < 10 { seq![(value + 48) as u8] }
+    else { decimal_text(value / 10).push((value % 10 + 48) as u8) }
+}
+
+/// 递归按预期 u64 的十进制位数终止；不解析任意输入数字，也不截断或回绕。
+pub fn decimal_bytes(value: u64) -> (bytes: Vec<u8>)
+    ensures bytes@ == decimal_text(value as nat),
+    decreases value,
+{
+    if value < 10 {
+        vec![value as u8 + 48]
+    } else {
+        let mut bytes = decimal_bytes(value / 10);
+        bytes.push((value % 10) as u8 + 48);
+        bytes
+    }
+}
+
+pub fn encode_path(path: &[u8]) -> (encoded: Vec<u8>)
+    ensures encoded@ == dependency_escape(path@),
+{
+    let mut encoded = Vec::new();
+    let mut i = 0;
+    while i < path.len()
+        invariant 0 <= i <= path.len(), encoded@ == dependency_escape(path@.take(i as int)),
+        decreases path.len() - i,
+    {
+        if path[i] == 32 { encoded.push(92u8); }
+        encoded.push(path[i]);
+        assert(path@.take(i + 1) =~= path@.take(i as int).push(path[i as int]));
+        assert(path@.take(i + 1).drop_last() =~= path@.take(i as int));
+        i += 1;
+    }
+    assert(path@.take(i as int) =~= path@);
+    encoded
+}
+
+pub open spec fn target_prefix(output: Seq<u8>) -> Seq<u8> {
+    output + seq![46u8, 100u8, 58u8, 32u8]
+}
+
+pub open spec fn compiler_paths(input: Seq<u8>, output: Seq<u8>) -> Option<Seq<Seq<u8>>> {
+    let prefix = target_prefix(output);
+    if !prefix_at(input, 0, prefix) { None }
+    else {
+        let end = next_byte(input, prefix.len() as int, 10u8);
+        if end < prefix.len() || end >= input.len() { None }
+        else { dependency_scan(input.subrange(prefix.len() as int, end), Seq::empty(), Seq::empty()) }
+    }
+}
+
+/// 读取首个编译目标的依赖列表；完整规则与 checksum 另由
+/// matches_dependency_content 精确核对。
+pub fn compiler_dependency_paths(input: &[u8], output: &[u8]) -> (parsed: Option<Vec<Vec<u8>>>)
+    ensures
+        match parsed {
+            None => compiler_paths(input@, output@).is_none(),
+            Some(paths) => compiler_paths(input@, output@) == Some(dependency_values(paths@))
+                && paths.len() > 0
+                && (forall|i: int| 0 <= i < paths.len() ==> dependency_word((#[trigger] paths[i])@)),
+        },
+{
+    let mut prefix = Vec::new();
+    append_bytes(&mut prefix, output);
+    append_bytes(&mut prefix, &[46u8, 100u8, 58u8, 32u8]);
+    assert(prefix@ =~= target_prefix(output@));
+    if !matches_at(input, 0, prefix.as_slice()) { return None; }
+    let end = find_byte(input, prefix.len(), 10u8);
+    if end == input.len() { return None; }
+    let list = copy_range(input, prefix.len(), end);
+    assert(compiler_paths(input@, output@) == dependency_scan(list@, Seq::empty(), Seq::empty()));
+    let parsed = parse_dependency_paths(list.as_slice());
+    proof {
+        if let Some(paths) = &parsed {
+            assert forall|i: int| 0 <= i < paths.len() implies dependency_word((#[trigger] paths[i])@) by {
+                assert(paths@[i]@ == dependency_values(paths@)[i]);
+            }
+        }
+    }
+    parsed
+}
+
+pub struct SourceBinding {
     pub path: Vec<u8>,
     pub sha256: Vec<u8>,
-    pub length: Vec<u8>,
+    pub length: u64,
 }
 
-pub open spec fn prefix(bytes: Seq<u8>, expected: Seq<u8>) -> bool {
-    bytes.len() >= expected.len() && bytes.take(expected.len() as int) == expected
+pub open spec fn source_pair_matches(source: &SourceBinding, candidate: &SourceBinding) -> bool {
+    relative_components(source.path@).is_some()
+        && candidate.path@ == joined_components(relative_components(source.path@).unwrap())
+        && super::identifiers::digest_format(candidate.sha256@)
+        && source.sha256@ == candidate.sha256@
+        && source.length == candidate.length
 }
 
-pub fn has_prefix(bytes: &[u8], expected: &[u8]) -> (matches: bool)
-    ensures matches == prefix(bytes@, expected@),
+pub fn matches_source_pair(source: &SourceBinding, candidate: &SourceBinding) -> (matched: bool)
+    ensures matched <==> source_pair_matches(source, candidate),
 {
-    if bytes.len() < expected.len() { return false; }
-    identifiers::equal_bytes(&bytes[..expected.len()], expected)
+    let Some(path) = normalize_relative_path(source.path.as_slice()) else { return false; };
+    equal_bytes(path.as_slice(), candidate.path.as_slice())
+        && super::identifiers::valid_digest(candidate.sha256.as_slice())
+        && equal_bytes(source.sha256.as_slice(), candidate.sha256.as_slice())
+        && source.length == candidate.length
 }
 
-pub open spec fn decimal(bytes: Seq<u8>) -> bool {
-    bytes.len() > 0 && (bytes.len() == 1 || bytes[0] != 48)
-        && forall|i: int| 0 <= i < bytes.len() ==> 48 <= #[trigger] bytes[i] <= 57
+pub open spec fn listed_source_path(sources: Seq<SourceBinding>, path: Seq<u8>, limit: int) -> bool {
+    exists|i: int| 0 <= i < limit && (#[trigger] sources[i]).path@ == path
 }
 
-pub open spec fn source_path(bytes: Seq<u8>) -> bool {
-    bytes.len() > 0 && forall|i: int| 0 <= i < bytes.len() ==>
-        #[trigger] bytes[i] != 0 && bytes[i] != 10 && bytes[i] != 13
-}
-
-/// 长度保持编译器原十进制字节；与真实文件长度格式化的结果精确比较，
-/// 不把不受信输入转换为机器整数，也不截断或回绕。
-pub open spec fn checksum_line(line: Seq<u8>, record: &SourceChecksum) -> bool {
-    identifiers::digest_format(record.sha256@) && decimal(record.length@)
-        && source_path(record.path@)
-        && line == b"# checksum:sha256="@ + record.sha256@
-            + b" file_len:"@ + record.length@ + seq![32u8] + record.path@
-}
-
-pub open spec fn length_end(line: Seq<u8>, end: int) -> bool {
-    93 <= end < line.len() - 1 && line[end] == 32
-        && decimal(line.subrange(92, end))
-}
-
-pub open spec fn valid_checksum_line(line: Seq<u8>) -> bool {
-    line.len() >= 95 && prefix(line, b"# checksum:sha256="@)
-        && identifiers::digest_format(line.subrange(18, 82))
-        && line.subrange(82, 92) == b" file_len:"@
-        && exists|end: int| length_end(line, end)
-            && source_path(line.subrange(end + 1, line.len() as int))
-}
-
-pub proof fn unique_length_end(line: Seq<u8>, first: int, second: int)
-    requires length_end(line, first), length_end(line, second),
-    ensures first == second,
+pub fn contains_source_path(sources: &Vec<SourceBinding>, path: &[u8], limit: usize) -> (found: bool)
+    requires limit <= sources.len(),
+    ensures found <==> listed_source_path(sources@, path@, limit as int),
 {
-    if first < second {
-        assert(48 <= line.subrange(92, second)[first - 92] <= 57);
-    } else if second < first {
-        assert(48 <= line.subrange(92, first)[second - 92] <= 57);
-    }
-}
-
-pub fn copy_bytes(bytes: &[u8]) -> (out: Vec<u8>)
-    ensures out@ == bytes@,
-{
-    let mut out = Vec::new();
     let mut i = 0;
-    while i < bytes.len()
-        invariant 0 <= i <= bytes.len(), out@ == bytes@.take(i as int),
-        decreases bytes.len() - i,
+    while i < limit
+        invariant 0 <= i <= limit <= sources.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] sources[j]).path@ != path@,
+        decreases limit - i,
     {
-        out.push(bytes[i]);
-        assert(bytes@.take(i + 1) =~= bytes@.take(i as int).push(bytes[i as int]));
+        if equal_bytes(sources[i].path.as_slice(), path) { return true; }
         i += 1;
     }
-    out
+    false
 }
 
-pub fn parse_checksum_line(line: &[u8]) -> (out: Result<SourceChecksum, String>)
-    ensures out.is_ok() == valid_checksum_line(line@),
-        out.is_ok() ==> checksum_line(line@, &out.unwrap()),
+pub open spec fn source_metadata_admitted(
+    sources: Seq<SourceBinding>, candidate: Seq<SourceBinding>, root: Seq<u8>, claims: Seq<Vec<u8>>,
+) -> bool {
+    sources.len() > 0 && sources.len() == candidate.len()
+        && (forall|i: int| 0 <= i < sources.len() ==>
+            source_pair_matches(#[trigger] &sources[i], &candidate[i]))
+        && (forall|i: int| 0 <= i < candidate.len() ==>
+            !listed_source_path(candidate, (#[trigger] candidate[i]).path@, i))
+        && listed_source_path(candidate, root, candidate.len() as int)
+        && (forall|i: int| 0 <= i < claims.len() ==>
+            listed_source_path(candidate, (#[trigger] claims[i])@, candidate.len() as int))
+}
+
+/// 每个编译器路径必须对应一个不同的候选条目，摘要与字节长度也须相同；
+/// 完整根路径与每项显式声明都必须出现。调用方须从固定登记／Git 取得预期条目。
+pub fn admit_source_metadata(
+    sources: &Vec<SourceBinding>, candidate: &Vec<SourceBinding>, root: &[u8], claims: &Vec<Vec<u8>>,
+) -> (accepted: bool)
+    ensures accepted <==> source_metadata_admitted(sources@, candidate@, root@, claims@),
 {
-    if line.len() < 95 || !has_prefix(line, b"# checksum:sha256=") {
-        return Err("E_VERUS_SOURCES: malformed checksum record".to_string());
-    }
-    if !identifiers::valid_digest(&line[18..82])
-        || !identifiers::equal_bytes(&line[82..92], b" file_len:") {
-        return Err("E_VERUS_SOURCES: malformed checksum record".to_string());
-    }
-    let mut end = 92;
-    while end < line.len() && line[end] != 32
-        invariant 92 <= end <= line.len(), line.len() >= 95,
-            forall|i: int| 92 <= i < end ==> 48 <= #[trigger] line[i] <= 57,
-            forall|n: int| length_end(line@, n) ==> end <= n,
-        decreases line.len() - end,
+    if sources.len() == 0 || sources.len() != candidate.len() { return false; }
+    let mut i = 0;
+    while i < sources.len()
+        invariant 0 <= i <= sources.len(), 0 < sources.len() == candidate.len(),
+            forall|j: int| 0 <= j < i ==>
+                source_pair_matches(#[trigger] &sources[j], &candidate[j]),
+            forall|j: int| 0 <= j < i ==>
+                !listed_source_path(candidate@, (#[trigger] candidate[j]).path@, j),
+        decreases sources.len() - i,
     {
-        if line[end] < 48 || line[end] > 57 {
-            return Err("E_VERUS_SOURCES: malformed checksum length".to_string());
-        }
-        end += 1;
-    }
-    if end == 92 || end == line.len() || end == line.len() - 1
-        || (end > 93 && line[92] == 48) {
-        return Err("E_VERUS_SOURCES: malformed checksum length or path".to_string());
-    }
-    proof {
-        assert(length_end(line@, end as int));
-        assert forall|n: int| length_end(line@, n) implies n == end by {
-            unique_length_end(line@, n, end as int);
-        }
-    }
-    let mut i = end + 1;
-    while i < line.len()
-        invariant end + 1 <= i <= line.len(), end < line.len() - 1,
-            length_end(line@, end as int),
-            forall|n: int| length_end(line@, n) ==> n == end,
-            forall|j: int| end < j < i ==>
-                #[trigger] line[j] != 0 && line[j] != 10 && line[j] != 13,
-        decreases line.len() - i,
-    {
-        if line[i] == 0 || line[i] == 10 || line[i] == 13 {
-            return Err("E_VERUS_SOURCES: malformed checksum path".to_string());
-        }
+        if !matches_source_pair(&sources[i], &candidate[i]) { return false; }
+        if contains_source_path(candidate, candidate[i].path.as_slice(), i) { return false; }
         i += 1;
     }
-    let sha256 = copy_bytes(&line[18..82]);
-    let length = copy_bytes(&line[92..end]);
-    let path = copy_bytes(&line[end + 1..]);
-    proof {
-        assert(source_path(line@.subrange(end + 1, line.len() as int)));
-        assert(line@ == line@.subrange(0, 18) + line@.subrange(18, 82)
-            + line@.subrange(82, 92) + line@.subrange(92, end as int)
-            + seq![32u8] + line@.subrange(end + 1, line.len() as int)) by {
-            assert(line[end as int] == 32);
+    if !contains_source_path(candidate, root, candidate.len()) { return false; }
+    let mut j = 0;
+    while j < claims.len()
+        invariant 0 <= j <= claims.len(), 0 < sources.len() == candidate.len(),
+            forall|i: int| 0 <= i < sources.len() ==>
+                source_pair_matches(#[trigger] &sources[i], &candidate[i]),
+            forall|i: int| 0 <= i < candidate.len() ==>
+                !listed_source_path(candidate@, (#[trigger] candidate[i]).path@, i),
+            listed_source_path(candidate@, root@, candidate.len() as int),
+            forall|i: int| 0 <= i < j ==>
+                listed_source_path(candidate@, (#[trigger] claims[i])@, candidate.len() as int),
+        decreases claims.len() - j,
+    {
+        if !contains_source_path(candidate, claims[j].as_slice(), candidate.len()) { return false; }
+        j += 1;
+    }
+    true
+}
+
+pub open spec fn checksum_prefix(source: &SourceBinding) -> Seq<u8> {
+    vstd::utf8::encode_utf8("# checksum:sha256="@) + source.sha256@ + vstd::utf8::encode_utf8(" file_len:"@)
+}
+
+pub open spec fn checksum_line(source: &SourceBinding) -> Seq<u8> {
+    checksum_prefix(source) + decimal_text(source.length as nat)
+        + seq![32u8] + dependency_escape(source.path@)
+}
+
+pub fn matches_checksum(line: &[u8], source: &SourceBinding) -> (matched: bool)
+    ensures matched <==> line@ == checksum_line(source),
+{
+    let mut prefix = Vec::new();
+    append_bytes(&mut prefix, "# checksum:sha256=".as_bytes());
+    append_bytes(&mut prefix, source.sha256.as_slice());
+    append_bytes(&mut prefix, " file_len:".as_bytes());
+    let length = decimal_bytes(source.length);
+    append_bytes(&mut prefix, length.as_slice());
+    prefix.push(32u8);
+    assert(prefix@ =~= checksum_prefix(source) + decimal_text(source.length as nat) + seq![32u8]);
+    let path = encode_path(source.path.as_slice());
+    append_bytes(&mut prefix, path.as_slice());
+    assert(prefix@ =~= checksum_line(source));
+    equal_bytes(line, prefix.as_slice())
+}
+
+pub open spec fn source_paths(sources: Seq<SourceBinding>) -> Seq<Seq<u8>> {
+    sources.map(|i: int, source: SourceBinding| source.path@)
+}
+
+pub open spec fn phony_rules(sources: Seq<SourceBinding>) -> Seq<u8>
+    decreases sources.len(),
+{
+    if sources.len() == 0 { Seq::empty() }
+    else { phony_rules(sources.drop_last()) + dependency_escape(sources.last().path@) + seq![58u8, 10u8] }
+}
+
+pub open spec fn dependency_header(output: Seq<u8>, sources: Seq<SourceBinding>) -> Seq<u8> {
+    target_prefix(output) + dependency_encoding(source_paths(sources)) + seq![10u8, 10u8]
+        + output + seq![58u8, 32u8] + dependency_encoding(source_paths(sources)) + seq![10u8, 10u8]
+        + phony_rules(sources)
+}
+
+pub fn dependency_header_bytes(output: &[u8], sources: &Vec<SourceBinding>) -> (header: Vec<u8>)
+    ensures header@ == dependency_header(output@, sources@),
+{
+    let mut list = Vec::new();
+    let mut i = 0;
+    assert(source_paths(sources@.take(0)) =~= Seq::<Seq<u8>>::empty());
+    while i < sources.len()
+        invariant 0 <= i <= sources.len(),
+            list@ == dependency_encoding(source_paths(sources@.take(i as int))),
+        decreases sources.len() - i,
+    {
+        let ghost previous = source_paths(sources@.take(i as int));
+        let path = encode_path(sources[i].path.as_slice());
+        if i > 0 { list.push(32u8); }
+        append_bytes(&mut list, path.as_slice());
+        assert(source_paths(sources@.take(i + 1)) =~= previous.push(sources@[i as int].path@));
+        assert(previous.push(sources@[i as int].path@).drop_last() =~= previous);
+        i += 1;
+    }
+    assert(sources@.take(i as int) =~= sources@);
+    let mut header = Vec::new();
+    append_bytes(&mut header, output);
+    append_bytes(&mut header, &[46u8, 100u8, 58u8, 32u8]);
+    append_bytes(&mut header, list.as_slice());
+    append_bytes(&mut header, &[10u8, 10u8]);
+    append_bytes(&mut header, output);
+    append_bytes(&mut header, &[58u8, 32u8]);
+    append_bytes(&mut header, list.as_slice());
+    append_bytes(&mut header, &[10u8, 10u8]);
+    let ghost targets = header@;
+    assert(phony_rules(sources@.take(0)) == Seq::<u8>::empty());
+    i = 0;
+    while i < sources.len()
+        invariant 0 <= i <= sources.len(), header@ == targets + phony_rules(sources@.take(i as int)),
+        decreases sources.len() - i,
+    {
+        let path = encode_path(sources[i].path.as_slice());
+        append_bytes(&mut header, path.as_slice());
+        append_bytes(&mut header, &[58u8, 10u8]);
+        assert(sources@.take(i + 1).drop_last() =~= sources@.take(i as int));
+        i += 1;
+    }
+    assert(sources@.take(i as int) =~= sources@);
+    header
+}
+
+pub open spec fn checksum_trailer(
+    input: Seq<u8>, sources: Seq<SourceBinding>, index: int, before_checksums: bool,
+) -> bool
+    recommends 0 <= index <= sources.len(),
+    decreases input.len(),
+{
+    if input.len() == 0 { index == sources.len() }
+    else {
+        let end = next_byte(input, 0, 10u8);
+        if end < 0 || end >= input.len() { false }
+        else {
+            let line = input.take(end);
+            let remaining = input.skip(end + 1);
+            if index < sources.len() {
+                if before_checksums && (line.len() == 0
+                    || prefix_at(line, 0, vstd::utf8::encode_utf8("# env-dep:"@))) {
+                    checksum_trailer(remaining, sources, index, true)
+                } else {
+                    line == checksum_line(&sources[index])
+                        && checksum_trailer(remaining, sources, index + 1, false)
+                }
+            } else {
+                line.len() == 0 && checksum_trailer(remaining, sources, index, false)
+            }
         }
     }
-    Ok(SourceChecksum { path, sha256, length })
 }
+
+pub open spec fn dependency_content_matches(
+    input: Seq<u8>, output: Seq<u8>, sources: Seq<SourceBinding>,
+) -> bool {
+    let header = dependency_header(output, sources);
+    sources.len() > 0 && prefix_at(input, 0, header)
+        && checksum_trailer(input.skip(header.len() as int), sources, 0, true)
+}
+
+/// 按预期源码元数据精确核对完整有序内容；调用方仍须把每个预期路径、摘要和
+/// 长度绑定到固定源码字节，单独通过此函数不建立该来源关系。
+pub fn matches_dependency_content(input: &[u8], output: &[u8], sources: &Vec<SourceBinding>) -> (matched: bool)
+    ensures matched <==> dependency_content_matches(input@, output@, sources@),
+{
+    if sources.len() == 0 { return false; }
+    let header = dependency_header_bytes(output, sources);
+    if !matches_at(input, 0, header.as_slice()) { return false; }
+    let mut position = header.len();
+    let mut index = 0;
+    let mut before_checksums = true;
+    assert(input@.skip(position as int) == input@.skip(header.len() as int));
+    while position < input.len()
+        invariant
+            header.len() <= position <= input.len(), 0 <= index <= sources.len(),
+            sources.len() > 0, prefix_at(input@, 0, header@),
+            header@ == dependency_header(output@, sources@),
+            checksum_trailer(input@.skip(header.len() as int), sources@, 0, true)
+                == checksum_trailer(input@.skip(position as int), sources@, index as int, before_checksums),
+        decreases input.len() - position,
+    {
+        let end = find_byte(input, position, 10u8);
+        proof { next_byte_shift(input@, position as int, 10u8); }
+        if end == input.len() {
+            assert(!checksum_trailer(input@.skip(position as int), sources@, index as int, before_checksums));
+            return false;
+        }
+        let line = copy_range(input, position, end);
+        assert(line@ =~= input@.skip(position as int).take(end - position));
+        assert(input@.skip(end + 1) =~= input@.skip(position as int).skip(end - position + 1));
+        if index < sources.len() {
+            if before_checksums && (line.len() == 0
+                || matches_at(line.as_slice(), 0, "# env-dep:".as_bytes())) {
+            } else {
+                if !matches_checksum(line.as_slice(), &sources[index]) {
+                    assert(!checksum_trailer(input@.skip(position as int), sources@, index as int, before_checksums));
+                    return false;
+                }
+                index += 1;
+                before_checksums = false;
+            }
+        } else {
+            if line.len() != 0 { return false; }
+            before_checksums = false;
+        }
+        position = end + 1;
+    }
+    assert(input@.skip(position as int) =~= Seq::<u8>::empty());
+    index == sources.len()
+}
+
+pub proof fn next_byte_shift(input: Seq<u8>, start: int, byte: u8)
+    requires 0 <= start <= input.len(),
+    ensures next_byte(input.skip(start), 0, byte) == next_byte(input, start, byte) - start,
+    decreases input.len() - start,
+{
+    next_byte_suffix(input, start, 0, byte);
+}
+
+proof fn next_byte_suffix(input: Seq<u8>, start: int, offset: int, byte: u8)
+    requires 0 <= start <= input.len(), 0 <= offset <= input.len() - start,
+    ensures next_byte(input.skip(start), offset, byte) == next_byte(input, start + offset, byte) - start,
+    decreases input.len() - start - offset,
+{
+    if start + offset < input.len() && input[start + offset] != byte {
+        next_byte_suffix(input, start, offset + 1, byte);
+    }
+}
+
+pub proof fn next_byte_at(input: Seq<u8>, start: int, end: int, byte: u8)
+    requires 0 <= start <= end <= input.len(),
+        end == input.len() || input[end] == byte,
+        forall|i: int| start <= i < end ==> input[i] != byte,
+    ensures next_byte(input, start, byte) == end,
+    decreases end - start,
+{
+    if start < end { next_byte_at(input, start + 1, end, byte); }
+}
+
 
 }
