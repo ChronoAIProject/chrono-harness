@@ -77,7 +77,7 @@ fn run() -> u8 {
             }
             Err(e) => {
                 eprintln!("{e}");
-                (1)
+                1
             }
         };
     }
@@ -87,7 +87,7 @@ fn run() -> u8 {
 }
 fn fail(message: &str) -> u8 {
     eprintln!("{message}");
-    (2)
+    2
 }
 
 fn main() -> std::process::ExitCode {

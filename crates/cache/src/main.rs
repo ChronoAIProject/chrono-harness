@@ -6,7 +6,7 @@ fn run() -> u8 {
         }
         Err(error) => {
             eprintln!("{error}");
-            (2)
+            2
         }
     }
 }

@@ -1,6 +1,6 @@
 # 结构化日志与错误
 
-`chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner、宿主目录或 Git。宿主明确登记它的构建、测试计划、输入、输出和 CI 单元。
+`chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner 或 Git。核心记录和 tracing 层不依赖宿主目录；`runtime` 适配器从明确宿主根读取日志选择。宿主登记它的构建、测试计划、输入、输出和 CI 单元。
 
 ## 保留原错误及其原因
 

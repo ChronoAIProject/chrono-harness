@@ -6,7 +6,7 @@ fn run() -> u8 {
         }
         Err(error) => {
             eprintln!("E_DISTRIBUTION: {error}");
-            (1)
+            1
         }
     }
 }
