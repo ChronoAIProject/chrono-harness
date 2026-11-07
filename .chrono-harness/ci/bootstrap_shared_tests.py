@@ -2073,9 +2073,11 @@ class RealFixtureStartup(unittest.TestCase):
                     attempt.publish()
                     self.assertEqual(retained.read_bytes(), raw)
                     self.assertEqual(json.loads(raw)["source"], observed)
-            binding = (evidence / "github-output").read_text().strip().split("=", 1)[1]
+            outputs = dict(line.split("=", 1) for line in (evidence / "github-output").read_text().splitlines())
+            binding = outputs["binding"]
             attempt.result["binding"] = binding
             environment["CHRONO_STARTUP_BINDING"] = binding
+            environment["CHRONO_STARTUP_INSTALLER_SHA256"] = outputs["installer_sha256"]
             registered("host.bootstrap-shared-install-unit_runner")
             units = json.loads((root / ".chrono-harness/ci/units.json").read_bytes())
             run("runner-startup", units["units"]["runner"]["bootstrap"], root)

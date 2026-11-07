@@ -11,6 +11,8 @@ pub struct Config {
     pub directory: String,
     pub artifact: String,
     pub download_action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installer_sha256_output: Option<String>,
     pub consumers: BTreeMap<String, Consumer>,
 }
 
@@ -45,6 +47,17 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
         );
     }
     action(&s.download_action, "actions/download-artifact")?;
+    if s.installer_sha256_output.as_ref().is_some_and(|name| {
+        name.is_empty()
+            || name.len() > 128
+            || !name
+                .bytes()
+                .next()
+                .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+            || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    }) {
+        return Err("startup installer digest requires a literal producer output name".into());
+    }
     if matches!(
         s.artifact.as_str(),
         "chrono-collection" | "chrono-detector-evidence"
@@ -142,8 +155,13 @@ pub(crate) fn consumer(
         .map(|s| shell(s))
         .collect::<Vec<_>>()
         .join(" ");
+    let installer_binding = if s.installer_sha256_output.is_some() {
+        "          CHRONO_STARTUP_INSTALLER_SHA256: ${{ needs.detect.outputs.startup_installer_sha256 }}\n"
+    } else {
+        ""
+    };
     let prefix = format!(
-        "      - name: Download registered startup artifact\n        if: ${{{{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}}}\n        uses: {}\n        with:\n          artifact-ids: ${{{{ needs.detect.outputs.startup_artifact }}}}\n          path: {}\n          merge-multiple: true\n      - name: Install registered startup tools\n        shell: bash\n        env:\n          CHRONO_STARTUP_BINDING: ${{{{ needs.detect.outputs.startup_binding }}}}\n        run: |\n          {command}\n",
+        "      - name: Download registered startup artifact\n        if: ${{{{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}}}\n        uses: {}\n        with:\n          artifact-ids: ${{{{ needs.detect.outputs.startup_artifact }}}}\n          path: {}\n          merge-multiple: true\n      - name: Install registered startup tools\n        shell: bash\n        env:\n          CHRONO_STARTUP_BINDING: ${{{{ needs.detect.outputs.startup_binding }}}}\n{installer_binding}        run: |\n          {command}\n",
         s.download_action,
         scalar(&s.directory)
     );

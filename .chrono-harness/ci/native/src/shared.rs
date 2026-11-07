@@ -1,4 +1,4 @@
-//! 本宿主共享启动产物；安装前校验全部原件，SDK 和工具不从产物中执行。
+//! 本宿主共享启动产物；薄入口先核安装器绑定，Rust 再校验全部原件与本地 SDK。
 use crate::{
     bindings::{self, Environment, NativePlatform},
     construction::{BuildFailure, Report},
@@ -112,7 +112,8 @@ fn encode(value: &impl Serialize) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 fn payload_path(name: &str, destination: &str) -> Result<String, String> {
-    let tool = destination.strip_prefix(".chrono-harness/bin/")
+    let tool = destination
+        .strip_prefix(".chrono-harness/bin/")
         .ok_or("startup payload requires a declared bin destination")?;
     Ok(format!("tools/{name}/{tool}"))
 }
@@ -237,9 +238,12 @@ impl Shared {
         let available = profiles.keys().cloned().collect();
         let installer = &registration.installer;
         if !profiles.get(&installer.profile).is_some_and(|selected| {
-            selected.producer.profile.install.iter().any(|item| {
-                item.destination == installer.destination
-            })
+            selected
+                .producer
+                .profile
+                .install
+                .iter()
+                .any(|item| item.destination == installer.destination)
         }) {
             return Err("startup installer requires an explicitly installed tool".into());
         }
@@ -424,8 +428,11 @@ impl Shared {
         let binding = sha256(&raw);
         let installer = &self.registration.installer;
         let installer_sha256 = &manifest.profiles[&installer.profile]
-            .files.iter().find(|item| item.destination == installer.destination)
-            .ok_or("startup installer is missing from the manifest")?.sha256;
+            .files
+            .iter()
+            .find(|item| item.destination == installer.destination)
+            .ok_or("startup installer is missing from the manifest")?
+            .sha256;
         let original = profile::path(
             root,
             &format!(".chrono-harness/state/startup-originals/manifest-{binding}.json"),

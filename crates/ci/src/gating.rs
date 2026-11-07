@@ -239,6 +239,15 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
     if g.startup.is_some() {
         outputs.push_str("      startup_binding: ${{ steps.chrono_startup.outputs.binding }}\n      startup_artifact: ${{ steps.chrono_startup_upload.outputs.artifact-id }}\n");
     }
+    if let Some(name) = g
+        .startup
+        .as_ref()
+        .and_then(|s| s.installer_sha256_output.as_ref())
+    {
+        outputs.push_str(&format!(
+            "      startup_installer_sha256: ${{{{ steps.chrono_startup.outputs.{name} }}}}\n"
+        ));
+    }
     for id in c.units.keys() {
         let job = job_id(id);
         outputs.push_str(&format!(

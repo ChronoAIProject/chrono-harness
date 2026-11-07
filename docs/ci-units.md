@@ -159,7 +159,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 ### 共享 startup 与 diagnostics 准备
 
-本仓 detector 为单元／汇总生产登记核心启动工具。缓存准备构建 `chrono-cache`，bootstrap 调已有 core profile 一次，发布声明安装工具。当前 core 声明六项工具，增加标准清单需要的 Cargo 保护程序和输入生产者；合格 source51 原生 startup 只有原五项执行物，不证明新 profile。
+本仓 detector 为单元／汇总生产登记核心启动工具。缓存准备构建 `chrono-cache`，bootstrap 调已有 core profile 一次，发布声明安装工具。当前 core 声明七项工具，包含 Cargo 保护程序、输入生产者及共享安装所需的 `chrono-host-bootstrap`；合格 source51 原生 startup 只有原五项执行物，不证明新 profile。
 
 消费者验证并安装所选 profile，再在原 cache／core 准备位置 verify。diagnostics 使用 `host.bootstrap-diagnostics-guard`：先以 bootstrap `prerequisites` 明确验证导入 core，再运行已有 `build.judge-cargo`，委托 `host.bootstrap-diagnostics-inputs`，最后安装候选 `chrono-judge-cargo`。
 
@@ -176,6 +176,8 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 登记标准／原生检查仍必需，fixture 观察不证明原生验收。运行／构建／CI／存储成本未测，原操作／时间／输出上限不变。此源码构建只服务 diagnostics，其他消费者仍传递原 cache／core profile。本地／发布 bootstrap 保留登记源码构建，标准入口及业务构建计划不变。准备只提供执行物；原生保护政策／输入绑定和真实执行仍须分别验收。
 
 可选 `job_gating.startup` 使用 `chrono-shared-startup/v1`，声明字面宿主 `directory`、产物名、固定 `download_action`，以及按明确 job ID 索引的 `consumers`。每个消费者有非空 `need`、`output_use`、字面 `install` argv。已有 detector bootstrap 是唯一生产者，向 `GITHUB_OUTPUT` 写不透明 `binding`，不加 job。
+
+需要从传递产物运行安装器时，宿主用可选 `installer_sha256_output` 点名生产者的 SHA-256 输出字段。字段名只能含 ASCII 字母、数字和下划线，首字符不能是数字。provider 将该值作为 `startup_installer_sha256` job 输出，传给安装步骤的 `CHRONO_STARTUP_INSTALLER_SHA256`。本仓选择 `installer_sha256`；薄 shell 在 chmod 和执行前核原字节，完整产物校验继续归 Rust 安装器。这条绑定复用现有 step／job output，不增加下载或构建步骤。
 
 provider 在检测前上传声明目录，将生产 binding 和真实上传 artifact ID 作为 detector 输出。消费者按该 ID 下载，包括后续 attempt 只重跑失败 job 时；空 ID 不能触发下载全部。安装器须拒绝 binding 或传递文件缺失，无成功豁免。
 
@@ -428,7 +430,7 @@ push／pull_request 准备将生成 provider、工作流、profile 绑定候选�
 
 源码行为测试用独立克隆宿主中的真实候选二进制，覆盖并发、离线汇总、合成 GitHub 响应。公开 Go／TS／mix [示例](examples.md)使用独立原生工作流，已核本地／integration／PR／dev、真实取消及选择性重试、业务失败同时其他单元通过、恢复后零业务选择。首次清单仍是独立合同。
 
-本产品宿主当前在 `.chrono-harness/ci/units.json` 登记 24 个条件单元及汇总；早期独立工作流阶段为十六单元。当前 core bootstrap 明确构建 runner、judge-ci、ci、worktree、judge-cargo、inputs。各所选计划保留完整构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。选原配置仍可用默认 full bootstrap。
+本产品宿主当前在 `.chrono-harness/ci/units.json` 登记 24 个条件单元及汇总；早期独立工作流阶段为十六单元。当前 core bootstrap 明确构建 runner、judge-ci、ci、worktree、judge-cargo、inputs 和共享安装前端。各所选计划保留完整构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。选原配置仍可用默认 full bootstrap。
 
 CI 生成器消费者在已提交 push 事件上执行生成单元的真实短 `chrono-harness check`，由登记输入程序准备绑定候选的工作流源码／上下文，再读取原报告。普通 `chrono-ci prepare` CLI 已退役；`prepare-endpoints` 与 `acquire-seed` 仍由原生采用流程调用。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
 
