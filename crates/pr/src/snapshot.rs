@@ -142,7 +142,25 @@ pub(crate) fn parse(
                     let name = field(node, "/name")?;
                     let status = field(node, "/status")?;
                     let state = match status {
-                        "COMPLETED" => field(node, "/conclusion")?,
+                        "COMPLETED" => {
+                            let conclusion = field(node, "/conclusion")?;
+                            if ![
+                                "SUCCESS",
+                                "FAILURE",
+                                "CANCELLED",
+                                "TIMED_OUT",
+                                "ACTION_REQUIRED",
+                                "STARTUP_FAILURE",
+                                "STALE",
+                                "NEUTRAL",
+                                "SKIPPED",
+                            ]
+                            .contains(&conclusion)
+                            {
+                                return Err("invalid completed check conclusion".into());
+                            }
+                            conclusion
+                        }
                         "QUEUED" | "IN_PROGRESS" | "WAITING" | "REQUESTED" | "PENDING" => {
                             if !node.get("conclusion").is_some_and(Value::is_null) {
                                 return Err("pending check has a conclusion".into());

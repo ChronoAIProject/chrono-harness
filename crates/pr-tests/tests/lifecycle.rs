@@ -196,6 +196,10 @@ fn unknown_states_wrong_commits_and_incomplete_latest_sets_are_errors() {
             json!("FUTURE_STATE"),
         ),
         (
+            "/data/repository/object/statusCheckRollup/contexts/nodes/0/conclusion",
+            json!("PENDING"),
+        ),
+        (
             "/data/repository/object/statusCheckRollup/contexts/nodes/0/checkSuite/commit/oid",
             json!(OTHER),
         ),
