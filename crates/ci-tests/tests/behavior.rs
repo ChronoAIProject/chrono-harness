@@ -913,9 +913,21 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
         tool["program"]
     );
     let provider = read(".chrono-harness/ci/units.json");
-    assert_eq!(provider["collection"]["bootstrap"][0], tool["program"]);
+    assert_eq!(provider["collection"]["bootstrap"][0], "/bin/bash");
+    assert_eq!(
+        provider["collection"]["bootstrap"][1],
+        ".chrono-harness/ci/bootstrap-shared.sh"
+    );
     for unit in provider["units"].as_object().unwrap().values() {
-        assert_eq!(unit["bootstrap"][0], tool["program"]);
+        if unit["bootstrap"][1] == ".chrono-harness/ci/bootstrap.py" {
+            assert_eq!(unit["bootstrap"][0], tool["program"]);
+        } else {
+            assert_eq!(unit["bootstrap"][0], "/bin/bash");
+            assert_eq!(
+                unit["bootstrap"][1],
+                ".chrono-harness/ci/bootstrap-shared.sh"
+            );
+        }
     }
 }
 

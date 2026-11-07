@@ -113,15 +113,15 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 已有原生 Rust 发布构建／验证单元选择自己的项目输出，Python 发布验证和包收集器无登记编译缓存。分组测试中不同生产者使用不同条目。
 
-缓存种子运行 `host.bootstrap-cache`，通过已有 bootstrap 所有者和 `build.cache` 构建候选 planner，再安装二进制。其配方明确 `report_path: .chrono-harness/state/cache-bootstrap.json`；之后 core bootstrap 保留默认 `.chrono-harness/state/bootstrap.json`。
+缓存种子运行 `host.bootstrap-cache`，由薄 shell 进入已有 Rust bootstrap，通过原所有者保护和 `build.cache` 构建候选 planner，再安装二进制。其配方明确 `report_path: .chrono-harness/state/cache-bootstrap.json`；之后 core bootstrap 保留默认 `.chrono-harness/state/bootstrap.json`。
 
 宿主 bootstrap 接受可选的 `.chrono-harness/state/` 下字面报告文件，拒绝越界或符号链接位置，并传递报告发布错误。各配方拥有自己的报告位置；重复用同一位置会替换最新结果。已有产物上传保留两份独立记录。
 
 传输报告保留报告进程的执行路径、实测文件摘要及版本。消费者可与独立 bootstrap 记录中的安装二进制摘要及干净源码身份匹配。文件摘要不证明编译器输入完整或内存加载身份；bootstrap 证据缺失或源码不干净，不能证明绑定到干净源码。
 
-detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
+detector 的四项缓存绑定实际采用的 `bootstrap-native.sh` 入口、自身 bootstrap 配方和工具链登记，不再把 Python bootstrap 作为兼容性输入，也没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
 
-专属 Rust 宿主采用回归覆盖这些区别，包括 detector 没有业务检查政策，以及 detector 构建参数变化。它们只验证这些声明依赖，不证明构建输入完整或所有登记都有必要。
+专属 Rust 宿主采用回归覆盖这些区别，包括 detector 没有业务检查政策、Python 启动脚本变化保持缓存键，以及实际 shell 入口和构建参数变化使缓存键失效。它们只验证这些声明依赖，不证明构建输入完整或所有登记都有必要。
 
 ### 恢复、保存与写入者
 
