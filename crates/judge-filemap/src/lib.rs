@@ -341,7 +341,7 @@ fn produce_environment(
                     continue;
                 }
                 let cause = causes.first().unwrap();
-                let seed = seeds.iter().find(|s| &s.id == cause).unwrap();
+                let seed = verified_graph::seed_by_id(&seeds, cause).unwrap();
                 let mut witness = vec![seed.node.clone()];
                 witness.extend(
                     closure
@@ -410,7 +410,7 @@ fn produce_environment(
                     .or_else(|| closure.reached.get(&edge.to).map(|s| (&edge.to, s)));
                 if let Some((node, causes)) = reached {
                     let cause = causes.first().unwrap();
-                    let seed = seeds.iter().find(|s| &s.id == cause).unwrap();
+                    let seed = verified_graph::seed_by_id(&seeds, cause).unwrap();
                     let path = closure.witness(cause, node).unwrap();
                     let mut witness = vec![seed.node.clone()];
                     witness.extend(path.iter().map(|e| e.to.clone()));

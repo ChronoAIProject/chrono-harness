@@ -231,13 +231,7 @@ fn typed_union_has_exact_sorted_slots_and_all_three_origins() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn typed_edge_indices_preserve_parallel_slots_cycles_and_duplicate_roots() {
     use policy::EdgeKind::*;
-    proof {
-        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c");
-        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
-        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
-        vstd::utf8::is_ascii_chars_encode_utf8("c"@);
-        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
-    }
+    proof { abc_byte_order(); }
     let names: Vec<&str> = vec!["a", "b", "c"];
     proof {
         assert forall|i: int, j: int| 0 <= i < j < names.len()
@@ -1038,13 +1032,7 @@ fn source_rows_cover_empty_isolated_unicode_and_missing_source_boundaries() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn source_rows_group_unsorted_duplicate_edges_into_exact_typed_slots() {
     use policy::EdgeKind::*;
-    proof {
-        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c");
-        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
-        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
-        vstd::utf8::is_ascii_chars_encode_utf8("c"@);
-        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
-    }
+    proof { abc_byte_order(); }
     let names: Vec<&str> = vec!["a", "b", "c"];
     proof {
         assert forall|i: int, j: int| 0 <= i < j < names.len()
@@ -1611,6 +1599,72 @@ fn seed_before(a: &policy::Seed, b: &policy::Seed)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn seed_id_lookup_uses_only_complete_ids_and_preserves_all_borrowed_fields() {
+    proof {
+        reveal_strlit(""); reveal_strlit("root\0尾"); reveal_strlit("根é"); reveal_strlit("last");
+        reveal_strlit("missing"); reveal_strlit("root"); reveal_strlit("root\0");
+        reveal_strlit("root\0尾x"); reveal_strlit("LAST"); reveal_strlit("根e\u{301}");
+        reveal_strlit("第三节点"); reveal_strlit("第二引用"); reveal_strlit("末原因");
+    }
+    let empty: Vec<policy::Seed> = vec![];
+    let missing = policy::seed_by_id(&empty, "");
+    assert(missing.is_none());
+    let values = vec![
+        seed("", "空节点", "空引用\0", "空原因"),
+        seed("root\0尾", "第二节点\0", "第二引用", "第二原因\0"),
+        seed("根é", "第三节点", "第三引用\0", "第三原因"),
+        seed("last", "末节点", "末引用", "末原因"),
+    ];
+    let first = policy::seed_by_id(&values, "").unwrap();
+    assert(first.key() == values@[0].key());
+    let middle = policy::seed_by_id(&values, "root\0尾").unwrap();
+    assert(middle.key() == values@[1].key());
+    let unicode = policy::seed_by_id(&values, "根é").unwrap();
+    assert(unicode.key() == values@[2].key());
+    let last = policy::seed_by_id(&values, "last").unwrap();
+    assert(last.key() == values@[3].key());
+    let absent = policy::seed_by_id(&values, "missing");
+    assert(absent.is_none());
+    let prefix = policy::seed_by_id(&values, "root");
+    assert(prefix.is_none());
+    let shorter = policy::seed_by_id(&values, "root\0");
+    assert(shorter.is_none());
+    let longer = policy::seed_by_id(&values, "root\0尾x");
+    assert(longer.is_none());
+    let case = policy::seed_by_id(&values, "LAST");
+    assert(case.is_none());
+    let normalized = policy::seed_by_id(&values, "根e\u{301}");
+    assert(normalized.is_none());
+    let node = policy::seed_by_id(&values, "第三节点");
+    assert(node.is_none());
+    let reference = policy::seed_by_id(&values, "第二引用");
+    assert(reference.is_none());
+    let reason = policy::seed_by_id(&values, "末原因");
+    assert(reason.is_none());
+}
+
+/// 任意完整 ID，包括空、Unicode 和 NUL；重复 ID 保留原有首项语义。
+#[cfg_attr(not(verus_keep_ghost), allow(dead_code))]
+fn duplicate_seed_id_lookup_returns_the_first_original_record(id: &str) {
+    let values = vec![
+        seed(id, "首节点\0", "首引用", "首原因\0"),
+        seed(id, "后节点", "后引用\0", "后原因"),
+        seed(id, "末节点", "末引用", "末原因"),
+    ];
+    let found = policy::seed_by_id(&values, id).unwrap();
+    assert(found.key() == values@[0].key());
+    assert(found.node@ == "首节点\0"@);
+    assert(found.reference@ == "首引用"@);
+    assert(found.reason@ == "首原因\0"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn duplicate_seed_id_boundaries_include_empty_unicode_and_nul() {
+    duplicate_seed_id_lookup_returns_the_first_original_record("");
+    duplicate_seed_id_lookup_returns_the_first_original_record("重复原因\0é");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn seed_order_uses_complete_id_node_reference_reason_in_that_order() {
     proof {
         reveal_strlit(""); reveal_strlit("a"); reveal_strlit("z"); reveal_strlit("a\0");
@@ -1844,6 +1898,24 @@ fn sparse_predecessors_keep_exact_reached_nodes_and_typed_search_slots() {
     assert forall|i: int| 0 <= i < entries.len() implies (#[trigger] entries@[i]).name() != "b".spec_bytes() by {
         assert(policy::predecessor_keys(entries@).to_set().contains(policy::predecessor_keys(entries@)[i]));
     }
+}
+
+/// 在局部引理中展开样本编码，使用方只消费明确的字节与顺序事实。
+proof fn abc_byte_order()
+    ensures "a".spec_bytes() == seq![97u8], "b".spec_bytes() == seq![98u8],
+        "c".spec_bytes() == seq![99u8],
+        policy::byte_lt("a".spec_bytes(), "b".spec_bytes()),
+        policy::byte_lt("a".spec_bytes(), "c".spec_bytes()),
+        policy::byte_lt("b".spec_bytes(), "c".spec_bytes()),
+{
+    reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c");
+    vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+    vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+    vstd::utf8::is_ascii_chars_encode_utf8("c"@);
+    reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    assert(policy::byte_prefix("a".spec_bytes(), "b".spec_bytes(), 0));
+    assert(policy::byte_prefix("a".spec_bytes(), "c".spec_bytes(), 0));
+    assert(policy::byte_prefix("b".spec_bytes(), "c".spec_bytes(), 0));
 }
 
 }
