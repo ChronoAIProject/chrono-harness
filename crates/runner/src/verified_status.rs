@@ -142,6 +142,80 @@ impl PartialOrd for WireStatus {
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct Delta {
+    pub kind: String,
+    pub path: String,
+    pub old_blob: Option<String>,
+    pub new_blob: Option<String>,
+    pub old_mode: Option<String>,
+    pub new_mode: Option<String>,
+}
+
+fn clone_optional_text(value: &Option<String>) -> (out: Option<String>)
+    ensures out == *value,
+{
+    match value { None => None, Some(text) => Some(text.clone()) }
+}
+
+#[verifier::inline]
+pub open spec fn optional_text(value: &Option<String>) -> Option<Seq<char>> {
+    match value { None => None, Some(text) => Some(text@) }
+}
+
+fn optional_text_equal(left: &Option<String>, right: &Option<String>) -> (equal: bool)
+    ensures equal == (optional_text(left) == optional_text(right)),
+{
+    match (left, right) {
+        (Some(a), Some(b)) => identifiers::equal_text(a.as_str(), b.as_str()),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+impl Clone for Delta {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    {
+        Self { kind: self.kind.clone(), path: self.path.clone(),
+            old_blob: clone_optional_text(&self.old_blob),
+            new_blob: clone_optional_text(&self.new_blob),
+            old_mode: clone_optional_text(&self.old_mode),
+            new_mode: clone_optional_text(&self.new_mode) }
+    }
+}
+
+#[verifier::inline]
+pub open spec fn delta_equal(left: &Delta, right: &Delta) -> bool {
+    left.kind@ == right.kind@ && left.path@ == right.path@
+        && optional_text(&left.old_blob) == optional_text(&right.old_blob)
+        && optional_text(&left.new_blob) == optional_text(&right.new_blob)
+        && optional_text(&left.old_mode) == optional_text(&right.old_mode)
+        && optional_text(&left.new_mode) == optional_text(&right.new_mode)
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for Delta {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { delta_equal(self, other) }
+}
+
+impl PartialEq for Delta {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == delta_equal(self, other),
+    {
+        identifiers::equal_text(self.kind.as_str(), other.kind.as_str())
+            && identifiers::equal_text(self.path.as_str(), other.path.as_str())
+            && optional_text_equal(&self.old_blob, &other.old_blob)
+            && optional_text_equal(&self.new_blob, &other.new_blob)
+            && optional_text_equal(&self.old_mode, &other.old_mode)
+            && optional_text_equal(&self.new_mode, &other.new_mode)
+    }
+}
+
+impl Eq for Delta {}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct Finding {
     pub code: String,
     pub level: String,
@@ -180,6 +254,76 @@ pub fn valid_finding_fields(finding: &Finding) -> (valid: bool)
             || identifiers::equal_text(finding.level.as_str(), "warning")
             || identifiers::equal_text(finding.level.as_str(), "error"))
         && finding.delta_refs.len() > 0
+}
+
+#[verifier::inline]
+pub open spec fn record_reference(reference: Seq<char>) -> bool {
+    let bytes = vstd::utf8::encode_utf8(reference);
+    bytes.len() > 0 && bytes[0] == 47
+}
+
+#[verifier::inline]
+pub open spec fn reference_allowed(reference: Seq<char>, delta: Option<&[Delta]>) -> bool {
+    record_reference(reference) || match delta {
+        None => false,
+        Some(entries) => exists|i: int| 0 <= i < entries.len()
+            && #[trigger] entries[i].path@ == reference,
+    }
+}
+
+/// None 对应初始库存；普通请求直接借用自己的完整 DELTA。
+pub fn valid_finding_reference(reference: &str, delta: Option<&[Delta]>) -> (valid: bool)
+    ensures valid == reference_allowed(reference@, delta),
+{
+    let bytes = reference.as_bytes();
+    if bytes.len() > 0 && bytes[0] == 47 { return true; }
+    match delta {
+        None => false,
+        Some(entries) => {
+            let mut i = 0;
+            while i < entries.len()
+                invariant
+                    0 <= i <= entries.len(),
+                    delta == Some(entries),
+                    !record_reference(reference@),
+                    forall|j: int| 0 <= j < i ==> #[trigger] entries[j].path@ != reference@,
+                decreases entries.len() - i,
+            {
+                if identifiers::equal_text(entries[i].path.as_str(), reference) {
+                    assert(entries[i as int].path@ == reference@);
+                    assert(exists|j: int| 0 <= j < entries.len()
+                        && #[trigger] entries[j].path@ == reference@);
+                    return true;
+                }
+                i += 1;
+            }
+            false
+        }
+    }
+}
+
+pub open spec fn finding_references(finding: &Finding, delta: Option<&[Delta]>) -> bool {
+    forall|i: int| 0 <= i < finding.delta_refs.len()
+        ==> reference_allowed(#[trigger] finding.delta_refs[i]@, delta)
+}
+
+pub fn valid_finding_references(finding: &Finding, delta: Option<&[Delta]>) -> (valid: bool)
+    ensures valid == finding_references(finding, delta),
+{
+    let mut i = 0;
+    while i < finding.delta_refs.len()
+        invariant
+            0 <= i <= finding.delta_refs.len(),
+            forall|j: int| 0 <= j < i
+                ==> reference_allowed(#[trigger] finding.delta_refs[j]@, delta),
+        decreases finding.delta_refs.len() - i,
+    {
+        if !valid_finding_reference(finding.delta_refs[i].as_str(), delta) {
+            return false;
+        }
+        i += 1;
+    }
+    true
 }
 
 pub open spec fn evidence_identity(path: &str, kind: &str, sha256: &str) -> bool {

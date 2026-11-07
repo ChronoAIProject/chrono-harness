@@ -676,7 +676,11 @@ pass 不允许 `warning`，warn 必须存在 `warning`；finding 克隆保留完
 响应头直接核完整协议／请求 ID／判官 ID 及原退出。finding 字段形状由同源 Verus 核代码和消息非空、
 级别精确为 `info`／`warning`／`error`、引用数组非空；evidence 身份由同源 Verus 核
 `.chrono-harness/state/` 字节前缀、种类非空和完整摘要格式。前缀允许空后缀，不代替后续文件检查。
-这些局部判断不证明完整响应组合、finding 引用归属、JSON 或证据 IO，范围见 [Verus 实施说明](docs/verus.md)。
+当前实现的引用允许条件也由同源 Verus 逐项判断：普通请求接受以 `/` 字节开头的引用，
+或与本请求任一实际 `Delta.path` 完整相等的文本；初始库存只接受前一类。
+实际 DELTA 的克隆和比较保留六个字段，区分可选文本的缺失、空值和完整内容。
+这些局部判断不证明登记记录指针的语法／目标归属、完整响应组合、JSON 或证据 IO，
+范围见 [Verus 实施说明](docs/verus.md)。
 
 子进程输出 fail 却 exit 0、空 stdout、额外日志、截断 JSON、未知状态都属于协议错误。
 本轮选中的当前进程崩溃、超时、不可执行、摘要不匹配、必需测试未执行都不能降级为通过。

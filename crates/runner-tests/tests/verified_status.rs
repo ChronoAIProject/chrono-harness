@@ -503,4 +503,183 @@ fn evidence_identity_rejects_missing_short_long_and_uppercase_digest() {
     assert(!no_digest); assert(!short_digest); assert(!long_digest); assert(!upper_digest);
 }
 
+fn delta_clone_keeps_every_field(value: &policy::Delta) {
+    let copied = value.clone();
+    assert(copied.kind == value.kind && copied.path == value.path);
+    assert(copied.old_blob == value.old_blob && copied.new_blob == value.new_blob);
+    assert(copied.old_mode == value.old_mode && copied.new_mode == value.new_mode);
+    let equal = copied.eq(value);
+    assert(equal);
+}
+
+fn delta_equality_distinguishes_each_complete_field(left: &str, right: &str)
+    requires left@ != right@,
+{
+    let original = policy::Delta { kind: left.to_owned(), path: left.to_owned(),
+        old_blob: Some(left.to_owned()), new_blob: Some(left.to_owned()),
+        old_mode: Some(left.to_owned()), new_mode: Some(left.to_owned()) };
+    delta_clone_keeps_every_field(&original);
+    let kind = policy::Delta { kind: right.to_owned(), ..original.clone() };
+    let path = policy::Delta { path: right.to_owned(), ..original.clone() };
+    let old_blob = policy::Delta { old_blob: Some(right.to_owned()), ..original.clone() };
+    let new_blob = policy::Delta { new_blob: Some(right.to_owned()), ..original.clone() };
+    let old_mode = policy::Delta { old_mode: Some(right.to_owned()), ..original.clone() };
+    let new_mode = policy::Delta { new_mode: Some(right.to_owned()), ..original.clone() };
+    let equal = original.eq(&kind); assert(!equal);
+    let equal = original.eq(&path); assert(!equal);
+    let equal = original.eq(&old_blob); assert(!equal);
+    let equal = original.eq(&new_blob); assert(!equal);
+    let equal = original.eq(&old_mode); assert(!equal);
+    let equal = original.eq(&new_mode); assert(!equal);
+    let missing = policy::Delta { old_blob: None, ..original.clone() };
+    let equal = original.eq(&missing); assert(!equal);
+    let missing = policy::Delta { new_blob: None, ..original.clone() };
+    let equal = original.eq(&missing); assert(!equal);
+    let missing = policy::Delta { old_mode: None, ..original.clone() };
+    let equal = original.eq(&missing); assert(!equal);
+    let missing = policy::Delta { new_mode: None, ..original.clone() };
+    let equal = original.eq(&missing); assert(!equal);
+}
+
+fn any_listed_path_is_accepted(path: &str, kind: &str, metadata: &str) {
+    let entry = policy::Delta { kind: kind.to_owned(), path: path.to_owned(),
+        old_blob: Some(metadata.to_owned()), new_blob: None,
+        old_mode: None, new_mode: Some(metadata.to_owned()) };
+    delta_clone_keeps_every_field(&entry);
+    let entries = vec![entry];
+    let slice = entries.as_slice();
+    proof {
+        assert(slice@.len() == 1 && slice@[0].path@ == path@);
+        assert(exists|i: int| 0 <= i < slice@.len() && slice@[i].path@ == path@);
+    }
+    let accepted = policy::valid_finding_reference(path, Some(slice));
+    assert(accepted);
+}
+
+fn unlisted_relative_reference_is_rejected(reference: &str, path: &str)
+    requires
+        reference.spec_bytes().len() == 0 || reference.spec_bytes()[0] != 47,
+        reference@ != path@,
+{
+    let entries = vec![policy::Delta { kind: "".to_owned(), path: path.to_owned(),
+        old_blob: None, new_blob: None, old_mode: None, new_mode: None }];
+    let accepted = policy::valid_finding_reference(reference, Some(entries.as_slice()));
+    assert(!accepted);
+    let initial = policy::valid_finding_reference(reference, None);
+    assert(!initial);
+    let empty: Vec<policy::Delta> = Vec::new();
+    let accepted = policy::valid_finding_reference(reference, Some(empty.as_slice()));
+    assert(!accepted);
+}
+
+fn record_pointer_is_accepted_in_both_modes(reference: &str)
+    requires reference.spec_bytes().len() > 0, reference.spec_bytes()[0] == 47,
+{
+    let initial = policy::valid_finding_reference(reference, None);
+    let empty: Vec<policy::Delta> = Vec::new();
+    let ordinary = policy::valid_finding_reference(reference, Some(empty.as_slice()));
+    assert(initial && ordinary);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn reference_membership_keeps_exact_text_and_initial_scope() {
+    proof {
+        reveal_strlit(""); reveal_strlit("x"); reveal_strlit("X"); reveal_strlit("x/y");
+        reveal_strlit("/"); reveal_strlit("/records/a");
+        assert(vstd::string::is_ascii("")); assert(vstd::string::is_ascii("x"));
+        assert(vstd::string::is_ascii("X")); assert(vstd::string::is_ascii("x/y"));
+        assert(vstd::string::is_ascii("/")); assert(vstd::string::is_ascii("/records/a"));
+        vstd::string::is_ascii_spec_bytes(""); vstd::string::is_ascii_spec_bytes("x");
+        vstd::string::is_ascii_spec_bytes("X"); vstd::string::is_ascii_spec_bytes("x/y");
+        vstd::string::is_ascii_spec_bytes("/"); vstd::string::is_ascii_spec_bytes("/records/a");
+        assert(""@.len() == 0 && "x"@.len() == 1 && "x/y"@.len() == 3);
+        assert("X"@[0] == 'X' && "x"@[0] == 'x');
+        assert("x".spec_bytes()[0] == 120 && "x/y".spec_bytes()[0] == 120);
+        assert("/".spec_bytes()[0] == 47 && "/records/a".spec_bytes()[0] == 47);
+    }
+    delta_equality_distinguishes_each_complete_field("x", "X");
+    delta_equality_distinguishes_each_complete_field("", "x");
+    any_listed_path_is_accepted("", "", "");
+    any_listed_path_is_accepted("中文\0", "unknown", "arbitrary\0metadata");
+    any_listed_path_is_accepted("é", "", "");
+    any_listed_path_is_accepted("e\u{301}", "", "");
+    unlisted_relative_reference_is_rejected("", "x");
+    unlisted_relative_reference_is_rejected("x", "X");
+    unlisted_relative_reference_is_rejected("x/y", "x");
+    record_pointer_is_accepted_in_both_modes("/");
+    record_pointer_is_accepted_in_both_modes("/records/a");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn finding_reference_list_checks_every_position_and_preserves_duplicates() {
+    proof {
+        reveal_strlit("x"); reveal_strlit("y"); reveal_strlit("/a");
+        assert(vstd::string::is_ascii("x")); assert(vstd::string::is_ascii("y"));
+        assert(vstd::string::is_ascii("/a"));
+        vstd::string::is_ascii_spec_bytes("x"); vstd::string::is_ascii_spec_bytes("y");
+        vstd::string::is_ascii_spec_bytes("/a");
+        assert("x".spec_bytes()[0] == 120 && "y".spec_bytes()[0] == 121);
+        assert("/a".spec_bytes()[0] == 47 && "x"@[0] != "y"@[0]);
+    }
+    let entries = vec![policy::Delta { kind: "".to_owned(), path: "x".to_owned(),
+        old_blob: None, new_blob: None, old_mode: None, new_mode: None }];
+    let finding = policy::Finding { code: "".to_owned(), level: "".to_owned(),
+        message: "".to_owned(), delta_refs: vec!["/a".to_owned(), "x".to_owned(),
+            "x".to_owned(), "/a".to_owned()], causes: Vec::new() };
+    let slice = entries.as_slice();
+    proof {
+        assert(slice@.len() == 1 && slice@[0].path@ == "x"@);
+        assert(finding.delta_refs@.len() == 4);
+        assert(finding.delta_refs@[0]@ == "/a"@ && finding.delta_refs@[3]@ == "/a"@);
+        assert(finding.delta_refs@[1]@ == "x"@ && finding.delta_refs@[2]@ == "x"@);
+        assert(policy::record_reference("/a"@));
+        assert(!policy::record_reference("x"@) && !policy::record_reference("y"@));
+        assert(policy::reference_allowed("/a"@, Some(slice)));
+        assert(policy::reference_allowed("x"@, Some(slice))) by {
+            assert(slice[0].path@ == "x"@);
+            assert(exists|j: int| 0 <= j < slice.len() && slice[j].path@ == "x"@);
+        }
+        assert(!policy::reference_allowed("y"@, Some(slice))) by {
+            assert forall|j: int| 0 <= j < slice.len() implies slice[j].path@ != "y"@ by {
+                assert(j == 0);
+            }
+        }
+        assert forall|i: int| 0 <= i < finding.delta_refs@.len()
+            implies policy::reference_allowed(#[trigger] finding.delta_refs@[i]@, Some(slice)) by {
+            if i == 0 || i == 3 {
+                assert(finding.delta_refs@[i]@ == "/a"@);
+                assert(policy::record_reference(finding.delta_refs@[i]@));
+            } else {
+                assert(finding.delta_refs@[i]@ == slice@[0].path@);
+                assert(exists|j: int| 0 <= j < slice@.len()
+                    && slice@[j].path@ == finding.delta_refs@[i]@);
+            }
+        }
+        assert(!policy::reference_allowed(finding.delta_refs@[1]@, None));
+    }
+    let accepted = policy::valid_finding_references(&finding, Some(slice));
+    assert(accepted);
+    let initial = policy::valid_finding_references(&finding, None);
+    assert(!initial);
+    let first = policy::Finding { delta_refs: vec!["y".to_owned(), "x".to_owned()], ..finding.clone() };
+    let middle = policy::Finding { delta_refs: vec!["x".to_owned(), "y".to_owned(), "x".to_owned()], ..finding.clone() };
+    let last = policy::Finding { delta_refs: vec!["x".to_owned(), "y".to_owned()], ..finding.clone() };
+    proof {
+        assert(first.delta_refs@.len() == 2 && first.delta_refs@[0]@ == "y"@);
+        assert(middle.delta_refs@.len() == 3 && middle.delta_refs@[1]@ == "y"@);
+        assert(last.delta_refs@.len() == 2 && last.delta_refs@[1]@ == "y"@);
+        assert(!policy::reference_allowed(first.delta_refs@[0]@, Some(slice)));
+        assert(!policy::reference_allowed(middle.delta_refs@[1]@, Some(slice)));
+        assert(!policy::reference_allowed(last.delta_refs@[1]@, Some(slice)));
+    }
+    let accepted = policy::valid_finding_references(&first, Some(slice)); assert(!accepted);
+    let accepted = policy::valid_finding_references(&middle, Some(slice)); assert(!accepted);
+    let accepted = policy::valid_finding_references(&last, Some(slice)); assert(!accepted);
+    let records = policy::Finding { delta_refs: vec!["/a".to_owned(), "/a".to_owned()], ..finding.clone() };
+    let accepted = policy::valid_finding_references(&records, None); assert(accepted);
+    let empty = policy::Finding { delta_refs: Vec::new(), ..finding };
+    let accepted = policy::valid_finding_references(&empty, None); assert(accepted);
+    let fields = policy::valid_finding_fields(&empty); assert(!fields);
+}
+
 }

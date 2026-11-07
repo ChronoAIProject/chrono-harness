@@ -15,7 +15,7 @@ pub fn digest<T: Serialize>(value: &T) -> Result<String, String> {
     Ok(sha256(&canonical(value)?))
 }
 pub use crate::verified_identifiers::valid_digest_text as is_digest;
-pub use crate::verified_status::{Finding, WireStatus as Status, append_finding};
+pub use crate::verified_status::{Delta, Finding, WireStatus as Status, append_finding};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Evidence {
@@ -40,16 +40,6 @@ pub struct Endpoint {
     pub commit: String,
     pub tree: String,
     pub root: PathBuf,
-}
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Delta {
-    pub kind: String,
-    pub path: String,
-    pub old_blob: Option<String>,
-    pub new_blob: Option<String>,
-    pub old_mode: Option<String>,
-    pub new_mode: Option<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -254,7 +244,7 @@ pub fn validate_response(req: &Request, r: &Response, exit: i32) -> Result<(), S
         &req.judge_id,
         r,
         exit,
-        |p| p.starts_with('/') || req.delta.iter().any(|d| d.path == p),
+        Some(&req.delta),
     )
 }
 /// Shared response contract; the request protocol owns admissible finding references.
@@ -265,7 +255,7 @@ pub(crate) fn validate_response_at(
     judge_id: &str,
     r: &Response,
     exit: i32,
-    reference: impl Fn(&str) -> bool,
+    delta: Option<&[Delta]>,
 ) -> Result<(), String> {
     if !crate::verified_status::wire_header_matches(
         &r.protocol,
@@ -281,7 +271,7 @@ pub(crate) fn validate_response_at(
     }
     for f in &r.findings {
         if !crate::verified_status::valid_finding_fields(f)
-            || f.delta_refs.iter().any(|p| !reference(p))
+            || !crate::verified_status::valid_finding_references(f, delta)
         {
             return Err("E_PROTOCOL: invalid finding".into());
         }
