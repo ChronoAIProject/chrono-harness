@@ -753,7 +753,7 @@ class DiagnosticsComposition(unittest.TestCase):
         actions["projects"][0]["id"] = "diagnostics-fixture"
         actions["projects"][0]["actions"].update({
             "verify": {"operation": "host.bootstrap-shared-verify-core", "tool": "native",
-                       "argv": [str(self.native), ".", CONFIG, "verify", "core"]},
+                       "argv": [".", CONFIG, "verify", "core"]},
             "guard": {"operation": "build.judge-cargo", "tool": "python3",
                       "argv": [fixture.OPERATION, "environment", "guard-domain", *keys]},
             "observer-bootstrap": {"operation": "host.bootstrap-diagnostics-inputs", "tool": "python3",
