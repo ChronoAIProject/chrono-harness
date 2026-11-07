@@ -217,7 +217,9 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
                 .or_default()
                 .insert(seed.id.as_str());
             crate::verified_graph::merge_traversed_causes(
-                &mut traversed, row.outgoing, seed.id.as_str(),
+                &mut traversed,
+                row.outgoing,
+                seed.id.as_str(),
             );
         }
         out.predecessors
