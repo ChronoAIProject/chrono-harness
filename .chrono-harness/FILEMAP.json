@@ -229,7 +229,6 @@
     {"path":".github/workflows/chrono-release.yml","owner":"repository","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:distribution-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":"docs/distribution.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"docs/examples.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
-    {"path":"docs/native-ci-adoption.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/judge-cargo/Cargo.toml","owner":"judge-cargo","surface":"judge-implementation","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-cargo"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
     {"path":"crates/judge-cargo/Cargo.lock","owner":"judge-cargo","surface":"judge-implementation","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-cargo"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
     {"path":"crates/judge-cargo/src/lib.rs","owner":"judge-cargo","surface":"judge-implementation","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-cargo"}]},
