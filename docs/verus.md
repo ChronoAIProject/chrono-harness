@@ -269,7 +269,7 @@ JSON 解码、节点提取、诊断和完整图外层组合继续保留未完成
 ## 固定执行入口
 
 宿主 bootstrap 的 Rust 迁移正在实施。core／Verus 和所有者阶段 profile 已选择薄 shell 与 Rust，
-共享入口的切换、完整使用方验收和旧 Python 路径退役仍未完成。
+共享入口与生成工作流已切到 Rust，旧 Python 共享 CLI 及重复行为测试已退役；完整使用方验收仍未完成。
 `.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
 字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
 以及环境名／值、宿主路径、私有 homes、default profile、SDK 探测分支和进程退出状态。
