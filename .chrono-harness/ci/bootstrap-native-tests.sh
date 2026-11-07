@@ -1,9 +1,9 @@
 #!/bin/sh
-# 启动入口的 shell 行为预期；外部工具接口由登记的 Rust fixture 提供。
+# 启动入口的 shell 行为预期；外部工具接口由独立登记的 shell fixture 提供。
 set -eu
 task_repo=$(pwd -P)
 task_entry="$task_repo/.chrono-harness/ci/bootstrap-native.sh"
-task_fixture="$task_repo/.chrono-harness/cache/host-bootstrap-native-tests/target/debug/chrono-test-bootstrap-tool"
+task_fixture="$task_repo/.chrono-harness/ci/fixtures/bootstrap-launcher-tool.sh"
 test -x "$task_fixture" || { echo 'missing registered launcher fixture' >&2; exit 2; }
 task_temporary=$(mktemp -d "${TMPDIR:-/tmp}/chrono-native-launcher.XXXXXX")
 task_temporary=$(CDPATH= cd -- "$task_temporary" && pwd -P)
@@ -11,7 +11,6 @@ trap 'task_status=$?; if [ "$task_status" -eq 0 ]; then rm -rf -- "$task_tempora
 mkdir "$task_temporary/tools"
 cp "$task_fixture" "$task_temporary/tools/rustup"
 export PATH="$task_temporary/tools:$PATH"
-export CHRONO_BOOTSTRAP_LAUNCHER_FIXTURE=1
 export CHRONO_LAUNCHER_CALLS="$task_temporary/calls"
 unset CHRONO_WORKTREE_BOOTSTRAP
 task_main="$task_temporary/main host"

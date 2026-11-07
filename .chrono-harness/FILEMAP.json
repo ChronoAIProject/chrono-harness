@@ -16,6 +16,7 @@
     {"path":".chrono-harness/ci/native-tests/tests/shared.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/bootstrap-native.sh","owner":"host-bootstrap-launcher","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":".chrono-harness/ci/bootstrap-native-tests.sh","owner":"host-bootstrap-launcher-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"}]},
+    {"path":".chrono-harness/ci/fixtures/bootstrap-launcher-tool.sh","owner":"host-bootstrap-launcher-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"}]},
     {"path":".chrono-harness/ci/native/src/owner.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native/src/lifecycle.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native-tests/tests/owner.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
@@ -569,8 +570,6 @@
     {"from":"project:host-bootstrap-native","kind":"runtime-input","to":"script:host-bootstrap-launcher"},
     {"from":"script:host-bootstrap-launcher","kind":"runtime-input","to":"script:host-bootstrap"},
     {"from":"script:host-bootstrap-launcher","kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},
-    {"from":"project:host-bootstrap-native-tests","kind":"runtime-input","to":"script:host-bootstrap-launcher-tests"},
-    {"from":"project:host-bootstrap-native-tests","kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},
     {"from":"project:judge-registration","kind":"compile","to":"project:host-bootstrap-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-bootstrap-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-bootstrap-native-tests"},
@@ -1186,7 +1185,7 @@
   ],
   "execution_plans": {
     "test:host-bootstrap-launcher-tests": {
-      "operations": ["build.host-bootstrap-native-tests", "test.host-bootstrap-launcher-tests"],
+      "operations": ["test.host-bootstrap-launcher-tests"],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
