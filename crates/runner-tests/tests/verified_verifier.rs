@@ -215,7 +215,7 @@ fn library_admission_requires_original_path_nonempty_length_and_digest() {
     let mut bad_digest = library(1); bad_digest.sha256 = vec![48u8];
     let short = policy::admit_artifact_observation(&contract(), &Some(Ok(bad_digest)), &args);
     assert(short.is_err());
-    let mut invalid = library(1); invalid.sha256.set(17, 65u8);
+    let mut invalid = library(1); invalid.sha256[17] = 65u8;
     assert(invalid.sha256[17] == 65u8);
     assert(!policy::identifiers::digest_format(invalid.sha256@));
     let uppercase = policy::admit_artifact_observation(&contract(), &Some(Ok(invalid)), &args);
