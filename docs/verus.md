@@ -326,7 +326,8 @@ Rust 测试另外验证真实消费者，不替代证明。
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
 现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
-八个证明单元先核共享 core，再安装工具。
+十个证明单元先核共享 core，再安装工具；inputs 复用同一启动 profile，
+在运行已登记的路径证明前安装 Verus。共享 core 的校验不代表 Verus 已安装。
 当前归档只适用于 macOS arm64。
 
 ## 此批使用的外部接口
