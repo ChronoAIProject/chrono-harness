@@ -2656,7 +2656,14 @@ proof fn predecessor_path_edge(rows: Seq<Predecessor>, node: Seq<u8>, path: Seq<
         predecessor_at(rows, predecessor_path_nodes(node, path)[at + 1]) matches Some(row)
             && row.parent matches Some(parent) && parent.key() == path[at],
 {
-    if at > 0 { assert(path[at - 1].2 == path[at].0); }
+    hide(predecessor_at);
+    let nodes = predecessor_path_nodes(node, path);
+    assert(nodes.len() == path.len() + 1);
+    assert(nodes[at + 1] == path[at].2);
+    if at > 0 {
+        assert(nodes[at] == path[at - 1].2);
+        assert(path[at - 1].2 == path[at].0);
+    } else { assert(nodes[at] == path[at].0); }
     assert(predecessor_at(rows, path[at].2) matches Some(row)
         && row.parent matches Some(parent) && parent.key() == path[at]);
 }
