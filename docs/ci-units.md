@@ -157,23 +157,13 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 检测读取完整 Git 树和登记 blob，不执行业务测试或版本探测。源码 bootstrap 只需准备声明的产品源码输入。上文稀疏路径是本 Rust 产品宿主选择；发布二进制消费者可只准备宿主登记／安装器／工作流路径。detector 不发现 SDK、import、目录或语言边界。
 
-### 共享 startup 与 diagnostics 准备
+### 共享 startup
 
-本仓 detector 为单元／汇总生产登记核心启动工具。缓存准备构建 `chrono-cache`，bootstrap 调已有 core profile 一次，发布声明安装工具。当前 core 声明六项工具，增加标准清单需要的 Cargo 保护程序和输入生产者；合格 source51 原生 startup 只有原五项执行物，不证明新 profile。
+本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 只构建并安装五项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-inputs`、`chrono-worktree`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。
 
-消费者验证并安装所选 profile，再在原 cache／core 准备位置 verify。diagnostics 使用 `host.bootstrap-diagnostics-guard`：先以 bootstrap `prerequisites` 明确验证导入 core，再运行已有 `build.judge-cargo`，委托 `host.bootstrap-diagnostics-inputs`，最后安装候选 `chrono-judge-cargo`。
+runner 和 diagnostics 已使用普通锁定 Cargo 构建，现役项目 action 不再调用 `cargo-guard`。因此 core 不再获取、构建或传递 `chrono-judge-cargo`，scoped 工具表和四份直接配置也移除其闲置声明。Cargo 适配器的专属测试仍由自己的执行计划构建，完整安装与独立发布不由 core 决定，仍须分别核查实际使用方。
 
-保护／观察器源码构建明确选普通原生 Cargo home，允许为各自锁定 manifest 获取输入。普通检查配置保留 dev 环境，只有原受保护 diagnostics action 选独立配置及私有离线 home。委托生产者构建候选观察器，在单元原上传目录下 `.chrono-harness/state/diagnostics-native/` 保留有限源码／工具／配置观察及四份目录原件。
-
-后续受保护构建拒绝时，已有 always 上传仍保留这些原件；准备不把观察摘要改成预期，也不使保护自动通过。独立 `diagnostics-guard-bootstrap.json` 记录干净源码身份、原操作流和安装摘要；导入 core 报告和 `startup-install.json` 继续作为绑定源码的导入证据。core 验证或保护程序构建失败，都在标准检查前停止。
-
-前置操作用调用方环境，在外层 profile 创建所选 home、探测／准备构建工具链前运行。因此共享验证与安装一样独立解析当前 core 选择，后面的保护工具链不能替换它。精确本地路径／摘要／版本、继承编译器／包装器冲突、声明的生产到消费迁移保持原义。
-
-前置使用明确配置工具，在同一原报告中先于普通操作。失败保留真实流及退出，阻止后续构建／输入／安装效果。
-
-**产品与宿主政策曾同步修改：**bootstrap 新增这个可选明确阶段，共享报告验证绑定完整有序序列；本宿主只把 diagnostics core 验证移入该阶段。此前所有保护操作继承已选保护工具链。Python 组合回归覆盖安装切换、不同构建范围下 core 选择不变，以及真实本地变化在依赖效果前拒绝。
-
-登记标准／原生检查仍必需，fixture 观察不证明原生验收。运行／构建／CI／存储成本未测，原操作／时间／输出上限不变。此源码构建只服务 diagnostics，其他消费者仍传递原 cache／core profile。本地／发布 bootstrap 保留登记源码构建，标准入口及业务构建计划不变。准备只提供执行物；原生保护政策／输入绑定和真实执行仍须分别验收。
+诊断单元直接验证导入 core，执行原格式、锁定构建和行为测试；不再准备专属保护工具、私有离线领域或目录观察。共享工具的验证／导入合同保持如下。
 
 可选 `job_gating.startup` 使用 `chrono-shared-startup/v1`，声明字面宿主 `directory`、产物名、固定 `download_action`，以及按明确 job ID 索引的 `consumers`。每个消费者有非空 `need`、`output_use`、字面 `install` argv。已有 detector bootstrap 是唯一生产者，向 `GITHUB_OUTPUT` 写不透明 `binding`，不加 job。
 

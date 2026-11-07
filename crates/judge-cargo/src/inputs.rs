@@ -5,10 +5,7 @@ use chrono_judge_filemap::{
     edges,
     graph::{self, EdgeKind, Seed},
 };
-use chrono_judge_registration::{
-    Registrations,
-    inputs::{runtime_state_identity, runtime_state_source},
-};
+use chrono_judge_registration::Registrations;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -631,15 +628,10 @@ pub(crate) fn prepare(
             )));
         }
         let row = matches[0];
-        let digest = if runtime_state_source(row)?.is_some() {
-            runtime_state_identity(&root, row)?.0
-        } else {
-            row["sha256"]
-                .as_str()
-                .filter(|_| row["presence"] != "absent")
-                .ok_or_else(|| error(format!("input {id} requires bound present bytes")))?
-                .into()
-        };
+        let digest = row["sha256"]
+            .as_str()
+            .filter(|_| row["presence"] != "absent")
+            .ok_or_else(|| error(format!("input {id} requires bound present bytes")))?;
         let path = root.join(row["location"].as_str().unwrap());
         if matches!(r.config()["schema_version"].as_u64(), Some(2 | 3 | 4)) {
             if chrono_judge_registration::inputs::observe_file(&path)
@@ -650,7 +642,7 @@ pub(crate) fn prepare(
             }
             strict_inputs.borrow_mut().push(path.clone());
         }
-        retain(path, Some(&digest))
+        retain(path, Some(digest))
     };
     let mut absent_inputs = Vec::new();
     let mut tool_inputs = BTreeMap::new();
@@ -677,11 +669,7 @@ pub(crate) fn prepare(
             let row = declarations.iter().find(|d| d["id"] == *id).unwrap();
             let expected = ToolInput {
                 path: root.join(row["location"].as_str().unwrap()),
-                sha256: if runtime_state_source(row)?.is_some() {
-                    runtime_state_identity(&root, row)?.0
-                } else {
-                    row["sha256"].as_str().unwrap().into()
-                },
+                sha256: row["sha256"].as_str().unwrap().into(),
             };
             if tool.is_empty() || tool_inputs.insert(tool.clone(), expected).is_some() {
                 return Err(error(
