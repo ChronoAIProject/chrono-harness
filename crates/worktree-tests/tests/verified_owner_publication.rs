@@ -40,6 +40,7 @@ fn stage_report_value_drift_and_incomplete_processes_are_rejected() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn stage_report_names_reject_missing_or_reused_originals() {
+    broadcast use vstd::string::group_string_axioms;
     let names = vec!["stdout".to_string(), "stderr".to_string()];
     proof {
         reveal_strlit(""); reveal_strlit("stdout"); reveal_strlit("stderr");
@@ -85,9 +86,10 @@ fn stage_report_collects_the_first_failed_requirement() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn stage_report_digest_path_and_relocation_boundaries() {
-    let zeros = vec![48u8; 64];
-    let uppercase = vec![65u8; 64];
-    let short = vec![48u8; 63];
+    broadcast use vstd::array::group_array_axioms;
+    let zeros = [48u8; 64];
+    let uppercase = [65u8; 64];
+    let short = [48u8; 63];
     let valid = policy::valid_stage_digest(&zeros);
     let bad_case = policy::valid_stage_digest(&uppercase);
     let bad_length = policy::valid_stage_digest(&short);
