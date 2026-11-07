@@ -2923,12 +2923,12 @@ fn program_command(
     Ok(command)
 }
 
-fn bootstrap_command(
+fn bootstrap_policy(
     r: &mut Runner,
     root: &Path,
     registrations: &Registrations,
     path: &str,
-) -> Result<CommandSpec, String> {
+) -> Result<Value, String> {
     relative_path(path)?;
     if !path.starts_with(".chrono-harness/ci/") {
         return Err("bootstrap configuration must be a registered CI policy".into());
@@ -2952,6 +2952,19 @@ fn bootstrap_command(
     if r.blob(root, &head, script)? != source {
         return Err("bootstrap entrypoint differs from commit".into());
     }
+    Ok(policy)
+}
+
+fn bootstrap_command(
+    r: &mut Runner,
+    root: &Path,
+    registrations: &Registrations,
+    path: &str,
+) -> Result<CommandSpec, String> {
+    let policy = bootstrap_policy(r, root, registrations, path)?;
+    let script = policy["entrypoint"]["script"]
+        .as_str()
+        .ok_or("bootstrap entrypoint script")?;
     let action = value!({"tool":policy["entrypoint"]["tool"],"argv":[script,root,path]});
     let mut command = action_command(root, registrations.config(), &action)?;
     command.env.insert(

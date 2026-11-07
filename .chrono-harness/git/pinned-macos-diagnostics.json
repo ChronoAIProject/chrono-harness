@@ -7341,11 +7341,11 @@
       },
       {
         "id": "toolchain.rust.inventory",
-        "location": ".chrono-harness/state/diagnostics-native/guard-inputs/rust.json",
+        "location": ".chrono-harness/state/units/diagnostics/runtime-inputs/rust.json",
         "presence": "present",
         "source": {
           "schema": "chrono-runtime-state/v1",
-          "manifest": ".chrono-harness/state/diagnostics-native/observation.json",
+          "manifest": ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json",
           "pointer": "/directories/rust/manifest"
         }
       },
