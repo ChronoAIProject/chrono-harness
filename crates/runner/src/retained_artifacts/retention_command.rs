@@ -36,7 +36,9 @@ pub(super) struct Historical {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "kebab-case", deny_unknown_fields)]
 enum Request {
-    Maintain,
+    Maintain {
+        originals: Option<Vec<String>>,
+    },
     MigratePolicy {
         previous_policy: Evidence,
     },
@@ -54,6 +56,16 @@ enum Request {
         declaration: Evidence,
         receipt: Evidence,
         pointer: String,
+    },
+    ReleasePreserved {
+        original: OriginalIdentity,
+        roles: Vec<String>,
+        survivor_root: std::path::PathBuf,
+        survivor_path: String,
+        sha256: String,
+        length: u64,
+        current_consumers_released: bool,
+        reason: String,
     },
     AcknowledgeDelivery {
         report: String,
@@ -134,7 +146,29 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
                 &receipt.sha256,
             )
         }
-        Request::Maintain => inventory.maintain(),
+        Request::Maintain { originals } => match originals {
+            Some(originals) => inventory.maintain_originals(&originals),
+            None => inventory.maintain(),
+        },
+        Request::ReleasePreserved {
+            original,
+            roles,
+            survivor_root,
+            survivor_path,
+            sha256,
+            length,
+            current_consumers_released,
+            reason,
+        } => inventory.release_preserved(
+            &original,
+            &roles,
+            &survivor_root,
+            &survivor_path,
+            &sha256,
+            length,
+            current_consumers_released,
+            &reason,
+        ),
         Request::MigratePolicy { previous_policy } => {
             inventory.migrate_policy(&evidence(root, &previous_policy)?)
         }
