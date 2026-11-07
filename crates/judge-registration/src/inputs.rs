@@ -28,6 +28,93 @@ pub fn snapshot_schema_for(r: &Registrations) -> &'static str {
 
 pub use chrono_harness::input_file::observe_file;
 
+/// A runtime-state input is declared by the repository but produced by the
+/// current host. The producer's observation manifest supplies the digest so
+/// a machine-specific inventory is never copied into the repository policy.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeStateSource {
+    pub manifest: String,
+    pub pointer: String,
+}
+
+pub fn runtime_state_source(input: &Value) -> Result<Option<RuntimeStateSource>, String> {
+    let Some(source) = input.get("source") else {
+        return Ok(None);
+    };
+    crate::schema::object(source, &["schema", "manifest", "pointer"], &[])?;
+    if source["schema"] != "chrono-runtime-state/v1" {
+        return Err("unsupported runtime input source schema".into());
+    }
+    let location = crate::schema::string(&input["location"])?;
+    crate::schema::path(&input["location"])?;
+    if !location.starts_with(".chrono-harness/state/") {
+        return Err("runtime input location must be in host state".into());
+    }
+    let manifest = source["manifest"]
+        .as_str()
+        .filter(|path| path.starts_with(".chrono-harness/state/"))
+        .ok_or("runtime input source manifest must be in host state")?;
+    crate::schema::path(&source["manifest"])?;
+    let pointer = source["pointer"]
+        .as_str()
+        .filter(|pointer| pointer.starts_with('/'))
+        .ok_or("runtime input source pointer must be a nonempty JSON Pointer")?;
+    if input["presence"] != "present" || input.get("sha256").is_some() {
+        return Err("runtime-state inputs must be present and omit sha256".into());
+    }
+    Ok(Some(RuntimeStateSource {
+        manifest: manifest.into(),
+        pointer: pointer.into(),
+    }))
+}
+
+/// Resolve a runtime-state input to the exact bytes identity published by its
+/// producer. The observation entry must name the declared path and digest;
+/// the live file is hashed again before it is handed to a consumer.
+pub fn runtime_state_identity(
+    root: &std::path::Path,
+    input: &Value,
+) -> Result<(String, u64), String> {
+    let source = runtime_state_source(input)?.ok_or("input is not runtime-state")?;
+    let manifest = chrono_harness::json(
+        &std::fs::read(chrono_harness::no_symlink_parents(root, &source.manifest)?)
+            .map_err(|e| e.to_string())?,
+    )?;
+    if manifest["schema"] != "chrono-input-observation-result/v2"
+        || manifest["status"] != "observed"
+    {
+        return Err("runtime-state source manifest is not a successful observation".into());
+    }
+    let entry = manifest
+        .pointer(&source.pointer)
+        .ok_or_else(|| {
+            format!(
+                "runtime-state source pointer is missing: {}",
+                source.pointer
+            )
+        })?
+        .as_object()
+        .ok_or("runtime-state source pointer must select an object")?;
+    let path = entry
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or("runtime-state source entry path missing")?;
+    let expected = entry
+        .get("sha256")
+        .and_then(Value::as_str)
+        .filter(|digest| wire::is_digest(digest))
+        .ok_or("runtime-state source entry digest missing")?;
+    if path != input["location"].as_str().ok_or("runtime input location")? {
+        return Err("runtime-state source entry path differs from input location".into());
+    }
+    let actual_path = chrono_harness::no_symlink_parents(root, path)?;
+    let actual = file_identity(&actual_path)?;
+    if actual.0 != expected {
+        return Err("runtime-state source entry digest differs from live file".into());
+    }
+    Ok(actual)
+}
+
 /// Parse the retained representation without reading or repairing its contents.
 pub enum Retained<'a> {
     Absent,
@@ -274,12 +361,15 @@ pub fn required_plan_files(
 ) -> Result<std::collections::BTreeSet<String>, String> {
     use crate::NodeKind;
     use std::collections::BTreeSet;
-    let all: BTreeSet<String> = r.config()["environment"]["inputs"]
+    let mut all = BTreeSet::new();
+    for input in r.config()["environment"]["inputs"]
         .as_array()
         .ok_or("inputs missing")?
-        .iter()
-        .map(|i| i["id"].as_str().unwrap().to_owned())
-        .collect();
+    {
+        if runtime_state_source(input)?.is_none() {
+            all.insert(input["id"].as_str().ok_or("input id missing")?.to_owned());
+        }
+    }
     let Some(selected) = selected else {
         return Ok(all);
     };
@@ -570,9 +660,16 @@ fn validate_inner(
         let files = cfg["environment"]["inputs"]
             .as_array()
             .ok_or("inputs missing")?;
+        let mut has_endpoint_inputs = false;
+        for input in files {
+            if runtime_state_source(input)?.is_none() {
+                has_endpoint_inputs = true;
+                break;
+            }
+        }
         let strict_environment = new.filemap()["schema_version"] == 2;
         if (retained.get("schema").is_some()
-            || !files.is_empty()
+            || has_endpoint_inputs
             || strict_environment && !cfg["environment"]["inherit"].as_array().unwrap().is_empty())
             && retained["commit"] != endpoint.commit
         {
@@ -608,6 +705,14 @@ fn validate_inner(
         }
         for input in files {
             let id = input["id"].as_str().unwrap();
+            if runtime_state_source(input)?.is_some() {
+                if retained["files"].get(id).is_some() {
+                    return Err(format!(
+                        "{name}: runtime-state input cannot be retained: {id}"
+                    ));
+                }
+                continue;
+            }
             if !required.contains(id) && retained["files"].get(id).is_none() {
                 continue;
             }
