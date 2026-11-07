@@ -44,6 +44,14 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 .chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
 
+所有者升级的阶段构建由 `bootstrap-owner-stage.json` 选择薄 shell 入口 `bootstrap-native.sh`，
+在已有 bootstrap 租约内用固定 Rust 1.95.0 构建并调用本宿主的 `chrono-host-bootstrap`。
+Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及两流，再交出现有 stage 描述符；
+阶段校验读取同一生产者的固定原件。shell 只转交参数，不复制构建配方或解释报告。
+外层 core／共享启动及其升级编排仍使用 Python，外部宿主不运行本仓这项源码构建。
+这一批同时修改实现、阶段入口和宿主工具登记；原生构建、真实升级及受影响标准／CI 消费分别验收，
+新增原生入口的构建、验证和存储总成本未测。
+
 提交修改、确保候选检出干净后，本地和生成 CI 使用同一标准判断命令：
 
 ```sh
