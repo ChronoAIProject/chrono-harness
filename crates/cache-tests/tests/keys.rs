@@ -671,7 +671,12 @@ fn report_requires_current_planner_identity_before_publication() {
         );
         assert_eq!(fs::read(&path).unwrap(), retained_plan);
         assert!(!root.path().join(&directory).exists());
-        assert!(!root.path().join(".chrono-harness/state/cache-reports/").exists());
+        assert!(
+            !root
+                .path()
+                .join(".chrono-harness/state/cache-reports/")
+                .exists()
+        );
     }
 }
 
