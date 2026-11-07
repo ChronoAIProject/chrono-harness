@@ -149,7 +149,7 @@ pub fn invoke(
             &req.judge_id,
             &r,
             p.exit_code,
-            |s| s.starts_with('/'),
+            None,
         )?;
         Ok(r)
     });
