@@ -38,6 +38,8 @@ Rust、发布资产和验证操作由该宿主入口及配方管理，生成器�
 
 宿主 Rust bootstrap 的 `test.host-bootstrap-native-tests` 也纳入两平台发布验证。它直接编译源码与 Rust 测试工具，不消费发布二进制，`needs` 为空且 `rust_toolchain=true`；原始未过滤操作保留登记的独立 `--target-dir`。这只新增发布验证 job，日常 scoped 检查仍归现有 `host-bootstrap` 单元，成本未测。
 
+Python 外层的诊断组合测试调用真实 Rust 共享接口。测试驱动复用 `projects.json` 的 `build.host-bootstrap-native` 操作准备候选工具，因此直接执行原始 `host.bootstrap-tests` 也会完成该前置；FILEMAP 不再重复安排它。发布验证明确采用 `rust_toolchain=true`，保留原有 worktree／runner 发布资产依赖；Rust 启动工具仅由测试构建，不增加公开发行资产。新增构建及验证总成本未测。
+
 薄 shell 启动入口的 `test.host-bootstrap-launcher-tests` 同样纳入两平台发布验证。它使用独立登记的 shell 命令替身，验证协调者拒绝、保护描述符与参数转交，以及原退出码；不预编译 Rust 测试工具，也不消费发布二进制，`needs` 为空且 `rust_toolchain=false`。发布验证保留原未过滤操作；新增 job 的实际总成本未测。
 
 ## v2 的依赖与传输
@@ -49,6 +51,8 @@ v1 输出和无依赖行为保留。v2 增加固定提交的 `download_artifact_
 重复的 v2 下载配置使用 YAML 锚点／别名，且只复用生产 job 与目的目录完全相同的登记。每个消费者仍独立下载，原 artifact ID、条件、目录、`needs`、命令、时限、并发和证据采集不变；实际下载次数不减少。写工作流或首次采用源前，生成器按 500,000 字节保守检查 GitHub 的 500 KB 限额，超限则失败并保全已有文件。
 
 ## v5 构建配方
+
+发布 job 的缓存准备使用登记的 Rust bootstrap／薄 shell 入口，和本地／主 CI 复用同一 cache profile；发布编排本身仍待迁移。
 
 宿主唯一调度入口是 `.chrono-harness/release/build.py`。`build.json` 管理 unit ID、manifest／asset 或原始 operation、依赖、handoff 目录、成本、原生 job 对应、局部并发和时限。`projects.json` 独自管理原测试 argv，`plan.json` 独自管理资产源路径，`consumer_staging` 列全部保留目的路径；不扫描目录、名称或测试正文找单元。
 
