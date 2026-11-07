@@ -22,6 +22,15 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 `str::as_bytes` 与切片长度／索引使用固定 vstd 的外部合同，没有新增受信仓内实现。
 最多读取 64 个字节，使用常量额外状态；这是算法估计，完整构建、验证、CI 与存储成本未测。
 
+普通请求和初始库存请求的头部判断也直接使用同一根的 `valid_request_header`。
+返回真当且仅当协议和模式分别与调用方给出的精确值相等，且 judge ID 非空。
+普通请求绑定 `chrono-judge/v1`／`evaluate`，初始请求绑定
+`chrono-initial-judge/v1`／`inventory`；不额外限制 judge ID 的字符。
+独立根核两个有效组合、交叉协议／模式、空名称、大小写、版本后缀、NUL、换行，
+并证明任意非空名称均接受，包括 Unicode。复用 runner 现有两项标识符整 crate 证明，
+没有新增验证进程。请求封存、JSON／摘要和外层组合仍待证明。
+比较最多读取协议和模式的完整字节，名称只查空值；构建、验证和完整运行成本未测。
+
 `crates/runner/src/verified_paths.rs` 是 `relative_path` 的实际判断实现。
 它精确描述当前 POSIX 词法路径合同：拒绝空、绝对路径、开头的当前目录、任意完整父目录分量，
 以及 NUL、换行、回车和反斜杠；保留原本允许的内部 `.`、重复分隔符和末尾分隔符。
@@ -174,9 +183,14 @@ Rust 测试另外验证真实消费者，不替代证明。
 | --- | --- |
 | `str::as_bytes` | 借用完整 UTF-8 字节，返回切片视图等于 `str::spec_bytes()`；后者由固定 vstd 定义为字符串字符序列的 UTF-8 编码。摘要判断读取原字节。 |
 | `String::as_str` | 借用原字符串，字符视图相等；finding 判断读取真实 level。 |
+| `str::is_empty` | 返回真当且仅当字符序列长度为零；请求头只要求 judge ID 非空，不附加 ASCII ID 限制。 |
 | 切片 `len`、`<[T] as Index<usize>>::index` 及 `<usize as SliceIndex<[T]>>::index` | 长度和逐项读取对应切片视图；本仓循环另行证明索引界限、完整遍历、返回条件及终止。`T` 在本批为 `u8` 或 `Finding`。 |
 | `<String as Clone>::clone` | 复制完整字符串；本仓 Finding 克隆证明各实际字符串字段均保留。 |
 | `<Vec<String> as Clone>::clone` | 保留长度和逐项克隆关系；本仓 Finding 克隆证明两个引用数组的完整字段、顺序和重复均保留。 |
+
+实际字段借用使用固定 vstd 的 `String::as_str` 合同；协议和模式比较复用已证明的
+`equal_text`／`equal_bytes`，其 UTF-8 转换采用 `str::as_bytes` 的完整字节合同、
+切片长度／索引合同和固定 vstd 的 UTF-8 编解码引理。没有新增仓内受信实现。
 
 `Status`／`WireStatus`／`CheckResult`／`Finding` 的 Debug 与 Serde 派生是明确保留的外部编码接口，沿用原 JSON 名称和字段合同，
 不据这些派生主张解码、协议校验或仓内决策已经证明。工具下载、摘要、进程与 IO 的现有接口继续保留原验收义务。

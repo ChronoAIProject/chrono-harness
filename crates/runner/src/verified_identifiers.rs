@@ -8,6 +8,18 @@ use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
+/// 只检查请求头；judge 名称沿用非空合同，不套用 CI 单元的 ASCII ID 限制。
+pub fn valid_request_header(
+    protocol: &str, mode: &str, judge_id: &str,
+    expected_protocol: &str, expected_mode: &str,
+) -> (valid: bool)
+    ensures valid <==> protocol@ == expected_protocol@ && mode@ == expected_mode@
+        && judge_id@.len() > 0,
+{
+    equal_text(protocol, expected_protocol) && equal_text(mode, expected_mode)
+        && !judge_id.is_empty()
+}
+
 pub fn equal_text(actual: &str, expected: &str) -> (equal: bool)
     ensures equal <==> actual@ == expected@,
 {

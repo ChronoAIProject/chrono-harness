@@ -194,7 +194,13 @@ impl Request {
         Ok(())
     }
     fn validate_header(&self) -> Result<(), String> {
-        if self.protocol != PROTOCOL || self.mode != "evaluate" || self.judge_id.is_empty() {
+        if !crate::verified_identifiers::valid_request_header(
+            self.protocol.as_str(),
+            self.mode.as_str(),
+            self.judge_id.as_str(),
+            PROTOCOL,
+            "evaluate",
+        ) {
             return Err("E_PROTOCOL: request identity/mode".into());
         }
         Ok(())

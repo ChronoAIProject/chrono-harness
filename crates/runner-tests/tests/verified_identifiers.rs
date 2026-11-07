@@ -10,6 +10,108 @@ use vstd::prelude::*;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn request_header_profiles_and_empty_judge() {
+    proof {
+        reveal_strlit("chrono-judge/v1");
+        reveal_strlit("chrono-initial-judge/v1");
+        reveal_strlit("evaluate");
+        reveal_strlit("inventory");
+        reveal_strlit("judge");
+        reveal_strlit("");
+        assert("chrono-judge/v1"@.len() == 15);
+        assert("chrono-initial-judge/v1"@.len() == 23);
+        assert("evaluate"@.len() == 8 && "inventory"@.len() == 9);
+        assert("judge"@.len() == 5 && ""@.len() == 0);
+    }
+    let evaluation = policy::valid_request_header(
+        "chrono-judge/v1", "evaluate", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(evaluation);
+    let inventory = policy::valid_request_header(
+        "chrono-initial-judge/v1", "inventory", "judge",
+        "chrono-initial-judge/v1", "inventory",
+    );
+    assert(inventory);
+    let empty = policy::valid_request_header(
+        "chrono-judge/v1", "evaluate", "", "chrono-judge/v1", "evaluate",
+    );
+    assert(!empty);
+    let empty_protocol = policy::valid_request_header(
+        "", "evaluate", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!empty_protocol);
+    let empty_mode = policy::valid_request_header(
+        "chrono-judge/v1", "", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!empty_mode);
+    let wrong_protocol = policy::valid_request_header(
+        "chrono-initial-judge/v1", "evaluate", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!wrong_protocol);
+    let wrong_mode = policy::valid_request_header(
+        "chrono-initial-judge/v1", "evaluate", "judge",
+        "chrono-initial-judge/v1", "inventory",
+    );
+    assert(!wrong_mode);
+    let wrong_inventory = policy::valid_request_header(
+        "chrono-judge/v1", "inventory", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!wrong_inventory);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn request_header_preserves_full_text_and_nonempty_name_contract() {
+    proof {
+        reveal_strlit("chrono-judge/v1");
+        reveal_strlit("evaluate");
+        reveal_strlit("判官/\0\n");
+        reveal_strlit("chrono-judge/v1\0");
+        reveal_strlit("evaluate\n");
+        reveal_strlit("Evaluate");
+        reveal_strlit("chrono-initial-judge/v10");
+        reveal_strlit("chrono-initial-judge/v1");
+        reveal_strlit("inventory");
+        assert("chrono-judge/v1"@.len() == 15 && "chrono-judge/v1\0"@.len() == 16);
+        assert("evaluate"@.len() == 8 && "evaluate\n"@.len() == 9);
+        assert("Evaluate"@.len() == 8 && "Evaluate"@[0] != "evaluate"@[0]);
+        assert("chrono-initial-judge/v1"@.len() == 23
+            && "chrono-initial-judge/v10"@.len() == 24);
+        assert("判官/\0\n"@.len() == 5);
+    }
+    let unicode_judge = policy::valid_request_header(
+        "chrono-judge/v1", "evaluate", "判官/\0\n", "chrono-judge/v1", "evaluate",
+    );
+    assert(unicode_judge);
+    let nul_protocol = policy::valid_request_header(
+        "chrono-judge/v1\0", "evaluate", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!nul_protocol);
+    let newline_mode = policy::valid_request_header(
+        "chrono-judge/v1", "evaluate\n", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!newline_mode);
+    let uppercase = policy::valid_request_header(
+        "chrono-judge/v1", "Evaluate", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!uppercase);
+    let suffix = policy::valid_request_header(
+        "chrono-initial-judge/v10", "inventory", "judge",
+        "chrono-initial-judge/v1", "inventory",
+    );
+    assert(!suffix);
+}
+
+// 任意非空名称都保留；头部校验不能偷偷加强为 ASCII 标识符策略。
+fn request_header_accepts_any_nonempty_judge(judge: &str)
+    requires judge@.len() > 0,
+{
+    let accepted = policy::valid_request_header(
+        "chrono-judge/v1", "evaluate", judge, "chrono-judge/v1", "evaluate",
+    );
+    assert(accepted);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn oid_boundaries() {
     let zero_bytes = [48u8; 40];
     let zero = policy::valid_oid(&zero_bytes);
