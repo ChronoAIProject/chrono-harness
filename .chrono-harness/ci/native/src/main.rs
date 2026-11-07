@@ -89,6 +89,10 @@ fn run() -> Result<(), BuildFailure> {
     let environment = std::env::vars_os().collect();
     let native = bindings::native_platform()?;
     match arguments.as_slice() {
+        [version] if version == "--version" => {
+            println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
         [host, config, command] if command == "produce" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             shared::Shared::read(&root, config, &native)?.produce(&root, &environment, &native)
