@@ -47,8 +47,8 @@ fn runtime_state_input_consumes_observation_manifest_and_rejects_drift() {
 
     let host = TempDir::new().unwrap();
     let root = host.path().canonicalize().unwrap();
-    let inventory = ".chrono-harness/state/diagnostics-native/guard-inputs/rust.json";
-    let observation = ".chrono-harness/state/diagnostics-native/observation.json";
+    let inventory = ".chrono-harness/state/units/diagnostics/runtime-inputs/rust.json";
+    let observation = ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json";
     fs::create_dir_all(root.join(inventory).parent().unwrap()).unwrap();
     fs::create_dir_all(root.join(observation).parent().unwrap()).unwrap();
     let bytes = b"runtime inventory\n";

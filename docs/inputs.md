@@ -217,7 +217,9 @@ fetch 可下载缺失锁定包，metadata 保持离线；不执行保护，也�
 
 所选原生政策绑定原 Cargo／rustc、Xcode 26.6 工具、diagnostics 私有 Cargo home、明确缺失的配置，以及原生 sysroot／SDK／developer 根。按配置选择的 FILEMAP 边保留 1,127 个包源码文件身份，并与合格 registry 清单核对。本机 macOS 27 政策及其输入边仍只适用于本机。
 
-**原生构建输入政策现在把运行时事实留在宿主状态：**`toolchain.rust.inventory` 不再选择提交到 Git 的 Rust 目录清单，而是声明 `.chrono-harness/state/diagnostics-native/guard-inputs/rust.json`，并通过 `.chrono-harness/state/diagnostics-native/observation.json` 的 `/directories/rust/manifest` 指针消费。`host.bootstrap-diagnostics-inputs` 先运行登记的 `inputs.observe-diagnostics` 生产者；Cargo guard 随后读取 observation manifest，核对清单声明的路径和摘要，再重新计算当前文件摘要。缺少 observation、指针错误、路径不一致或文件漂移都会在启动 Cargo 前失败。
+**原生构建输入政策现在把运行时事实留在宿主状态：**`toolchain.rust.inventory` 不再选择提交到 Git 的 Rust 目录清单，而是声明 `.chrono-harness/state/units/diagnostics/runtime-inputs/rust.json`，并通过同目录 `observation.json` 的 `/directories/rust/manifest` 指针消费。`host.bootstrap-diagnostics-inputs` 先运行登记的 `inputs.observe-diagnostics` 生产者；Cargo guard 随后读取 observation manifest，核对清单声明的路径和摘要，再重新计算当前文件摘要。缺少 observation、指针错误、路径不一致或文件漂移都会在启动 Cargo 前失败。
+
+生产者直接把这两份原件写入已登记的 diagnostics 单元 artifact 根，由现有上传和汇总运输；不再另写一份供复制的清单。诊断生产者拥有原件，Cargo guard 和来源验收消费它们。运输后核 provider 回执的有限到期时间，按该 artifact 的到期与删除生命周期回收；本地原件沿用受保护操作及宿主 state 生命周期。原件缺失不能由 Cargo 成功或汇总绿灯替代。
 
 清单位置和观察报告都必须是 `.chrono-harness/state/` 下的规范相对路径，已有路径检查拒绝越界和符号链接。source 使用 `serde_json::Value::pointer` 消费非空 JSON Pointer，支持标准的 `/`、`~` 转义；旧的点分隔写法已退役。schema 与实际消费者共用同一份来源解析，不再分别解释路径和指针。端点快照排除这些本轮状态，缺少来源时由真实 Cargo 消费前置报告失败。
 
