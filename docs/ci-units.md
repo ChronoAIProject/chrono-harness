@@ -141,7 +141,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
   "detector": {
     "runs_on": "macos-26",
     "timeout_minutes": 45,
-    "bootstrap": ["/usr/bin/python3", ".chrono-harness/ci/bootstrap.py", ".", ".chrono-harness/ci/bootstrap-detector.json"],
+    "bootstrap": ["/bin/bash", ".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-core.json"],
     "sparse_checkout": [".chrono-harness/", "crates/", "assets/", ".github/workflows/chrono-ci.yml", ".gitignore"]
   }
 }
@@ -157,63 +157,17 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 检测读取完整 Git 树和登记 blob，不执行业务测试或版本探测。源码 bootstrap 只需准备声明的产品源码输入。上文稀疏路径是本 Rust 产品宿主选择；发布二进制消费者可只准备宿主登记／安装器／工作流路径。detector 不发现 SDK、import、目录或语言边界。
 
-### 共享 startup
+### 共享启动准备
 
-本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 只构建并安装五项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-inputs`、`chrono-worktree`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。
+本仓 detector 为单元和汇总生产登记的核心启动工具。缓存准备构建 `chrono-cache`，共享生产者调用已有 core profile 一次，构建并安装六项工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-inputs`、`chrono-worktree` 和共享安装所需的 `chrono-host-bootstrap`。
 
 runner 和 diagnostics 已使用普通锁定 Cargo 构建，现役项目 action 不再调用 `cargo-guard`。因此 core 不再获取、构建或传递 `chrono-judge-cargo`，scoped 工具表和四份直接配置也移除其闲置声明。Cargo 适配器的专属测试仍由自己的执行计划构建，完整安装与独立发布不由 core 决定，仍须分别核查实际使用方。
 
-诊断单元直接验证导入 core，执行原格式、锁定构建和行为测试；不再准备专属保护工具、私有离线领域或目录观察。共享工具的验证／导入合同保持如下。
+共享生产、安装和验证由 Rust `chrono-host-bootstrap` 负责，薄 shell 入口按独立传递的 SHA-256 核对安装器后再执行。消费者验证来源、清单、原报告、工具和本地 SDK，安装所选 profile，再在原 cache／core 准备位置验证。工作流生成器沿已有 outputs 传递安装器摘要。
 
-可选 `job_gating.startup` 使用 `chrono-shared-startup/v1`，声明字面宿主 `directory`、产物名、固定 `download_action`，以及按明确 job ID 索引的 `consumers`。每个消费者有非空 `need`、`output_use`、字面 `install` argv。已有 detector bootstrap 是唯一生产者，向 `GITHUB_OUTPUT` 写不透明 `binding`，不加 job。
+没有必要验收使用方的 diagnostics 环境保护、专属准备配置和组合测试已退役；diagnostics 产品及其单元测试继续按当前登记执行。此处不保留已退役保护的启动路径。
 
-provider 在检测前上传声明目录，将生产 binding 和真实上传 artifact ID 作为 detector 输出。消费者按该 ID 下载，包括后续 attempt 只重跑失败 job 时；空 ID 不能触发下载全部。安装器须拒绝 binding 或传递文件缺失，无成功豁免。
-
-传递目录不能重叠证据根，避免每份普通证据归档都复制二进制。未列消费者或未采用 startup 的配置保留原行为。兼容性／安装检查由宿主负责，provider 不推断语言、布局或平台兼容。
-
-本仓 bootstrap 可写工具链 home 也在已有 `.chrono-harness/cache/` 产物根，是可重建执行输入，不属于上传的 `.chrono-harness/state/`。原身份及生产回执留在 state。共享来源验证同一缓存位置，不要求为汇总报告传递编译器文件，见[bootstrap 边界](ci.md#this-repository)。
-
-宿主 Python 实现绑定干净主源码 commit／tree、平台、配置／profile 字节、原 bootstrap 报告、文件摘要／大小／执行模式。替换工具前验证整份传递，恢复传输丢失的执行位，在明确导入来源旁保留精确生产报告。安装不是本地构建；使用时验证拒绝已安装内容变化。
-
-绑定缺失／改变、源码／配置／平台不符、符号链接、内容损坏或发布失败都会停止 job。这只覆盖登记启动输出，不证明编译器／SDK 输入完整、对抗性认证、linked 所有权或多文件断电原子性。真实传递／重跑验收与 fixture 验证分开。上传／下载／安装有明确资源类别，实测成本计入复用评估。
-
-### 端点、状态与原生产身份
-
-PR 用固定 workflow merge commit 的第一父提交作 base，事件 head 作 candidate；必须恰有两个父提交且第二父提交等于事件 head。事件载荷中的旧 base 不决定选测。默认 push 用完整 before／after，含多提交。明确 `push_baselines` 和创建规则保持原义；detector 只观察一次配置远端基线，将固定输出交依赖 job。
-
-足够时获取从不含 blob 的 depth-two checkout／fetch 开始，缺端点 OID 明确用 `--depth=2 --filter=blob:none` fetch。深度二不保证任意历史。full 单元／汇总为分支／分叉判官保留完整历史获取并过滤 blob，detector 仍从浅获取读精确端点树。
-
-端点缺失／不可得、有父首次基线、删除但无候选、登记错误都失败，不用 HEAD^、merge-base 或全选回退。改名视为两端已登记路径的删除／新增，保留两边依赖范围。变更文件数在选择前从完整 Git 树取得，不设数量门或截断。
-
-GitHub [原生路径过滤](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons)文档有 3000 文件上限，[PR files API](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files)最多 3,000，[compare API](https://docs.github.com/en/rest/commits/commits#compare-two-commits)最多 300。detector 不从它们取文件列表，这些也不是通用运行上限。
-
-Rust provider 拒绝检测失败／取消／缺失，以及任一选中单元失败、取消、缺失或意外跳过。只有 detector 声明非必需的跳过可接受。gather 核精确父 run／仓库／当前 attempt／事件／工作流源码，依赖完成后分页读 job 历史，不轮询其他工作流，也不等自己的父运行结束。
-
-独立重试保留原 detector 及成功前置 attempt。非必需跳过由 `needs` 绑定，无需 job 执行 metadata 或产物。每个选中单元须在同一父 run 有成功的最新 API 状态；生成 `production` 输出寻址真实原 artifact、上下文摘要、报告摘要及生产 attempt。
-
-API job 身份和 `run_attempt` 可能描述沿用工作，不能据此造产物名。gather 将原 context／run／attempt／job 和两个摘要与 production 输出核对。后续失败／跳过不能用早先成功替代；父 attempt 漂移、产物不符／缺失均失败。原进程字节、源码 SHA／revision、事件／端点、报告摘要、执行物身份及上传／来源根映射继续绑定并判断。
-
-同一父运行的一次 gather 只读取一份完整分页产物清单，以及该固定 revision 的工作流原字节；逐个单元仍核唯一产物、仓库／run／candidate、生产 attempt、上下文和报告摘要。观察只保存在本次调用内，不跨运行共享。全部下载与原件检查结束后、发布 manifest 前，重新核父运行身份和 attempt；该核验仍计入末个产物原有的累计期限与流上限。没有选中单元时不读取产物清单或源码。独立工作流继续分别绑定其运行和源码。
-
-Rust 行为回归验证单／多／零单元及重复汇总的请求次数，跨页末个产物缺失、歧义或错误绑定，以及最后下载后父 attempt 漂移时拒绝发布，并保留已下载报告原字节。这里只约束显式启动的传输进程；CLI 内部网络请求、完整执行耗时和计费成本仍需实际观察。
-
-按范围 provider 在生产环境登记 `CHRONO_CI_DETECTION`、`CHRONO_CI_NEEDS`、`GITHUB_RUN_ID`、`GITHUB_RUN_ATTEMPT`、`GITHUB_JOB`。可选完整原生适配器则记录真实获取值，在业务继承外转发，保留独立 job 差异。生成汇总传精确 `needs` 对象，Rust provider 独自拥有接受条件，YAML／bootstrap Python 没有第二套白名单或选择算法。
-
-### 拓扑迁移
-
-新 v4 单元初始化在没有已采用拓扑时选择条件父工作流；已有明确旧 provider 含义及定制保留。
-
-full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语义文档读取、routes `global_selection`／分配验证及 `units::required`。它不提供 schema2 完整上下文、原 birth 回执、输入快照、流式产物或历史转换观察。最终完整汇总仍核真实有效输入和七判官原件。
-
-外部输入变化若带来额外最终义务，缺证据会拒绝；声明调度不声称已知这些快照。需解码器的历史登记报具体调度边界，不执行历史代码或猜测。真实完整原生上下文／快照准备和启用仍交调用方。
-
-普通 `init`／`generate`／`verify` 只拥有当前 provider 输出，先核这些输出、保留宿主来源、拒绝无所有权冲突。verify 报漂移不修复；它们不推导其他拓扑、检查或退役旧工作流。
-
-拓扑变更用已有明确 `migrate`，提供精确旧 provider 快照和新来源。写入前核旧生成结果／新冲突，保留定制，只退役旧快照拥有的输出，同时更新宿主 FILEMAP 和明确消费者。
-
-采用 `job_gating` 时，准备／源码检查绑定 `collection.workflow_path`，单独声明的单元地址不使普通生成器拥有未启用工作流。gather wait／poll 设置保留独立工作流含义，此父工作流传输不轮询，不用它们。
-
-这样去掉重复迁移逻辑，以及普通生成时额外渲染／读取旧拓扑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。旧 ci-host 和已发布 Go／TS／mix provider 在公开二进制可用、调用方明确迁移前保留历史形式。
+本地和发布 bootstrap 继续走登记的源码构建；共享安装只服务当前 CI 使用方。准备成功不代替后续标准检查和原生验收，完整构建、运行、CI 及存储成本未测。
 
 ## 分配与执行
 
@@ -418,7 +372,7 @@ push／pull_request 准备将生成 provider、工作流、profile 绑定候选�
 
 源码行为测试用独立克隆宿主中的真实候选二进制，覆盖并发、离线汇总、合成 GitHub 响应。公开 Go／TS／mix [示例](examples.md)使用独立原生工作流，已核本地／integration／PR／dev、真实取消及选择性重试、业务失败同时其他单元通过、恢复后零业务选择。首次清单仍是独立合同。
 
-本产品宿主当前在 `.chrono-harness/ci/units.json` 登记 24 个条件单元及汇总；早期独立工作流阶段为十六单元。当前 core bootstrap 明确构建 runner、judge-ci、ci、worktree、judge-cargo、inputs。各所选计划保留完整构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。选原配置仍可用默认 full bootstrap。
+本产品宿主当前在 `.chrono-harness/ci/units.json` 登记 23 个条件单元及汇总；早期独立工作流阶段为十六单元。当前 core bootstrap 明确构建 runner、judge-ci、ci、worktree、judge-cargo、inputs 和共享安装前端。各所选计划保留完整构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。bootstrap 必须显式选择已登记配置，旧的默认 full 配方已退役。
 
 CI 生成器消费者在已提交 push 事件上执行生成单元的真实短 `chrono-harness check`，由登记输入程序准备绑定候选的工作流源码／上下文，再读取原报告。普通 `chrono-ci prepare` CLI 已退役；`prepare-endpoints` 与 `acquire-seed` 仍由原生采用流程调用。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
 

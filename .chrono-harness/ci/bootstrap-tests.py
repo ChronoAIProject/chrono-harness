@@ -344,15 +344,24 @@ class Bootstrap(unittest.TestCase):
     def declare(self, *args):
         self.write_json(self.registry, self.declarations(*args))
 
-    def invoke(self, selected=None):
-        args = [sys.executable, "-B", str(self.ci / "bootstrap.py"), str(self.root)]
-        if selected is not None:
-            args.append(selected)
+    def invoke(self, selected=".chrono-harness/ci/bootstrap.json"):
+        args = [sys.executable, "-B", str(self.ci / "bootstrap.py"), str(self.root), selected]
         return subprocess.run(args, cwd=tempfile.gettempdir(), env=self.environment,
                               pass_fds=PASS_FDS, capture_output=True)
 
     def succeeded(self, result):
         self.assertEqual(result.returncode, 0, result)
+
+    def test_requires_explicit_config_before_construction_effects(self):
+        result = subprocess.run(
+            [sys.executable, "-B", str(self.ci / "bootstrap.py"), str(self.root)],
+            cwd=tempfile.gettempdir(), env=self.environment,
+            pass_fds=PASS_FDS, capture_output=True)
+        self.assertNotEqual(result.returncode, 0, result)
+        self.assertIn(b"usage: bootstrap.py HOST_ROOT REGISTERED_CONFIG", result.stderr)
+        self.assertFalse(self.state_path.exists())
+        self.assertFalse((self.root / "built-tool").exists())
+        self.assertFalse((self.tools / "calls.json").exists())
 
     def test_subprocess_failure_diagnostic_preserves_command_exit_and_binary_streams(self):
         argv = [sys.executable, "-B", str(self.root / OPERATION), "fail", "7"]
@@ -944,6 +953,6 @@ if __name__ == "__main__":
         from bootstrap_shared_tests import RealFixtureStartup
         unittest.main(argv=[sys.argv[0]], defaultTest="RealFixtureStartup")
     else:
-        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition, RunnerConsumption, FixtureHostPolicy
+        from bootstrap_shared_tests import AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition, RunnerConsumption, FixtureHostPolicy
         from bootstrap_owner_tests import OwnerPhases, ProducerSource
         unittest.main()

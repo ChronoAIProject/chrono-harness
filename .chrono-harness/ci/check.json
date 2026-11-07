@@ -67,11 +67,9 @@
       ".chrono-harness/ci/check.json",
       ".chrono-harness/ci/units.json",
       ".chrono-harness/ci/bootstrap.py",
-      ".chrono-harness/ci/bootstrap.json",
       ".chrono-harness/ci/bootstrap-core.json",
       ".chrono-harness/ci/bootstrap-native.sh",
       ".chrono-harness/ci/bootstrap-frontend.json",
-      ".chrono-harness/ci/bootstrap-detector.json",
       ".github/workflows/chrono-ci.yml",
       ".chrono-harness/ci/workflow-inventory.json",
       ".chrono-harness/process_fds.py",
@@ -80,7 +78,8 @@
       ".chrono-harness/ci/bootstrap-cache.json",
       ".chrono-harness/ci/bootstrap-toolchains.json",
       "crates/ci/src/inventory.rs",
-      "crates/ci-tests/tests/inventory.rs"
+      "crates/ci-tests/tests/inventory.rs",
+      ".chrono-harness/ci/bootstrap-shared.sh"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,
@@ -236,6 +235,14 @@
     "shared_operations": {
       "verify.runner-status": ["judge-cost", "judge-filemap", "judge-mixed", "judge-projects", "judge-registration", "judge-routes", "judge-workflow", "judge-workflow-short", "judge-workflow-units", "runner"],
       "verify.runner-status-tests": ["judge-cost", "judge-filemap", "judge-mixed", "judge-projects", "judge-registration", "judge-routes", "judge-workflow", "judge-workflow-short", "judge-workflow-units", "runner"],
+      "verify.runner-identifiers": [
+        "ci",
+        "runner"
+      ],
+      "verify.runner-identifiers-tests": [
+        "ci",
+        "runner"
+      ],
       "verify.runner-limits": [
         "judge-registration",
         "judge-routes",
