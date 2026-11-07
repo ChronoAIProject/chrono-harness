@@ -10,6 +10,13 @@ fn fixture_with_publication_probe(drift: Option<bool>) -> (Host, PathBuf, String
     fixture_with_bindings(drift, false)
 }
 fn fixture_with_bindings(drift: Option<bool>, registry: bool) -> (Host, PathBuf, String, String) {
+    fixture_with_entrypoint(drift, registry, ".chrono-harness/ci/bootstrap.py")
+}
+fn fixture_with_entrypoint(
+    drift: Option<bool>,
+    registry: bool,
+    entrypoint: &str,
+) -> (Host, PathBuf, String, String) {
     let h = Host::new("payload");
     h.kernel_cleanup();
     let cleanup = h.root.join(".chrono-harness/cleanup.json");
@@ -26,6 +33,10 @@ fn fixture_with_bindings(drift: Option<bool>, registry: bool) -> (Host, PathBuf,
         )
         .unwrap();
         files.push(format!(".chrono-harness/ci/{name}"));
+    }
+    if entrypoint != ".chrono-harness/ci/bootstrap.py" {
+        fs::copy(ci.join("bootstrap.py"), h.root.join(entrypoint)).unwrap();
+        files.push(entrypoint.into());
     }
     fs::copy(
         source().join(".chrono-harness/process_fds.py"),
@@ -61,7 +72,7 @@ fn fixture_with_bindings(drift: Option<bool>, registry: bool) -> (Host, PathBuf,
     let projects_path = h.root.join(PROJECTS);
     let mut projects = json(&fs::read(&projects_path).unwrap()).unwrap();
     projects["scripts"] = value!([
-        {"id":"construction","path":".chrono-harness/ci/bootstrap.py","test_script":"construction-tests",
+        {"id":"construction","path":entrypoint,"test_script":"construction-tests",
          "actions":{"execute":{"operation":"owner.fixture-version","tool":"cargo","argv":["--version"]}}},
         {"id":"construction-tests","path":".chrono-harness/ci/bootstrap_shared.py","tests_for":"construction",
          "actions":{"execute":{"operation":"owner.fixture-test","tool":"cargo","argv":["--version"]}}}
@@ -75,7 +86,7 @@ fn fixture_with_bindings(drift: Option<bool>, registry: bool) -> (Host, PathBuf,
         "tool_bindings":{"cargo":{"path":tools.join("cargo"),"sha256":sha256(&fs::read(tools.join("cargo")).unwrap()),"version":"cargo 1.95.0 (fixture)"},
             "rustc":{"path":tools.join("rustc"),"sha256":sha256(&fs::read(tools.join("rustc")).unwrap()),"version":"rustc 1.95.0 (fixture)"}},
         "environment":{"PATH":std::env::join_paths(std::iter::once(tools).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap()))).unwrap().to_str().unwrap()},
-        "entrypoint":{"tool":"owner-probe","script":".chrono-harness/ci/bootstrap.py"},
+        "entrypoint":{"tool":"owner-probe","script":entrypoint},
         "participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":fixture_git(),"config":POLICY},
         "owner_stage":{"source":".chrono-harness/bin/built-owner","selected":".chrono-harness/bin/chrono-worktree"}});
     if registry {
@@ -176,6 +187,18 @@ fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, St
         .env("PATH", std::env::var_os("PATH").unwrap());
     h.received(h.native_output(&mut actual))
 }
+#[test]
+fn owner_deployment_uses_the_declared_producer_entrypoint_for_stage_inputs() {
+    let (h, exe, path, sha) = fixture_with_entrypoint(
+        None,
+        true,
+        ".chrono-harness/ci/owner-stage-producer.py",
+    );
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(report.get("managed_process").is_none(), "{report}");
+}
+
 #[test]
 fn owner_deployment_publishes_in_the_rust_lease_owner() {
     let (h, exe, path, sha) = fixture();
