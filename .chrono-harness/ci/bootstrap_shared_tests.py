@@ -674,6 +674,205 @@ class SharedStartup(unittest.TestCase):
         self.assertEqual(target.read_bytes(), b"keep")
 
 
+class DiagnosticsComposition(unittest.TestCase):
+    def setUp(self):
+        self.host = fixture.Bootstrap()
+        self.host.setUp()
+        self.addCleanup(self.host.doCleanups)
+        self.root = self.host.root
+        self.native = SOURCE.parent / "cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
+        self.host.config["install"].append({"source": "built-second", "destination": ".chrono-harness/bin/second"})
+        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
+        for name in ["built-tool", "built-second"]:
+            path = self.root / name
+            path.write_bytes(b"second")
+            path.chmod(0o755)
+        self.shared = {"schema": "chrono-host-startup/v1", "directory": ".chrono-harness/startup/",
+                       "profiles": {"core": {"config": ".chrono-harness/ci/bootstrap.json", "build": True}},
+                       "consumers": {"unit_fixture": ["core"]},
+                       "installer": {"profile": "core", "destination": ".chrono-harness/bin/tool"}}
+        self.host.write_json(self.root / CONFIG, self.shared)
+        (self.root / ".gitignore").write_text("/built-*\n/.chrono-harness/bin/\n/.chrono-harness/state/\n/.chrono-harness/startup/\n/mock-tools/\n")
+        (self.root / "product-source").write_text("original")
+        self.host.git("init", "-q")
+        self.host.git("config", "user.email", "fixture@example.invalid")
+        self.host.git("config", "user.name", "Fixture")
+        self.host.git("add", ".")
+        self.host.git("commit", "-qm", "source")
+        self.environment = self.host.environment
+        self.output = self.host.tools / "github-output"
+        self.output.touch()
+        self.environment["GITHUB_OUTPUT"] = str(self.output)
+        self.transfer = self.root / self.shared["directory"]
+
+    def invoke(self, command, *args, root=None):
+        root = root or self.root
+        return subprocess.run([str(self.native),
+                               str(root), CONFIG, command, *args], env=self.environment,
+                              pass_fds=fixture.PASS_FDS, capture_output=True)
+
+    def produce(self):
+        self.host.succeeded(self.invoke("produce"))
+        outputs = dict(line.split("=", 1) for line in self.output.read_text().splitlines())
+        self.environment["CHRONO_STARTUP_BINDING"] = outputs["binding"]
+        self.assertEqual(self.environment["CHRONO_STARTUP_BINDING"],
+                         hashlib.sha256((self.transfer / "manifest.json").read_bytes()).hexdigest())
+
+    def prepare_diagnostics_composition(self):
+        """Use production install/main/verify; fixtures replace external builds only.
+
+        Core's current selection is inherited independently. The enclosing guard
+        and nested observer must use their declared ordinary online domain, even
+        when the caller has private offline inputs. Installation evidence must
+        remain comparison data, including after an equal-byte path switch.
+        """
+        bindings = self.bind_tools(relocate=True)
+        ordinary = self.root / "mock-tools-ordinary"
+        shutil.copytree(self.host.tools, ordinary)
+        environment = dict(PATH=str(ordinary) + os.pathsep + os.environ["PATH"],
+                           HOME=str(ordinary / "home"), CARGO_HOME=str(ordinary / "cargo-home"),
+                           RUSTUP_HOME=str(ordinary / "rustup-home"),
+                           RUSTC=str(ordinary / "rustc"), RUSTC_WRAPPER="",
+                           RUSTC_WORKSPACE_WRAPPER="", CARGO_NET_OFFLINE="false")
+        guard = json.loads((SOURCE / "bootstrap-diagnostics-guard.json").read_bytes())
+        observer = json.loads((SOURCE / "bootstrap-diagnostics-inputs.json").read_bytes())
+        for name, profile, output in [("bootstrap-diagnostics-guard.json", guard, "guard-domain"),
+                                      ("bootstrap-diagnostics-inputs.json", observer, "observer-domain")]:
+            profile.update(projects=self.host.config["projects"], tools=dict(
+                               python3=sys.executable, **{name: bindings[name]["path"]
+                                                         for name in ("cargo", "rustc")}),
+                           tool_bindings=bindings, environment=environment,
+                           native_platform={"system": platform.system(), "machine": platform.machine()},
+                           install=[{"source": output, "destination": ".chrono-harness/bin/" + output}],
+                           report_path=".chrono-harness/state/" + output + ".json")
+            for key in ("participation", "tool_bindings_registry"):
+                profile.pop(key, None)
+            self.host.write_json(self.host.ci / name, profile)
+        keys = ["HOME", "CARGO_HOME", "RUSTUP_HOME", "RUSTC", "CARGO_NET_OFFLINE"]
+        actions = self.host.declarations("write", "built-tool", "binary")
+        actions["projects"][0]["actions"].update({
+            "verify": {"operation": "host.bootstrap-shared-verify-core", "tool": "python3",
+                       "argv": [str(self.native), ".", CONFIG, "verify", "core"]},
+            "guard": {"operation": "build.judge-cargo", "tool": "python3",
+                      "argv": [fixture.OPERATION, "environment", "guard-domain", *keys]},
+            "observer-bootstrap": {"operation": "host.bootstrap-diagnostics-inputs", "tool": "python3",
+                                   "argv": [".chrono-harness/ci/bootstrap.py", ".",
+                                            ".chrono-harness/ci/bootstrap-diagnostics-inputs.json"]},
+            "observer-build": {"operation": "build.inputs", "tool": "python3",
+                               "argv": [fixture.OPERATION, "environment", "observer-domain", *keys]},
+            "observe": {"operation": "inputs.observe-diagnostics", "tool": "python3",
+                        "argv": [fixture.OPERATION, "write", "observer-prepared", "prepared"]}})
+        self.host.write_json(self.host.registry, actions)
+        (self.root / ".gitignore").write_text((self.root / ".gitignore").read_text() +
+                                              "/guard-domain\n/observer-domain\n/observer-prepared\n/mock-tools-*/\n")
+        self.host.git("add", ".")
+        self.host.git("commit", "-qm", "registered diagnostics composition fixture")
+        self.environment.update(CARGO_HOME=str(self.host.tools / "private-cargo"),
+                                CARGO_NET_OFFLINE="true")
+        self.produce()
+        self.host.succeeded(self.invoke("install", "unit_fixture"))
+        self.composition_originals = {path: (self.root / path).read_bytes() for path in [
+            ".chrono-harness/state/startup-install.json",
+            ".chrono-harness/state/startup-originals/core.json",
+            ".chrono-harness/state/bootstrap.json"]}
+        self.ordinary_environment = {key: environment[key] for key in keys}
+
+    def invoke_diagnostics_composition(self):
+        return self.host.invoke(".chrono-harness/ci/bootstrap-diagnostics-guard.json")
+
+    def assert_composition_originals(self):
+        for path, original in self.composition_originals.items():
+            self.assertEqual((self.root / path).read_bytes(), original, path)
+
+    def test_diagnostics_composition_verifies_core_before_selecting_build_domain(self):
+        self.prepare_diagnostics_composition()
+        self.host.succeeded(self.invoke_diagnostics_composition())
+        self.assert_composition_originals()
+        for name in ("guard-domain", "observer-domain"):
+            self.assertEqual(json.loads((self.root / ".chrono-harness/bin" / name).read_bytes()),
+                             self.ordinary_environment)
+        self.assertEqual((self.root / "observer-prepared").read_bytes(), b"prepared")
+        report = json.loads((self.root / ".chrono-harness/state/guard-domain.json").read_bytes())
+        self.assertEqual([row["operation"] for row in report["operations"]],
+                         ["host.bootstrap-shared-verify-core", "build.judge-cargo",
+                          "host.bootstrap-diagnostics-inputs"])
+        self.assertTrue(all(row["exit_code"] == 0 for row in report["operations"]))
+        import bootstrap_shared
+        profile = json.loads((self.host.ci / "bootstrap-diagnostics-guard.json").read_bytes())
+        bootstrap_shared.validate_execution(self.root, profile, report)
+        missing = json.loads(json.dumps(report))
+        missing["operations"].pop(0)
+        with self.assertRaisesRegex(ValueError, "startup producer operations differ"):
+            bootstrap_shared.validate_execution(self.root, profile, missing)
+
+    def test_diagnostics_composition_rejects_core_drift_before_dependent_effects(self):
+        self.prepare_diagnostics_composition()
+        original_environment = dict(self.environment)
+        alternate = self.root / "mock-tools-alternate"
+        shutil.copytree(self.host.tools, alternate)
+        cases = [("path", b"installed local executable provenance differs"),
+                 ("bytes", b"bound cargo identity mismatch"),
+                 ("version", b"bound cargo identity mismatch"),
+                 ("compiler", b"inherited compiler selection differs"),
+                 ("wrapper", b"inherited compiler wrapper differs"),
+                 ("workspace-wrapper", b"inherited compiler wrapper differs")]
+        cargo = self.host.tools / "cargo"
+        original_cargo = cargo.read_bytes()
+        for defect, message in cases:
+            with self.subTest(defect=defect):
+                self.environment.clear()
+                self.environment.update(original_environment)
+                if defect == "path":
+                    self.environment["PATH"] = str(alternate) + os.pathsep + os.environ["PATH"]
+                elif defect in ("bytes", "version"):
+                    cargo.write_bytes(original_cargo + b"\n# changed identity\n" if defect == "bytes"
+                                      else original_cargo.replace(b"1.95.0 (fixture)", b"1.94.0 (fixture)"))
+                else:
+                    key = {"compiler": "RUSTC", "wrapper": "RUSTC_WRAPPER",
+                           "workspace-wrapper": "RUSTC_WORKSPACE_WRAPPER"}[defect]
+                    self.environment[key] = str(alternate / "rustc")
+                result = self.invoke_diagnostics_composition()
+                cargo.write_bytes(original_cargo)
+                self.assertNotEqual(result.returncode, 0, result)
+                self.assertIn(message, result.stderr)
+                self.assert_composition_originals()
+                reports = sorted((self.root / ".chrono-harness/state").glob("bootstrap-*/report.json"),
+                                 key=lambda path: path.stat().st_mtime_ns)
+                failed = json.loads(reports[-1].read_bytes())
+                self.assertEqual(failed["status"], "failed")
+                self.assertEqual(failed["versions"], {}, "enclosing SDK selection ran before verification")
+                self.assertEqual([row["operation"] for row in failed["operations"]],
+                                 ["host.bootstrap-shared-verify-core"])
+                self.assertEqual(failed["operations"][0]["exit_code"], 1)
+                for path in ("guard-domain", "observer-domain", "observer-prepared",
+                             ".chrono-harness/bin/guard-domain"):
+                    self.assertFalse((self.root / path).exists(), path)
+
+    def bind_tools(self, relocate=False):
+        bindings = {}
+        for tool in ["cargo", "rustc"]:
+            path = self.host.tools / tool
+            bindings[tool] = {"path": str(path),
+                              "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                              "version": tool + " 1.95.0 (fixture)", "allow_relocation": relocate}
+        self.host.config["tools"].update({"cargo": str(self.host.tools / "cargo"),
+                                           "rustc": str(self.host.tools / "rustc")})
+        self.host.config.update(
+            require_tool_bindings=True,
+            tool_bindings_registry=".chrono-harness/ci/fixture-bindings.json",
+            participation={"coordinator_root": "git-main-worktree",
+                           "program": ".chrono-harness/bin/chrono-worktree",
+                           "git": "/usr/bin/git", "config": ".chrono-harness/worktree.json"})
+        self.host.write_json(self.host.ci / "fixture-bindings.json", {
+            "schema": "chrono-bootstrap-toolchains/v1", "rust_toolchain": "1.95.0",
+            "platforms": {platform.system() + "/" + platform.machine(): {"tools": bindings}}})
+        self.environment["CHRONO_WORKTREE_BOOTSTRAP"] = str(self.root)
+        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
+        self.host.git("add", ".chrono-harness/ci/bootstrap.json", ".chrono-harness/ci/fixture-bindings.json")
+        self.host.git("commit", "-qm", "bind bootstrap executables")
+        return bindings
+
+
 class RealAttempt:
     """One producer-owned attempt; its result is evidence, never a cleanup ledger.
 

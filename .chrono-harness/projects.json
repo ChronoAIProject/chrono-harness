@@ -4967,6 +4967,15 @@
             ".chrono-harness/ci/bootstrap-tests.py"
           ]
         },
+        "diagnostics-composition": {
+          "operation": "host.bootstrap-diagnostics-composition-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared_tests.py",
+            "DiagnosticsComposition"
+          ]
+        },
         "real-consumer": {
           "operation": "host.bootstrap-real-consumer",
           "tool": "python3",
