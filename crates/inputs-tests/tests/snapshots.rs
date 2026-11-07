@@ -40,6 +40,7 @@ fn endpoint_capture_excludes_runtime_inventory_without_reading_its_live_source()
     config["schema_version"] = value!(2);
     for input in config["environment"]["inputs"].as_array_mut().unwrap() {
         input["presence"] = value!("present");
+        input["location"] = value!(fs::canonicalize(input["location"].as_str().unwrap()).unwrap());
     }
     config["environment"]["inputs"]
         .as_array_mut()

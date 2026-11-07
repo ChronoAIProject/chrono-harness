@@ -195,12 +195,24 @@ Config 接受明确的 `schema_version: 1 | 2 | 3 | 4`；projects 接受 1／2�
 | canonical_check | v1–v3 `{operation, argv: string[]}`；v4 增加 `profile`、可选独立 `initial_profile` 和 `inputs.local/ci` actions `{operation,tool,argv}`；唯一 `validate.delta` 路由 |
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
 | facts_git | config v3/v4 必填 `{tool, input, guard?}`，前两项分别引用唯一 tools 与 present 文件输入；可选 guard 见下；v1/v2 不接纳此字段，包括 null |
-| environment | `{inherit: string[], values: object, inputs: object[]}`；v4 可加 `credential_environment: string[]`，声明仅用于输入取得、不转发给 Git／判官的 inherit 凭据；v1 输入 `{id, location, sha256}`，v2/v3/v4 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
+| environment | `{inherit: string[], values: object, inputs: object[]}`；v4 可加 `credential_environment: string[]`，声明仅用于输入取得、不转发给 Git／判官的 inherit 凭据；v1 输入 `{id, location, sha256}`，v2/v3/v4 输入为 `{id, location, presence: "present", sha256}`、`{id, location, presence: "absent"}` 或下述运行时来源；变量及输入文件白名单 |
 | input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[], bindings?: {id, consumer, kind, inputs: string[]}[], coverage?: object}`；`bindings` 仅为 config v3 的显式白名单，工程声明不是完备性证明 |
 | protocol | `{id, timeout_seconds, stdout_limit_bytes, encoding}`；正整数限制、UTF-8 |
 | semantic_fields | `{path, pointers: string[], on}[]`；语义字段分类，见 §8 |
 | artifacts | `{path, owner, kind, tracked: false}[]`；明确生成目录白名单 |
 | enforcement | `not-implemented` 或 `enabled`；proposed 不产生通过报告 |
+
+Config v2/v3/v4 可为本轮生产、由明确消费者读取的状态输入登记
+`{id, location, presence: "present", source: {schema: "chrono-runtime-state/v1", manifest, pointer}}`，
+不同时登记 `sha256`。`location` 与 `manifest` 都必须是 `.chrono-harness/state/` 下的规范相对路径；
+消费时沿既有路径检查拒绝符号链接。`manifest` 必须是成功的
+`chrono-input-observation-result/v2`（`status: "observed"`），`pointer` 是交由
+`serde_json::Value::pointer` 解释的非空 JSON Pointer，选择包含 `{path, sha256}` 的对象。
+所选 path 必须等于 location，消费者在实际操作前重新计算活文件摘要；缺失、失败观察、
+无效指针、不同路径或内容漂移均失败，不启动受保护 Cargo 操作。
+运行时状态不进入历史端点快照，端点不得保留该输入的字节表示；快照成功不豁免实际消费前置。
+生产者、消费者与有限保留／释放要求沿 §2.3 登记，不把本轮来源变成固定执行物身份，
+也不据此声明输入完整、full 启用或同判。
 
 tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次，报告绝对路径、文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。Config v3 在读取 Git 对象前，从显式 candidate 配置绑定 `facts_git`；该配置的原始字节随后必须与固定 candidate 中的 blob 相同。
 
