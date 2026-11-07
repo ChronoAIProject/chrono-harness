@@ -16,7 +16,7 @@ use std::{
     time::Instant,
 };
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Stream {
     pub path: String,
@@ -24,7 +24,7 @@ pub struct Stream {
     pub size: u64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Operation {
     pub operation: String,
@@ -41,7 +41,7 @@ pub struct Operation {
     pub reused_from: Option<StreamOrigin>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StreamOrigin {
     pub path: String,

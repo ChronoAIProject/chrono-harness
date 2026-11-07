@@ -173,6 +173,15 @@
         "--version"
       ],
       "expected_version": null
+    },
+    {
+      "id": "bash",
+      "program": "/bin/bash",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": null
     }
   ],
   "protocol": {

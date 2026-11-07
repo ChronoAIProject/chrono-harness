@@ -5,6 +5,7 @@ pub mod bindings;
 pub mod construction;
 pub mod environment;
 pub mod execution;
+pub mod lifecycle;
 pub mod original;
 pub mod owner;
 pub mod profile;

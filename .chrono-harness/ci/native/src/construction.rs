@@ -96,6 +96,7 @@ pub struct Construction<'a> {
     selected: Option<Selected>,
     before: SourceObservation,
     inherited: Environment,
+    owner_source: Option<PathBuf>,
 }
 
 pub struct Published {
@@ -219,6 +220,7 @@ impl<'a> Construction<'a> {
             selected: None,
             before,
             inherited: inherited.clone(),
+            owner_source: None,
         })
     }
 
@@ -329,11 +331,42 @@ impl<'a> Construction<'a> {
         stdout: &mut (impl Write + Send),
         stderr: &mut (impl Write + Send),
     ) -> Result<(), BuildFailure> {
+        self.operations_with_reuse(&BTreeMap::new(), stdout, stderr)
+    }
+
+    pub fn operations_reusing_owner(
+        &mut self,
+        native: &crate::bindings::NativePlatform,
+        stdout: &mut (impl Write + Send),
+        stderr: &mut (impl Write + Send),
+    ) -> Result<(), BuildFailure> {
+        let reuse = crate::owner::reuse_construction(
+            self.root,
+            &self.inherited,
+            native,
+            &self.profile,
+            &self.report,
+            &self.before,
+        )?;
+        self.owner_source = reuse.source;
+        self.operations_with_reuse(&reuse.operations, stdout, stderr)
+    }
+
+    fn operations_with_reuse(
+        &mut self,
+        reused: &BTreeMap<String, Operation>,
+        stdout: &mut (impl Write + Send),
+        stderr: &mut (impl Write + Send),
+    ) -> Result<(), BuildFailure> {
         let selected = self
             .selected
             .as_ref()
             .ok_or("bootstrap SDK has not been selected")?;
         for name in &self.profile.operations {
+            if let Some(original) = reused.get(name) {
+                self.report.operations.push(original.clone());
+                continue;
+            }
             let method = &self.operations[name];
             let bindings = selected
                 .bindings
@@ -386,8 +419,29 @@ impl<'a> Construction<'a> {
     /// 调用方先执行现役所有者的安装判定，再传入实际采用的 source。
     pub fn install_tool(&mut self, source: &Path, destination: &str) -> Result<(), BuildFailure> {
         let target = path(self.root, destination, b".chrono-harness/bin/")?;
+        let source = if destination == self.profile.participation.program {
+            self.owner_source.as_deref().unwrap_or(source)
+        } else {
+            source
+        };
         if !source.is_file() {
             return Err(format!("missing built tool: {}", source.display()).into());
+        }
+        if destination == self.profile.participation.program {
+            crate::owner::check_shared_install(
+                self.root,
+                &self.inherited,
+                &self.profile,
+                source,
+                &target,
+            )?;
+            if target.exists() && file_identity(source)?.0 == file_identity(&target)?.0 {
+                self.report.installed.push(Installed {
+                    path: destination.into(),
+                    sha256: file_identity(&target)?.0,
+                });
+                return Ok(());
+            }
         }
         fs::create_dir_all(target.parent().ok_or("missing install parent")?)
             .map_err(|error| error.to_string())?;
@@ -400,9 +454,13 @@ impl<'a> Construction<'a> {
     }
 
     /// 成功还须具备全部原操作、安装和 owner stage，调用方的 Ok 不能代替完成事实。
-    pub fn stage_owner(&mut self, previous: &policy::owner_publication::Binding) -> Result<(), BuildFailure> {
+    pub fn stage_owner(
+        &mut self,
+        previous: &policy::owner_publication::Binding,
+    ) -> Result<(), BuildFailure> {
         let stage = crate::owner::stage(self.root, &self.inherited, &self.profile, previous)?;
-        self.report.owner_stage = Some(serde_json::to_value(stage).map_err(|error| error.to_string())?);
+        self.report.owner_stage =
+            Some(serde_json::to_value(stage).map_err(|error| error.to_string())?);
         Ok(())
     }
 

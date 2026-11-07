@@ -329,6 +329,15 @@
         "--version"
       ],
       "expected_version": "chrono-judge-cargo 0.1.0"
+    },
+    {
+      "id": "bash",
+      "program": "/bin/bash",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": null
     }
   ],
   "environment": {

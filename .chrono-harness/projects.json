@@ -4098,7 +4098,20 @@
         "validate_original_execution": {
           "operation": "host.bootstrap-native-original-execution",
           "tool": "cargo",
-          "argv": ["run", "--locked", "--manifest-path", ".chrono-harness/ci/native/Cargo.toml", "--target-dir", ".chrono-harness/cache/host-bootstrap-native/target", "--bin", "chrono-host-bootstrap", "--", "validate-original-execution", ".", ".chrono-harness/state/bootstrap.json"]
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            ".chrono-harness/ci/native/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/host-bootstrap-native/target",
+            "--bin",
+            "chrono-host-bootstrap",
+            "--",
+            "validate-original-execution",
+            ".",
+            ".chrono-harness/state/bootstrap.json"
+          ]
         },
         "build": {
           "operation": "build.host-bootstrap-native",
@@ -4158,6 +4171,15 @@
             "-o",
             ".chrono-harness/state/verify.bootstrap-bindings.rlib",
             "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "owner_stage": {
+          "operation": "host.bootstrap-owner-stage",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-owner-stage.json"
           ]
         }
       },
@@ -4655,16 +4677,6 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-diagnostics-guard.json"
-          ]
-        },
-        "owner-stage": {
-          "operation": "host.bootstrap-owner-stage",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-owner-stage.json"
           ]
         },
         "owner-verify": {
