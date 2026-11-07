@@ -40,7 +40,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_runner' --plan-output '.chrono-harness/state/cache/release.linux_build_runner/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.runner
         id: cache_0_restore
@@ -129,7 +129,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_instructions' --plan-output '.chrono-harness/state/cache/release.linux_build_instructions/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.instructions
         id: cache_0_restore
@@ -218,7 +218,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_ci' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_ci/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-ci
         id: cache_0_restore
@@ -307,7 +307,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_ci' --plan-output '.chrono-harness/state/cache/release.linux_build_ci/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.ci
         id: cache_0_restore
@@ -396,7 +396,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_registration' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_registration/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-registration
         id: cache_0_restore
@@ -485,7 +485,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_filemap' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_filemap/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-filemap
         id: cache_0_restore
@@ -574,7 +574,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_routes' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_routes/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-routes
         id: cache_0_restore
@@ -663,7 +663,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_projects' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_projects/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-projects
         id: cache_0_restore
@@ -752,7 +752,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_cost' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_cost/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-cost
         id: cache_0_restore
@@ -841,7 +841,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_mixed' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_mixed/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-mixed
         id: cache_0_restore
@@ -930,7 +930,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_workflow' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_workflow/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-workflow
         id: cache_0_restore
@@ -1019,7 +1019,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_inputs' --plan-output '.chrono-harness/state/cache/release.linux_build_inputs/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.inputs
         id: cache_0_restore
@@ -1108,7 +1108,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_distribution' --plan-output '.chrono-harness/state/cache/release.linux_build_distribution/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.distribution
         id: cache_0_restore
@@ -1197,7 +1197,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_cargo' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_cargo/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-cargo
         id: cache_0_restore
@@ -1286,7 +1286,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_worktree' --plan-output '.chrono-harness/state/cache/release.linux_build_worktree/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.worktree
         id: cache_0_restore
@@ -1384,7 +1384,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_distribution_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_distribution_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.distribution-tests
         id: cache_0_restore
@@ -1498,7 +1498,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_worktree_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_worktree_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.worktree-tests
         id: cache_0_restore
@@ -1589,7 +1589,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_runner_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_runner_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.runner-tests
         id: cache_0_restore
@@ -1744,7 +1744,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_inputs_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_inputs_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.inputs-tests
         id: cache_0_restore
@@ -1846,7 +1846,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_ci_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_ci_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.ci-tests
         id: cache_0_restore
@@ -1938,7 +1938,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_ci_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_ci_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-ci-tests
         id: cache_0_restore
@@ -2030,7 +2030,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_registration_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_registration_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-registration-tests
         id: cache_0_restore
@@ -2127,7 +2127,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_projects_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_projects_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-projects-tests
         id: cache_0_restore
@@ -2228,7 +2228,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_workflow_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_workflow_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-workflow-tests
         id: cache_0_restore
@@ -2335,7 +2335,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_cargo_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_cargo_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-cargo-tests
         id: cache_0_restore
@@ -2424,7 +2424,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_instructions_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_instructions_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.instructions-tests
         id: cache_0_restore
@@ -2519,7 +2519,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_filemap_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_filemap_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-filemap-tests
         id: cache_0_restore
@@ -2608,7 +2608,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_routes_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_routes_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-routes-tests
         id: cache_0_restore
@@ -2702,7 +2702,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_cost_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_cost_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-cost-tests
         id: cache_0_restore
@@ -2797,7 +2797,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_mixed_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_mixed_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-mixed-tests
         id: cache_0_restore
@@ -3114,7 +3114,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_runner' --plan-output '.chrono-harness/state/cache/release.macos_build_runner/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.runner
         id: cache_0_restore
@@ -3203,7 +3203,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_instructions' --plan-output '.chrono-harness/state/cache/release.macos_build_instructions/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.instructions
         id: cache_0_restore
@@ -3292,7 +3292,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_ci' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_ci/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-ci
         id: cache_0_restore
@@ -3381,7 +3381,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_ci' --plan-output '.chrono-harness/state/cache/release.macos_build_ci/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.ci
         id: cache_0_restore
@@ -3470,7 +3470,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_registration' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_registration/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-registration
         id: cache_0_restore
@@ -3559,7 +3559,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_filemap' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_filemap/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-filemap
         id: cache_0_restore
@@ -3648,7 +3648,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_routes' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_routes/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-routes
         id: cache_0_restore
@@ -3737,7 +3737,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_projects' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_projects/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-projects
         id: cache_0_restore
@@ -3826,7 +3826,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_cost' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_cost/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-cost
         id: cache_0_restore
@@ -3915,7 +3915,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_mixed' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_mixed/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-mixed
         id: cache_0_restore
@@ -4004,7 +4004,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_workflow' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_workflow/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-workflow
         id: cache_0_restore
@@ -4093,7 +4093,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_inputs' --plan-output '.chrono-harness/state/cache/release.macos_build_inputs/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.inputs
         id: cache_0_restore
@@ -4182,7 +4182,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_distribution' --plan-output '.chrono-harness/state/cache/release.macos_build_distribution/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.distribution
         id: cache_0_restore
@@ -4271,7 +4271,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_cargo' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_cargo/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-cargo
         id: cache_0_restore
@@ -4360,7 +4360,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_worktree' --plan-output '.chrono-harness/state/cache/release.macos_build_worktree/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.worktree
         id: cache_0_restore
@@ -4458,7 +4458,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_distribution_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_distribution_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.distribution-tests
         id: cache_0_restore
@@ -4572,7 +4572,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_worktree_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_worktree_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.worktree-tests
         id: cache_0_restore
@@ -4663,7 +4663,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_runner_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_runner_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.runner-tests
         id: cache_0_restore
@@ -4818,7 +4818,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_inputs_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_inputs_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.inputs-tests
         id: cache_0_restore
@@ -4920,7 +4920,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_ci_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_ci_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.ci-tests
         id: cache_0_restore
@@ -5012,7 +5012,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_ci_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_ci_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-ci-tests
         id: cache_0_restore
@@ -5104,7 +5104,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_registration_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_registration_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-registration-tests
         id: cache_0_restore
@@ -5201,7 +5201,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_projects_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_projects_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-projects-tests
         id: cache_0_restore
@@ -5302,7 +5302,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_workflow_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_workflow_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-workflow-tests
         id: cache_0_restore
@@ -5409,7 +5409,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_cargo_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_cargo_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-cargo-tests
         id: cache_0_restore
@@ -5498,7 +5498,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_instructions_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_instructions_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.instructions-tests
         id: cache_0_restore
@@ -5593,7 +5593,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_filemap_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_filemap_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-filemap-tests
         id: cache_0_restore
@@ -5682,7 +5682,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_routes_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_routes_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-routes-tests
         id: cache_0_restore
@@ -5776,7 +5776,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_cost_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_cost_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-cost-tests
         id: cache_0_restore
@@ -5871,7 +5871,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_mixed_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_mixed_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-mixed-tests
         id: cache_0_restore
@@ -6362,7 +6362,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_diagnostics_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_diagnostics_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.diagnostics-tests
         id: cache_0_restore
@@ -6451,7 +6451,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_diagnostics_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_diagnostics_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.diagnostics-tests
         id: cache_0_restore
@@ -6630,7 +6630,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_cache' --plan-output '.chrono-harness/state/cache/release.linux_build_cache/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.cache
         id: cache_0_restore
@@ -6721,7 +6721,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_cache_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_cache_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.cache-tests
         id: cache_0_restore
@@ -6810,7 +6810,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_cache' --plan-output '.chrono-harness/state/cache/release.macos_build_cache/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.cache
         id: cache_0_restore
@@ -6901,7 +6901,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_cache_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_cache_tests/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.cache-tests
         id: cache_0_restore
