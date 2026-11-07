@@ -45,6 +45,48 @@ fn all_status_pairs_preserve_variant_identity_and_cloning() {
     expect(&Status::Blocked, &Status::Blocked, true);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn severity_maximum_keeps_all_sixteen_expected_results() {
+    let pp = WireStatus::Pass.maximum(WireStatus::Pass);
+    let pw = WireStatus::Pass.maximum(WireStatus::Warn);
+    let pf = WireStatus::Pass.maximum(WireStatus::Fail);
+    let pe = WireStatus::Pass.maximum(WireStatus::Error);
+    assert(pp == WireStatus::Pass && pw == WireStatus::Warn
+        && pf == WireStatus::Fail && pe == WireStatus::Error);
+    let wp = WireStatus::Warn.maximum(WireStatus::Pass);
+    let ww = WireStatus::Warn.maximum(WireStatus::Warn);
+    let wf = WireStatus::Warn.maximum(WireStatus::Fail);
+    let we = WireStatus::Warn.maximum(WireStatus::Error);
+    assert(wp == WireStatus::Warn && ww == WireStatus::Warn
+        && wf == WireStatus::Fail && we == WireStatus::Error);
+    let fp = WireStatus::Fail.maximum(WireStatus::Pass);
+    let fw = WireStatus::Fail.maximum(WireStatus::Warn);
+    let ff = WireStatus::Fail.maximum(WireStatus::Fail);
+    let fe = WireStatus::Fail.maximum(WireStatus::Error);
+    assert(fp == WireStatus::Fail && fw == WireStatus::Fail
+        && ff == WireStatus::Fail && fe == WireStatus::Error);
+    let ep = WireStatus::Error.maximum(WireStatus::Pass);
+    let ew = WireStatus::Error.maximum(WireStatus::Warn);
+    let ef = WireStatus::Error.maximum(WireStatus::Fail);
+    let ee = WireStatus::Error.maximum(WireStatus::Error);
+    assert(ep == WireStatus::Error && ew == WireStatus::Error
+        && ef == WireStatus::Error && ee == WireStatus::Error);
+}
+
+fn severity_maximum_keeps_idempotence_commutativity_and_associativity(
+    a: WireStatus, b: WireStatus, c: WireStatus,
+) {
+    let aa = a.clone().maximum(a.clone());
+    assert(aa == a);
+    let ab = a.clone().maximum(b.clone());
+    let ba = b.clone().maximum(a.clone());
+    assert(ab == ba);
+    let left = ab.maximum(c.clone());
+    let bc = b.maximum(c);
+    let right = a.maximum(bc);
+    assert(left == right);
+}
+
 fn protocol_pair(a: &WireStatus, b: &WireStatus, expected: Ordering)
     requires expected == a.order_spec(b),
         (expected == Ordering::Equal) == (*a == *b),

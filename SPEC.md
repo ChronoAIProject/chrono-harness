@@ -661,6 +661,8 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 | 3 | 早期 spec-only CLI 的未实现退出码；现役 CI slice 不使用，完整配置拒绝返回 2 |
 
 当前协议四态的实际类型、身份比较、`pass < warn < fail < error` 顺序、克隆和退出码由同源 Verus 实现。
+两个实际协议状态的合并直接调用同源 `maximum`，结果精确保留严重程度较高的变体。
+full 执行与审计、初始库存、留存报告汇总及 finding 记录共用这一实现；外层遍历与状态转换仍分别承担证明义务。
 实际响应校验与留存报告审计复用同一证明根判断真实 finding 列表的状态一致性：fail／error 当且仅当存在精确 `error` 级别，
 pass 不允许 `warning`，warn 必须存在 `warning`；finding 克隆保留完整字段及两个引用数组的顺序和重复。
 响应头直接核完整协议／请求 ID／判官 ID 及原退出。finding 字段形状由同源 Verus 核代码和消息非空、

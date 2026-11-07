@@ -201,6 +201,13 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 
 实际 `wire::Status` 也归 `verified_status.rs`，保持 pass／warn／fail／error 的外部编码。
 身份比较、`pass < warn < fail < error` 的完整顺序、克隆和退出码 0／0／1／2 均由同源 Verus 证明；
+两两汇总也直接调用同源 `WireStatus::maximum`，证明结果精确等于两个实际输入中严重程度较高的变体。
+full 执行、留存审计、初始库存、projects 留存汇总、workflow 证书汇总及 finding 记录均直接使用这一实现，
+替换原标准库 `Ord::max` 调用；不接收调用方计算的等级或有效标志。
+独立 Verus 预期逐项列出全部 16 对结果，并核任意三种状态下的幂等、交换与结合性质。
+复用原两个状态整 crate 证明、FILEMAP 和实际使用方，不新增项目、操作、依赖、外部假设或预算。
+每次合并只比较两个四态值，不分配或增加进程；完整构建、证明、运行、CI 与存储成本未知。
+此处仅证明二元合并，外层列表遍历、缺失／失败分类、JSON 与完整执行状态仍待证明。
 真实 `Finding` 的克隆保留 code、level、message 及两个引用数组的完整字符串、顺序和重复。
 `wire::validate_response_at` 经上述前置校验、`full::validate_execution` 经同源留存审计组合消费同一 `findings_match_status`，
 只读取原 finding 的完整 level 字段：

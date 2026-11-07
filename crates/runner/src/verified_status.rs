@@ -59,6 +59,13 @@ impl WireStatus {
     {
         match self { Self::Pass | Self::Warn => 0, Self::Fail => 1, Self::Error => 2 }
     }
+
+    /// 汇总实际协议状态，精确保留严重程度较高的那个变体。
+    pub fn maximum(self, other: Self) -> (out: Self)
+        ensures out == (if self.rank_spec() >= other.rank_spec() { self } else { other }),
+    {
+        if self.rank() >= other.rank() { self } else { other }
+    }
 }
 
 /// 普通响应和保留报告共用实际头部字段；不另加名称或协议内容限制。
@@ -232,9 +239,7 @@ pub fn append_finding(
         *status == (if old(status).rank_spec() >= severity.rank_spec() { *old(status) } else { severity }),
         findings@ == old(findings)@.push(finding),
 {
-    if status.rank() < severity.rank() {
-        *status = severity;
-    }
+    *status = status.clone().maximum(severity);
     findings.push(finding);
 }
 

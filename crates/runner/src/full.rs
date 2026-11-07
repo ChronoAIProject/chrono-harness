@@ -580,7 +580,7 @@ pub fn execute(
             .collect();
         if !blocked.is_empty() {
             records.push(value!({"id":b.id,"binding":b,"state":"blocked","blocked_by":blocked,"exit_code":null}));
-            status = status.max(Status::Error);
+            status = status.maximum(Status::Error);
             continue;
         }
         let req = match (|| {
@@ -598,7 +598,7 @@ pub fn execute(
         };
         match wire::invoke_prepared(&req, &b, env, timeout, limit) {
             Ok((r, p)) => {
-                status = status.max(r.status.clone());
+                status = status.maximum(r.status.clone());
                 // The process already digested the canonical request bytes it consumed.
                 // Reuse that observation instead of serializing the same request again.
                 records.push(value!({"id":b.id,"binding":b,"state":"executed","request_id":req.request().request_id,"request_digest":p.stdin_sha256,"exit_code":p.exit_code,"response":r,"process":p}));
@@ -783,7 +783,7 @@ pub fn validate_execution(
                     }
                     validate_transport_failure(message.as_str().unwrap(), &process, &request)
                         .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
-                    expected_status = expected_status.max(Status::Error);
+                    expected_status = expected_status.maximum(Status::Error);
                     failed.insert(binding.id.clone());
                 } else {
                     if record["request_digest"] != request_digest {
@@ -817,7 +817,7 @@ pub fn validate_execution(
                             "E_SELF_DIAGNOSTIC: record {id} response differs from process"
                         ));
                     }
-                    expected_status = expected_status.max(response.status.clone());
+                    expected_status = expected_status.maximum(response.status.clone());
                     if response.status >= Status::Fail {
                         failed.insert(binding.id.clone());
                     }
@@ -859,7 +859,7 @@ pub fn validate_execution(
                         "E_SELF_DIAGNOSTIC: record {id} has invalid blocked predecessors"
                     ));
                 }
-                expected_status = expected_status.max(Status::Error);
+                expected_status = expected_status.maximum(Status::Error);
                 failed.insert(binding.id.clone());
             }
             "error" => {
@@ -892,7 +892,7 @@ pub fn validate_execution(
                         "E_SELF_DIAGNOSTIC: error record {id} has no transport failure"
                     ));
                 }
-                expected_status = expected_status.max(Status::Error);
+                expected_status = expected_status.maximum(Status::Error);
                 failed.insert(binding.id.clone());
             }
             other => {
