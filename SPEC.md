@@ -380,7 +380,7 @@ Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING
 
 `chrono-github-full-ci/v2` 是显式完整 context 的独立 dispatch 投影，使用宿主 schema4 登记的短 check 入口，旧 provider v1 拒绝。调用方提供context 原始 UTF-8 JSON 字符串与所有引用证据；生成器不推断角色、时间、宿主布局或证据获取方式。候选配置的 Git 绑定核对 HEAD、配置、provider 源和指定 workflow修订中的投影字节，只在精确缺对象读数后补取固定 OID。
 
-完整准备由短 check 的登记输入 action 执行，独立 full provider 的手工 `chrono-ci prepare` 拒绝。准备阶段保留 context 原字节，另存 Git 观察、源身份和所选短 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。不可变上下文／准备原件按路径与摘要保留，准备报告不再内嵌重复的 `context.input_bytes`；当前输出可替换，原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
+完整准备由短 check 的登记输入 action 执行，普通 `chrono-ci prepare` 手工入口已退役，调用在读取投影或发布准备输出前拒绝；内部事件准备 API，以及原生流程使用的 `prepare-endpoints`／`acquire-seed` 保留。准备阶段保留 context 原字节，另存 Git 观察、源身份和所选短 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。不可变上下文／准备原件按路径与摘要保留，准备报告不再内嵌重复的 `context.input_bytes`；当前输出可替换，原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
 
 字段、重试与采用边界见 [完整 CI 传输合同](docs/full-ci.md)。
 
@@ -412,6 +412,12 @@ worktree v2 的 start/reconstruct 自动发布目的地 birth association，full
 现役源码扩展 `chrono-ci-check/v3` 的 `policy.units` 与 `shared_operations`。判官先完成两端 DELTA、移除／替代义务及全局所选操作图验证，再按 `--unit ID` 过滤执行；不能借单元过滤隐藏全局操作环。单元报告分别列本单元所选、全局所选、交给其它单元、所需单元及真正不需要的义务。某单元成功只承担自身结果，其失败不取消不相关 workflow。本地及该 workflow 均追加完全相同的 `--unit ID` 到登记 check 指令；v1/v2 原调用行为保留。
 
 同一入口的 `--collect MANIFEST` 只重建当前义务并核所需原始单元报告，不能重跑业务测试。它检查完整报告集合、固定端点／配置／执行物 pin、原始判官输出、计划身份及候选操作／顺序／边界、工具观察、逐操作原始回执和成功状态；缺漏、重复、陈旧或失败报告不得全局通过。执行物 pin 由明确调用输入承担，不宣称据此证明构建产地、外部输入完整或跨环境同判。
+
+CI 的执行结果转换与终态使用同源 Verus：完整 passed／blocked 状态分别映射为 Passed／Blocked，其余均 Failed，
+原因保留原错误或既有默认值；退出只在原 Passed 或原非零退出时保留。
+单元和 collection 的终态由真实结果列表产生，存在 Failed／Blocked 当且仅当失败；
+库存异常及诊断失败由同一证明所有者产生对应失败记录和状态。
+这些局部证明不替代 projects 原结果生产、原件准入、JSON 解码和完整覆盖门，范围见 [Verus 说明](docs/verus.md)。
 
 `chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。
 

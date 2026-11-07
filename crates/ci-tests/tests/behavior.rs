@@ -375,7 +375,7 @@ fn configured_push_baseline_rejects_ambiguity_missing_refs_and_invalid_events() 
 }
 
 #[test]
-fn configured_push_baseline_cli_fetches_the_pinned_missing_object_and_preserves_customization() {
+fn configured_push_baseline_preparation_fetches_the_pinned_missing_object_and_preserves_customization() {
     let (d, base, candidate) = repo();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--bare", "-q"]);
@@ -426,36 +426,22 @@ fn configured_push_baseline_cli_fetches_the_pinned_missing_object_and_preserves_
     init(d.path(), &input).unwrap();
     write(&input, &config());
     assert!(!init(d.path(), &input).unwrap());
-    let payload = d.path().join("event.json");
-    fs::write(
-        &payload,
-        serde_json::to_vec(
-            &json!({"ref":"refs/heads/verify/change","before":base,"after":candidate}),
-        )
-        .unwrap(),
+    let saved: Config = serde_json::from_slice(
+        &fs::read(d.path().join(".chrono-harness/ci/github.json")).unwrap(),
     )
     .unwrap();
-    let output = d.path().join("outputs");
-    fs::write(&output, "").unwrap();
-    let args: Vec<String> = [
-        "prepare",
-        "--host-root",
-        d.path().to_str().unwrap(),
-        "--config",
-        ".chrono-harness/ci/github.json",
-        "--event",
+    assert_eq!(
+        serde_json::to_value(&saved).unwrap(),
+        serde_json::to_value(&configured).unwrap()
+    );
+    let context = prepare(
+        d.path(),
+        &saved,
         "push",
-        "--payload",
-        payload.to_str().unwrap(),
-        "--workflow-revision",
+        &json!({"ref":"refs/heads/verify/change","before":base,"after":candidate}),
         &candidate,
-        "--github-output",
-        output.to_str().unwrap(),
-    ]
-    .into_iter()
-    .map(str::to_string)
-    .collect();
-    let context: Value = serde_json::from_str(&chrono_ci::dispatch(&args).unwrap()).unwrap();
+    )
+    .unwrap();
     assert_eq!(context["base"], advanced);
     assert_eq!(context["candidate"], candidate);
     assert_eq!(context["source"], "push-configured-baseline-ref");
@@ -463,15 +449,8 @@ fn configured_push_baseline_cli_fetches_the_pinned_missing_object_and_preserves_
         git(d.path(), &["rev-parse", &format!("{advanced}^{{commit}}")]),
         advanced
     );
-    assert!(
-        fs::read_to_string(output)
-            .unwrap()
-            .contains(&format!("base={advanced}\n"))
-    );
-    let saved: Value =
-        serde_json::from_slice(&fs::read(d.path().join(&configured.context_path)).unwrap())
-            .unwrap();
-    assert_eq!(saved, context);
+    assert_eq!(context["workflow_source_revision"], candidate);
+    assert_eq!(context["canonical_argv"], json!([saved.runner, "check"]));
 }
 #[test]
 fn manual_full_range_and_explicit_initial() {
@@ -562,7 +541,7 @@ fn event_context_contains_same_canonical_entry() {
     assert_eq!(argv, vec![".chrono-harness/bin/chrono-harness", "check"]);
 }
 #[test]
-fn cli_preserves_context_and_outputs_full_identity() {
+fn standalone_prepare_is_rejected_before_context_and_output_publication() {
     let (d, b, c) = repo();
     let cfg = d.path().join(".chrono-harness/ci/github.json");
     write(&cfg, &config());
@@ -573,7 +552,7 @@ fn cli_preserves_context_and_outputs_full_identity() {
     )
     .unwrap();
     let output = d.path().join("github-output");
-    fs::write(&output, "").unwrap();
+    fs::write(&output, "untouched\n").unwrap();
     let a = vec![
         "prepare",
         "--host-root",
@@ -592,14 +571,10 @@ fn cli_preserves_context_and_outputs_full_identity() {
     .into_iter()
     .map(str::to_string)
     .collect::<Vec<_>>();
-    let r: Value = serde_json::from_str(&chrono_ci::dispatch(&a).unwrap()).unwrap();
-    assert_eq!(r["workflow_source_revision"], b);
-    assert!(
-        fs::read_to_string(output)
-            .unwrap()
-            .contains(&format!("candidate={c}"))
-    );
-    assert!(d.path().join(".chrono-harness/state/context.json").exists());
+    let result = chrono_ci::dispatch(&a);
+    assert!(result.is_err(), "retired prepare accepted: {result:?}");
+    assert_eq!(fs::read_to_string(output).unwrap(), "untouched\n");
+    assert!(!d.path().join(".chrono-harness/state/context.json").exists());
 }
 fn retain_command_result(
     root: &Path,

@@ -430,7 +430,7 @@ push／pull_request 准备将生成 provider、工作流、profile 绑定候选�
 
 本产品宿主当前在 `.chrono-harness/ci/units.json` 登记 24 个条件单元及汇总；早期独立工作流阶段为十六单元。当前 core bootstrap 明确构建 runner、judge-ci、ci、worktree、judge-cargo、inputs。各所选计划保留完整构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。选原配置仍可用默认 full bootstrap。
 
-CI 生成器消费者还在已提交 push 事件上执行生成单元的真实 `chrono-ci prepare` CLI，核绑定候选的工作流源码／上下文，再调用所记录本地 `chrono-harness check` argv，读原报告。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
+CI 生成器消费者在已提交 push 事件上执行生成单元的真实短 `chrono-harness check`，由登记输入程序准备绑定候选的工作流源码／上下文，再读取原报告。普通 `chrono-ci prepare` CLI 已退役；`prepare-endpoints` 与 `acquire-seed` 仍由原生采用流程调用。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
 
 Go／TS／mix 的真实 push／PR、汇总及全部单元见[原生采用证据](native-ci-adoption.md)，完成的是该有限 profile 的生成单元采用。有效输入完整、各 provider 版本宿主采用、确定同判及完整启用仍分别验收。
 
