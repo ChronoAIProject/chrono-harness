@@ -2796,8 +2796,7 @@ fn completion_io_allows_independent_publication_and_preserves_new_references() {
         .unwrap();
     assert_eq!(output["outcome"]["exit"], 101);
     assert_eq!(output["references"], json!([first_id]));
-    let round = maintenance(h.path());
-    assert_eq!(fixture_remaining(h.path(), &round), 2, "{round}");
+    assert_eq!(maintain_fixture_to(h.path(), 2), 2);
     assert!(h.path().join(original).exists());
     assert!(h.path().join(parent).exists());
     inventory(h.path())
@@ -3123,7 +3122,16 @@ fn declared_consumer_cli_protects_existing_original_and_requires_real_release() 
     let round = retained_artifacts::retention::maintain_adopted(h.path())
         .unwrap()
         .unwrap();
-    assert_eq!(round["removed_logical_bytes"], 2048);
+    let rounds = maintain_fixture_rounds_to(h.path(), 0);
+    assert_eq!(
+        round["removed_logical_bytes"].as_u64().unwrap()
+            + rounds
+                .iter()
+                .map(|r| r["removed_logical_bytes"].as_u64().unwrap())
+                .sum::<u64>(),
+        2048,
+        "{round}; {rounds:?}"
+    );
     assert!(!h.path().join(&path).exists());
     assert!(
         ledger(h.path())["summaries"]
@@ -3285,6 +3293,7 @@ fn declared_consumer_survives_killed_real_reader_and_ordinary_reentry() {
     let release = consumer_release(h.path(), &declaration, "released");
     assert_eq!(consumer_call(h.path(), release).exit_code, 0);
     retained_artifacts::retention::maintain_adopted(h.path()).unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert!(!h.path().join(path).exists());
 }
 
