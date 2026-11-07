@@ -243,8 +243,18 @@
       "kind": "startup-transfer",
       "tracked": false
     },
-    "crates/pr/target/",
-    "crates/pr-tests/target/"
+    {
+      "path": "crates/pr/target/",
+      "owner": "pr",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/pr-tests/target/",
+      "owner": "pr-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    }
   ],
   "facts_git": {
     "tool": "git",
