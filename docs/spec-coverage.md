@@ -219,6 +219,8 @@ beta.11 发布及[四个示例升级](examples.md)都有精确落地和 dev 证�
 
 公开 beta.12／13 scoped CI 提供明确的整计划单元归属、共享操作声明、独立 workflow 和离线汇总。先验全局 DELTA 义务再分单元；gather 绑定原 workflow 源、端点和 attempt。[公开示例](examples.md)核独立 SDK profile、真实失败／取消隔离、选择性重试和零 DELTA 汇总。三个业务宿主升级二进制时，CI／SDK 源和生成 workflow 逐字保留。产品宿主当时登记十六个独立整计划 workflow、一个 collector 和明确的三工具 bootstrap 配置。bootstrap 回归核所配操作／安装选择、默认行为不变及失败传递。历史修复和 initial 消费者使用采用的 provider，不重新解释历史定义。beta.15 历史方法替代绑定精确原／现方法及映射所有者，拒绝缺失／过期／重复／未绑定声明，保留字段省略时的严格合同，并实测漂移发现和修复。provider run 有歧义仍明确失败；完整输入和治理未获证明。
 
+当前源码已退役独立 `chrono-ci gather` CLI，报告收集由现役 `check --collect` 内部调用。原 CLI 的下载重试、时间与输出上限、凭据省略、固定来源与 attempt、陈旧上下文拒绝和重复收集原件保留测试，迁到真实短命令。内部 gather 实现和最终判官验收保留；公开二进制、原生采用与完整 SPEC 验收仍按实际验证范围报告。
+
 beta.13 加入从明确 scoped v1／units 源迁移到 units 的自有投影迁移。测试保全定制初始化、源字节和无关 workflow，在写入前拒绝旧编辑或新目的地冲突。真实公开 macOS 消费者迁移三个已交付宿主并核 workflow 字节。initial／full／release 迁移、多文件原子性、完整输入、full 启用、确定性同判和形式化细化不在保证内，见[定制与更新](ci-units.md#host-customization-and-updates)。
 
 full-v3 单元核心在 scoped CI 和七判官 full 入口复用 runner 的纯分配／选择函数，先验全局义务和操作 DAG 再分单元。integration／delivery 切片核本地真实证据、产生贡献，暂缓完成结论。封存的原请求模板重建各判官 stdin；选中报告在登记上限内，以无损紧凑编码保留进程精确字节及按地址关联的上下文／输入／证据闭包。汇总不启动业务执行物（含版本命令），核保留的真实 success／warning 及声明合同，输出带来源的覆盖，不虚构聚合执行行。普通 full workflow 政策和 delivery certificate 消费者核最终汇总及全部原证据。普通不分单元 full check 保留本地流式 blob 验证，不受可搬运单元／报告上限限制。provider 生成及自动传输沿用 CI 所有者和明确的 full-context／upload 映射。原生 full 宿主启用、Go 采用、公开发布仍待完成；同判和运行提速未建立。

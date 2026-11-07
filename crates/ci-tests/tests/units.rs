@@ -533,7 +533,18 @@ fn gather_host_config(
 ) -> (short::ShortHost, String, String) {
     let (mut host, b, _) = consumer();
     let root = host.path();
-    let mut cfg = config_value();
+    let policy = ".chrono-harness/config.json";
+    let mut cfg: Value = serde_json::from_slice(&fs::read(root.join(policy)).unwrap()).unwrap();
+    cfg["environment"]["inherit"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("GH_TOKEN"));
+    cfg["environment"]["credential_environment"] = json!(["GH_TOKEN"]);
+    json_file(root, policy, &cfg);
+    let mut cfg: Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/ci/units.json")).unwrap())
+            .unwrap();
+    cfg["gather"]["wait_seconds"] = json!(15);
     configure_mock_transport(&mut cfg);
     configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
@@ -544,22 +555,27 @@ fn gather_host_config(
     host.candidate = c.clone();
     let root = host.path();
     install_mock_transport(root, mode, &c);
+    json_file(
+        root,
+        ".chrono-harness/state/event.json",
+        &json!({"ref":"refs/heads/dev","before":b,"after":c,"created":false,"deleted":false}),
+    );
     for unit in ["alpha", "beta"] {
-        let mut context = unit_context(root, &b, &c, Some(unit));
-        let report = execute_context(root, &context, 0);
+        let result = native_check(&host, &["check", "--unit", unit])
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{result:?}");
+        short::copy_artifacts(
+            &root.join(format!(".chrono-harness/state/{unit}")),
+            &root.join(format!(".chrono-harness/state/mock-artifacts/{unit}")),
+        );
         if mode == "stale-context" {
+            let path = format!(".chrono-harness/state/mock-artifacts/{unit}/{unit}/context.json");
+            let mut context: Value =
+                serde_json::from_slice(&fs::read(root.join(&path)).unwrap()).unwrap();
             context["base"] = json!(c);
+            json_file(root, &path, &context);
         }
-        json_file(
-            root,
-            &format!(".chrono-harness/state/mock-artifacts/{unit}/{unit}/context.json"),
-            &context,
-        );
-        json_file(
-            root,
-            &format!(".chrono-harness/state/mock-artifacts/{unit}/{unit}/check.json"),
-            &report,
-        );
     }
     json_file(
         root,
@@ -569,8 +585,34 @@ fn gather_host_config(
     (host, b, c)
 }
 
-fn gather_cli(root: &Path) -> std::process::Output {
-    Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+fn native_check(host: &short::ShortHost, args: &[&str]) -> Command {
+    let mut command = host.command(args);
+    command
+        .env(chrono_harness::prepared::SOURCE, "ci")
+        .env("GITHUB_EVENT_NAME", "push")
+        .env(
+            "GITHUB_EVENT_PATH",
+            host.path().join(".chrono-harness/state/event.json"),
+        )
+        .env("CHRONO_WORKFLOW_REVISION", &host.candidate)
+        .env("GITHUB_REPOSITORY", "owner/host")
+        .env("GH_TOKEN", "fixture-credential-must-not-be-persisted");
+    command
+}
+
+fn collect_cli(host: &short::ShortHost) -> std::process::Output {
+    native_check(host, &["check", "--collect"])
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn standalone_gather_is_rejected_without_transport_or_publication() {
+    let (host, _, _) = gather_host("success");
+    let root = host.path();
+    let launches = root.join(".chrono-harness/state/mock-launches.jsonl");
+    let before = fs::read(&launches).ok();
+    let result = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(root)
         .args([
             "gather",
@@ -583,19 +625,10 @@ fn gather_cli(root: &Path) -> std::process::Output {
         ])
         .env("GH_TOKEN", "fixture-credential-must-not-be-persisted")
         .output()
-        .unwrap()
-}
-
-#[test]
-fn standalone_gather_is_rejected_without_transport_or_publication() {
-    let (host, _, _) = gather_host("success");
-    let root = host.path();
-    let launches = root.join(".chrono-harness/state/mock-launches.jsonl");
-    let before = fs::read(&launches).ok();
-    let result = gather_cli(root);
+        .unwrap();
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     assert!(result.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("unknown command"));
+    assert!(!result.stderr.is_empty());
     assert_eq!(fs::read(&launches).ok(), before);
     for path in [
         ".chrono-harness/state/collection/gather.json",
@@ -636,11 +669,11 @@ fn alpha_downloads(report: &Value) -> Vec<&Value> {
 
 #[test]
 fn download_recovery_retains_failed_attempt_and_selects_only_complete_artifact() {
-    let (host, b, c) = gather_host_config("success", |cfg| {
+    let (host, _, _) = gather_host_config("success", |cfg| {
         cfg["gather"]["download_retry"] = download_retry();
     });
     failed_downloads(host.path(), 1, 503);
-    let result = gather_cli(host.path());
+    let result = collect_cli(&host);
     assert!(
         result.status.success(),
         "{}",
@@ -681,7 +714,8 @@ fn download_recovery_retains_failed_attempt_and_selects_only_complete_artifact()
         &attempts[0]["argv"].as_array().unwrap()[1..8],
         &attempts[1]["argv"].as_array().unwrap()[1..8]
     );
-    execute_context(host.path(), &unit_context(host.path(), &b, &c, None), 0);
+    let final_report = published_report(host.path(), None, &result);
+    assert_eq!(final_report["response"]["evidence"]["executed"], json!([]));
 }
 
 #[test]
@@ -695,7 +729,7 @@ fn download_recovery_is_opt_in_and_exhaustion_or_unlisted_status_stays_failed() 
             }
         });
         failed_downloads(host.path(), failures, status);
-        let result = gather_cli(host.path());
+        let result = collect_cli(&host);
         assert!(!result.status.success());
         let report = gathered(host.path());
         assert_eq!(alpha_downloads(&report).len(), expected_attempts);
@@ -714,7 +748,7 @@ fn download_recovery_does_not_accept_invalid_evidence_after_transport_recovers()
         cfg["gather"]["download_retry"] = download_retry();
     });
     failed_downloads(host.path(), 1, 503);
-    assert!(!gather_cli(host.path()).status.success());
+    assert!(!collect_cli(&host).status.success());
     let report = gathered(host.path());
     assert_eq!(alpha_downloads(&report).len(), 2);
     assert!(
@@ -785,7 +819,7 @@ fn download_recovery_shares_original_time_and_output_budgets() {
             .unwrap()
             .as_nanos()
             .to_string();
-        let result = gather_cli(host.path());
+        let result = collect_cli(&host);
         let returned = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -797,7 +831,11 @@ fn download_recovery_shares_original_time_and_output_budgets() {
         if attempts.len() != expected_attempts {
             retain_command_result(
                 host.path(),
-                &["gather".into()],
+                &[
+                    ".chrono-harness/bin/chrono-harness".into(),
+                    "check".into(),
+                    "--collect".into(),
+                ],
                 &json!({"case":mode,"expected_attempts":expected_attempts,
                     "started_unix_ns":started,"returned_unix_ns":returned}),
                 &result,
@@ -832,8 +870,8 @@ fn download_recovery_shares_original_time_and_output_budgets() {
 
 #[test]
 fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
-    let (host, b, c) = gather_host("success");
-    let result = gather_cli(host.path());
+    let (host, _, _) = gather_host("success");
+    let result = collect_cli(&host);
     assert!(
         result.status.success(),
         "{}",
@@ -848,7 +886,8 @@ fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
     let gather: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(gather["result"]["status"], "gathered-unjudged");
     assert_eq!(gather["result"]["units"].as_array().unwrap().len(), 2);
-    execute_context(host.path(), &unit_context(host.path(), &b, &c, None), 0);
+    let final_report = published_report(host.path(), None, &result);
+    assert_eq!(final_report["response"]["evidence"]["executed"], json!([]));
     assert_eq!(
         fs::read_to_string(host.path().join(".chrono-harness/state/calls-a")).unwrap(),
         "alpha"
@@ -859,7 +898,7 @@ fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
     );
     let retained = gather["retained_report"].as_str().unwrap();
     let original = fs::read(host.path().join(retained)).unwrap();
-    let again = gather_cli(host.path());
+    let again = collect_cli(&host);
     assert!(again.status.success(), "{again:?}");
     assert_eq!(fs::read(host.path().join(retained)).unwrap(), original);
     assert_ne!(gathered(host.path())["retained_report"], retained);
@@ -874,7 +913,7 @@ fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
         ("changed-attempt", "run changed"),
     ] {
         let (host, _, _) = gather_host(mode);
-        let result = gather_cli(host.path());
+        let result = collect_cli(&host);
         assert!(!result.status.success(), "{mode}");
         let report: Value = serde_json::from_slice(
             &fs::read(

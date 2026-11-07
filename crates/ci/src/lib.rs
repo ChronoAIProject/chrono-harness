@@ -800,7 +800,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let command = args
         .first()
-        .ok_or("use init/generate/verify/migrate/prepare/gather --host-root H --config P")?;
+        .ok_or("use init/generate/verify/migrate/prepare --host-root H --config P")?;
     let mut opts = std::collections::BTreeMap::new();
     let mut i = 1;
     while i < args.len() {
@@ -829,7 +829,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     let config = *opts.get("--config").ok_or("--config required")?;
     if !matches!(
         command.as_str(),
-        "prepare" | "prepare-endpoints" | "acquire-seed" | "gather" | "migrate"
+        "prepare" | "prepare-endpoints" | "acquire-seed" | "migrate"
     ) && opts.len() != 2
     {
         return Err("extra arguments".into());
@@ -882,20 +882,6 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                 opts.get("--event").ok_or("event required")?,
                 &payload,
                 opts.get("--workflow-revision").ok_or("revision required")?,
-            )
-        }
-        "gather" => {
-            if opts.len() != 3 {
-                return Err("gather requires only host-root, config, repository".into());
-            }
-            let Projection::Units(c) = load_projection(&no_symlink_parents(&root, config)?)? else {
-                return Err("gather requires unit provider".into());
-            };
-            gather::gather(
-                &root,
-                config,
-                &c,
-                opts.get("--repository").ok_or("--repository required")?,
             )
         }
         "prepare" | "prepare-endpoints" => {
