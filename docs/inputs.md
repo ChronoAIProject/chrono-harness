@@ -163,6 +163,17 @@ Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩�
 
 旧原生 config／runner 样本及过时比较、FILEMAP 项已经移除，固定来源仍在 Git。当前获取测试直接读取现役观察声明；保留的遗漏和原件不同的纠正见[输入来源保管](input-source-custody.md)。全面启用、输入齐全、固定两端原件、真实 CI 验收和同判仍未完成。
 
+### 工具链入口与本机路径
+
+普通本机操作按有效 `PATH` 解析登记的 Cargo 一次，仍核对精确版本。macOS 27 保留
+`RUSTUP_TOOLCHAIN=1.95.0`，继承实际 `PATH`、`RUSTC`、`RUSTFLAGS` 和 `RUSTUP_HOME`，
+不把某次个人 checkout 的工具链目录写成后续候选的运行预期。
+
+bootstrap 使用已有 profile、`rustup which --toolchain` 与官方组件摘要选择并重核
+Cargo／rustc；编译器、wrapper 和实际路径观察沿该生产者报告消费。完整宿主工具表
+不再重复登记没有直接 action 的 rustc／rustup，相关声明和 FILEMAP 边同步移除。
+这不改变 bootstrap 的固定版本、组件绑定或失败拒绝，也不建立完整输入或同判。
+
 ### 退役 diagnostics 的专属输入链
 
 diagnostics 的路径依赖使用方会自行编译源码，不消费独立受保护构建的产物。当前没有额外环境保护的必要验收终点；本仓恢复普通锁定 Cargo 构建，退役专属观察、私有 Cargo home 准备、vendor 目录来源、主机快照、配置级输入和启动 profile。实际修改与保留边界见 [Cargo 所有者](cargo-projects.md#本仓已退役的额外保护链)。
