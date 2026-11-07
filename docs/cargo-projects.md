@@ -4,8 +4,6 @@
 
 `judge-cargo`／`judge-cargo-tests` 是独立的生产／测试项目对。通用 registration、projects 不依赖它或 TOML。宿主通过登记二进制、参数、政策输入和 FILEMAP 边采用此适配器。Go／TS／脚本宿主不会因为出现类似 Cargo 的文件或目录名，就必须采用 Cargo 政策。
 
-公开 beta.16 分发下文的 v5 工具链清单能力。其原生发布在 macOS arm64、Linux x86_64 执行适配器专属测试；这不证明编译器／SDK／委托输入完整，也不启用产品宿主。
-
 政策须位于宿主 `.chrono-harness/` 下，并登记在 FILEMAP：
 
 ```json
@@ -63,9 +61,7 @@ chrono-judge-cargo run --host-root HOST --config .chrono-harness/config.json \
 
 政策入口还可使用 `chrono-cargo-input-policies/v1`，只含 `schema`、`configurations`。后者把明确的有效配置路径映射到直接 `chrono-cargo-inputs/v2`–`v6` 政策路径。选择使用已取得的登记身份，不探测平台或挑选可用工具链。两个路径都须是宿主 `.chrono-harness/` 下的字面路径，两份文件都须登记并连到真实消费者。缺映射／文件、嵌套选择器、别名、路径穿越或通过直接目标参数绕过选择，都会失败。操作继续只点名一个入口。新增的 `policy_binding` 报告两份原摘要和有效配置；每次子进程结束后都保留并核对两份原件。
 
-**本仓 diagnostics 曾同步修改产品与宿主政策：**旧原生政策移到 `cargo/diagnostics-native.json`；稳定入口 `cargo/diagnostics.json` 为固定原生配置选择该文件，为 macOS 27 选择 `cargo/diagnostics-local.json`。本地政策绑定实际所选 Rust／SDK 根，并通过 `manifest_root` 绑定原清单根。核对原摘要或缺失声明后才迁移本地输入路径。内容不同的 rustix 索引保留原所有者精确字节，不能冒充所选 Cargo home 的索引。
-
-这些提案声明不证明输入完整或同判。新增成本为一次有限政策读取和身份复核，总验证成本未测；原期限和受保护操作继续适用。
+政策读取和身份复核的总验证成本须由采用宿主实测；声明不证明输入完整或同判，原期限和受保护操作继续适用。
 
 保护程序的登记开发构建与其他清单判官一样使用优化级别 1。大型 sysroot／SDK 清单仍执行原有全部文件、目录、别名及边界检查，只改变编译后的执行成本。受保护操作仍使用各自登记的期限。实际外层消费者须在所选宿主证明性能符合期限，不能只凭构建 profile 或小型回归判断。
 
@@ -77,7 +73,7 @@ chrono-judge-cargo run --host-root HOST --config .chrono-harness/config.json \
 
 每轮复核从空文件表开始，因此每次子进程结束后仍能发现持续存在的父路径替换、文件修改和别名漂移。表借用现有声明，每个不同的规范根文件路径至多一项，不跨子进程边界保留内容观察。分配／查询成本未测。这不是文件系统快照保证，两次观察间修改又恢复的变化仍不在合同内。
 
-每项绑定沿用两个有界线程，检查声明文件，对本轮尚未验证的文件计算摘要。返回验证结果或启动受保护子进程前，两个线程必须都结束；任一线程错误使该轮失败。所选宿主每轮声明的逻辑文件量为 14,466,038,905 字节，包含重叠清单。去重后的实际摘要字节数和外层性能须由宿主测量。预期摘要、子进程边界和执行限制不变。
+每项绑定沿用两个有界线程，检查声明文件，对本轮尚未验证的文件计算摘要。返回验证结果或启动受保护子进程前，两个线程必须都结束；任一线程错误使该轮失败。实际摘要字节数和外层性能须由采用宿主测量，不维护已退役主机的清单读数。预期摘要、子进程边界和执行限制不变。
 
 ## 配置与包声明
 
@@ -192,12 +188,8 @@ v5 以 `chrono-cargo-run/v3` 报告工具链证据和链接器工具观察；v2�
 
 ## 本仓已退役的额外保护链
 
-runner 的额外 guard 没有接入正式检查，已连同专属实验和输入退役。原观察 JSON 中由获取测试实际读取的 34 项项目预期已迁入原 Rust 测试，断言保留。
+本仓 runner 和 diagnostics 的额外 guard、专属观察、主机快照与启动入口已退役。获取测试所需的项目预期由原 Rust 测试维护，断言保留；历史迁移细节归 Git 和原 PR。
 
-diagnostics 是独立 Rust 库。runner、judge-ci 和专属测试通过 Cargo 路径依赖编译其源码，不消费独立 `build.diagnostics` 的产物。当前需求由普通锁定 Cargo 构建和真实行为测试满足，额外的环境保护未形成必须保留的验收终点。因此 `build.diagnostics` 恢复直接 `cargo build --locked --manifest-path crates/diagnostics/Cargo.toml`；diagnostics 单元复用已有 core 安装验证，再执行原未过滤测试。
+diagnostics 是独立 Rust 库。runner、judge-ci 和专属测试通过 Cargo 路径依赖编译其源码，不消费独立 `build.diagnostics` 的产物。当前需求由[项目登记](../.chrono-harness/projects.json)中的普通锁定 Cargo 构建和真实行为测试满足；diagnostics 单元复用已有 core 安装验证，再执行原未过滤测试，额外环境保护没有必要的验收终点。
 
-**可见宿主政策与 CI 消费修改：**删除 diagnostics 专属 Cargo 政策、Git 选择器及两个直接配置、两个 bootstrap profile、观察声明、本机 Rust／Xcode 快照、vendor 配置和准备声明。同步移除 macOS 27 的 1,125 项独占输入声明、专属 file-input binding、3,430 条配置级边及三个公共 guard 依赖。Git、bootstrap 和三个独立工具输入仍有现役消费者，保留各自声明；其他普通 Cargo 环境绑定不受此次退役影响。
-
-专属宿主组合测试和私有离线领域测试随功能退役；通用 bootstrap 的工具漂移、安装验证、普通 Cargo 领域及通用 Cargo guard 的成功／失败／边界行为测试继续执行。专为该采用引入的运行时来源输入模式及其合成测试也已退役，Cargo 消费恢复统一的显式摘要绑定。通用 guard 产品能力仍须单独审计必要性，完整输入尚未验收。
-
-历史失败和原件由既有保管者按原义务保留；删除入口不表示历史实验通过，也不删除其他工作树或 state。验证走候选 bootstrap、两端 DELTA 的正式检查、PR CI 和落地后验；总运行、CI、存储收益未测，输入完整性与同判仍未建立。
+通用 bootstrap 的工具漂移、安装验证、普通 Cargo 领域及通用 guard 行为测试继续执行。通用 guard 产品能力仍须单独审计必要性，完整输入尚未验收。历史失败原件按实际调试／验收义务保留；退役不表示旧实验通过。总运行、CI、存储收益未测，输入完整性与同判仍未建立。
