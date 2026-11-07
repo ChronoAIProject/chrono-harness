@@ -63,7 +63,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.detect' --plan-output '.chrono-harness/state/cache/check.detect/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache detect.ci
         id: cache_0_restore
