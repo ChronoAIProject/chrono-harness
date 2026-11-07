@@ -205,9 +205,12 @@ def produce(root, path, config, profiles, config_sha):
     transfer = safe(root, config["directory"][:-1])
     if transfer.exists():
         raise ValueError("startup transfer already exists")
-    for item in config["profiles"].values():
+    for name, item in config["profiles"].items():
         if item["build"]:
-            subprocess.run([sys.executable, "-B", str(root / ".chrono-harness/ci/bootstrap.py"),
+            profile = profiles[name][0]
+            entrypoint = profile["entrypoint"]
+            program = profile["tools"].get(entrypoint["tool"], entrypoint["tool"])
+            subprocess.run([program, str(root / entrypoint["script"]),
                             str(root), item["config"]], check=True, pass_fds=bootstrap.PASS_FDS)
     if source(root) != observed:
         raise ValueError("startup source changed during production")

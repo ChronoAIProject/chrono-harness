@@ -4442,9 +4442,14 @@
       "test_script": "host-bootstrap-launcher-tests",
       "actions": {
         "execute": {
-          "operation": "host.bootstrap-native-launcher",
+          "operation": "host.bootstrap-core",
           "tool": "bash",
           "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-core.json"]
+        },
+        "verus": {
+          "operation": "host.bootstrap-verus",
+          "tool": "bash",
+          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-verus.json"]
         }
       }
     },
@@ -4474,16 +4479,6 @@
             "-B",
             ".chrono-harness/ci/bootstrap.py",
             "."
-          ]
-        },
-        "core": {
-          "operation": "host.bootstrap-core",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-core.json"
           ]
         },
         "cache": {
@@ -4877,16 +4872,6 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-owner-verification.json"
-          ]
-        },
-        "verus": {
-          "operation": "host.bootstrap-verus",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-verus.json"
           ]
         },
         "unit": {

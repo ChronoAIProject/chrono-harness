@@ -70,6 +70,8 @@
       ".chrono-harness/ci/bootstrap.py",
       ".chrono-harness/ci/bootstrap.json",
       ".chrono-harness/ci/bootstrap-core.json",
+      ".chrono-harness/ci/bootstrap-native.sh",
+      ".chrono-harness/ci/bootstrap-frontend.json",
       ".chrono-harness/ci/bootstrap-detector.json",
       ".github/workflows/chrono-ci.yml",
       ".chrono-harness/ci/workflow-inventory.json",
