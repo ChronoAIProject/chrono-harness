@@ -583,7 +583,7 @@ fn provider_cli_preserves_plan_probe_and_native_failure_observations_in_upload_d
 }
 
 #[test]
-fn report_rejects_a_planner_executable_mismatch_before_publication() {
+fn report_requires_current_planner_identity_before_publication() {
     let (root, config) = fixture();
     fs::write(
         root.path().join(".chrono-harness/cache.json"),
@@ -612,36 +612,67 @@ fn report_rejects_a_planner_executable_mismatch_before_publication() {
         String::from_utf8_lossy(&planned.stderr)
     );
     let path = root.path().join(plan_path);
-    let mut plan: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    plan["planner"]["sha256"] = json!("0".repeat(64));
-    fs::write(&path, serde_json::to_vec(&plan).unwrap()).unwrap();
+    let plan: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    let expected = &plan["planner"];
     let steps = json!({
         "cache_0_restore":{"outcome":"success","outputs":{}},
         "cache_0_save":{"outcome":"skipped","outputs":{}},
         "work":{"outcome":"success"}
     });
-    let output = Command::new(&binary)
-        .args([
-            "report",
-            "--host-root",
-            root.path().to_str().unwrap(),
-            "--plan",
-            plan_path,
-            "--report-directory",
-            ".chrono-harness/state/cache/check.one/",
-            "--steps-env",
-            "CACHE_TEST_STEPS",
-            "--work",
-            "work",
-        ])
-        .env("CACHE_TEST_STEPS", serde_json::to_string(&steps).unwrap())
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("differs from the planner executable")
-    );
+    for (index, planner) in [
+        None,
+        Some(Value::Null),
+        Some(json!({"version":expected["version"]})),
+        Some(json!({"sha256":expected["sha256"]})),
+        Some(json!({"sha256":null,"version":expected["version"]})),
+        Some(json!({"sha256":7,"version":expected["version"]})),
+        Some(json!({"sha256":expected["sha256"],"version":7})),
+        Some(json!({"sha256":"0".repeat(64),"version":expected["version"]})),
+        Some(json!({"sha256":expected["sha256"],"version":"another-version"})),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut altered = plan.clone();
+        match planner {
+            Some(planner) => altered["planner"] = planner,
+            None => {
+                altered.as_object_mut().unwrap().remove("planner");
+            }
+        }
+        let retained_plan = serde_json::to_vec(&altered).unwrap();
+        fs::write(&path, &retained_plan).unwrap();
+        let directory = format!(".chrono-harness/state/cache/rejected-{index}/");
+        let output = Command::new(&binary)
+            .args([
+                "report",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--plan",
+                plan_path,
+                "--report-directory",
+                &directory,
+                "--steps-env",
+                "CACHE_TEST_STEPS",
+                "--work",
+                "work",
+            ])
+            .env("CACHE_TEST_STEPS", serde_json::to_string(&steps).unwrap())
+            .output()
+            .unwrap();
+        assert!(
+            !output.status.success(),
+            "case {index} unexpectedly admitted planner identity: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(output.stdout.is_empty());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("differs from the planner executable")
+        );
+        assert_eq!(fs::read(&path).unwrap(), retained_plan);
+        assert!(!root.path().join(&directory).exists());
+        assert!(!root.path().join(".chrono-harness/state/cache-reports/").exists());
+    }
 }
 
 #[test]

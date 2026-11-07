@@ -1,9 +1,11 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
+#![allow(unexpected_cfgs)]
 mod backend;
 mod content;
 mod probe;
 mod recovery;
 mod report;
+pub mod verified_planner;
 pub use backend::Config as Backend;
 use chrono_harness::{decode, file_identity, no_symlink_parents, sha256, wire};
 pub use report::transport_report;
