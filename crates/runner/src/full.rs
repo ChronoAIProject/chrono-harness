@@ -953,18 +953,7 @@ fn validate_record_response(
     {
         return Err("response identity/status/exit mismatch".into());
     }
-    let errors = response
-        .findings
-        .iter()
-        .any(|finding| finding.level == "error");
-    let warnings = response
-        .findings
-        .iter()
-        .any(|finding| finding.level == "warning");
-    if (matches!(response.status, Status::Fail | Status::Error) != errors)
-        || (response.status == Status::Pass && warnings)
-        || (response.status == Status::Warn && !warnings)
-    {
+    if !crate::verified_status::findings_match_status(&response.status, &response.findings) {
         return Err("response findings/status disagree".into());
     }
     Ok(())

@@ -13,6 +13,15 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 每个字节都属于 ASCII 字母、数字或 `._-`。循环证明返回值与各自规格充要相等，包含边界和终止。
 `facts::full_oid` 与 `units::id` 直接消费这些结果。
 
+摘要格式也由同一根的 `digest_format`／`valid_digest`／`valid_digest_text` 规定和实现：
+必须恰为 64 个 ASCII 小写十六进制字节，允许全零。`wire::is_digest` 直接重导出文本判断，
+现役响应、原件、输入和工作树使用方消费同一实现。字节循环证明完整输入的充要条件和终止，
+文本入口证明借用完整 UTF-8 字节；不把格式证明当作 SHA-256 计算、真实性或原件存在证明。
+独立根核 0／40／63／64／65 长度、全零、数字和 a–f 端点、任意位置的非法字节，
+以及完整混合文本、NUL、换行、大小写和 UTF-8 序列。复用原六项 runner 整 crate 操作；
+`str::as_bytes` 与切片长度／索引使用固定 vstd 的外部合同，没有新增受信仓内实现。
+最多读取 64 个字节，使用常量额外状态；这是算法估计，完整构建、验证、CI 与存储成本未测。
+
 `crates/runner/src/verified_paths.rs` 是 `relative_path` 的实际判断实现。
 它精确描述当前 POSIX 词法路径合同：拒绝空、绝对路径、开头的当前目录、任意完整父目录分量，
 以及 NUL、换行、回车和反斜杠；保留原本允许的内部 `.`、重复分隔符和末尾分隔符。
@@ -35,6 +44,23 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 唯一先行 verifier、执行工具和项目登记必须精确对应。消费关系判官读取显式 preparation，
 再核原共享 core 合同；解码和外层组合仍待证明。独立根与 Rust 回归核缺前置、重复、
 把校验放入普通操作、工具／schema／命令／项目错绑及缺文档。registration 原计划增加两项整 crate 证明。
+
+## 协议状态与 finding
+
+实际 `wire::Status` 也归 `verified_status.rs`，保持 pass／warn／fail／error 的外部编码。
+身份比较、`pass < warn < fail < error` 的完整顺序、克隆和退出码 0／0／1／2 均由同源 Verus 证明；
+真实 `Finding` 的克隆保留 code、level、message 及两个引用数组的完整字符串、顺序和重复。
+`wire::validate_response_at` 和 `full::validate_record_response` 直接消费同一 `findings_match_status`，
+只读取原 finding 的完整 level 字段：
+fail／error 当且仅当存在 `error`，pass 不允许 `warning`，warn 必须存在 `warning`。
+该循环证明完整列表的存在量词及终止，不由调用方提供预先计算的标志。
+
+独立根列出全部 16 对状态比较、四个退出码及全部 error／warning 存在组合，
+另核空列表、info、排列和重复、大小写／Unicode／NUL 级别、其他字段含误导文字及完整克隆。
+现有协议进程测试继续核四态真实 JSON、退出码与错误状态拒绝。
+finding 格式、引用准入、响应身份、证据 IO、JSON 解码和外层组合仍待证明。
+状态判断为常量工作；finding 扫描为 O(F) 条记录，使用常量额外状态，不增加进程。
+这是当前算法估计；完整运行、构建、验证、CI 和存储成本未测。
 
 ## 实际图内核
 
@@ -140,9 +166,19 @@ Rust 测试另外验证真实消费者，不替代证明。
 
 ## 此批使用的外部接口
 
-明确采用固定 Verus／vstd 对 `Vec`、`String`／`str`、UTF-8、`Option` 与标准 trait 的规格；
-这些是外部库合同，不是本仓自写的受信实现。没有新增 `external_body`、`assume` 或证明过滤。
-`Status`／`CheckResult` 的 Debug 与 Serde 派生是明确保留的外部编码接口，沿用原 JSON 名称和字段合同，
+本批新增生产逻辑采用下表的具体外部接口，合同来自固定 Verus／vstd；
+类型或库名本身不授予其他仓内逻辑豁免。没有新增 `external_body`、`assume` 或证明过滤。
+其余存量证明根和程序使用的外部接口仍须完整清点，不据本表主张全仓覆盖。
+
+| 外部接口 | 本批用途及采用的合同 |
+| --- | --- |
+| `str::as_bytes` | 借用完整 UTF-8 字节，返回切片视图等于 `str::spec_bytes()`；后者由固定 vstd 定义为字符串字符序列的 UTF-8 编码。摘要判断读取原字节。 |
+| `String::as_str` | 借用原字符串，字符视图相等；finding 判断读取真实 level。 |
+| 切片 `len`、`<[T] as Index<usize>>::index` 及 `<usize as SliceIndex<[T]>>::index` | 长度和逐项读取对应切片视图；本仓循环另行证明索引界限、完整遍历、返回条件及终止。`T` 在本批为 `u8` 或 `Finding`。 |
+| `<String as Clone>::clone` | 复制完整字符串；本仓 Finding 克隆证明各实际字符串字段均保留。 |
+| `<Vec<String> as Clone>::clone` | 保留长度和逐项克隆关系；本仓 Finding 克隆证明两个引用数组的完整字段、顺序和重复均保留。 |
+
+`Status`／`WireStatus`／`CheckResult`／`Finding` 的 Debug 与 Serde 派生是明确保留的外部编码接口，沿用原 JSON 名称和字段合同，
 不据这些派生主张解码、协议校验或仓内决策已经证明。工具下载、摘要、进程与 IO 的现有接口继续保留原验收义务。
 `TraversedEdge` 的原 Debug／Serde 派生同样只承担外部编码。
 选测返回转换明确保留固定 Rust 1.95.0 的
@@ -155,6 +191,9 @@ Verus 证明覆盖转换前的完整选择、去重和顺序，现有 Rust 回�
 O(E(1 + (L+1)log(U+1)) + U²)，再有原标准库集合转换。
 这是当前算法的上界估计，不是 Verus 机械成本证明。临时向量保留 U 个目标字符串及句柄，
 不增加运行时进程；完整运行、构建、验证、CI 和存储成本未测。
+
+finding 克隆使用固定 vstd 对 `<String as Clone>::clone` 和 `<Vec<String> as Clone>::clone` 的外部合同，
+前者保留完整字符串，后者保留长度及逐项克隆关系；本仓实现证明各实际字段均保留。
 
 **产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十六项证明。
 固定宏依赖通过 runner 传播到现役依赖方的独立 lockfile，没有升级其他包。
