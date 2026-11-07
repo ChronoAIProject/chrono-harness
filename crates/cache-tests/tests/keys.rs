@@ -128,6 +128,50 @@ fn adopt_consumer_contract(root: &Path, config: &mut Value) {
 }
 
 #[test]
+fn only_current_cache_registration_is_admitted() {
+    let (root, mut config) = fixture();
+    adopt_consumer_contract(root.path(), &mut config);
+    let current = plan(root.path(), &config, "check.one").unwrap();
+    assert_eq!(current["schema"], "chrono-cache-plan/v2");
+    println!(
+        "CURRENT_V2_PROJECT_KEY={}",
+        current["caches"]["project"]["key"]
+    );
+    // A retired registration must fail even without the current contract map.
+    config.as_object_mut().unwrap().remove("consumer_operations");
+    for schema in ["chrono-cache/v1", "chrono-cache/v3", ""] {
+        config["schema"] = json!(schema);
+        let config: Config = serde_json::from_value(config.clone()).unwrap();
+        assert!(
+            chrono_cache::validate(&config)
+                .unwrap_err()
+                .contains("E_CACHE_CONFIG"),
+            "{schema}"
+        );
+    }
+}
+
+#[test]
+fn transport_report_rejects_retired_plan_schema() {
+    let (root, mut config) = fixture();
+    adopt_consumer_contract(root.path(), &mut config);
+    let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+    assert!(chrono_cache::transport_report(&prepared, &json!({}), "work", None).is_ok());
+    for schema in [
+        json!("chrono-cache-plan/v1"),
+        json!("chrono-cache-plan/v3"),
+        Value::Null,
+    ] {
+        prepared["schema"] = schema;
+        assert!(
+            chrono_cache::transport_report(&prepared, &json!({}), "work", None)
+                .unwrap_err()
+                .contains("E_CACHE_REPORT")
+        );
+    }
+}
+
+#[test]
 fn source_changes_reuse_compatible_domain_and_compiler_changes_do_not() {
     let (root, config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
