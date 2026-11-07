@@ -810,14 +810,8 @@ fn absent_inputs_are_explicit_and_empty_files_are_present() {
 }
 
 #[test]
-fn executable_candidates_require_exact_keys_and_still_require_builds() {
+fn exact_keys_still_require_builds_and_retired_executable_kind_is_rejected() {
     let (root, mut config) = fixture();
-    config["artifacts"]["target"]["kind"] = json!("executable-candidate");
-    assert!(
-        plan(root.path(), &config, "check.one")
-            .unwrap_err()
-            .contains("exact restoration")
-    );
     config["caches"]["project"]["restore"] = json!("exact");
     let result = plan(root.path(), &config, "check.one").unwrap();
     assert_eq!(result["caches"]["project"]["restore_keys"], json!([]));
@@ -825,6 +819,8 @@ fn executable_candidates_require_exact_keys_and_still_require_builds() {
         result["caches"]["project"]["handling"],
         "registered-build-required"
     );
+    config["artifacts"]["target"]["kind"] = json!("executable-candidate");
+    assert!(plan(root.path(), &config, "check.one").is_err());
 }
 
 #[test]
