@@ -32,6 +32,8 @@ pub mod units;
 #[allow(unexpected_cfgs)]
 pub mod verified_identifiers;
 #[allow(unexpected_cfgs)]
+pub mod verified_limits;
+#[allow(unexpected_cfgs)]
 pub mod verified_paths;
 #[allow(unexpected_cfgs)]
 pub mod verified_status;
@@ -563,9 +565,7 @@ pub fn validate_command(s: &CommandSpec) -> Result<(), String> {
         || s.env
             .iter()
             .any(|(k, v)| k.is_empty() || k.contains(['=', '\0']) || v.contains('\0'))
-        || s.timeout_seconds == 0
-        || s.output_limit_bytes == 0
-        || s.output_limit_bytes > 64 * 1024 * 1024
+        || !verified_limits::valid_execution_bounds(s.timeout_seconds, s.output_limit_bytes)
     {
         return Err("invalid command/bounds".into());
     }
@@ -1071,7 +1071,7 @@ fn run_process_inner_with_stdout(
         "preparing bounded process invocation"
     );
     validate_command(s)?;
-    if stdout_limit == 0 || stdout_limit > 64 * 1024 * 1024 {
+    if !verified_limits::valid_output_limit(stdout_limit) {
         return Err("invalid immutable input transport bound".into());
     }
     if expected.is_some() && !Path::new(&s.program).is_absolute() {

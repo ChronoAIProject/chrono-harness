@@ -612,6 +612,9 @@ registration 先消费原始快照与 context；filemap 据登记生成 impact�
 
 共享上下文的推导属于登记判官逻辑；runner 只传递具名输出，不在内部另写项目政策。所有摘要使用 SHA-256；JSON 摘要使用 RFC 8785 JCS，文件 blob 按原始字节计算。普通请求的 registries.digest 覆盖两端五份 JSON 的路径与内容，两个端点都必须存在。初始化请求没有 base 或 delta 字段，使用单份候选登记映射的独立摘要。
 
+摘要文本格式由同源 Verus 的 `verified_identifiers::digest_format` 规定：恰为 64 个 ASCII 小写十六进制字节，允许全零。
+实际 `wire::is_digest` 直接使用其已证明的文本入口；格式证明不证明 SHA-256 计算、源真实性或原件存在。
+
 ```json
 {
   "protocol": "chrono-judge/v1",
@@ -636,6 +639,11 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 | 1 | 至少一个 fail：已完成判定，存在约束错误 |
 | 2 | error：输入/协议/基础设施失败或必要证据不足 |
 | 3 | 早期 spec-only CLI 的未实现退出码；现役 CI slice 不使用，完整配置拒绝返回 2 |
+
+当前协议四态的实际类型、身份比较、`pass < warn < fail < error` 顺序、克隆和退出码由同源 Verus 实现。
+实际响应校验与留存报告审计复用同一证明根判断真实 finding 列表的状态一致性：fail／error 当且仅当存在精确 `error` 级别，
+pass 不允许 `warning`，warn 必须存在 `warning`；finding 克隆保留完整字段及两个引用数组的顺序和重复。
+这不证明外层响应身份、finding 格式与引用有效性、JSON 或证据 IO，范围见 [Verus 实施说明](docs/verus.md)。
 
 子进程输出 fail 却 exit 0、空 stdout、额外日志、截断 JSON、未知状态都属于协议错误。
 本轮选中的当前进程崩溃、超时、不可执行、摘要不匹配、必需测试未执行都不能降级为通过。
@@ -1159,5 +1167,9 @@ Git main 的已登记历史可重建产物可经同一生命周期所有者 `mig
 新增规格、判断、状态维护及其独立边界预期必须直接使用 Verus，并登记整 crate 证明作为实际消费者的必需前置；
 不能先增加未证明逻辑再记作迁移缺口。既有缺口按批迁移，Python 相关迁移暂缓。
 实施按可独立验收的小批次推进，未迁移义务必须明确保留。当前实际 runner 的 OID、CI 单元 ID
-及相对词法路径判断已使用同源 Verus，执行结果与规格充要相等，且循环终止；
+及相对词法路径判断已使用同源 Verus，执行结果与规格充要相等，且循环终止。
+执行器命令、不可变输入传输、登记及路由计划的资源上限共用同源 Verus 判断：
+超时为正，输出为 1 字节至 64 MiB（含两端）；独立边界直接调用真实实现，整 crate 证明为使用方计划的必需前置。
+普通与初始库存请求的头部判断也使用同源 Verus，精确匹配各自协议和模式，并要求 judge ID 非空；
+名称不额外受 ASCII ID 限制。请求封存、JSON／摘要及外层组合仍待证明。
 其他逻辑、完整 SPEC 对应与全仓强制覆盖尚未完成。详见 [Verus 实施范围](docs/verus.md)。

@@ -21,9 +21,10 @@ pub struct Bounds {
 }
 impl Bounds {
     fn valid(&self) -> bool {
-        self.timeout_seconds > 0
-            && self.output_limit_bytes > 0
-            && self.output_limit_bytes <= 64 * 1024 * 1024
+        chrono_harness::verified_limits::valid_execution_bounds(
+            self.timeout_seconds,
+            self.output_limit_bytes,
+        )
     }
 }
 impl Plan {

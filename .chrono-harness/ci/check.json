@@ -230,6 +230,16 @@
       }
     },
     "shared_operations": {
+      "verify.runner-limits": [
+        "judge-registration",
+        "judge-routes",
+        "runner"
+      ],
+      "verify.runner-limits-tests": [
+        "judge-registration",
+        "judge-routes",
+        "runner"
+      ],
       "build.ci": [
         "ci",
         "judge-workflow",
