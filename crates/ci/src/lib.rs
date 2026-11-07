@@ -17,6 +17,7 @@ pub mod release;
 pub mod resources;
 pub mod startup;
 pub mod units;
+pub mod verified_literals;
 
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]

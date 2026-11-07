@@ -66,6 +66,8 @@
     {"path":"crates/judge-ci-tests/tests/git_facts.rs","owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci-tests"}]},
     {"path":"crates/ci/Cargo.toml","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci"}]},
     {"path":"crates/ci/Cargo.lock","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci"}]},
+    {"path":"crates/ci/src/verified_literals.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
+    {"path":"crates/ci-tests/tests/verified_literals.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":"crates/ci/src/lib.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":"crates/ci/src/main.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":"crates/ci-tests/Cargo.toml","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci-tests"}]},
@@ -530,6 +532,7 @@
     {"path":"crates/worktree-tests/tests/verified_owner_publication.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]}
   ],
   "project_edges": [
+    {"from":"tool:verus","kind":"build-input","to":"project:ci"},
     {"from":"project:runner","kind":"compile","to":"project:runner-tests"},
     {"from":"project:runner","kind":"runtime-input","to":"project:runner-tests"},
     {"from":"project:runner","kind":"test-execution","to":"test:runner-tests"},
@@ -1179,6 +1182,8 @@
     },
     "test:ci-tests": {
       "operations": [
+        "verify.ci-literals",
+        "verify.ci-literals-tests",
         "fmt.ci",
         "fmt.ci-tests",
         "build.runner",
@@ -1490,6 +1495,8 @@
       "worktree-test-inventory"
     ],
     "claims": {
+      "verify.ci-literals": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.ci-literals-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "build.ci": {
         "resources": [],
         "outputs": [

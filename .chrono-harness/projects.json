@@ -1057,6 +1057,24 @@
             "--config",
             ".chrono-harness/ci/worktree-inventory.json"
           ]
+        },
+        "verify_literals": {
+          "operation": "verify.ci-literals",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-literals.rlib,dep-info=.chrono-harness/state/verify.ci-literals.rlib.d",
+            "crates/ci/src/verified_literals.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-literals.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -1158,6 +1176,24 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
+          ]
+        },
+        "verify_literals": {
+          "operation": "verify.ci-literals-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-literals-tests.rlib,dep-info=.chrono-harness/state/verify.ci-literals-tests.rlib.d",
+            "crates/ci-tests/tests/verified_literals.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-literals-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },

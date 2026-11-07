@@ -18,6 +18,25 @@ fn config() -> FullConfig {
     }))
     .unwrap()
 }
+
+#[test]
+fn full_render_consumes_literal_argument_policy() {
+    for value in ["", "普通文本", "$", "${", "$HOME `literal`", "${x{", "{{"] {
+        let mut c = config();
+        c.bootstrap.push(value.into());
+        assert!(full::render(&c, SOURCE).is_ok(), "{value:?}");
+    }
+    for value in ["\0", "\n", "\r", "${{", "x${{y", "${${{"] {
+        let mut c = config();
+        c.bootstrap.push(value.into());
+        assert_eq!(
+            full::render(&c, SOURCE).unwrap_err(),
+            "full CI settings must be literal single-line values",
+            "{value:?}"
+        );
+    }
+}
+
 fn host(mode: &str) -> Host {
     let mut h = Host::new(mode);
     let c = config();
