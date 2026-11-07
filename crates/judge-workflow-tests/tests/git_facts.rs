@@ -675,33 +675,39 @@ fn full_ci_consumer(selected: bool) {
     assert_eq!(delivery["tests"]["tests"], local["tests"]["tests"]);
     assert_eq!(delivery["parity"]["status"], "unestablished");
     if selected {
-        // Full-CI preparation must reject the same literal linked entries.
-        let original = fs::read(root.join(source_path)).unwrap();
+        // The current input producer rejects linked policies before Git or
+        // business operations. Reuse its real short-check request as the control.
         for path in [linked_entry, ".chrono-harness/linked directory/config.json"] {
-            let mut linked_provider = provider.clone();
-            linked_provider["check_config"] = json!(path);
-            fs::write(
-                root.join(source_path),
-                serde_json::to_vec(&linked_provider).unwrap(),
-            )
-            .unwrap();
+            let mut request = delivery["preparation"]["request"].clone();
+            request["profile"] = json!(path);
+            let input = root.join(".chrono-harness/state/linked-policy-request.json");
+            fs::write(&input, serde_json::to_vec(&request).unwrap()).unwrap();
             let trace = fs::read(root.join(".chrono-harness/state/git-trace")).unwrap();
             let order = fs::read(root.join(".chrono-harness/state/order")).unwrap();
             let out = h.capture_native(
-                Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+                Command::new(&ci)
                     .current_dir(&root)
-                    .env("DECLARED_EMPTY", "")
-                    .env_remove("DECLARED_ABSENT")
-                    .env("CHRONO_CHECK_SOURCE", "ci")
+                    .stdin(fs::File::open(input).unwrap())
                     .env("GITHUB_EVENT_NAME", "workflow_dispatch")
                     .env(
                         "GITHUB_EVENT_PATH",
                         root.join(".chrono-harness/state/payload.json"),
                     )
                     .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-                    .arg("check"),
+                    .args([
+                        "check-inputs",
+                        "--config",
+                        source_path,
+                        "--event-env",
+                        "GITHUB_EVENT_NAME",
+                        "--payload-env",
+                        "GITHUB_EVENT_PATH",
+                        "--revision-env",
+                        "CHRONO_WORKFLOW_REVISION",
+                    ]),
             );
-            assert_eq!(out.status.code(), Some(2));
+            assert_eq!(out.status.code(), Some(1));
+            assert!(out.stdout.is_empty());
             assert!(
                 String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"),
                 "{out:?}"
@@ -716,7 +722,6 @@ fn full_ci_consumer(selected: bool) {
             );
             assert!(!root.join(".chrono-harness/state/preparation.json").exists());
         }
-        fs::write(root.join(source_path), original).unwrap();
     }
     // Preparation transports an invalid freshness claim; only workflow judges it.
     let context_path = root.join(".chrono-harness/state/context.json");
