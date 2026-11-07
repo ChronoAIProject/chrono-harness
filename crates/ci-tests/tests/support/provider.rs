@@ -175,7 +175,7 @@ pub fn parent(args: &[String]) {
             ));
             let id = 99 + artifacts.len();
             artifacts.push(json!({"id":id,"name":production["artifact"],"expired":false,
-                "workflow_run":{"id":101,"head_sha":detection["candidate"]},
+                "workflow_run":{"id":101,"head_sha":detection["event_head"]},
                 "archive_download_url":format!("https://api.github.com/repos/owner/host/actions/artifacts/{id}/zip")}));
         }
         if mode == "artifact-missing" {
@@ -201,7 +201,7 @@ pub fn parent(args: &[String]) {
     } else if args[1].contains("/jobs?") {
         let mut rows = vec![json!({"id":200,"run_id":101,"run_attempt":2,
             "name":"Detect registered DELTA","status":"completed", "conclusion":"success",
-            "head_sha":detection["candidate"]})];
+            "head_sha":detection["event_head"]})];
         let mut units: Vec<_> = provider["units"].as_object().unwrap().keys().collect();
         units.sort();
         for (index, unit) in units.iter().enumerate() {
@@ -220,7 +220,7 @@ pub fn parent(args: &[String]) {
                 2
             };
             rows.push(json!({"id":201+index,"run_id":101,"run_attempt":attempt,
-                "name":provider["units"][*unit]["name"],"head_sha":detection["candidate"],
+                "name":provider["units"][*unit]["name"],"head_sha":detection["event_head"],
                 "status":"completed","conclusion":if required {"success"} else {"skipped"}}));
         }
         if mode == "carried" {
@@ -269,7 +269,7 @@ pub fn parent(args: &[String]) {
         println!(
             "{}",
             json!({"id":if mode == "wrong-run" {999} else {101},
-            "run_attempt":attempt,"status":"in_progress","head_sha":detection["candidate"],
+            "run_attempt":attempt,"status":"in_progress","head_sha":detection["event_head"],
             "event":detection["event"],"path":provider["collection"]["workflow_path"],
             "repository":{"full_name":"owner/host"}})
         );

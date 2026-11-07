@@ -123,6 +123,8 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 <a id="conditional-jobs-and-the-required-aggregate"></a>
 
+默认合并采用[并行验收、按依赖合并](merging.md)。PR 的被验候选是固定 workflow 合并提交 M，基线是其第一父，第二父须为事件 head H。`chrono-ci-detection/v2` 分别记录 `candidate=M` 和 `event_head=H`，汇总对测试报告使用 M，对原生运行、job 和 artifact 的 `head_sha` 使用 H。不能把两种身份互换。
+
 ## 条件 job 与唯一必需汇总
 
 父工作流用原生 concurrency 替换同一 PR 的旧运行。组名绑定工作流路径、事件、PR 号；非 PR 事件用唯一 run ID，所以 push 的各次完整 before／after 不会因取消排队而丢失。父工作流内各单元独立调度。

@@ -270,14 +270,45 @@ fn push_uses_actual_before_after() {
     assert_eq!(r["source"], "push-before-after");
 }
 #[test]
-fn pr_uses_head_not_merge_ref() {
+fn pr_checks_fixed_merge_tree_and_keeps_event_head_identity() {
     let (d, b, c) = repo();
     let p = json!({"pull_request":{"base":{"sha":b},"head":{"sha":c}},"after":"ignored-merge"});
     let merge = tools::pr_workflow_merge(d.path(), &b, &c);
+    git(d.path(), &["checkout", "--detach", &merge]);
     let r = prepare(d.path(), &config(), "pull_request", &p, &merge).unwrap();
-    assert_eq!(r["candidate"], c);
+    assert_eq!(r["candidate"], merge);
+    assert_eq!(r["event_head"], c);
     assert_eq!(r["workflow_source_revision"], merge);
     assert_eq!(r["base"], b);
+}
+
+#[test]
+fn pr_merge_candidate_contains_concurrent_target_changes_without_updating_head() {
+    let (d, old_base, head) = repo();
+    git(d.path(), &["checkout", "--detach", &old_base]);
+    fs::write(d.path().join("concurrent"), "target-only input").unwrap();
+    git(d.path(), &["add", "concurrent"]);
+    git(d.path(), &["commit", "-qm", "concurrent target change"]);
+    let base = git(d.path(), &["rev-parse", "HEAD"]);
+    git(d.path(), &["merge", "--no-ff", "--no-edit", &head]);
+    let merge = git(d.path(), &["rev-parse", "HEAD"]);
+    let payload = json!({"pull_request":{"base":{"sha":old_base},"head":{"sha":head}}});
+    let context = prepare(d.path(), &config(), "pull_request", &payload, &merge).unwrap();
+    assert_eq!(context["base"], base);
+    assert_eq!(context["candidate"], merge);
+    assert_eq!(context["event_head"], head);
+    assert_eq!(
+        git(d.path(), &["show", &format!("{merge}:concurrent")]),
+        "target-only input"
+    );
+    assert_eq!(git(d.path(), &["show", &format!("{merge}:a")]), "b");
+    // A head-only checkout must not obtain a merge-tree verdict.
+    git(d.path(), &["checkout", "--detach", &head]);
+    assert!(
+        prepare(d.path(), &config(), "pull_request", &payload, &merge)
+            .unwrap_err()
+            .contains("checkout is not exact event candidate")
+    );
 }
 
 #[test]
@@ -286,6 +317,7 @@ fn pr_rejects_non_merge_and_unrelated_workflow_parents() {
     let payload = json!({"pull_request":{"base":{"sha":base},"head":{"sha":head}}});
     let reversed = tools::pr_workflow_merge(d.path(), &head, &base);
     for revision in [&base, &head, &reversed] {
+        git(d.path(), &["checkout", "--detach", revision]);
         let error = prepare(d.path(), &config(), "pull_request", &payload, revision).unwrap_err();
         assert!(
             error.contains("exactly two parents and the event head as second parent"),
@@ -293,6 +325,7 @@ fn pr_rejects_non_merge_and_unrelated_workflow_parents() {
         );
         assert!(error.contains("git_facts"), "{error}");
     }
+    git(d.path(), &["checkout", "--detach", &head]);
     assert_eq!(git(d.path(), &["rev-parse", "HEAD"]), head);
 }
 
