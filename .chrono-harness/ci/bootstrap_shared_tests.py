@@ -611,6 +611,9 @@ class RealAttempt:
         if completion.exists():
             cls.require_consumer_completion(evidence, result)
             return
+        if result["status"] == "failed" and len(result["commands"]) == 1 and result["commands"][0]["name"] == "clone":
+            cls.require_failed_clone(evidence, result)
+            return
         for descriptor in custody.get("required_originals", []):
             cls.original(descriptor)
         reports = {}
@@ -642,6 +645,27 @@ class RealAttempt:
         # Release only the cache-attempt admission slot after exclusive disposal.
         # Failed originals and their consumers keep their outcomes and identities.
         cls.verify_disposal(root, custody["declared_outputs"], json.loads(released))
+
+    @classmethod
+    def require_failed_clone(cls, evidence, result):
+        """A joined clone failure produced no managed output to release.
+
+        Keep the failed result, streams and partial source in place. This only
+        settles admission; it claims neither cache disposal nor task success.
+        """
+        command, custody = result["commands"][0], result["custody"]
+        root, argv = Path(result["fixture"]), command["argv"]
+        if (any(key in custody for key in ("owner_executable", "managed_report", "declared_outputs", "release_report"))
+                or type(command["exit_code"]) is not int or command["exit_code"] <= 0 or command["status"] != "failed"
+                or result["source"].get("dirty") is not False or result["source"].get("error") is not None
+                or root != evidence / "fixture" or root.is_symlink() or root.resolve() != root
+                or len(argv) != 9 or not Path(argv[0]).is_absolute()
+                or argv[1:7] != ["clone", "--no-local", "-q", "--depth=1", "--single-branch", "--no-tags"]
+                or argv[7:] != [command["cwd"], str(root)] or not Path(command["cwd"]).is_absolute()
+                or custody["disposal"] != "not-requested" or custody["descendants_quiescent"] is not None):
+            raise ValueError("failed clone has no unambiguous joined pre-management original")
+        cls.original(command["stdout"])
+        cls.original(command["stderr"])
 
     @classmethod
     def require_consumer_completion(cls, evidence, result):
@@ -1098,6 +1122,56 @@ class RealAttempt:
 
 
 class AttemptCustody(unittest.TestCase):
+    def failed_clone(self, directory):
+        source = Path(directory).resolve()
+        observed = {"commit": "a" * 40, "tree": "b" * 40, "dirty": False, "error": None}
+        attempt = RealAttempt(source / "evidence", observed, time.monotonic() + 10, 1048576)
+        root = Path(attempt.result["fixture"])
+        root.mkdir()
+        (root / "partial-source").write_bytes(b"preserve partial clone")
+        with self.assertRaisesRegex(AssertionError, "clone: exit_code=128"):
+            attempt.run("clone", ["/usr/bin/git", "clone", "--no-local", "-q", "--depth=1",
+                        "--single-branch", "--no-tags", str(source), str(root)], source, dict(os.environ))
+        attempt.finish("failed", "joined clone failure")
+        return attempt
+
+    def test_joined_failed_clone_retains_source_and_failure_before_next_attempt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            attempt = self.failed_clone(directory)
+            original = (attempt.evidence / "result.json").read_bytes()
+            RealAttempt.require_settled(attempt.evidence)
+            next_attempt = RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 10, 1048576)
+            self.assertNotEqual(next_attempt.evidence, attempt.evidence)
+            self.assertEqual((attempt.evidence / "result.json").read_bytes(), original)
+            self.assertEqual((Path(attempt.result["fixture"]) / "partial-source").read_bytes(), b"preserve partial clone")
+            self.assertEqual(attempt.result["custody"]["disposal"], "not-requested")
+            self.assertIsNone(attempt.result["custody"]["descendants_quiescent"])
+
+    def test_failed_clone_admission_refuses_unknown_outcomes_management_and_changed_originals(self):
+        for mode in ("timeout", "signal", "managed", "extra-command", "other-command", "argv", "fixture", "stream"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                attempt = self.failed_clone(directory)
+                command = attempt.result["commands"][0]
+                if mode == "timeout":
+                    command.update(status="timeout", exit_code=None)
+                elif mode == "signal":
+                    command["exit_code"] = -9
+                elif mode == "managed":
+                    attempt.result["custody"]["owner_executable"] = {"path": "owner"}
+                elif mode == "extra-command":
+                    attempt.result["commands"].append(dict(command, name="managed-use"))
+                elif mode == "other-command":
+                    command["name"] = "managed-use"
+                elif mode == "argv":
+                    command["argv"][1] = "checkout"
+                elif mode == "fixture":
+                    attempt.result["fixture"] = str(attempt.evidence.parent)
+                else:
+                    Path(command["stderr"]["path"]).write_bytes(b"changed")
+                attempt.publish()
+                with self.assertRaises((ValueError, OSError, KeyError, TypeError)):
+                    RealAttempt.require_settled(attempt.evidence)
+
     def test_terminal_success_failure_and_timeout_keep_originals_and_refuse_accumulation(self):
         for mode, code, status in [("fail", "0", "passed"), ("fail", "7", "failed"),
                                    ("timeout", "0", "timeout")]:
