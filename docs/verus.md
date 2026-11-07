@@ -45,6 +45,23 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 再核原共享 core 合同；解码和外层组合仍待证明。独立根与 Rust 回归核缺前置、重复、
 把校验放入普通操作、工具／schema／命令／项目错绑及缺文档。registration 原计划增加两项整 crate 证明。
 
+## 协议状态与 finding
+
+实际 `wire::Status` 也归 `verified_status.rs`，保持 pass／warn／fail／error 的外部编码。
+身份比较、`pass < warn < fail < error` 的完整顺序、克隆和退出码 0／0／1／2 均由同源 Verus 证明；
+真实 `Finding` 的克隆保留 code、level、message 及两个引用数组的完整字符串、顺序和重复。
+`wire::validate_response_at` 和 `full::validate_record_response` 直接消费同一 `findings_match_status`，
+只读取原 finding 的完整 level 字段：
+fail／error 当且仅当存在 `error`，pass 不允许 `warning`，warn 必须存在 `warning`。
+该循环证明完整列表的存在量词及终止，不由调用方提供预先计算的标志。
+
+独立根列出全部 16 对状态比较、四个退出码及全部 error／warning 存在组合，
+另核空列表、info、排列和重复、大小写／Unicode／NUL 级别、其他字段含误导文字及完整克隆。
+现有协议进程测试继续核四态真实 JSON、退出码与错误状态拒绝。
+finding 格式、引用准入、响应身份、证据 IO、JSON 解码和外层组合仍待证明。
+状态判断为常量工作；finding 扫描为 O(F) 条记录，使用常量额外状态，不增加进程。
+这是当前算法估计；完整运行、构建、验证、CI 和存储成本未测。
+
 ## 实际图内核
 
 `crates/judge-filemap/src/verified_graph.rs` 是实际有类型边比较、两端边并集、名称索引、
@@ -118,7 +135,7 @@ Rust 测试另外验证真实消费者，不替代证明。
 
 明确采用固定 Verus／vstd 对 `Vec`、`String`／`str`、UTF-8、`Option` 与标准 trait 的规格；
 这些是外部库合同，不是本仓自写的受信实现。没有新增 `external_body`、`assume` 或证明过滤。
-`Status`／`CheckResult` 的 Debug 与 Serde 派生是明确保留的外部编码接口，沿用原 JSON 名称和字段合同，
+`Status`／`WireStatus`／`CheckResult`／`Finding` 的 Debug 与 Serde 派生是明确保留的外部编码接口，沿用原 JSON 名称和字段合同，
 不据这些派生主张解码、协议校验或仓内决策已经证明。工具下载、摘要、进程与 IO 的现有接口继续保留原验收义务。
 `TraversedEdge` 的原 Debug／Serde 派生同样只承担外部编码。
 选测返回转换明确保留固定 Rust 1.95.0 的
@@ -131,6 +148,9 @@ Verus 证明覆盖转换前的完整选择、去重和顺序，现有 Rust 回�
 O(E(1 + (L+1)log(U+1)) + U²)，再有原标准库集合转换。
 这是当前算法的上界估计，不是 Verus 机械成本证明。临时向量保留 U 个目标字符串及句柄，
 不增加运行时进程；完整运行、构建、验证、CI 和存储成本未测。
+
+finding 克隆使用固定 vstd 对 `<String as Clone>::clone` 和 `<Vec<String> as Clone>::clone` 的外部合同，
+前者保留完整字符串，后者保留长度及逐项克隆关系；本仓实现证明各实际字段均保留。
 
 **产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十二项证明。
 固定宏依赖通过 runner 传播到现役依赖方的独立 lockfile，没有升级其他包。

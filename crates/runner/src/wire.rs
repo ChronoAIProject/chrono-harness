@@ -15,32 +15,7 @@ pub fn digest<T: Serialize>(value: &T) -> Result<String, String> {
     Ok(sha256(&canonical(value)?))
 }
 pub use crate::verified_identifiers::valid_digest_text as is_digest;
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-#[serde(rename_all = "lowercase")]
-pub enum Status {
-    Pass,
-    Warn,
-    Fail,
-    Error,
-}
-impl Status {
-    pub fn exit_code(&self) -> i32 {
-        match self {
-            Self::Pass | Self::Warn => 0,
-            Self::Fail => 1,
-            Self::Error => 2,
-        }
-    }
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Finding {
-    pub code: String,
-    pub level: String,
-    pub message: String,
-    pub delta_refs: Vec<String>,
-    pub causes: Vec<String>,
-}
+pub use crate::verified_status::{Finding, WireStatus as Status};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Evidence {
@@ -303,12 +278,7 @@ pub(crate) fn validate_response_at(
             return Err("E_PROTOCOL: invalid finding".into());
         }
     }
-    let errors = r.findings.iter().any(|f| f.level == "error");
-    let warnings = r.findings.iter().any(|f| f.level == "warning");
-    if (matches!(r.status, Status::Fail | Status::Error) != errors)
-        || (r.status == Status::Pass && warnings)
-        || (r.status == Status::Warn && !warnings)
-    {
+    if !crate::verified_status::findings_match_status(&r.status, &r.findings) {
         return Err("E_PROTOCOL: finding/status disagreement".into());
     }
     for e in &r.evidence {
