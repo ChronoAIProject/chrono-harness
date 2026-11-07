@@ -134,19 +134,6 @@
             "crates/runner/Cargo.toml"
           ]
         },
-        "inputs_vendor": {
-          "operation": "inputs.vendor.runner",
-          "tool": "cargo",
-          "argv": [
-            "vendor",
-            "--locked",
-            "--offline",
-            "--versioned-dirs",
-            "--manifest-path",
-            "crates/runner/Cargo.toml",
-            ".chrono-harness/cache/runner-vendor"
-          ]
-        },
         "verify_identifiers": {
           "operation": "verify.runner-identifiers",
           "tool": "verus",
@@ -3039,43 +3026,6 @@
             "--output",
             ".chrono-harness/state/isolated-rust/developer-acquisition.json"
           ]
-        },
-        "observe_diagnostics": {
-          "operation": "inputs.observe-diagnostics",
-          "tool": "chrono-inputs",
-          "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/diagnostics-observation.json",
-            "--output",
-            ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json"
-          ]
-        },
-        "prepare_runner": {
-          "operation": "inputs.prepare-runner",
-          "tool": "chrono-worktree",
-          "argv": [
-            "use",
-            "--operation",
-            "inputs.prepare-runner-body",
-            "--path",
-            "."
-          ]
-        },
-        "prepare_runner_body": {
-          "operation": "inputs.prepare-runner-body",
-          "tool": "chrono-inputs",
-          "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/runner-preparation.json",
-            "--output",
-            ".chrono-harness/state/runner-preparation/observation.json"
-          ]
         }
       },
       "test_project": "inputs-tests",
@@ -3939,18 +3889,8 @@
       "actions": {
         "build": {
           "operation": "build.diagnostics",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/cargo/diagnostics-config.json",
-            "--policy",
-            ".chrono-harness/cargo/diagnostics.json",
-            "--operation",
-            "build.diagnostics"
-          ]
+          "tool": "cargo",
+          "argv": ["build","--locked","--manifest-path","crates/diagnostics/Cargo.toml"]
         },
         "check": {
           "operation": "check.diagnostics",
@@ -4869,26 +4809,6 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-acquire-linux.json"
-          ]
-        },
-        "diagnostics-inputs": {
-          "operation": "host.bootstrap-diagnostics-inputs",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-diagnostics-inputs.json"
-          ]
-        },
-        "diagnostics-guard": {
-          "operation": "host.bootstrap-diagnostics-guard",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-diagnostics-guard.json"
           ]
         },
         "owner-verify": {

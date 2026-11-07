@@ -1,8 +1,6 @@
 # 可选的 Cargo 项目检查
 
-本机 diagnostics 通过 `.chrono-harness/cargo/runner-vendor.toml` 读取当前工作树的 Cargo vendor 来源。diagnostics 的 26 个锁定包复用已有的 1,113 个输入身份，包含 1,087 份共有源码和 26 份 Cargo 校验清单；配置另有明确绑定。它不再单独登记同一批包的 1,127 个 registry 文件。包版本、锁文件 checksum 和共有源码摘要保持原值；原生 diagnostics 继续消费其独立登记的来源。
-
-**可见宿主政策与消费者修改：**本机 diagnostics 的 metadata、离线 build、配置清单、输入绑定和配置级 FILEMAP 边一起选择现有 vendor 来源。Cargo 未复制的 26 个解包完成标记、13 份 `.gitignore`（含嵌套文件）及一份 `.gitattributes` 不再属于此消费者输入。准备仍使用 `inputs.prepare-runner` 中现有的 fetch／vendor，不增加共享缓存、发现器或兼容分支；源码、SDK／工具链和每次子进程后的复核仍适用。该修改须由实际受保护构建、标准 DELTA 及原生检查验收，运行、CI 和存储收益尚未测量。
+本仓的 diagnostics 库与其路径依赖消费者使用登记的锁定 Cargo 构建。独立的受保护构建产物没有接入这些消费者；专属 guard、主机快照、vendor 准备和启动 profile 已退役。普通构建、格式检查及 diagnostics 的真实行为测试继续由原计划执行。
 
 `judge-cargo`／`judge-cargo-tests` 是独立的生产／测试项目对。通用 registration、projects 不依赖它或 TOML。宿主通过登记二进制、参数、政策输入和 FILEMAP 边采用此适配器。Go／TS／脚本宿主不会因为出现类似 Cargo 的文件或目录名，就必须采用 Cargo 政策。
 
@@ -192,16 +190,14 @@ v5 以 `chrono-cargo-run/v3` 报告工具链证据和链接器工具观察；v2�
 
 目录清单 v3 增加精确子项名称行，含根 `.`、空目录和只有别名的目录。v1／v2 含义不变。可选 `manifest_root` 可明确把未改原清单迁到另一所选现用根；来源错误、字节变化、别名越界、循环和子项变化仍拒绝。观察器原件由已有保护程序消费，包括操作后复核。阶段观察保留失败发生位置，不替代任何检查。
 
-本仓已退役额外的 runner guard。日常 runner 构建、检查和专属测试原本就使用登记的锁定 Cargo 操作；`guard.check.runner` 只在输入准备的末尾和两个宿主观察实验中调用，未接入本地／CI 的正式 runner 检查。继续保存其独立政策、主机清单绑定和实验入口，不能为这些现役操作提供额外的已验收结果。
+## 本仓已退役的额外保护链
 
-`inputs.prepare-runner` 继续通过现有 fetch／vendor 准备本机 diagnostics 使用的目录来源；它不再执行额外 runner 检查。`cargo/runner.json`、`cargo/observe.json`、两个专属观察 action 和仅服务退役链的输入／依赖边一起删除。`observe.json` 没有产品执行接口，唯一读取方是 inputs 的获取测试；其中 34 个项目的预期列表移入原 Rust 测试，覆盖及断言保留，未使用的 guard 消费声明删除。原失败和历史源码归既有保管者，不把关闭提案说成历史实验通过。
+runner 的额外 guard 没有接入正式检查，已连同专属实验和输入退役。原观察 JSON 中由获取测试实际读取的 34 项项目预期已迁入原 Rust 测试，断言保留。
 
-本机 diagnostics 仍有实际的 `build.diagnostics` 入口，消费 26 个锁定包的 1,113 个 vendor 文件身份，以及其配置、Rust／SDK／Developer 输入。共享清单暂留给这个使用方，下一批继续审计必要性和运行事实迁移。macOS 27 配置保留 1,130 项输入声明；Git 事实与 bootstrap 工具选择的独立 runner 依赖继续登记。这些数量是声明规模，不证明完整性或资源收益。
+diagnostics 是独立 Rust 库。runner、judge-ci 和专属测试通过 Cargo 路径依赖编译其源码，不消费独立 `build.diagnostics` 的产物。当前需求由普通锁定 Cargo 构建和真实行为测试满足，额外的环境保护未形成必须保留的验收终点。因此 `build.diagnostics` 恢复直接 `cargo build --locked --manifest-path crates/diagnostics/Cargo.toml`；diagnostics 单元复用已有 core 安装验证，再执行原未过滤测试。
 
-**宿主输入政策修改：**`local-xcode-build.json` 从保留的 Xcode 26.5 Contents 原清单选择当前本机 diagnostics 所需的记录。保留五个已声明工具（`clang`、`ar`、`ld`、`libtool`、`dsymutil`）、链接器的四个发行库（`libLTO`、`libtapi`、`libcodedirectory`、`libswiftDemangle`）、clang 21 资源子树及版本别名，以及 Xcode／工具链 metadata。固定工具的 Mach-O 导入和 clang 资源／链接命令观察支持这份范围；系统框架依赖仍在这份有限清单的完整性声明之外。
+**可见宿主政策与 CI 消费修改：**删除 diagnostics 专属 Cargo 政策、Git 选择器及两个直接配置、两个 bootstrap profile、观察声明、本机 Rust／Xcode 快照、vendor 配置和准备声明。同步移除 macOS 27 的 1,125 项独占输入声明、专属 file-input binding、3,430 条配置级边及三个公共 guard 依赖。Git、bootstrap 和三个独立工具输入仍有现役消费者，保留各自声明；其他普通 Cargo 环境绑定不受此次退役影响。
 
-每个所选文件摘要、字面别名和精确目录子项行都来自原清单，内容不变。父目录子项名仍保留，包括未选的移动 SDK、Swift 工具和图形应用名称；这些内容不属于当前 Rust 构建消费者的输入子集。单独的完整 macOS SDK 清单和每次子进程后的保护检查保持不变。这改变声明范围，不改变保护算法或 600 秒期限。原完整 Xcode 获取结果仍保留；子集不证明输入完整或同判，仍须实际消费验证和总成本测量。
+专属宿主组合测试和私有离线领域测试随功能退役；通用 bootstrap 的工具漂移、安装验证、普通 Cargo 领域及通用 Cargo guard 的成功／失败／边界行为测试继续执行。runtime-state 输入测试使用自含 fixture，保留原全部断言。这里只退役宿主采用，不据此声明通用 guard 产品能力必要性或完整输入已验收。
 
-精确 51 原生 run `41021444210/1` 确认了对应 37 项操作，包括 diagnostics 的 27 节点锁定／离线 metadata 及受保护离线构建。其余 58 个方法仍已登记，但这批没有执行证据。这个原生 diagnostics 范围不能证明普通兄弟包输入、本地 diagnostics 选择或隔离 runner home 合格。完整宿主绑定、输入完整和候选验收仍分别处理；[输入保管说明](input-source-custody.md)记录保留来源及其余各消费者前置条件。
-
-macOS 27 提案配置保留本机 diagnostics 的保护绑定。其文件绑定为 1,125 项，使用现有 vendor 文件和来源配置，不重复登记包内容。它们使用公共 FILEMAP 边及这个精确配置的声明边。保护程序继续在准备和各次子进程前后读取、复核所选输入。此迁移不补齐其他消费者、完整宿主范围或启用完整检查；验证仍由候选 bootstrap、标准变更及已有保护／真实 CI 消费者承担，总成本未测。
+历史失败和原件由既有保管者按原义务保留；删除入口不表示历史实验通过，也不删除其他工作树或 state。验证走候选 bootstrap、两端 DELTA 的正式检查、PR CI 和落地后验；总运行、CI、存储收益未测，输入完整性与同判仍未建立。
