@@ -3043,6 +3043,13 @@ impl CauseSet {
         &self.names
     }
 
+    pub fn into_names(self) -> (out: Vec<String>)
+        ensures out@ == self.view(), ordered_causes(out@),
+    {
+        proof { use_type_invariant(&self); }
+        self.names
+    }
+
     pub fn len(&self) -> (out: usize)
         ensures out == self.keys().len(),
     { proof { reveal(cause_keys); } self.names.len() }
@@ -3228,6 +3235,62 @@ impl Clone for CauseSet {
     }
 }
 
+/// 实际遍历记录；编码和诊断继续使用原外部派生接口。
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+pub struct TraversedEdge {
+    pub edge: Edge,
+    pub seeds: CauseSet,
+}
+
+impl Clone for TraversedEdge {
+    fn clone(&self) -> (out: Self)
+        ensures out.edge.key() == self.edge.key(), out.seeds.keys() == self.seeds.keys(),
+    {
+        Self { edge: self.edge.clone(), seeds: self.seeds.clone() }
+    }
+}
+
+#[verifier::opaque]
+pub open spec fn selected_target_keys(rows: Seq<TraversedEdge>) -> Set<Seq<u8>>
+    decreases rows.len(),
+{
+    if rows.len() == 0 { Set::empty() }
+    else {
+        let prior = selected_target_keys(rows.drop_last());
+        let edge = rows.last().edge;
+        if edge.kind == EdgeKind::TestExecution { prior.insert(edge.to_bytes()) }
+        else { prior }
+    }
+}
+
+/// 只由真实 test-execution 边选中目标，忽略其他类型和原因集合。
+pub fn selected_test_targets(rows: &[TraversedEdge]) -> (out: Vec<String>)
+    ensures ordered_causes(out@), cause_keys(out@).to_set() == selected_target_keys(rows@),
+{
+    proof { reveal(selected_target_keys); }
+    let mut targets = CauseSet::default();
+    let mut at: usize = 0;
+    while at < rows.len()
+        invariant at <= rows.len(),
+            targets.keys().to_set() == selected_target_keys(rows@.take(at as int)),
+        decreases rows.len() - at,
+    {
+        let edge = &rows[at].edge;
+        if let EdgeKind::TestExecution = edge.kind {
+            targets.insert(edge.to.as_str());
+        }
+        proof {
+            reveal(selected_target_keys);
+            let prefix = rows@.take(at as int + 1);
+            assert(prefix.drop_last() =~= rows@.take(at as int));
+            assert(prefix.last() == rows@[at as int]);
+        }
+        at += 1;
+    }
+    assert(rows@.take(at as int) =~= rows@);
+    targets.into_names()
+}
+
 /// One FIFO-discovered node and its complete original typed adjacency row.
 pub struct ReachedRow<'t, 'a> {
     pub node: &'a str,
@@ -3359,6 +3422,90 @@ pub fn propagate<'t, 'a>(topology: &'t Topology<'a>, root: usize) -> (out: Propa
             =~= fifo_predecessors(topology.names@, topology.edge_rows@, topology.indices.rows@, root));
     }
     Propagation { rows, predecessors }
+}
+
+pub open spec fn seed_topology_matches(topology: &Topology, seeds: Seq<Seed>) -> bool {
+    ordered_names(topology.names@)
+        && topology.names.len() == topology.edge_rows.len()
+        && topology.names.len() == topology.indices.rows.len()
+        && valid_graph(topology.indices.rows@)
+        && (forall|row: int| 0 <= row < topology.edge_rows.len()
+            ==> edge_indices_match(topology.names@, topology.edge_rows@[row]@,
+                #[trigger] topology.indices.rows@[row]@))
+        && topology.indices.roots.len() == seeds.len()
+        && forall|at: int| 0 <= at < seeds.len() ==> {
+            let root = #[trigger] topology.indices.roots@[at];
+            root < topology.names.len()
+                && topology.names@[root as int].spec_bytes() == seeds[at].key().1
+        }
+}
+
+/// One actual Seed and the propagation from its corresponding topology root.
+pub struct SeedPropagation<'t, 'a> {
+    pub seed: &'a Seed,
+    pub propagation: Propagation<'t, 'a>,
+}
+
+pub open spec fn seed_propagation_matches(
+    item: SeedPropagation, topology: &Topology, seeds: Seq<Seed>, at: int,
+) -> bool {
+    0 <= at < seeds.len() && *item.seed == seeds[at]
+        && propagation_rows(item.propagation.rows@, topology.names@, topology.edge_rows@,
+            fifo(topology.indices.rows@, topology.indices.roots@[at]).2)
+        && (forall|name: Seq<u8>| propagation_names(item.propagation.rows@).contains(name)
+            == reachable_name(topology.names@, topology.indices.rows@,
+                topology.indices.roots@[at], name))
+        && predecessor_keys(item.propagation.predecessors.view()).to_set()
+            == fifo_predecessors(topology.names@, topology.edge_rows@,
+                topology.indices.rows@, topology.indices.roots@[at])
+}
+
+/// Streaming state: every successful step advances exactly one seed position.
+/// No zip truncation and no collection of all live propagation rows.
+pub struct SeedPropagations<'t, 'a> {
+    topology: &'t Topology<'a>,
+    seeds: &'a [Seed],
+    next: usize,
+}
+
+impl<'t, 'a> SeedPropagations<'t, 'a> {
+    #[verifier::type_invariant]
+    spec fn inv(self) -> bool {
+        seed_topology_matches(self.topology, self.seeds@) && self.next <= self.seeds.len()
+    }
+
+    pub closed spec fn cursor(&self) -> usize { self.next }
+    pub closed spec fn seed_values(&self) -> Seq<Seed> { self.seeds@ }
+    pub closed spec fn graph(&self) -> &'t Topology<'a> { self.topology }
+
+    pub fn new(topology: &'t Topology<'a>, seeds: &'a [Seed]) -> (out: Self)
+        requires seed_topology_matches(topology, seeds@),
+        ensures out.cursor() == 0, out.seed_values() == seeds@, out.graph() == topology,
+    {
+        Self { topology, seeds, next: 0 }
+    }
+
+}
+
+impl<'t, 'a> Iterator for SeedPropagations<'t, 'a> {
+    type Item = SeedPropagation<'t, 'a>;
+
+    fn next(&mut self) -> (out: Option<Self::Item>)
+        ensures self.seed_values() == old(self).seed_values(), self.graph() == old(self).graph(),
+            out.is_none() <==> old(self).cursor() == old(self).seed_values().len(),
+            self.cursor() == old(self).cursor() + if out.is_some() { 1int } else { 0int },
+            out matches Some(item) ==> seed_propagation_matches(
+                item, old(self).graph(), old(self).seed_values(), old(self).cursor() as int),
+    {
+        proof { use_type_invariant(&*self); }
+        if self.next == self.seeds.len() { return None; }
+        let at = self.next;
+        let root = self.topology.indices.roots[at];
+        let propagation = propagate(self.topology, root);
+        let item = SeedPropagation { seed: &self.seeds[at], propagation };
+        self.next = at + 1;
+        Some(item)
+    }
 }
 
 }
