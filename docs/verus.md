@@ -13,6 +13,24 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 每个字节都属于 ASCII 字母、数字或 `._-`。循环证明返回值与各自规格充要相等，包含边界和终止。
 `facts::full_oid` 与 `units::id` 直接消费这些结果。
 
+摘要格式也由同一根的 `digest_format`／`valid_digest`／`valid_digest_text` 规定和实现：
+必须恰为 64 个 ASCII 小写十六进制字节，允许全零。`wire::is_digest` 直接重导出文本判断，
+现役响应、原件、输入和工作树使用方消费同一实现。字节循环证明完整输入的充要条件和终止，
+文本入口证明借用完整 UTF-8 字节；不把格式证明当作 SHA-256 计算、真实性或原件存在证明。
+独立根核 0／40／63／64／65 长度、全零、数字和 a–f 端点、任意位置的非法字节，
+以及完整混合文本、NUL、换行、大小写和 UTF-8 序列。复用原六项 runner 整 crate 操作；
+`str::as_bytes` 与切片长度／索引使用固定 vstd 的外部合同，没有新增受信仓内实现。
+最多读取 64 个字节，使用常量额外状态；这是算法估计，完整构建、验证、CI 与存储成本未测。
+
+普通请求和初始库存请求的头部判断也直接使用同一根的 `valid_request_header`。
+返回真当且仅当协议和模式分别与调用方给出的精确值相等，且 judge ID 非空。
+普通请求绑定 `chrono-judge/v1`／`evaluate`，初始请求绑定
+`chrono-initial-judge/v1`／`inventory`；不额外限制 judge ID 的字符。
+独立根核两个有效组合、交叉协议／模式、空名称、大小写、版本后缀、NUL、换行，
+并证明任意非空名称均接受，包括 Unicode。复用 runner 现有两项标识符整 crate 证明，
+没有新增验证进程。请求封存、JSON／摘要和外层组合仍待证明。
+比较最多读取协议和模式的完整字节，名称只查空值；构建、验证和完整运行成本未测。
+
 `crates/runner/src/verified_paths.rs` 是 `relative_path` 的实际判断实现。
 它精确描述当前 POSIX 词法路径合同：拒绝空、绝对路径、开头的当前目录、任意完整父目录分量，
 以及 NUL、换行、回车和反斜杠；保留原本允许的内部 `.`、重复分隔符和末尾分隔符。
@@ -35,6 +53,23 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 唯一先行 verifier、执行工具和项目登记必须精确对应。消费关系判官读取显式 preparation，
 再核原共享 core 合同；解码和外层组合仍待证明。独立根与 Rust 回归核缺前置、重复、
 把校验放入普通操作、工具／schema／命令／项目错绑及缺文档。registration 原计划增加两项整 crate 证明。
+
+## 协议状态与 finding
+
+实际 `wire::Status` 也归 `verified_status.rs`，保持 pass／warn／fail／error 的外部编码。
+身份比较、`pass < warn < fail < error` 的完整顺序、克隆和退出码 0／0／1／2 均由同源 Verus 证明；
+真实 `Finding` 的克隆保留 code、level、message 及两个引用数组的完整字符串、顺序和重复。
+`wire::validate_response_at` 和 `full::validate_record_response` 直接消费同一 `findings_match_status`，
+只读取原 finding 的完整 level 字段：
+fail／error 当且仅当存在 `error`，pass 不允许 `warning`，warn 必须存在 `warning`。
+该循环证明完整列表的存在量词及终止，不由调用方提供预先计算的标志。
+
+独立根列出全部 16 对状态比较、四个退出码及全部 error／warning 存在组合，
+另核空列表、info、排列和重复、大小写／Unicode／NUL 级别、其他字段含误导文字及完整克隆。
+现有协议进程测试继续核四态真实 JSON、退出码与错误状态拒绝。
+finding 格式、引用准入、响应身份、证据 IO、JSON 解码和外层组合仍待证明。
+状态判断为常量工作；finding 扫描为 O(F) 条记录，使用常量额外状态，不增加进程。
+这是当前算法估计；完整运行、构建、验证、CI 和存储成本未测。
 
 ## 实际图内核
 
@@ -69,6 +104,19 @@ FIFO 首次发现生成确定的最短跳数和前驱；传播行逐槽对应原
 
 外层节点／边关联、seed-ID 映射、完整原因合并、JSON／诊断适配、
 外层额外选测和完整 SPEC 对应仍未证明。局部图证明不证明实际登记完整，也不代表全仓覆盖完成。
+
+## 执行资源上限
+
+`crates/runner/src/verified_limits.rs` 负责执行资源准入的唯一判断：超时为正 `u64`，
+输出为 1 至 67,108,864 字节（64 MiB，含两端）的 `usize`。
+`valid_execution_bounds` 和单独的 `valid_output_limit` 分别证明返回值与规格充要相等。
+实际执行器的命令检查、不可变输入传输、registration 的默认／逐操作上限和 routes 的计划检查直接调用它们；
+使用真实字段类型，无中间数组、整数转换或新增外部接口假设。
+生产根覆盖任意类型有效的参数；独立 Verus 根直接调用实现，核零值、最小值、最大值、越界一字节、
+`u64::MAX` 超时与 `usize::MAX` 输出。原 Rust 消费者测试仍负责外围计划和进程行为。
+runner、registration 和 routes 的登记计划把两项整 crate 证明放在原构建和测试之前。
+判断使用常量时间与额外空间，不增加运行时进程；构建、验证、CI 和存储的实际成本未测。
+外层解析、计划组合、启动状态和完整 SPEC 对应仍待证明。
 
 ## CI 离线汇总的结果集合
 
@@ -113,7 +161,8 @@ JSON 解码、哈希、metadata／inode 观察、路径解析、Git、文件系�
 ## 固定执行入口
 
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
-`test:runner-tests` 先运行六项整 crate Verus 操作及编译，registration、filemap 与 CI 汇总各先运行两项，
+`test:runner-tests` 先运行八项整 crate Verus 操作及编译，registration 先运行四项，
+routes、filemap 与 CI 汇总各先运行两项；同一计划内共用的证明操作只执行一次，
 worktree 的 core／adoption 两个消费计划共用两项发布证明，再执行各自原 Rust 构建和测试。
 独立根直接读取生产源码，声明成功、失败和边界预期；
 Rust 测试另外验证真实消费者，不替代证明。
@@ -121,14 +170,29 @@ Rust 测试另外验证真实消费者，不替代证明。
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
 现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
-六个证明单元先核共享 core，再安装工具。
+七个证明单元先核共享 core，再安装工具。
 当前归档只适用于 macOS arm64。
 
 ## 此批使用的外部接口
 
-明确采用固定 Verus／vstd 对 `Vec`、`String`／`str`、UTF-8、`Option` 与标准 trait 的规格；
-这些是外部库合同，不是本仓自写的受信实现。没有新增 `external_body`、`assume` 或证明过滤。
-`Status`／`CheckResult` 的 Debug 与 Serde 派生是明确保留的外部编码接口，沿用原 JSON 名称和字段合同，
+本批新增生产逻辑采用下表的具体外部接口，合同来自固定 Verus／vstd；
+类型或库名本身不授予其他仓内逻辑豁免。没有新增 `external_body`、`assume` 或证明过滤。
+其余存量证明根和程序使用的外部接口仍须完整清点，不据本表主张全仓覆盖。
+
+| 外部接口 | 本批用途及采用的合同 |
+| --- | --- |
+| `str::as_bytes` | 借用完整 UTF-8 字节，返回切片视图等于 `str::spec_bytes()`；后者由固定 vstd 定义为字符串字符序列的 UTF-8 编码。摘要判断读取原字节。 |
+| `String::as_str` | 借用原字符串，字符视图相等；finding 判断读取真实 level。 |
+| `str::is_empty` | 返回真当且仅当字符序列长度为零；请求头只要求 judge ID 非空，不附加 ASCII ID 限制。 |
+| 切片 `len`、`<[T] as Index<usize>>::index` 及 `<usize as SliceIndex<[T]>>::index` | 长度和逐项读取对应切片视图；本仓循环另行证明索引界限、完整遍历、返回条件及终止。`T` 在本批为 `u8` 或 `Finding`。 |
+| `<String as Clone>::clone` | 复制完整字符串；本仓 Finding 克隆证明各实际字符串字段均保留。 |
+| `<Vec<String> as Clone>::clone` | 保留长度和逐项克隆关系；本仓 Finding 克隆证明两个引用数组的完整字段、顺序和重复均保留。 |
+
+实际字段借用使用固定 vstd 的 `String::as_str` 合同；协议和模式比较复用已证明的
+`equal_text`／`equal_bytes`，其 UTF-8 转换采用 `str::as_bytes` 的完整字节合同、
+切片长度／索引合同和固定 vstd 的 UTF-8 编解码引理。没有新增仓内受信实现。
+
+`Status`／`WireStatus`／`CheckResult`／`Finding` 的 Debug 与 Serde 派生是明确保留的外部编码接口，沿用原 JSON 名称和字段合同，
 不据这些派生主张解码、协议校验或仓内决策已经证明。工具下载、摘要、进程与 IO 的现有接口继续保留原验收义务。
 `TraversedEdge` 的原 Debug／Serde 派生同样只承担外部编码。
 选测返回转换明确保留固定 Rust 1.95.0 的
@@ -142,7 +206,10 @@ O(E(1 + (L+1)log(U+1)) + U²)，再有原标准库集合转换。
 这是当前算法的上界估计，不是 Verus 机械成本证明。临时向量保留 U 个目标字符串及句柄，
 不增加运行时进程；完整运行、构建、验证、CI 和存储成本未测。
 
-**产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十四项证明。
+finding 克隆使用固定 vstd 对 `<String as Clone>::clone` 和 `<Vec<String> as Clone>::clone` 的外部合同，
+前者保留完整字符串，后者保留长度及逐项克隆关系；本仓实现证明各实际字段均保留。
+
+**产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十六项证明。
 固定宏依赖通过 runner 传播到现役依赖方的独立 lockfile，没有升级其他包。
 runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` 定位需要 O(log C) 次字节比较，
 新增插入最多移动 C 个字符串句柄，存储为 O(C)。原图索引与遍历成本继续保留；
