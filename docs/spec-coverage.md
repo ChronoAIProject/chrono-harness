@@ -423,6 +423,10 @@ CI full／release 的字面单行判断由 CI 自己的同源 Verus 模块统一
 ## runner 的 Verus 分批迁移
 
 registration 的实际八种 `NodeKind` 以及其复制／相等已迁入同源 Verus。
+full 准备状态的五份登记是否为 `active`、治理是否为 `enabled`、输入是否
+`declared-complete` 且存在空的未解决项数组，也已接到同源 `verified_readiness.rs`。
+Serde 的可选文本／数组观察直接传入，生产和独立边界根进入 registration 计划；
+实际证明与原消费者验收另行核对，其余准备判断和完整 full 启用仍未完成。
 FILEMAP 原边类型准入直接消费该类型；独立40行表覆盖320种边／起点／终点组合，
 节点独立根覆盖64对相等／不等与克隆。生产／独立证明已登记为真实 registration／filemap
 计划的必需前置；此处列明实现范围，尚不声明本候选已执行通过或交付。

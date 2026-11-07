@@ -9,6 +9,8 @@ mod transition;
 pub mod verified_consumption;
 #[allow(unexpected_cfgs)]
 pub mod verified_nodes;
+#[allow(unexpected_cfgs)]
+pub mod verified_readiness;
 pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, interpret_scheduling_with_reader,
     interpret_with_reader, replacements, retirement_declaration, retirement_requests, reused_tools,
@@ -453,7 +455,7 @@ fn readiness(
         ("filemap", &n.filemap),
         ("workflow", &n.workflow),
     ] {
-        if v["status"] != "active" {
+        if !verified_readiness::registry_active(v["status"].as_str()) {
             issue(
                 r,
                 "E_ACTIVATION",
@@ -463,13 +465,11 @@ fn readiness(
             );
         }
     }
-    if n.config["enforcement"] != "enabled"
-        || n.config["input_closure"]["status"] != "declared-complete"
-        || !n.config["input_closure"]["unresolved"]
-            .as_array()
-            .unwrap()
-            .is_empty()
-    {
+    if !verified_readiness::input_ready(
+        n.config["enforcement"].as_str(),
+        n.config["input_closure"]["status"].as_str(),
+        n.config["input_closure"]["unresolved"].as_array(),
+    ) {
         issue(
             r,
             "E_EVIDENCE_UNRESOLVED",
