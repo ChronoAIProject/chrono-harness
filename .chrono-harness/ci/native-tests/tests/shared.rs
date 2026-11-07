@@ -20,9 +20,10 @@ const TRANSFER: &str = ".chrono-harness/cache/startup";
 
 #[test]
 fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
-    let host = tempfile::tempdir().unwrap();
-    let root = fs::canonicalize(host.path()).unwrap();
     let outside = tempfile::tempdir().unwrap();
+    let path = outside.path().join("bootstrap");
+    fs::create_dir(&path).unwrap();
+    let root = fs::canonicalize(path).unwrap();
     fs::create_dir(root.join(".chrono-harness")).unwrap();
     fs::write(
         root.join(".chrono-harness/logging.json"),
@@ -38,6 +39,7 @@ fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
     for (args, operation) in [
         (vec!["bootstrap", host, "missing.json"], "bootstrap"),
         (vec![host, "missing.json"], "bootstrap"),
+        (vec!["bootstrap", "missing.json"], "bootstrap"),
         (vec![host, "missing.json", "produce"], "produce"),
         (
             vec!["validate-original-execution", host, "missing.json"],
