@@ -48,7 +48,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
@@ -196,7 +196,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -331,7 +331,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -502,7 +502,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -637,7 +637,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -772,7 +772,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -843,7 +843,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -1050,7 +1050,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -1185,7 +1185,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -1401,7 +1401,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -1545,7 +1545,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -1707,7 +1707,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -1878,7 +1878,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -2049,7 +2049,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -2229,7 +2229,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -2373,7 +2373,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -2508,7 +2508,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -2733,7 +2733,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -2950,7 +2950,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -3167,7 +3167,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -3238,7 +3238,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -3348,7 +3348,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -3483,7 +3483,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -3636,7 +3636,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
@@ -3779,7 +3779,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
-          fetch-depth: 2
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}
           filter: blob:none
           persist-credentials: true
       - name: Download registered startup artifact
