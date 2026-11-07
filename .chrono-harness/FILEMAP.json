@@ -1066,8 +1066,6 @@
     {"from":"project:ci","kind":"runtime-input","to":"project:ci-tests"},
     {"from":"project:worktree","kind":"compile","to":"project:ci-tests"},
     {"from":"tool:cargo","kind":"runtime-input","to":"script:host-bootstrap"},
-    {"from":"tool:rustc","kind":"runtime-input","to":"script:host-bootstrap"},
-    {"from":"tool:rustup","kind":"runtime-input","to":"script:host-bootstrap"},
     {"from":"input:bootstrap-native-toolchains","kind":"runtime-input","to":"script:host-bootstrap"},
     {"from":"environment:CARGO_HOME","kind":"runtime-input","to":"script:host-bootstrap"},
     {"from":"environment:RUSTUP_HOME","kind":"runtime-input","to":"script:host-bootstrap"},
