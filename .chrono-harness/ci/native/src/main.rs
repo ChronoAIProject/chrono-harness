@@ -142,9 +142,7 @@ fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
     let (host, operation) = match arguments.as_slice() {
         [host, _, operation] if operation.to_str() == Some("produce") => (Some(host), "produce"),
-        [host, _, operation, _]
-            if matches!(operation.to_str(), Some("install" | "verify")) =>
-        {
+        [host, _, operation, _] if matches!(operation.to_str(), Some("install" | "verify")) => {
             (Some(host), operation.to_str().unwrap())
         }
         [operation, host, _]
