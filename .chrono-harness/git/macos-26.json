@@ -130,15 +130,6 @@
       "expected_version": "chrono-inputs 0.1.0"
     },
     {
-      "id": "cargo-guard",
-      "program": ".chrono-harness/bin/chrono-judge-cargo",
-      "resolution": "PATH-once",
-      "version_argv": [
-        "--version"
-      ],
-      "expected_version": "chrono-judge-cargo 0.1.0"
-    },
-    {
       "id": "verus",
       "program": ".chrono-harness/bin/verus/verus",
       "resolution": "PATH-once",
