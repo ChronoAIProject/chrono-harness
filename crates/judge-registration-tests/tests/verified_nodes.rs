@@ -23,7 +23,7 @@ fn node_variants_retain_identity_and_are_distinct() {
         decreases kinds.len() - i,
     {
         let copy = kinds[i].clone();
-        assert(copy == kinds[i]);
+        assert(copy == kinds@[i as int]);
         let mut j = 0;
         while j < kinds.len()
             invariant 0 <= j <= kinds.len(), 0 <= i < kinds.len(), kinds.len() == 8,
