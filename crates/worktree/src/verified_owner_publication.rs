@@ -24,7 +24,7 @@ pub enum StageRequirement {
 }
 
 pub open spec fn distinct_stage_names(names: Seq<String>, nonempty: bool) -> bool {
-    (forall|i: int| 0 <= i < names.len() ==> (!nonempty || names[i]@.len() > 0))
+    (forall|i: int| 0 <= i < names.len() ==> (!nonempty || names[i]@ != ""@))
         && (forall|i: int, j: int| 0 <= i < j < names.len()
             ==> names[i]@ != names[j]@)
 }
@@ -37,7 +37,7 @@ pub fn valid_stage_names(names: &Vec<String>, nonempty: bool) -> (valid: bool)
     while i < names.len()
         invariant
             0 <= i <= names.len(),
-            forall|j: int| 0 <= j < i ==> (!nonempty || names[j]@.len() > 0),
+            forall|j: int| 0 <= j < i ==> (!nonempty || names[j]@ != ""@),
             forall|j: int, k: int| 0 <= j < k < i ==> names[j]@ != names[k]@,
         decreases names.len() - i,
     {
@@ -46,6 +46,9 @@ pub fn valid_stage_names(names: &Vec<String>, nonempty: bool) -> (valid: bool)
         while j < i
             invariant
                 0 <= j <= i < names.len(),
+                !nonempty || names[i as int]@ != ""@,
+                forall|k: int| 0 <= k < i ==> (!nonempty || names[k]@ != ""@),
+                forall|k: int, l: int| 0 <= k < l < i ==> names[k]@ != names[l]@,
                 forall|k: int| 0 <= k < j ==> names[k]@ != names[i as int]@,
             decreases i - j,
         {
