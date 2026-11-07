@@ -163,6 +163,8 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 
 `evidence_directory` 可把原件放入已有发布上传目录，普通检查则放入上传的宿主状态。detector 可选择同一字段，通过已有 job 的固定上传 action 保留原件，包括失败后。目录须是字面宿主状态路径，并明确上传隐藏文件；文件缺失使上传失败，不能声称已保留。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划、探测原件。未采用时，detector 文件只是 runner 临时状态。
 
+每份上传原件直接写入选定目录，并返回其路径和 SHA-256。探测程序保留实际探测原输出；计划中的探测引用、恢复、内容核验、封存和后端观察继续保留各自返回引用所需的原字节。
+
 报告在已有 job 运行。未登记 backend 就不发 API 请求。只有 action 成功且 key 匹配，才报告 exact／compatible；空输出记 `miss-or-unavailable`。原生保存成功仍为 `unconfirmed`，带 `W_CACHE_SAVE_UNCONFIRMED`，因为固定 action 可能捕获后端异常后成功退出。不能由 action outcome 推断归档已保存、编译器复用或执行物身份验证。
 
 本 job 未选择保存且未观察到保存的缓存记 `not-requested`；实际发生未登记保存仍可见，带 `W_CACHE_UNREGISTERED_SAVE`。具体保存归因和归档内容诊断仍需后端／action 日志。

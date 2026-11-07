@@ -14,13 +14,8 @@ pub(crate) fn retain_for_upload(
     stem: &str,
     raw: &[u8],
 ) -> Result<prepared::Original, String> {
-    let original =
-        prepared::retain_original(root, ".chrono-harness/state/cache-reports/", stem, raw)?;
-    let name = Path::new(&original.path)
-        .file_name()
-        .and_then(|s| s.to_str())
-        .ok_or("E_CACHE_REPORT: original filename")?;
-    let path = format!("{directory}{name}");
+    let digest = sha256(raw);
+    let path = format!("{directory}{stem}-{digest}.json");
     let target = chrono_harness::prepare_publication(root, &path)?;
     match fs::OpenOptions::new()
         .write(true)
@@ -35,7 +30,10 @@ pub(crate) fn retain_for_upload(
         }
         Err(e) => return Err(format!("E_CACHE_REPORT: {e}")),
     }
-    Ok(prepared::Original { path, ..original })
+    Ok(prepared::Original {
+        path,
+        sha256: digest,
+    })
 }
 
 pub fn transport_report(
