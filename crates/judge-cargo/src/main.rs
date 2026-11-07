@@ -3,11 +3,11 @@ use std::{
     io::{Read, Write},
     path::Path,
 };
-fn main() -> std::process::ExitCode {
+fn run() -> u8 {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args == ["--version"] {
         println!("chrono-judge-cargo {}", env!("CARGO_PKG_VERSION"));
-        return std::process::ExitCode::SUCCESS;
+        return 0;
     }
     if args.len() == 9
         && args[0] == "run"
@@ -26,7 +26,7 @@ fn main() -> std::process::ExitCode {
             }
             Err(e) => return fail(&e.to_string()),
         }
-        return std::process::ExitCode::from(report.exit_code);
+        return report.exit_code;
     }
     if args.len() == 4 && args[..3] == ["--protocol", "chrono-judge/v1", "--policy"] {
         let mut bytes = vec![];
@@ -51,7 +51,7 @@ fn main() -> std::process::ExitCode {
             }
             Err(e) => return fail(&e),
         }
-        return std::process::ExitCode::from(response.status.exit_code() as u8);
+        return response.status.exit_code() as u8;
     }
     if args.len() >= 9
         && args[0] == "check"
@@ -73,11 +73,11 @@ fn main() -> std::process::ExitCode {
         ) {
             Ok(value) => {
                 println!("{value}");
-                std::process::ExitCode::SUCCESS
+                0
             }
             Err(e) => {
                 eprintln!("{e}");
-                std::process::ExitCode::from(1)
+                (1)
             }
         };
     }
@@ -85,7 +85,11 @@ fn main() -> std::process::ExitCode {
         "E_USAGE: --protocol chrono-judge/v1 --policy PATH | check --host-root ROOT --config PATH --policy PATH --project ID ... | run --host-root ROOT --config PATH --policy PATH --operation ID",
     )
 }
-fn fail(message: &str) -> std::process::ExitCode {
+fn fail(message: &str) -> u8 {
     eprintln!("{message}");
-    std::process::ExitCode::from(2)
+    (2)
+}
+
+fn main() -> std::process::ExitCode {
+    std::process::ExitCode::from(chrono_harness::logged_main("chrono-judge-cargo", run))
 }

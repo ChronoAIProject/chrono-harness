@@ -1,13 +1,17 @@
-fn main() -> std::process::ExitCode {
+fn run() -> u8 {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match chrono_inputs::run(&std::env::current_dir().unwrap(), &args) {
         Ok(text) => {
             print!("{text}");
-            std::process::ExitCode::SUCCESS
+            0
         }
         Err(e) => {
             eprintln!("{e}");
-            std::process::ExitCode::from(2)
+            (2)
         }
     }
+}
+
+fn main() -> std::process::ExitCode {
+    std::process::ExitCode::from(chrono_harness::logged_main("chrono-inputs", run))
 }

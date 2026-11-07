@@ -121,6 +121,43 @@ fn configured_logger_preserves_json_fields_filtering_and_failure_records() {
 }
 
 #[test]
+fn explicit_library_sink_survives_file_adoption_and_dual_failure_keeps_both_causes() {
+    use std::sync::{Arc, Mutex};
+    #[derive(Clone)]
+    struct Captured(Arc<Mutex<Vec<u8>>>);
+    impl Write for Captured {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    }
+    let fixture = Fixture::new();
+    fixture.policy(4096, 2, "info");
+    let captured = Captured(Arc::new(Mutex::new(Vec::new())));
+    let logger = runtime::logger(&fixture.0, "fixture", tracing::Level::INFO, captured.clone()).unwrap();
+    logger.run(|| tracing::info!(event_id = "original.sink", "retained evidence"));
+    logger.finish().unwrap();
+    let original: Value = serde_json::from_slice(&captured.0.lock().unwrap()).unwrap();
+    assert_eq!(original, records(&fixture.0.join(".chrono-harness/state/logs"))[0]);
+    struct Failed;
+    impl Write for Failed {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> { Err(io::Error::from_raw_os_error(5)) }
+        fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    }
+    fixture.policy(1, 2, "info");
+    let logger = runtime::logger(&fixture.0, "fixture", tracing::Level::INFO, Failed).unwrap();
+    logger.run(|| tracing::error!("both sinks fail"));
+    let errors = logger.finish().unwrap_err();
+    use chrono_diagnostics::error::RecordedError;
+    let node = errors[0].error_node();
+    let file = &node.source.as_ref().unwrap().source.as_ref().unwrap();
+    assert_eq!(file.code, "E_RUNTIME_LOG");
+    assert_eq!(file.related[0].role, "stderr");
+    assert_eq!(file.related[0].error.source.as_ref().unwrap().native_code, Some(5));
+}
+
+#[test]
 fn malformed_and_escaping_policy_is_rejected_before_creating_logs() {
     let fixture = Fixture::new();
     fixture.policy(100, 2, "verbose");

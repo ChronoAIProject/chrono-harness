@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-fn main() {
+fn run() -> u8 {
     let mut bytes = Vec::new();
     let result = std::io::stdin()
         .take(1024 * 1024 + 1)
@@ -16,7 +16,7 @@ fn main() {
         Ok(r) => r,
         Err(e) => {
             eprintln!("E_REQUEST: {e}");
-            std::process::exit(2)
+            return 2
         }
     };
     let response = chrono_judge_ci::judge(&request);
@@ -30,7 +30,11 @@ fn main() {
         || output.write_all(b"\n").is_err()
         || output.flush().is_err()
     {
-        std::process::exit(2)
+        return 2
     }
-    std::process::exit(if failed { 1 } else { 0 });
+    if failed { 1 } else { 0 }
+}
+
+fn main() -> std::process::ExitCode {
+    std::process::ExitCode::from(chrono_harness::logged_main("chrono-judge-ci", run))
 }

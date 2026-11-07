@@ -59,12 +59,15 @@ pub struct RuntimeSink<W> {
 
 impl<W: Write> Write for RuntimeSink<W> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.file.write_all(bytes)?;
-        if let Some(stderr) = &mut self.stderr {
-            stderr.write_all(bytes)?;
-            stderr.flush()?;
+        let file = self.file.write_all(bytes);
+        let stderr = self.stderr.as_mut().map(|stderr| stderr.write_all(bytes).and_then(|()| stderr.flush())).unwrap_or(Ok(()));
+        match (file, stderr) {
+            (Ok(()), Ok(())) => Ok(bytes.len()),
+            (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+            (Err(file), Err(stderr)) => Err(io::Error::other(
+                io_failure(file).with_related("stderr", io_failure(stderr)),
+            )),
         }
-        Ok(bytes.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -78,9 +81,7 @@ fn io_failure(error: io::Error) -> Failure {
     Failure::wrap("E_RUNTIME_LOG", "runtime logging IO failed", NativeIoError::new(error))
 }
 
-pub fn configured_logger<W: Write + Send + 'static>(
-    root: &Path, producer: &str, stderr: W,
-) -> Result<Option<Logger<RuntimeSink<W>>>, Failure> {
+fn load_policy(root: &Path) -> Result<Option<Policy>, Failure> {
     let config = root.join(CONFIG_PATH);
     match fs::symlink_metadata(&config) {
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -93,15 +94,41 @@ pub fn configured_logger<W: Write + Send + 'static>(
     if bytes.len() > 16384 {
         return Err(Failure::new("E_LOG_CONFIG", "runtime log policy exceeds 16384 bytes"));
     }
-    let policy: Policy = serde_json::from_slice(&bytes).map_err(|error| {
-        // serde_json has no RecordedError adapter; preserve the concrete parse error in memory.
-        io_failure(io::Error::new(io::ErrorKind::InvalidData, error))
+    let policy: Policy = serde_json::from_slice(&bytes).map_err(|source| {
+        Failure::wrap("E_LOG_CONFIG", "invalid runtime log policy", logging::LogFailure::Json {
+            source, observed_fields: Default::default(),
+        })
     })?;
     policy.validate()?;
+    Ok(Some(policy))
+}
+
+fn sink<W>(root: &Path, policy: &Policy, stderr: W) -> Result<RuntimeSink<W>, Failure> {
     let file = RollingFile::open(&root.join(&policy.directory), policy.max_bytes, policy.max_files).map_err(io_failure)?;
-    Ok(Some(Logger::new(producer, policy.level()?, RuntimeSink {
+    Ok(RuntimeSink {
         file, stderr: policy.stderr.then_some(stderr),
-    })))
+    })
+}
+
+pub fn configured_logger<W: Write + Send + 'static>(
+    root: &Path, producer: &str, stderr: W,
+) -> Result<Option<Logger<RuntimeSink<W>>>, Failure> {
+    let Some(policy) = load_policy(root)? else { return Ok(None); };
+    Ok(Some(Logger::new(producer, policy.level()?, sink(root, &policy, stderr)?)))
+}
+
+/// Preserve a library caller's chosen sink and level when the host has not adopted file logs.
+pub fn logger<W: Write + Send + 'static>(
+    root: &Path, producer: &str, default_level: Level, stderr: W,
+) -> Result<Logger<Box<dyn Write + Send>>, Failure> {
+    match load_policy(root)? {
+        Some(mut policy) => {
+            // An explicitly requested evidence sink remains active; file logging mirrors it.
+            policy.stderr = true;
+            Ok(Logger::new(producer, policy.level()?, Box::new(sink(root, &policy, stderr)?) as Box<dyn Write + Send>))
+        }
+        None => Ok(Logger::new(producer, default_level, Box::new(stderr) as Box<dyn Write + Send>)),
+    }
 }
 
 fn emergency(producer: &str, failure: &Failure) {
@@ -118,7 +145,7 @@ pub fn cli(producer: &str, work: impl FnOnce() -> u8) -> u8 {
     let root = args.windows(2).find(|pair| pair[0] == "--host-root")
         .map(|pair| PathBuf::from(&pair[1])).map(Ok)
         .unwrap_or_else(std::env::current_dir);
-    let root = match root {
+    let root = match root.and_then(fs::canonicalize) {
         Ok(root) => root,
         Err(error) => { emergency(producer, &io_failure(error)); return 2; }
     };

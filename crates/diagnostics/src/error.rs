@@ -85,7 +85,8 @@ impl StdError for NativeIoError {
 pub(crate) fn io_error_node(error: &io::Error) -> ErrorNode {
     let mut context = Context::new();
     context.insert("kind".into(), format!("{:?}", error.kind()).into());
-    if error.get_ref().is_some() {
+    let recorded = error.get_ref().and_then(|source| source.downcast_ref::<Failure>());
+    if error.get_ref().is_some() && recorded.is_none() {
         context.insert("custom_source".into(), "not_recorded".into());
     }
     ErrorNode {
@@ -93,7 +94,7 @@ pub(crate) fn io_error_node(error: &io::Error) -> ErrorNode {
         code: format!("io::{:?}", error.kind()),
         message: error.to_string(),
         context,
-        source: None,
+        source: recorded.map(|source| Box::new(source.error_node())),
         native_code: error.raw_os_error().map(i64::from),
         traceback: None,
         related: Vec::new(),

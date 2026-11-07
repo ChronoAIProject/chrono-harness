@@ -1,6 +1,4 @@
-use std::process::ExitCode;
-
-fn main() -> ExitCode {
+fn run() -> u8 {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
     let Some(arguments) = arguments
         .iter()
@@ -29,13 +27,17 @@ fn main() -> ExitCode {
         let flushed = logger.finish();
         // The failed CLI operation remains failed if its diagnostic cannot be published.
         if published.is_err() || flushed.is_err() {
-            return ExitCode::from(2);
+            return 2;
         }
-        return ExitCode::from(2);
+        return 2;
     };
     let output = chrono_harness::dispatch(&arguments);
     match chrono_harness::publish_native_output(&output) {
-        Ok(exit_code) => ExitCode::from(exit_code),
-        Err(_failure) => ExitCode::from(2),
+        Ok(exit_code) => exit_code,
+        Err(_failure) => 2,
     }
+}
+
+fn main() -> std::process::ExitCode {
+    std::process::ExitCode::from(chrono_harness::logged_main("chrono-harness", run))
 }
