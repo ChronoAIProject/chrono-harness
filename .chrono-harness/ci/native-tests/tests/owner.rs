@@ -50,13 +50,7 @@ impl Staged {
         fixture.commit();
         fixture
     }
-    fn invoke(
-        fixture: &Fixture,
-        arguments: &[&str],
-        marker: bool,
-        capabilities: bool,
-        deployment: Option<&str>,
-    ) -> Output {
+    fn invoke(fixture: &Fixture, arguments: &[&str], marker: bool, capabilities: bool) -> Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
         command
             .current_dir(&fixture.root)
@@ -65,14 +59,9 @@ impl Staged {
             .envs(fixture.environment.iter().filter(|(key, _)| {
                 key.as_os_str() != std::ffi::OsStr::new(chrono_harness::process_fds::ENV)
             }));
-        command
-            .env_remove("CHRONO_WORKTREE_BOOTSTRAP")
-            .env_remove("CHRONO_WORKTREE_OWNER_DEPLOYMENT");
+        command.env_remove("CHRONO_WORKTREE_BOOTSTRAP");
         if marker {
             command.env("CHRONO_WORKTREE_BOOTSTRAP", &fixture.root);
-        }
-        if let Some(value) = deployment {
-            command.env("CHRONO_WORKTREE_OWNER_DEPLOYMENT", value);
         }
         if capabilities {
             let lease = tempfile::tempfile().unwrap();
@@ -98,7 +87,6 @@ impl Staged {
             ],
             true,
             true,
-            None,
         );
         assert!(
             output.status.success(),
@@ -172,8 +160,7 @@ impl Staged {
 }
 
 #[test]
-fn native_owner_stage_retains_actual_execution_and_selected_inode_then_validates_the_exclusive_callback()
- {
+fn native_owner_stage_retains_actual_execution_and_selected_inode() {
     let staged = Staged::new();
     let root = &staged.fixture.root;
     let qualified = owner::stage_report(
@@ -191,30 +178,6 @@ fn native_owner_stage_retains_actual_execution_and_selected_inode_then_validates
         fs::read(staged.stage_path()).unwrap(),
         fs::read(root.join("out/cargo")).unwrap()
     );
-    let output = Staged::invoke(
-        &staged.fixture,
-        &[
-            ".",
-            ".chrono-harness/ci/build.json",
-            "--owner-stage-validation",
-            &staged.reference,
-            &staged.digest,
-        ],
-        true,
-        true,
-        Some(&staged.digest),
-    );
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let validation: publication::Validation = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(publication::valid_validation(
-        &validation,
-        &staged.digest,
-        &qualified.stage
-    ));
 }
 
 #[test]
@@ -244,7 +207,7 @@ fn owner_stage_rejects_an_original_from_another_physical_host() {
 }
 
 #[test]
-fn owner_stage_refuses_marker_without_descriptors_and_callbacks_without_exact_exclusive_binding() {
+fn owner_stage_refuses_marker_without_descriptors() {
     let fixture = Staged::setup();
     for (marker, capabilities) in [(true, false), (false, true)] {
         let output = Staged::invoke(
@@ -256,7 +219,6 @@ fn owner_stage_refuses_marker_without_descriptors_and_callbacks_without_exact_ex
             ],
             marker,
             capabilities,
-            None,
         );
         assert!(!output.status.success());
         assert!(
@@ -267,34 +229,6 @@ fn owner_stage_refuses_marker_without_descriptors_and_callbacks_without_exact_ex
         );
         assert!(!fixture.root.join("out/cargo").exists());
     }
-    let staged = Staged::new();
-    let originals = fs::read(staged.fixture.root.join(&staged.reference)).unwrap();
-    for (marker, capabilities, deployment) in [
-        (true, true, None),
-        (true, true, Some("wrong")),
-        (false, true, Some(staged.digest.as_str())),
-        (true, false, Some(staged.digest.as_str())),
-    ] {
-        let output = Staged::invoke(
-            &staged.fixture,
-            &[
-                ".",
-                ".chrono-harness/ci/build.json",
-                "--owner-stage-validation",
-                &staged.reference,
-                &staged.digest,
-            ],
-            marker,
-            capabilities,
-            deployment,
-        );
-        assert!(!output.status.success());
-        assert!(output.stdout.is_empty());
-    }
-    assert_eq!(
-        fs::read(staged.fixture.root.join(&staged.reference)).unwrap(),
-        originals
-    );
 }
 
 #[test]
@@ -467,7 +401,6 @@ fn public_bootstrap_seeds_a_real_git_main_and_keeps_the_actual_failed_child_exit
             &[".", ".chrono-harness/ci/build.json"],
             false,
             false,
-            None,
         );
         if let Some(exit) = failure {
             assert_eq!(

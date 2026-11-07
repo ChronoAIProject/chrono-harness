@@ -336,11 +336,13 @@ v4 的工作流只调用 `check`、`check --unit ID` 或 `check --collect`，输
 | 未匹配的已有分支 push | 载荷 `before`／`after` |
 | 创建配置基线分支（`created`、before 全零、ref 匹配） | 无父 `after` 由同一短命令选择显式初始 profile，无 base，模式 `initial-inventory`；有父候选要求明确范围 |
 | 创建其他未匹配分支（`created`、before 全零、ref 不同） | 观察一次配置创建基线 ref，固定提交，与载荷 `after` 比较；候选等于已有基线就如实无操作 |
-| 指向 dev 的 PR | 事件 `pull_request.base.sha`／`head.sha`；检出 head，不用默认 merge ref |
+| 指向 dev 的 PR | 固定 workflow merge commit 的第一父提交／事件 `head.sha`；须恰有两个父提交且第二父提交等于 head；检出 head |
 | workflow_dispatch | 明确完整 base／candidate，或明确 initial 加无父 candidate |
 | 删除分支 | 无候选检查，不能生成通过的候选报告 |
 
 这里的单工作流 provider 检查 dev、integration/** push，指向 dev 的 PR 和手动 dispatch。已采用独立单元 provider 复用事件准备，collector 没有手动触发，见[单元说明](ci-units.md)。
+
+**产品与事件基线合同同时改变。** PR 的 `pr-workflow-merge-head` 来源由现有绑定 Git 读取固定 workflow 对象及父身份，再由同源 Verus 身份谓词验证父数量和候选对应。缺对象、非双亲或第二父不符保留 `E_CI_GIT` 和原进程；旧事件 base 不作为替代路径。候选源码仍是事件 head，detector 固定后各单元沿用同一对端点。新增成本是现有不可变对象／父读取，完整 CI 与存储成本未知。
 
 工作流检出事件候选、bootstrap 候选登记工具、运行登记的短检查，失败也上传证据。标准输入程序委托事件准备，不生成额外长命令步骤。checkout 临时读取凭据保留给必要对象获取，由 post-job 清理移除。对象缺失须明确 fetch 或失败。手动 dispatch 可用性可能取决于默认分支是否登记工作流。源码 revision 用 `github.workflow_sha` 独立记录。
 

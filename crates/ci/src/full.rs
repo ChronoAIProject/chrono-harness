@@ -49,7 +49,7 @@ fn scope_present<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Scope>, D::Er
 }
 
 fn literal(value: &str) -> Result<(), String> {
-    if value.contains(['\0', '\r', '\n']) || value.contains("${{") {
+    if !crate::verified_literals::valid_literal(value.as_bytes()) {
         return Err("full CI settings must be literal single-line values".into());
     }
     Ok(())

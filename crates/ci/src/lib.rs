@@ -17,6 +17,7 @@ pub mod release;
 pub mod resources;
 pub mod startup;
 pub mod units;
+pub mod verified_literals;
 
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -694,12 +695,11 @@ fn prepare_policy_fixed(
                         (false, Some(before), candidate, "push-before-after")
                     }
                 }
-                "pull_request" => (
-                    false,
-                    Some(string(&payload["pull_request"]["base"]["sha"])?),
-                    string(&payload["pull_request"]["head"]["sha"])?,
-                    "pr-base-head",
-                ),
+                "pull_request" => {
+                    let candidate = string(&payload["pull_request"]["head"]["sha"])?;
+                    let base = facts.pull_request_baseline(workflow_revision, &candidate)?;
+                    (false, Some(base), candidate, "pr-workflow-merge-head")
+                }
                 "workflow_dispatch" => {
                     let initial = match &payload["inputs"]["initial"] {
                         Value::Bool(v) => *v,

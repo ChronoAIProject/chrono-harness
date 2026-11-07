@@ -228,4 +228,33 @@ fn digest_text_uses_the_complete_utf8_bytes() {
     assert(!empty);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn merge_parent_identity_boundaries() {
+    let base = [97u8; 40];
+    let head = [98u8; 40];
+    let wrong = [99u8; 40];
+    let zero = [48u8; 40];
+    assert(base@[0] == 97 && head@[0] == 98);
+    let accepted = policy::valid_merge_parents(2, &base, &head, &head);
+    assert(accepted);
+    let missing_parent = policy::valid_merge_parents(1, &base, &head, &head);
+    assert(!missing_parent);
+    let extra_parent = policy::valid_merge_parents(3, &base, &head, &head);
+    assert(!extra_parent);
+    let unrelated_head = policy::valid_merge_parents(2, &base, &wrong, &head);
+    assert(!unrelated_head);
+    let invalid_base = policy::valid_merge_parents(2, &zero, &head, &head);
+    assert(!invalid_base);
+    let invalid_head = policy::valid_merge_parents(2, &base, &zero, &zero);
+    assert(!invalid_head);
+    let empty: [u8; 0] = [];
+    let missing_head = policy::valid_merge_parents(2, &base, &empty, &head);
+    assert(!missing_head);
+    let base64 = [100u8; 64];
+    let head64 = [101u8; 64];
+    assert(base64@[0] == 100 && head64@[0] == 101);
+    let accepted64 = policy::valid_merge_parents(2, &base64, &head64, &head64);
+    assert(accepted64);
+}
+
 }
