@@ -1,4 +1,4 @@
-//! 离线汇总实际使用的结果集合判断及精确 Verus 合同。
+//! 现役 CI 的执行结果转换、终态与离线结果集合合同。
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
@@ -19,6 +19,113 @@ pub use chrono_harness::verified_status as result_types;
 use result_types::{CheckResult, Status};
 
 verus! {
+
+pub open spec fn operation_status(state: Seq<char>) -> Status {
+    if state == "passed"@ { Status::Passed }
+    else if state == "blocked"@ { Status::Blocked }
+    else { Status::Failed }
+}
+
+pub open spec fn operation_exit(state: Seq<char>, observed: Option<i32>) -> Option<i32> {
+    match observed {
+        Some(code) => if state == "passed"@ || code != 0 { Some(code) } else { None },
+        None => None,
+    }
+}
+
+pub open spec fn operation_cause(error: &Option<String>) -> Seq<char> {
+    match error {
+        Some(cause) => cause@,
+        None => "registered command completed with matching receipt"@,
+    }
+}
+
+/// 直接生成现役 CheckResult；失败回执中的零退出只留在原回执，不冒充失败退出。
+pub fn operation_result(
+    operation: &str, state: &str, error: &Option<String>, observed: Option<i32>,
+) -> (row: CheckResult)
+    ensures row.id@ == operation@,
+        row.status == operation_status(state@),
+        row.cause@ == operation_cause(error),
+        row.exit_code == operation_exit(state@, observed),
+{
+    let passed = equal_text(state, "passed");
+    let status = if passed { Status::Passed }
+        else if equal_text(state, "blocked") { Status::Blocked }
+        else { Status::Failed };
+    let cause = match error {
+        Some(cause) => cause.clone(),
+        None => "registered command completed with matching receipt".to_string(),
+    };
+    let exit_code = match observed {
+        Some(code) => if passed || code != 0 { Some(code) } else { None },
+        None => None,
+    };
+    CheckResult { id: operation.to_string(), status, cause, exit_code }
+}
+
+pub open spec fn report_failure(rows: Seq<CheckResult>) -> bool {
+    exists|i: int| 0 <= i < rows.len()
+        && ((#[trigger] rows[i]).status == Status::Failed || rows[i].status == Status::Blocked)
+}
+
+pub open spec fn report_status(rows: Seq<CheckResult>) -> Status {
+    if report_failure(rows) { Status::Failed } else { Status::Passed }
+}
+
+/// 本地／单元和离线汇总使用同一真实结果列表，失败或阻断均不能生成通过。
+pub fn response_status(rows: &Vec<CheckResult>) -> (status: Status)
+    ensures status == report_status(rows@),
+{
+    let mut i = 0;
+    while i < rows.len()
+        invariant 0 <= i <= rows.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] rows[j]).status != Status::Failed
+                && rows[j].status != Status::Blocked,
+        decreases rows.len() - i,
+    {
+        let row = &rows[i];
+        if row.status.eq(&Status::Failed) || row.status.eq(&Status::Blocked) {
+            assert(report_failure(rows@));
+            return Status::Failed;
+        }
+        i += 1;
+    }
+    Status::Passed
+}
+
+/// 原异常产生唯一库存失败记录；状态与该实际记录同源。
+pub fn inventory_failure(cause: String) -> (failure: (Status, Vec<CheckResult>))
+    ensures failure.0 == report_status(failure.1@), failure.0 == Status::Failed,
+        failure.1.len() == 1, failure.1[0].id@ == "ci.inventory"@,
+        failure.1[0].status == Status::Failed, failure.1[0].cause@ == cause@,
+        failure.1[0].exit_code.is_none(),
+{
+    let rows = vec![CheckResult {
+        id: "ci.inventory".to_string(), status: Status::Failed, cause, exit_code: None,
+    }];
+    assert(report_failure(rows@));
+    (Status::Failed, rows)
+}
+
+/// 诊断失败追加原有列表，保全先前顺序、重复及全部字段，并产生失败终态。
+pub fn diagnostic_failure(rows: &mut Vec<CheckResult>) -> (status: Status)
+    ensures rows.len() == old(rows).len() + 1,
+        rows@.take(old(rows).len() as int) == old(rows)@,
+        rows@.last().id@ == "ci.execution-diagnostics"@,
+        rows@.last().status == Status::Failed,
+        rows@.last().cause@ == "execution diagnostic publication failed; original errors retained"@,
+        rows@.last().exit_code.is_none(),
+        status == Status::Failed, status == report_status(rows@),
+{
+    rows.push(CheckResult {
+        id: "ci.execution-diagnostics".to_string(), status: Status::Failed,
+        cause: "execution diagnostic publication failed; original errors retained".to_string(),
+        exit_code: None,
+    });
+    assert(report_failure(rows@));
+    Status::Failed
+}
 
 pub open spec fn matching_result(
     values: Seq<CheckResult>, id: Seq<char>, status: Status, exit_code: Option<i32>,
