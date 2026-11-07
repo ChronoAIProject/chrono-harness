@@ -1388,7 +1388,33 @@ impl Inventory {
     pub fn maintain_at(&self, observed: u64) -> Result<Value, String> {
         self.round_metadata
             .set(Some(self.policy.max_metadata_bytes_per_round));
-        let result = self.maintain_round(observed);
+        let result = self.maintain_round(observed, None);
+        self.round_metadata.set(None);
+        result
+    }
+    /// A caller can name its actual remaining originals without re-enumerating
+    /// unrelated diagnostic metadata. The same limits and dependency guards apply.
+    pub fn maintain_originals(&self, originals: &[String]) -> Result<Value, String> {
+        if originals.is_empty()
+            || originals.len() > self.policy.max_related_outputs
+            || originals.iter().collect::<BTreeSet<_>>().len() != originals.len()
+        {
+            return Err(
+                "explicit maintenance originals are empty, duplicated or over capacity".into(),
+            );
+        }
+        for id in originals {
+            let path = self.object_directory(id)?.join("record.json");
+            if !fs::symlink_metadata(path)
+                .map_err(|e| e.to_string())?
+                .is_file()
+            {
+                return Err("explicit maintenance original declaration is unavailable".into());
+            }
+        }
+        self.round_metadata
+            .set(Some(self.policy.max_metadata_bytes_per_round));
+        let result = self.maintain_round(now()?, Some(originals));
         self.round_metadata.set(None);
         result
     }
@@ -1397,11 +1423,11 @@ impl Inventory {
     pub fn maintain_available(&self) -> Result<Value, String> {
         self.maintain()
     }
-    fn maintain_round(&self, observed: u64) -> Result<Value, String> {
+    fn maintain_round(&self, observed: u64, originals: Option<&[String]>) -> Result<Value, String> {
         self.round_began.set(Some(Instant::now()));
         self.round_node_limit
             .set(Some(self.policy.max_nodes_per_round));
-        let result = self.partition_round(observed);
+        let result = self.partition_round(observed, originals);
         self.round_node_limit.set(None);
         self.round_began.set(None);
         result
