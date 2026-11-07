@@ -1976,12 +1976,13 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         &lane.join(".chrono-harness/state/inputs"),
         &delivery_root.path().join(".chrono-harness/state/inputs"),
     );
-    for path in [
-        ".chrono-harness/state/inputs.json",
-        ".chrono-harness/state/integration.json",
-    ] {
-        fs::copy(lane.join(path), delivery_root.path().join(path)).unwrap();
-    }
+    fs::copy(
+        lane.join(".chrono-harness/state/integration.json"),
+        delivery_root
+            .path()
+            .join(".chrono-harness/state/integration.json"),
+    )
+    .unwrap();
     fs::remove_dir_all(lane.join(".chrono-harness/state/collection")).unwrap();
     fs::write(tools.path().join("cargo-fixture"), &sdk_original).unwrap();
     fs::set_permissions(
@@ -2011,7 +2012,65 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         ],
     );
     fs::write(&payload, serde_json::to_vec(&json!({"merge_commit_sha":workflow_merge,"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate,"ref":"integration/short-full"}}})).unwrap()).unwrap();
-    detect(delivery_root.path(), "930");
+    // Business snapshots also bind the tested merge endpoint. Produce fresh
+    // originals at B and M instead of reusing the integration head's snapshot.
+    let capture_delivery = |endpoint: &str, output: &str| {
+        git(delivery_root.path(), &["checkout", "--detach", endpoint]);
+        let captured = host::capture_native(
+            delivery_root.path(),
+            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                .current_dir(delivery_root.path())
+                .env("CHRONO_CHECK_SOURCE", "ci")
+                .env("DECLARED_EMPTY", "")
+                .env_remove("DECLARED_ABSENT")
+                .args([
+                    "capture",
+                    "--host-root",
+                    ".",
+                    "--config",
+                    CONFIG,
+                    "--commit",
+                    endpoint,
+                    "--output",
+                    output,
+                ]),
+        );
+        assert!(
+            captured.status.success(),
+            "{}",
+            String::from_utf8_lossy(&captured.stderr)
+        );
+    };
+    capture_delivery(&h.base, ".chrono-harness/state/base-delivery.json");
+    capture_delivery(
+        &workflow_merge,
+        ".chrono-harness/state/candidate-delivery.json",
+    );
+    let paired = host::capture_native(
+        delivery_root.path(),
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(delivery_root.path())
+            .args([
+                "pair",
+                "--host-root",
+                ".",
+                "--base-snapshot",
+                ".chrono-harness/state/base-delivery.json",
+                "--candidate-snapshot",
+                ".chrono-harness/state/candidate-delivery.json",
+                "--output",
+                ".chrono-harness/state/inputs.json",
+            ]),
+    );
+    assert!(
+        paired.status.success(),
+        "{}",
+        String::from_utf8_lossy(&paired.stderr)
+    );
+    let delivery_detection = detect(delivery_root.path(), "930");
+    assert_eq!(delivery_detection["base"], h.base);
+    assert_eq!(delivery_detection["candidate"], workflow_merge);
+    assert_eq!(delivery_detection["event_head"], h.candidate);
     let published = native(delivery_root.path(), "publish", None, "930");
     assert!(
         published.status.success(),
