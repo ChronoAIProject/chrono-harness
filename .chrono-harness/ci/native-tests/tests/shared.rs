@@ -350,13 +350,18 @@ fn produce_builds_only_declared_profiles_and_keeps_originals_on_output_failure()
         extra
     );
     assert_eq!(binding.len(), 64);
-    let calls: Vec<Value> = serde_json::from_slice(
-        &fs::read(fixture.tools.join("calls.json")).unwrap(),
-    )
-    .unwrap();
+    let calls: Vec<Value> =
+        serde_json::from_slice(&fs::read(fixture.tools.join("calls.json")).unwrap()).unwrap();
     assert_eq!(
-        calls.iter().filter(|row| row[0] == "producer").collect::<Vec<_>>(),
-        vec![&json!(["producer", fixture.root, ".chrono-harness/ci/build.json"])]
+        calls
+            .iter()
+            .filter(|row| row[0] == "producer")
+            .collect::<Vec<_>>(),
+        vec![&json!([
+            "producer",
+            fixture.root,
+            ".chrono-harness/ci/build.json"
+        ])]
     );
 
     let fixture = original();
@@ -389,8 +394,18 @@ fn registered_producer_failure_keeps_raw_streams_exit_and_unpublished_transfer()
         assert_eq!(output.stdout, b"producer stdout\x00\xff\n");
         assert!(output.stderr.starts_with(b"producer stderr\xfe\n"));
         assert!(!fixture.root.join(TRANSFER).exists());
-        assert!(!fixture.root.join(".chrono-harness/state/bootstrap.json").exists());
-        assert!(fixture.root.join(".chrono-harness/state/bootstrap-extra.json").is_file());
+        assert!(
+            !fixture
+                .root
+                .join(".chrono-harness/state/bootstrap.json")
+                .exists()
+        );
+        assert!(
+            fixture
+                .root
+                .join(".chrono-harness/state/bootstrap-extra.json")
+                .is_file()
+        );
     }
 }
 
