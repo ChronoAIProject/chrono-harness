@@ -2062,6 +2062,15 @@
             "--manifest-path",
             "crates/judge-routes-tests/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -3988,7 +3997,12 @@
         "build": {
           "operation": "build.diagnostics",
           "tool": "cargo",
-          "argv": ["build","--locked","--manifest-path","crates/diagnostics/Cargo.toml"]
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
         },
         "check": {
           "operation": "check.diagnostics",
@@ -4553,12 +4567,20 @@
         "execute": {
           "operation": "host.bootstrap-core",
           "tool": "bash",
-          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-core.json"]
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-core.json"
+          ]
         },
         "verus": {
           "operation": "host.bootstrap-verus",
           "tool": "bash",
-          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-verus.json"]
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus.json"
+          ]
         }
       }
     },
@@ -4571,7 +4593,9 @@
         "execute": {
           "operation": "test.host-bootstrap-launcher-tests",
           "tool": "bash",
-          "argv": [".chrono-harness/ci/bootstrap-native-tests.sh"]
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native-tests.sh"
+          ]
         }
       }
     },

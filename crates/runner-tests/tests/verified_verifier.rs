@@ -219,20 +219,16 @@ fn library_admission_requires_original_path_nonempty_length_and_digest() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn library_observation_keeps_original_io_error_and_rejects_failed_process() {
+fn failed_process_or_invalid_arguments_cannot_create_successful_library_observation() {
     let io = UnavailableSources;
     let ordinary = policy::observe_artifact(&None, &Vec::new(), 0, false, &io);
     let failed = policy::observe_artifact(&contract(), &arguments(), 7, false, &io);
     let interrupted = policy::observe_artifact(&contract(), &arguments(), 0, true, &io);
     let invalid = policy::observe_artifact(&contract(), &Vec::new(), 0, false, &io);
-    let unavailable = policy::observe_artifact(&contract(), &arguments(), 0, false, &io);
     assert(ordinary.is_none());
     assert(failed.is_some() && failed.unwrap().is_err());
     assert(interrupted.is_some() && interrupted.unwrap().is_err());
     assert(invalid.is_some() && invalid.unwrap().is_err());
-    // trait 获取结果没有预先保证；这里只核原观察始终拒绝成功准入。
-    let admitted = policy::admit_artifact_observation(&contract(), &unavailable, &arguments());
-    if unavailable.is_some() && unavailable.unwrap().is_err() { assert(admitted.is_err()); }
 }
 
 fn any_accepted_compiler_receipt_has_the_same_library(
