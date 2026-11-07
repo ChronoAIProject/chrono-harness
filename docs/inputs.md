@@ -239,11 +239,13 @@ fetch 可下载缺失锁定包，metadata 保持离线；不执行保护，也�
 
 观察器把完整、未改动的 `runtime-inputs/rust.json` 写入上述 diagnostics 单元 artifact 根；它同时作为 Cargo guard 的运行时输入，不复制到 endpoint snapshot。历史 J／N 摘要只作为已接纳原件的事实记录，不再作为当前 Git policy 的输入预期。
 
-运行时 `sdk.json` 的预期仍为 `95337d9300b02f0e75bde2d6aec955d5a8f3a9fc1e8a951726c15c433f74221b`。完整 `xcode-contents.json` 原件的 SHA-256 为 `866c18f9c3469a4cf734e452748b2eff0c4f3bcbeccccbab515c6a29d3309d4d`，观察器继续独立保留它；构建选择下述固定子集。包文件采用仍以 `packages.json` 为准，其 SHA-256 为 `ba0f4178c06dede474b4d6c4adb39fe0dafaf01af15d3bcde2a5a1532cfcd2da`。
+历史合格原件曾记录 `sdk.json`、完整 `xcode-contents.json` 和 `packages.json` 的摘要；这些摘要只作为观察 artifact 的 provenance 保留，不再成为当前 Git policy 的输入预期。每次受保护运行以当次 `observation.json` 发布的 manifest 为准，构建选择仍沿用既有子集。
 
-**可见宿主输入政策修改：**原生 `toolchain.developer.inventory` 选择已提交的 `diagnostics-xcode-build.json`。其记录来自上述已采用的 Xcode 26.6 原件，最新失败运行 `42134957152/1` 又保留了相同摘要。范围沿用本机清单的五个构建工具、四个发行库、完整 clang 21 资源子树及版本别名、Xcode／工具链 metadata；文件摘要、字面别名及所选物理父目录的精确子项名称均保留原行。无关应用、移动 SDK 等未选内容不再逐次复核，所选父目录中的对应子项名称仍须存在。完整 macOS SDK、原始观察、各次命令后复核及 600 秒期限不变。这是输入范围调整，不证明原生工具导入依赖完整、系统框架完整或同判；新候选仍须真实原生构建、测试和汇总验收。
+**可见宿主输入政策修改：**原生 `toolchain.developer.inventory` 和 `toolchain.sdk.inventory` 不再选择提交到 Git 的 `diagnostics-xcode-build.json` 或固定摘要。它们分别声明 `.chrono-harness/state/diagnostics-native/guard-inputs/xcode-contents.json`、`.chrono-harness/state/diagnostics-native/guard-inputs/sdk.json`，并通过现役生产者输出 `.chrono-harness/state/units/diagnostics/runtime-inputs/observation.json` 的 `directories.developer.manifest`、`directories.sdk.manifest` 指针消费。`inputs.observe-diagnostics` 是生产者，diagnostics Cargo guard 是消费者；生产者先发布当前主机的目录清单，guard 核对指针、路径和摘要后再次计算 live file，缺少观察、路径不一致或漂移都在构建前失败。
 
-这些固定预期来自已确认合格的保留数据，不从当前安装反推。观察器的获取过程和原始输出不变，普通构建明确使用 `--offline`，通用保护行为不变。
+这两份 inventory 是当前受保护操作的运行事实，不是可移植政策；完成或失败调试义务及 artifact 保留期结束后由宿主 state 生命周期回收。Git 只保留 producer contract、source manifest 和 runtime-state 引用，不保留机器路径、安装内容或固定摘要。Xcode 外层 Contents、完整 SDK、原始观察和既有目录上限仍由生产者输出；范围仍沿用五个构建工具、四个发行库、clang 21 资源及别名等现有选择。此次迁移只覆盖 diagnostics 的 Developer／SDK inventory，不证明原生工具导入依赖完整、系统框架完整、输入闭合或同判；`input_closure` 继续为 `incomplete`，候选仍须真实原生构建、测试和汇总验收。
+
+观察器仍从实际获取和原始输出产生当次 manifest，不从当前安装反推或回写 Git policy；普通构建明确使用 `--offline`，通用保护行为不变。
 
 登记验证可能选中范围较广的现有消费者，本地／原生验证和存储成本未知。本机 macOS 27 检查不能验证所选原生 Xcode／SDK 绑定；共享 diagnostics 政策现在描述原生消费者，真实原生受保护构建、diagnostics 测试和标准汇总仍待完成。原件缺失、资格确认失败和内容变化继续判失败；生产者成功不代表受保护构建、单元／汇总、完整输入、同判或实际落地已通过验收。
 
