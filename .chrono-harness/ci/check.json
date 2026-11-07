@@ -236,6 +236,14 @@
       }
     },
     "shared_operations": {
+      "verify.runner-identifiers": [
+        "ci",
+        "runner"
+      ],
+      "verify.runner-identifiers-tests": [
+        "ci",
+        "runner"
+      ],
       "verify.runner-limits": [
         "judge-registration",
         "judge-routes",
