@@ -1533,10 +1533,6 @@
       "worktree-test-inventory"
     ],
     "claims": {
-      "host.bootstrap-native-original-execution": {
-        "resources": [],
-        "outputs": [".chrono-harness/cache/"]
-      },
       "build.host-bootstrap-native": {
         "resources": [
       
