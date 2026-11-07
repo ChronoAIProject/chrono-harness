@@ -159,6 +159,8 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 
 缓存不跳过标准检查，不用缓存状态替代构建／测试结果。最终 `chrono-cache report` 记录原生 action 输出、请求／匹配键、原业务／bootstrap outcome 及不可变来源报告。
 
+`report` 与 `seal` 都要求计划中的 planner SHA-256 和版本完整，且与当前执行物全文相等。缺失、null、非文本或不匹配的身份在发布报告原件前拒绝；不再为缺少身份的旧计划发布 `unavailable` 成功。当前 `plan` 始终提供身份。只观察传输步骤的库函数 `transport_report` 仍报告未观察执行物身份，不替代 CLI 的核验。
+
 `evidence_directory` 可把原件放入已有发布上传目录，普通检查则放入上传的宿主状态。detector 可选择同一字段，通过已有 job 的固定上传 action 保留原件，包括失败后。目录须是字面宿主状态路径，并明确上传隐藏文件；文件缺失使上传失败，不能声称已保留。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划、探测原件。未采用时，detector 文件只是 runner 临时状态。
 
 报告在已有 job 运行。未登记 backend 就不发 API 请求。只有 action 成功且 key 匹配，才报告 exact／compatible；空输出记 `miss-or-unavailable`。原生保存成功仍为 `unconfirmed`，带 `W_CACHE_SAVE_UNCONFIRMED`，因为固定 action 可能捕获后端异常后成功退出。不能由 action outcome 推断归档已保存、编译器复用或执行物身份验证。

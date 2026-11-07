@@ -221,30 +221,21 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     )?;
     let producer = super::current_executable_identity()
         .map_err(|e| format!("E_CACHE_REPORT: producer executable: {e}"))?;
-    let verification = match plan.get("planner") {
-        Some(expected)
-            if expected["sha256"] == producer["sha256"]
-                && expected["version"] == producer["version"] =>
-        {
-            json!({"status":"matched","expected":expected,"observed":producer})
-        }
-        Some(expected) => {
-            json!({"status":"mismatch","expected":expected,"observed":producer})
-        }
-        None => {
-            json!({"status":"unavailable","reason":"legacy-plan-without-planner-identity","observed":producer})
-        }
-    };
-    report["producer"] = producer;
-    report["current_executable_verification"] = verification.clone();
-    if verification["status"] == "mismatch" {
+    let expected = &plan["planner"];
+    if !super::verified_planner::matches_planner_identity(
+        expected["sha256"].as_str(),
+        expected["version"].as_str(),
+        producer["sha256"].as_str(),
+        producer["version"].as_str(),
+    ) {
         return Err("E_CACHE_REPORT: report executable differs from the planner executable".into());
     }
-    if verification["status"] == "matched" {
-        if let Some(caches) = report["caches"].as_object_mut() {
-            for cache in caches.values_mut() {
-                cache["current_executable_verification"] = json!("matched");
-            }
+    report["current_executable_verification"] =
+        json!({"status":"matched","expected":expected,"observed":producer});
+    report["producer"] = producer;
+    if let Some(caches) = report["caches"].as_object_mut() {
+        for cache in caches.values_mut() {
+            cache["current_executable_verification"] = json!("matched");
         }
     }
     report["plan"] = json!({"path":plan_path,"sha256":sha256(&plan_raw)});

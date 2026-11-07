@@ -401,6 +401,7 @@
         "worktree-adoption"
       ],
       "verify.verus-result": [
+        "cache",
         "ci",
         "judge-ci",
         "judge-projects",
@@ -409,6 +410,7 @@
         "runner"
       ],
       "verify.verus-result-tests": [
+        "cache",
         "ci",
         "judge-ci",
         "judge-projects",

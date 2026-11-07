@@ -190,9 +190,12 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let plan: Value = decode(&plan_raw)?;
     revalidate(&root, required("--config")?, &plan)?;
     let current = super::current_executable_identity()?;
-    if current["sha256"] != plan["planner"]["sha256"]
-        || current["version"] != plan["planner"]["version"]
-    {
+    if !super::verified_planner::matches_planner_identity(
+        plan["planner"]["sha256"].as_str(),
+        plan["planner"]["version"].as_str(),
+        current["sha256"].as_str(),
+        current["version"].as_str(),
+    ) {
         return Err("E_CACHE_CONTENT: seal executable differs from planner".into());
     }
     let steps_raw = std::env::var(required("--steps-env")?).map_err(|e| e.to_string())?;
