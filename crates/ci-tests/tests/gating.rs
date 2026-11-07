@@ -78,6 +78,9 @@ fn explicit_parent_migration_preserves_unit_settings() {
     assert!(text.contains("needs.detect.outputs.unit_alpha == 'true'"));
     assert!(text.contains("'check' '--collect'"));
     assert!(text.contains("'explicit-a.sh'"));
+    assert!(text.contains(
+        "fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}"
+    ));
     assert!(text.contains("macos-14"));
     let workflow: Value = serde_yaml_ng::from_str(&text).unwrap();
     assert!(workflow["on"].get("workflow_dispatch").is_none());

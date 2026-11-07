@@ -179,7 +179,12 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
     let checkout = if c.schema == units::FULL_SCHEMA {
         "          fetch-depth: 0\n          filter: blob:none\n"
     } else {
-        "          fetch-depth: 2\n          filter: blob:none\n"
+        // A pull-request checkout may point at GitHub's synthetic merge
+        // commit.  A depth-two fetch can contain the first parent while
+        // omitting the PR base (the second parent), which makes baseline
+        // facts unavailable to the detector.  Keep push jobs shallow, but
+        // give PR jobs the complete history required by the declared base.
+        "          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '2' }}\n          filter: blob:none\n"
     };
     body = body.replacen("          fetch-depth: 0\n", checkout, 1);
     body = super::cache::project(
@@ -274,7 +279,11 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         run: |
           {generator} detect --host-root . --config {config} --github-output "$GITHUB_OUTPUT"
 "#,
-        detector_depth = if c.native_adoption.is_some() { 0 } else { 2 },
+        detector_depth = if c.native_adoption.is_some() {
+            "0"
+        } else {
+            "${{ github.event_name == 'pull_request' && '0' || '2' }}"
+        },
         runner = scalar(&g.detector.runs_on),
         timeout = g.detector.timeout_minutes,
         checkout = c.collection.checkout_action,
