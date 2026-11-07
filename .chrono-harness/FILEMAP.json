@@ -2127,15 +2127,13 @@
       "verify.registration-readiness": {
         "resources": [],
         "outputs": [
-          ".chrono-harness/state/verify.registration-readiness.rlib",
-          ".chrono-harness/state/verify.registration-readiness.rlib.d"
+          ".chrono-harness/state/"
         ]
       },
       "verify.registration-readiness-tests": {
         "resources": [],
         "outputs": [
-          ".chrono-harness/state/verify.registration-readiness-tests.rlib",
-          ".chrono-harness/state/verify.registration-readiness-tests.rlib.d"
+          ".chrono-harness/state/"
         ]
       },
       "verify.registration-nodes": {

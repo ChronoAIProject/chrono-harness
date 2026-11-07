@@ -295,7 +295,6 @@ JSON 解码、节点提取、诊断和完整图外层组合继续保留未完成
 **产品与宿主政策同时变更：**生产调用替换原有普通 Rust 比较；两项整 crate 证明作为
 registration 专属计划的必需前置，独立预期和 Rust 测试编译同一生产源。
 沿用固定 Verus、完整验证参数和原错误码 `E_ACTIVATION`／`E_EVIDENCE_UNRESOLVED`。
-新增证明输出只声明各自的 rlib 与 dep-info，不占用整个 state 目录。
 新增依赖为零，验证与存储总成本未测；JSON 解析、错误记录、其余准备判断及 full 启用仍待完成。
 本节描述实现范围，成功验收须消费实际证明和真实 registration 进程原结果。
 
