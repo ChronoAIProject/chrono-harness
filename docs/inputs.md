@@ -167,7 +167,7 @@ Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩�
 
 本机 diagnostics 的 metadata／build 通过 `.chrono-harness/cargo/runner-vendor.toml` 读取当前工作树的目录来源。26 个锁定包使用 1,087 份源码和 26 份 Cargo 校验清单，包 checksum 和文件身份继续由当前 diagnostics 政策绑定。准备沿用 Cargo 自带的 `vendor --locked --offline --versioned-dirs`，不增加包解析器或共享缓存。
 
-**可见宿主政策与退役修改：**删除未接入正式 runner 检查的 `guard.check.runner` 及其政策、两个专属观察实验和无读取入口的 Cargo 观察声明。日常 runner 构建、检查及测试仍走已有锁定 Cargo 操作。macOS 27 的两个专属 guard 绑定、1,710 项独占输入声明和 2,847 条配置级依赖边同步删除；Git 事实与 bootstrap 工具选择各自保留独立 runner 关系。
+**可见宿主政策与退役修改：**删除未接入正式 runner 检查的 `guard.check.runner` 及其政策、两个专属观察实验和仅供测试读取项目列表的 Cargo 观察 JSON。项目列表迁到现有 Rust 获取测试，原有操作覆盖、唯一性、工具及平台断言继续执行；未使用的 guard 消费声明不再保留。日常 runner 构建、检查及测试仍走已有锁定 Cargo 操作。macOS 27 的两个专属 guard 绑定、1,710 项独占输入声明和 2,847 条配置级依赖边同步删除；Git 事实与 bootstrap 工具选择各自保留独立 runner 关系。
 
 diagnostics 仍使用的 1,130 项输入声明、配置和共享 Rust／SDK／Developer 清单不属于这次退役。`local-rust-build.json`、`local-xcode-build.json` 及旧 SDK 路径仍是待处理的本机运行事实；真实引用不能单独证明永久入库必要，后续须继续核对 diagnostics 的必要性链，再迁移或退役。运行、CI 和存储总收益未测，完整输入与同判仍未建立。
 

@@ -21,7 +21,7 @@
 | 4 | .chrono-harness/cargo/diagnostics-local.json | 81,977 | runtime-fact | diagnostics | build-input→project:diagnostics; test-execution→test:diagnostics-tests | build-input→project:diagnostics; test-execution→test:diagnostics-tests 当前读取主机/输入快照 → 需要观测身份、诊断或 provenance → 终点：有 owner、消费者、保留与清理声明的 state/artifact。 | migrate-to-state/artifact |
 | 5 | .chrono-harness/cargo/diagnostics-native.json | 81,750 | runtime-fact | diagnostics | build-input→project:diagnostics; test-execution→test:diagnostics-tests | build-input→project:diagnostics; test-execution→test:diagnostics-tests 当前读取主机/输入快照 → 需要观测身份、诊断或 provenance → 终点：有 owner、消费者、保留与清理声明的 state/artifact。 | migrate-to-state/artifact |
 | 6 | .chrono-harness/cargo/diagnostics.json | 372 | portable-contract | diagnostics | build-input→project:diagnostics; test-execution→test:diagnostics-tests | build-input→project:diagnostics; test-execution→test:diagnostics-tests 需要稳定仓库声明 → 该声明选择或约束登记操作 → 终点：受治理的产品/check/release 行为。 | retain-minimal-contract |
-| 7 | .chrono-harness/cargo/observe.json | 1,396 | retired | judge-cargo-tests | 原 runtime-input 边没有对应读取入口；产品无此 schema 的执行接口，测试不读取本文件 | 没有当前必要性终点 | delete-unused-declaration-and-edge |
+| 7 | .chrono-harness/cargo/observe.json | 1,396 | retired | inputs-tests（原登记误指 judge-cargo-tests） | 产品无此 schema 的执行接口；inputs 获取测试只读取 34 个项目的预期列表，已迁入同一 Rust 测试，断言保留 | 必需测试数据归测试；未使用的 guard 消费声明没有当前终点 | migrate-expectation-to-rust-and-delete-unused-policy |
 | 8 | .chrono-harness/cargo/runner-vendor.toml | 114 | portable-contract | repository | build-input→project:runner; runtime-input→project:judge-cargo; runtime-input→project:inputs; runtime-input→project:judge-cargo-tests; test-execution→test:judge-cargo-tests | build-input→project:runner; runtime-input→project:judge-cargo; runtime-input→project:inputs; runtime-input→project:judge-cargo-tests; test-execution→test:judge-cargo-tests 需要稳定仓库声明 → 该声明选择或约束登记操作 → 终点：受治理的产品/check/release 行为。 | retain-minimal-contract |
 | 9 | .chrono-harness/cargo/runner.json | 130,618 | retired | repository | 只供准备流程末尾的额外 guard 和专属观察实验；正式 runner 构建／检查／测试直接用 Cargo | 原正式锁定 Cargo 操作已满足现役 runner 检查，无额外已接入结果 | retire-guard-policy-inputs-edges-and-observations |
 | 10 | .chrono-harness/ci/bootstrap-acquire-linux.json | 3,306 | mixed | host-bootstrap | runtime-input→script:host-bootstrap; test-execution→test:host-bootstrap-tests | runtime-input→script:host-bootstrap; test-execution→test:host-bootstrap-tests 需要声明或选择 → 同一字节还携带主机/运行观测 → 终点：仓库中的可移植声明 + 仓外运行事实。 | split-contract-and-fact |
@@ -108,7 +108,7 @@
 
 ### 第一批迁移候选
 
-已完成 diagnostics Rust、Developer、SDK inventory 的第一批 state 迁移：确认现役 producer，发布 observation/state inventory，更新 Cargo policy、FILEMAP、registration/tests，并删除 Rust/Xcode Git 清单。本轮审计先退役了额外 runner guard，删除 `cargo/runner.json`、无读取入口的 `cargo/observe.json`、两个专属观察实验、1,710 项独占输入和 2,847 条配置级边。`inputs/local-rust-build.json` 与 `local-xcode-build.json` 仍被本机 diagnostics 引用，不能随 runner 一并删除；下一步核实 diagnostics 的终点，再处理其政策和清单中的绝对 sysroot／SDK／toolchain 事实。每批都须先运行真实 producer→consumer，满足保留条件后再删除 Git 快照。
+已完成 diagnostics Rust、Developer、SDK inventory 的第一批 state 迁移：确认现役 producer，发布 observation/state inventory，更新 Cargo policy、FILEMAP、registration/tests，并删除 Rust/Xcode Git 清单。本轮审计先退役了额外 runner guard，删除 `cargo/runner.json`、`cargo/observe.json`、两个专属观察实验、1,710 项独占输入和 2,847 条配置级边；`observe.json` 的项目列表迁入原 Rust 获取测试，原断言保留。`inputs/local-rust-build.json` 与 `local-xcode-build.json` 仍被本机 diagnostics 引用，不能随 runner 一并删除；下一步核实 diagnostics 的终点，再处理其政策和清单中的绝对 sysroot／SDK／toolchain 事实。每批都须先运行真实 producer→consumer，满足保留条件后再删除 Git 快照。
 
 ### 第二批迁移候选
 

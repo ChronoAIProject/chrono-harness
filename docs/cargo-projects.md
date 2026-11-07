@@ -194,7 +194,7 @@ v5 以 `chrono-cargo-run/v3` 报告工具链证据和链接器工具观察；v2�
 
 本仓已退役额外的 runner guard。日常 runner 构建、检查和专属测试原本就使用登记的锁定 Cargo 操作；`guard.check.runner` 只在输入准备的末尾和两个宿主观察实验中调用，未接入本地／CI 的正式 runner 检查。继续保存其独立政策、主机清单绑定和实验入口，不能为这些现役操作提供额外的已验收结果。
 
-`inputs.prepare-runner` 继续通过现有 fetch／vendor 准备本机 diagnostics 使用的目录来源；它不再执行额外 runner 检查。`cargo/runner.json`、没有读取入口的 `cargo/observe.json`、两个专属观察 action 和仅服务退役链的输入／依赖边一起删除。原失败和历史源码归既有保管者，不把关闭提案说成历史实验通过。
+`inputs.prepare-runner` 继续通过现有 fetch／vendor 准备本机 diagnostics 使用的目录来源；它不再执行额外 runner 检查。`cargo/runner.json`、`cargo/observe.json`、两个专属观察 action 和仅服务退役链的输入／依赖边一起删除。`observe.json` 没有产品执行接口，唯一读取方是 inputs 的获取测试；其中 34 个项目的预期列表移入原 Rust 测试，覆盖及断言保留，未使用的 guard 消费声明删除。原失败和历史源码归既有保管者，不把关闭提案说成历史实验通过。
 
 本机 diagnostics 仍有实际的 `build.diagnostics` 入口，消费 26 个锁定包的 1,113 个 vendor 文件身份，以及其配置、Rust／SDK／Developer 输入。共享清单暂留给这个使用方，下一批继续审计必要性和运行事实迁移。macOS 27 配置保留 1,130 项输入声明；Git 事实与 bootstrap 工具选择的独立 runner 依赖继续登记。这些数量是声明规模，不证明完整性或资源收益。
 

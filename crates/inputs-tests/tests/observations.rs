@@ -932,17 +932,48 @@ fn main_host_observation_reuses_all_declared_cargo_acquisition_operations() {
         &fs::read(root.join(".chrono-harness/inputs/native-observation.json")).unwrap(),
     )
     .unwrap();
-    let owner: Value =
-        serde_json::from_slice(&fs::read(root.join(".chrono-harness/cargo/observe.json")).unwrap())
-            .unwrap();
-    let expected: Vec<String> = owner["projects"]
-        .as_array()
-        .unwrap()
+    let expected_projects = [
+        "runner",
+        "runner-tests",
+        "instructions",
+        "instructions-tests",
+        "judge-ci",
+        "judge-ci-tests",
+        "ci",
+        "ci-tests",
+        "judge-registration",
+        "judge-registration-tests",
+        "judge-filemap",
+        "judge-filemap-tests",
+        "judge-routes",
+        "judge-routes-tests",
+        "judge-projects",
+        "judge-projects-tests",
+        "judge-cost",
+        "judge-cost-tests",
+        "judge-mixed",
+        "judge-mixed-tests",
+        "judge-workflow",
+        "judge-workflow-tests",
+        "inputs",
+        "inputs-tests",
+        "distribution",
+        "distribution-tests",
+        "judge-cargo",
+        "judge-cargo-tests",
+        "worktree",
+        "worktree-tests",
+        "diagnostics",
+        "diagnostics-tests",
+        "cache",
+        "cache-tests",
+    ];
+    let expected: Vec<String> = expected_projects
         .iter()
-        .flat_map(|p| {
+        .flat_map(|project| {
             [
-                format!("inputs.fetch.{}", p.as_str().unwrap()),
-                format!("inputs.metadata.{}", p.as_str().unwrap()),
+                format!("inputs.fetch.{project}"),
+                format!("inputs.metadata.{project}"),
             ]
         })
         .collect();
