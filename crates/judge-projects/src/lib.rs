@@ -1,4 +1,5 @@
 //! Pair admissibility and actual operation/test evidence. Selection remains FILEMAP-owned.
+mod verified_languages;
 use chrono_harness::{
     CommandSpec, facts, run_process_observed,
     wire::{self, Binding, Finding, Request, Response, Status},
@@ -338,7 +339,7 @@ fn dedicated_pair<'a>(
     if registry["schema_version"] == 2 {
         let implementation = production["language"].as_str().unwrap();
         let testing = test["language"].as_str().unwrap();
-        if implementation != testing && !(implementation == "shell" && testing == "python") {
+        if !verified_languages::dedicated_test_language(implementation, testing) {
             return Err(format!(
                 "E_TEST_LANGUAGE: {prefix}:{prod_id} declares {implementation:?}, \
              but its dedicated test {prefix}:{test_id} declares {testing:?}; \
