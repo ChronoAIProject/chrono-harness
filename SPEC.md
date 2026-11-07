@@ -637,6 +637,11 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 | 2 | error：输入/协议/基础设施失败或必要证据不足 |
 | 3 | 早期 spec-only CLI 的未实现退出码；现役 CI slice 不使用，完整配置拒绝返回 2 |
 
+当前协议四态的实际类型、身份比较、`pass < warn < fail < error` 顺序、克隆和退出码由同源 Verus 实现。
+真实 finding 列表的状态一致性判断也使用同一证明根：fail／error 当且仅当存在精确 `error` 级别，
+pass 不允许 `warning`，warn 必须存在 `warning`；finding 克隆保留完整字段及两个引用数组的顺序和重复。
+这不证明外层响应身份、finding 格式与引用有效性、JSON 或证据 IO，范围见 [Verus 实施说明](docs/verus.md)。
+
 子进程输出 fail 却 exit 0、空 stdout、额外日志、截断 JSON、未知状态都属于协议错误。
 本轮选中的当前进程崩溃、超时、不可执行、摘要不匹配、必需测试未执行都不能降级为通过。
 总结果优先级 error > fail > warn > pass；基础错误阻止依赖任务，独立任务可以继续收集证据。
