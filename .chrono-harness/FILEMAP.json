@@ -11,7 +11,12 @@
     }
   },
   "files": [
-    {"path":".chrono-harness/ci/bootstrap-native.sh","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":".chrono-harness/ci/bootstrap-frontend.json","owner":"host-bootstrap-launcher","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/native/src/shared.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/shared.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/bootstrap-native.sh","owner":"host-bootstrap-launcher","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":".chrono-harness/ci/bootstrap-native-tests.sh","owner":"host-bootstrap-launcher-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"}]},
+    {"path":".chrono-harness/ci/fixtures/bootstrap-launcher-tool.sh","owner":"host-bootstrap-launcher-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"}]},
     {"path":".chrono-harness/ci/native/src/owner.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native/src/lifecycle.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native-tests/tests/owner.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
@@ -19,6 +24,7 @@
     {"path":".chrono-harness/ci/native/src/original.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native-tests/tests/original.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native-tests/tests/support/construction.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/support/producer.sh","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native/src/construction.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native-tests/tests/construction.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native/src/profile.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
@@ -300,7 +306,7 @@
     {"path":"crates/ci-tests/tests/units.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
     {"path":"docs/ci-units.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/ci/src/migrate.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
-    {"path":".chrono-harness/ci/bootstrap-core.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
+    {"path":".chrono-harness/ci/bootstrap-core.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"}]},
     {"path":"crates/worktree/src/rebind_steps.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/rebind_resume.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/tests/rebind_resume.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
@@ -537,7 +543,7 @@
     {"path":"crates/ci-tests/tests/fixtures/native-provider.json","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
     {"path":".chrono-harness/judges-macos-27.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:runner"}]},
     {"path":".chrono-harness/ci/bootstrap-unit.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"test-execution","to":"test:inputs-tests"}]},
-    {"path":".chrono-harness/ci/bootstrap-verus.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"test-execution","to":"test:inputs-tests"}]},
+    {"path":".chrono-harness/ci/bootstrap-verus.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:inputs-tests"}]},
     {"path":".chrono-harness/ci/verus-macos-arm64.sha256","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
     {"path":"docs/verus.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/judge-filemap/src/verified_graph.rs","owner":"judge-filemap","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-filemap"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"}]},
@@ -564,6 +570,9 @@
     {"path":"crates/worktree-tests/tests/verified_owner_publication.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]}
   ],
   "project_edges": [
+    {"from":"project:host-bootstrap-native","kind":"runtime-input","to":"script:host-bootstrap-launcher"},
+    {"from":"script:host-bootstrap-launcher","kind":"runtime-input","to":"script:host-bootstrap"},
+    {"from":"script:host-bootstrap-launcher","kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},
     {"from":"project:judge-registration","kind":"compile","to":"project:host-bootstrap-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-bootstrap-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-bootstrap-native-tests"},
@@ -1152,6 +1161,7 @@
     {"from":"project:runner","kind":"runtime-input","to":"script:host-bootstrap-tests"}
   ],
   "test_costs": [
+    {"test":"host-bootstrap-launcher-tests","cost":"unmeasured"},
     {"test":"host-bootstrap-native-tests","cost":"unmeasured"},
     {"test":"runner-tests","cost":"unmeasured"},
     {"test":"instructions-tests","cost":"unmeasured"},
@@ -1178,6 +1188,11 @@
     {"test":"cache-tests","cost":"unmeasured"}
   ],
   "execution_plans": {
+    "test:host-bootstrap-launcher-tests": {
+      "operations": ["test.host-bootstrap-launcher-tests"],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
     "test:host-bootstrap-native-tests": {
       "operations": [
         "verify.bootstrap-bindings-tests",
@@ -1564,6 +1579,7 @@
       "worktree-test-inventory"
     ],
     "claims": {
+      "test.host-bootstrap-launcher-tests": {"resources":[],"outputs":[]},
       "build.host-bootstrap-native": {
         "resources": [
 
