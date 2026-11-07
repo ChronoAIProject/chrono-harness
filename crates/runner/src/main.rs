@@ -17,6 +17,11 @@ fn run() -> u8 {
                     serde_json::json!(arguments[index].as_encoded_bytes()),
                 );
         let logger = chrono_diagnostics::logging::Logger::stderr("chrono-harness");
+        let _ = chrono_diagnostics::logging::failure(
+            "cli.invalid_argument",
+            &error.to_string(),
+            &error.record(),
+        );
         let published = logger.run(|| {
             chrono_diagnostics::logging::failure(
                 "cli.invalid_argument",
@@ -32,6 +37,9 @@ fn run() -> u8 {
         return 2;
     };
     let output = chrono_harness::dispatch(&arguments);
+    if !output.stderr.is_empty() {
+        chrono_harness::log_cli_error(&output.stderr);
+    }
     match chrono_harness::publish_native_output(&output) {
         Ok(exit_code) => exit_code,
         Err(_failure) => 2,

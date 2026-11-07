@@ -56,6 +56,10 @@ fn actual_cli_records_success_failure_and_rotates_without_stdout_changes() {
             .all(|r| r["schema"] == "chrono-log/v1" && r["producer"] == "chrono-harness")
     );
     assert!(rows.iter().any(|r| r["event"] == "cli.started"));
+    assert!(
+        rows.iter()
+            .any(|r| r["event"] == "cli.diagnostic" && r["message"] == "E_USAGE: use --help\n")
+    );
     assert!(rows.iter().any(|r| r["event"] == "cli.finished"
         && r["level"] == "error"
         && r["fields"]["exit_code"] == 2));
@@ -112,4 +116,21 @@ fn actual_cli_rejects_invalid_policy_before_business_execution() {
     let event: Value = serde_json::from_slice(&actual.stderr).unwrap();
     assert_eq!(event["event"], "runtime.logging_failed");
     assert!(event["error"]["error"]["source"].is_object());
+}
+
+#[test]
+fn absent_host_adoption_leaves_argument_errors_with_the_command() {
+    let fixture = tempfile::tempdir().unwrap();
+    let missing = fixture.path().join("missing-host");
+    let args = ["unknown-command", "--host-root", missing.to_str().unwrap()];
+    let expected = chrono_harness::dispatch(&args);
+    let actual = Command::new(binary())
+        .args(args)
+        .current_dir(fixture.path())
+        .output()
+        .unwrap();
+    assert_eq!(actual.status.code(), Some(i32::from(expected.exit_code)));
+    assert_eq!(actual.stdout, expected.stdout.as_bytes());
+    assert_eq!(actual.stderr, expected.stderr.as_bytes());
+    assert!(!missing.exists());
 }

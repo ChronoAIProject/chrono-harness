@@ -15,6 +15,7 @@ fn run() -> u8 {
     let request = match result {
         Ok(r) => r,
         Err(e) => {
+            chrono_harness::log_cli_error(&format!("E_REQUEST: {e}"));
             eprintln!("E_REQUEST: {e}");
             return 2;
         }

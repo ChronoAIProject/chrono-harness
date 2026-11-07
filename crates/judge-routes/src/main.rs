@@ -6,6 +6,7 @@ fn run() -> u8 {
         return 0;
     }
     if args != ["--protocol", "chrono-judge/v1"] {
+        chrono_harness::log_cli_error(&format!("E_USAGE: --protocol chrono-judge/v1"));
         eprintln!("E_USAGE: --protocol chrono-judge/v1");
         return 2;
     }
@@ -16,12 +17,14 @@ fn run() -> u8 {
         .is_err()
         || bytes.len() > 64 * 1024 * 1024
     {
+        chrono_harness::log_cli_error(&format!("E_PROTOCOL: request read/bound"));
         eprintln!("E_PROTOCOL: request read/bound");
         return 2;
     }
     let req: chrono_harness::wire::Request = match chrono_harness::decode(&bytes) {
         Ok(r) => r,
         Err(e) => {
+            chrono_harness::log_cli_error(&format!("E_PROTOCOL: {e}"));
             eprintln!("E_PROTOCOL: {e}");
             return 2;
         }
@@ -34,6 +37,7 @@ fn run() -> u8 {
             }
         }
         Err(e) => {
+            chrono_harness::log_cli_error(&format!("E_PROTOCOL: {e}"));
             eprintln!("E_PROTOCOL: {e}");
             return 2;
         }

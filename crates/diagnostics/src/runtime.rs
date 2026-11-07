@@ -14,6 +14,12 @@ use std::{
 
 pub const CONFIG_PATH: &str = ".chrono-harness/logging.json";
 
+/// Record an existing CLI diagnostic without inventing a typed domain cause from its text.
+/// The command still publishes its original diagnostic through its existing output boundary.
+pub fn diagnostic(message: &str) {
+    tracing::error!(event_id = "cli.diagnostic", message = message);
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
@@ -143,6 +149,7 @@ fn load_policy(root: &Path) -> Result<Option<Policy>, Failure> {
 }
 
 fn sink<W>(root: &Path, policy: &Policy, stderr: W) -> Result<RuntimeSink<W>, Failure> {
+    let root = fs::canonicalize(root).map_err(io_failure)?;
     let file = RollingFile::open(
         &root.join(&policy.directory),
         policy.max_bytes,
@@ -218,7 +225,7 @@ pub fn cli(producer: &str, work: impl FnOnce() -> u8) -> u8 {
         .map(|pair| PathBuf::from(&pair[1]))
         .map(Ok)
         .unwrap_or_else(std::env::current_dir);
-    let root = match root.and_then(fs::canonicalize) {
+    let root = match root {
         Ok(root) => root,
         Err(error) => {
             emergency(producer, &io_failure(error));
@@ -230,6 +237,13 @@ pub fn cli(producer: &str, work: impl FnOnce() -> u8) -> u8 {
         Ok(None) => return work(),
         Err(error) => {
             emergency(producer, &error);
+            return 2;
+        }
+    };
+    let root = match fs::canonicalize(&root) {
+        Ok(root) => root,
+        Err(error) => {
+            emergency(producer, &io_failure(error));
             return 2;
         }
     };

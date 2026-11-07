@@ -6,6 +6,7 @@ fn run() -> u8 {
             0
         }
         Err(e) => {
+            chrono_harness::log_cli_error(&format!("{e}"));
             eprintln!("{e}");
             2
         }

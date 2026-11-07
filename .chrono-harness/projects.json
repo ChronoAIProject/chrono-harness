@@ -1640,6 +1640,15 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "format": {
+          "operation": "format.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1854,6 +1863,15 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-routes/Cargo.toml"
           ]
@@ -2234,6 +2252,15 @@
             "--manifest-path",
             "crates/judge-cost/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
         }
       },
       "test_project": "judge-cost-tests",
@@ -2405,6 +2432,15 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-mixed/Cargo.toml"
           ]
@@ -3013,6 +3049,15 @@
             "--output",
             ".chrono-harness/state/runner-preparation/observation.json"
           ]
+        },
+        "format": {
+          "operation": "format.inputs",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
         }
       },
       "test_project": "inputs-tests",
@@ -3208,6 +3253,15 @@
             "--manifest-path",
             "crates/distribution/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.distribution",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
         }
       },
       "test_project": "distribution-tests",
@@ -3379,6 +3433,15 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-cargo/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-cargo",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-cargo/Cargo.toml"
           ]
@@ -4171,6 +4234,15 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.cache",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/cache/Cargo.toml"
           ]
