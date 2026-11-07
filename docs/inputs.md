@@ -157,6 +157,8 @@ Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩�
 
 该消费者仍为 proposed，实际 Cargo、编译器、package／resolver、SDK、配置和保留输入绑定尚未解决。政策保留必需领域和预期包参数，不采用历史机器字节。有源码不等于保护机制已采用。执行前，负责人须核对观察器选中的 Cargo／Rustup home、rustc 与当前宿主环境及保护配置一致；继承环境本身不证明输入完整。
 
+diagnostics 标准构建复用已有 fetch／vendor 操作，在自己的 FILEMAP 计划中明确列为构建前置，并在同一次 use 保护下消费生成的来源。它无需先运行上述独立 runner 保护观察；后者的 `guard.check.runner` 结果仍按自己的真实状态保留。准备操作、输出占用和使用方一起登记，验证成本包含实际获取及构建，完整成本未知。
+
 获取参与仍保留当前根 worktree v3 政策。这些来源声明没有采用 Linux 关联／协调政策或完整 Linux 宿主配置，真实平台采用仍待完成。
 
 新增真实 CI 工作流选择有限输入集成分支并传递两份登记配置。原事件、参数、输出、退出、run／attempt、工作流修订随获取原件及 14 个安装目的保存。工作流 job 键不等于远端数字 job ID，须从原运行解析真实 job、artifact 和生产 attempt。提交工作流不代表已经运行、已消费安装工具或已落地。
