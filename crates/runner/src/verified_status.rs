@@ -4,6 +4,8 @@ use core::cmp::Ordering;
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(verus_keep_ghost)]
 #[path = "verified_identifiers.rs"]
@@ -146,6 +148,43 @@ pub struct Finding {
     pub message: String,
     pub delta_refs: Vec<String>,
     pub causes: Vec<String>,
+}
+
+pub open spec fn finding_fields(finding: &Finding) -> bool {
+    finding.code@.len() > 0 && finding.message@.len() > 0
+        && (finding.level@ == "info"@ || finding.level@ == "warning"@
+            || finding.level@ == "error"@)
+        && finding.delta_refs@.len() > 0
+}
+
+/// 只判断原协议要求的字段形状；引用是否属于实际请求仍由该请求检查。
+pub fn valid_finding_fields(finding: &Finding) -> (valid: bool)
+    ensures valid == finding_fields(finding),
+{
+    !finding.code.as_str().is_empty() && !finding.message.as_str().is_empty()
+        && (identifiers::equal_text(finding.level.as_str(), "info")
+            || identifiers::equal_text(finding.level.as_str(), "warning")
+            || identifiers::equal_text(finding.level.as_str(), "error"))
+        && finding.delta_refs.len() > 0
+}
+
+pub open spec fn evidence_identity(path: &str, kind: &str, sha256: &str) -> bool {
+    let prefix = ".chrono-harness/state/".spec_bytes();
+    path.spec_bytes().len() >= prefix.len()
+        && path.spec_bytes().take(prefix.len() as int) == prefix
+        && kind@.len() > 0 && identifiers::digest_format(sha256.spec_bytes())
+}
+
+/// 保留原前缀合同，不在这里增加词法路径或文件存在条件。
+pub fn valid_evidence_identity(path: &str, kind: &str, sha256: &str) -> (valid: bool)
+    ensures valid == evidence_identity(path, kind, sha256),
+{
+    let bytes = path.as_bytes();
+    let prefix = ".chrono-harness/state/".as_bytes();
+    if bytes.len() < prefix.len() { return false; }
+    let (head, _) = bytes.split_at(prefix.len());
+    identifiers::equal_bytes(head, prefix) && !kind.is_empty()
+        && identifiers::valid_digest_text(sha256)
 }
 
 impl Clone for Finding {
