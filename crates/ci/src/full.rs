@@ -8,7 +8,7 @@ use chrono_harness::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
-use std::{fs, io::Write, path::Path};
+use std::{fs, path::Path};
 
 pub const SCHEMA: &str = "chrono-github-full-ci/v2";
 const MARKER: &str = "# chrono-ci: owned github-full-ci/v1\n";
@@ -434,36 +434,4 @@ pub fn prepare(
         write_file(root, &c.preparation_path, &report_bytes)?;
     }
     Ok(report)
-}
-
-pub(crate) fn prepare_dispatch(
-    root: &Path,
-    path: &str,
-    c: &Config,
-    event: &str,
-    payload: &Value,
-    workflow_revision: &str,
-    github_output: Option<&str>,
-) -> Result<String, String> {
-    if event != "workflow_dispatch" {
-        return Err("full CI requires an explicit context dispatch".into());
-    }
-    let context = payload["inputs"]["context"]
-        .as_str()
-        .ok_or("dispatch requires context JSON string")?;
-    let report = prepare(root, path, c, context.as_bytes(), workflow_revision)?;
-    if let Some(output) = github_output {
-        let mut file = fs::OpenOptions::new()
-            .append(true)
-            .open(output)
-            .map_err(|e| e.to_string())?;
-        writeln!(
-            file,
-            "base={}\ncandidate={}",
-            report["base"].as_str().unwrap(),
-            report["candidate"].as_str().unwrap()
-        )
-        .map_err(|e| e.to_string())?;
-    }
-    Ok(serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n")
 }
