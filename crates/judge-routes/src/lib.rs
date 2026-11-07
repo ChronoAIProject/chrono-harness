@@ -568,7 +568,20 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
             "E_RECEIPT_MISMATCH: plan/method/tool/argv/cwd/input/environment/output".into(),
         );
     }
-    Ok(())
+    let decoded = serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
+        chrono_harness::verified_verifier::proof_stdout(
+            &op.method.output_contract,
+            &p.stdout_bytes,
+        ),
+    )
+    .ok();
+    chrono_harness::verified_verifier::admit_output(
+        &op.method.output_contract,
+        &decoded,
+        &op.method.argv,
+        p.exit_code,
+        p.failure.is_some(),
+    )
 }
 pub fn execute_actions(r: &Registrations) -> BTreeMap<String, String> {
     r.test_bindings()

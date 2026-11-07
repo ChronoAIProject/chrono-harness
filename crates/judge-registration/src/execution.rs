@@ -185,6 +185,8 @@ pub struct Method {
     pub operation: String,
     pub tool: String,
     pub argv: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_contract: Option<chrono_harness::verified_verifier::OutputContract>,
 }
 /// A test identity is opaque; its owner and terminal action are explicit registration.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -297,7 +299,10 @@ pub fn methods(projects: &Value) -> Result<BTreeMap<String, Vec<Method>>, String
                     tool: action["tool"].as_str().ok_or("tool missing")?.into(),
                     argv: serde_json::from_value(action["argv"].clone())
                         .map_err(|e| e.to_string())?,
+                    output_contract: serde_json::from_value(action["output_contract"].clone())
+                        .map_err(|e| e.to_string())?,
                 };
+                chrono_harness::verified_verifier::validate_contract(&method.output_contract)?;
                 out.entry(operation.into()).or_default().push(method);
             }
         }
