@@ -392,7 +392,7 @@ Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING
 
 `chrono-github-full-ci/v2` 是显式完整 context 的独立 dispatch 投影，使用宿主 schema4 登记的短 check 入口，旧 provider v1 拒绝。调用方提供context 原始 UTF-8 JSON 字符串与所有引用证据；生成器不推断角色、时间、宿主布局或证据获取方式。候选配置的 Git 绑定核对 HEAD、配置、provider 源和指定 workflow修订中的投影字节，只在精确缺对象读数后补取固定 OID。
 
-完整准备由短 check 的登记输入 action 执行，独立 full provider 的手工 `chrono-ci prepare` 拒绝。准备阶段保留 context 原字节，另存 Git 观察、源身份和所选短 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。不可变上下文／准备原件按路径与摘要保留，准备报告不再内嵌重复的 `context.input_bytes`；当前输出可替换，原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
+完整准备由短 check 的登记输入 action 执行，普通 `chrono-ci prepare` 手工入口已退役，调用在读取投影或发布准备输出前拒绝；内部事件准备 API，以及原生流程使用的 `prepare-endpoints`／`acquire-seed` 保留。准备阶段保留 context 原字节，另存 Git 观察、源身份和所选短 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。不可变上下文／准备原件按路径与摘要保留，准备报告不再内嵌重复的 `context.input_bytes`；当前输出可替换，原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
 
 字段、重试与采用边界见 [完整 CI 传输合同](docs/full-ci.md)。
 
@@ -417,7 +417,7 @@ Gitlink、特殊文件及非 UTF-8 登记路径尚不支持；时间戳、ACL、
 
 runner 分别保留真实 argv/cwd 与 PreparedCheck 的配置、端点、scope、context 原字节／语义摘要及原始生产证据，执行现役判官；canonical consumers 拒绝伪造展开 argv 和 selector 不一致。
 
-worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。
+worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。原生报告收集由 `check --collect` 内部执行，不提供独立 `chrono-ci gather` CLI；传输、固定来源与 attempt、报告原件及最终判官验收义务仍保留。
 
 旧合同显式拼写仅留给旧登记。full 独立短单元／汇总已接入显式 execution_units 与原始证据；当前实现不宣称 native 完成或完整 SPEC 验收。
 
