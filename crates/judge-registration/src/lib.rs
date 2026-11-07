@@ -7,19 +7,22 @@ mod registrations;
 mod transition;
 #[allow(unexpected_cfgs)]
 pub mod verified_consumption;
+#[allow(unexpected_cfgs)]
+pub mod verified_nodes;
 pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, interpret_scheduling_with_reader,
     interpret_with_reader, replacements, retirement_declaration, retirement_requests, reused_tools,
     validate_retained_view, validate_test_retirement, views, views_for_collection_inputs,
     views_for_collection_inputs_with, views_with_reader,
 };
+pub use verified_nodes::NodeKind;
 pub mod initial;
 mod schema;
 use chrono_harness::{
     facts, json, no_symlink_parents, sha256,
     wire::{self, Finding, Request, Response, Status},
 };
-pub use registrations::{NodeDefinition, NodeKind, NodeView, Registrations};
+pub use registrations::{NodeDefinition, NodeView, Registrations};
 use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},

@@ -1,5 +1,5 @@
 //! Shared strict registration data; loading does not assert readiness or semantic validity.
-use crate::{Result, schema};
+use crate::{NodeKind, Result, schema};
 use chrono_harness::facts;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -246,17 +246,6 @@ impl Registrations {
         }
         nodes
     }
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NodeKind {
-    File,
-    Project,
-    Script,
-    Input,
-    Test,
-    Judge,
-    Tool,
-    Environment,
 }
 #[derive(Clone, Debug)]
 pub struct NodeDefinition<'a> {
