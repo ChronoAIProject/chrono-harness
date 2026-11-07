@@ -86,12 +86,21 @@ pub struct Verification {
 }
 
 /// 原编译进程结束后取得的库文件身份；不在回执中复制库内容。
-#[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct CompiledArtifact {
     pub path: Vec<u8>,
     pub sha256: Vec<u8>,
     pub length: u64,
+}
+
+impl Clone for CompiledArtifact {
+    fn clone(&self) -> (out: Self)
+        ensures out.path@ == self.path@, out.sha256@ == self.sha256@,
+            out.length == self.length,
+    {
+        Self { path: self.path.clone(), sha256: self.sha256.clone(), length: self.length }
+    }
 }
 
 /// 外部文件／SHA-256 接口返回点名普通文件的实际摘要与长度或原错误。

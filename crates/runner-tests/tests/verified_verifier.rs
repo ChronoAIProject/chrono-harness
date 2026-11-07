@@ -181,6 +181,14 @@ fn library(length: u64) -> (out: policy::CompiledArtifact)
     policy::CompiledArtifact { path: original.path, sha256: original.sha256, length }
 }
 
+/// 任意观察（包括尚未准入的空值、Unicode、NUL 或无效摘要）都原样复制。
+fn any_library_clone_preserves_every_field(artifact: &policy::CompiledArtifact) {
+    let copied = artifact.clone();
+    assert(copied.path@ == artifact.path@);
+    assert(copied.sha256@ == artifact.sha256@);
+    assert(copied.length == artifact.length);
+}
+
 impl policy::ArtifactRead for UnavailableSources {
     fn identity(&self, path: &[u8]) -> Result<(Vec<u8>, u64), String> {
         Err("original library read error\0é".to_string())
