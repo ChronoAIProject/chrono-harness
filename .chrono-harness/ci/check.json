@@ -404,6 +404,7 @@
         "cache",
         "ci",
         "judge-ci",
+        "judge-projects",
         "judge-registration",
         "judge-routes",
         "runner"
@@ -412,6 +413,7 @@
         "cache",
         "ci",
         "judge-ci",
+        "judge-projects",
         "judge-registration",
         "judge-routes",
         "runner"

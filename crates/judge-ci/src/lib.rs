@@ -11,6 +11,7 @@ use std::fs;
 use std::path::Path;
 mod collect;
 pub use collect::{UnitOriginals, unit_originals};
+mod source_binding;
 mod units;
 #[allow(unexpected_cfgs)]
 pub mod verified_collection;
@@ -71,11 +72,12 @@ pub struct Policy {
     pub operation_timeout_seconds: u64,
     pub operation_output_limit_bytes: usize,
 }
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct Snapshot {
     registry: Value,
     owner_nodes: BTreeMap<String, String>,
     files: BTreeMap<String, Value>,
+    source_registry: Result<chrono_harness::verified_verifier::sources::SourceRegistry, String>,
     projects: BTreeMap<String, Value>,
     operations: BTreeMap<
         String,
@@ -510,6 +512,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
         registry: pr,
         owner_nodes,
         files,
+        source_registry: serde_json::from_value(fm).map_err(|e| e.to_string()),
         projects,
         operations: ops,
         edges,
@@ -1659,6 +1662,7 @@ fn evaluate(
         }
         let mut response = collect::collect(
             req,
+            reader,
             manifest,
             &config,
             &new,
@@ -1716,12 +1720,26 @@ fn evaluate(
     }
     if let Some(plan) = &plan {
         let outcome = execute_plan(req, plan)?;
+        let source_io = source_binding::CandidateIo {
+            reader,
+            request: req,
+            tree: &new.tree,
+        };
         for result in outcome.executed.iter().chain(&outcome.blocked) {
-            results.push(verified_collection::operation_result(
+            results.push(verified_collection::operation_result_with_sources(
                 result.operation.as_str(),
                 result.status.as_str(),
                 &result.error,
                 result.receipt.as_ref().map(|r| r.process.exit_code),
+                chrono_harness::verified_verifier::sources::bind_process_sources(
+                    result.status.as_str(),
+                    result
+                        .receipt
+                        .as_ref()
+                        .map(|r| (&r.process.argv, &r.compiler_dependency)),
+                    &new.source_registry,
+                    &source_io,
+                ),
             ));
             if let Some(receipt) = &result.receipt {
                 let mut original = serde_json::to_value(receipt).map_err(|e| e.to_string())?;

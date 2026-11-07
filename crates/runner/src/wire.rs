@@ -267,11 +267,16 @@ pub(crate) fn validate_response_at(
     exit: i32,
     reference: impl Fn(&str) -> bool,
 ) -> Result<(), String> {
-    if r.protocol != protocol
-        || r.request_id != request_id
-        || r.judge_id != judge_id
-        || exit != r.status.exit_code()
-    {
+    if !crate::verified_status::wire_header_matches(
+        &r.protocol,
+        &r.request_id,
+        &r.judge_id,
+        &r.status,
+        exit,
+        protocol,
+        request_id,
+        judge_id,
+    ) {
         return Err("E_PROTOCOL: response identity/status/exit mismatch".into());
     }
     for f in &r.findings {
