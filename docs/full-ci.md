@@ -72,12 +72,10 @@ checkout 使用给定 candidate。候选绑定的 Git 核对 HEAD、完整配置
 
 上传使用 `always()` 保留登记根和失败证据，早期 bootstrap 失败可能只有作业日志。单文件写入不是多文件崩溃或并发事务。真实消费者测试、原生生成派发、公开发布、完整宿主启用和本地／CI 同判分别验收；此投影不创建 PR、合并、发布 required check 或核落地。
 
-## 输入后续工作的范围与来源纠正
+## 当前输入与采用边界
 
-后续输入实现保留原负责人处的采集／准备和 Cargo v6／directory v3 源码，沿用当前快照／组合、保留执行、精确 Git v2 选择及 worktree v3。登记的独立 runner 保护仍为 proposed，缺少当前绑定、参与和真实 CI 验收；它没有启用历史完整政策。完整 SPEC 目标仍未完成，本次源码只算 I1 交接。
+输入观察、捕获、配对和组合归 [inputs 所有者](inputs.md)，可选 Cargo 保护归 [Cargo 所有者](cargo-projects.md)。本仓额外 runner／diagnostics guard 已退役，不是待激活入口；通用产品或源码测试不证明某份宿主政策仍有必要。
 
-PR163 的 `65d577f0c570451b674d271642d385b316c7085b` 有真实 distribution 消费者：bootstrap-core.json、bootstrap-detector.json、bootstrap.json 都选择 distribution-release.json，bootstrap.py／共享启动执行或验证安装器、回执和载荷。因此先前“没有已提交配置消费这条分支”的说法不符合这个固定来源。当前 distribution 产品已经负责安装，保留遗漏的宿主集成不要求另造安装器或切到 beta.21。
+现役完整宿主登记仍为 proposed，输入与执行物绑定未齐全。完整原生 CI、固定两端原件、安装后真实消费及同判分别验收，不能由工作流生成或历史绿色推导。后续采用须先绑定当前必要性终点，再用候选生产者验证实际范围。
 
-PR205 的 `native/macos/config.json`、`cargo-runner.json` 样本与 PR163 原 config 和 runner 政策**字节不同**，不能当作原样替换。不同 Git blob 身份、遗漏的保护／package／检查程序／发布源码，以及历史证据义务均保留在[输入来源保管](input-source-custody.md)。这里不把任何遗漏认定为冗余或已交付。完整真实 CI 启用、精确两端组合、当前安装消费者参与及更强同判仍未建立。
-
-**产品与宿主政策曾同步修改：**新增观察器／Cargo 行为及其登记的获取／独立消费者声明，保留当前 Git／worktree 政策含义。固定政策到 `script:release-build` 的过时 FILEMAP 边已改指当前 `project:release-build`。所选生产者实际执行前，源码安装、真实 CI、存储和总维护成本均未知。
+历史源码、不同样本及尚未取得的原件由[输入保管者](input-source-custody.md)负责。来源只作固定数据，不恢复历史安装配方、并列政策或长期维护 CI 运行快照；退役也不把旧失败改写为成功。
