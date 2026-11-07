@@ -3032,6 +3032,35 @@ fn preserved_original_release_keeps_other_members_of_the_same_consumer() {
         b"original"
     );
 }
+
+#[test]
+fn explicit_maintenance_visits_only_the_named_originals() {
+    if !isolated_capability_test("explicit_maintenance_visits_only_the_named_originals") {
+        return;
+    }
+    let h = host(256, 16);
+    let mut ids = Vec::new();
+    for name in ["selected", "unrelated"] {
+        let path = tree(h.path(), name);
+        let publication = inventory(h.path()).begin("fixture", &path, json!(null)).unwrap();
+        ids.push(publication.id().to_owned());
+        publication.complete(json!({"exit":7})).unwrap();
+    }
+    let unrelated = retention_state::object_path(h.path(), &ids[1]);
+    fs::write(&unrelated, b"unrelated damaged metadata").unwrap();
+    for originals in [json!([]), json!([ids[0], ids[0]]), json!(["unknown"])] {
+        assert_eq!(consumer_call(h.path(), json!({"operation":"maintain","originals":originals})).exit_code, 2);
+        assert!(h.path().join(".chrono-harness/state/fixtures/selected").exists());
+    }
+    let result = consumer_call(h.path(), json!({"operation":"maintain","originals":[ids[0]]}));
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    assert!(!h.path().join(".chrono-harness/state/fixtures/selected").exists());
+    assert!(h.path().join(".chrono-harness/state/fixtures/unrelated").exists());
+    assert_eq!(fs::read(unrelated).unwrap(), b"unrelated damaged metadata");
+    let reply: Value = serde_json::from_str(&result.stdout).unwrap();
+    assert_eq!(reply["scope"]["kind"], "declared-components");
+    assert_eq!(reply["scope"]["originals"], json!([ids[0]]));
+}
 #[test]
 fn declared_consumer_cli_protects_existing_original_and_requires_real_release() {
     if !isolated_capability_test(
