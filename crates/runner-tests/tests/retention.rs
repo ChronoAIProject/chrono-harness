@@ -2924,7 +2924,12 @@ fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
     fs::write(survivor.path().join("original.json"), raw).unwrap();
     let role = format!("recovery:{path}");
     let publication = inventory(h.path())
-        .begin_rooted("fixture", path, json!({"completion":"unknown"}), &[role.clone()])
+        .begin_rooted(
+            "fixture",
+            path,
+            json!({"completion":"unknown"}),
+            &[role.clone()],
+        )
         .unwrap();
     let id = publication.id().to_owned();
     let declaration = json!({
@@ -2941,8 +2946,16 @@ fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
     let live = consumer_call(h.path(), declaration.clone());
     assert_eq!(live.exit_code, 2, "{}", live.stdout);
     drop(publication);
+    let reader = inventory(h.path()).consume(&id).unwrap();
+    assert_eq!(consumer_call(h.path(), declaration.clone()).exit_code, 2);
+    drop(reader);
     let before = ledger(h.path());
-    for field in ["sha256", "roles", "current_consumers_released", "survivor_path"] {
+    for field in [
+        "sha256",
+        "roles",
+        "current_consumers_released",
+        "survivor_path",
+    ] {
         let mut rejected = declaration.clone();
         rejected[field] = match field {
             "sha256" => json!("0".repeat(64)),
@@ -2963,8 +2976,61 @@ fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
     assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
     assert_eq!(consumer_call(h.path(), declaration.clone()).exit_code, 0);
     assert_eq!(maintain_fixture_to(h.path(), 0), 0);
-    assert_eq!(fs::read(survivor.path().join("original.json")).unwrap(), raw);
+    assert_eq!(
+        fs::read(survivor.path().join("original.json")).unwrap(),
+        raw
+    );
     assert_eq!(consumer_call(h.path(), declaration).exit_code, 0);
+}
+
+#[test]
+fn preserved_original_release_keeps_other_members_of_the_same_consumer() {
+    if !isolated_capability_test(
+        "preserved_original_release_keeps_other_members_of_the_same_consumer",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let survivor = tempfile::tempdir().unwrap();
+    let mut ids = Vec::new();
+    for name in ["archived", "still-required"] {
+        let path = format!(".chrono-harness/state/fixtures/{name}.json");
+        fs::write(h.path().join(&path), b"original").unwrap();
+        let p = inventory(h.path())
+            .begin("fixture", &path, json!({"exit":7}))
+            .unwrap();
+        ids.push(p.id().to_owned());
+        p.complete(json!({"exit":7})).unwrap();
+    }
+    inventory(h.path())
+        .reference("shared-recheck", &ids)
+        .unwrap();
+    let path = ".chrono-harness/state/fixtures/archived.json";
+    fs::write(survivor.path().join("original.json"), b"original").unwrap();
+    let mut request = json!({"operation":"release-preserved",
+        "original":original_identity(h.path(), &ids[0], path),"roles":["shared-recheck"],
+        "survivor_root":h.path(),"survivor_path":path,
+        "sha256":chrono_harness::sha256(b"original"),"length":8,
+        "current_consumers_released":true,"reason":"Only the first member has been preserved and released"});
+    assert_eq!(consumer_call(h.path(), request.clone()).exit_code, 2);
+    request["survivor_root"] = json!(survivor.path());
+    request["survivor_path"] = json!("original.json");
+    fs::write(survivor.path().join("original.json"), b"modified").unwrap();
+    assert_eq!(consumer_call(h.path(), request.clone()).exit_code, 2);
+    fs::write(survivor.path().join("original.json"), b"original").unwrap();
+    let result = consumer_call(h.path(), request);
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    assert_eq!(ledger(h.path())["roots"]["shared-recheck"], json!([ids[1]]));
+    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
+    assert!(
+        h.path()
+            .join(".chrono-harness/state/fixtures/still-required.json")
+            .is_file()
+    );
+    assert_eq!(
+        fs::read(survivor.path().join("original.json")).unwrap(),
+        b"original"
+    );
 }
 #[test]
 fn declared_consumer_cli_protects_existing_original_and_requires_real_release() {

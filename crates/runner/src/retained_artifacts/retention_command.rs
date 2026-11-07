@@ -55,6 +55,16 @@ enum Request {
         receipt: Evidence,
         pointer: String,
     },
+    ReleasePreserved {
+        original: OriginalIdentity,
+        roles: Vec<String>,
+        survivor_root: std::path::PathBuf,
+        survivor_path: String,
+        sha256: String,
+        length: u64,
+        current_consumers_released: bool,
+        reason: String,
+    },
     AcknowledgeDelivery {
         report: String,
         report_sha256: String,
@@ -135,6 +145,25 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
             )
         }
         Request::Maintain => inventory.maintain(),
+        Request::ReleasePreserved {
+            original,
+            roles,
+            survivor_root,
+            survivor_path,
+            sha256,
+            length,
+            current_consumers_released,
+            reason,
+        } => inventory.release_preserved(
+            &original,
+            &roles,
+            &survivor_root,
+            &survivor_path,
+            &sha256,
+            length,
+            current_consumers_released,
+            &reason,
+        ),
         Request::MigratePolicy { previous_policy } => {
             inventory.migrate_policy(&evidence(root, &previous_policy)?)
         }

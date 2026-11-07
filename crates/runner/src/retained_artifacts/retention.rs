@@ -1230,6 +1230,129 @@ impl Inventory {
         self.save(&l, &gate)?;
         Ok(receipt)
     }
+    /// A terminal caller preserves an exact original outside the retired host.
+    /// This ends only its explicitly named roots; maintenance still owns disposal.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn release_preserved(
+        &self,
+        original: &OriginalIdentity,
+        roles: &[String],
+        survivor_root: &Path,
+        survivor_path: &str,
+        digest: &str,
+        length: u64,
+        current_consumers_released: bool,
+        reason: &str,
+    ) -> Result<Value, String> {
+        let selected: BTreeSet<_> = roles.iter().cloned().collect();
+        if !current_consumers_released
+            || reason.trim().is_empty()
+            || reason.len() > 4096
+            || roles.is_empty()
+            || roles.len() > self.policy.max_related_outputs
+            || selected.len() != roles.len()
+            || roles.iter().any(|r| r.is_empty() || r.len() > 256)
+            || !crate::wire::is_digest(digest)
+            || length > self.policy.max_output_bytes
+            || !survivor_root.is_absolute()
+            || fs::canonicalize(survivor_root).map_err(|e| e.to_string())? != survivor_root
+        {
+            return Err("preserved release requires exact roots, external original and explicit current consumer release".into());
+        }
+        crate::relative_path(&original.path)?;
+        let survivor = no_symlink_parents(survivor_root, survivor_path)?;
+        if survivor.starts_with(&self.root) {
+            return Err("preserved original must survive outside the retired host".into());
+        }
+        let verify = |path: &Path| -> Result<String, String> {
+            let before = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+            if !before.is_file() || before.file_type().is_symlink() || before.len() != length {
+                return Err(
+                    "preserved release requires a physical file with the declared length".into(),
+                );
+            }
+            let signature = identity(path)?;
+            let file = fs::File::open(path).map_err(|e| e.to_string())?;
+            if identity(path)? != signature
+                || crate::copy_hashed(&file, std::io::sink())? != (digest.into(), length)
+                || identity(path)? != signature
+                || before.modified().map_err(|e| e.to_string())?
+                    != fs::symlink_metadata(path)
+                        .map_err(|e| e.to_string())?
+                        .modified()
+                        .map_err(|e| e.to_string())?
+            {
+                return Err("preserved original bytes or identity changed".into());
+            }
+            Ok(signature)
+        };
+        let survivor_identity = verify(&survivor)?;
+        let receipt = json!({"schema":"chrono-preserved-original-release/v1","id":original.id,
+            "original":original,"roles":roles,"survivor_root":survivor_root,
+            "survivor_path":survivor_path,"survivor_identity":survivor_identity,
+            "sha256":digest,"length":length,"reason":reason,
+            "effects":"consumer-root-release-only","disposal":"not-attempted",
+            "completion":"not-established"});
+        let gate = self.addressed_gate(
+            &[original.id.clone()],
+            &[original.path.clone()],
+            roles,
+            None,
+            false,
+            true,
+        )?;
+        let mut ledger = self.load(&gate)?;
+        if ledger.summaries.iter().any(|s| s == &receipt) {
+            self.stable(&gate)?;
+            return Ok(receipt);
+        }
+        let output = ledger
+            .outputs
+            .iter()
+            .find(|o| o.id == original.id)
+            .ok_or("preserved original is unavailable")?;
+        if output.tree {
+            return Err(
+                "preserved release requires an explicitly retained regular original".into(),
+            );
+        }
+        let actual: BTreeSet<_> = ledger
+            .roots
+            .iter()
+            .filter(|(_, ids)| ids.contains(&original.id))
+            .map(|(role, _)| role.clone())
+            .collect();
+        if actual != selected {
+            return Err(
+                "preserved release roots differ from the current original consumers".into(),
+            );
+        }
+        let leases = self.original_leases(&ledger, std::slice::from_ref(original), true)?;
+        let source = no_symlink_parents(&self.root, &original.path)?;
+        if verify(&source)? != original.identity || verify(&survivor)? != survivor_identity {
+            return Err("preserved release original identity changed".into());
+        }
+        for role in roles {
+            let remaining: Vec<_> = ledger.roots[role]
+                .iter()
+                .filter(|id| **id != original.id)
+                .cloned()
+                .collect();
+            self.reference_locked(&mut ledger, role, &remaining)?;
+        }
+        for lease in &leases {
+            lease.stable()?;
+        }
+        self.stable(&gate)?;
+        ledger.summaries.push(receipt.clone());
+        let excess = ledger
+            .summaries
+            .len()
+            .saturating_sub(self.policy.max_summaries);
+        ledger.summaries.drain(..excess);
+        self.save(&ledger, &gate)?;
+        Ok(receipt)
+    }
     /// Edges are not roots. Released historical cycles can be reclaimed.
     pub fn dependencies(&self, id: &str, references: &[String]) -> Result<(), String> {
         let gate = self.addressed_gate(
