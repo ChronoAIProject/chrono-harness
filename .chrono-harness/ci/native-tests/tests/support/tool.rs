@@ -4,6 +4,7 @@ use std::{
     env,
     fs::{self, OpenOptions},
     io::Write,
+    os::unix::fs::PermissionsExt,
     path::Path,
     process::{Command, ExitCode},
 };
@@ -135,7 +136,10 @@ fn run() -> Result<u8, String> {
         && args.len() == 2
     {
         let compiler = fs::canonicalize(executable).map_err(|e| e.to_string())?;
-        fs::write(&args[1], serde_json::to_vec(&json!({"compiler":compiler,"wrapper":env::var("RUSTC_WRAPPER").ok(),"workspace_wrapper":env::var("RUSTC_WORKSPACE_WRAPPER").ok()})).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        fs::write(format!("{}.selection.json",args[1]), serde_json::to_vec(&json!({"compiler":compiler,"wrapper":env::var("RUSTC_WRAPPER").ok(),"workspace_wrapper":env::var("RUSTC_WORKSPACE_WRAPPER").ok()})).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        fs::copy(executable, &args[1]).map_err(|e| e.to_string())?;
+        fs::set_permissions(&args[1], fs::Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
     } else {
         return Ok(99);
     }

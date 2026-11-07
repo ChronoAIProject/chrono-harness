@@ -75,6 +75,7 @@ dependencies = [
  "chrono-judge-registration",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

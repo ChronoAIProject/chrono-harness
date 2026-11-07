@@ -1,10 +1,11 @@
 //! 显式环境选择与 Rustup 调用；不修改进程全局环境或全局默认工具链。
+use crate::profile::path as host_path;
 use crate::{
     bindings::{self, Declarations, Environment, NativePlatform, Tools},
     verified_bindings::{self as policy, Executable},
 };
-use chrono_harness::{json, no_symlink_parents, resolve_program};
-use serde::Deserialize;
+use chrono_harness::{json, resolve_program};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
@@ -38,7 +39,7 @@ impl std::fmt::Display for Failure {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Provision {
     pub profile: String,
@@ -63,13 +64,6 @@ pub struct Selected {
 
 fn typed<T: serde::de::DeserializeOwned>(value: &Value) -> Result<T, String> {
     serde_json::from_value(value.clone()).map_err(|error| error.to_string())
-}
-
-fn host_path(root: &Path, declared: &str, prefix: &[u8]) -> Result<PathBuf, String> {
-    if !policy::host_path(declared.as_bytes(), prefix) {
-        return Err(format!("invalid bootstrap host path: {declared}"));
-    }
-    no_symlink_parents(root, declared)
 }
 
 impl Prepared {

@@ -15,6 +15,159 @@ verus! {
 
 pub enum DeclarationSource { Registry, Direct, Unbound, Reject }
 
+pub fn participation_mode(coordinator: &str, absolute_git: bool) -> (valid: bool)
+    ensures valid <==> (coordinator@ == "git-main-worktree"@ && absolute_git),
+{
+    equal_text(coordinator, "git-main-worktree") && absolute_git
+}
+
+pub fn needs_configured_tool(prerequisite: bool, tool: &str) -> (required: bool)
+    ensures required <==> (prerequisite || (tool@ != "cargo"@ && tool@ != "rustc"@)),
+{
+    prerequisite || (!equal_text(tool, "cargo") && !equal_text(tool, "rustc"))
+}
+
+pub fn unique_method(count: usize) -> (valid: bool)
+    ensures valid <==> count == 1,
+{ count == 1 }
+
+pub fn profile_options(schema: &str, bound: bool, upgrade: bool, stage: bool, reuse_empty: bool) -> (valid: bool)
+    ensures valid <==> (schema@ == "chrono-bootstrap/v1"@ && bound
+        && !(upgrade && stage) && (reuse_empty || upgrade)),
+{
+    equal_text(schema, "chrono-bootstrap/v1") && bound && !(upgrade && stage) && (reuse_empty || upgrade)
+}
+
+pub open spec fn unique_names(names: Seq<String>) -> bool {
+    (forall|i: int| 0 <= i < names.len() ==> names[i]@ != ""@)
+        && (forall|i: int, j: int| 0 <= j < i < names.len() ==> names[i]@ != names[j]@)
+}
+
+pub fn valid_names(names: &Vec<String>) -> (valid: bool)
+    ensures valid <==> unique_names(names@),
+{
+    let mut i = 0;
+    while i < names.len()
+        invariant
+            0 <= i <= names.len(),
+            forall|k: int| 0 <= k < i ==> names@[k]@ != ""@,
+            forall|k: int, j: int| 0 <= j < k < i ==> names@[k]@ != names@[j]@,
+        decreases names.len() - i,
+    {
+        if equal_text(names[i].as_str(), "") { return false; }
+        let mut j = 0;
+        while j < i
+            invariant
+                0 <= j <= i < names.len(),
+                names@[i as int]@ != ""@,
+                forall|k: int| 0 <= k < i ==> names@[k]@ != ""@,
+                forall|k: int, earlier: int| 0 <= earlier < k < i ==> names@[k]@ != names@[earlier]@,
+                forall|k: int| 0 <= k < j ==> names@[i as int]@ != names@[k]@,
+            decreases i - j,
+        {
+            if equal_text(names[i].as_str(), names[j].as_str()) { return false; }
+            j += 1;
+        }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn name_member(values: Seq<String>, target: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < values.len() && (#[trigger] values[i])@ == target
+}
+
+fn contains_name(values: &Vec<String>, target: &str) -> (found: bool)
+    ensures found <==> name_member(values@, target@),
+{
+    let mut i = 0;
+    while i < values.len()
+        invariant 0 <= i <= values.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] values@[j])@ != target@,
+        decreases values.len() - i,
+    {
+        if equal_text(values[i].as_str(), target) { return true; }
+        i += 1;
+    }
+    false
+}
+
+pub fn names_subset(selected: &Vec<String>, available: &Vec<String>) -> (valid: bool)
+    ensures valid <==> (forall|i: int| 0 <= i < selected@.len()
+        ==> name_member(available@, (#[trigger] selected@[i])@)),
+{
+    let mut i = 0;
+    while i < selected.len()
+        invariant
+            0 <= i <= selected.len(),
+            forall|k: int| 0 <= k < i ==> name_member(available@, (#[trigger] selected@[k])@),
+        decreases selected.len() - i,
+    {
+        if !contains_name(available, selected[i].as_str()) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn same_name_list(a: Seq<String>, b: Seq<String>) -> bool {
+    a.len() == b.len() && forall|i: int| 0 <= i < a.len() ==> a[i]@ == b[i]@
+}
+
+pub fn text_list_equal(a: &Vec<String>, b: &Vec<String>) -> (equal: bool)
+    ensures equal <==> same_name_list(a@, b@),
+{
+    if a.len() != b.len() { return false; }
+    let mut i = 0;
+    while i < a.len()
+        invariant a.len() == b.len(), 0 <= i <= a.len(),
+            forall|j: int| 0 <= j < i ==> a@[j]@ == b@[j]@,
+        decreases a.len() - i,
+    {
+        if !equal_text(a[i].as_str(), b[i].as_str()) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub fn all_successful(codes: &Vec<i32>) -> (success: bool)
+    ensures success <==> (forall|i: int| 0 <= i < codes@.len() ==> codes@[i] == 0),
+{
+    let mut i = 0;
+    while i < codes.len()
+        invariant 0 <= i <= codes.len(), forall|j: int| 0 <= j < i ==> codes@[j] == 0,
+        decreases codes.len() - i,
+    {
+        if codes[i] != 0 { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub fn construction_complete(expected: &Vec<String>, actual: &Vec<String>, codes: &Vec<i32>,
+    expected_installations: &Vec<String>, installations: &Vec<String>,
+    selected: bool, expected_stage: bool, observed_stage: bool) -> (complete: bool)
+    ensures complete <==> (selected && same_name_list(expected@, actual@)
+        && actual@.len() == codes@.len()
+        && (forall|i: int| 0 <= i < codes@.len() ==> codes@[i] == 0)
+        && same_name_list(expected_installations@, installations@)
+        && expected_stage == observed_stage),
+{
+    selected && text_list_equal(expected, actual) && actual.len() == codes.len()
+        && all_successful(codes) && text_list_equal(expected_installations, installations)
+        && expected_stage == observed_stage
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "lowercase"))]
+pub enum BuildStatus { Passed, Failed }
+
+pub fn construction_status(failed: bool, complete: bool) -> (out: BuildStatus)
+    ensures (out is Passed) <==> (!failed && complete),
+        (out is Failed) <==> (failed || !complete),
+{
+    if !failed && complete { BuildStatus::Passed } else { BuildStatus::Failed }
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct SourceObservation {

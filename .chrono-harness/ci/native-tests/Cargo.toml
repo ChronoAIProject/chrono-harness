@@ -39,6 +39,14 @@ path = "tests/execution.rs"
 name = "source"
 path = "tests/source.rs"
 
+[[test]]
+name = "profile"
+path = "tests/profile.rs"
+
+[[test]]
+name = "construction"
+path = "tests/construction.rs"
+
 [dependencies.serde]
 version = "1"
 features = ["derive"]

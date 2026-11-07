@@ -13,6 +13,130 @@ use vstd::prelude::*;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn construction_success_requires_the_complete_ordered_execution_installation_and_owner_stage() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("bb"); reveal_strlit("tool");
+        assert("a"@.len() != "bb"@.len());
+    }
+    let mut expected = Vec::new(); expected.push("a".to_string()); expected.push("bb".to_string());
+    let mut actual = Vec::new(); actual.push("a".to_string()); actual.push("bb".to_string());
+    let mut reordered = Vec::new(); reordered.push("bb".to_string()); reordered.push("a".to_string());
+    let mut installed = Vec::new(); installed.push("tool".to_string());
+    let missing: Vec<String> = Vec::new();
+    let mut codes = Vec::new(); codes.push(0i32); codes.push(0i32);
+    let mut failed_codes = Vec::new(); failed_codes.push(0i32); failed_codes.push(17i32);
+    let mut short_codes = Vec::new(); short_codes.push(0i32);
+    proof {
+        assert forall|i: int| 0 <= i < expected@.len() implies expected@[i]@ == actual@[i]@ by {
+            assert(i == 0 || i == 1);
+        }
+        assert(policy::same_name_list(expected@, actual@));
+        assert(expected@[0]@.len() == 1 && reordered@[0]@.len() == 2);
+        assert(!policy::same_name_list(expected@, reordered@));
+        assert forall|i: int| 0 <= i < codes@.len() implies codes@[i] == 0 by {
+            assert(i == 0 || i == 1);
+        }
+        assert(failed_codes@[1] == 17 && failed_codes@.len() == 2);
+        assert(codes@.len() == actual@.len() && short_codes@.len() != actual@.len());
+        assert(policy::same_name_list(installed@, installed@));
+        assert(installed@.len() == 1 && missing@.len() == 0);
+        assert(!policy::same_name_list(installed@, missing@));
+    }
+    let complete = policy::construction_complete(&expected, &actual, &codes, &installed, &installed, true, false, false);
+    let stage = policy::construction_complete(&expected, &actual, &codes, &installed, &installed, true, true, true);
+    let unordered = policy::construction_complete(&expected, &reordered, &codes, &installed, &installed, true, false, false);
+    let failed = policy::construction_complete(&expected, &actual, &failed_codes, &installed, &installed, true, false, false);
+    let no_code = policy::construction_complete(&expected, &actual, &short_codes, &installed, &installed, true, false, false);
+    let no_install = policy::construction_complete(&expected, &actual, &codes, &installed, &missing, true, false, false);
+    let no_selection = policy::construction_complete(&expected, &actual, &codes, &installed, &installed, false, false, false);
+    let no_stage = policy::construction_complete(&expected, &actual, &codes, &installed, &installed, true, true, false);
+    let extra_stage = policy::construction_complete(&expected, &actual, &codes, &installed, &installed, true, false, true);
+    assert(complete && stage && !unordered && !failed && !no_code && !no_install && !no_selection && !no_stage && !extra_stage);
+    let passed = policy::construction_status(false, true);
+    let interrupted = policy::construction_status(false, false);
+    let errored = policy::construction_status(true, true);
+    let missing_failed = policy::construction_status(true, false);
+    assert(passed is Passed && interrupted is Failed && errored is Failed && missing_failed is Failed);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn profile_sequences_keep_empty_subsets_but_reject_empty_or_duplicate_operation_names() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("bb"); reveal_strlit("ccc"); reveal_strlit("");
+        assert("a"@.len() == 1 && "bb"@.len() == 2 && "ccc"@.len() == 3);
+    }
+    let empty: Vec<String> = Vec::new();
+    let mut names = Vec::new(); names.push("a".to_string()); names.push("bb".to_string());
+    let mut duplicate = Vec::new(); duplicate.push("a".to_string()); duplicate.push("a".to_string());
+    let mut blank = Vec::new(); blank.push("".to_string());
+    let mut selected = Vec::new(); selected.push("bb".to_string());
+    let mut missing = Vec::new(); missing.push("ccc".to_string());
+    proof {
+        assert forall|i: int| 0 <= i < names@.len() implies names@[i]@ != ""@ by {
+            assert(i == 0 || i == 1);
+            assert(names@[i]@.len() == 1 || names@[i]@.len() == 2);
+        }
+        assert forall|i: int, j: int| 0 <= j < i < names@.len() implies names@[i]@ != names@[j]@ by {
+            assert(i == 1 && j == 0);
+            assert(names@[i]@.len() != names@[j]@.len());
+        }
+        assert(policy::unique_names(empty@) && policy::unique_names(names@));
+        assert(duplicate@[0]@ == duplicate@[1]@ && duplicate@.len() == 2);
+        assert(!policy::unique_names(duplicate@));
+        assert(blank@[0]@ == ""@ && blank@.len() == 1);
+        assert(!policy::unique_names(blank@));
+        assert(selected@.len() == 1 && selected@[0]@ == names@[1]@);
+        assert(policy::name_member(names@, selected@[0]@));
+        assert forall|i: int| 0 <= i < names@.len() implies names@[i]@ != missing@[0]@ by {
+            assert(i == 0 || i == 1);
+            assert(names@[i]@.len() != missing@[0]@.len());
+        }
+        assert(!policy::name_member(names@, missing@[0]@));
+        assert(!policy::name_member(empty@, selected@[0]@));
+    }
+    let empty_names = policy::valid_names(&empty);
+    let valid = policy::valid_names(&names);
+    let repeated = policy::valid_names(&duplicate);
+    let blank_name = policy::valid_names(&blank);
+    let empty_subset = policy::names_subset(&empty, &names);
+    let selected_subset = policy::names_subset(&selected, &names);
+    let missing_subset = policy::names_subset(&missing, &names);
+    let no_available = policy::names_subset(&selected, &empty);
+    assert(empty_names && valid && !repeated && !blank_name);
+    assert(empty_subset && selected_subset && !missing_subset && !no_available);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn profile_modes_require_registry_bound_current_schema_and_one_owner_phase() {
+    proof {
+        reveal_strlit("chrono-bootstrap/v1"); reveal_strlit("unknown");
+        reveal_strlit("git-main-worktree"); reveal_strlit("other");
+        reveal_strlit("cargo"); reveal_strlit("rustc"); reveal_strlit("custom");
+        assert("chrono-bootstrap/v1"@.len() != "unknown"@.len());
+        assert("git-main-worktree"@.len() != "other"@.len());
+        assert("cargo"@.len() != "custom"@.len() && "rustc"@.len() != "custom"@.len());
+    }
+    let ordinary = policy::profile_options("chrono-bootstrap/v1", true, false, false, true);
+    let upgrade = policy::profile_options("chrono-bootstrap/v1", true, true, false, false);
+    let stage = policy::profile_options("chrono-bootstrap/v1", true, false, true, true);
+    let unknown = policy::profile_options("unknown", true, false, false, true);
+    let unbound = policy::profile_options("chrono-bootstrap/v1", false, false, false, true);
+    let conflict = policy::profile_options("chrono-bootstrap/v1", true, true, true, true);
+    let no_upgrade = policy::profile_options("chrono-bootstrap/v1", true, false, false, false);
+    let main = policy::participation_mode("git-main-worktree", true);
+    let relative_git = policy::participation_mode("git-main-worktree", false);
+    let other = policy::participation_mode("other", true);
+    let zero = policy::unique_method(0); let one = policy::unique_method(1); let two = policy::unique_method(2);
+    let cargo = policy::needs_configured_tool(false, "cargo");
+    let compiler = policy::needs_configured_tool(false, "rustc");
+    let custom = policy::needs_configured_tool(false, "custom");
+    let prerequisite = policy::needs_configured_tool(true, "cargo");
+    assert(ordinary && upgrade && stage && !unknown && !unbound && !conflict && !no_upgrade);
+    assert(main && !relative_git && !other && !zero && one && !two);
+    assert(!cargo && !compiler && custom && prerequisite);
+}
+
 fn source_observation(commit: &str, tree: &str, dirty: bool, error: Option<String>) -> (out: policy::SourceObservation)
     ensures
         out.commit is Some, out.commit.unwrap()@ == commit@,
