@@ -10,13 +10,11 @@
     "inputs.fetch.judge-ci",
     "inputs.fetch.ci",
     "inputs.fetch.worktree",
-    "inputs.fetch.judge-cargo",
     "inputs.fetch.inputs",
     "build.runner",
     "build.judge-ci",
     "build.ci",
     "build.worktree",
-    "build.judge-cargo",
     "build.inputs",
     "host.bootstrap-verus"
   ],
@@ -32,10 +30,6 @@
     {
       "source": "crates/ci/target/debug/chrono-ci",
       "destination": ".chrono-harness/bin/chrono-ci"
-    },
-    {
-      "source": "crates/judge-cargo/target/debug/chrono-judge-cargo",
-      "destination": ".chrono-harness/bin/chrono-judge-cargo"
     },
     {
       "source": "crates/inputs/target/debug/chrono-inputs",

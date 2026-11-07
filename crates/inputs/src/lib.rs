@@ -177,12 +177,6 @@ fn capture_declared(
         if !required.contains(input["id"].as_str().unwrap()) {
             continue;
         }
-        // Runtime-state inputs are produced by the current host's declared
-        // producer. They are validated at the consuming operation and never
-        // copied into an endpoint snapshot.
-        if chrono_judge_registration::inputs::runtime_state_source(input)?.is_some() {
-            continue;
-        }
         let path = root.join(input["location"].as_str().unwrap());
         let retained = if matches!(r.config()["schema_version"].as_u64(), Some(2 | 3 | 4)) {
             match observe_file(&path)? {
