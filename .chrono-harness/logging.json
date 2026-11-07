@@ -1,0 +1,8 @@
+{
+  "schema": "chrono-runtime-logging/v1",
+  "level": "info",
+  "directory": ".chrono-harness/state/logs/",
+  "max_bytes": 10485760,
+  "max_files": 5,
+  "stderr": false
+}
