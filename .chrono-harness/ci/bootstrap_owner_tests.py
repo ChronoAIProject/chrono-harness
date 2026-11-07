@@ -1,4 +1,4 @@
-"""Behavioral checks for the bootstrap byte owner; lifecycle exclusion is Rust-owned."""
+"""Behavioral checks for bootstrap qualification and owner phase consumers."""
 import json
 import hashlib
 import os
@@ -24,7 +24,7 @@ def retained_process(stdout=b"", stderr=b"", **metadata):
     return process
 
 
-class OwnerPublication(unittest.TestCase):
+class OwnerPhases(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix="bootstrap-owner-")
         self.addCleanup(self.directory.cleanup)
@@ -38,64 +38,11 @@ class OwnerPublication(unittest.TestCase):
         self.staged = self.selected.parent / "owner-stages/one/chrono-worktree"
         self.staged.parent.mkdir(parents=True)
         self.staged.write_bytes(b"source-built correction")
-        self.record = {"selected": ".chrono-harness/bin/chrono-worktree",
-                       "previous": owner.file_binding(self.selected),
-                       "staged": dict(owner.file_binding(self.staged),
-                                      path=self.staged.relative_to(self.root).as_posix())}
 
-    def test_publication_preserves_original_inode_and_reentry_is_idempotent(self):
-        previous = self.record["previous"]
-        result = owner.publish_bytes(self.root, self.record)
-        self.assertEqual(self.selected.read_bytes(), b"source-built correction")
-        retained = self.staged.parent / "previous-owner"
-        self.assertEqual(owner.file_binding(retained), previous)
-        self.assertEqual(owner.publish_bytes(self.root, self.record), result)
-
-    def test_interrupted_after_atomic_replace_recovers_from_original_intent(self):
-        replace = os.replace
-        def interrupt(source, target):
-            replace(source, target)
-            if Path(target) == self.selected:
-                raise OSError("original publication interruption")
-        with mock.patch.object(owner.os, "replace", side_effect=interrupt):
-            with self.assertRaisesRegex(OSError, "original publication interruption"):
-                owner.publish_bytes(self.root, self.record)
-        self.assertFalse((self.staged.parent / "publication-result.json").exists())
-        result = owner.publish_bytes(self.root, self.record)
-        self.assertEqual(result["installed"], owner.file_binding(self.selected))
-        self.assertEqual((self.staged.parent / "previous-owner").read_bytes(),
-                         b"original installed owner")
-
-    def test_changed_selected_or_stage_and_foreign_retention_refuse_before_replacement(self):
-        for changed in (self.selected, self.staged, self.staged.parent / "previous-owner"):
-            with self.subTest(changed=changed):
-                original = changed.read_bytes() if changed.exists() else None
-                changed.write_bytes(b"foreign bytes")
-                before = self.selected.read_bytes()
-                with self.assertRaises(ValueError):
-                    owner.publish_bytes(self.root, self.record)
-                self.assertEqual(self.selected.read_bytes(), before)
-                if original is None:
-                    changed.unlink()
-                else:
-                    changed.write_bytes(original)
-
-    def test_reentry_refuses_same_bytes_from_a_different_published_inode(self):
-        owner.publish_bytes(self.root, self.record)
-        foreign = self.selected.parent / "foreign-same-bytes"
-        foreign.write_bytes(self.selected.read_bytes())
-        os.replace(foreign, self.selected)
-        with self.assertRaisesRegex(ValueError, "drifted after publication intent"):
-            owner.publish_bytes(self.root, self.record)
-
-    def test_symlink_and_marker_without_capabilities_refuse(self):
-        self.staged.unlink()
-        self.staged.symlink_to(self.selected)
-        with self.assertRaises(ValueError):
-            owner.publish_bytes(self.root, self.record)
+    def test_marker_without_original_capabilities_refuses_validation(self):
         with mock.patch.object(bootstrap, "PASS_FDS", ()):
             with self.assertRaisesRegex(ValueError, "ownership descriptors"):
-                owner.require_capabilities(self.root)
+                owner.validate_stage(self.root, "unused-stage", "unused-binding")
 
     def owner_result(self, directory, name, code=0):
         consumer = "bootstrap-owner:" + directory.name + ":" + name
@@ -243,7 +190,16 @@ class ProducerSource(unittest.TestCase):
             bootstrap.main()
         original = fixture.root / profile["report_path"]
         stage = json.loads(original.read_bytes())
-        publication = owner.publish_bytes(fixture.root, stage["owner_stage"])
+        # Synthetic external publication inputs test this Python reader only.
+        # Real byte production, inode retention and recovery are Rust CLI tests.
+        staged = fixture.root / stage["owner_stage"]["staged"]["path"]
+        selected.rename(staged.parent / "previous-owner")
+        shutil.copyfile(staged, selected)
+        layout = json.loads((Path(__file__).parent / "fixtures/owner-publication.json").read_bytes())
+        publication = dict(layout["result"], stage=stage["owner_stage"], installed=owner.file_binding(selected))
+        intent = dict(layout["intent"], stage=stage["owner_stage"], replacement=publication["installed"])
+        owner.shared.write_new(staged.parent / "publication-intent.json", owner.shared.encode(intent))
+        owner.shared.write_new(staged.parent / "publication-result.json", owner.shared.encode(publication))
         adoption = {"schema": "chrono-worktree-owner-adoption/v1", "source_commit": stage["source"]["commit"],
                     "stage_result": profile["report_path"], "stage_sha256": owner.shared.digest(original.read_bytes()),
                     "installed": publication["installed"], "original_owner": stage["owner_stage"]["previous"],
@@ -277,6 +233,21 @@ class ProducerSource(unittest.TestCase):
         config = json.loads((fixture.root / ".chrono-harness/ci/reuse-core.json").read_bytes())
         owner.shared.original_report(fixture.root, {"config": ".chrono-harness/ci/reuse-core.json"},
                                      config, bootstrap.observe_source(fixture.root))
+
+    def test_construction_reuse_binds_only_the_reused_operations_tool_selection(self):
+        fixture, selected, adoption = self.published_fixture(reuse=True)
+        config = json.loads((fixture.root / ".chrono-harness/ci/reuse-core.json").read_bytes())
+        report = json.loads((fixture.root / adoption["stage_result"]).read_bytes())
+        observed = bootstrap.observe_source(fixture.root)
+        # Core's later Verus bootstrap needs Python; owner construction does not.
+        config["tools"]["python3"] = sys.executable
+        reused, source = owner.reuse_construction(fixture.root, config, report, observed)
+        self.assertEqual(set(reused), set(config["reuse_owner_operations"]))
+        self.assertEqual(source, fixture.root / report["owner_stage"]["staged"]["path"])
+        tool = report["operations"][0]["tool"]
+        config["tools"][tool] = "different-reused-tool"
+        with self.assertRaisesRegex(ValueError, "owner construction selection differs: tool " + tool):
+            owner.reuse_construction(fixture.root, config, report, observed)
 
     def test_construction_reuse_refuses_different_selection_observation_and_missing_operations(self):
         fixture, selected, adoption = self.published_fixture(reuse=True)

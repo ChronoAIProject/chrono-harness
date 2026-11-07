@@ -758,13 +758,18 @@ Git main 工具缺失保留原 seed 行为；linked 缺协调者或不兼容，�
 
 内部 stage profile 构建 build.worktree，把独立执行物留在 `.chrono-harness/bin/owner-stages/`。构建失败不请求部署，原命令／后代全部等待结束后，stage 才请求 EX。
 
-core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候选部署后，core 消费原操作记录／流，以保留 stage 工具作为安装输入。复用前核当前 adoption、源码、声明、工具链、实测环境。原 PID／退出／流描述符不改，`reused_from` 点名 stage 报告，不假称第二次执行。首次 seed 或独立所有 linked 工具仍运行声明构建。
+core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候选部署后，core 消费原操作记录／流，以保留 stage 工具作为安装输入。复用前核当前 adoption、源码、声明、工具链、实测环境及这批操作实际使用的工具选择；core 其他操作新增工具槽不使原构建失效。原 PID／退出／流描述符不改，`reused_from` 点名 stage 报告，不假称第二次执行。首次 seed 或独立所有 linked 工具仍运行声明构建。
 
 **产品与宿主政策曾同步修改：**去掉已采用 main 的重复 owner 构建，避免临时重建替换部署字节。登记 bootstrap 测试覆盖复用、选择、原绑定拒绝，再验源码 bootstrap 及受影响标准／原生范围；总节时未测。
 
-普通共享 bootstrap 复用相同协调者字节，改变须走 owner 部署回调。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
+普通共享 bootstrap 复用相同协调者字节，改变须走 Rust owner 部署入口。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
 
-真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。Python 负责字节验证、原 inode 保全、原子替换、中断发布重入；Rust 负责物理关联、已提交端点、原准入／登记 EX、发布／采用检查。
+真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。Python 负责构建及完整阶段报告校验，内部 `--owner-stage-validation` 回调只返回已校验的阶段记录和原报告摘要。Rust 所有者在原准入／全部登记 EX 下完成旧 inode 保全、发布意图、原子替换、中断发布重入和采用检查；回调不再写安装字节。
+
+发布的身份／内容比较、阶段及回调绑定、原件／意图／替换状态选择由同源 Verus 实现，
+worktree core／adoption 计划都先执行生产根和独立边界根的整 crate 证明。
+原件存在时仍需核其完整旧绑定；孤立准备文件、错绑意图或意外所选 inode 拒绝。
+局部证明与真实文件系统测试的边界见 [Verus 实施范围](verus.md#所有者可执行文件发布)。
 
 部署从逐工作树记录和 Git inventory 产生真实排除集合。独占发布阻止新登记／use，在改所选字节前，为该物理协调者每个未解决登记（含 linked）取得原 EX，贯穿发布／采用，并复核准入、账本字节、inventory、关联、协调政策、租约身份。
 
@@ -772,7 +777,7 @@ core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候�
 
 **产品与宿主政策曾同步修改：**Python 总是确认并复用真实已安装所有者，core／FILEMAP 用当前升级声明替代固定历史供应，移除专属供应验证及只用外部包测试。共享 startup 保留真实 CI 消费者及测试。
 
-Python 升级回归不依赖无关传递包，覆盖普通／已发布生产者、原件丢失／损坏、资格确认后变化、构建失败不发布。仅原生生命周期调用在这些 Python 用例中隔离；真实协调 bootstrap、两端标准 DELTA、原生采用、落地另验。摘要、尝试存储、验证成本未测，原期限／操作上限／排除不变。
+Python 升级回归不依赖无关传递包，覆盖普通／已发布生产者、原件丢失／损坏、资格确认后变化、构建失败不发布。Python 资格读取用例使用独立登记的合成发布格式样本，只验证当前 Python 使用方。真实发布、保留 inode、结果 IO 失败后的重入、同字节换 inode、输入漂移、符号链接及租约排除由 Rust 专属测试执行实际部署入口，不给产品增加测试入口。真实协调 bootstrap、两端标准 DELTA、原生采用、落地另验。摘要、尝试存储、验证成本未测，原期限／操作上限／排除不变。
 
 构建载体、stage 候选、保留旧 owner inode、原报告／流用于当前工程／PR 验收。待验收／调试和依赖消费结束，走登记生命周期回收；保全独有工作和失败原件，不按年龄删或宣称完成。真实生产者数据仍是必要证据，不构成历史格式／接口兼容义务。
 
