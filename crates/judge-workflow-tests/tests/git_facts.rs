@@ -613,7 +613,10 @@ fn full_ci_consumer(selected: bool) {
                 .filter_map(|j| j["transport_failure"].as_str())
                 .collect::<Vec<_>>()
         );
-        let prepared = &report["preparation"]["result"]["evidence"];
+        let original = &report["preparation"]["result"]["evidence"];
+        let raw = fs::read(root.join(original["report_path"].as_str().unwrap())).unwrap();
+        assert_eq!(sha256(&raw), original["report_sha256"]);
+        let prepared: Value = serde_json::from_slice(&raw).unwrap();
         assert_eq!(prepared["governance"], "not-evaluated");
         assert_eq!(
             prepared["canonical_argv"],
