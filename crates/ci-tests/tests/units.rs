@@ -586,6 +586,26 @@ fn gather_cli(root: &Path) -> std::process::Output {
         .unwrap()
 }
 
+#[test]
+fn standalone_gather_is_rejected_without_transport_or_publication() {
+    let (host, _, _) = gather_host("success");
+    let root = host.path();
+    let launches = root.join(".chrono-harness/state/mock-launches.jsonl");
+    let before = fs::read(&launches).ok();
+    let result = gather_cli(root);
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    assert!(result.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("unknown command"));
+    assert_eq!(fs::read(&launches).ok(), before);
+    for path in [
+        ".chrono-harness/state/collection/gather.json",
+        ".chrono-harness/state/collection/manifest.json",
+        ".chrono-harness/state/collection/downloads/",
+    ] {
+        assert!(!root.join(path).exists(), "published {path}");
+    }
+}
+
 fn download_retry() -> Value {
     json!({"max_attempts":3,"delay_seconds":1,"http_statuses":[429,500,502,503,504]})
 }
