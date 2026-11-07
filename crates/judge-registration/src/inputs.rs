@@ -193,7 +193,7 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
         let selection = crate::schema::object(
             &value["selection"],
             &["schema", "path", "platform", "config_path"],
-            &[],
+            &["registry_path"],
         )
         .map_err(|e| format!("E_INPUT_SNAPSHOT: invalid selector binding: {e}"))?;
         if selection["schema"] != "chrono-registry-selection/v1"
@@ -211,6 +211,12 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
                 .as_str()
                 .ok_or("E_INPUT_SNAPSHOT: selector path must be a string")?;
             relative_path(path)?;
+        }
+        if let Some(path) = selection.get("registry_path") {
+            relative_path(
+                path.as_str()
+                    .ok_or("E_INPUT_SNAPSHOT: selector registry path must be a string")?,
+            )?;
         }
     } else if value.get("effective_config_path").is_some() || value.get("selection").is_some() {
         return Err("E_INPUT_SNAPSHOT: selection binding requires snapshot v3".into());

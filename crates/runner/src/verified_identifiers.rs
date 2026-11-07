@@ -129,6 +129,14 @@ pub fn valid_oid(bytes: &[u8]) -> (valid: bool)
     nonzero
 }
 
+pub fn valid_merge_parents(
+    count: usize, base: &[u8], second: &[u8], head: &[u8],
+) -> (valid: bool)
+    ensures valid <==> count == 2 && oid(base@) && oid(head@) && second@ == head@,
+{
+    count == 2 && valid_oid(base) && valid_oid(head) && equal_bytes(second, head)
+}
+
 
 #[verifier::inline]
 pub open spec fn identifier_byte(byte: u8) -> bool {
