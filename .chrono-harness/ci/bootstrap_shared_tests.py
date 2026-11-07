@@ -233,13 +233,13 @@ class SharedStartup(unittest.TestCase):
         self.root = self.host.root
         shutil.copyfile(SOURCE / "bootstrap_shared.py", self.host.ci / "bootstrap_shared.py")
         self.host.config["install"].append({"source": "built-second", "destination": ".chrono-harness/bin/second"})
-        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
+        self.host.write_json(self.host.ci / "bootstrap-core.json", self.host.config)
         for name in ["built-tool", "built-second"]:
             path = self.root / name
             path.write_bytes(b"second")
             path.chmod(0o755)
         self.shared = {"schema": "chrono-host-startup/v1", "directory": ".chrono-harness/startup/",
-                       "profiles": {"core": {"config": ".chrono-harness/ci/bootstrap.json", "build": True}},
+                       "profiles": {"core": {"config": ".chrono-harness/ci/bootstrap-core.json", "build": True}},
                        "consumers": {"unit_fixture": ["core"]}}
         self.host.write_json(self.root / CONFIG, self.shared)
         (self.root / ".gitignore").write_text("/built-*\n/.chrono-harness/bin/\n/.chrono-harness/state/\n/.chrono-harness/startup/\n/mock-tools/\n")
@@ -270,8 +270,8 @@ class SharedStartup(unittest.TestCase):
     def test_produce_uses_registered_profile_entrypoint_before_any_report_or_transfer(self):
         self.host.config["entrypoint"]["tool"] = "refusing-producer"
         self.host.config["tools"]["refusing-producer"] = "/usr/bin/false"
-        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
-        self.host.git("add", ".chrono-harness/ci/bootstrap.json")
+        self.host.write_json(self.host.ci / "bootstrap-core.json", self.host.config)
+        self.host.git("add", ".chrono-harness/ci/bootstrap-core.json")
         self.host.git("commit", "-qm", "registered refusing producer")
         result = self.invoke("produce")
         self.assertNotEqual(result.returncode, 0, result)
@@ -324,7 +324,7 @@ class SharedStartup(unittest.TestCase):
                 elif defect == "dirty": (root / "product-source").write_text("different")
                 elif defect == "source":
                     subprocess.run(["git", "-C", str(root), "-c", "user.name=Fixture", "-c", "user.email=f@example.invalid", "commit", "--allow-empty", "-qm", "other"], check=True, pass_fds=fixture.PASS_FDS)
-                elif defect == "profile": (root / ".chrono-harness/ci/bootstrap.json").write_text("{}")
+                elif defect == "profile": (root / ".chrono-harness/ci/bootstrap-core.json").write_text("{}")
                 elif defect == "platform":
                     manifest["platform"] = {"system": "different", "machine": "different"}
                     manifest_path.write_text(json.dumps(manifest))
@@ -416,8 +416,8 @@ class SharedStartup(unittest.TestCase):
         self.host.config["tools"].update({"cargo": str(self.host.tools / "cargo"),
                                            "rustc": str(self.host.tools / "rustc")})
         self.host.config["tool_bindings"] = bindings
-        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
-        self.host.git("add", ".chrono-harness/ci/bootstrap.json")
+        self.host.write_json(self.host.ci / "bootstrap-core.json", self.host.config)
+        self.host.git("add", ".chrono-harness/ci/bootstrap-core.json")
         self.host.git("commit", "-qm", "bind bootstrap executables")
         return bindings
 
@@ -471,7 +471,7 @@ class SharedStartup(unittest.TestCase):
         self.host.config["tools"].pop("cargo")
         self.host.config["tools"].pop("rustc")
         self.host.config.update(tool_bindings_registry=path, require_tool_bindings=True)
-        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
+        self.host.write_json(self.host.ci / "bootstrap-core.json", self.host.config)
         self.host.git("add", ".chrono-harness/ci")
         self.host.git("commit", "-qm", "native expectations")
         self.produce()
