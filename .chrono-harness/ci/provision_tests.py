@@ -206,9 +206,16 @@ class NativeCargoDomains(unittest.TestCase):
         # production selection/drift validation remains the Rust owner's check.
         selector = json.loads((SOURCE.parents[1] / entry).read_text())
         rows = selector["platforms"]["macos-aarch64"]["configurations"]
-        selected = [row for row in rows if row["sha256"] ==
-                    "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"]
+        expected_path = (".chrono-harness/git/pinned-macos-diagnostics.json"
+                         if entry.endswith("diagnostics-config.json")
+                         else ".chrono-harness/git/pinned-macos.json")
+        selected = [row for row in rows if row["path"] == expected_path]
         self.assertEqual(len(selected), 1)
+        if entry.endswith("diagnostics-config.json"):
+            selected_config = json.loads((SOURCE.parents[1] / expected_path).read_text())
+            git_input = next(item for item in selected_config["environment"]["inputs"]
+                             if item["id"] == "git-executable")
+            self.assertEqual(selected[0]["sha256"], git_input["sha256"])
         return json.loads((SOURCE.parents[1] / selected[0]["path"]).read_text())
 
     def selected_environment(self, values, inherited=None, bootstrap_profile=False):

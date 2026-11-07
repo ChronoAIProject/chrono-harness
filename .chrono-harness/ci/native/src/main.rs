@@ -2,7 +2,7 @@
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
-    lifecycle, original, owner, profile,
+    lifecycle, original, owner, profile, shared,
 };
 use serde_json::json;
 use std::{path::Path, process::ExitCode};
@@ -89,6 +89,19 @@ fn run() -> Result<(), BuildFailure> {
     let environment = std::env::vars_os().collect();
     let native = bindings::native_platform()?;
     match arguments.as_slice() {
+        [host, config, command] if command == "produce" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            shared::Shared::read(&root, config, &native)?.produce(&root, &environment, &native)
+        }
+        [host, config, command, selected] if command == "install" || command == "verify" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            let shared = shared::Shared::read(&root, config, &native)?;
+            if command == "install" {
+                shared.install(&root, &environment, &native, selected)
+            } else {
+                shared.verify(&root, &environment, &native, selected)
+            }
+        }
         [command, host, reference] if command == "validate-original-execution" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             let raw = profile::read(&root, reference, b".chrono-harness/state/")?;
@@ -106,32 +119,47 @@ fn run() -> Result<(), BuildFailure> {
         }
         [command, host, config] if command == "bootstrap" => bootstrap(host, config, false),
         [host, config] => bootstrap(host, config, false),
-        [host, config, mode, reference, digest] if mode == "--owner-stage-validation" => {
-            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
-            let validation =
-                owner::validate_stage(&root, &environment, &native, config, reference, digest)?;
-            println!(
-                "{}",
-                serde_json::to_string(&validation).map_err(|error| error.to_string())?
-            );
-            Ok(())
-        }
         _ => Err("unknown native bootstrap command or arguments".into()),
     }
 }
 
-fn main() -> ExitCode {
+fn execute() -> u8 {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(()) => 0,
         Err(error) => {
+            chrono_harness::log_cli_error(&format!("E_BOOTSTRAP: {}", error.message));
             eprintln!("E_BOOTSTRAP: {}", error.message);
-            ExitCode::from(
-                error
-                    .exit_code
-                    .and_then(|code| u8::try_from(code).ok())
-                    .filter(|code| *code != 0)
-                    .unwrap_or(1),
-            )
+            error
+                .exit_code
+                .and_then(|code| u8::try_from(code).ok())
+                .filter(|code| *code != 0)
+                .unwrap_or(1)
         }
     }
+}
+
+fn main() -> ExitCode {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    let first = arguments.first().and_then(|argument| argument.to_str());
+    let (host, operation) = match first {
+        Some(command @ ("bootstrap" | "construct-owner-stage" | "validate-original-execution")) => {
+            (arguments.get(1), command)
+        }
+        _ => (
+            arguments.first(),
+            arguments
+                .get(2)
+                .and_then(|argument| argument.to_str())
+                .unwrap_or("bootstrap"),
+        ),
+    };
+    ExitCode::from(match host {
+        Some(host) => chrono_harness::logged_main_at(
+            Path::new(host),
+            "chrono-host-bootstrap",
+            operation,
+            execute,
+        ),
+        None => chrono_harness::logged_main("chrono-host-bootstrap", execute),
+    })
 }

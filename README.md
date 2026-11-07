@@ -61,7 +61,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 本仓约束和工具选择登记在 [.chrono-harness/](.chrono-harness/config.json)。先从当前候选源码安装工具，再使用日常检查入口：
 
 ```sh
-/usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
+/bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-core.json
 # 先提交候选改动，确保工作树干净
 .chrono-harness/bin/chrono-harness check
 ```

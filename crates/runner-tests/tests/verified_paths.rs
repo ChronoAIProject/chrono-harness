@@ -19,6 +19,34 @@ fn expect(path: &[u8], expected: bool)
     assert(actual == expected);
 }
 
+fn expect_state(path: &[u8], expected: bool)
+    requires expected == policy::host_state_path(path@),
+{
+    let actual = policy::valid_host_state_path(path);
+    assert(actual == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn state_prefix_requires_an_exact_directory_and_nonempty_suffix() {
+    expect_state(&[], false);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101], false);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47], false);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 115, 47, 97], false);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 97], true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn state_suffix_keeps_relative_path_boundaries() {
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 228, 184, 173], true);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 97, 47, 46, 47, 98], true);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 47, 97, 47], true);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 46, 46, 47, 97], false);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 97, 0], false);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 97, 10], false);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 97, 13], false);
+    expect_state(&[46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 97, 92], false);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn empty_and_absolute_paths_fail() {
     expect(&[], false);

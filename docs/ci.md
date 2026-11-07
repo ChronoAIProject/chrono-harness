@@ -34,12 +34,12 @@
 
 CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选择 Git。准备命令和绑定 Git 消费者使用同一原生执行物，故障适配器在输入登记保留所选路径。平台缺登记就失败，不从环境 PATH 回退。这不改变消费宿主 Git 政策，也不证明 Git 输入完整。
 
-从仓库根运行。本 macOS 宿主为 bootstrap／迁移明确绑定 `/usr/bin/python3` 和精确 `Python 3.9.6`，按范围工具表也登记同一合同。bootstrap 需要该解释器、Git、rustup；Rust 1.95.0 不可用时安装，并独立确保 rustfmt 存在，包括已装最小工具链的情况。
+从仓库根运行。core、Verus 准备和所有者阶段构建由 Rust 执行，薄 shell 入口需要 Git、rustup；首次前端编译使用固定 Rust 1.95.0，已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。其他仍使用 Python 的 profile 和测试继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
 
 它按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap 操作，再复制声明二进制，不复制 Cargo 配方或发现项目。工具链操作明确点名版本，不改全局默认。专属 CI 测试的复制宿主回归消费已安装候选工具，须先 bootstrap：
 
 ```sh
-/usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
+/bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-core.json
 .chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/units.json
 .chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
@@ -48,9 +48,9 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 在已有 bootstrap 租约内用固定 Rust 1.95.0 构建并调用本宿主的 `chrono-host-bootstrap`。
 Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及两流，再交出现有 stage 描述符；
 阶段校验读取同一生产者的固定原件。shell 只转交参数，不复制构建配方或解释报告。
-外层 core／共享启动及其升级编排仍使用 Python，外部宿主不运行本仓这项源码构建。
-这一批同时修改实现、阶段入口和宿主工具登记；原生构建、真实升级及受影响标准／CI 消费分别验收，
-新增原生入口的构建、验证和存储总成本未测。
+普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再执行该保留文件；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
+共享启动当前仍由 Python 编排，但 produce 按所选 profile 的 `entrypoint` 和工具声明调用真实生产者，因此 core 产物来自 Rust。其余 Python profile 和测试仍待迁移，外部宿主不运行本仓这项源码构建。
+**实现与宿主政策同时变更：**本批修改 core／Verus 的正式方法及所属登记，增加前端安装和共享生产入口的行为验证；原生构建、真实升级及受影响标准／CI 消费分别验收。新增前端构建、验证和存储总成本未测。
 
 提交修改、确保候选检出干净后，本地和生成 CI 使用同一标准判断命令：
 
@@ -333,11 +333,13 @@ v4 的工作流只调用 `check`、`check --unit ID` 或 `check --collect`，输
 | 未匹配的已有分支 push | 载荷 `before`／`after` |
 | 创建配置基线分支（`created`、before 全零、ref 匹配） | 无父 `after` 由同一短命令选择显式初始 profile，无 base，模式 `initial-inventory`；有父候选要求明确范围 |
 | 创建其他未匹配分支（`created`、before 全零、ref 不同） | 观察一次配置创建基线 ref，固定提交，与载荷 `after` 比较；候选等于已有基线就如实无操作 |
-| 指向 dev 的 PR | 事件 `pull_request.base.sha`／`head.sha`；检出 head，不用默认 merge ref |
+| 指向 dev 的 PR | 固定 workflow merge commit 的第一父提交／事件 `head.sha`；须恰有两个父提交且第二父提交等于 head；检出 head |
 | workflow_dispatch | 明确完整 base／candidate，或明确 initial 加无父 candidate |
 | 删除分支 | 无候选检查，不能生成通过的候选报告 |
 
 这里的单工作流 provider 检查 dev、integration/** push，指向 dev 的 PR 和手动 dispatch。已采用独立单元 provider 复用事件准备，collector 没有手动触发，见[单元说明](ci-units.md)。
+
+**产品与事件基线合同同时改变。** PR 的 `pr-workflow-merge-head` 来源由现有绑定 Git 读取固定 workflow 对象及父身份，再由同源 Verus 身份谓词验证父数量和候选对应。缺对象、非双亲或第二父不符保留 `E_CI_GIT` 和原进程；旧事件 base 不作为替代路径。候选源码仍是事件 head，detector 固定后各单元沿用同一对端点。新增成本是现有不可变对象／父读取，完整 CI 与存储成本未知。
 
 工作流检出事件候选、bootstrap 候选登记工具、运行登记的短检查，失败也上传证据。标准输入程序委托事件准备，不生成额外长命令步骤。checkout 临时读取凭据保留给必要对象获取，由 post-job 清理移除。对象缺失须明确 fetch 或失败。手动 dispatch 可用性可能取决于默认分支是否登记工作流。源码 revision 用 `github.workflow_sha` 独立记录。
 

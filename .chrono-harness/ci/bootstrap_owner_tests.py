@@ -39,10 +39,10 @@ class OwnerPhases(unittest.TestCase):
         self.staged.parent.mkdir(parents=True)
         self.staged.write_bytes(b"source-built correction")
 
-    def test_marker_without_original_capabilities_refuses_validation(self):
+    def test_construction_requires_original_capabilities(self):
         with mock.patch.object(bootstrap, "PASS_FDS", ()):
             with self.assertRaisesRegex(ValueError, "ownership descriptors"):
-                owner.validate_stage(self.root, "unused-stage", "unused-binding")
+                owner.require_capabilities(self.root)
 
     def owner_result(self, directory, name, code=0):
         consumer = "bootstrap-owner:" + directory.name + ":" + name

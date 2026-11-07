@@ -70,6 +70,8 @@
       ".chrono-harness/ci/bootstrap.py",
       ".chrono-harness/ci/bootstrap.json",
       ".chrono-harness/ci/bootstrap-core.json",
+      ".chrono-harness/ci/bootstrap-native.sh",
+      ".chrono-harness/ci/bootstrap-frontend.json",
       ".chrono-harness/ci/bootstrap-detector.json",
       ".github/workflows/chrono-ci.yml",
       ".chrono-harness/ci/workflow-inventory.json",
@@ -221,7 +223,8 @@
       "host-bootstrap": {
         "tests": [
           "test:host-bootstrap-tests",
-          "test:host-bootstrap-native-tests"
+          "test:host-bootstrap-native-tests",
+          "test:host-bootstrap-launcher-tests"
         ],
         "report_path": ".chrono-harness/state/units/host-bootstrap/check.json"
       },
@@ -410,6 +413,16 @@
         "judge-ci",
         "judge-registration",
         "judge-routes",
+        "runner"
+      ],
+      "verify.runner-paths": [
+        "inputs",
+        "judge-registration",
+        "runner"
+      ],
+      "verify.runner-paths-tests": [
+        "inputs",
+        "judge-registration",
         "runner"
       ]
     },

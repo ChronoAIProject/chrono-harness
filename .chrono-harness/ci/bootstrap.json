@@ -3,7 +3,8 @@
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
   "tools": {
-    "python3": "/usr/bin/python3"
+    "python3": "/usr/bin/python3",
+    "bash": "/bin/bash"
   },
   "operations": [
     "build.runner",

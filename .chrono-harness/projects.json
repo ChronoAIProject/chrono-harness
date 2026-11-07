@@ -41,6 +41,8 @@
     "host-bootstrap-tests",
     "host-bootstrap-native",
     "host-bootstrap-native-tests",
+    "host-bootstrap-launcher",
+    "host-bootstrap-launcher-tests",
     "cache",
     "cache-tests"
   ],
@@ -1155,6 +1157,28 @@
             "--config",
             ".chrono-harness/ci/worktree-inventory.json"
           ]
+        },
+        "verify_literals": {
+          "operation": "verify.ci-literals",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-literals.rlib,dep-info=.chrono-harness/state/verify.ci-literals.rlib.d",
+            "crates/ci/src/verified_literals.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-literals.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
@@ -1257,6 +1281,28 @@
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
           ]
+        },
+        "verify_literals": {
+          "operation": "verify.ci-literals-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-literals-tests.rlib,dep-info=.chrono-harness/state/verify.ci-literals-tests.rlib.d",
+            "crates/ci-tests/tests/verified_literals.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-literals-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
@@ -3023,7 +3069,7 @@
             "--manifest",
             ".chrono-harness/inputs/diagnostics-observation.json",
             "--output",
-            ".chrono-harness/state/diagnostics-native/observation.json"
+            ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json"
           ]
         },
         "prepare_runner": {
@@ -4453,18 +4499,6 @@
       "lockfile": ".chrono-harness/ci/native-tests/Cargo.lock",
       "root": ".chrono-harness/ci/native-tests",
       "actions": {
-        "build": {
-          "operation": "build.host-bootstrap-native-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            ".chrono-harness/ci/native-tests/Cargo.toml",
-            "--target-dir",
-            ".chrono-harness/cache/host-bootstrap-native-tests/target"
-          ]
-        },
         "format_check": {
           "operation": "fmt.host-bootstrap-native-tests",
           "tool": "cargo",
@@ -4536,6 +4570,37 @@
   ],
   "scripts": [
     {
+      "id": "host-bootstrap-launcher",
+      "language": "shell",
+      "path": ".chrono-harness/ci/bootstrap-native.sh",
+      "test_script": "host-bootstrap-launcher-tests",
+      "actions": {
+        "execute": {
+          "operation": "host.bootstrap-core",
+          "tool": "bash",
+          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-core.json"]
+        },
+        "verus": {
+          "operation": "host.bootstrap-verus",
+          "tool": "bash",
+          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-verus.json"]
+        }
+      }
+    },
+    {
+      "id": "host-bootstrap-launcher-tests",
+      "language": "shell",
+      "path": ".chrono-harness/ci/bootstrap-native-tests.sh",
+      "tests_for": "host-bootstrap-launcher",
+      "actions": {
+        "execute": {
+          "operation": "test.host-bootstrap-launcher-tests",
+          "tool": "bash",
+          "argv": [".chrono-harness/ci/bootstrap-native-tests.sh"]
+        }
+      }
+    },
+    {
       "id": "host-bootstrap",
       "language": "python",
       "path": ".chrono-harness/ci/bootstrap.py",
@@ -4548,16 +4613,6 @@
             "-B",
             ".chrono-harness/ci/bootstrap.py",
             "."
-          ]
-        },
-        "core": {
-          "operation": "host.bootstrap-core",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-core.json"
           ]
         },
         "cache": {
@@ -4951,16 +5006,6 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-owner-verification.json"
-          ]
-        },
-        "verus": {
-          "operation": "host.bootstrap-verus",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-verus.json"
           ]
         },
         "unit": {

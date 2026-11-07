@@ -232,7 +232,13 @@ pub fn cli(producer: &str, work: impl FnOnce() -> u8) -> u8 {
             return 2;
         }
     };
-    let logger = match configured_logger(&root, producer, io::stderr()) {
+    let operation = args.first().and_then(|arg| arg.to_str()).unwrap_or("");
+    cli_at(&root, producer, operation, work)
+}
+
+/// Use a host and operation already selected by an entry with positional arguments.
+pub fn cli_at(root: &Path, producer: &str, operation: &str, work: impl FnOnce() -> u8) -> u8 {
+    let logger = match configured_logger(root, producer, io::stderr()) {
         Ok(Some(logger)) => logger,
         Ok(None) => return work(),
         Err(error) => {
@@ -240,14 +246,13 @@ pub fn cli(producer: &str, work: impl FnOnce() -> u8) -> u8 {
             return 2;
         }
     };
-    let root = match fs::canonicalize(&root) {
+    let root = match fs::canonicalize(root) {
         Ok(root) => root,
         Err(error) => {
             emergency(producer, &io_failure(error));
             return 2;
         }
     };
-    let operation = args.first().and_then(|arg| arg.to_str()).unwrap_or("");
     let exit = logger.run(|| {
         let span = tracing::info_span!("cli", pid = std::process::id(), operation, host_root = %root.display());
         let _entered = span.enter();

@@ -12,6 +12,56 @@ mod consumption;
 mod support;
 
 #[test]
+fn retained_state_paths_require_nonempty_suffix_and_keep_lexical_spelling() {
+    use chrono_judge_registration::inputs::retained_shape;
+    for (path, accepted) in [
+        (".chrono-harness/state/blob", true),
+        (".chrono-harness/state/中文", true),
+        (".chrono-harness/state/a/./blob", true),
+        (".chrono-harness/state//blob/", true),
+        (".chrono-harness/state/", false),
+        (".chrono-harness/state", false),
+        (".chrono-harness/states/blob", false),
+        (".chrono-harness/state/../blob", false),
+        (".chrono-harness/state/blob\0", false),
+    ] {
+        let reference = json!({"blob": path, "sha256": sha256(b""), "length": 0});
+        let result = retained_shape(&reference);
+        assert_eq!(result.is_ok(), accepted, "{path:?}");
+        if let Err(error) = result {
+            assert!(error.starts_with("E_INPUT_BLOB:"), "{error}");
+        }
+    }
+}
+
+#[test]
+fn runtime_state_paths_preserve_canonical_spelling_for_both_references() {
+    for field in ["location", "manifest"] {
+        for (path, accepted) in [
+            (".chrono-harness/state/inventory.json", true),
+            (".chrono-harness/state/中文.json", true),
+            (".chrono-harness/state/", false),
+            (".chrono-harness/states/inventory.json", false),
+            (".chrono-harness/state/a/./inventory.json", false),
+            (".chrono-harness/state//inventory.json", false),
+            (".chrono-harness/state/a/", false),
+            (".chrono-harness/state/../inventory.json", false),
+        ] {
+            let mut input = json!({"location": ".chrono-harness/state/inventory.json",
+                "presence": "present", "source": {"schema": "chrono-runtime-state/v1",
+                "manifest": ".chrono-harness/state/observation.json", "pointer": "/inventory"}});
+            if field == "location" {
+                input["location"] = json!(path);
+            } else {
+                input["source"]["manifest"] = json!(path);
+            }
+            let result = chrono_judge_registration::inputs::runtime_state_source(&input);
+            assert_eq!(result.is_ok(), accepted, "{field}: {path:?}: {result:?}");
+        }
+    }
+}
+
+#[test]
 fn runtime_state_input_rejects_locations_outside_host_state() {
     for location in [
         ".chrono-harness/inputs/tracked-inventory.json",
@@ -42,52 +92,80 @@ fn runtime_state_input_rejects_locations_outside_host_state() {
 }
 
 #[test]
-fn runtime_state_input_consumes_observation_manifest_and_rejects_drift() {
+fn runtime_state_inputs_consume_observation_manifests_and_reject_drift() {
     use chrono_judge_registration::inputs::{runtime_state_identity, runtime_state_source};
 
     let host = TempDir::new().unwrap();
     let root = host.path().canonicalize().unwrap();
-    let inventory = ".chrono-harness/state/diagnostics-native/guard-inputs/rust.json";
-    let observation = ".chrono-harness/state/diagnostics-native/observation.json";
-    fs::create_dir_all(root.join(inventory).parent().unwrap()).unwrap();
+    let observation = ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json";
     fs::create_dir_all(root.join(observation).parent().unwrap()).unwrap();
-    let bytes = b"runtime inventory\n";
-    fs::write(root.join(inventory), bytes).unwrap();
-    let digest = sha256(bytes);
+    let entries = [
+        (
+            "rust",
+            "toolchain.rust.inventory",
+            ".chrono-harness/state/units/diagnostics/runtime-inputs/rust.json",
+        ),
+        (
+            "developer",
+            "toolchain.developer.inventory",
+            ".chrono-harness/state/diagnostics-native/guard-inputs/xcode-contents.json",
+        ),
+        (
+            "sdk",
+            "toolchain.sdk.inventory",
+            ".chrono-harness/state/diagnostics-native/guard-inputs/sdk.json",
+        ),
+    ];
+    let mut directories = serde_json::Map::new();
+    let mut inputs = Vec::new();
+    for (key, id, inventory) in entries {
+        fs::create_dir_all(root.join(inventory).parent().unwrap()).unwrap();
+        let bytes = format!("runtime {key} inventory\n");
+        fs::write(root.join(inventory), bytes.as_bytes()).unwrap();
+        directories.insert(
+            key.into(),
+            json!({
+                "manifest": {"path": inventory, "sha256": sha256(bytes.as_bytes())}
+            }),
+        );
+        inputs.push(json!({
+            "id": id,
+            "location": inventory,
+            "presence": "present",
+            "source": {
+                "schema": "chrono-runtime-state/v1",
+                "manifest": observation,
+                "pointer": format!("/directories/{key}/manifest")
+            }
+        }));
+    }
     fs::write(
         root.join(observation),
         serde_json::to_vec(&json!({
             "schema": "chrono-input-observation-result/v2",
             "status": "observed",
-            "directories": {
-                "rust": {
-                    "manifest": {"path": inventory, "sha256": digest.clone()}
-                }
-            }
+            "directories": directories
         }))
         .unwrap(),
     )
     .unwrap();
-    let input = json!({
-        "id": "toolchain.rust.inventory",
-        "location": inventory,
-        "presence": "present",
-        "source": {
-            "schema": "chrono-runtime-state/v1",
-            "manifest": observation,
-            "pointer": "/directories/rust/manifest"
-        }
-    });
+    for ((key, _, _), input) in entries.iter().zip(&inputs) {
+        let bytes = format!("runtime {key} inventory\n");
+        let source = runtime_state_source(input).unwrap().unwrap();
+        assert_eq!(source.pointer, format!("/directories/{key}/manifest"));
+        assert_eq!(
+            runtime_state_identity(&root, input).unwrap(),
+            (sha256(bytes.as_bytes()), bytes.len() as u64)
+        );
+    }
 
-    let source = runtime_state_source(&input).unwrap().unwrap();
-    assert_eq!(source.pointer, "/directories/rust/manifest");
-    assert_eq!(
-        runtime_state_identity(&root, &input).unwrap(),
-        (digest.clone(), bytes.len() as u64)
-    );
-
-    fs::write(root.join(inventory), b"drifted inventory\n").unwrap();
-    let error = runtime_state_identity(&root, &input).unwrap_err();
+    let developer = &inputs[1];
+    fs::write(
+        root.join(developer["location"].as_str().unwrap()),
+        b"drifted inventory\n",
+    )
+    .unwrap();
+    let error = runtime_state_identity(&root, developer).unwrap_err();
     assert!(error.contains("differs from live file"), "{error}");
 }
 

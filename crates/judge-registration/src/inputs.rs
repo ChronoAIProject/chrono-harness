@@ -45,16 +45,17 @@ pub fn runtime_state_source(input: &Value) -> Result<Option<RuntimeStateSource>,
     if source["schema"] != "chrono-runtime-state/v1" {
         return Err("unsupported runtime input source schema".into());
     }
-    let location = crate::schema::string(&input["location"])?;
-    crate::schema::path(&input["location"])?;
-    if !location.starts_with(".chrono-harness/state/") {
-        return Err("runtime input location must be in host state".into());
-    }
+    crate::schema::state_path(
+        &input["location"],
+        "runtime input location must be in host state",
+    )?;
     let manifest = source["manifest"]
         .as_str()
-        .filter(|path| path.starts_with(".chrono-harness/state/"))
         .ok_or("runtime input source manifest must be in host state")?;
-    crate::schema::path(&source["manifest"])?;
+    crate::schema::state_path(
+        &source["manifest"],
+        "runtime input source manifest must be in host state",
+    )?;
     let pointer = source["pointer"]
         .as_str()
         .filter(|pointer| pointer.starts_with('/'))
@@ -145,9 +146,8 @@ pub fn retained_shape(value: &Value) -> Result<Retained<'_>, String> {
             crate::schema::object(value, &["blob", "sha256", "length"], &[])?;
             let path = blob
                 .as_str()
-                .filter(|p| p.starts_with(".chrono-harness/state/"))
+                .filter(|p| chrono_harness::verified_paths::valid_host_state_path(p.as_bytes()))
                 .ok_or("reference must be within host state")?;
-            relative_path(path)?;
             let digest = value["sha256"]
                 .as_str()
                 .filter(|s| wire::is_digest(s))
@@ -193,7 +193,7 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
         let selection = crate::schema::object(
             &value["selection"],
             &["schema", "path", "platform", "config_path"],
-            &[],
+            &["registry_path"],
         )
         .map_err(|e| format!("E_INPUT_SNAPSHOT: invalid selector binding: {e}"))?;
         if selection["schema"] != "chrono-registry-selection/v1"
@@ -211,6 +211,12 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
                 .as_str()
                 .ok_or("E_INPUT_SNAPSHOT: selector path must be a string")?;
             relative_path(path)?;
+        }
+        if let Some(path) = selection.get("registry_path") {
+            relative_path(
+                path.as_str()
+                    .ok_or("E_INPUT_SNAPSHOT: selector registry path must be a string")?,
+            )?;
         }
     } else if value.get("effective_config_path").is_some() || value.get("selection").is_some() {
         return Err("E_INPUT_SNAPSHOT: selection binding requires snapshot v3".into());
