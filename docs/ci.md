@@ -49,7 +49,7 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及两流，再交出现有 stage 描述符；
 阶段校验读取同一生产者的固定原件。shell 只转交参数，不复制构建配方或解释报告。
 普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再执行该保留文件；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
-共享启动使用薄入口 `bootstrap-shared.sh`。produce 委托上述受保护入口，Rust 按各 profile 的 `entrypoint` 调真实生产者。core 的七项安装工具包含 `chrono-host-bootstrap`，导出路径按 `tools/<profile>/<安装目标相对 bin 的路径>` 命名。共享登记的 `installer` 明确选择 core 前端；生产者向 `GITHUB_OUTPUT` 分别写 manifest 的 `binding` 和前端的 `installer_sha256`。
+共享启动使用薄入口 `bootstrap-shared.sh`。produce 委托上述受保护入口，Rust 按各 profile 的 `entrypoint` 调真实生产者。core 的安装工具包含 `chrono-host-bootstrap`，导出路径按 `tools/<profile>/<安装目标相对 bin 的路径>` 命名。共享登记的 `installer` 明确选择 core 前端；生产者向 `GITHUB_OUTPUT` 分别写 manifest 的 `binding` 和前端的 `installer_sha256`。
 
 install 先用现有 `/usr/bin/shasum` 核对 `CHRONO_STARTUP_INSTALLER_SHA256`，拒绝缺绑定、字节差异及执行路径中的符号链接，再恢复下载丢失的执行位并运行前端。Rust 在安装任何工具前校验完整 manifest、全部 profile 的原报告／流、产物和本地 SDK；verify 复用已安装前端。每个消费者直接复用生产者二进制。其余 Python profile、原件校验库及部分测试仍待迁移，外部宿主不运行本仓这项源码构建。
 

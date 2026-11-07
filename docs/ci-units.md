@@ -159,7 +159,9 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 ### 共享启动准备
 
-本仓 detector 为单元和汇总生产登记的核心启动工具。缓存准备构建 `chrono-cache`，共享生产者调用已有 core profile 一次，并按登记发布工具。当前 core 声明七项工具，包含 Cargo 保护程序、输入生产者及共享安装所需的 `chrono-host-bootstrap`；历史 source51 的五项执行物不能证明当前 profile 已验收。
+本仓 detector 为单元和汇总生产登记的核心启动工具。缓存准备构建 `chrono-cache`，共享生产者调用已有 core profile 一次，构建并安装六项工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-inputs`、`chrono-worktree` 和共享安装所需的 `chrono-host-bootstrap`。
+
+runner 和 diagnostics 已使用普通锁定 Cargo 构建，现役项目 action 不再调用 `cargo-guard`。因此 core 不再获取、构建或传递 `chrono-judge-cargo`，scoped 工具表和四份直接配置也移除其闲置声明。Cargo 适配器的专属测试仍由自己的执行计划构建，完整安装与独立发布不由 core 决定，仍须分别核查实际使用方。
 
 共享生产、安装和验证由 Rust `chrono-host-bootstrap` 负责，薄 shell 入口按独立传递的 SHA-256 核对安装器后再执行。消费者验证来源、清单、原报告、工具和本地 SDK，安装所选 profile，再在原 cache／core 准备位置验证。工作流生成器沿已有 outputs 传递安装器摘要。
 

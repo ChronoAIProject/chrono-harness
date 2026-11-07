@@ -12,7 +12,6 @@
     "projects": ".chrono-harness/projects.json",
     "tools": {
       "cargo": "cargo",
-      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
       "chrono-inputs": ".chrono-harness/bin/chrono-inputs",
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
