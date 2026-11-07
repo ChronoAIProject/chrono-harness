@@ -45,16 +45,17 @@ pub fn runtime_state_source(input: &Value) -> Result<Option<RuntimeStateSource>,
     if source["schema"] != "chrono-runtime-state/v1" {
         return Err("unsupported runtime input source schema".into());
     }
-    let location = crate::schema::string(&input["location"])?;
-    crate::schema::path(&input["location"])?;
-    if !location.starts_with(".chrono-harness/state/") {
-        return Err("runtime input location must be in host state".into());
-    }
+    crate::schema::state_path(
+        &input["location"],
+        "runtime input location must be in host state",
+    )?;
     let manifest = source["manifest"]
         .as_str()
-        .filter(|path| path.starts_with(".chrono-harness/state/"))
         .ok_or("runtime input source manifest must be in host state")?;
-    crate::schema::path(&source["manifest"])?;
+    crate::schema::state_path(
+        &source["manifest"],
+        "runtime input source manifest must be in host state",
+    )?;
     let pointer = source["pointer"]
         .as_str()
         .filter(|pointer| pointer.starts_with('/'))
@@ -145,9 +146,8 @@ pub fn retained_shape(value: &Value) -> Result<Retained<'_>, String> {
             crate::schema::object(value, &["blob", "sha256", "length"], &[])?;
             let path = blob
                 .as_str()
-                .filter(|p| p.starts_with(".chrono-harness/state/"))
+                .filter(|p| chrono_harness::verified_paths::valid_host_state_path(p.as_bytes()))
                 .ok_or("reference must be within host state")?;
-            relative_path(path)?;
             let digest = value["sha256"]
                 .as_str()
                 .filter(|s| wire::is_digest(s))

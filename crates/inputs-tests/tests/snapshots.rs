@@ -305,6 +305,7 @@ fn wrong_checkout_dirty_config_missing_input_and_unsafe_output_never_publish_sna
     for (commit, path) in [
         ("HEAD", ".chrono-harness/state/one.json"),
         (&oid, "outside.json"),
+        (&oid, ".chrono-harness/state/"),
         (&oid, ".chrono-harness/state/../bad.json"),
     ] {
         let (code, _, _) = invoke(

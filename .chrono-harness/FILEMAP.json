@@ -1209,6 +1209,8 @@
       "operations": [
         "verify.verus-result",
         "verify.verus-result-tests",
+        "verify.runner-paths",
+        "verify.runner-paths-tests",
         "verify.runner-limits",
         "verify.runner-limits-tests",
         "verify.registration-preparation-tests",
@@ -1317,6 +1319,8 @@
     },
     "test:inputs-tests": {
       "operations": [
+        "verify.runner-paths",
+        "verify.runner-paths-tests",
         "fmt.inputs",
         "fmt.inputs-tests",
         "build.runner",
