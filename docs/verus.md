@@ -199,8 +199,23 @@ runner、registration、routes、judge-ci 和 CI 生成器测试计划的必需�
 
 ## 固定执行入口
 
+`crates/judge-registration/src/verified_nodes.rs` 拥有实际八种 `NodeKind`，
+复制及相等的返回值与变体身份充要相等；自然所有者只重导出这个类型。
+filemap 的原 `valid_types` 已移到现役 `verified_graph.rs`，直接消费该同源类型，
+按五种边与八种起点／终点的完整关系准入。规格按终点定义关系，实现按边派发；
+独立固定表用40行目标位图逐项核全部320种组合，含43项允许与277项拒绝。
+节点独立根另核八种变体克隆及全部64对相等／不等，不通过另一套整数类型代替真实枚举。
+
+**产品与宿主政策同时变更：**新节点生产／独立根进入 registration 实际计划的必需前置；
+图生产／独立根直接编译同一节点源，FILEMAP 逐项登记这四个消费者。
+新增逻辑、规格与独立预期均直接使用 Verus；未改 Python、固定工具、验证过滤或预算。
+`NodeKind` 的 `Copy` 是无状态值复制，`Debug` 派生仅保留原诊断名；后者明确采用
+固定 Rust 1.95.0 标准派生接口，不产生仓内判断。Clone／PartialEq 由仓内同源证明拥有，未豁免。
+JSON 解码、节点提取、诊断和完整图外层组合继续保留未完成义务。
+额外证明、编译、运行、CI与存储总成本未测；不据此声明全仓覆盖门已完成。
+
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
-`test:runner-tests` 先运行十项整 crate Verus 操作及编译，registration 先运行六项，
+`test:runner-tests` 先运行十项整 crate Verus 操作及编译，registration 先运行八项，
 routes 与 CI 汇总各先运行四项，filemap 与 CI 生成器各先运行两项；同一计划内共用的证明操作只执行一次，
 worktree 的 core／adoption 两个消费计划共用两项发布证明，再执行各自原 Rust 构建和测试。
 独立根直接读取生产源码，声明成功、失败和边界预期；

@@ -16,6 +16,83 @@ verus! {
 
 broadcast use vstd::string::group_string_axioms;
 
+/// One complete row: bits name File, Project, Script, Input, Test, Judge, Tool, Environment.
+fn check_type_row(kind: policy::EdgeKind, from: policy::NodeKind, mask: u8)
+    requires
+        policy::permitted_types(kind, from, policy::NodeKind::File) == (mask & 1u8 != 0),
+        policy::permitted_types(kind, from, policy::NodeKind::Project) == (mask & 2u8 != 0),
+        policy::permitted_types(kind, from, policy::NodeKind::Script) == (mask & 4u8 != 0),
+        policy::permitted_types(kind, from, policy::NodeKind::Input) == (mask & 8u8 != 0),
+        policy::permitted_types(kind, from, policy::NodeKind::Test) == (mask & 16u8 != 0),
+        policy::permitted_types(kind, from, policy::NodeKind::Judge) == (mask & 32u8 != 0),
+        policy::permitted_types(kind, from, policy::NodeKind::Tool) == (mask & 64u8 != 0),
+        policy::permitted_types(kind, from, policy::NodeKind::Environment) == (mask & 128u8 != 0),
+{
+    use policy::NodeKind::*;
+    let file = policy::valid_types(kind, from, File);
+    let project = policy::valid_types(kind, from, Project);
+    let script = policy::valid_types(kind, from, Script);
+    let input = policy::valid_types(kind, from, Input);
+    let test = policy::valid_types(kind, from, Test);
+    let judge = policy::valid_types(kind, from, Judge);
+    let tool = policy::valid_types(kind, from, Tool);
+    let environment = policy::valid_types(kind, from, Environment);
+    assert(file == (mask & 1u8 != 0));
+    assert(project == (mask & 2u8 != 0));
+    assert(script == (mask & 4u8 != 0));
+    assert(input == (mask & 8u8 != 0));
+    assert(test == (mask & 16u8 != 0));
+    assert(judge == (mask & 32u8 != 0));
+    assert(tool == (mask & 64u8 != 0));
+    assert(environment == (mask & 128u8 != 0));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn all_320_edge_type_combinations_match_the_independent_table() {
+    use policy::EdgeKind::*;
+    use policy::NodeKind::*;
+    check_type_row(Compile, File, 2);
+    check_type_row(Compile, Project, 2);
+    check_type_row(Compile, Script, 0);
+    check_type_row(Compile, Input, 0);
+    check_type_row(Compile, Test, 0);
+    check_type_row(Compile, Judge, 0);
+    check_type_row(Compile, Tool, 0);
+    check_type_row(Compile, Environment, 0);
+    check_type_row(BuildInput, File, 6);
+    check_type_row(BuildInput, Project, 6);
+    check_type_row(BuildInput, Script, 6);
+    check_type_row(BuildInput, Input, 6);
+    check_type_row(BuildInput, Test, 0);
+    check_type_row(BuildInput, Judge, 0);
+    check_type_row(BuildInput, Tool, 6);
+    check_type_row(BuildInput, Environment, 6);
+    check_type_row(RuntimeInput, File, 38);
+    check_type_row(RuntimeInput, Project, 38);
+    check_type_row(RuntimeInput, Script, 38);
+    check_type_row(RuntimeInput, Input, 38);
+    check_type_row(RuntimeInput, Test, 0);
+    check_type_row(RuntimeInput, Judge, 0);
+    check_type_row(RuntimeInput, Tool, 38);
+    check_type_row(RuntimeInput, Environment, 38);
+    check_type_row(TestExecution, File, 16);
+    check_type_row(TestExecution, Project, 16);
+    check_type_row(TestExecution, Script, 16);
+    check_type_row(TestExecution, Input, 16);
+    check_type_row(TestExecution, Test, 0);
+    check_type_row(TestExecution, Judge, 0);
+    check_type_row(TestExecution, Tool, 16);
+    check_type_row(TestExecution, Environment, 16);
+    check_type_row(JudgeTrigger, File, 32);
+    check_type_row(JudgeTrigger, Project, 32);
+    check_type_row(JudgeTrigger, Script, 0);
+    check_type_row(JudgeTrigger, Input, 32);
+    check_type_row(JudgeTrigger, Test, 0);
+    check_type_row(JudgeTrigger, Judge, 0);
+    check_type_row(JudgeTrigger, Tool, 32);
+    check_type_row(JudgeTrigger, Environment, 32);
+}
+
 fn edge(from: &str, kind: policy::EdgeKind, to: &str) -> (out: policy::Edge)
     ensures out.from_bytes() == from.spec_bytes(), out.kind == kind,
         out.to_bytes() == to.spec_bytes(),

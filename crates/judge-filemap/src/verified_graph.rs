@@ -4,6 +4,13 @@ use chrono_harness::verus;
 use core::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 #[cfg(verus_keep_ghost)]
+#[path = "../../judge-registration/src/verified_nodes.rs"]
+pub mod nodes;
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_judge_registration::NodeKind;
+#[cfg(verus_keep_ghost)]
+pub use nodes::NodeKind;
+#[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
@@ -172,6 +179,46 @@ impl PartialEq for EdgeKind {
 }
 
 impl Eq for EdgeKind {}
+
+/// Complete allowed relation, stated by destination rather than dispatch order.
+pub open spec fn permitted_types(kind: EdgeKind, from: NodeKind, to: NodeKind) -> bool {
+    let source = from == NodeKind::File || from == NodeKind::Project
+        || from == NodeKind::Script || from == NodeKind::Input
+        || from == NodeKind::Tool || from == NodeKind::Environment;
+    match to {
+        NodeKind::Project => (kind == EdgeKind::Compile
+            && (from == NodeKind::File || from == NodeKind::Project))
+            || ((kind == EdgeKind::BuildInput || kind == EdgeKind::RuntimeInput) && source),
+        NodeKind::Script => (kind == EdgeKind::BuildInput || kind == EdgeKind::RuntimeInput) && source,
+        NodeKind::Test => kind == EdgeKind::TestExecution && source,
+        NodeKind::Judge => (kind == EdgeKind::RuntimeInput && source)
+            || (kind == EdgeKind::JudgeTrigger && source && from != NodeKind::Script),
+        _ => false,
+    }
+}
+
+pub fn valid_types(kind: EdgeKind, from: NodeKind, to: NodeKind) -> (valid: bool)
+    ensures valid == permitted_types(kind, from, to),
+{
+    use NodeKind::*;
+    match kind {
+        EdgeKind::Compile => matches!(from, File | Project) && to == Project,
+        EdgeKind::BuildInput => {
+            matches!(from, File | Project | Script | Input | Tool | Environment)
+                && matches!(to, Project | Script)
+        }
+        EdgeKind::RuntimeInput => {
+            matches!(from, File | Project | Script | Input | Tool | Environment)
+                && matches!(to, Project | Script | Judge)
+        }
+        EdgeKind::TestExecution => {
+            matches!(from, File | Project | Script | Input | Tool | Environment) && to == Test
+        }
+        EdgeKind::JudgeTrigger => {
+            matches!(from, File | Project | Input | Tool | Environment) && to == Judge
+        }
+    }
+}
 
 #[cfg(verus_keep_ghost)]
 impl vstd::std_specs::cmp::OrdSpecImpl for EdgeKind {

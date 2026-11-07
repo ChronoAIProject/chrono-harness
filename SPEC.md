@@ -1185,4 +1185,8 @@ routes 在核过同一原回执、原 stdout 字节摘要和完整执行身份�
 报告版本／commit 精确匹配、success 为真、两类错误标记为假、errors 为零、verified 大于零，且验证整个 crate。
 缺失／错型报告、过滤参数、额外参数、输出与 dep-info 路径不符均失败；普通操作不解析业务 stdout。
 本地执行和离线 collection 共用这项判断。此合同不单独证明源码／dep-info 绑定、编译器正确性或完整输入。
+实际登记的八种 NodeKind 由同源 Verus 拥有，复制与相等保全变体身份。
+FILEMAP 的五种边必须通过同源 Verus 的完整起点／终点类型关系；独立表覆盖全部320种组合，
+包括 Script 可作 build／runtime／test 输入而不能触发 judge，以及 Test／Judge 不能作这些输入的边界。
+registration 和 filemap 的实际计划强制验证其生产／独立根；JSON 节点提取与外层组合仍待迁移。
 其他逻辑、完整 SPEC 对应与全仓强制覆盖尚未完成。详见 [Verus 实施范围](docs/verus.md)。
