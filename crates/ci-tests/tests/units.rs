@@ -714,7 +714,7 @@ fn download_recovery_retains_failed_attempt_and_selects_only_complete_artifact()
         &attempts[0]["argv"].as_array().unwrap()[1..8],
         &attempts[1]["argv"].as_array().unwrap()[1..8]
     );
-    let final_report = published_report(host.path(), None, &result);
+    let final_report = short::published_report(host.path(), None, &result);
     assert_eq!(final_report["response"]["evidence"]["executed"], json!([]));
 }
 
@@ -886,7 +886,7 @@ fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
     let gather: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(gather["result"]["status"], "gathered-unjudged");
     assert_eq!(gather["result"]["units"].as_array().unwrap().len(), 2);
-    let final_report = published_report(host.path(), None, &result);
+    let final_report = short::published_report(host.path(), None, &result);
     assert_eq!(final_report["response"]["evidence"]["executed"], json!([]));
     assert_eq!(
         fs::read_to_string(host.path().join(".chrono-harness/state/calls-a")).unwrap(),
