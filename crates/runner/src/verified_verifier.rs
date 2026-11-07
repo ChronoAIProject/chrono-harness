@@ -201,12 +201,12 @@ pub open spec fn report_accepted(report: &CompilerReport, contract: &OutputContr
 
 pub open spec fn output_accepted(
     contract: &Option<OutputContract>, decoded: &Option<CompilerReport>,
-    args: Seq<String>, exit: Option<i32>, process_failed: bool,
+    args: Seq<String>, exit: i32, process_failed: bool,
 ) -> bool {
     match contract {
         None => true,
         Some(value) => valid_contract(contract) && verifier_arguments(args)
-            && exit == Some(0i32) && !process_failed
+            && exit == 0 && !process_failed
             && match decoded { None => false, Some(report) => report_accepted(report, value) },
     }
 }
@@ -214,7 +214,7 @@ pub open spec fn output_accepted(
 /// 直接消费同一原进程的退出、失败、参数和一次解码得到的完整报告。
 pub fn admit_output(
     contract: &Option<OutputContract>, decoded: &Option<CompilerReport>,
-    args: &Vec<String>, exit: Option<i32>, process_failed: bool,
+    args: &Vec<String>, exit: i32, process_failed: bool,
 ) -> (out: Result<(), String>)
     ensures out.is_ok() == output_accepted(contract, decoded, args@, exit, process_failed),
 {
@@ -223,7 +223,7 @@ pub fn admit_output(
         Ok(()) => {},
         Err(error) => { return Err(error); },
     }
-    if exit != Some(0i32) || process_failed || !canonical_verifier_arguments(args) {
+    if exit != 0 || process_failed || !canonical_verifier_arguments(args) {
         return Err("E_VERUS_RESULT: process or verifier arguments rejected".to_string());
     }
     let report = match decoded {
