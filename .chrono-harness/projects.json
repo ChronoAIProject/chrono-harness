@@ -176,11 +176,7 @@
             "-o",
             ".chrono-harness/state/verify.runner-identifiers.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "verify_paths": {
           "operation": "verify.runner-paths",
@@ -198,11 +194,7 @@
             "-o",
             ".chrono-harness/state/verify.runner-paths.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "verify_status": {
           "operation": "verify.runner-status",
@@ -220,11 +212,7 @@
             "-o",
             ".chrono-harness/state/verify.runner-status.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "verify_limits": {
           "operation": "verify.runner-limits",
@@ -242,11 +230,7 @@
             "-o",
             ".chrono-harness/state/verify.runner-limits.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "verify_verifier": {
           "operation": "verify.verus-result",
@@ -264,11 +248,7 @@
             "-o",
             ".chrono-harness/state/verify.verus-result.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "language": "rust"
@@ -426,11 +406,7 @@
             "-o",
             ".chrono-harness/state/verify.runner-identifiers-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "verify_paths": {
           "operation": "verify.runner-paths-tests",
@@ -448,11 +424,7 @@
             "-o",
             ".chrono-harness/state/verify.runner-paths-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "verify_status": {
           "operation": "verify.runner-status-tests",
@@ -470,11 +442,7 @@
             "-o",
             ".chrono-harness/state/verify.runner-status-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "verify_limits": {
           "operation": "verify.runner-limits-tests",
@@ -492,11 +460,7 @@
             "-o",
             ".chrono-harness/state/verify.runner-limits-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "verify_verifier": {
           "operation": "verify.verus-result-tests",
@@ -514,11 +478,7 @@
             "-o",
             ".chrono-harness/state/verify.verus-result-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "language": "rust"
@@ -832,11 +792,7 @@
             "-o",
             ".chrono-harness/state/verify.ci-collection.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "language": "rust"
@@ -982,11 +938,7 @@
             "-o",
             ".chrono-harness/state/verify.ci-collection-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "language": "rust"
@@ -1352,11 +1304,7 @@
             "-o",
             ".chrono-harness/state/verify.registration-preparation.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "language": "rust"
@@ -1476,11 +1424,7 @@
             "-o",
             ".chrono-harness/state/verify.registration-preparation-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "language": "rust"
@@ -1579,11 +1523,7 @@
             "-o",
             ".chrono-harness/state/verify.filemap-graph.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "language": "rust"
@@ -1715,11 +1655,7 @@
             "-o",
             ".chrono-harness/state/verify.filemap-graph-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "language": "rust"
@@ -3581,11 +3517,7 @@
             "-o",
             ".chrono-harness/state/verify.owner-publication.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "test_project": "worktree-tests",
@@ -3773,11 +3705,7 @@
             "-o",
             ".chrono-harness/state/verify.owner-publication-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         }
       },
       "tests_for": "worktree",
@@ -4281,11 +4209,7 @@
             "-o",
             ".chrono-harness/state/verify.bootstrap-bindings.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "owner_stage": {
           "operation": "host.bootstrap-owner-stage",
@@ -4365,11 +4289,7 @@
             "-o",
             ".chrono-harness/state/verify.bootstrap-bindings-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
+          ]
         },
         "execute": {
           "operation": "test.host-bootstrap-native-tests",
