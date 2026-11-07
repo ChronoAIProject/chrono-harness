@@ -14,6 +14,11 @@ fn only_exact_active_registry_is_ready() {
     proof {
         reveal_strlit("active"); reveal_strlit("proposed"); reveal_strlit("");
         reveal_strlit("Active"); reveal_strlit("active\0"); reveal_strlit("启用");
+        assert("active"@.len() != "proposed"@.len());
+        assert("active"@.len() != ""@.len());
+        assert("active"@[0] != "Active"@[0]);
+        assert("active"@.len() != "active\0"@.len());
+        assert("active"@.len() != "启用"@.len());
     }
     let ready = readiness::registry_active(Some("active"));
     assert(ready);
@@ -36,6 +41,8 @@ fn activation_requires_all_three_current_input_conditions() {
     proof {
         reveal_strlit("enabled"); reveal_strlit("not-implemented");
         reveal_strlit("declared-complete"); reveal_strlit("incomplete");
+        assert("enabled"@.len() != "not-implemented"@.len());
+        assert("declared-complete"@.len() != "incomplete"@.len());
     }
     let empty: Vec<u8> = Vec::new();
     let ready = readiness::input_ready(Some("enabled"), Some("declared-complete"), Some(&empty));
@@ -64,6 +71,11 @@ fn empty_collection_does_not_make_mismatched_text_ready() {
         reveal_strlit("enabled"); reveal_strlit("Enabled"); reveal_strlit("enabled\0");
         reveal_strlit("declared-complete"); reveal_strlit("declared-complete\0");
         reveal_strlit(""); reveal_strlit("完整");
+        assert("enabled"@[0] != "Enabled"@[0]);
+        assert("enabled"@.len() != "enabled\0"@.len());
+        assert("declared-complete"@.len() != "declared-complete\0"@.len());
+        assert("declared-complete"@.len() != ""@.len());
+        assert("declared-complete"@.len() != "完整"@.len());
     }
     let empty: Vec<&str> = Vec::new();
     let case = readiness::input_ready(Some("Enabled"), Some("declared-complete"), Some(&empty));
