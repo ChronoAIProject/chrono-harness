@@ -46,7 +46,7 @@
 
 候选必须已提交，且检出干净。`--unit ID` 和无值的 `--collect` 分别选择同一入口的单元模式与汇总模式；汇总不重执行业务。schema4 从 config.json 的 `canonical_check` 选择 profile 和输入 action。`CHRONO_CHECK_SOURCE` 未设置或为 `local` 时，使用登记的工作树输入程序；为 `ci` 时，使用登记的 CI 事件输入程序。其他值或缺输入都报错，不猜范围、不回退。本地固定登记 remote 的 workflow target 和干净 HEAD，不手工 prepare。
 
-本宿主采用 scoped `chrono-ci-check/v3`：23 个单元、一个 DELTA detector 和始终运行的汇总任务，唯一必需检查是 `chrono / collection`。目标为 dev 或 integration/** 的 PR 以固定 workflow 合并提交的第一父提交为基线、固定合并提交为候选，另保留事件 head 核对 GitHub 运行和工件，dev push 检查落地 before／after。integration 分支需要候选检查时创建 PR，草稿 PR 也支持；推送本身不另行触发主 CI。父运行按 PR 号替换旧运行，push 则按 run ID 保留每次运行。单元和报告由 check.json 维护，拓扑、共享启动和上传由 units.json 维护。
+本宿主采用 scoped `chrono-ci-check/v3`、一个 DELTA detector 和始终运行的汇总任务，唯一必需检查是 `chrono / collection`。目标为 dev 或 integration/** 的 PR 以固定 workflow 合并提交的第一父提交为基线、固定合并提交为候选，另保留事件 head 核对 GitHub 运行和工件，dev push 检查落地 before／after。integration 分支需要候选检查时创建 PR，草稿 PR 也支持；推送本身不另行触发主 CI。父运行按 PR 号替换旧运行，push 则按 run ID 保留每次运行。单元和报告由 [check.json](../ci/check.json) 维护，拓扑、共享启动和上传由 [units.json](../ci/units.json) 维护，不另维护单元计数。
 
 [CI 单元说明](../../docs/ci-units.md#conditional-jobs-and-the-required-aggregate)规定如何核对原始 producer／artifact attempt、沿用成功前置结果，以及共享安装。不能按当前重跑 attempt 猜产物归属。业务构建仍使用独立计划；本地和发布继续保留源码构建。
 
@@ -89,27 +89,27 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 | 当前任务 | 负责文档与适用条件 |
 | --- | --- |
 | 改登记、执行计划或测试 | [影响范围](../../docs/filemap-impact.md)、[执行、分组和语言](../../docs/execution.md)、[单元库存](../../docs/ci-units.md)：本宿主 cap=2，不越过依赖、共享 claim 或登记时限。跨调用隔离由调用方负责。分组、真实未过滤库存，以及原断言、线程和发布操作的保留要求，见单元说明。语言声明不能证明其余跨语言逻辑已迁移。 |
-| 改输入、Cargo 或 full 采用 | [输入与同判条件](../../docs/inputs.md)、[Cargo guarded](../../docs/cargo-projects.md)、[Git facts](../../docs/git-facts.md)、[full CI](../../docs/full-ci.md)：快照不补依赖、不改预期摘要、不启用治理。候选解码器读取历史数据，不执行旧判官。full unscoped 需要原 origin receipt 和历史证据，缺失则失败。旧 scoped 宿主的专用解码器、工具测试数据、历史对象获取和迁移测试已退役。当前 projects 测试使用原未过滤 action；通用转换接口使用自含合成测试数据验证，不获取旧仓库，也不提供历史兼容入口。 |
-| 改 CI 缓存 | [缓存说明](../../docs/ci-cache.md)：保留普通 plan／restore、producer-manifest 内容验证、失败恢复、原构建与测试、seal／save 和原始 outcome 报告。专属 Variables／PR 正文激活、manifest-removal 测试数据和新增权限依赖，已按用户要求退役，不增加替代入口。历史 C1 观察到两项缓存的坏内容保存、恢复、拒绝、重建和替换；但原兼容域的健康精确命中尚未达成，rustup 身份变化，最新 collection 返回 HTTP 502。保留部分结论和原件。外部归属、linked transport 租约、其他使用方和完整验收仍未完成；目前只支持 primary checkout。缓存测试仅在失败时保留原测试数据、探测配置和报告。 |
+| 改输入、Cargo 或 full 采用 | [输入与同判条件](../../docs/inputs.md)、[Cargo guarded](../../docs/cargo-projects.md)、[Git facts](../../docs/git-facts.md)、[full CI](../../docs/full-ci.md)：快照不补依赖、不改预期摘要、不启用治理。候选解码器读取固定历史数据，不执行旧判官。full unscoped 需要原 origin receipt 和历史证据，缺失则失败。当前 projects 测试使用原未过滤 action；通用转换接口用自含合成测试数据验证，不获取旧仓库，也不提供已退役宿主的兼容入口。 |
+| 改 CI 缓存 | [缓存说明](../../docs/ci-cache.md)：普通 plan／restore、producer-manifest 内容验证、失败恢复、原构建与测试、seal／save 和原始 outcome 报告均有当前使用方。专属远端激活层已退役，不增加替代入口。目前只支持 primary checkout，完整验收仍有缺口；具体观察和原件入口由缓存说明维护。缓存测试仅在失败时保留原测试数据、探测配置和报告。 |
 | 改发布或消费关系 | [发布说明](../../docs/release-ci.md)：v5 明确登记 needs／rust_toolchain／verification_consumers，保留原未过滤操作、producer／run／attempt 和失败证据。declared 不证明必要性；本地、原生和公开采用分别验收。 |
 | 读成本或排查失败 | [汇总观察](../../docs/ci-units.md#github-projection-and-transport)、[诊断范围](../../docs/diagnostics.md)：先读原件。当前 attempt 的 API 视图可能包含沿用结果，新 job ID 不证明任务重跑。canonical-check 包含构建、测试和汇总；读数不代表完整历史、重跑成本、计费或全流程总量，告警不能证明冗余或节省。 |
 
 ## 当前未完成边界
 
-五份 full 治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`，尚未采用 Cargo guarded policy。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
+完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`，尚未采用 Cargo guarded policy。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
 
-宿主 Git facts 采用 `chrono-git-configs/v3` 精确摘要选择；工作树采用 v3 主身份和登记的补充身份。原生队列当前的 `61e77a2d…`（run `41927937485/1`）和 `b8763cf2…`（run `41941690768/1`）分别绑定完整政策，并明确共用固定基线数据路径；另保留实测 macOS 27.0.1 本机身份。版本预期和完整验收仍须实际 bound probe 验证，未知摘要仍在执行前拒绝。
+宿主 Git facts 采用 `chrono-git-configs/v3` 精确摘要选择；实际映射和固定数据路径归[选择器](../config.json)，工作树接受的主身份及补充身份归[工作树政策](../worktree.json)。版本预期和完整验收仍须实际 bound probe 验证，未知摘要仍在执行前拒绝。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不在本上下文复制运行号或摘要。
 
 政策与产品同时变更时，候选决定实际执行程序。固定端点先按候选程序身份读取明确登记；端点未登记该身份时，只读取候选声明的 registry_path 和端点原字节，不启动历史 Git，也不猜其他路径。额外读取和完整验证成本未测。
 
-日常本机检查的 CARGO_HOME 和输入声明，采用当前检出的 .chrono-harness/cache/bootstrap-owner-tooling/cargo，与 bootstrap 的可重建工具缓存登记一致。HOME／TMPDIR 沿用既有继承环境，已移除对旧检出目录的写入绑定。摘要、只读工具链和 SDK 绑定继续保留，实际采用仍待验收。原生仍使用 macos-26；当前生产 `72b1d08` 和临时环境 `c515cd05` 的 scoped 检查已有范围有限的观察，不能证明完整启用；开发工具目录仍未明确绑定。
+日常本机检查的 CARGO_HOME 使用当前检出的 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与 bootstrap 的可重建工具缓存登记一致；HOME／TMPDIR 沿用继承环境。bootstrap 绑定所选 Rust 工具的版本和组件摘要；SDKROOT／DEVELOPER_DIR 等路径选择不等于 SDK 内容绑定，也不证明祖先 Cargo 配置及其余输入完整。当前声明与采用缺口归[输入说明](../../docs/inputs.md)，运行观察归原件。
 
 普通 full check 在登记要求和所选义务通过后，只表示 DELTA 满足当前合同。`declared-complete` 是负责方的工程声明，registration 仍报告 `completeness_proven:false`。已知缺输入、必需依赖未解决、缺绑定或快照，以及漂移，都必须失败；不另要求普遍的隐藏输入证明或 VM。
 
 同一命令已经采用；要主张同判，仍需完整相同的有效输入和确定性求值。当前程序不建立更强的输入完整性保证，因此报告保持“尚未建立 parity”。独立比较或改写命令、固定 `spec status` 已退役，也不另加普通 full 关卡。
 
-两项 producer-manifest/v1 缓存，已有原生 cold／save、健康精确命中、兼容源码校验后的实际重建，以及不兼容环境分域和重建的有限观察，分别来自 `39688684172/1`、`39690377913/1,2` 和 `39695762671/1`。原 Variables GET／list HTTP 403 和后续 C1 部分证据继续保留。坏内容恢复或替换，不等于修复后在原域健康精确命中。可选远端激活层已退役，不作为当前推进依赖。并发、其他使用方、完整成本和生命周期合同仍未完成。
+缓存已有部分原生观察；坏内容恢复或替换，不等于修复后在原兼容域健康精确命中，该项仍未完整验收。linked transport 租约、其他使用方、并发及完整成本和生命周期合同仍有缺口，具体范围见[缓存说明](../../docs/ci-cache.md)。已退役的远端激活层不作为当前推进依赖。
 
-临时优化环境已由普通 revert `c72c141` 移除，恢复树等同生产 `72b1d08`，实验历史保留。当前 scoped 路径只采用 runner-startup 的版本化内部消费关系检查。full judge 的类型化 prelaunch 和报告诊断已有范围有限的实现。detector→startup 导入与安装→runner 检查→原件汇总链已有 Darwin 原生观察；runner 原始输出包含 166 passed／1 ignored 和具名 prelaunch 回归。Linux、外部及全部使用方采用仍未完成，具体限制见负责文档和覆盖表。
+当前 scoped 路径只采用 runner-startup 的版本化内部消费关系检查。full judge 的类型化 prelaunch 和报告诊断已有范围有限的实现。detector→startup 导入与安装→runner 检查→原件汇总链已有 Darwin 原生观察；Linux、外部及全部使用方采用仍未完成，具体限制见负责文档和[覆盖表](../../docs/spec-coverage.md)。旧实验、回退和测试读数直接查 Git、原 PR／CI，不在本上下文维护副本。
 
 完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收，仍未完成；阶段成功不是交付。成本仍有 unmeasured 项。来源和许可是可选阅读资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其他工作树，不把过程转录写入产品源。
