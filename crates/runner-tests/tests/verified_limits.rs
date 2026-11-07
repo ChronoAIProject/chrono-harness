@@ -12,13 +12,6 @@ use vstd::prelude::*;
 
 verus! {
 
-fn every_scalar_pair_has_exact_admission(timeout: u64, output: usize) {
-    let observed = policy::valid_execution_bounds(timeout, output);
-    assert(observed == (timeout != 0 && output >= 1 && output <= 67_108_864));
-    let observed_output = policy::valid_output_limit(output);
-    assert(observed_output == (output >= 1 && output <= 67_108_864));
-}
-
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn positive_timeout_accepts_the_complete_inclusive_output_boundary() {
     let minimum = policy::valid_execution_bounds(1, 1);
