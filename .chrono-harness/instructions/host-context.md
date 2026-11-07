@@ -34,7 +34,7 @@
 /bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-core.json
 ```
 
-检查前，从候选源码执行 Rust core bootstrap。薄 shell 入口先委托已有所有者保护前端编译，随后运行保留在 bin 中的前端；首次 Git main 检出可以初始化。Rust 版本、操作和安装产物由 bootstrap-core.json／projects.json 决定，不用环境默认值替代，也不改全局默认工具链。core 和 Verus 准备已使用 Rust；其他仍采用 Python 的 profile 和测试继续绑定本 macOS 宿主的 `/usr/bin/python3`／Python 3.9.6。工具观察或摘要不能证明完整来源。关联检出缺少兼容协调者或所有权信息时，在构建前失败。详见 [CI 启动](../../docs/ci.md#this-repository)和[生命周期参与](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)。
+检查前，从候选源码执行 Rust core bootstrap。薄 shell 入口先委托已有所有者保护前端编译，随后运行保留在 bin 中的前端；首次 Git main 检出可以初始化。Rust 版本、操作和安装产物由 bootstrap-core.json／projects.json 决定，不用环境默认值替代，也不改全局默认工具链。core、Verus、共享与缓存启动、unit 和 owner-verification 已使用 Rust；原生输入获取、Python 测试和发布编排继续绑定本 macOS 宿主的 `/usr/bin/python3`／Python 3.9.6。工具观察或摘要不能证明完整来源。关联检出缺少兼容协调者或所有权信息时，在构建前失败。详见 [CI 启动](../../docs/ci.md#this-repository)和[生命周期参与](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)。
 
 ### 本地／CI 检查
 

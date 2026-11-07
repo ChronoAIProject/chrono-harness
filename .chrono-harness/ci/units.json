@@ -41,8 +41,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -71,8 +71,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -85,8 +85,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -99,8 +99,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -113,8 +113,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -143,8 +143,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -253,8 +253,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -356,8 +356,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -370,8 +370,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],

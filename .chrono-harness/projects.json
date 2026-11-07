@@ -4890,6 +4890,24 @@
             ".",
             ".chrono-harness/ci/bootstrap-cache.json"
           ]
+        },
+        "owner-verify": {
+          "operation": "host.bootstrap-owner-verify",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-owner-verification.json"
+          ]
+        },
+        "unit": {
+          "operation": "host.bootstrap-unit",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-unit.json"
+          ]
         }
       }
     },
@@ -4932,26 +4950,6 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-acquire-linux.json"
-          ]
-        },
-        "owner-verify": {
-          "operation": "host.bootstrap-owner-verify",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-owner-verification.json"
-          ]
-        },
-        "unit": {
-          "operation": "host.bootstrap-unit",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-unit.json"
           ]
         },
         "verus-download": {

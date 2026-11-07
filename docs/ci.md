@@ -34,7 +34,7 @@
 
 CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选择 Git。准备命令和绑定 Git 消费者使用同一原生执行物，故障适配器在输入登记保留所选路径。平台缺登记就失败，不从环境 PATH 回退。这不改变消费宿主 Git 政策，也不证明 Git 输入完整。
 
-从仓库根运行。core、Verus 准备和所有者阶段构建由 Rust 执行，薄 shell 入口需要 Git、rustup；首次前端编译使用固定 Rust 1.95.0，已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。其他仍使用 Python 的 profile 和测试继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
+从仓库根运行。core、Verus、共享与缓存启动、unit、所有者阶段构建及 owner-verification 由 Rust 执行，薄 shell 入口需要 Git、rustup；首次前端编译使用固定 Rust 1.95.0，已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。原生输入获取、Python 测试和发布编排继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
 
 它按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap 操作，再复制声明二进制，不复制 Cargo 配方或发现项目。工具链操作明确点名版本，不改全局默认。专属 CI 测试的复制宿主回归消费已安装候选工具，须先 bootstrap：
 
@@ -51,7 +51,11 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再执行该保留文件；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
 共享启动使用薄入口 `bootstrap-shared.sh`。produce 委托上述受保护入口，Rust 按各 profile 的 `entrypoint` 调真实生产者。core 的安装工具包含 `chrono-host-bootstrap`，导出路径按 `tools/<profile>/<安装目标相对 bin 的路径>` 命名。共享登记的 `installer` 明确选择 core 前端；生产者向 `GITHUB_OUTPUT` 分别写 manifest 的 `binding` 和前端的 `installer_sha256`。
 
-install 先用现有 `/usr/bin/shasum` 核对 `CHRONO_STARTUP_INSTALLER_SHA256`，拒绝缺绑定、字节差异及执行路径中的符号链接，再恢复下载丢失的执行位并运行前端。Rust 在安装任何工具前校验完整 manifest、全部 profile 的原报告／流、产物和本地 SDK；verify 复用已安装前端。每个消费者直接复用生产者二进制。其余 Python profile、原件校验库及部分测试仍待迁移，外部宿主不运行本仓这项源码构建。
+install 先用现有 `/usr/bin/shasum` 核对 `CHRONO_STARTUP_INSTALLER_SHA256`，拒绝缺绑定、字节差异及执行路径中的符号链接，再恢复下载丢失的执行位并运行前端。Rust 在安装任何工具前校验完整 manifest、全部 profile 的原报告／流、产物和本地 SDK；verify 复用已安装前端。每个消费者直接复用生产者二进制。原生获取 profile、Python 原件校验库及部分测试仍待迁移，外部宿主不运行本仓这项源码构建。
+
+unit 和 owner-verification 也通过同一薄 shell 入口调用 Rust。unit 保留共享 core 验证这一前置，再执行 Verus 准备；owner-verification 保留原来的七项获取、格式、构建及测试操作，其中 Python owner 测试继续显式选择解释器。CI 的 9 项 unit 启动命令与 projects 负责人同步迁移，无证明操作的单元继续直接验证共享 core。安装目标、报告路径及所有者保护沿用原声明。
+
+**执行入口与宿主政策同时变更：**本批调整上述两项配置、操作负责人、CI 启动参数和 FILEMAP 依赖，复用已有 Rust 执行及 shell 行为测试。原生输入获取另批核验；本批正式 DELTA 检查、实际 CI 和 dev 落地仍须验收，验证及总成本未测。
 
 **实现与宿主政策同时变更：**本批修改 core／Verus 及共享启动的正式方法和登记，CI 生成器增加显式安装器摘要输出转交；原生构建、真实升级、共享安装及受影响标准／CI 消费分别验收。新增前端构建、验证和存储总成本未测。共享 produce／install／verify 与直接行为测试已迁 Rust；Python 保留外层诊断组合测试和 owner 仍使用的原报告校验函数。完整实际使用方和标准 CI 验收尚未完成，不能据局部检查宣称整批交付。
 
@@ -104,7 +108,7 @@ full v1 重复准备若只差进程所有权描述符编号，则返回原准备
 
 core 和 cache 共用源码登记 `.chrono-harness/ci/bootstrap-toolchains.json`，明确声明 Darwin／arm64（macos-26 CI）及 Linux／x86_64（ubuntu-24.04 发布 cache-bootstrap）。未知／缺少组合在准备工具前失败。
 
-本仓未使用的完整默认 profile 和独立 detector profile 已退役。当前 detector 直接使用共享 Rust 生产入口；cache 也由现有 Rust bootstrap 执行，薄 shell 负责进入受保护前端。其余仍使用 Python 的 profile 继续按各自显式配置调用，不提供隐式默认配置。
+本仓未使用的完整默认 profile 和独立 detector profile 已退役。当前 detector 直接使用共享 Rust 生产入口；cache、unit 和 owner-verification 也由现有 Rust bootstrap 执行，薄 shell 负责进入受保护前端。原生输入获取仍按其显式 Python 配置调用，不提供隐式默认配置。
 
 每个执行物 SHA-256 都从官方 Rust 1.95.0 组件归档的精确 Cargo／rustc 成员取得，独立于本机安装。登记保留官方 manifest URL／摘要／日期及组件 URL、归档摘要、成员、大小、版本来源。归档摘要只说明来源，不能代替执行物字节预期。Cargo 上游版本实现解释 package 0.96.0／CLI 1.95.0 的区别。
 
