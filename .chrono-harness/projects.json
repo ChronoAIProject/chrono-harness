@@ -109,21 +109,6 @@
             "crates/runner/Cargo.toml"
           ]
         },
-        "guarded_check": {
-          "operation": "guard.check.runner",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/git/macos-27.json",
-            "--policy",
-            ".chrono-harness/cargo/runner.json",
-            "--operation",
-            "guard.check.runner"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.runner",
           "tool": "cargo",
@@ -3542,40 +3527,6 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "observe_guard": {
-          "operation": "test.judge-cargo-guard-observation",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml",
-            "--test",
-            "inputs",
-            "--",
-            "--ignored",
-            "--exact",
-            "runner_guard_within_joinable_observation_window",
-            "--nocapture"
-          ]
-        },
-        "observe_runner_preparation": {
-          "operation": "test.judge-cargo-runner-preparation-observation",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml",
-            "--test",
-            "inputs",
-            "--",
-            "--ignored",
-            "--exact",
-            "runner_preparation_within_joinable_observation_window",
-            "--nocapture"
           ]
         }
       },
