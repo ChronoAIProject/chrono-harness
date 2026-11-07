@@ -1516,57 +1516,51 @@
     ],
     "claims": {
       "build.host-bootstrap-native": {
-        "resources": [],
+        "resources": [
+      
+        ],
         "outputs": [
-          ".chrono-harness/cache/host-bootstrap-native/target/"
+          ".chrono-harness/cache/"
         ]
       },
       "fmt.host-bootstrap-native": {
-        "resources": [],
-        "outputs": []
-      },
-      "format.host-bootstrap-native": {
-        "resources": [],
-        "outputs": []
-      },
-      "inputs.lockfile.host-bootstrap-native": {
-        "resources": [],
-        "outputs": []
+        "resources": [
+      
+        ],
+        "outputs": [
+      
+        ]
       },
       "verify.bootstrap-bindings": {
-        "resources": [],
+        "resources": [
+      
+        ],
         "outputs": [
           ".chrono-harness/state/"
         ]
       },
-      "build.host-bootstrap-native-tests": {
-        "resources": [],
+      "fmt.host-bootstrap-native-tests": {
+        "resources": [
+      
+        ],
         "outputs": [
-          ".chrono-harness/cache/host-bootstrap-native-tests/target/"
+      
         ]
       },
-      "fmt.host-bootstrap-native-tests": {
-        "resources": [],
-        "outputs": []
-      },
-      "format.host-bootstrap-native-tests": {
-        "resources": [],
-        "outputs": []
-      },
-      "inputs.lockfile.host-bootstrap-native-tests": {
-        "resources": [],
-        "outputs": []
-      },
       "verify.bootstrap-bindings-tests": {
-        "resources": [],
+        "resources": [
+      
+        ],
         "outputs": [
           ".chrono-harness/state/"
         ]
       },
       "test.host-bootstrap-native-tests": {
-        "resources": [],
+        "resources": [
+      
+        ],
         "outputs": [
-          ".chrono-harness/cache/host-bootstrap-native-tests/target/"
+          ".chrono-harness/cache/"
         ]
       },
       "build.ci": {
