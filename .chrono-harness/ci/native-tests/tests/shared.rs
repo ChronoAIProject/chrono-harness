@@ -9,8 +9,9 @@ const CONFIG: &str = ".chrono-harness/ci/shared.json";
 const TRANSFER: &str = ".chrono-harness/cache/startup";
 
 fn cli(root: &Path, environment: &Environment, args: &[&str]) -> Output {
-    let mut command = bindings::command(root,
-        Path::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native")), &[], environment).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
+    command.current_dir(root).env_clear().envs(environment);
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
     command.arg(root).arg(CONFIG).args(args).output().unwrap()
 }
 
