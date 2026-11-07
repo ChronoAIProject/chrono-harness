@@ -226,6 +226,18 @@ class ParentSourceAcquisition(unittest.TestCase):
 
 
 class DiagnosticsComposition(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # This Python interface suite also runs directly in a release checkout.
+        # Reuse the registered build instead of assuming a FILEMAP prelude ran.
+        import bootstrap
+        root = SOURCE.parents[1]
+        projects = json.loads((root / ".chrono-harness/projects.json").read_bytes())
+        action = bootstrap.registered_operations(projects)["build.host-bootstrap-native"]
+        tools = {row["id"]: row["program"] for row in fixture_host_config(root)["tools"]}
+        subprocess.run([tools[action["tool"]], *action["argv"]], cwd=root,
+                       pass_fds=fixture.PASS_FDS, check=True)
+
     def setUp(self):
         self.host = fixture.Bootstrap()
         self.host.setUp()

@@ -1536,7 +1536,6 @@
     },
     "test:host-bootstrap-tests": {
       "operations": [
-        "build.host-bootstrap-native",
         "host.bootstrap-provision-tests",
         "host.bootstrap-tests",
         "host.bootstrap-real-consumer"
@@ -2013,7 +2012,8 @@
       "host.bootstrap-tests": {
         "resources": [],
         "outputs": [
-          ".chrono-harness/state/"
+          ".chrono-harness/state/",
+          ".chrono-harness/cache/"
         ]
       },
       "fmt.cache": {
