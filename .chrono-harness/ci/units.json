@@ -6,12 +6,20 @@
     "name": "chrono / collection",
     "runs_on": "macos-26",
     "push_branches": [
-      "dev"
+      "dev",
+      "integration/**"
     ],
     "pull_request_branches": [
-      "dev"
+      "dev",
+      "integration/**"
     ],
     "branch_creation_base_ref": "refs/heads/dev",
+    "push_baselines": [
+      {
+        "ref_prefix": "refs/heads/integration/",
+        "base_ref": "refs/heads/dev"
+      }
+    ],
     "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
     "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
     "timeout_minutes": 45,
