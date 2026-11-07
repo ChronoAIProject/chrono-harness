@@ -45,6 +45,22 @@ fn original() -> Fixture {
 
 fn configured(build_at_export: bool) -> Fixture {
     let mut fixture = Fixture::new();
+    fs::write(
+        fixture.root.join(".chrono-harness/ci/entry.sh"),
+        include_bytes!("support/producer.sh"),
+    )
+    .unwrap();
+    let producer = fixture.tools.join("producer");
+    fs::copy(env!("CARGO_BIN_EXE_chrono-test-bootstrap-tool"), &producer).unwrap();
+    fixture.environment.insert(
+        "CHRONO_TEST_BOOTSTRAP_PRODUCER".into(),
+        producer.into_os_string(),
+    );
+    fixture.environment.insert(
+        "CHRONO_TEST_BOOTSTRAP_NATIVE".into(),
+        env!("CARGO_BIN_EXE_chrono-test-bootstrap-native").into(),
+    );
+    fixture.config["tools"]["sh"] = json!("/bin/sh");
     fixture.config["participation"]["git"] = json!("/usr/bin/git");
     let path = fixture.root.join(".chrono-harness/ci/registry.json");
     let mut registry: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
@@ -334,6 +350,14 @@ fn produce_builds_only_declared_profiles_and_keeps_originals_on_output_failure()
         extra
     );
     assert_eq!(binding.len(), 64);
+    let calls: Vec<Value> = serde_json::from_slice(
+        &fs::read(fixture.tools.join("calls.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        calls.iter().filter(|row| row[0] == "producer").collect::<Vec<_>>(),
+        vec![&json!(["producer", fixture.root, ".chrono-harness/ci/build.json"])]
+    );
 
     let fixture = original();
     let mut environment = fixture.environment.clone();
@@ -352,6 +376,22 @@ fn produce_builds_only_declared_profiles_and_keeps_originals_on_output_failure()
         .unwrap(),
         manifest
     );
+}
+
+#[test]
+fn registered_producer_failure_keeps_raw_streams_exit_and_unpublished_transfer() {
+    for code in [37, 0] {
+        let fixture = configured(true);
+        let mut environment = fixture.environment.clone();
+        environment.insert("CHRONO_TEST_PRODUCER_EXIT".into(), code.to_string().into());
+        let output = cli(&fixture.root, &environment, &["produce"]);
+        assert_eq!(output.status.code(), Some(if code == 0 { 1 } else { code }));
+        assert_eq!(output.stdout, b"producer stdout\x00\xff\n");
+        assert!(output.stderr.starts_with(b"producer stderr\xfe\n"));
+        assert!(!fixture.root.join(TRANSFER).exists());
+        assert!(!fixture.root.join(".chrono-harness/state/bootstrap.json").exists());
+        assert!(fixture.root.join(".chrono-harness/state/bootstrap-extra.json").is_file());
+    }
 }
 
 #[test]

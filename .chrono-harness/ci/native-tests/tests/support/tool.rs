@@ -91,7 +91,28 @@ fn run() -> Result<u8, String> {
         .map_err(|e| e.to_string())?;
     writeln!(stream, "{}", json!({"tool":name,"environment":selected}))
         .map_err(|e| e.to_string())?;
-    if name == "rustup" {
+    if name == "producer" {
+        if let Ok(code) = env::var("CHRONO_TEST_PRODUCER_EXIT") {
+            std::io::stdout()
+                .write_all(b"producer stdout\x00\xff\n")
+                .map_err(|e| e.to_string())?;
+            std::io::stderr()
+                .write_all(b"producer stderr\xfe\n")
+                .map_err(|e| e.to_string())?;
+            return code.parse::<u8>().map_err(|e| e.to_string());
+        }
+        let mut command = Command::new(
+            env::var_os("CHRONO_TEST_BOOTSTRAP_NATIVE").ok_or("missing native producer")?,
+        );
+        command.args(&args);
+        chrono_harness::process_fds::forward_command(&mut command, &[])?;
+        return Ok(command
+            .status()
+            .map_err(|e| e.to_string())?
+            .code()
+            .and_then(|code| u8::try_from(code).ok())
+            .unwrap_or(1));
+    } else if name == "rustup" {
         let words: Vec<&str> = args.iter().map(String::as_str).collect();
         match words.as_slice() {
             ["which", "--toolchain", "1.95.0", tool @ ("cargo" | "rustc")] => {
