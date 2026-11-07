@@ -191,13 +191,13 @@ link／dep-info／`-o` 输出同源，源码和输出参数非空。额外参数
 普通操作向解码接口传空字节，不解析其业务输出；其既有退出规则由原所有者保留。
 本地 projects 和离线 collection 都消费 routes 的同一准入结果。
 
-本宿主为十八项证明操作逐项登记固定 Verus 版本及 commit；新增两项整 crate 根作为
+本宿主为各项证明操作逐项登记固定 Verus 版本及 commit；报告准入的两项整 crate 根作为
 runner、registration、routes、judge-ci 和 CI 生成器测试计划的必需前置。
 未执行的证明、未声明合同的普通操作及现有原件身份核验，不因此取得全仓覆盖保证。
 源码、真实编译依赖／dep-info checksum、完整 SPEC 对应及全仓新增逻辑覆盖门仍须继续实施。
 新增检查为固定形状比较和原报告解码，完整构建、验证、CI、存储及运行成本未测。
 
-## 固定执行入口
+## 实际节点与类型关系
 
 `crates/judge-registration/src/verified_nodes.rs` 拥有实际八种 `NodeKind`，
 复制及相等的返回值与变体身份充要相等；自然所有者只重导出这个类型。
@@ -213,6 +213,8 @@ filemap 的原 `valid_types` 已移到现役 `verified_graph.rs`，直接消费�
 固定 Rust 1.95.0 标准派生接口，不产生仓内判断。Clone／PartialEq 由仓内同源证明拥有，未豁免。
 JSON 解码、节点提取、诊断和完整图外层组合继续保留未完成义务。
 额外证明、编译、运行、CI与存储总成本未测；不据此声明全仓覆盖门已完成。
+
+## 固定执行入口
 
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
 `test:runner-tests` 先运行十项整 crate Verus 操作及编译，registration 先运行八项，
@@ -275,7 +277,7 @@ O(E(1 + (L+1)log(U+1)) + U²)，再有原标准库集合转换。
 finding 克隆使用固定 vstd 对 `<String as Clone>::clone` 和 `<Vec<String> as Clone>::clone` 的外部合同，
 前者保留完整字符串，后者保留长度及逐项克隆关系；本仓实现证明各实际字段均保留。
 
-**产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十八项证明。
+**产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划逐项登记证明。
 固定宏依赖通过 runner 传播到现役依赖方的独立 lockfile，没有升级其他包。
 runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` 定位需要 O(log C) 次字节比较，
 新增插入最多移动 C 个字符串句柄，存储为 O(C)。原图索引与遍历成本继续保留；
