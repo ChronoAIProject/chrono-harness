@@ -48,8 +48,13 @@ fn stage_report_names_reject_missing_or_reused_originals() {
         assert("stdout"@[3] != "stderr"@[3]);
         assert(names[0]@ == "stdout"@);
         assert(names[1]@ == "stderr"@);
+        assert("stdout"@.len() == 6 && "stderr"@.len() == 6 && ""@.len() == 0);
+        assert(names[0]@.len() == 6 && names[1]@.len() == 6);
         assert forall|i: int| 0 <= i < names.len() implies names[i]@ != ""@ by {
             assert(i == 0 || i == 1);
+            if i == 0 { assert(names[i]@ == names[0]@); }
+            else { assert(names[i]@ == names[1]@); }
+            assert(names[i]@.len() == 6);
         }
         assert forall|i: int, j: int| 0 <= i < j < names.len()
             implies names[i]@ != names[j]@ by { assert(i == 0 && j == 1); }
