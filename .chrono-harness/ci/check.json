@@ -62,7 +62,9 @@
       "crates/diagnostics-tests/target/",
       "crates/cache/target/",
       "crates/cache-tests/target/",
-      ".chrono-harness/startup/"
+      ".chrono-harness/startup/",
+      "crates/pr/target/",
+      "crates/pr-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -179,7 +181,8 @@
       },
       "worktree": {
         "tests": [
-          "test:worktree-tests"
+          "test:worktree-tests",
+          "test:pr-tests"
         ],
         "report_path": ".chrono-harness/state/units/worktree/check.json"
       },
@@ -235,8 +238,30 @@
       }
     },
     "shared_operations": {
-      "verify.runner-status": ["judge-cost", "judge-filemap", "judge-mixed", "judge-projects", "judge-registration", "judge-routes", "judge-workflow", "judge-workflow-short", "judge-workflow-units", "runner"],
-      "verify.runner-status-tests": ["judge-cost", "judge-filemap", "judge-mixed", "judge-projects", "judge-registration", "judge-routes", "judge-workflow", "judge-workflow-short", "judge-workflow-units", "runner"],
+      "verify.runner-status": [
+        "judge-cost",
+        "judge-filemap",
+        "judge-mixed",
+        "judge-projects",
+        "judge-registration",
+        "judge-routes",
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units",
+        "runner"
+      ],
+      "verify.runner-status-tests": [
+        "judge-cost",
+        "judge-filemap",
+        "judge-mixed",
+        "judge-projects",
+        "judge-registration",
+        "judge-routes",
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units",
+        "runner"
+      ],
       "verify.runner-limits": [
         "judge-registration",
         "judge-routes",
