@@ -70,7 +70,7 @@
 | 7 合法退役 | 有限实现：W 共同移除生产／测试、明确别名修复 | 完整原生启用 |
 | 8 移除必需测试 | 有限实现：W 明确成功替换或已验共同退役 | 完整原生启用 |
 | 9 配对不唯一／缺失 | 有限实现：projects 和真实消费者负例 | 完整原生启用 |
-| 10 manifest 依赖未声明 | 有限实现：可选 Cargo 明确政策、TOML 路径依赖、缺边拒绝；v4 绑定 Cargo／编译器，v5 增 sysroot／后端／链接器／SDK／脚本清单，有直接／完整／scoped 真实消费者；diagnostics Rust、Developer、SDK inventory 已由 producer observation manifest 提供给 runtime-state Cargo guard，Git 只保留引用合同 | 编译器库／后端／链接器／SDK 语义输入完整；其余运行时 inventory 迁移、受保护 registry／Git 解析、完整宿主启用 |
+| 10 manifest 依赖未声明 | 有限实现：可选 Cargo 明确政策、TOML 路径依赖、缺边拒绝；v4 绑定 Cargo／编译器，v5 增 sysroot／后端／链接器／SDK／脚本清单，有直接／完整／scoped 真实消费者；通用 runtime-state 输入合同及其自含漂移测试保留，diagnostics 的额外保护采用已退役 | 编译器库／后端／链接器／SDK 语义输入完整；其余运行时 inventory 迁移、受保护 registry／Git 解析、完整宿主启用 |
 | 11 已知缺输入／必需依赖未解决 | 有限实现：明确外部节点、必需项目边、declared-complete v3 回归、v5 清单、可选版本化输入范围，以及 proposed_and_incomplete_never_receive_governance_success | 本仓 Cargo／SDK／配置仍未完整，不发现依赖或证明普遍完整 |
 | 12 README 不全测 | 有限实现：F、C、projects 真实不执行无关历史缺陷 | 完整原生启用 |
 | 13 独立脚本测试 | 有限实现：真实完整链脚本对 | 完整原生启用 |
@@ -341,7 +341,7 @@ Rust capability fixture 用独立测试进程，断言、预算和明确内部�
 
 observer 获取、明确原生／准备源及 Cargo v6／directory v3 行为已与当前传输／进程所有者协调。登记的 host-bootstrap→隔离 guarded-runner 消费链、14 个安装参与者、34 对 fetch／metadata 仍明确列出。通用 Rust 行为 case 和 Python 准备／运行／转交 case 保留；源码登记本身不是执行结论。当前宿主绑定／采用、受保护已装参与者消费、候选 canonical／native、落地、完整输入及同判仍待完成。PR163 保留源码、可选当前方法处置和 scoped 剩余项见[保管说明](input-source-custody.md#remaining-consumer-prerequisites)。
 
-精确源码 `51d85d833e4fdf9f7a607af901bfa52d3e64939a` 的原生 `41021444210/1` 为对应 95 个当前操作中的 37 个提供资格证据，余下 58 个在该组中只有登记、没有执行证据。当前方法保留 94 个直接 Cargo 配方和一个 diagnostics guarded build。diagnostics 的 27 节点原生 metadata／offline-build 结果只覆盖本领域。普通 full 输入、隔离 home 一致性、本地 diagnostics、七项 full 绑定、default／portable／distribution 采用及历史原件仍是 P1–P6 义务。合格 startup 产物 `12961832338` 含 18 个原成员和五个执行物，只支持有限 native core／detector 供给，不证明 default 的 14 工具安装或完整 SPEC §12.1。PR163 作为历史保管事项已关闭，当前义务在 PR214 继续；历史兼容不是当前支持义务。
+精确源码 `51d85d833e4fdf9f7a607af901bfa52d3e64939a` 的原生 `41021444210/1` 为对应 95 个当前操作中的 37 个提供资格证据，余下 58 个在该组中只有登记、没有执行证据。该历史方法保留 94 个直接 Cargo 配方和一个 diagnostics guarded build；当前额外 diagnostics 保护链已退役，使用 95 个直接 Cargo 配方。diagnostics 的 27 节点原生 metadata／offline-build 结果只覆盖本领域。普通 full 输入、隔离 home 一致性、本地 diagnostics、七项 full 绑定、default／portable／distribution 采用及历史原件仍是 P1–P6 义务。合格 startup 产物 `12961832338` 含 18 个原成员和五个执行物，只支持有限 native core／detector 供给，不证明 default 的 14 工具安装或完整 SPEC §12.1。PR163 作为历史保管事项已关闭，当前义务在 PR214 继续；历史兼容不是当前支持义务。
 
 I3 将所选 macOS 27 runner guard 的 2398 个字面输入 ID 连通，保留 2387 个包文件预期，并选择私下获取的精确 Rustup 1.29.1。当前 SDK 和外层 Xcode Contents 清单保留真实 Developer 别名拓扑；原 Developer-only 拒绝仍是失败。源码迁移未启用 full 治理，也不认证历史保留端点、原生获取、guarded 消费、评审或落地。候选实际检查及已装消费者后置条件须各有固定源码原件；完整 SPEC 和确定性同判未完成。
 
@@ -376,6 +376,8 @@ I3 实测失败修复加入明确的配置级 FILEMAP 边投影和可选 scoped-
 **产品与宿主登记同改：**组合候选保留中断输入原件恢复、新前缀／双线程目录验证、runner 报告消费完成和原件保留生命周期合同。可选隔离观察沿用登记所有者及当前宿主输出路径。输入预期身份、产品／准入／维护／累计输出上限均不变。worktree stdout 改为紧凑 JSON，所有解码值和原捕获身份保留。仍须显式两端 DELTA 检查及真实 bootstrap 消费；先前生产验收只对原固定源码／范围有效。独立评审、原生验收、落地、协调者部署、完整输入／同判及其余 SPEC 各自验收；新增验证／存储成本仅以保留命令回执为测量依据。
 
 <a id="native-diagnostics-cargo-domain-repair-source"></a>
+
+以下保留历史来源范围；相关 diagnostics 宿主采用及专属测试已退役，不再是当前待激活入口。
 ### 原生 diagnostics Cargo 领域修复源码
 
 首批 PR211 原生原件显示：私有 diagnostics-only offline home 中 21 个普通 Cargo check 失败，guard bootstrap 在 diagnostics 生产前失败。普通原生配置保留 dev 环境及当前 action 必需的 guard／observer 工具声明；既有 guarded diagnostics action 选择自己的原生配置，保留 v6 offline／package／toolchain／native-target／configuration 合同。guard／observer bootstrap 前置先用普通 Cargo 获取自身 locked manifest，再做私有 diagnostics fetch／metadata 和 guarded 消费。共享 startup 只传工具及原报告，不传 Cargo registry。
@@ -389,6 +391,8 @@ I3 实测失败修复加入明确的配置级 FILEMAP 边投影和可选 scoped-
 固定修正 `d04bf3004d17f438bfcbadde3bd4d85023eb08c3` 通过 3 项 Rust／68 项 Python 定向测试及真实 51 项保护下构建。正式 bootstrap 仍因不合格的 unmanaged 消费交接退出 2，已装 owner `985e45d9…` 未变。这只是固定源码证据，本说明不新增候选 canonical、采用、评审或落地通过结论。
 
 <a id="native-diagnostics-retained-build-inventory-source"></a>
+
+以下保留历史来源范围；相关 diagnostics 宿主采用及专属测试已退役，不再是当前待激活入口。
 ### 原生 diagnostics 保留构建清单源码
 
 **可见宿主政策变化：**native diagnostics 选择固定 directory-v3 清单，含 158 个合格共用 Rust payload 文件及原 22 个 directory 行／根／别名。旧 159 文件 raw 身份还绑定 `lib/rustlib/components` 内容；新 build certificate 不覆盖该内容、成员语法、类型或原内容漂移，但仍要求该子项名称／存在。完整 raw observer 输出不变并独立保留。[原生采用合同](inputs.md#native-diagnostics-originals-before-guard-adoption)记录精确保留摘要、源码范围和排除项。通用 observer／guard／startup、普通前置、私有 offline、macOS 27／default profile、configuration／package／SDK 及子进程后保留漂移合同均保留。
@@ -465,3 +469,9 @@ CI 离线汇总的实际结果 ID 集合比较及期望列表构造也已迁到�
 独立根声明排列、空集合、缺项、额外项、缺库存标记、重复集合语义和 Unicode／NUL 边界，
 Rust 回归从真实生产报告改写原 stdout，核排列通过、缺项／额外项及重复结果失败，且汇总不重执行业务。
 该范围仍须候选正式检查和原生验收；解码、登记列表的外层提取、适配和完整 CI／SPEC 证明未完成。
+
+## diagnostics 额外环境保护退役
+
+独立受保护构建的产物没有接入 diagnostics 的路径依赖使用方；当前需求由普通锁定 Cargo 构建和真实行为测试满足。恢复原构建操作，退役 13 个专属政策／快照／准备文件、1,125 项本机独占输入声明、3,430 条配置级边和专属组合／离线领域测试。通用 Cargo guard 产品行为、bootstrap 工具绑定及 runtime-state 输入合同测试保留。详细消费关系和政策影响见 [Cargo 所有者](cargo-projects.md#本仓已退役的额外保护链)。
+
+本批没有新增程序判断；独立边界预期不新增未证明逻辑，保留现役 Verus 前置。候选正式检查、原生 PR CI 和落地后验仍待完成。退役不证明历史验收通过、全仓必要性门已实现、输入完整或全局目标完成。
