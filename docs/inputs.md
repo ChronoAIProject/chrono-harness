@@ -237,7 +237,7 @@ fetch 可下载缺失锁定包，metadata 保持离线；不执行保护，也�
 
 所有保留的现用内容、物理父路径、目录结构、根、别名，以及子进程结束后仍存在的保留输入变化，继续由原 v3 消费者保护。配置、包装器、环境、包、SDK／developer／链接器、原启动绑定和上限沿用原合同。本机 macOS 27／默认六组件及普通在线前置构建各自保留原选择。
 
-观察器仍把完整、未改动的 `guard-inputs/rust.json` 写为独立诊断原件；它现在同时作为 Cargo guard 的运行时输入，不复制到 endpoint snapshot。历史 J／N 摘要只作为已接纳原件的事实记录，不再作为当前 Git policy 的输入预期。
+观察器把完整、未改动的 `runtime-inputs/rust.json` 写入上述 diagnostics 单元 artifact 根；它同时作为 Cargo guard 的运行时输入，不复制到 endpoint snapshot。历史 J／N 摘要只作为已接纳原件的事实记录，不再作为当前 Git policy 的输入预期。
 
 运行时 `sdk.json` 的预期仍为 `95337d9300b02f0e75bde2d6aec955d5a8f3a9fc1e8a951726c15c433f74221b`。完整 `xcode-contents.json` 原件的 SHA-256 为 `866c18f9c3469a4cf734e452748b2eff0c4f3bcbeccccbab515c6a29d3309d4d`，观察器继续独立保留它；构建选择下述固定子集。包文件采用仍以 `packages.json` 为准，其 SHA-256 为 `ba0f4178c06dede474b4d6c4adb39fe0dafaf01af15d3bcde2a5a1532cfcd2da`。
 
