@@ -34,6 +34,53 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
     (d, f, v, commit)
 }
 #[test]
+fn endpoint_capture_excludes_runtime_inventory_without_reading_its_live_source() {
+    let (d, _f, mut values, _) = fixture();
+    let config = values.get_mut(CONFIG).unwrap();
+    config["schema_version"] = value!(2);
+    for input in config["environment"]["inputs"].as_array_mut().unwrap() {
+        input["presence"] = value!("present");
+    }
+    config["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!({
+            "id":"runtime", "location":".chrono-harness/state/current-inventory.json",
+            "presence":"present", "source":{"schema":"chrono-runtime-state/v1",
+                "manifest":".chrono-harness/state/observation.json",
+                "pointer":"/directories/rust/manifest"}
+        }));
+    write_values(d.path(), &values);
+    let oid = commit(d.path());
+    let (code, snapshot, error) = invoke(
+        d.path(),
+        &[
+            "capture",
+            "--config",
+            CONFIG,
+            "--commit",
+            &oid,
+            "--output",
+            ".chrono-harness/state/endpoint.json",
+        ],
+    );
+    assert_eq!(code, 0, "{error}");
+    assert_eq!(snapshot["files"].as_object().unwrap().len(), 2);
+    assert!(snapshot["files"].get("runtime").is_none());
+    assert!(snapshot["files"]["data"]["sha256"].is_string());
+    assert!(
+        !d.path()
+            .join(".chrono-harness/state/current-inventory.json")
+            .exists()
+    );
+    assert!(
+        !d.path()
+            .join(".chrono-harness/state/observation.json")
+            .exists()
+    );
+}
+
+#[test]
 fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
     let (d, _f, mut v, _) = fixture();
     let path_dir = tempfile::tempdir().unwrap();

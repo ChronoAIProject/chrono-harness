@@ -7346,7 +7346,7 @@
         "source": {
           "schema": "chrono-runtime-state/v1",
           "manifest": ".chrono-harness/state/diagnostics-native/observation.json",
-          "pointer": "directories.rust.manifest"
+          "pointer": "/directories/rust/manifest"
         }
       },
       {

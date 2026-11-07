@@ -26,7 +26,7 @@ fn runtime_state_input_rejects_locations_outside_host_state() {
             "source": {
                 "schema": "chrono-runtime-state/v1",
                 "manifest": ".chrono-harness/state/observation.json",
-                "pointer": "directories.rust.manifest"
+                "pointer": "/directories/rust/manifest"
             }
         });
         assert!(
@@ -75,12 +75,12 @@ fn runtime_state_input_consumes_observation_manifest_and_rejects_drift() {
         "source": {
             "schema": "chrono-runtime-state/v1",
             "manifest": observation,
-            "pointer": "directories.rust.manifest"
+            "pointer": "/directories/rust/manifest"
         }
     });
 
     let source = runtime_state_source(&input).unwrap().unwrap();
-    assert_eq!(source.pointer, "directories.rust.manifest");
+    assert_eq!(source.pointer, "/directories/rust/manifest");
     assert_eq!(
         runtime_state_identity(&root, &input).unwrap(),
         (digest.clone(), bytes.len() as u64)
@@ -89,6 +89,71 @@ fn runtime_state_input_consumes_observation_manifest_and_rejects_drift() {
     fs::write(root.join(inventory), b"drifted inventory\n").unwrap();
     let error = runtime_state_identity(&root, &input).unwrap_err();
     assert!(error.contains("differs from live file"), "{error}");
+}
+
+#[test]
+fn runtime_state_source_consumes_json_pointer_and_rejects_invalid_observations() {
+    use chrono_judge_registration::inputs::runtime_state_identity;
+    let host = TempDir::new().unwrap();
+    let root = host.path().canonicalize().unwrap();
+    let inventory = ".chrono-harness/state/inventory.json";
+    let observation = ".chrono-harness/state/observation.json";
+    fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
+    let bytes = b"current runtime bytes";
+    fs::write(root.join(inventory), bytes).unwrap();
+    let input = json!({"id":"runtime", "location":inventory, "presence":"present",
+        "source":{"schema":"chrono-runtime-state/v1", "manifest":observation,
+            "pointer":"/directories/rust~1~0/manifest"}});
+    let manifest = json!({"schema":"chrono-input-observation-result/v2", "status":"observed",
+        "directories":{"rust/~":{"manifest":{"path":inventory,"sha256":sha256(bytes)}}}});
+    for (case, expected) in [
+        ("valid", ""),
+        ("missing", "No such file"),
+        ("failed", "not a successful observation"),
+        ("schema", "not a successful observation"),
+        ("syntax", "nonempty JSON Pointer"),
+        ("pointer", "pointer is missing"),
+        ("scalar", "must select an object"),
+        ("path", "path differs from input location"),
+        ("digest", "digest missing"),
+        ("drift", "differs from live file"),
+    ] {
+        let mut input = input.clone();
+        let mut manifest = manifest.clone();
+        match case {
+            "failed" => manifest["status"] = json!("failed"),
+            "schema" => manifest["schema"] = json!("unrelated-result/v1"),
+            "syntax" => input["source"]["pointer"] = json!("directories.rust.manifest"),
+            "pointer" => input["source"]["pointer"] = json!("/directories/missing"),
+            "scalar" => input["source"]["pointer"] = json!("/status"),
+            "path" => {
+                manifest["directories"]["rust/~"]["manifest"]["path"] =
+                    json!(".chrono-harness/state/other.json")
+            }
+            "digest" => manifest["directories"]["rust/~"]["manifest"]["sha256"] = json!("invalid"),
+            "drift" => {
+                manifest["directories"]["rust/~"]["manifest"]["sha256"] =
+                    json!(sha256(b"other bytes"))
+            }
+            "valid" | "missing" => {}
+            _ => unreachable!(),
+        }
+        fs::write(
+            root.join(observation),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        if case == "missing" {
+            fs::remove_file(root.join(observation)).unwrap();
+        }
+        let result = runtime_state_identity(&root, &input);
+        if case == "valid" {
+            assert_eq!(result.unwrap(), (sha256(bytes), bytes.len() as u64));
+        } else {
+            let error = result.unwrap_err();
+            assert!(error.contains(expected), "{case}: {error}");
+        }
+    }
 }
 
 #[test]

@@ -62,7 +62,7 @@ fn choice(v: &Value, choices: &[&str]) -> Result {
     }
     Ok(())
 }
-fn path(v: &Value) -> Result {
+pub(crate) fn path(v: &Value) -> Result {
     let p = string(v)?;
     relative_path(p)?;
     if p.split('/').any(|c| c.is_empty() || c == ".") {
@@ -286,25 +286,7 @@ pub fn config(v: &Value) -> Result {
                 object(i, &["id", "location", "presence"], &[])?;
             } else if i.get("source").is_some() {
                 object(i, &["id", "location", "presence", "source"], &[])?;
-                object(&i["source"], &["schema", "manifest", "pointer"], &[])?;
-                if i["source"]["schema"] != "chrono-runtime-state/v1" {
-                    return Err("unsupported runtime input source schema".into());
-                }
-                let manifest = string(&i["source"]["manifest"])?;
-                path(&i["source"]["manifest"])?;
-                if !manifest.starts_with(".chrono-harness/state/") {
-                    return Err("runtime input source manifest must be in host state".into());
-                }
-                let pointer = string(&i["source"]["pointer"])?;
-                if pointer.split('.').any(|part| {
-                    part.is_empty()
-                        || part == "."
-                        || part == ".."
-                        || part.contains('/')
-                        || part.contains('\\')
-                }) {
-                    return Err("runtime input source pointer must be a dotted literal".into());
-                }
+                crate::inputs::runtime_state_source(i)?;
             } else {
                 object(i, &["id", "location", "presence", "sha256"], &[])?;
                 hash(&i["sha256"])?;

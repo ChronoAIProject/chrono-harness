@@ -41,27 +41,24 @@ pub fn runtime_state_source(input: &Value) -> Result<Option<RuntimeStateSource>,
     let Some(source) = input.get("source") else {
         return Ok(None);
     };
+    crate::schema::object(source, &["schema", "manifest", "pointer"], &[])?;
     if source["schema"] != "chrono-runtime-state/v1" {
         return Err("unsupported runtime input source schema".into());
+    }
+    let location = crate::schema::string(&input["location"])?;
+    crate::schema::path(&input["location"])?;
+    if !location.starts_with(".chrono-harness/state/") {
+        return Err("runtime input location must be in host state".into());
     }
     let manifest = source["manifest"]
         .as_str()
         .filter(|path| path.starts_with(".chrono-harness/state/"))
         .ok_or("runtime input source manifest must be in host state")?;
-    relative_path(manifest)?;
+    crate::schema::path(&source["manifest"])?;
     let pointer = source["pointer"]
         .as_str()
-        .filter(|pointer| {
-            !pointer.is_empty()
-                && pointer.split('.').all(|part| {
-                    !part.is_empty()
-                        && part != "."
-                        && part != ".."
-                        && !part.contains('/')
-                        && !part.contains('\\')
-                })
-        })
-        .ok_or("runtime input source pointer must be a dotted literal")?;
+        .filter(|pointer| pointer.starts_with('/'))
+        .ok_or("runtime input source pointer must be a nonempty JSON Pointer")?;
     if input["presence"] != "present" || input.get("sha256").is_some() {
         return Err("runtime-state inputs must be present and omit sha256".into());
     }
@@ -88,13 +85,14 @@ pub fn runtime_state_identity(
     {
         return Err("runtime-state source manifest is not a successful observation".into());
     }
-    let mut value = &manifest;
-    for part in source.pointer.split('.') {
-        value = value
-            .get(part)
-            .ok_or_else(|| format!("runtime-state source pointer is missing: {part}"))?;
-    }
-    let entry = value
+    let entry = manifest
+        .pointer(&source.pointer)
+        .ok_or_else(|| {
+            format!(
+                "runtime-state source pointer is missing: {}",
+                source.pointer
+            )
+        })?
         .as_object()
         .ok_or("runtime-state source pointer must select an object")?;
     let path = entry
