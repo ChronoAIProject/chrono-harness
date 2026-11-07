@@ -217,7 +217,11 @@ fetch 可下载缺失锁定包，metadata 保持离线；不执行保护，也�
 
 所选原生政策绑定原 Cargo／rustc、Xcode 26.6 工具、diagnostics 私有 Cargo home、明确缺失的配置，以及原生 sysroot／SDK／developer 根。按配置选择的 FILEMAP 边保留 1,127 个包源码文件身份，并与合格 registry 清单核对。本机 macOS 27 政策及其输入边仍只适用于本机。
 
-**原生构建输入政策曾有以下调整：**`toolchain.rust.inventory` 现在选择已提交的 `.chrono-harness/inputs/diagnostics-rust-build.json`，SHA-256 为 `d22ae2e29961289dd9835ac4bdd51d9a942e16209702dc76fe9ce46d63157901`。这份固定的 `chrono-input-directory/v3` 保留子集，恰好包含已接纳 J／N 原始 Rust 清单共有的 158 条文件记录、全部 22 条目录记录、原根和所有声明的别名。它只去掉 `lib/rustlib/components` 的文件内容记录；Cargo、rustc、后端、标准库内容和四份组件安装 manifest 都保留精确身份。
+**原生构建输入政策现在把运行时事实留在宿主状态：**`toolchain.rust.inventory` 不再选择提交到 Git 的 Rust 目录清单，而是声明 `.chrono-harness/state/diagnostics-native/guard-inputs/rust.json`，并通过 `.chrono-harness/state/diagnostics-native/observation.json` 的 `/directories/rust/manifest` 指针消费。`host.bootstrap-diagnostics-inputs` 先运行登记的 `inputs.observe-diagnostics` 生产者；Cargo guard 随后读取 observation manifest，核对清单声明的路径和摘要，再重新计算当前文件摘要。缺少 observation、指针错误、路径不一致或文件漂移都会在启动 Cargo 前失败。
+
+清单位置和观察报告都必须是 `.chrono-harness/state/` 下的规范相对路径，已有路径检查拒绝越界和符号链接。source 使用 `serde_json::Value::pointer` 消费非空 JSON Pointer，支持标准的 `/`、`~` 转义；旧的点分隔写法已退役。schema 与实际消费者共用同一份来源解析，不再分别解释路径和指针。端点快照排除这些本轮状态，缺少来源时由真实 Cargo 消费前置报告失败。
+
+这份 state inventory 是 diagnostics 原生运行的临时事实，不是可移植政策。所有者是 `inputs.observe-diagnostics` 生产者，消费者是 diagnostics Cargo guard；它只在该次受保护操作及其证据保留期内存在，完成或失败义务结束后由宿主 state 生命周期回收。Git 只保留 producer contract、source manifest 和 runtime-state 引用，不保留机器路径、安装内容或固定摘要。`input_closure` 仍为 `incomplete`，这次迁移只覆盖 diagnostics Rust inventory。
 
 当前消费者直接选择固定 Cargo／rustc／sysroot，执行锁定且离线的 metadata／build，不管理组件。启动阶段另核原源码／报告／安装／执行物绑定。因此，构建和来源检查仍绑定这些实际内容，但不再确认安装器组件登记文件的内容。
 
@@ -225,7 +229,7 @@ fetch 可下载缺失锁定包，metadata 保持离线；不执行保护，也�
 
 所有保留的现用内容、物理父路径、目录结构、根、别名，以及子进程结束后仍存在的保留输入变化，继续由原 v3 消费者保护。配置、包装器、环境、包、SDK／developer／链接器、原启动绑定和上限沿用原合同。本机 macOS 27／默认六组件及普通在线前置构建各自保留原选择。
 
-观察器仍把完整、未改动的 `guard-inputs/rust.json` 写为独立诊断原件，不把它选作本次构建清单。已接纳的 J 原始 SHA-256 为 `792aad114bf2ffec0fea2ebae5fd921cc03446cd4a1a524c933197b3c4e6757b`；N 为 `2452c5a1b1a08232f42c144765c69d1dee9bca7ac24ea9214374bb499662c29b`。
+观察器仍把完整、未改动的 `guard-inputs/rust.json` 写为独立诊断原件；它现在同时作为 Cargo guard 的运行时输入，不复制到 endpoint snapshot。历史 J／N 摘要只作为已接纳原件的事实记录，不再作为当前 Git policy 的输入预期。
 
 运行时 `sdk.json` 的预期仍为 `95337d9300b02f0e75bde2d6aec955d5a8f3a9fc1e8a951726c15c433f74221b`。完整 `xcode-contents.json` 原件的 SHA-256 为 `866c18f9c3469a4cf734e452748b2eff0c4f3bcbeccccbab515c6a29d3309d4d`，观察器继续独立保留它；构建选择下述固定子集。包文件采用仍以 `packages.json` 为准，其 SHA-256 为 `ba0f4178c06dede474b4d6c4adb39fe0dafaf01af15d3bcde2a5a1532cfcd2da`。
 
