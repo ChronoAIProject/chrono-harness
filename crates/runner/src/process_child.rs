@@ -7,6 +7,15 @@ use std::{
     thread::JoinHandle,
 };
 
+#[cfg(feature = "retention-test")]
+static STATUS_PROBES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Read actual monitor probes in the isolated completion-wait fixture.
+#[cfg(feature = "retention-test")]
+pub fn direct_child_status_probe_count() -> usize {
+    STATUS_PROBES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 struct ReapOnDrop {
     child: Child,
     joined: bool,
@@ -66,6 +75,8 @@ impl DirectChild {
         expired: bool,
         wake: impl FnOnce() + Send + 'static,
     ) -> io::Result<Option<ExitStatus>> {
+        #[cfg(feature = "retention-test")]
+        STATUS_PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.probe_with(observed, expired, wake, Child::try_wait)
     }
 

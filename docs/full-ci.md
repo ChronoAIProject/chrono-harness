@@ -44,7 +44,9 @@
  "--revision-env", "CHRONO_WORKFLOW_REVISION"]
 ```
 
-工具、环境和输入的实际消费者边须完整登记。宿主继承 `CHRONO_CHECK_SOURCE` 及上述三个事件变量；生成步骤设置 `CHRONO_CHECK_SOURCE=ci`、固定 workflow 修订，其余事件变量由 GitHub 提供。短入口在同一登记命令中获取输入并运行七判官；不手工串接另一套检查配方。
+工具、环境和输入的实际消费者边须完整登记。宿主继承 `CHRONO_CHECK_SOURCE` 及上述三个事件变量；生成步骤设置 `CHRONO_CHECK_SOURCE=ci`、固定 workflow 修订，其余事件变量由 GitHub 提供。短入口在同一登记命令中获取输入并运行七判官。
+
+**产品与规范同步收窄：**独立 full provider 的手工 `chrono-ci prepare` 已退役，调用会失败且不发布准备输出。准备逻辑由当前 `check-inputs` 输入 action 复用；测试直接验证必要原件、绑定和失败边界，端到端消费者通过短 check 验证七判官。删除重复的 CLI 包装和测试准备步骤，总构建、CI、存储和迁移成本未测。
 
 未固定提交的 action、未知字段、表达式设置、符号链接、输入／输出归属重叠和非法路径都会失败。允许的设置是字面单行字符串，shell 特殊字符保留原字节。`check_config` 可使用严格一层原生选择器，稳定入口路径和选中配置绑定均保留。
 

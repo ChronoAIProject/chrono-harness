@@ -941,17 +941,8 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                     )?;
                     return Ok(serde_json::to_string(&context).map_err(|e| e.to_string())? + "\n");
                 }
-                Projection::Full(c) => {
-                    return full::prepare_dispatch(
-                        &root,
-                        config,
-                        &c,
-                        opts.get("--event").ok_or("--event required")?,
-                        &payload,
-                        opts.get("--workflow-revision")
-                            .ok_or("--workflow-revision required")?,
-                        opts.get("--github-output").copied(),
-                    );
+                Projection::Full(_) => {
+                    return Err("full CI preparation requires the registered short check".into());
                 }
                 Projection::Check(c) => c,
                 Projection::Release(_) => {
