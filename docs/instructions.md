@@ -155,17 +155,7 @@ init／generate 只接受 schema 2、producer=`chrono-instructions`、render=`at
 
 支持范围限于 Unix 和当前 macOS 普通 IO，不保证崩溃原子性、并发写入、跨平台行为，或恢复 ACL、扩展属性、原 inode、时间戳及所有者。没有针对恶意 AI 的关卡，也不假定全局安装或 provider。
 
-下面是现有实现的直接验证命令。本仓日常检查仍走[登记的统一入口](ci.md#this-repository)，由明确依赖选择适用操作。
-
-```sh
-cargo fmt --check --manifest-path crates/instructions/Cargo.toml
-cargo build --locked --manifest-path crates/instructions/Cargo.toml
-cargo check --locked --manifest-path crates/instructions/Cargo.toml
-cargo fmt --check --manifest-path crates/instructions-tests/Cargo.toml
-cargo build --tests --locked --manifest-path crates/instructions-tests/Cargo.toml
-cargo check --tests --locked --manifest-path crates/instructions-tests/Cargo.toml
-cargo test --locked --manifest-path crates/instructions-tests/Cargo.toml
-```
+本仓验证走[登记的统一入口](ci.md#this-repository)，由明确依赖选择格式检查、生产构建、专属行为测试及适用的同源 Verus 证明。具体参数归 projects／FILEMAP 登记，本文引用该入口。
 
 产品默认根包含同语言测试规则，以及 sh／bash 可以用 Python 测试的例外。[实际消费者边界](methodology-extraction.md#实际消费者边界)说明本仓根、上下文和 skill 的内容范围与测量口径。编辑内容须复核完整载荷，不截尾，也不靠全局配置扩限。单独选择 `core.behavior` 也包含同语言要求；生成指南不代表语言配对判官已执行。
 
