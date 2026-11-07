@@ -51,6 +51,10 @@ path = "tests/construction.rs"
 name = "original"
 path = "tests/original.rs"
 
+[[test]]
+name = "owner"
+path = "tests/owner.rs"
+
 [[bin]]
 name = "chrono-test-bootstrap-native"
 path = "../native/src/main.rs"

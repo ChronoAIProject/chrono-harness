@@ -94,6 +94,9 @@ impl Fixture {
         Construction::begin(&self.root, self.loaded(), &self.environment).unwrap()
     }
     pub fn committed(&self) -> Construction<'_> {
+        Construction::begin(&self.root, self.commit(), &self.environment).unwrap()
+    }
+    pub fn commit(&self) -> Loaded {
         let loaded = self.loaded();
         fs::write(self.root.join(".gitignore"), b"native tools/\nout/\nprepared\n.chrono-harness/state/\n.chrono-harness/bin/\n.chrono-harness/cache/\n").unwrap();
         for args in [
@@ -124,7 +127,7 @@ impl Fixture {
                 String::from_utf8_lossy(&output.stderr)
             );
         }
-        Construction::begin(&self.root, loaded, &self.environment).unwrap()
+        loaded
     }
     pub fn report(&self, published: &Published) -> Value {
         serde_json::from_slice(&fs::read(&published.original).unwrap()).unwrap()

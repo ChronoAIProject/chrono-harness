@@ -11,7 +11,27 @@ mod identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 use identifiers::equal_text;
 
+// 复用生命周期所有者的权威类型和发布判断；不复制为宿主私有版本。
+#[path = "../../../../crates/worktree/src/verified_owner_publication.rs"]
+pub mod owner_publication;
+
 verus! {
+
+pub fn owner_publication_header(schema: &str, adoption: &str, completion: &str) -> (valid: bool)
+    ensures valid <==> (schema@ == "chrono-bootstrap-owner-publication/v1"@
+        && adoption@ == "not-claimed"@ && completion@ == "not-claimed"@),
+{
+    equal_text(schema, "chrono-bootstrap-owner-publication/v1") && equal_text(adoption, "not-claimed")
+        && equal_text(completion, "not-claimed")
+}
+
+pub fn owner_adoption_header(schema: &str) -> (valid: bool)
+    ensures valid <==> schema@ == "chrono-worktree-owner-adoption/v1"@,
+{ equal_text(schema, "chrono-worktree-owner-adoption/v1") }
+
+pub fn owner_stage_input(installed_empty: bool, declared: bool, selected: &str, expected: &str) -> (valid: bool)
+    ensures valid <==> (installed_empty && declared && selected@ == expected@),
+{ installed_empty && declared && equal_text(selected, expected) }
 
 pub enum DeclarationSource { Registry, Direct, Unbound, Reject }
 

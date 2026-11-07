@@ -400,6 +400,12 @@ impl<'a> Construction<'a> {
     }
 
     /// 成功还须具备全部原操作、安装和 owner stage，调用方的 Ok 不能代替完成事实。
+    pub fn stage_owner(&mut self, previous: &policy::owner_publication::Binding) -> Result<(), BuildFailure> {
+        let stage = crate::owner::stage(self.root, &self.inherited, &self.profile, previous)?;
+        self.report.owner_stage = Some(serde_json::to_value(stage).map_err(|error| error.to_string())?);
+        Ok(())
+    }
+
     pub fn finish(mut self, outcome: Result<(), BuildFailure>) -> Result<Published, BuildFailure> {
         let mut expected = self.profile.prerequisites.clone();
         expected.extend(self.profile.operations.iter().cloned());
