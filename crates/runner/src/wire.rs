@@ -14,11 +14,7 @@ pub fn canonical<T: Serialize>(value: &T) -> Result<Vec<u8>, String> {
 pub fn digest<T: Serialize>(value: &T) -> Result<String, String> {
     Ok(sha256(&canonical(value)?))
 }
-pub fn is_digest(s: &str) -> bool {
-    s.len() == 64
-        && s.bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
+pub use crate::verified_identifiers::valid_digest_text as is_digest;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {

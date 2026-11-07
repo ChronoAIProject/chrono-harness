@@ -612,6 +612,9 @@ registration 先消费原始快照与 context；filemap 据登记生成 impact�
 
 共享上下文的推导属于登记判官逻辑；runner 只传递具名输出，不在内部另写项目政策。所有摘要使用 SHA-256；JSON 摘要使用 RFC 8785 JCS，文件 blob 按原始字节计算。普通请求的 registries.digest 覆盖两端五份 JSON 的路径与内容，两个端点都必须存在。初始化请求没有 base 或 delta 字段，使用单份候选登记映射的独立摘要。
 
+摘要文本格式由同源 Verus 的 `verified_identifiers::digest_format` 规定：恰为 64 个 ASCII 小写十六进制字节，允许全零。
+实际 `wire::is_digest` 直接使用其已证明的文本入口；格式证明不证明 SHA-256 计算、源真实性或原件存在。
+
 ```json
 {
   "protocol": "chrono-judge/v1",

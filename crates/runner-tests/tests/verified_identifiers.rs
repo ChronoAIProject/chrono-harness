@@ -46,4 +46,73 @@ fn identifier_ascii_boundaries() {
     assert(!invalid_unicode);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn digest_lengths_and_allowed_bytes() {
+    let empty: [u8; 0] = [];
+    let missing = policy::valid_digest(&empty);
+    assert(!missing);
+    let oid_length = [97u8; 40];
+    let only_oid = policy::valid_digest(&oid_length);
+    assert(!only_oid);
+    let short = [48u8; 63];
+    let too_short = policy::valid_digest(&short);
+    assert(!too_short);
+    let long = [48u8; 65];
+    let too_long = policy::valid_digest(&long);
+    assert(!too_long);
+    let zero = [48u8; 64];
+    let zero_digest = policy::valid_digest(&zero);
+    assert(zero_digest);
+    let nine = [57u8; 64];
+    let digit_end = policy::valid_digest(&nine);
+    assert(digit_end);
+    let a = [97u8; 64];
+    let lower_start = policy::valid_digest(&a);
+    assert(lower_start);
+    let f = [102u8; 64];
+    let lower_end = policy::valid_digest(&f);
+    assert(lower_end);
+}
+
+fn reject_digest_byte_at(at: usize, byte: u8)
+    requires at < 64,
+        byte < b'0' || (b'9' < byte && byte < b'a') || b'f' < byte,
+{
+    let mut bytes = [48u8; 64];
+    bytes[at] = byte;
+    let accepted = policy::valid_digest(&bytes);
+    assert(bytes@[at as int] == byte);
+    assert(!policy::oid_byte(bytes@[at as int]));
+    assert(!accepted);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn digest_rejects_bad_bytes_throughout_the_full_input() {
+    reject_digest_byte_at(0, 47);
+    reject_digest_byte_at(1, 58);
+    reject_digest_byte_at(9, 64);
+    reject_digest_byte_at(31, 65);
+    reject_digest_byte_at(32, 96);
+    reject_digest_byte_at(63, 103);
+    reject_digest_byte_at(7, 0);
+    reject_digest_byte_at(42, 10);
+    reject_digest_byte_at(62, 128);
+    reject_digest_byte_at(17, 195);
+    reject_digest_byte_at(61, 255);
+    let mut utf8 = [48u8; 64];
+    utf8[0] = 195;
+    utf8[1] = 169;
+    let unicode = policy::valid_digest(&utf8);
+    assert(!unicode);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn digest_text_uses_the_complete_utf8_bytes() {
+    let text = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    let accepted = policy::valid_digest_text(text);
+    assert(accepted);
+    let empty = policy::valid_digest_text("");
+    assert(!empty);
+}
+
 }
