@@ -77,6 +77,7 @@
     {"path":".chrono-harness/ci/bootstrap.py","owner":"host-bootstrap","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
     {"path":".github/workflows/chrono-ci.yml","owner":"repository","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"}],"projection":{"sources":[".chrono-harness/ci/units.json"],"producer":"project:ci","scope":"whole-file"}},
     {"path":"docs/ci.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
+    {"path":"docs/repository-boundary-audit.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner/src/wire.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/canonical_request.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/facts.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
