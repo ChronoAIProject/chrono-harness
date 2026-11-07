@@ -37,7 +37,7 @@ fn runtime_state_input_rejects_locations_outside_host_state() {
         let config = values.get_mut(support::CONFIG).unwrap();
         config["schema_version"] = json!(2);
         config["environment"]["inputs"] = json!([input]);
-        assert!(chrono_judge_registration::schema::config(config).is_err());
+        assert!(chrono_judge_registration::Registrations::load(&values, support::CONFIG).is_err());
     }
 }
 
