@@ -7341,9 +7341,13 @@
       },
       {
         "id": "toolchain.rust.inventory",
-        "location": ".chrono-harness/inputs/diagnostics-rust-build.json",
+        "location": ".chrono-harness/state/units/diagnostics/runtime-inputs/rust.json",
         "presence": "present",
-        "sha256": "d22ae2e29961289dd9835ac4bdd51d9a942e16209702dc76fe9ce46d63157901"
+        "source": {
+          "schema": "chrono-runtime-state/v1",
+          "manifest": ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json",
+          "pointer": "/directories/rust/manifest"
+        }
       },
       {
         "id": "toolchain.sdk.inventory",

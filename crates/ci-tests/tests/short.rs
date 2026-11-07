@@ -1074,12 +1074,17 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
     ] {
         // The fixture's v4 provider retains its registered push rule when explicitly configured.
         json_file(&h.root, ".chrono-harness/state/event.json", &payload);
+        let revision = if event_name == "pull_request" {
+            tools::pr_workflow_merge(&h.root, &h.base, &h.candidate)
+        } else {
+            h.candidate.clone()
+        };
         let o = h
             .command(&["check", "--unit", "alpha"])
             .env(prepared::SOURCE, "ci")
             .env("GITHUB_EVENT_NAME", event_name)
             .env("GITHUB_EVENT_PATH", &event)
-            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+            .env("CHRONO_WORKFLOW_REVISION", &revision)
             .output()
             .unwrap();
         assert_eq!(

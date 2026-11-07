@@ -273,10 +273,27 @@ fn push_uses_actual_before_after() {
 fn pr_uses_head_not_merge_ref() {
     let (d, b, c) = repo();
     let p = json!({"pull_request":{"base":{"sha":b},"head":{"sha":c}},"after":"ignored-merge"});
-    let r = prepare(d.path(), &config(), "pull_request", &p, &b).unwrap();
+    let merge = tools::pr_workflow_merge(d.path(), &b, &c);
+    let r = prepare(d.path(), &config(), "pull_request", &p, &merge).unwrap();
     assert_eq!(r["candidate"], c);
-    assert_eq!(r["workflow_source_revision"], b);
+    assert_eq!(r["workflow_source_revision"], merge);
     assert_eq!(r["base"], b);
+}
+
+#[test]
+fn pr_rejects_non_merge_and_unrelated_workflow_parents() {
+    let (d, base, head) = repo();
+    let payload = json!({"pull_request":{"base":{"sha":base},"head":{"sha":head}}});
+    let reversed = tools::pr_workflow_merge(d.path(), &head, &base);
+    for revision in [&base, &head, &reversed] {
+        let error = prepare(d.path(), &config(), "pull_request", &payload, revision).unwrap_err();
+        assert!(
+            error.contains("exactly two parents and the event head as second parent"),
+            "{error}"
+        );
+        assert!(error.contains("git_facts"), "{error}");
+    }
+    assert_eq!(git(d.path(), &["rev-parse", "HEAD"]), head);
 }
 
 #[test]

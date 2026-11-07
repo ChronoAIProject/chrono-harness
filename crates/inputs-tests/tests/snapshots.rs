@@ -34,6 +34,54 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
     (d, f, v, commit)
 }
 #[test]
+fn endpoint_capture_excludes_runtime_inventory_without_reading_its_live_source() {
+    let (d, _f, mut values, _) = fixture();
+    let config = values.get_mut(CONFIG).unwrap();
+    config["schema_version"] = value!(2);
+    for input in config["environment"]["inputs"].as_array_mut().unwrap() {
+        input["presence"] = value!("present");
+        input["location"] = value!(fs::canonicalize(input["location"].as_str().unwrap()).unwrap());
+    }
+    config["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!({
+            "id":"runtime", "location":".chrono-harness/state/current-inventory.json",
+            "presence":"present", "source":{"schema":"chrono-runtime-state/v1",
+                "manifest":".chrono-harness/state/observation.json",
+                "pointer":"/directories/rust/manifest"}
+        }));
+    write_values(d.path(), &values);
+    let oid = commit(d.path());
+    let (code, snapshot, error) = invoke(
+        d.path(),
+        &[
+            "capture",
+            "--config",
+            CONFIG,
+            "--commit",
+            &oid,
+            "--output",
+            ".chrono-harness/state/endpoint.json",
+        ],
+    );
+    assert_eq!(code, 0, "{error}");
+    assert_eq!(snapshot["files"].as_object().unwrap().len(), 2);
+    assert!(snapshot["files"].get("runtime").is_none());
+    assert!(snapshot["files"]["data"]["sha256"].is_string());
+    assert!(
+        !d.path()
+            .join(".chrono-harness/state/current-inventory.json")
+            .exists()
+    );
+    assert!(
+        !d.path()
+            .join(".chrono-harness/state/observation.json")
+            .exists()
+    );
+}
+
+#[test]
 fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
     let (d, _f, mut v, _) = fixture();
     let path_dir = tempfile::tempdir().unwrap();
@@ -804,8 +852,15 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     fs::write(
         root.join(selector),
         serde_json::to_vec(&value!({
-            "schema": "chrono-git-configs/v1",
-            "platforms": {format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH): CONFIG}
+            "schema": "chrono-git-configs/v3",
+            "platforms": {format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH): {
+                "program": program,
+                "configurations": [{
+                    "sha256": sha256(&fs::read(&program).unwrap()),
+                    "path": CONFIG,
+                    "registry_path": CONFIG
+                }]
+            }}
         }))
         .unwrap(),
     )
@@ -828,6 +883,17 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     assert_eq!(selected["config_path"], selector);
     assert_eq!(selected["effective_config_path"], CONFIG);
     assert_eq!(selected["selection"]["config_path"], CONFIG);
+    assert_eq!(selected["selection"]["registry_path"], CONFIG);
+    for path in [
+        Value::Null,
+        value!(false),
+        value!("../outside.json"),
+        value!("/absolute.json"),
+    ] {
+        let mut invalid = selected.clone();
+        invalid["selection"]["registry_path"] = path;
+        assert!(chrono_judge_registration::inputs::snapshot_shape(&invalid).is_err());
+    }
     fs::write(root.join("src.bin"), b"selected candidate").unwrap();
     let selected_candidate = commit(&root);
     let (exit, _, error) = invoke(
@@ -875,15 +941,19 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
         .unwrap(),
         paired
     );
-    for field in ["effective_config_path", "selection"] {
+    for field in ["effective_config_path", "selection", "registry_path"] {
         let mut wrong = paired.clone();
-        wrong["candidate"][field] = if field == "selection" {
-            let mut v = wrong["candidate"][field].clone();
-            v["platform"] = value!("wrong-platform");
-            v
+        if field == "registry_path" {
+            wrong["candidate"]["selection"][field] = value!(".chrono-harness/wrong-config.json");
         } else {
-            value!("wrong-config.json")
-        };
+            wrong["candidate"][field] = if field == "selection" {
+                let mut v = wrong["candidate"][field].clone();
+                v["platform"] = value!("wrong-platform");
+                v
+            } else {
+                value!("wrong-config.json")
+            };
+        }
         if field == "effective_config_path" {
             wrong["candidate"]["selection"]["config_path"] = value!("wrong-config.json");
         }

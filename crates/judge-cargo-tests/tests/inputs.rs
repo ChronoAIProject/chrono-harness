@@ -1401,6 +1401,75 @@ fn toolchain_binding_records_sysroot_backend_linker_sdk_and_build_inputs() {
 }
 
 #[test]
+fn runtime_toolchain_inventory_is_consumed_and_invalid_sources_block_cargo() {
+    for case in ["valid", "missing", "failed", "path", "drift"] {
+        let mut f = Fixture::new();
+        toolchain_binding(&mut f);
+        absent_input(&mut f);
+        let root = f.root();
+        let input = f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|i| i["id"] == "toolchain.sysroot.manifest")
+            .unwrap();
+        let path = input["location"].clone();
+        let digest = input.as_object_mut().unwrap().remove("sha256").unwrap();
+        let observation = ".chrono-harness/state/toolchain-observation.json";
+        input["source"] = json!({"schema":"chrono-runtime-state/v1",
+            "manifest":observation,"pointer":"/directories/rust/manifest"});
+        let mut manifest = json!({"schema":"chrono-input-observation-result/v2",
+            "status":"observed","directories":{"rust":{"manifest":{"path":path,"sha256":digest}}}});
+        match case {
+            "failed" => manifest["status"] = json!("failed"),
+            "path" => {
+                manifest["directories"]["rust"]["manifest"]["path"] =
+                    json!(".chrono-harness/state/other.json")
+            }
+            "drift" => {
+                manifest["directories"]["rust"]["manifest"]["sha256"] =
+                    json!(sha256(b"different inventory"))
+            }
+            "valid" | "missing" => {}
+            _ => unreachable!(),
+        }
+        if case != "missing" {
+            fs::write(
+                root.join(observation),
+                serde_json::to_vec(&manifest).unwrap(),
+            )
+            .unwrap();
+        }
+        f.save();
+        let (code, report, stderr) = f.call();
+        if case == "valid" {
+            assert_eq!(code, 0, "{report} {stderr}");
+            assert_eq!(report["metadata"]["exit_code"], 0);
+            assert_eq!(report["operation"]["exit_code"], 0);
+            assert_eq!(
+                fs::read(root.join(".chrono-harness/state/test-ran")).unwrap(),
+                b"ran"
+            );
+        } else {
+            assert_ne!(code, 0, "{case}: {report} {stderr}");
+            let expected = match case {
+                "missing" => "No such file",
+                "failed" => "not a successful observation",
+                "path" => "path differs from input location",
+                "drift" => "differs from live file",
+                _ => unreachable!(),
+            };
+            assert!(
+                report["error"].as_str().unwrap().contains(expected),
+                "{case}: {report} {stderr}"
+            );
+            assert!(report["metadata"].is_null() && report["operation"].is_null());
+            assert!(!root.join(".chrono-harness/state/test-ran").exists());
+        }
+    }
+}
+
+#[test]
 fn toolchain_binding_rejects_selection_and_inventory_drift_before_cargo() {
     let mut f = Fixture::new();
     toolchain_binding(&mut f);

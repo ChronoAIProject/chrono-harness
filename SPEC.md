@@ -195,12 +195,24 @@ Config 接受明确的 `schema_version: 1 | 2 | 3 | 4`；projects 接受 1／2�
 | canonical_check | v1–v3 `{operation, argv: string[]}`；v4 增加 `profile`、可选独立 `initial_profile` 和 `inputs.local/ci` actions `{operation,tool,argv}`；唯一 `validate.delta` 路由 |
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
 | facts_git | config v3/v4 必填 `{tool, input, guard?}`，前两项分别引用唯一 tools 与 present 文件输入；可选 guard 见下；v1/v2 不接纳此字段，包括 null |
-| environment | `{inherit: string[], values: object, inputs: object[]}`；v4 可加 `credential_environment: string[]`，声明仅用于输入取得、不转发给 Git／判官的 inherit 凭据；v1 输入 `{id, location, sha256}`，v2/v3/v4 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
+| environment | `{inherit: string[], values: object, inputs: object[]}`；v4 可加 `credential_environment: string[]`，声明仅用于输入取得、不转发给 Git／判官的 inherit 凭据；v1 输入 `{id, location, sha256}`，v2/v3/v4 输入为 `{id, location, presence: "present", sha256}`、`{id, location, presence: "absent"}` 或下述运行时来源；变量及输入文件白名单 |
 | input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[], bindings?: {id, consumer, kind, inputs: string[]}[], coverage?: object}`；`bindings` 仅为 config v3 的显式白名单，工程声明不是完备性证明 |
 | protocol | `{id, timeout_seconds, stdout_limit_bytes, encoding}`；正整数限制、UTF-8 |
 | semantic_fields | `{path, pointers: string[], on}[]`；语义字段分类，见 §8 |
 | artifacts | `{path, owner, kind, tracked: false}[]`；明确生成目录白名单 |
 | enforcement | `not-implemented` 或 `enabled`；proposed 不产生通过报告 |
+
+Config v2/v3/v4 可为本轮生产、由明确消费者读取的状态输入登记
+`{id, location, presence: "present", source: {schema: "chrono-runtime-state/v1", manifest, pointer}}`，
+不同时登记 `sha256`。`location` 与 `manifest` 都必须是 `.chrono-harness/state/` 下的规范相对路径；
+消费时沿既有路径检查拒绝符号链接。`manifest` 必须是成功的
+`chrono-input-observation-result/v2`（`status: "observed"`），`pointer` 是交由
+`serde_json::Value::pointer` 解释的非空 JSON Pointer，选择包含 `{path, sha256}` 的对象。
+所选 path 必须等于 location，消费者在实际操作前重新计算活文件摘要；缺失、失败观察、
+无效指针、不同路径或内容漂移均失败，不启动受保护 Cargo 操作。
+运行时状态不进入历史端点快照，端点不得保留该输入的字节表示；快照成功不豁免实际消费前置。
+生产者、消费者与有限保留／释放要求沿 §2.3 登记，不把本轮来源变成固定执行物身份，
+也不据此声明输入完整、full 启用或同判。
 
 tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次，报告绝对路径、文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。Config v3 在读取 Git 对象前，从显式 candidate 配置绑定 `facts_git`；该配置的原始字节随后必须与固定 candidate 中的 blob 相同。
 
@@ -724,7 +736,7 @@ Harness 自身的检查、观测、缓存与资源报告也按独立生产／测
 
 | ID | 本轮职责与典型错误 |
 | --- | --- |
-| registration | schema/引用/白名单/快照/输入闭合；E_UNREGISTERED、E_SNAPSHOT_DIRTY |
+| registration | schema/引用/白名单/快照/输入闭合及必要性链；E_UNREGISTERED、E_SNAPSHOT_DIRTY、E_WHY_UNRESOLVED |
 | filemap | 两端图、类型边、归属、影响；E_DANGLING_EDGE |
 | projects | 一一配对、项目隔离、所选构建/测试执行；E_TEST_PAIR、E_TEST_FAILED |
 | routes | 唯一操作与 argv/证据一致；E_ROUTE_MISSING、E_ROUTE_AMBIGUOUS |
@@ -1020,6 +1032,11 @@ Git 跟踪边界在清理前就生效：`state`、CI artifact、runner 快照、
 | 自主结构优化完成或中断，出现与 DELTA 无关的旧热点 | 完成须核真实 PR／落地与适用检查；中断保留未完成状态，旧热点仅为上下文，不全仓判红或要求人介入 |
 | 新功能仅有专属测试、文档配方或臆想的未来调用 | 不作为功能交付；先核真实现存问题与消费者，必需中间实现随实际接入一起验收 |
 | 消费者在外部仓库或真实用户操作中 | 显式登记身份、固定版本、实际入口、输入输出用途与接入证据；证据不可取得不伪造消费或成功 |
+| 任一功能、字段、依赖、脚本、判官、CI job、缓存、报告、测试或文档无法追溯到当前必要性链终点 | `E_WHY_UNRESOLVED`；不实现、不激活、不加入构建／CI／保留，已有对象走 retirement／迁移 |
+| 必要性只写“未来使用”“方便审计”“保持一致”或只引用一次 CI 绿色 | `E_WHY_UNRESOLVED`；继续追问当前消费者、失败影响和可观察验收 |
+| 对象有真实消费者但中间依赖没有独立必要性链 | 沿消费者分支补齐生产者、输入、输出用途和终点；链条未闭合前保持 unknown，不假称完整 |
+| 专属测试是某功能唯一所谓消费者，但没有产品、外部接口或当前 SPEC 终点 | `E_WHY_UNRESOLVED`；测试不能单独赋予无用途功能交付资格 |
+| 必要性链终点的消费者身份、版本、入口或证据不可取得 | 保留 `unknown` 和原始缺证；不转为 active，不新增替代机制或人工确认门 |
 | 受影响功能的消费者缺登记、已退役或实际调用不符 | 对该 DELTA 报具体登记／引用／证据错误；保留未验证边界，不自动猜消费者或全仓判红 |
 | 启动任务前宿主有完成通知、只有原生阻塞等待，或两者均缺 | 只选实际可用的一个通道并明确原结果取得方式；两者均缺时报能力缺口，不启动无法收取终态的任务 |
 | 等待超时、静默或通道丢失，原任务尚无匹配终态 | 保留原句柄、已有结果及 unknown；恢复原任务收取，不重复启动；独立已授权工作继续 |
@@ -1073,7 +1090,7 @@ context 可通过 retained_inputs 引用两固定端点的外部文件原字节�
 
 旧 scoped provider v1／v2／v3 已退役；v4 可明确加入 initial 清单投影，不会推断。固定旧发布包的登记不产生当前源码的兼容义务。绑定不证明网络／凭据／Git 配置完整或当前候选的原生采用，见 [CI 说明](docs/ci.md)。
 
-CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹配的 integration 创建／修复 push，以完整候选对比固定观察 dev 顶端；未配置 push 仍用 before／after，见 docs/ci.md。准备不认证 workflow 义务。workflow 用真实观察和完成报告核有限分支、integration、退役、迁移合同，见 [workflow 说明](docs/workflow.md)。
+CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹配的 integration 创建／修复 push，以完整候选对比固定观察 dev 顶端；未配置 push 仍用 before／after，见 docs/ci.md。PR 以同次运行固定 workflow merge commit 的第一父提交为基线、事件 head 为候选；必须恰有两个父提交且第二父提交与 head 完整身份相等，否则失败。事件载荷中较早的 base SHA 不决定选测，依赖 job 消费 detector 已固定的两端。准备不认证 workflow 义务。workflow 用真实观察和完成报告核有限分支、integration、退役、迁移合同，见 [workflow 说明](docs/workflow.md)。
 
 完整 Cargo／SDK／外部输入、超出明确根清单 profile 的 initial 采用／bootstrap 来源、原生 full CI／同判、AI 协调与陈旧重建全流程、PR／merge／落地及最终完整 SPEC 审计仍未完成。单个执行者的本地行为检查不证明独立评审、原生 CI 或落地；指令生成的平台／崩溃／并发限制仍有效。原编号要求和每项验收目标全部保留。
 
