@@ -6,6 +6,9 @@ pub mod facts;
 mod facts_binding;
 mod facts_configs;
 mod process_child;
+#[cfg(feature = "retention-test")]
+#[doc(hidden)]
+pub use process_child::direct_child_status_probe_count;
 #[cfg(unix)]
 mod process_ownership;
 /// Existing selector owner resolves a host policy for provider consumers.

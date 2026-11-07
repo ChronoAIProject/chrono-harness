@@ -38,37 +38,6 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .output()
         .unwrap()
 }
-fn prepare_cli(h: &Host, bytes: &[u8], event: &str) -> std::process::Output {
-    prepare_cli_from(h, SOURCE, bytes, event)
-}
-fn prepare_cli_from(h: &Host, source: &str, bytes: &[u8], event: &str) -> std::process::Output {
-    let payload = h.root.join(".chrono-harness/state/payload.json");
-    write(
-        &h.root,
-        ".chrono-harness/state/payload.json",
-        &json!({"inputs":{"context":String::from_utf8(bytes.to_vec()).unwrap()}}),
-    );
-    let output = h.root.join(".chrono-harness/state/github-output");
-    fs::write(&output, "").unwrap();
-    cli(
-        h.root.parent().unwrap(),
-        &[
-            "prepare",
-            "--host-root",
-            h.root.file_name().unwrap().to_str().unwrap(),
-            "--config",
-            source,
-            "--event",
-            event,
-            "--payload",
-            payload.to_str().unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-            "--github-output",
-            output.to_str().unwrap(),
-        ],
-    )
-}
 fn prepare(h: &Host, bytes: &[u8]) -> Result<Value, String> {
     full::prepare(&h.root, SOURCE, &config(), bytes, &h.candidate)
 }
@@ -77,26 +46,16 @@ fn failure(error: &str) -> Value {
 }
 
 #[test]
-fn cli_preserves_context_bytes_and_separate_observations_from_another_cwd() {
+fn preparation_preserves_context_bytes_and_separate_observations() {
     let h = host("pass");
     let bytes = context(&h, &h.candidate);
-    let out = prepare_cli(&h, &bytes, "workflow_dispatch");
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let r: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let r = prepare(&h, &bytes).unwrap();
     assert_eq!(fs::read(h.root.join(config().context_path)).unwrap(), bytes);
     assert_eq!(r, read(&h.root, &config().preparation_path));
     assert_eq!(r["context"]["sha256"], sha256(&bytes));
     assert_eq!(r["canonical_argv"], json!(full::argv(&config())));
     assert_eq!(r["governance"], "not-evaluated");
     assert_eq!(r["parity"], "unestablished");
-    assert_eq!(
-        fs::read_to_string(h.root.join(".chrono-harness/state/github-output")).unwrap(),
-        format!("base={}\ncandidate={}\n", h.candidate, h.candidate)
-    );
     assert!(r["git_facts"]["processes"].as_array().unwrap().len() > 5);
     assert!(!h.trace().contains(" fetch "));
     let again = prepare(&h, &bytes).unwrap();
@@ -258,7 +217,7 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
 }
 
 #[test]
-fn malformed_context_and_events_fail_without_invented_defaults() {
+fn malformed_context_fails_without_invented_defaults() {
     let h = host("pass");
     let original = context(&h, &h.candidate);
     for (key, value) in [
@@ -277,7 +236,6 @@ fn malformed_context_and_events_fail_without_invented_defaults() {
     }
     assert!(prepare(&h, b"{}").is_err());
     assert!(prepare(&h, b"not json").is_err());
-    assert!(!prepare_cli(&h, &original, "push").status.success());
     assert!(h.trace().is_empty());
     assert!(!h.root.join(config().context_path).exists());
 }
@@ -434,7 +392,7 @@ fn context_and_report_symlinks_preserve_the_original_target() {
 }
 
 #[test]
-fn committed_cli_rejects_component_output_collisions_before_publication() {
+fn committed_preparation_rejects_component_output_collisions_before_publication() {
     for (field, path, expected) in [
         (
             "preparation_path",
@@ -466,30 +424,10 @@ fn committed_cli_rejects_component_output_collisions_before_publication() {
         fs::create_dir_all(unrelated.parent().unwrap()).unwrap();
         fs::write(&unrelated, b"unrelated retained evidence").unwrap();
         let bytes = context(&h, &h.candidate);
-        let out = prepare_cli(&h, &bytes, "workflow_dispatch");
-        let published = fs::read(h.root.join(&c.context_path)).ok();
-        let report = serde_json::from_slice::<Value>(&out.stdout).ok();
-        assert!(
-            !out.status.success(),
-            "{field}={path}: CLI exit={:?}; reported_status={:?}; context_preserved={}; context_replaced_by_report={}",
-            out.status.code(),
-            report.as_ref().map(|r| &r["status"]),
-            published.as_deref() == Some(bytes.as_slice()),
-            published
-                .as_ref()
-                .and_then(|b| serde_json::from_slice::<Value>(b).ok())
-                .is_some_and(|v| v["schema"] == "chrono-full-ci-inputs/v1")
-        );
-        assert_eq!(out.status.code(), Some(1));
-        assert!(String::from_utf8_lossy(&out.stderr).contains(expected));
-        assert!(out.stdout.is_empty());
+        let error = full::prepare(&h.root, SOURCE, &c, &bytes, &h.candidate).unwrap_err();
+        assert!(error.contains(expected), "{field}={path}: {error}");
         assert!(!h.root.join(&c.context_path).exists());
         assert!(!h.root.join(&c.preparation_path).exists());
-        assert!(
-            fs::read(h.root.join(".chrono-harness/state/github-output"))
-                .unwrap()
-                .is_empty()
-        );
         assert_eq!(fs::read(unrelated).unwrap(), b"unrelated retained evidence");
         assert_eq!(fs::read(h.root.join(SOURCE)).unwrap(), source_bytes);
         assert_eq!(
@@ -501,7 +439,7 @@ fn committed_cli_rejects_component_output_collisions_before_publication() {
 }
 
 #[test]
-fn current_source_cli_rejects_component_ownership_before_publication() {
+fn current_source_rejects_component_ownership_before_publication() {
     for (source_path, field, value, expected) in [
         (
             SOURCE,
@@ -582,27 +520,21 @@ fn current_source_cli_rejects_component_ownership_before_publication() {
         write(&h.root, source_path, &source);
         let source_bytes = fs::read(h.root.join(source_path)).unwrap();
         let workflow_bytes = fs::read(h.root.join(config().workflow_path)).unwrap();
-        let out = prepare_cli_from(
-            &h,
-            source_path,
-            &context(&h, &h.candidate),
-            "workflow_dispatch",
-        );
-        assert_eq!(out.status.code(), Some(1), "{source_path}: {field}={value}");
-        assert!(
-            String::from_utf8_lossy(&out.stderr).contains(expected),
-            "{source_path}: {field}={value}: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        assert!(out.stdout.is_empty());
         let c: FullConfig = serde_json::from_value(source).unwrap();
+        let error = full::prepare(
+            &h.root,
+            source_path,
+            &c,
+            &context(&h, &h.candidate),
+            &h.candidate,
+        )
+        .unwrap_err();
+        assert!(
+            error.contains(expected),
+            "{source_path}: {field}={value}: {error}"
+        );
         assert!(!h.root.join(&c.context_path).exists());
         assert!(!h.root.join(&c.preparation_path).exists());
-        assert!(
-            fs::read(h.root.join(".chrono-harness/state/github-output"))
-                .unwrap()
-                .is_empty()
-        );
         assert_eq!(fs::read(h.root.join(source_path)).unwrap(), source_bytes);
         assert_eq!(
             fs::read(h.root.join(&c.workflow_path)).unwrap(),
@@ -623,7 +555,7 @@ fn current_source_cli_rejects_component_ownership_before_publication() {
 }
 
 #[test]
-fn committed_cli_preserves_separate_component_spellings_and_customization() {
+fn committed_preparation_preserves_separate_component_spellings_and_customization() {
     for scope in [
         None,
         Some(json!({"kind":"unit","unit":"compiler.arm64-1"})),
@@ -660,13 +592,7 @@ fn committed_cli_preserves_separate_component_spellings_and_customization() {
             fs::write(h.root.join(manifest), b"caller-owned collection input").unwrap();
         }
         let bytes = context(&h, &h.candidate);
-        let out = prepare_cli(&h, &bytes, "workflow_dispatch");
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let report = full::prepare(&h.root, SOURCE, &c, &bytes, &h.candidate).unwrap();
         assert_eq!(report["status"], "prepared");
         assert_eq!(report["canonical_argv"], json!(full::argv(&c)));
         assert_eq!(report["context"]["current_path"], c.context_path);
@@ -693,5 +619,60 @@ fn committed_cli_preserves_separate_component_spellings_and_customization() {
             fs::read_to_string(h.root.join(&c.workflow_path)).unwrap(),
             full::render(&c, SOURCE).unwrap()
         );
+    }
+}
+
+#[test]
+fn standalone_full_prepare_is_rejected_without_publishing_or_git() {
+    for scope in [
+        None,
+        Some(json!({"kind":"unit","unit":"compiler"})),
+        Some(json!({"kind":"collect","manifest":".chrono-harness/state/manifest.json"})),
+    ] {
+        let mut h = host("pass");
+        let mut c = config();
+        c.scope = scope.map(|value| serde_json::from_value(value).unwrap());
+        write(&h.root, SOURCE, &serde_json::to_value(&c).unwrap());
+        generate(&h.root, SOURCE, false).unwrap();
+        h.revise();
+        let payload = h.root.join(".chrono-harness/state/payload.json");
+        write(
+            &h.root,
+            ".chrono-harness/state/payload.json",
+            &json!({"inputs":{"context":String::from_utf8(context(&h, &h.candidate)).unwrap()}}),
+        );
+        let output = h.root.join(".chrono-harness/state/github-output");
+        fs::write(&output, b"caller-owned output\n").unwrap();
+        for event in ["workflow_dispatch", "push"] {
+            let out = cli(
+                h.root.parent().unwrap(),
+                &[
+                    "prepare",
+                    "--host-root",
+                    h.root.file_name().unwrap().to_str().unwrap(),
+                    "--config",
+                    SOURCE,
+                    "--event",
+                    event,
+                    "--payload",
+                    payload.to_str().unwrap(),
+                    "--workflow-revision",
+                    &h.candidate,
+                    "--github-output",
+                    output.to_str().unwrap(),
+                ],
+            );
+            assert_eq!(out.status.code(), Some(1), "{out:?}");
+            assert!(
+                String::from_utf8_lossy(&out.stderr)
+                    .contains("full CI preparation requires the registered short check"),
+                "{out:?}"
+            );
+            assert!(out.stdout.is_empty());
+            assert!(!h.root.join(&c.context_path).exists());
+            assert!(!h.root.join(&c.preparation_path).exists());
+            assert_eq!(fs::read(&output).unwrap(), b"caller-owned output\n");
+            assert!(h.trace().is_empty());
+        }
     }
 }

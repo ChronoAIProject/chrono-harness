@@ -574,44 +574,8 @@ fn full_ci_consumer(selected: bool) {
             .unwrap(),
         )
         .unwrap();
-        let out = h.capture_native(Command::new(&ci).current_dir(&root).args([
-            "prepare",
-            "--host-root",
-            ".",
-            "--config",
-            source_path,
-            "--event",
-            "workflow_dispatch",
-            "--payload",
-            payload.to_str().unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-        ]));
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let prepared: Value = serde_json::from_slice(&out.stdout).unwrap();
-        assert_eq!(prepared["governance"], "not-evaluated");
-        assert_eq!(
-            prepared["canonical_argv"],
-            json!([".chrono-harness/bin/chrono-harness", "check"])
-        );
-        if selected {
-            assert_eq!(prepared["git_facts"]["selection"]["path"], CONFIG);
-            assert_eq!(
-                prepared["git_facts"]["selection"]["config_path"],
-                NATIVE_CONFIG
-            );
-        }
-        assert_eq!(
-            fs::read(root.join(".chrono-harness/state/context.json")).unwrap(),
-            context
-        );
-        let argv: Vec<String> = serde_json::from_value(prepared["canonical_argv"].clone()).unwrap();
         let out = h.capture_native(
-            Command::new(root.join(&argv[0]))
+            Command::new(root.join(".chrono-harness/bin/chrono-harness"))
                 .current_dir(&root)
                 .env("DECLARED_EMPTY", "")
                 .env_remove("DECLARED_ABSENT")
@@ -619,7 +583,7 @@ fn full_ci_consumer(selected: bool) {
                 .env("GITHUB_EVENT_NAME", "workflow_dispatch")
                 .env("GITHUB_EVENT_PATH", &payload)
                 .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-                .args(&argv[1..]),
+                .arg("check"),
         );
         h.retain_command_result("prepared-check", &out);
         assert!(
@@ -648,6 +612,30 @@ fn full_ci_consumer(selected: bool) {
                 .flatten()
                 .filter_map(|j| j["transport_failure"].as_str())
                 .collect::<Vec<_>>()
+        );
+        let original = &report["preparation"]["result"]["evidence"];
+        let raw = fs::read(root.join(original["report_path"].as_str().unwrap())).unwrap();
+        assert_eq!(sha256(&raw), original["report_sha256"]);
+        let prepared: Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(prepared["governance"], "not-evaluated");
+        assert_eq!(
+            prepared["canonical_argv"],
+            json!([".chrono-harness/bin/chrono-harness", "check"])
+        );
+        if selected {
+            assert_eq!(prepared["git_facts"]["selection"]["path"], CONFIG);
+            assert_eq!(
+                prepared["git_facts"]["selection"]["config_path"],
+                NATIVE_CONFIG
+            );
+        }
+        assert_eq!(
+            fs::read(root.join(".chrono-harness/state/context.json")).unwrap(),
+            context
+        );
+        assert_eq!(
+            fs::read(root.join(prepared["context"]["path"].as_str().unwrap())).unwrap(),
+            context
         );
         fs::remove_file(root.join(".chrono-harness/state/preparation.json")).unwrap();
         report
@@ -687,33 +675,41 @@ fn full_ci_consumer(selected: bool) {
     assert_eq!(delivery["tests"]["tests"], local["tests"]["tests"]);
     assert_eq!(delivery["parity"]["status"], "unestablished");
     if selected {
-        // Full-CI preparation must reject the same literal linked entries.
-        let original = fs::read(root.join(source_path)).unwrap();
+        // The current input producer rejects linked policies before Git or
+        // business operations. Reuse its real short-check request as the control.
         for path in [linked_entry, ".chrono-harness/linked directory/config.json"] {
-            let mut linked_provider = provider.clone();
-            linked_provider["check_config"] = json!(path);
-            fs::write(
-                root.join(source_path),
-                serde_json::to_vec(&linked_provider).unwrap(),
-            )
-            .unwrap();
+            let mut request = delivery["preparation"]["request"].clone();
+            request["profile"] = json!(path);
             let trace = fs::read(root.join(".chrono-harness/state/git-trace")).unwrap();
             let order = fs::read(root.join(".chrono-harness/state/order")).unwrap();
-            let out = h.capture_native(Command::new(&ci).current_dir(&root).args([
-                "prepare",
-                "--host-root",
-                ".",
-                "--config",
-                source_path,
-                "--event",
-                "workflow_dispatch",
-                "--payload",
-                ".chrono-harness/state/payload.json",
-                "--workflow-revision",
-                &h.candidate,
-            ]));
+            let out = h.capture_native_input(
+                Command::new(&ci)
+                    .current_dir(&root)
+                    .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+                    .env(
+                        "GITHUB_EVENT_PATH",
+                        root.join(".chrono-harness/state/payload.json"),
+                    )
+                    .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+                    .args([
+                        "check-inputs",
+                        "--config",
+                        source_path,
+                        "--event-env",
+                        "GITHUB_EVENT_NAME",
+                        "--payload-env",
+                        "GITHUB_EVENT_PATH",
+                        "--revision-env",
+                        "CHRONO_WORKFLOW_REVISION",
+                    ]),
+                &serde_json::to_vec(&request).unwrap(),
+            );
             assert_eq!(out.status.code(), Some(1));
-            assert!(String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"));
+            assert!(out.stdout.is_empty());
+            assert!(
+                String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"),
+                "{out:?}"
+            );
             assert_eq!(
                 fs::read(root.join(".chrono-harness/state/git-trace")).unwrap(),
                 trace
@@ -724,7 +720,6 @@ fn full_ci_consumer(selected: bool) {
             );
             assert!(!root.join(".chrono-harness/state/preparation.json").exists());
         }
-        fs::write(root.join(source_path), original).unwrap();
     }
     // Preparation transports an invalid freshness claim; only workflow judges it.
     let context_path = root.join(".chrono-harness/state/context.json");

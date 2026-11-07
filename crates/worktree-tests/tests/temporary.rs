@@ -41,13 +41,7 @@ fn command_carrier_count(command: &Command) -> usize {
 
 #[test]
 fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
-    use std::{
-        os::fd::AsRawFd,
-        time::{Duration, Instant},
-    };
-    unsafe extern "C" {
-        fn flock(fd: i32, operation: i32) -> i32;
-    }
+    use std::time::{Duration, Instant};
     let h = host();
     let (store, outputs) =
         chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
@@ -68,7 +62,7 @@ fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
     }
     // Hold the real allocation metadata exclusion through the complete drain.
     let held = fs::File::open(&paths[0]).unwrap();
-    assert_eq!(unsafe { flock(held.as_raw_fd(), 2 | 4) }, 0);
+    held.lock().unwrap();
     let began = Instant::now();
     let (code, report, error) = h.auto("maintain", &[]);
     let elapsed = began.elapsed();

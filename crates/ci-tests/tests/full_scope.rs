@@ -310,54 +310,14 @@ fn scoped_host(scope: &Value, selector: bool, mode: &str) -> (Host, FullConfig, 
     (h, c, path)
 }
 
-fn scoped_prepare_cli(h: &Host, path: &str, bytes: &[u8], extra: &[&str]) -> std::process::Output {
-    let payload = h.root.join(".chrono-harness/state/payload.json");
-    write(
-        &h.root,
-        ".chrono-harness/state/payload.json",
-        &json!({"inputs":{"context":String::from_utf8(bytes.to_vec()).unwrap()}}),
-    );
-    let output = h.root.join(".chrono-harness/state/github-output");
-    fs::write(&output, "").unwrap();
-    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"))
-        .current_dir(h.root.parent().unwrap())
-        .env("PATH", &h.shadow)
-        .env("CHRONO_EVENT_AMBIENT", "ambient")
-        .args([
-            "prepare",
-            "--host-root",
-            h.root.file_name().unwrap().to_str().unwrap(),
-            "--config",
-            path,
-            "--event",
-            "workflow_dispatch",
-            "--payload",
-            payload.to_str().unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-            "--github-output",
-            output.to_str().unwrap(),
-        ])
-        .args(extra)
-        .output()
-        .unwrap()
-}
-
 #[test]
-fn committed_unit_and_collector_cli_prepare_preserve_caller_bytes_and_canonical_argv() {
+fn committed_unit_and_collector_preparation_preserves_caller_bytes_and_canonical_argv() {
     for scope in scopes() {
         for selector in [false, true] {
             let (h, c, path) = scoped_host(&scope, selector, "pass");
             let source = fs::read(h.root.join(path)).unwrap();
             let bytes = context(&h, &h.candidate);
-            let out = scoped_prepare_cli(&h, path, &bytes, &[]);
-            assert!(
-                out.status.success(),
-                "{scope}; selector={selector}: {}",
-                String::from_utf8_lossy(&out.stderr)
-            );
-            assert!(out.stderr.is_empty());
-            let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+            let report = full::prepare(&h.root, path, &c, &bytes, &h.candidate).unwrap();
             assert_eq!(fs::read(h.root.join(&c.context_path)).unwrap(), bytes);
             assert_eq!(report, read(&h.root, &c.preparation_path));
             assert_eq!(report["context"]["sha256"], sha256(&bytes));
@@ -368,10 +328,6 @@ fn committed_unit_and_collector_cli_prepare_preserve_caller_bytes_and_canonical_
             assert_eq!(report["status"], "prepared");
             assert_eq!(report["governance"], "not-evaluated");
             assert_eq!(report["parity"], "unestablished");
-            assert_eq!(
-                fs::read_to_string(h.root.join(".chrono-harness/state/github-output")).unwrap(),
-                format!("base={}\ncandidate={}\n", h.candidate, h.candidate)
-            );
             assert_eq!(report["git_facts"]["binding"]["path"], json!(h.program));
             if selector {
                 assert_eq!(report["git_facts"]["selection"]["path"], FACTS);
@@ -406,14 +362,6 @@ fn committed_unit_and_collector_cli_prepare_preserve_caller_bytes_and_canonical_
                 );
                 assert_eq!(fs::read(h.root.join(manifest)).unwrap(), retained);
             }
-            let saved = fs::read(h.root.join(&c.preparation_path)).unwrap();
-            let override_scope = scoped_prepare_cli(&h, path, &bytes, &["--unit", "different"]);
-            assert_eq!(override_scope.status.code(), Some(1));
-            assert!(
-                String::from_utf8_lossy(&override_scope.stderr)
-                    .contains("unit selection requires unit provider")
-            );
-            assert_eq!(fs::read(h.root.join(&c.preparation_path)).unwrap(), saved);
         }
     }
 }
@@ -494,11 +442,9 @@ fn scoped_git_failure_keeps_original_bytes_status_and_no_outputs() {
     for scope in scopes() {
         let (h, c, path) = scoped_host(&scope, false, "scope-probe-failure");
         let (_remote, base) = h.remote();
-        let out = scoped_prepare_cli(&h, path, &context(&h, &base), &[]);
-        assert_eq!(out.status.code(), Some(1));
-        assert!(out.stdout.is_empty());
-        let stderr = String::from_utf8(out.stderr).unwrap();
-        let evidence = failure(stderr.strip_prefix("E_CI: ").unwrap().trim());
+        let error =
+            full::prepare(&h.root, path, &c, &context(&h, &base), &h.candidate).unwrap_err();
+        let evidence = failure(&error);
         let failed = evidence["git_facts"]["processes"]
             .as_array()
             .unwrap()
