@@ -390,6 +390,21 @@ filemap 的原 `valid_types` 已移到现役 `verified_graph.rs`，直接消费�
 JSON 解码、节点提取、诊断和完整图外层组合继续保留未完成义务。
 额外证明、编译、运行、CI与存储总成本未测；不据此声明全仓覆盖门已完成。
 
+## 专属测试的语言配对
+
+projects 的实际 `dedicated_pair` 直接把登记中的 implementation／testing 字符串借给
+`verified_languages.rs`。同源定义与实现要求完整文本相等，或恰为 implementation `shell`、
+testing `python`；不归一化、不从扩展名推断，也不扩大 Python 例外。
+独立根证明任意相等文本接受、其余不同文本拒绝，并列明反向配对、大小写、前后缀、
+空格、NUL、Unicode 和空字符串边界。语言非空仍由既有 schema 负责。
+原 Rust 语言／metadata DELTA 回归继续验证实际 projects 使用方。
+
+**产品与宿主政策同时变更：**两项固定工具的整 crate 证明加入 projects 原测试计划的必需前置，
+源码和独立预期逐文件登记，并复用 runner 的已证明文本相等判断及现役 Verus 启动路径。
+外部接口仅沿用固定 vstd 的字符串／字节接口；没有新增依赖、仓内受信实现或跳过证明的分支。
+配对身份、错误分类、JSON、完整调用组合和全仓覆盖门仍待证明；本批不建立源码语言完整性。
+运行时只比较实际字符串；新增两项证明的完整构建、CI、存储成本未知。
+
 ## full 准备状态
 
 `judge-registration::readiness` 的五份登记状态与输入闭合判断由
