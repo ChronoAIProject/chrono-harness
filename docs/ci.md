@@ -61,7 +61,7 @@ install 先用现有 `/usr/bin/shasum` 核对 `CHRONO_STARTUP_INSTALLER_SHA256`�
 .chrono-harness/bin/chrono-harness check --unit ci
 ```
 
-bootstrap 最后参数明确选择宿主 CI 配置，省略沿用 full bootstrap 默认。生成的单元／汇总工作流选择 runner、judge-ci、ci、本地 worktree 输入生产者；其余构建来自原完整测试计划。并发运行单元须用不同检出。
+bootstrap 必须通过最后一个参数明确选择已登记配置，省略时在构建前报错。生成的单元／汇总工作流选择 runner、judge-ci、ci、本地 worktree 输入生产者；其余构建来自原完整测试计划。并发运行单元须用不同检出。
 
 本地不带 `--unit` 时，按 FILEMAP 调度执行整个所选 DELTA；同一入口加无值 `--collect`，则准备声明清单、核单元证据，不执行业务。
 
