@@ -17,7 +17,7 @@
 本仓通过 `.chrono-harness/logging.json` 采用统一文件日志。已接入的 Rust 命令入口在业务启动前初始化 logger，记录 `cli.started` 和 `cli.finished`，包含实际生产者、PID、操作、宿主路径和返回码。info 记录正常活动，失败返回用 error。运行日志位于 `.chrono-harness/state/logs/runtime.jsonl`；直接查看可用：
 
 ```sh
-tail -f .chrono-harness/state/logs/runtime.jsonl
+tail -F .chrono-harness/state/logs/runtime.jsonl
 ```
 
 当前每份上限 10485760 字节（10 MiB），共保留 5 份，包含当前文件及 `runtime.1.jsonl` 至 `runtime.4.jsonl`。越接近 1 越新。下一条完整记录将超过上限时先轮换，删除最旧份。正文最多 50 MiB，另有一个空的 `runtime.lock`；不压缩、不按调用创建新文件、不启动清理线程或定时器。`max_files` 必须为 1 至 64，`max_bytes` 必须为 1 至 67108864，`level` 支持 trace、debug、info、warn、error。`stderr: false` 使普通入口的新增日志只写文件；已有业务输出仍走原通道。
