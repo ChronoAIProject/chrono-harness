@@ -1520,6 +1520,66 @@ fn seed_before(a: &policy::Seed, b: &policy::Seed)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn seed_id_lookup_uses_only_complete_ids_and_preserves_all_borrowed_fields() {
+    let empty: Vec<policy::Seed> = vec![];
+    let missing = policy::seed_by_id(&empty, "");
+    assert(missing.is_none());
+    let values = vec![
+        seed("", "空节点", "空引用\0", "空原因"),
+        seed("root\0尾", "第二节点\0", "第二引用", "第二原因\0"),
+        seed("根é", "第三节点", "第三引用\0", "第三原因"),
+        seed("last", "末节点", "末引用", "末原因"),
+    ];
+    let first = policy::seed_by_id(&values, "").unwrap();
+    assert(first.key() == values@[0].key());
+    let middle = policy::seed_by_id(&values, "root\0尾").unwrap();
+    assert(middle.key() == values@[1].key());
+    let unicode = policy::seed_by_id(&values, "根é").unwrap();
+    assert(unicode.key() == values@[2].key());
+    let last = policy::seed_by_id(&values, "last").unwrap();
+    assert(last.key() == values@[3].key());
+    let absent = policy::seed_by_id(&values, "missing");
+    assert(absent.is_none());
+    let prefix = policy::seed_by_id(&values, "root");
+    assert(prefix.is_none());
+    let shorter = policy::seed_by_id(&values, "root\0");
+    assert(shorter.is_none());
+    let longer = policy::seed_by_id(&values, "root\0尾x");
+    assert(longer.is_none());
+    let case = policy::seed_by_id(&values, "LAST");
+    assert(case.is_none());
+    let normalized = policy::seed_by_id(&values, "根e\u{301}");
+    assert(normalized.is_none());
+    let node = policy::seed_by_id(&values, "第三节点");
+    assert(node.is_none());
+    let reference = policy::seed_by_id(&values, "第二引用");
+    assert(reference.is_none());
+    let reason = policy::seed_by_id(&values, "末原因");
+    assert(reason.is_none());
+}
+
+/// 任意完整 ID，包括空、Unicode 和 NUL；重复 ID 保留原有首项语义。
+#[cfg_attr(not(verus_keep_ghost), allow(dead_code))]
+fn duplicate_seed_id_lookup_returns_the_first_original_record(id: &str) {
+    let values = vec![
+        seed(id, "首节点\0", "首引用", "首原因\0"),
+        seed(id, "后节点", "后引用\0", "后原因"),
+        seed(id, "末节点", "末引用", "末原因"),
+    ];
+    let found = policy::seed_by_id(&values, id).unwrap();
+    assert(found.key() == values@[0].key());
+    assert(found.node@ == "首节点\0"@);
+    assert(found.reference@ == "首引用"@);
+    assert(found.reason@ == "首原因\0"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn duplicate_seed_id_boundaries_include_empty_unicode_and_nul() {
+    duplicate_seed_id_lookup_returns_the_first_original_record("");
+    duplicate_seed_id_lookup_returns_the_first_original_record("重复原因\0é");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn seed_order_uses_complete_id_node_reference_reason_in_that_order() {
     proof {
         reveal_strlit(""); reveal_strlit("a"); reveal_strlit("z"); reveal_strlit("a\0");
