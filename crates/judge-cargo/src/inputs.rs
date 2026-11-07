@@ -6,8 +6,8 @@ use chrono_judge_filemap::{
     graph::{self, EdgeKind, Seed},
 };
 use chrono_judge_registration::{
-    inputs::{runtime_state_identity, runtime_state_source},
     Registrations,
+    inputs::{runtime_state_identity, runtime_state_source},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

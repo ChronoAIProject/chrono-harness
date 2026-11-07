@@ -286,11 +286,7 @@ pub fn config(v: &Value) -> Result {
                 object(i, &["id", "location", "presence"], &[])?;
             } else if i.get("source").is_some() {
                 object(i, &["id", "location", "presence", "source"], &[])?;
-                object(
-                    &i["source"],
-                    &["schema", "manifest", "pointer"],
-                    &[],
-                )?;
+                object(&i["source"], &["schema", "manifest", "pointer"], &[])?;
                 if i["source"]["schema"] != "chrono-runtime-state/v1" {
                     return Err("unsupported runtime input source schema".into());
                 }
