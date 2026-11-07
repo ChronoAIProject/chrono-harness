@@ -44,6 +44,7 @@ impl Fixture {
         let root = fs::canonicalize(dir.path()).unwrap();
         let cargo = rust_tool("cargo");
         let rustc = rust_tool("rustc");
+        let rustdoc = rust_tool("rustdoc");
         let o = Command::new(&rustc).arg("-vV").output().unwrap();
         assert!(o.status.success());
         let target = String::from_utf8(o.stdout)
@@ -58,12 +59,13 @@ impl Fixture {
         v.get_mut(FM).unwrap()["project_edges"] = json!([
             edge("project:p", "compile", "project:t"),
             edge("project:p", "test-execution", "test:t"),
-            edge("project:t", "test-execution", "test:t")
+            edge("project:t", "test-execution", "test:t"),
+            edge("environment:RUSTDOC", "runtime-input", "project:t")
         ]);
         let version = Command::new(&cargo).arg("--version").output().unwrap();
         assert!(version.status.success());
         v.get_mut(CONFIG).unwrap()["tools"] = json!([{"id":"cargo","program":cargo,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}]);
-        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["PATH"],"values":{"RUSTC":rustc,"CARGO_HOME":root.join(".chrono-harness/state/cargo-home"),"CARGO_TERM_COLOR":"never","CHRONO_TEST_EFFECT":root.join(".chrono-harness/state/test-ran")},"inputs":[]});
+        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["PATH"],"values":{"RUSTC":rustc,"RUSTDOC":rustdoc,"CARGO_HOME":root.join(".chrono-harness/state/cargo-home"),"CARGO_TERM_COLOR":"never","CHRONO_TEST_EFFECT":root.join(".chrono-harness/state/test-ran")},"inputs":[]});
         write(
             &root,
             ".chrono-harness/cargo/config.toml",
