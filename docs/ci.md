@@ -53,7 +53,7 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 
 install 先用现有 `/usr/bin/shasum` 核对 `CHRONO_STARTUP_INSTALLER_SHA256`，拒绝缺绑定、字节差异及执行路径中的符号链接，再恢复下载丢失的执行位并运行前端。Rust 在安装任何工具前校验完整 manifest、全部 profile 的原报告／流、产物和本地 SDK；verify 复用已安装前端。每个消费者直接复用生产者二进制。原生获取 profile、Python 原件校验库及部分测试仍待迁移，外部宿主不运行本仓这项源码构建。
 
-unit 和 owner-verification 也通过同一薄 shell 入口调用 Rust。unit 保留共享 core 验证这一前置，再执行 Verus 准备；owner-verification 保留原来的七项获取、格式、构建及测试操作，其中 Python owner 测试继续显式选择解释器。CI 的 9 项 unit 启动命令与 projects 负责人同步迁移，无证明操作的单元继续直接验证共享 core。安装目标、报告路径及所有者保护沿用原声明。
+unit 通过纯转发入口 `bootstrap-installed.sh` 调用共享安装的 Rust 前端，保留共享 core 验证这一前置，再执行 Verus 准备。此时不能重新安装前端，否则编译路径差异可能改变二进制字节，使后续共享核验拒绝。owner-verification 继续通过源码启动入口，保留原来的七项获取、格式、构建及测试操作，其中 Python owner 测试继续显式选择解释器。CI 的 9 项 unit 启动命令与 projects 负责人同步迁移，无证明操作的单元继续直接验证共享 core。安装目标、报告路径及所有者保护沿用原声明。
 
 **执行入口与宿主政策同时变更：**本批调整上述两项配置、操作负责人、CI 启动参数和 FILEMAP 依赖，复用已有 Rust 执行及 shell 行为测试。原生输入获取另批核验；本批正式 DELTA 检查、实际 CI 和 dev 落地仍须验收，验证及总成本未测。
 

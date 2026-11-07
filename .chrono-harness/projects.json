@@ -4915,7 +4915,7 @@
           "operation": "host.bootstrap-unit",
           "tool": "bash",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
+            ".chrono-harness/ci/bootstrap-installed.sh",
             ".",
             ".chrono-harness/ci/bootstrap-unit.json"
           ]

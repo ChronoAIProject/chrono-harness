@@ -20,7 +20,7 @@
   },
   "entrypoint": {
     "tool": "bash",
-    "script": ".chrono-harness/ci/bootstrap-native.sh"
+    "script": ".chrono-harness/ci/bootstrap-installed.sh"
   },
   "require_tool_bindings": true,
   "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
