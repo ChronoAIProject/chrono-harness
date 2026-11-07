@@ -231,7 +231,10 @@ fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
 fn prepare_cli(h: &Host, event: &str, payload: &Value) -> Value {
     write(&h.root, ".chrono-harness/state/payload.json", &payload);
     let revision = if event == "pull_request" {
-        payload["pull_request"]["merge_commit_sha"].as_str().unwrap().to_owned()
+        payload["pull_request"]["merge_commit_sha"]
+            .as_str()
+            .unwrap()
+            .to_owned()
     } else {
         h.candidate.clone()
     };
@@ -288,7 +291,15 @@ fn native_platform_policy_serves_real_push_and_pr_cli_acquisition() {
         let payload = if event == "push" {
             json!({"before":base,"after":h.candidate,"created":false})
         } else {
-            git(remote.path(), &["fetch", "--no-write-fetch-head", h.root.to_str().unwrap(), &h.candidate]);
+            git(
+                remote.path(),
+                &[
+                    "fetch",
+                    "--no-write-fetch-head",
+                    h.root.to_str().unwrap(),
+                    &h.candidate,
+                ],
+            );
             let merge = tools::pr_workflow_merge(remote.path(), &base, &h.candidate);
             json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate},"merge_commit_sha":merge}})
         };

@@ -35,12 +35,20 @@ pub fn pr_workflow_merge(root: &Path, base: &str, head: &str) -> String {
         .arg("-C")
         .arg(root)
         .args([
-            "-c", "user.name=Fixture",
-            "-c", "user.email=fixture@example.invalid",
-            "-c", "commit.gpgsign=false",
-            "commit-tree", tree.trim(),
-            "-p", base, "-p", head,
-            "-m", "fixed PR workflow merge",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit-tree",
+            tree.trim(),
+            "-p",
+            base,
+            "-p",
+            head,
+            "-m",
+            "fixed PR workflow merge",
         ])
         .output()
         .unwrap();
