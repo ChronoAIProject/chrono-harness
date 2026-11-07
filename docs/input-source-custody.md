@@ -68,7 +68,7 @@ PR163 的三份固定 bootstrap 配置明确使用了 distribution-release.json�
 | 范围 | 负责人和待验收内容 |
 | --- | --- |
 | P1 普通完整输入 | 输入负责人：绑定源码的所选根元数据、features、packages、配置／home 和编译器／SDK／运行时原件；普通按范围 Cargo 回执不能补出这种完整对应 |
-| P2 独立 runner | 输入／bootstrap 负责人：协调所选私有 home、工具链和 runner 政策，再保留已有准备流程 → `guard.check.runner` 消费者的原件 |
+| P2 独立 runner | 额外 guard 提案已按当前必要性合同退役；日常 runner 检查继续使用锁定 Cargo 操作。旧实验原件和失败结论保留给原保管者，不列为待激活入口，也不认定历史验收通过 |
 | P3 本地 diagnostics | diagnostics／输入负责人：匹配本地政策、输入、home、工具链及实际 `build.diagnostics`；真实 CI 的 27 节点元数据／离线构建覆盖只证明其所在范围 |
 | P4 七个完整检查程序绑定 | 完整宿主／bootstrap 负责人：匹配默认配置的安装字节、生产者／消费者原件、两端输入和声明的完整范围；proposed 的空绑定仍未合格 |
 | P5 默认／发布安装 | bootstrap／distribution 负责人：默认 14 工具的安装后使用，以及所选便携／发布替代；产物 `12961832338` 已核验全部 18 个原成员和五个可执行载荷，包括核心工具 1–4，但只用于精确的原生 51 core／detector 供应 |

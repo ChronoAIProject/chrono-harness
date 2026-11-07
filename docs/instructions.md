@@ -35,6 +35,8 @@ CLI 接受 `init --host-root H [--methodology M] [--host-context C] [--locale L]
 
 新宿主 init 采用二进制内嵌默认；已有宿主升级二进制或重复 init，仍保留自己的 catalog、manifest、context 和根块外内容。没有自动升级、合并或更新子系统。
 
+**必要性规则同时更新产品默认与宿主采用：**现有 `goal.deliverable` 的中英文正文加入 SPEC §1.1 的逐跳“为什么”要求，适用于所有受跟踪或受执行对象。它明确当前终点、每跳证据、共享分支、unknown、禁止新增无必要对象，以及已有对象的补证／迁移／退役；需求或使用方变化后重新核对。默认根和本仓根／完整指南都从现有选择消费这条规则，不新增 atom、schema、判官或人工确认关卡。生成只发布方法文字，不能证明 AI 遵守，也不表示机器必要性门或全仓审计已完成。验证复用现有生成与 DELTA 检查；完整成本仍未知。
+
 已有宿主采用新默认时，以所选产品源码版本的 `assets/instructions/catalog.json` 和 `default-manifest.json` 为比较输入。在宿主自己的 catalog 中合入所需规则正文和 `workflow` 布局，再在 manifest 根输出选择 roots／layout。保留自定义 atoms、locale、file 源、其他输出、上下文和块外内容，不整份覆盖 catalog／manifest。已有不解析内容的 file 方法仍由原文件负责方编辑，不用 init 替换。
 
 然后走宿主登记的 `instructions.generate` 入口，核对真实根、AGENTS 字面链接和全部选中 Markdown／skill 使用方；重复生成确认无需写入。本仓使用自己的源和三个输出，产品默认仍只生成根。此路径只更新可读方法，不激活宿主判官，不证明 AI 遵守，也不建立 full／native 验收。
