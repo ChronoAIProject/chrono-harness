@@ -35,7 +35,11 @@ fn startup_names_modes_and_headers_use_exact_boundaries() {
     let zero = policy::startup_mode(0);
     let special = policy::startup_mode(512);
     let maximum = policy::startup_mode(4294967295u32);
-    assert(executable && lowest && highest && !no_execute && !zero && !special && !maximum) by (bit_vector);
+    proof {
+        assert(493u32 & 73u32 != 0 && 1u32 & 73u32 != 0 && 511u32 & 73u32 != 0
+            && 420u32 & 73u32 == 0) by (bit_vector);
+    }
+    assert(executable && lowest && highest && !no_execute && !zero && !special && !maximum);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

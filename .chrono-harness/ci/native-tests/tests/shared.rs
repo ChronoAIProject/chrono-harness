@@ -40,7 +40,12 @@ fn passed(output: Output) {
 }
 
 fn original() -> Fixture {
-    let fixture = Fixture::new();
+    configured(false)
+}
+
+fn configured(build_at_export: bool) -> Fixture {
+    let mut fixture = Fixture::new();
+    fixture.config["participation"]["git"] = json!("/usr/bin/git");
     let path = fixture.root.join(".chrono-harness/ci/registry.json");
     let mut registry: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     let native = bindings::native_platform().unwrap();
@@ -60,21 +65,24 @@ fn original() -> Fixture {
         fixture.root.join(CONFIG),
         serde_json::to_vec(&json!({
             "schema":"chrono-host-startup/v1", "directory":format!("{TRANSFER}/"),
-            "profiles":{"core":{"config":".chrono-harness/ci/build.json","build":false},
+            "profiles":{"core":{"config":".chrono-harness/ci/build.json","build":build_at_export},
                 "extra":{"config":".chrono-harness/ci/extra.json","build":false}},
             "consumers":{"unit":["core"]}
         }))
         .unwrap(),
     )
     .unwrap();
-    let mut build = fixture.committed();
-    build.prerequisites(&mut vec![], &mut vec![]).unwrap();
-    build.select().unwrap();
-    build.operations(&mut vec![], &mut vec![]).unwrap();
-    build
-        .install_tool(&fixture.root.join("out/cargo"), ".chrono-harness/bin/cargo")
-        .unwrap();
-    build.finish(Ok(())).unwrap().outcome.unwrap();
+    let loaded = fixture.commit();
+    if !build_at_export {
+        let mut build = Construction::begin(&fixture.root, loaded, &fixture.environment).unwrap();
+        build.prerequisites(&mut vec![], &mut vec![]).unwrap();
+        build.select().unwrap();
+        build.operations(&mut vec![], &mut vec![]).unwrap();
+        build
+            .install_tool(&fixture.root.join("out/cargo"), ".chrono-harness/bin/cargo")
+            .unwrap();
+        build.finish(Ok(())).unwrap().outcome.unwrap();
+    }
     let loaded = Loaded::read(
         &fixture.root,
         ".chrono-harness/ci/extra.json",
@@ -291,4 +299,128 @@ fn rejects_corrupt_artifact_before_any_installation_write() {
             );
         }
     }
+}
+
+#[test]
+fn produce_builds_only_declared_profiles_and_keeps_originals_on_output_failure() {
+    let fixture = configured(true);
+    assert!(
+        !fixture
+            .root
+            .join(".chrono-harness/state/bootstrap.json")
+            .exists()
+    );
+    let extra = fs::read(
+        fixture
+            .root
+            .join(".chrono-harness/state/bootstrap-extra.json"),
+    )
+    .unwrap();
+    let binding = export(&fixture);
+    assert!(fixture.root.join("prepared").exists());
+    assert!(
+        fixture
+            .root
+            .join(".chrono-harness/state/bootstrap.json")
+            .is_file()
+    );
+    assert_eq!(
+        fs::read(
+            fixture
+                .root
+                .join(".chrono-harness/state/bootstrap-extra.json")
+        )
+        .unwrap(),
+        extra
+    );
+    assert_eq!(binding.len(), 64);
+
+    let fixture = original();
+    let mut environment = fixture.environment.clone();
+    environment.insert("GITHUB_OUTPUT".into(), fixture.root.as_os_str().to_owned());
+    assert!(
+        !cli(&fixture.root, &environment, &["produce"])
+            .status
+            .success()
+    );
+    let manifest = fs::read(fixture.root.join(TRANSFER).join("manifest.json")).unwrap();
+    let binding = chrono_harness::sha256(&manifest);
+    assert_eq!(
+        fs::read(fixture.root.join(format!(
+            ".chrono-harness/state/startup-originals/manifest-{binding}.json"
+        )))
+        .unwrap(),
+        manifest
+    );
+}
+
+#[test]
+fn invalid_registration_and_dirty_source_fail_before_transfer_publication() {
+    let fixture = original();
+    let raw = fs::read(fixture.root.join(CONFIG)).unwrap();
+    let original: Value = serde_json::from_slice(&raw).unwrap();
+    let extra_path = fixture.root.join(".chrono-harness/ci/extra.json");
+    let extra_raw = fs::read(&extra_path).unwrap();
+    for (change, expected) in [
+        ("directory", "overlaps"),
+        ("duplicate-destination", "separate tools"),
+        ("duplicate-report", "separate reports"),
+        ("unknown-profile", "explicit unique"),
+        ("duplicate-profile", "explicit unique"),
+        ("profile-name", "profile name"),
+        ("unknown-field", "unknown field"),
+    ] {
+        let mut config = original.clone();
+        match change {
+            "directory" => config["directory"] = json!(".chrono-harness/state/transfer/"),
+            "duplicate-destination" => {
+                let mut extra: Value = serde_json::from_slice(&extra_raw).unwrap();
+                extra["install"][0]["destination"] = json!(".chrono-harness/bin/cargo");
+                fs::write(&extra_path, serde_json::to_vec(&extra).unwrap()).unwrap();
+            }
+            "duplicate-report" => {
+                config["profiles"]["extra"]["config"] = json!(".chrono-harness/ci/build.json")
+            }
+            "unknown-profile" => config["consumers"]["unit"] = json!(["absent"]),
+            "duplicate-profile" => config["consumers"]["unit"] = json!(["core", "core"]),
+            "profile-name" => {
+                config["profiles"]["bad/name"] = config["profiles"]["core"].clone();
+            }
+            "unknown-field" => config["unknown"] = json!(true),
+            _ => unreachable!(),
+        }
+        fs::write(
+            fixture.root.join(CONFIG),
+            serde_json::to_vec(&config).unwrap(),
+        )
+        .unwrap();
+        let error = chrono_host_bootstrap::shared::Shared::read(
+            &fixture.root,
+            CONFIG,
+            &bindings::native_platform().unwrap(),
+        )
+        .err()
+        .unwrap_or_else(|| panic!("accepted {change}"));
+        assert!(error.contains(expected), "{change}: {error}");
+        assert!(!fixture.root.join(TRANSFER).exists(), "published {change}");
+        fs::write(&extra_path, &extra_raw).unwrap();
+    }
+    fs::write(fixture.root.join(CONFIG), raw).unwrap();
+    fs::write(
+        fixture.root.join(".chrono-harness/ci/entry.sh"),
+        b"dirty source",
+    )
+    .unwrap();
+    let mut environment = fixture.environment.clone();
+    environment.insert(
+        "GITHUB_OUTPUT".into(),
+        fixture
+            .root
+            .join(".chrono-harness/state/output")
+            .into_os_string(),
+    );
+    let output = cli(&fixture.root, &environment, &["produce"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("requires clean source"));
+    assert!(!fixture.root.join(TRANSFER).exists());
 }
