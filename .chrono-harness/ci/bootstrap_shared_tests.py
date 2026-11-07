@@ -233,7 +233,8 @@ class DiagnosticsComposition(unittest.TestCase):
         import bootstrap
         root = SOURCE.parents[1]
         projects = json.loads((root / ".chrono-harness/projects.json").read_bytes())
-        action = bootstrap.registered_operations(projects)["build.host-bootstrap-native"]
+        cls.source_operations = bootstrap.registered_operations(projects)
+        action = cls.source_operations["build.host-bootstrap-native"]
         tools = {row["id"]: row["program"] for row in fixture_host_config(root)["tools"]}
         subprocess.run([tools[action["tool"]], *action["argv"]], cwd=root,
                        pass_fds=fixture.PASS_FDS, check=True)
@@ -245,6 +246,10 @@ class DiagnosticsComposition(unittest.TestCase):
         self.root = self.host.root
         self.native = SOURCE.parent / "cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
         self.host.config["install"].append({"source": "built-second", "destination": ".chrono-harness/bin/second"})
+        self.host.config["install"].append({"source": "built-bootstrap-native", "destination": ".chrono-harness/bin/chrono-host-bootstrap"})
+        shutil.copyfile(self.native, self.root / "built-bootstrap-native")
+        (self.root / "built-bootstrap-native").chmod(0o755)
+        shutil.copyfile(SOURCE / "bootstrap-shared.sh", self.host.ci / "bootstrap-shared.sh")
         self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
         for name in ["built-tool", "built-second"]:
             path = self.root / name
@@ -253,7 +258,7 @@ class DiagnosticsComposition(unittest.TestCase):
         self.shared = {"schema": "chrono-host-startup/v1", "directory": ".chrono-harness/startup/",
                        "profiles": {"core": {"config": ".chrono-harness/ci/bootstrap.json", "build": True}},
                        "consumers": {"unit_fixture": ["core"]},
-                       "installer": {"profile": "core", "destination": ".chrono-harness/bin/tool"}}
+                       "installer": {"profile": "core", "destination": ".chrono-harness/bin/chrono-host-bootstrap"}}
         self.host.write_json(self.root / CONFIG, self.shared)
         (self.root / ".gitignore").write_text("/built-*\n/.chrono-harness/bin/\n/.chrono-harness/state/\n/.chrono-harness/startup/\n/mock-tools/\n")
         (self.root / "product-source").write_text("original")
@@ -299,11 +304,13 @@ class DiagnosticsComposition(unittest.TestCase):
                            RUSTC_WORKSPACE_WRAPPER="", CARGO_NET_OFFLINE="false")
         guard = json.loads((SOURCE / "bootstrap-diagnostics-guard.json").read_bytes())
         observer = json.loads((SOURCE / "bootstrap-diagnostics-inputs.json").read_bytes())
+        fixture_tools = dict(python3=sys.executable, **{name: bindings[name]["path"]
+                                                      for name in ("cargo", "rustc")})
         for name, profile, output in [("bootstrap-diagnostics-guard.json", guard, "guard-domain"),
                                       ("bootstrap-diagnostics-inputs.json", observer, "observer-domain")]:
-            profile.update(projects=self.host.config["projects"], tools=dict(
-                               python3=sys.executable, native=str(self.native), **{name: bindings[name]["path"]
-                                                         for name in ("cargo", "rustc")}),
+            profile.update(projects=self.host.config["projects"], tools={
+                               tool: fixture_tools.get(tool, program)
+                               for tool, program in profile["tools"].items()},
                            tool_bindings=bindings, environment=environment,
                            native_platform={"system": platform.system(), "machine": platform.machine()},
                            install=[{"source": output, "destination": ".chrono-harness/bin/" + output}],
@@ -315,8 +322,7 @@ class DiagnosticsComposition(unittest.TestCase):
         actions = self.host.declarations("write", "built-tool", "binary")
         actions["projects"][0]["id"] = "diagnostics-fixture"
         actions["projects"][0]["actions"].update({
-            "verify": {"operation": "host.bootstrap-shared-verify-core", "tool": "native",
-                       "argv": [".", CONFIG, "verify", "core"]},
+            "verify": self.source_operations["host.bootstrap-shared-verify-core"],
             "guard": {"operation": "build.judge-cargo", "tool": "python3",
                       "argv": [fixture.OPERATION, "environment", "guard-domain", *keys]},
             "observer-bootstrap": {"operation": "host.bootstrap-diagnostics-inputs", "tool": "python3",
