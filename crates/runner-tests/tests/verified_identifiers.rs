@@ -76,7 +76,7 @@ fn digest_lengths_and_allowed_bytes() {
 
 fn reject_digest_byte_at(at: usize, byte: u8)
     requires at < 64,
-        byte < b'0' || (b'9' < byte && byte < b'a') || b'f' < byte,
+        byte < 48 || (57 < byte && byte < 97) || 102 < byte,
 {
     let mut bytes = [48u8; 64];
     bytes[at] = byte;
@@ -103,14 +103,25 @@ fn digest_rejects_bad_bytes_throughout_the_full_input() {
     utf8[0] = 195;
     utf8[1] = 169;
     let unicode = policy::valid_digest(&utf8);
+    assert(utf8@[0] == 195);
+    assert(!policy::oid_byte(utf8@[0]));
     assert(!unicode);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn digest_text_uses_the_complete_utf8_bytes() {
     let text = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    proof {
+        reveal_strlit("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        assert(vstd::string::is_ascii(text));
+        vstd::string::is_ascii_spec_bytes(text);
+    }
     let accepted = policy::valid_digest_text(text);
     assert(accepted);
+    proof {
+        reveal_strlit("");
+        vstd::string::is_ascii_spec_bytes("");
+    }
     let empty = policy::valid_digest_text("");
     assert(!empty);
 }
