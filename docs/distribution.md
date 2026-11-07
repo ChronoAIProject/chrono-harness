@@ -92,21 +92,7 @@ instructions 测试直接调用库及 dispatch；routes 测试调用库并使用
 
 `.github/workflows/chrono-release.yml` 投影为登记的 macOS、Ubuntu 独立单元，并在失败时仍尝试上传原始产物；上传构建 artifacts 不等于已发布。
 
-这个发布工作流由 `chrono-ci` 从宿主显式[发布源](../.chrono-harness/ci/release.json)生成，合同与扩展边界见 [release CI](release-ci.md)；公开 beta.10 包含原 v1 生成合同；现役 v2/v5 的候选仍需原生验证与发布。
-
-[beta.11](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.11) 已从固定源码 `a4af1a0ca7f3a69f7b3298abc5b187a74578b3f9` 公开发布，包含两个平台各 15 个工具、合并清单以及各平台的原始构建报告和打包清单，共 35 个资产。
-
-其[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36566708631)使用 v3 配方／v4 报告，在每个平台通过十个专属测试项目的 391 项测试；核对 31 个实际进程、28 个暂存目的路径及 24 轮身份观察。
-
-已匿名下载核对合并清单及两个平台的 worktree／installer／CI／runner／scoped judge 字节。
-
-合并清单 SHA-256 为 `93c6d9b2a0da66a7bc555a4d475c6f300f6d705d0ee7c634c92c445c0e435330`。
-
-beta.11 新增显式元数据重建与原始 checkout 身份核对，并包含先前发布的 Git 绑定、CI 生成、context 传递、远端清理和发布证据合同，宿主须自行选择采用相应版本配置；测试与摘要核验不证明输入及其依赖的完整性或确定性同判。
-
-已用匿名下载的 macOS arm64 `chrono-ci` 验证发布／full 工作流生成、漂移拒绝与恢复、原始 context 字节及规范 argv；用公开 `chrono-worktree` 清理实际交付分支并确认远端分支已不存在。
-
-这些消费验证不代表生成的 full 工作流已在 GitHub 原生执行；具体范围见 [full CI](full-ci.md) 与 [worktree](worktree.md#remote-branch-retirement)。
+这个发布工作流由 `chrono-ci` 从宿主显式[发布源](../.chrono-harness/ci/release.json)生成，合同与扩展边界见 [release CI](release-ci.md)。发布和实际宿主采用分别验收，旧发布不能证明当前候选已完成原生验证或发布。
 
 ```sh
 chrono-distribution pack --root PRODUCT --plan PRODUCT/.chrono-harness/release/plan.json --output ABSENT_OUTPUT
@@ -128,66 +114,6 @@ chrono-distribution assemble --input MAC_PACKAGE --input LINUX_PACKAGE --output 
 
 原生平台目前登记 `macos-aarch64`、`linux-x86_64`；实际产物以构建结果为准。其它平台需要显式增加构建与运行验证。构建证据、声明的源码身份及摘要不构成完整工具链/SDK 来源认证，也不保证不同平台结果相同。
 
-[beta.16](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.16) 已标记为公开 prerelease，固定源码为 `5428183235e8ccd56574ced6b303d9294e3a42ef`，包含 beta.15 之后的成对报告比较、显式输入绑定与覆盖登记、Cargo v5 工具链清单，以及 Git 声明文件核验。
-
-[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36655069168)在 15 个专属测试项目中通过 macOS arm64 的 588 项测试、Linux x86_64 的 583 项测试；差异是 5 项已有的 macOS 文件系统别名测试。
-
-每个平台原始报告保留 36 个成功进程、30 个暂存目的路径与 34 轮匹配的身份观察，15 个工具资产均与平台清单一致。
-
-共发布 35 个资产；合并清单 SHA-256 为 `fd9a3bda21db5ef1dff298e5a78463c346c69f89330477c08e4743480e6a19b7`。
-
-匿名下载的清单和 macOS 安装器已按公开摘要核对，并在公开 Go 示例的本地 clone 中安装原有 6 个具名工具，实际执行 rates 与 harness 两个单元。
-
-声明的 Git 文件内容或缺失状态变化导致业务操作前失败，恢复后通过；原始历史配置未改写。
-
-启用 Git 记录时测得的报告超出旧 8 MiB 上限，消费配置显式采用 16 MiB，读数与命令见 [Git 输入核验](git-facts.md#public-binary-consumption)。
-
-这次本地消费没有更新示例的远端配置，也不代表生成的 provider-v3 已在原生 CI 启用。
-
-输入及其依赖的完整性、完整宿主启用与本地／CI 完整同判仍未完成。
-
-[beta.17](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.17) 从固定源码 `47a18da29fb3aa92a147f0df8783dc49407175f5` 公开发布，新增 scoped／provider Git facts 的显式平台配置选择。
-
-[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36661720249)在 15 个专属测试项目中通过 macOS arm64 的 596 项测试、Linux x86_64 的 591 项测试；差异仍为 5 项 macOS 文件系统用例。
-
-每个平台核对 36 个成功进程、30 个暂存目的路径、34 轮身份观察及 15 个资产。
-
-共 35 个公开资产的摘要与大小均匹配原始产物；合并清单 SHA-256 为 `34e7286111e2d38e4254c40683310ff915292ff1be0a0ac2193ab9c0dfea5034`。
-
-匿名安装的 macOS beta.17 已在 Go 接入候选上通过规范 DELTA 检查；global 配置变化及已登记缺失的 include 出现均在业务操作前失败。
-
-beta.17 原候选的原生 Linux 单元通过，当次汇总因报告读取上限失败，详见[原生接入边界](native-ci-adoption.md#native-git-policy-adoption)。
-
-发行产物通过验证不等于该宿主已完成接入、输入及其依赖的完整性或同判。
-
-[beta.18](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.18) 已公开发布，固定源码 `b9665d1fa5b465d57ab84d5042712f30b297e882`，源码树与 PR #91 的 dev 落地相同。
-
-它分发 scoped v3 的可配置收集上限及紧凑报告；原始过程字节和候选／配置绑定保留，调大上限不能授权复用旧绑定报告。
-
-[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36666465494)在全部 15 个专属测试项目中通过 macOS arm64 的 601 项、Linux x86_64 的 596 项测试；差异为 5 项已有 macOS 文件系统用例。
-
-每个平台核对 36 个成功进程、30 个暂存目的路径、34 轮身份观察和 15 个工具资产。
-
-35 个公开资产的摘要与大小均匹配原始产物；合并清单 SHA-256 为 `5a59cb11fe857a31bbde87dde46828ecae072527b3cae3ed254b8fdc607ae74c`，6252 字节。
-
-匿名下载清单及两个平台的安装器也匹配。
-
-输入及其依赖的完整性、完整宿主治理及跨平台同判仍未认证。
-
-[beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19) 已公开发布，固定源码 `f8f28119096e9b50b2456024b473b252ea5f7cdd`、源码树 `0c51ad5c88c04a3e78be5f4edb1ed4b4f3c63e13`，与 PR #96 的 dev 落地相同。
-
-它分发显式生成目录的 Git 清单排除，覆盖 full／initial／scoped、registration、projects 和迁移消费者，并与 worktree 共用字面排除规则。
-
-[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36674223982)在全部 15 个专属测试项目中通过 macOS arm64 的 606 项、Linux x86_64 的 601 项测试；差异仍为 5 项已有 macOS 文件系统用例。
-
-每个平台核对 36 个成功进程、30 个暂存目的路径、34 轮身份观察与 15 个工具资产。
-
-发布后核对全部 35 个资产的摘要与大小，并核对标签实际指向上述源提交；匿名下载的清单和两平台安装器也匹配原始产物。
-
-合并清单 SHA-256 为 `857caddfba0ebfe0ec5780c7a31217b30ef0c65bff1b2b6152c8587bf439c731`，6252 字节。
-
-输入及其依赖的完整性、完整宿主治理和确定性同判仍未认证。
-
 ## 一键安装
 
 产品与宿主登记同步变更：Python 启动模板及其路径登记迁移为 Shell，安装规则仍归 Rust；组合发布命令新增显式安装源。保留原安装测试，增加真实 Shell/安装器和 HTTPS 命令边界验证；验证、下载及维护的总成本尚未测量。
@@ -202,7 +128,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 
 运行需要 POSIX `sh`、`uname`、`mktemp`、`cp`、`chmod`、`rm`、`wc`、`sha256sum` 或 `shasum -a 256`，HTTPS 源另需登记的 curl；无需 Python、Rust/Cargo、sudo 或修改全局配置。脚本来自所选固定版本，是首次信任入口；内嵌摘要固定字节，不单独认证发布者身份。临时下载在退出时清理，失败诊断留在原 stderr。
 
-beta.29 的全部 34 个公开资产已匿名核对摘要和大小。macOS arm64 已在仅提供所需系统工具的 PATH 中用上述命令安装全部 16 个工具，并验证同配置复用、配置变更拒绝、显式替换、生成的宿主入口和已安装的指南生成器。Linux x86_64 已通过原生构建和登记验证；公开安装的实际执行平台为 macOS。
+公开安装已有 macOS arm64 实际消费，Linux x86_64 的原生构建和登记验证不能代替公开安装验收。具体资产、摘要、构建结果及安装观察直接查所选发布、原 PR 和线上 CI，不在本文维护副本。
 
 ## 宿主采用
 
@@ -259,9 +185,3 @@ Cargo 只执行 Rust 产品的专属测试。
 外部测试工具独立放在登记的 `release/fixtures/` 文件。
 
 发布配方专属消费者测试通过实际 Python 入口验证显式操作顺序、含空格路径与不同 cwd、参数原样传递、未知／重复／歧义登记在构建前失败、失败阻止打包及保留原始非 UTF-8 输出。这些测试材料验证配方是否正确调用已有操作；真实 Rust 测试与平台行为另由原生发布作业验证。
-
-beta.11 的匿名公开安装入口在已升级混合宿主的真实 clone 和含空格／Unicode 的子工作树中运行，核对所选工具的公开摘要。
-
-原始 checkout 消费拒绝 Git `core.filemode=false` 隐藏的执行位变化；重建消费保留暂存／未暂存、二进制、可执行文件、字面 symlink 与旧 metadata，并通过登记 cleanup 清理已保存工作。
-
-该次消费平台为 macOS arm64；不外推其它恢复状态或原生 full 工作流派发。
