@@ -1976,12 +1976,13 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         &lane.join(".chrono-harness/state/inputs"),
         &delivery_root.path().join(".chrono-harness/state/inputs"),
     );
-    for path in [
-        ".chrono-harness/state/inputs.json",
-        ".chrono-harness/state/integration.json",
-    ] {
-        fs::copy(lane.join(path), delivery_root.path().join(path)).unwrap();
-    }
+    fs::copy(
+        lane.join(".chrono-harness/state/integration.json"),
+        delivery_root
+            .path()
+            .join(".chrono-harness/state/integration.json"),
+    )
+    .unwrap();
     fs::remove_dir_all(lane.join(".chrono-harness/state/collection")).unwrap();
     fs::write(tools.path().join("cargo-fixture"), &sdk_original).unwrap();
     fs::set_permissions(
