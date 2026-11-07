@@ -7316,7 +7316,7 @@
         "source": {
           "schema": "chrono-runtime-state/v1",
           "manifest": ".chrono-harness/state/diagnostics-native/observation.json",
-          "pointer": "directories.developer.manifest"
+          "pointer": "/directories/developer/manifest"
         }
       },
       {
@@ -7360,7 +7360,7 @@
         "source": {
           "schema": "chrono-runtime-state/v1",
           "manifest": ".chrono-harness/state/diagnostics-native/observation.json",
-          "pointer": "directories.sdk.manifest"
+          "pointer": "/directories/sdk/manifest"
         }
       }
     ]

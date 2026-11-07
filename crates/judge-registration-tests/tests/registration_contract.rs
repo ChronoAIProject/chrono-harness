@@ -85,7 +85,7 @@ fn runtime_state_inputs_consume_observation_manifests_and_reject_drift() {
             "source": {
                 "schema": "chrono-runtime-state/v1",
                 "manifest": observation,
-                "pointer": format!("directories.{key}.manifest")
+                "pointer": format!("/directories/{key}/manifest")
             }
         }));
     }
@@ -101,7 +101,7 @@ fn runtime_state_inputs_consume_observation_manifests_and_reject_drift() {
     .unwrap();
     for input in &inputs {
         let source = runtime_state_source(input).unwrap().unwrap();
-        assert!(source.pointer.starts_with("directories."));
+        assert!(source.pointer.starts_with("/directories/"));
         let (digest, length) = runtime_state_identity(&root, input).unwrap();
         assert_eq!(digest.len(), 64);
         assert_eq!(
