@@ -74,10 +74,13 @@ impl Request {
         Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
-        if self.protocol != PROTOCOL
-            || self.mode != "inventory"
-            || self.judge_id.is_empty()
-            || self.request_id != self.identity()?
+        if !crate::verified_identifiers::valid_request_header(
+            &self.protocol,
+            &self.mode,
+            &self.judge_id,
+            PROTOCOL,
+            "inventory",
+        ) || self.request_id != self.identity()?
         {
             return Err("E_PROTOCOL: initial request identity/mode".into());
         }

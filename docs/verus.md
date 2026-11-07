@@ -13,6 +13,15 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 每个字节都属于 ASCII 字母、数字或 `._-`。循环证明返回值与各自规格充要相等，包含边界和终止。
 `facts::full_oid` 与 `units::id` 直接消费这些结果。
 
+普通请求和初始库存请求的头部判断也直接使用同一根的 `valid_request_header`。
+返回真当且仅当协议和模式分别与调用方给出的精确值相等，且 judge ID 非空。
+普通请求绑定 `chrono-judge/v1`／`evaluate`，初始请求绑定
+`chrono-initial-judge/v1`／`inventory`；不额外限制 judge ID 的字符。
+独立根核两个有效组合、交叉协议／模式、空名称、大小写、版本后缀、NUL、换行，
+并证明任意非空名称均接受，包括 Unicode。复用 runner 现有两项标识符整 crate 证明，
+没有新增验证进程。请求封存、JSON／摘要和外层组合仍待证明。
+比较最多读取协议和模式的完整字节，名称只查空值；构建、验证和完整运行成本未测。
+
 `crates/runner/src/verified_paths.rs` 是 `relative_path` 的实际判断实现。
 它精确描述当前 POSIX 词法路径合同：拒绝空、绝对路径、开头的当前目录、任意完整父目录分量，
 以及 NUL、换行、回车和反斜杠；保留原本允许的内部 `.`、重复分隔符和末尾分隔符。
@@ -125,6 +134,11 @@ Rust 测试另外验证真实消费者，不替代证明。
 当前归档只适用于 macOS arm64。
 
 ## 此批使用的外部接口
+
+请求头判断明确采用固定 vstd 的 `str::is_empty`：返回真当且仅当字符序列长度为零。
+实际字段借用使用固定 vstd 的 `String::as_str` 合同；协议和模式比较复用已证明的
+`equal_text`／`equal_bytes`，其 UTF-8 转换采用 `str::as_bytes` 的完整字节合同、
+切片长度／索引合同和固定 vstd 的 UTF-8 编解码引理。没有新增仓内受信实现。
 
 明确采用固定 Verus／vstd 对 `Vec`、`String`／`str`、UTF-8、`Option` 与标准 trait 的规格；
 这些是外部库合同，不是本仓自写的受信实现。没有新增 `external_body`、`assume` 或证明过滤。
