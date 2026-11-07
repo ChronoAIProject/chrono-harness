@@ -18,7 +18,7 @@ broadcast use vstd::string::group_string_axioms;
 
 fn edge(from: &str, kind: policy::EdgeKind, to: &str) -> (out: policy::Edge)
     ensures out.from_bytes() == from.spec_bytes(), out.kind == kind,
-        out.to_bytes() == to.spec_bytes(),
+        out.to_bytes() == to.spec_bytes(), out.from@ == from@, out.to@ == to@,
 {
     policy::Edge { from: from.to_owned(), kind, to: to.to_owned() }
 }
@@ -1757,13 +1757,18 @@ fn sparse_predecessors_keep_exact_reached_nodes_and_typed_search_slots() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn empty_outgoing_preserves_all_existing_causes_and_absence() {
+    broadcast use vstd::std_specs::btree::group_btree_axioms;
+    proof { reveal(policy::cause_keys); }
     let kept = edge("input", policy::EdgeKind::Compile, "project");
     let absent = edge("input", policy::EdgeKind::RuntimeInput, "project");
     let mut rows = std::collections::BTreeMap::new();
-    let names = vec!["old".to_string(), "older".to_string()];
+    let names = vec!["old".to_owned(), "older".to_owned()];
+    assert(policy::cause_keys(names@) =~= seq!["old".spec_bytes(), "older".spec_bytes()]);
     let causes = policy::CauseSet::from_names(&names);
     proof { policy::edge_obeys_cmp(); }
     rows.insert(kept.clone(), causes);
+    assert(rows@.contains_key(kept));
+    assert(policy::edge_causes(rows@, kept) =~= set!["old".spec_bytes(), "older".spec_bytes()]);
     let ghost before = rows@;
     policy::merge_traversed_causes(&mut rows, &[], "new");
     assert(rows@.dom() =~= set![kept]);
@@ -1774,18 +1779,37 @@ fn empty_outgoing_preserves_all_existing_causes_and_absence() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn outgoing_duplicates_merge_ids_without_changing_unrelated_edges() {
+    broadcast use vstd::std_specs::btree::group_btree_axioms;
+    proof {
+        reveal(policy::cause_keys);
+        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("x");
+        reveal_strlit("y"); reveal_strlit("z");
+    }
     let shared = edge("a", policy::EdgeKind::Compile, "b");
     let added = edge("b", policy::EdgeKind::TestExecution, "test");
     let untouched = edge("x", policy::EdgeKind::RuntimeInput, "y");
     let absent = edge("y", policy::EdgeKind::Compile, "z");
+    assert(shared != added && shared != untouched && added != untouched);
+    assert(absent != shared && absent != added && absent != untouched);
     let mut rows = std::collections::BTreeMap::new();
-    let names = vec!["old".to_string()];
+    let names = vec!["old".to_owned()];
+    assert(policy::cause_keys(names@) =~= seq!["old".spec_bytes()]);
+    assert(policy::cause_keys(names@).to_set() =~= set!["old".spec_bytes()]);
     let old_causes = policy::CauseSet::from_names(&names);
+    assert(old_causes.keys().to_set() =~= set!["old".spec_bytes()]);
+    let shared_causes = old_causes.clone();
+    assert(shared_causes.keys() == old_causes.keys());
+    assert(shared_causes.keys().to_set() =~= set!["old".spec_bytes()]);
     proof { policy::edge_obeys_cmp(); }
-    rows.insert(shared.clone(), old_causes.clone());
+    rows.insert(shared.clone(), shared_causes);
     rows.insert(untouched.clone(), old_causes);
+    assert(rows@.dom() =~= set![shared, untouched]);
+    assert(policy::edge_causes(rows@, shared) =~= set!["old".spec_bytes()]);
+    assert(policy::edge_causes(rows@, untouched) =~= set!["old".spec_bytes()]);
     let ghost kept = rows@[untouched].view();
     let outgoing = vec![&shared, &shared, &added, &shared];
+    assert(outgoing@.map_values(|e: &policy::Edge| *e) =~= seq![shared, shared, added, shared]);
+    assert(policy::outgoing_members(outgoing@) =~= set![shared, added]);
     policy::merge_traversed_causes(&mut rows, &outgoing, "seed");
     assert(rows@.dom() =~= set![shared, added, untouched]);
     assert(policy::edge_causes(rows@, shared) =~= set!["old".spec_bytes(), "seed".spec_bytes()]);
@@ -1795,7 +1819,12 @@ fn outgoing_duplicates_merge_ids_without_changing_unrelated_edges() {
     policy::merge_traversed_causes(&mut rows, &outgoing, "seed");
     assert(policy::edge_causes(rows@, shared) =~= set!["old".spec_bytes(), "seed".spec_bytes()]);
     assert(policy::edge_causes(rows@, added) =~= set!["seed".spec_bytes()]);
-    policy::merge_traversed_causes(&mut rows, &vec![&added], "second");
+    let subset = vec![&added];
+    assert(subset@.map_values(|e: &policy::Edge| *e) =~= seq![added]);
+    assert(policy::outgoing_members(subset@) =~= set![added]);
+    let ghost before_second = rows@;
+    policy::merge_traversed_causes(&mut rows, &subset, "second");
+    assert(policy::edge_causes(rows@, added) == policy::edge_causes(before_second, added).insert("second".spec_bytes()));
     assert(policy::edge_causes(rows@, shared) =~= set!["old".spec_bytes(), "seed".spec_bytes()]);
     assert(policy::edge_causes(rows@, added) =~= set!["seed".spec_bytes(), "second".spec_bytes()]);
     assert(rows@[untouched].view() == kept);
@@ -1803,6 +1832,7 @@ fn outgoing_duplicates_merge_ids_without_changing_unrelated_edges() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn every_typed_edge_keeps_its_own_cause_state() {
+    broadcast use vstd::std_specs::btree::group_btree_axioms;
     use policy::EdgeKind::*;
     let compile = edge("same", Compile, "same");
     let build = edge("same", BuildInput, "same");
@@ -1811,6 +1841,8 @@ fn every_typed_edge_keeps_its_own_cause_state() {
     let judge = edge("same", JudgeTrigger, "same");
     let mut rows = std::collections::BTreeMap::new();
     let outgoing = vec![&compile, &build, &runtime, &test, &judge];
+    assert(outgoing@.map_values(|e: &policy::Edge| *e) =~= seq![compile, build, runtime, test, judge]);
+    assert(policy::outgoing_members(outgoing@) =~= set![compile, build, runtime, test, judge]);
     policy::merge_traversed_causes(&mut rows, &outgoing, "all");
     assert(rows@.dom() =~= set![compile, build, runtime, test, judge]);
     assert(policy::edge_causes(rows@, compile) =~= set!["all".spec_bytes()]);
@@ -1818,7 +1850,9 @@ fn every_typed_edge_keeps_its_own_cause_state() {
     assert(policy::edge_causes(rows@, runtime) =~= set!["all".spec_bytes()]);
     assert(policy::edge_causes(rows@, test) =~= set!["all".spec_bytes()]);
     assert(policy::edge_causes(rows@, judge) =~= set!["all".spec_bytes()]);
-    policy::merge_traversed_causes(&mut rows, &vec![&build, &runtime, &build], "subset");
+    let subset = vec![&build, &runtime, &build];
+    assert(subset@.map_values(|e: &policy::Edge| *e) =~= seq![build, runtime, build]);
+    policy::merge_traversed_causes(&mut rows, &subset, "subset");
     assert(policy::edge_causes(rows@, compile) =~= set!["all".spec_bytes()]);
     assert(policy::edge_causes(rows@, build) =~= set!["all".spec_bytes(), "subset".spec_bytes()]);
     assert(policy::edge_causes(rows@, runtime) =~= set!["all".spec_bytes(), "subset".spec_bytes()]);
@@ -1828,17 +1862,30 @@ fn every_typed_edge_keeps_its_own_cause_state() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn edge_and_cause_keys_preserve_unicode_nul_case_and_prefixes() {
+    broadcast use vstd::std_specs::btree::group_btree_axioms;
+    proof {
+        reveal_strlit("é\0"); reveal_strlit("e\u{301}\0");
+        reveal_strlit("é"); reveal_strlit("É\0");
+        reveal_strlit("target"); reveal_strlit("target\0");
+    }
     use policy::EdgeKind::Compile;
     let exact = edge("é\0", Compile, "target");
     let normalized = edge("e\u{301}\0", Compile, "target");
     let shorter = edge("é", Compile, "target");
     let upper = edge("É\0", Compile, "target");
     let other_target = edge("é\0", Compile, "target\0");
+    assert(exact != normalized && exact != shorter && exact != upper && exact != other_target);
     let mut rows = std::collections::BTreeMap::new();
     let outgoing = vec![&exact, &normalized, &shorter, &upper, &other_target];
+    assert(outgoing@.map_values(|e: &policy::Edge| *e) =~= seq![exact, normalized, shorter, upper, other_target]);
+    assert(policy::outgoing_members(outgoing@) =~= set![exact, normalized, shorter, upper, other_target]);
     policy::merge_traversed_causes(&mut rows, &outgoing, "");
-    policy::merge_traversed_causes(&mut rows, &vec![&exact], "起点\0");
-    policy::merge_traversed_causes(&mut rows, &vec![&exact], "起点");
+    let subset = vec![&exact];
+    assert(subset@.map_values(|e: &policy::Edge| *e) =~= seq![exact]);
+    assert(policy::outgoing_members(subset@) =~= set![exact]);
+    policy::merge_traversed_causes(&mut rows, &subset, "起点\0");
+    assert(policy::edge_causes(rows@, exact) =~= set!["".spec_bytes(), "起点\0".spec_bytes()]);
+    policy::merge_traversed_causes(&mut rows, &subset, "起点");
     assert(rows@.dom() =~= set![exact, normalized, shorter, upper, other_target]);
     assert(policy::edge_causes(rows@, exact)
         =~= set!["".spec_bytes(), "起点\0".spec_bytes(), "起点".spec_bytes()]);

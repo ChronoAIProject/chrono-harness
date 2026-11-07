@@ -3297,11 +3297,20 @@ pub fn merge_traversed_causes(
                 == edge_causes(before, key) + if outgoing_members(outgoing@.take(at as int + 1)).contains(key) {
                     Set::empty().insert(cause.spec_bytes())
                 } else { Set::empty() } by {
+                assert(edge_causes(previous, key) == edge_causes(before, key)
+                    + if outgoing_members(prefix).contains(key) {
+                        Set::empty().insert(cause.spec_bytes())
+                    } else { Set::empty() });
+                assert(outgoing_members(outgoing@.take(at as int + 1)).contains(key)
+                    == (outgoing_members(prefix).contains(key) || key == *edge));
                 if key == *edge {
                     assert(edge_causes(rows@, key) == edge_causes(previous, key).insert(cause.spec_bytes()));
+                    assert(edge_causes(previous, key).insert(cause.spec_bytes())
+                        =~= edge_causes(before, key) + Set::empty().insert(cause.spec_bytes()));
                 } else {
                     assert(rows@.contains_key(key) == previous.contains_key(key));
                     assert(previous.contains_key(key) ==> rows@[key] == previous[key]);
+                    assert(edge_causes(rows@, key) == edge_causes(previous, key));
                 }
             }
         }
