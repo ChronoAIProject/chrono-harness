@@ -134,7 +134,10 @@ proof fn known_levels(rows: Seq<policy::Finding>, levels: Seq<Seq<char>>)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn protocol_findings_cover_the_complete_presence_truth_table() {
-    proof { reveal_strlit("info"); reveal_strlit("warning"); reveal_strlit("error"); }
+    proof {
+        reveal_strlit("info"); reveal_strlit("warning"); reveal_strlit("error");
+        assert("info"@.len() == 4 && "warning"@.len() == 7 && "error"@.len() == 5);
+    }
     let empty: Vec<policy::Finding> = Vec::new();
     expected_statuses(&empty, true, false, false, false);
     let only_info = vec![finding("info"), finding("info")];
@@ -164,6 +167,10 @@ fn protocol_level_matching_uses_the_entire_real_field() {
     proof {
         reveal_strlit("info"); reveal_strlit("warning"); reveal_strlit("error");
         reveal_strlit("ERROR"); reveal_strlit("warning\0"); reveal_strlit("警告"); reveal_strlit("");
+        assert("info"@.len() == 4 && "warning"@.len() == 7 && "error"@.len() == 5);
+        assert("ERROR"@.len() == 5 && "warning\0"@.len() == 8
+            && "警告"@.len() == 2 && ""@.len() == 0);
+        assert("ERROR"@[0] != "error"@[0]);
     }
     let irrelevant = vec![finding("ERROR"), finding("warning\0"), finding("警告"), finding("")];
     proof { known_levels(irrelevant@, seq!["ERROR"@, "warning\0"@, "警告"@, ""@]); }
