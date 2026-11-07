@@ -127,7 +127,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 父工作流用原生 concurrency 替换同一 PR 的旧运行。组名绑定工作流路径、事件、PR 号；非 PR 事件用唯一 run ID，所以 push 的各次完整 before／after 不会因取消排队而丢失。父工作流内各单元独立调度。
 
-本宿主通过指向 dev 的 PR 检查开发分支，通过 dev push 检查落地变更。integration 由其 PR 验证，不再为每次分支 push 重跑同一套。各宿主继续拥有明确触发分支。
+本宿主检查 dev、integration/** 的 push，以及目标为 dev、integration/** 的 PR。integration push 按明确的 `push_baselines` 与一次观察后固定的 dev 顶端比较，dev push 用完整 before／after，PR 用事件 base／head。同一候选可以同时产生 push 与 PR 运行；两者保留各自固定端点和原始结果。各宿主继续拥有明确触发分支。
 
 最小生成结果是 `collection.workflow_path` 的单个父工作流。分支保护只要求汇总 job，即 `collection.name`，本仓当前为 **chrono / collection**；生成器不改分支保护。
 

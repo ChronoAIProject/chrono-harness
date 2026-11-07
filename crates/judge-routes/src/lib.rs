@@ -52,9 +52,10 @@ impl Execution {
         for op in &self.operations {
             if !op.predecessors.is_subset(&preceding)
                 || !preceding.insert(op.method.operation.clone())
-                || op.timeout_seconds == 0
-                || op.output_limit_bytes == 0
-                || op.output_limit_bytes > 64 * 1024 * 1024
+                || !chrono_harness::verified_limits::valid_execution_bounds(
+                    op.timeout_seconds,
+                    op.output_limit_bytes,
+                )
             {
                 return Err(
                     "E_EXECUTION_PLAN: duplicate, unordered prerequisite or invalid bound".into(),
