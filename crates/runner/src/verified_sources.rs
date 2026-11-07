@@ -800,6 +800,32 @@ pub fn contains_source_path(sources: &Vec<SourceBinding>, path: &[u8], limit: us
     false
 }
 
+pub open spec fn source_aliases_consistent(sources: Seq<SourceBinding>, index: int) -> bool {
+    forall|j: int| 0 <= j < index && (#[trigger] sources[j]).path@ == sources[index].path@
+        ==> sources[j].sha256@ == sources[index].sha256@
+            && sources[j].length == sources[index].length
+}
+
+pub fn consistent_source_aliases(sources: &Vec<SourceBinding>, index: usize) -> (consistent: bool)
+    requires index < sources.len(),
+    ensures consistent <==> source_aliases_consistent(sources@, index as int),
+{
+    let mut j = 0;
+    while j < index
+        invariant 0 <= j <= index < sources.len(),
+            forall|k: int| 0 <= k < j && (#[trigger] sources[k]).path@ == sources[index as int].path@
+                ==> sources[k].sha256@ == sources[index as int].sha256@
+                    && sources[k].length == sources[index as int].length,
+        decreases index - j,
+    {
+        if equal_bytes(sources[j].path.as_slice(), sources[index].path.as_slice())
+            && (!equal_bytes(sources[j].sha256.as_slice(), sources[index].sha256.as_slice())
+                || sources[j].length != sources[index].length) { return false; }
+        j += 1;
+    }
+    true
+}
+
 pub open spec fn source_metadata_admitted(
     sources: Seq<SourceBinding>, candidate: Seq<SourceBinding>, root: Seq<u8>,
 ) -> bool {
@@ -807,11 +833,11 @@ pub open spec fn source_metadata_admitted(
         && (forall|i: int| 0 <= i < sources.len() ==>
             source_pair_matches(#[trigger] &sources[i], &candidate[i]))
         && (forall|i: int| 0 <= i < candidate.len() ==>
-            !listed_source_path(candidate, (#[trigger] candidate[i]).path@, i))
+            #[trigger] source_aliases_consistent(candidate, i))
         && listed_source_path(candidate, root, candidate.len() as int)
 }
 
-/// 每个编译器路径必须对应一个不同的候选条目，摘要与字节长度也须相同；
+/// 每个原编译器路径逐项对应候选条目，同一规范路径的别名须有相同摘要和长度；
 /// 完整根路径必须出现。调用方须从固定登记／Git 取得预期条目。
 pub fn admit_source_metadata(
     sources: &Vec<SourceBinding>, candidate: &Vec<SourceBinding>, root: &[u8],
@@ -825,11 +851,11 @@ pub fn admit_source_metadata(
             forall|j: int| 0 <= j < i ==>
                 source_pair_matches(#[trigger] &sources[j], &candidate[j]),
             forall|j: int| 0 <= j < i ==>
-                !listed_source_path(candidate@, (#[trigger] candidate[j]).path@, j),
+                #[trigger] source_aliases_consistent(candidate@, j),
         decreases sources.len() - i,
     {
         if !matches_source_pair(&sources[i], &candidate[i]) { return false; }
-        if contains_source_path(candidate, candidate[i].path.as_slice(), i) { return false; }
+        if !consistent_source_aliases(candidate, i) { return false; }
         i += 1;
     }
     contains_source_path(candidate, root, candidate.len())
