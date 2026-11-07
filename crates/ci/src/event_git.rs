@@ -92,6 +92,25 @@ impl<'a> EventGit<'a> {
     pub(crate) fn parents(&self, candidate: &str) -> Result<Vec<String>, String> {
         self.reader.parents(self.root, candidate)
     }
+    pub(crate) fn pull_request_baseline(
+        &self,
+        workflow_revision: &str,
+        head: &str,
+    ) -> Result<String, String> {
+        self.require_commit(workflow_revision)?;
+        let parents = self.parents(workflow_revision)?;
+        let base = parents.first().map(String::as_str).unwrap_or("");
+        let second = parents.get(1).map(String::as_str).unwrap_or("");
+        if !chrono_harness::verified_identifiers::valid_merge_parents(
+            parents.len(),
+            base.as_bytes(),
+            second.as_bytes(),
+            head.as_bytes(),
+        ) {
+            return Err("pull-request workflow revision must have exactly two parents and the event head as second parent".into());
+        }
+        Ok(parents[0].clone())
+    }
     pub(crate) fn record(&self, context: &mut Value) {
         context["git_facts"] = self.reader.observation();
     }

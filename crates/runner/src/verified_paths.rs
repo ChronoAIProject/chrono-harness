@@ -66,4 +66,40 @@ pub fn valid_relative_path(path: &[u8]) -> (valid: bool)
     true
 }
 
+#[verifier::inline]
+pub open spec fn host_state_prefix() -> Seq<u8> {
+    seq![46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47]
+}
+
+/// state 根之后须有非空字节后缀；不增加规范拼写或文件系统身份约束。
+#[verifier::inline]
+pub open spec fn host_state_path(path: Seq<u8>) -> bool {
+    relative_path(path) && path.len() > 22
+        && (forall|i: int| 0 <= i < 22 ==> #[trigger] path[i] == host_state_prefix()[i])
+}
+
+pub fn valid_host_state_path(path: &[u8]) -> (valid: bool)
+    ensures valid == host_state_path(path@),
+{
+    if path.len() <= 22 {
+        return false;
+    }
+    let prefix = [46u8, 99, 104, 114, 111, 110, 111, 45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47];
+    let mut i = 0;
+    while i < 22
+        invariant
+            0 <= i <= 22,
+            path.len() > 22,
+            prefix@ == host_state_prefix(),
+            forall|j: int| 0 <= j < i ==> #[trigger] path[j] == host_state_prefix()[j],
+        decreases 22 - i,
+    {
+        if path[i] != prefix[i] {
+            return false;
+        }
+        i += 1;
+    }
+    valid_relative_path(path)
+}
+
 }

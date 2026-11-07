@@ -65,6 +65,17 @@ fn choice(v: &Value, choices: &[&str]) -> Result {
 pub(crate) fn path(v: &Value) -> Result {
     let p = string(v)?;
     relative_path(p)?;
+    canonical_path(p)
+}
+pub(crate) fn state_path(v: &Value, context: &str) -> Result {
+    let p = string(v)?;
+    if !chrono_harness::verified_paths::valid_host_state_path(p.as_bytes()) {
+        relative_path(p)?;
+        return Err(context.into());
+    }
+    canonical_path(p)
+}
+fn canonical_path(p: &str) -> Result {
     if p.split('/').any(|c| c.is_empty() || c == ".") {
         return Err(format!("noncanonical path {p}"));
     }
@@ -354,13 +365,10 @@ fn validate_execution_units(v: &Value) -> Result {
         ],
         &[],
     )?;
-    path(&fields["report_path"])?;
-    if !fields["report_path"]
-        .as_str()
-        .is_some_and(|p| p.starts_with(".chrono-harness/state/"))
-    {
-        return Err("execution_units.report_path must reside in .chrono-harness/state/".into());
-    }
+    state_path(
+        &fields["report_path"],
+        "execution_units.report_path must reside in .chrono-harness/state/",
+    )?;
     if fields["report_path"] == ".chrono-harness/state/report.json" {
         return Err("execution_units.report_path collides with canonical full report".into());
     }
@@ -378,13 +386,10 @@ fn validate_execution_units(v: &Value) -> Result {
         }
         object(unit, &["tests", "report_path"], &[])?;
         nonempty_strings(&unit["tests"])?;
-        path(&unit["report_path"])?;
-        if !unit["report_path"]
-            .as_str()
-            .is_some_and(|p| p.starts_with(".chrono-harness/state/"))
-        {
-            return Err("execution unit report must reside in .chrono-harness/state/".into());
-        }
+        state_path(
+            &unit["report_path"],
+            "execution unit report must reside in .chrono-harness/state/",
+        )?;
         if unit["report_path"] == fields["report_path"] {
             return Err(format!(
                 "execution unit report collides with full report: {id}"

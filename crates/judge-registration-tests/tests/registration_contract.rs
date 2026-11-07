@@ -12,6 +12,56 @@ mod consumption;
 mod support;
 
 #[test]
+fn retained_state_paths_require_nonempty_suffix_and_keep_lexical_spelling() {
+    use chrono_judge_registration::inputs::retained_shape;
+    for (path, accepted) in [
+        (".chrono-harness/state/blob", true),
+        (".chrono-harness/state/中文", true),
+        (".chrono-harness/state/a/./blob", true),
+        (".chrono-harness/state//blob/", true),
+        (".chrono-harness/state/", false),
+        (".chrono-harness/state", false),
+        (".chrono-harness/states/blob", false),
+        (".chrono-harness/state/../blob", false),
+        (".chrono-harness/state/blob\0", false),
+    ] {
+        let reference = json!({"blob": path, "sha256": sha256(b""), "length": 0});
+        let result = retained_shape(&reference);
+        assert_eq!(result.is_ok(), accepted, "{path:?}");
+        if let Err(error) = result {
+            assert!(error.starts_with("E_INPUT_BLOB:"), "{error}");
+        }
+    }
+}
+
+#[test]
+fn runtime_state_paths_preserve_canonical_spelling_for_both_references() {
+    for field in ["location", "manifest"] {
+        for (path, accepted) in [
+            (".chrono-harness/state/inventory.json", true),
+            (".chrono-harness/state/中文.json", true),
+            (".chrono-harness/state/", false),
+            (".chrono-harness/states/inventory.json", false),
+            (".chrono-harness/state/a/./inventory.json", false),
+            (".chrono-harness/state//inventory.json", false),
+            (".chrono-harness/state/a/", false),
+            (".chrono-harness/state/../inventory.json", false),
+        ] {
+            let mut input = json!({"location": ".chrono-harness/state/inventory.json",
+                "presence": "present", "source": {"schema": "chrono-runtime-state/v1",
+                "manifest": ".chrono-harness/state/observation.json", "pointer": "/inventory"}});
+            if field == "location" {
+                input["location"] = json!(path);
+            } else {
+                input["source"]["manifest"] = json!(path);
+            }
+            let result = chrono_judge_registration::inputs::runtime_state_source(&input);
+            assert_eq!(result.is_ok(), accepted, "{field}: {path:?}: {result:?}");
+        }
+    }
+}
+
+#[test]
 fn runtime_state_input_rejects_locations_outside_host_state() {
     for location in [
         ".chrono-harness/inputs/tracked-inventory.json",
@@ -47,13 +97,13 @@ fn runtime_state_inputs_consume_observation_manifests_and_reject_drift() {
 
     let host = TempDir::new().unwrap();
     let root = host.path().canonicalize().unwrap();
-    let observation = ".chrono-harness/state/diagnostics-native/observation.json";
+    let observation = ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json";
     fs::create_dir_all(root.join(observation).parent().unwrap()).unwrap();
     let entries = [
         (
             "rust",
             "toolchain.rust.inventory",
-            ".chrono-harness/state/diagnostics-native/guard-inputs/rust.json",
+            ".chrono-harness/state/units/diagnostics/runtime-inputs/rust.json",
         ),
         (
             "developer",

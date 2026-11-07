@@ -21,6 +21,34 @@ fn config() -> Value {
         }]
     })
 }
+
+#[test]
+fn release_render_consumes_literal_argument_policy() {
+    for value in ["", "普通文本", "$", "${", "$HOME `literal`", "${x{", "{{"] {
+        let mut c = config();
+        c["jobs"][0]["command"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(value));
+        assert!(
+            release::render(&serde_json::from_value(c).unwrap()).is_ok(),
+            "{value:?}"
+        );
+    }
+    for value in ["\0", "\n", "\r", "${{", "x${{y", "${${{"] {
+        let mut c = config();
+        c["jobs"][0]["command"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(value));
+        assert_eq!(
+            release::render(&serde_json::from_value(c).unwrap()).unwrap_err(),
+            "release settings must be literal single-line values",
+            "{value:?}"
+        );
+    }
+}
+
 fn write(root: &Path, path: &str, value: &Value) {
     let target = root.join(path);
     fs::create_dir_all(target.parent().unwrap()).unwrap();

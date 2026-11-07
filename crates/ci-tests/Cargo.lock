@@ -48,6 +48,7 @@ dependencies = [
  "serde",
  "serde_json",
  "time",
+ "verus_builtin_macros",
 ]
 
 [[package]]
@@ -61,6 +62,7 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "tempfile",
+ "verus_builtin_macros",
 ]
 
 [[package]]

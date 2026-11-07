@@ -10,6 +10,37 @@ use tempfile::TempDir;
 const CHILD: &str = env!("CARGO_BIN_EXE_chrono-test-cli-child");
 
 #[test]
+fn scoped_report_path_requires_a_nonempty_state_suffix() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("check.json");
+    for (report_path, accepted) in [
+        (".chrono-harness/state/check.json", true),
+        (".chrono-harness/state/中文.json", true),
+        (".chrono-harness/state/a/./check.json", true),
+        (".chrono-harness/state//check.json", true),
+        (".chrono-harness/state/a/", true),
+        (".chrono-harness/state/", false),
+        (".chrono-harness/state", false),
+        (".chrono-harness/states/check.json", false),
+        (".chrono-harness/state-old/check.json", false),
+        (".chrono-harness/state/../check.json", false),
+        ("/.chrono-harness/state/check.json", false),
+        (".chrono-harness/state/bad\0path", false),
+    ] {
+        let profile = json!({
+            "schema": "chrono-ci-check/v3",
+            "judge": {"program": CHILD, "args": [], "timeout_seconds": 15,
+                      "output_limit_bytes": 4096},
+            "policy": {},
+            "report_path": report_path
+        });
+        fs::write(&config_path, serde_json::to_vec(&profile).unwrap()).unwrap();
+        let loaded = chrono_harness::load_config(&config_path);
+        assert_eq!(loaded.is_ok(), accepted, "{report_path:?}: {loaded:?}");
+    }
+}
+
+#[test]
 fn ci_result_status_keeps_exact_wire_names_and_variant_identity() {
     let cases = [
         (Status::Passed, "passed"),

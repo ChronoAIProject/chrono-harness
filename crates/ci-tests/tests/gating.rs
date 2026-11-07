@@ -210,7 +210,12 @@ impl GatedHost {
                 "GITHUB_EVENT_PATH",
                 self.host.root.join(".chrono-harness/state/event.json"),
             )
-            .env("CHRONO_WORKFLOW_REVISION", &self.host.candidate)
+            .env(
+                "CHRONO_WORKFLOW_REVISION",
+                self.payload["pull_request"]["merge_commit_sha"]
+                    .as_str()
+                    .unwrap_or(&self.host.candidate),
+            )
             .env("GITHUB_REPOSITORY", "owner/host")
             .env("GITHUB_RUN_ID", "101")
             .env("GITHUB_RUN_ATTEMPT", "2")
@@ -1007,7 +1012,7 @@ fn large_complete_git_delta_retains_every_path_and_obligation() {
 }
 
 #[test]
-fn push_before_after_spans_multiple_commits_and_pr_keeps_event_base_head() {
+fn push_spans_multiple_commits_and_pr_uses_fixed_merge_base_despite_stale_event_base() {
     let mut h = GatedHost::new();
     h.change(&["a.txt"]);
     let previous = h.host.candidate.clone();
@@ -1016,9 +1021,10 @@ fn push_before_after_spans_multiple_commits_and_pr_keeps_event_base_head() {
     assert_eq!(d["required_units"], json!(["alpha", "beta"]));
     assert_eq!(d["base"], h.host.base);
     assert_ne!(d["base"], previous);
-    h.payload = json!({"pull_request":{"base":{"sha":previous},"head":{"sha":h.host.candidate}}});
+    let merge = tools::pr_workflow_merge(&h.host.root, &previous, &h.host.candidate);
+    h.payload = json!({"pull_request":{"base":{"sha":h.host.base},"head":{"sha":h.host.candidate},"merge_commit_sha":merge}});
     let d = h.detection();
-    assert_eq!(d["source"], "pr-base-head");
+    assert_eq!(d["source"], "pr-workflow-merge-head");
     assert_eq!(d["base"], previous);
     assert_eq!(d["required_units"], json!(["beta"]));
 }
