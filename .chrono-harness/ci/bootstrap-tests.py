@@ -314,7 +314,7 @@ class Bootstrap(unittest.TestCase):
             "operations": ["make.tool"],
             "install": [{"source": "built-tool", "destination": ".chrono-harness/bin/tool"}],
         }
-        self.write_json(self.ci / "bootstrap.json", self.config)
+        self.write_json(self.ci / "bootstrap-core.json", self.config)
         self.registry = self.root / ".chrono-harness/projects.json"
         self.declare("write", "built-tool", "binary")
         self.tools = self.root / "mock-tools"
@@ -407,7 +407,7 @@ class Bootstrap(unittest.TestCase):
             "coordinator_root": "git-main-worktree", "program": installed, "git": "git",
             "config": ".chrono-harness/native/fixture/worktree.json",
         }
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         self.git("init", "-q")
         (self.root / ".gitignore").write_text(
             "/crates/inputs/target/\n/.chrono-harness/bin/\n/.chrono-harness/state/\n/mock-tools/\n")
@@ -498,7 +498,7 @@ class Bootstrap(unittest.TestCase):
         self.declare("write", "built-tool", "later binary")
         self.succeeded(self.invoke())
         self.assertEqual(retained.read_bytes(), original)
-        self.assertEqual(self.evidence()["config"], ".chrono-harness/ci/bootstrap.json")
+        self.assertEqual(self.evidence()["config"], ".chrono-harness/ci/bootstrap-core.json")
         self.assertEqual(self.evidence()["installed"][0]["sha256"],
                          hashlib.sha256(b"later binary").hexdigest())
 
@@ -507,7 +507,7 @@ class Bootstrap(unittest.TestCase):
                       ".chrono-harness/ci/overwrite.json", ".chrono-harness/state/../source",
                       ".chrono-harness/state", ".chrono-harness/state/", ".chrono-harness/state//a.json"]:
             with self.subTest(value=value):
-                self.write_json(self.ci / "bootstrap.json", dict(self.config, report_path=value))
+                self.write_json(self.ci / "bootstrap-core.json", dict(self.config, report_path=value))
                 result = self.invoke()
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(b"bootstrap report must be an explicit host state file", result.stderr)
@@ -515,7 +515,7 @@ class Bootstrap(unittest.TestCase):
 
     def test_report_write_failure_is_not_success(self):
         selected = dict(self.config, report_path=".chrono-harness/state/blocked/result.json")
-        self.write_json(self.ci / "bootstrap.json", selected)
+        self.write_json(self.ci / "bootstrap-core.json", selected)
         blocked = self.root / ".chrono-harness/state/blocked"
         blocked.parent.mkdir()
         blocked.write_bytes(b"original evidence")
@@ -537,7 +537,7 @@ class Bootstrap(unittest.TestCase):
                 alias = state / "alias"
                 alias.symlink_to(other if is_directory else source)
                 selected = ".chrono-harness/state/alias" + ("/source" if is_directory else "")
-                self.write_json(self.ci / "bootstrap.json", dict(self.config, report_path=selected))
+                self.write_json(self.ci / "bootstrap-core.json", dict(self.config, report_path=selected))
                 result = self.invoke()
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(b"bootstrap report path must not contain a symlink", result.stderr)
@@ -552,7 +552,7 @@ class Bootstrap(unittest.TestCase):
                 config = dict(self.config)
                 if declared is not None:
                     config["rust_incremental"] = declared
-                self.write_json(self.ci / "bootstrap.json", config)
+                self.write_json(self.ci / "bootstrap-core.json", config)
                 self.environment["CARGO_INCREMENTAL"] = ambient
                 self.succeeded(self.invoke())
                 child = json.loads((self.root / ".chrono-harness/bin/tool").read_bytes())
@@ -562,7 +562,7 @@ class Bootstrap(unittest.TestCase):
     def test_invalid_incremental_declared_value_stops_before_tools(self):
         for value in [None, 0, 1, "true", [], {}]:
             with self.subTest(value=value):
-                self.write_json(self.ci / "bootstrap.json", dict(self.config, rust_incremental=value))
+                self.write_json(self.ci / "bootstrap-core.json", dict(self.config, rust_incremental=value))
                 result = self.invoke()
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(b"rust_incremental must be a boolean", result.stderr)
@@ -597,7 +597,7 @@ class Bootstrap(unittest.TestCase):
                     old = self.tools / name
                     if state == "stale": old.write_bytes(b"retired, not executable")
                     else: old.unlink()
-                self.write_json(self.ci / "bootstrap.json", config)
+                self.write_json(self.ci / "bootstrap-core.json", config)
                 self.succeeded(self.invoke())
                 self.assertEqual(self.evidence()["selection"]["cargo"], str(local / "cargo"))
         # A separately configured current selection remains authoritative.
@@ -607,12 +607,12 @@ class Bootstrap(unittest.TestCase):
         cargo.write_bytes((local / "cargo").read_bytes() + b"\n# different bytes, same version\n")
         cargo.chmod(0o755)
         config["tools"]["cargo"] = str(cargo)
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         rejected = self.invoke()
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn(b"configured cargo selection differs", rejected.stderr)
         config["tools"]["cargo"] = str(self.root / "missing-current-cargo")
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         rejected = self.invoke()
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn(b"configured cargo executable is missing", rejected.stderr)
@@ -622,7 +622,7 @@ class Bootstrap(unittest.TestCase):
         local = self.root / "relocated"
         shutil.copytree(self.tools, local)
         self.environment["PATH"] = str(local) + os.pathsep + os.environ["PATH"]
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         rejected = self.invoke()
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn(b"relocation is not permitted", rejected.stderr)
@@ -667,7 +667,7 @@ class Bootstrap(unittest.TestCase):
             "operation": "make.cargo", "tool": "cargo", "argv": ["build-fixture", "built-tool"],
         }
         self.write_json(self.registry, declarations)
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         self.succeeded(self.invoke())
         state = self.evidence()
         self.assertEqual([row["version"] for row in state["executables"]],
@@ -704,7 +704,7 @@ class Bootstrap(unittest.TestCase):
     def test_invalid_prerequisites_reject_before_tool_selection(self):
         for prerequisites in ("make.tool", [1], ["make.tool"], ["missing"], ["missing", "missing"]):
             with self.subTest(prerequisites=prerequisites):
-                self.write_json(self.ci / "bootstrap.json", dict(self.config, prerequisites=prerequisites))
+                self.write_json(self.ci / "bootstrap-core.json", dict(self.config, prerequisites=prerequisites))
                 rejected = self.invoke()
                 self.assertNotEqual(rejected.returncode, 0)
                 self.assertIn(b"bootstrap prerequisite", rejected.stderr)
@@ -713,7 +713,7 @@ class Bootstrap(unittest.TestCase):
 
     def test_failed_prerequisite_retains_originals_without_selecting_toolchain(self):
         self.declare("fail", "9")
-        self.write_json(self.ci / "bootstrap.json", dict(self.config, prerequisites=["make.tool"], operations=[]))
+        self.write_json(self.ci / "bootstrap-core.json", dict(self.config, prerequisites=["make.tool"], operations=[]))
         failed = self.invoke()
         self.assertEqual(failed.returncode, 9)
         self.assertFalse((self.tools / "calls.json").exists())
@@ -730,7 +730,7 @@ class Bootstrap(unittest.TestCase):
     def test_binding_mismatch_rejects_before_registered_operation(self):
         config = self.binding_config()
         config["tool_bindings"]["rustc"]["sha256"] = "0" * 64
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         result = self.invoke()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"bound rustc identity mismatch", result.stderr)
@@ -739,7 +739,7 @@ class Bootstrap(unittest.TestCase):
     def test_version_mismatch_with_matching_bytes_rejects_before_registered_operation(self):
         config = self.binding_config()
         config["tool_bindings"]["rustc"]["version"] = "rustc 1.94.0 (fixture)"
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         rejected = self.invoke()
         self.assertNotEqual(rejected.returncode, 0)
         self.assertIn(b"bound rustc identity mismatch", rejected.stderr)
@@ -747,7 +747,7 @@ class Bootstrap(unittest.TestCase):
 
     def test_required_binding_declaration_cannot_be_omitted(self):
         config = dict(self.config, require_tool_bindings=True)
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         result = self.invoke()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"requires declared Cargo/rustc bindings", result.stderr)
@@ -766,7 +766,7 @@ class Bootstrap(unittest.TestCase):
                 else:
                     key = {"compiler": "RUSTC", "wrapper": "RUSTC_WRAPPER", "workspace-wrapper": "RUSTC_WORKSPACE_WRAPPER"}[defect]
                     self.environment[key] = "/different/compiler"
-                self.write_json(self.ci / "bootstrap.json", candidate)
+                self.write_json(self.ci / "bootstrap-core.json", candidate)
                 rejected = self.invoke()
                 self.assertNotEqual(rejected.returncode, 0)
                 self.assertFalse((self.root / "built-tool").exists())
@@ -782,7 +782,7 @@ class Bootstrap(unittest.TestCase):
         self.write_json(self.registry, declarations)
         (self.root / "built-tool").write_bytes(b"keep")
         self.environment["BOUND_CARGO"] = str(self.tools / "cargo")
-        self.write_json(self.ci / "bootstrap.json", config)
+        self.write_json(self.ci / "bootstrap-core.json", config)
         result = self.invoke()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"bound cargo identity mismatch", result.stderr)
@@ -867,7 +867,7 @@ class Bootstrap(unittest.TestCase):
         self.assertFalse((self.root / "built-tool").exists())
         self.assertEqual((self.root / ".chrono-harness/bin/selected").read_bytes(), b"selected")
         self.assertEqual((self.root / ".chrono-harness/bin/tool").read_bytes(), b"binary")
-        self.assertEqual(state["config"], ".chrono-harness/ci/bootstrap.json")
+        self.assertEqual(state["config"], ".chrono-harness/ci/bootstrap-core.json")
         selected_state = self.state_path.read_bytes()
         selected_result = json.loads(selected_state)
         self.assertEqual(selected_result["config"], ".chrono-harness/ci/selected profile.json")

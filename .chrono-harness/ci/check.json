@@ -69,7 +69,6 @@
       ".chrono-harness/ci/check.json",
       ".chrono-harness/ci/units.json",
       ".chrono-harness/ci/bootstrap.py",
-      ".chrono-harness/ci/bootstrap.json",
       ".chrono-harness/ci/bootstrap-core.json",
       ".chrono-harness/ci/bootstrap-native.sh",
       ".chrono-harness/ci/bootstrap-frontend.json",
@@ -237,40 +236,6 @@
       }
     },
     "shared_operations": {
-      "verify.runner-status": [
-        "judge-cost",
-        "judge-filemap",
-        "judge-mixed",
-        "judge-projects",
-        "judge-registration",
-        "judge-routes",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units",
-        "runner"
-      ],
-      "verify.runner-status-tests": [
-        "judge-cost",
-        "judge-filemap",
-        "judge-mixed",
-        "judge-projects",
-        "judge-registration",
-        "judge-routes",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units",
-        "runner"
-      ],
-      "verify.runner-limits": [
-        "judge-registration",
-        "judge-routes",
-        "runner"
-      ],
-      "verify.runner-limits-tests": [
-        "judge-registration",
-        "judge-routes",
-        "runner"
-      ],
       "build.ci": [
         "ci",
         "judge-workflow",
@@ -417,42 +382,6 @@
       "build.cache": [
         "cache",
         "release-build-integration"
-      ],
-      "verify.owner-publication-tests": [
-        "worktree",
-        "worktree-adoption"
-      ],
-      "verify.owner-publication": [
-        "worktree",
-        "worktree-adoption"
-      ],
-      "verify.verus-result": [
-        "cache",
-        "ci",
-        "judge-ci",
-        "judge-projects",
-        "judge-registration",
-        "judge-routes",
-        "runner"
-      ],
-      "verify.verus-result-tests": [
-        "cache",
-        "ci",
-        "judge-ci",
-        "judge-projects",
-        "judge-registration",
-        "judge-routes",
-        "runner"
-      ],
-      "verify.runner-paths": [
-        "inputs",
-        "judge-registration",
-        "runner"
-      ],
-      "verify.runner-paths-tests": [
-        "inputs",
-        "judge-registration",
-        "runner"
       ]
     },
     "facts_config": ".chrono-harness/config.json",
