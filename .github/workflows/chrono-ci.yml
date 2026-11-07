@@ -2,7 +2,7 @@
 name: "chrono / collection"
 on:
   push:
-    branches: ["dev","integration/**"]
+    branches: ["dev"]
   pull_request:
     branches: ["dev","integration/**"]
 permissions:
