@@ -123,6 +123,8 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 <a id="conditional-jobs-and-the-required-aggregate"></a>
 
+默认合并采用[并行验收、按依赖合并](merging.md)。PR 的被验候选是固定 workflow 合并提交 M，基线是其第一父，第二父须为事件 head H。`chrono-ci-detection/v2` 分别记录 `candidate=M` 和 `event_head=H`，汇总对测试报告使用 M，对原生运行、job 和 artifact 的 `head_sha` 使用 H。不能把两种身份互换。
+
 ## 条件 job 与唯一必需汇总
 
 父工作流用原生 concurrency 替换同一 PR 的旧运行。组名绑定工作流路径、事件、PR 号；非 PR 事件用唯一 run ID，所以 push 的各次完整 before／after 不会因取消排队而丢失。父工作流内各单元独立调度。
@@ -214,6 +216,8 @@ full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语�
 采用 `job_gating` 时，准备／源码检查绑定 `collection.workflow_path`，单独声明的单元地址不使普通生成器拥有未启用工作流。gather wait／poll 设置保留独立工作流含义，此父工作流传输不轮询，不用它们。
 
 这样去掉重复迁移逻辑，以及普通生成时额外渲染／读取旧拓扑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。旧 ci-host 和已发布 Go／TS／mix provider 在公开二进制可用、调用方明确迁移前保留历史形式。
+
+本仓通过 projects.json 的 `ci.generate-job-gating-example` 操作维护该示例的生成工作流，委托同一 Rust 生成器；执行时沿用登记的 `chrono-worktree use` 保护。
 
 ## 分配与执行
 

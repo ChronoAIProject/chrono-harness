@@ -128,8 +128,8 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
     let mut body = body.replacen(old_if, &condition, 1);
     // The parent has automatic events only, so no manual candidate input exists.
     body = body.replacen(
-        "          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}\n",
-        "          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}\n",
+        "          ref: ${{ inputs.candidate || github.sha }}\n",
+        "          ref: ${{ github.sha }}\n",
         1,
     );
     let extra = if unit.is_none() {
@@ -256,7 +256,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
       - name: Acquire declared detector source
         uses: {checkout}
         with:
-          ref: ${{{{ github.event.pull_request.head.sha || github.event.after || github.sha }}}}
+          ref: ${{{{ github.sha }}}}
           fetch-depth: {detector_depth}
           filter: blob:none
           sparse-checkout-cone-mode: false
@@ -328,6 +328,7 @@ pub struct Detection {
     pub initial: bool,
     pub base: Option<String>,
     pub candidate: String,
+    pub event_head: String,
     pub source: String,
     pub changed_paths_count: usize,
     pub required_units: Vec<String>,
@@ -463,7 +464,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         return Err("detector selection not registered by provider".into());
     }
     let detection = Detection {
-        schema: "chrono-ci-detection/v1".into(),
+        schema: "chrono-ci-detection/v2".into(),
         repository: env("GITHUB_REPOSITORY")?,
         run_id: number("GITHUB_RUN_ID")?,
         run_attempt: number("GITHUB_RUN_ATTEMPT")?,
@@ -476,6 +477,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         initial: context["initial"] == true,
         base: context["base"].as_str().map(str::to_owned),
         candidate: candidate.into(),
+        event_head: context["event_head"]
+            .as_str()
+            .ok_or("detector event head missing")?
+            .into(),
         source: context["source"]
             .as_str()
             .ok_or("detector source missing")?
@@ -517,13 +522,18 @@ pub(crate) fn native_detection(
     revision: &str,
 ) -> Result<Value, String> {
     let d: Detection = decode(env(DETECTION_ENV)?.as_bytes())?;
-    let candidate = match event {
+    let event_head = match event {
         "push" => payload["after"].as_str(),
         "pull_request" => payload["pull_request"]["head"]["sha"].as_str(),
         _ => None,
     }
     .ok_or("gated native event has no candidate")?;
-    if d.schema != "chrono-ci-detection/v1"
+    let candidate = if event == "pull_request" {
+        revision
+    } else {
+        event_head
+    };
+    if d.schema != "chrono-ci-detection/v2"
         || d.repository != env("GITHUB_REPOSITORY")?
         || d.run_id != number("GITHUB_RUN_ID")?
         || d.run_attempt == 0
@@ -532,6 +542,7 @@ pub(crate) fn native_detection(
         || d.event_sha256 != wire::digest(payload)?
         || d.workflow_source_revision != revision
         || d.candidate != candidate
+        || d.event_head != event_head
         || d.provider_sha256 != file_identity(&root.join(path))?.0
         || d.check_config_sha256 != file_identity(&root.join(&c.collection.check_config))?.0
         || d.workflow_sha256 != file_identity(&root.join(&c.collection.workflow_path))?.0
@@ -541,6 +552,7 @@ pub(crate) fn native_detection(
         return Err("detector repository/run/attempt/event/source/profile binding mismatch".into());
     }
     if !full_oid(&d.candidate)
+        || !full_oid(&d.event_head)
         || !full_oid(&d.workflow_source_revision)
         || d.base.as_deref().is_some_and(|b| !full_oid(b))
         || d.initial != d.base.is_none()

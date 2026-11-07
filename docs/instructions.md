@@ -47,6 +47,8 @@ CLI 接受 `init --host-root H [--methodology M] [--host-context C] [--locale L]
 
 这些要求复用现有规则和生成器，不增加保留平台或自动证据清理实现。本仓 automatic_cleanup/v2 的操作、租约、回执、兼容切换和保留条件，仍由 host_context 和[工作树说明](worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)维护。没有新增判官或性能基准套件；生成与适用检查的成本按实际保留结果报告，完整 CI、存储和生命周期成本未知。生成前的旧副本不代表新规则；生成后也不证明遵守、翻译等价或完整验收。
 
+`candidate.landing` 还为新宿主提供[默认合并方案](merging.md)：独立 PR 并行检查、关闭 GitHub strict、验证固定合并树并在目标 push 检查实际落地变化。原有评审及必需检查保留；实际冲突、输入和依赖决定补验范围。产品默认与本仓 catalog 同步采用，完整治理的精确凭据和严格同树操作另按其明确合同验证。生成指南不修改远端规则，也不能证明原生事件或保护配置已生效。
+
 ## Schema 与可复制组合配方
 
 默认根明确选择 `job.wait`，本仓也在自己的 catalog／manifest 中采用。任务优先使用一个真实完成通知或原生阻塞等待通道，完成后一次核对原 stdout／stderr、退出码或 signal 和任务身份。产生结果的程序须等待自己的子孙及后台任务，调用方也须等待另行启动的任务。禁止用短周期状态、进程、产物查询，或反复空写、sleep 后查询、改名 wait/watch 的循环代替等待；允许授权内对原任务作长周期核实，不另开并行完成通道或新增确认关卡。

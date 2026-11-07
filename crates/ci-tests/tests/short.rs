@@ -1079,6 +1079,7 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
         } else {
             h.candidate.clone()
         };
+        git(&h.root, &["checkout", "--detach", &revision]);
         let o = h
             .command(&["check", "--unit", "alpha"])
             .env(prepared::SOURCE, "ci")
