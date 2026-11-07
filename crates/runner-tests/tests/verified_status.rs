@@ -82,6 +82,51 @@ fn protocol_state_order_keeps_all_sixteen_pairs_and_exact_exits() {
     assert(pass == 0 && warn == 0 && fail == 1 && error == 2);
 }
 
+// 任意完整文本和任意 i32 退出码；预期直接列出协议四态的数字合同。
+fn header_exits(protocol: &str, id: &str, judge: &str, exit: i32) {
+    let pass = policy::wire_header_matches(
+        protocol, id, judge, &WireStatus::Pass, exit, protocol, id, judge);
+    let warn = policy::wire_header_matches(
+        protocol, id, judge, &WireStatus::Warn, exit, protocol, id, judge);
+    let fail = policy::wire_header_matches(
+        protocol, id, judge, &WireStatus::Fail, exit, protocol, id, judge);
+    let error = policy::wire_header_matches(
+        protocol, id, judge, &WireStatus::Error, exit, protocol, id, judge);
+    assert(pass == (exit == 0) && warn == (exit == 0)
+        && fail == (exit == 1) && error == (exit == 2));
+}
+
+fn mismatched_headers(a: &str, b: &str)
+    requires a@ != b@,
+{
+    let protocol = policy::wire_header_matches(
+        b, a, a, &WireStatus::Pass, 0, a, a, a);
+    let request = policy::wire_header_matches(
+        a, b, a, &WireStatus::Pass, 0, a, a, a);
+    let judge = policy::wire_header_matches(
+        a, a, b, &WireStatus::Pass, 0, a, a, a);
+    assert(!protocol && !request && !judge);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn response_header_keeps_empty_full_text_and_integer_boundaries() {
+    header_exits("", "", "", 0);
+    header_exits("chrono-judge/v1", "请求\0", "é", 0);
+    header_exits("chrono-judge/v1", "请求\0", "é", 1);
+    header_exits("chrono-judge/v1", "请求\0", "é", 2);
+    header_exits("chrono-judge/v1", "请求\0", "é", -1);
+    header_exits("chrono-judge/v1", "请求\0", "é", i32::MIN);
+    header_exits("chrono-judge/v1", "请求\0", "é", i32::MAX);
+    proof {
+        reveal_strlit("request"); reveal_strlit("request\0");
+        reveal_strlit("é"); reveal_strlit("e\u{301}");
+        assert("request"@.len() == 7 && "request\0"@.len() == 8);
+        assert("é"@.len() == 1 && "e\u{301}"@.len() == 2);
+    }
+    mismatched_headers("request", "request\0");
+    mismatched_headers("é", "e\u{301}");
+}
+
 fn finding(level: &str) -> (out: policy::Finding)
     ensures out.level@ == level@,
 {
