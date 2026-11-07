@@ -280,10 +280,7 @@ pub(crate) fn validate_response_at(
         return Err("E_PROTOCOL: response identity/status/exit mismatch".into());
     }
     for f in &r.findings {
-        if f.code.is_empty()
-            || f.message.is_empty()
-            || !matches!(f.level.as_str(), "info" | "warning" | "error")
-            || f.delta_refs.is_empty()
+        if !crate::verified_status::valid_finding_fields(f)
             || f.delta_refs.iter().any(|p| !reference(p))
         {
             return Err("E_PROTOCOL: invalid finding".into());
@@ -293,10 +290,7 @@ pub(crate) fn validate_response_at(
         return Err("E_PROTOCOL: finding/status disagreement".into());
     }
     for e in &r.evidence {
-        if !e.path.starts_with(".chrono-harness/state/")
-            || e.kind.is_empty()
-            || !is_digest(&e.sha256)
-        {
+        if !crate::verified_status::valid_evidence_identity(&e.path, &e.kind, &e.sha256) {
             return Err("E_PROTOCOL: invalid evidence identity".into());
         }
         let p = no_symlink_parents(root, &e.path)?;

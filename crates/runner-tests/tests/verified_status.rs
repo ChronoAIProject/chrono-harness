@@ -11,6 +11,8 @@ use policy::{Status, WireStatus};
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
@@ -295,6 +297,210 @@ fn actual_finding_clone_keeps_complete_fields_and_reference_order() {
     assert(copied.delta_refs@[0]@ == "/根\0"@ && copied.delta_refs@[1]@ == ""@
         && copied.delta_refs@[2]@ == "/根\0"@);
     assert(copied.causes@[0]@ == "z"@ && copied.causes@[1]@ == "原因\0"@);
+}
+
+fn finding_fields_preserve_nonempty_full_text(code: &str, message: &str, reference: &str)
+    requires code@.len() > 0, message@.len() > 0,
+{
+    let refs = vec![reference.to_owned(), reference.to_owned()];
+    let info = policy::Finding { code: code.to_owned(), message: message.to_owned(),
+        level: "info".to_owned(), delta_refs: refs, causes: vec!["".to_owned()] };
+    let accepted = policy::valid_finding_fields(&info);
+    assert(accepted);
+    let warning = policy::Finding { level: "warning".to_owned(), ..info.clone() };
+    let accepted = policy::valid_finding_fields(&warning);
+    assert(accepted);
+    let error = policy::Finding { level: "error".to_owned(), ..info.clone() };
+    let accepted = policy::valid_finding_fields(&error);
+    assert(accepted);
+    assert(info.delta_refs.len() == 2 && info.delta_refs@[0]@ == reference@
+        && info.delta_refs@[1]@ == reference@);
+}
+
+fn empty_finding_fields_are_rejected(code: &str, message: &str, level: &str) {
+    proof { reveal_strlit(""); }
+    let refs = vec!["/records/x".to_owned()];
+    let no_code = policy::Finding { code: "".to_owned(), message: message.to_owned(),
+        level: level.to_owned(), delta_refs: refs.clone(), causes: Vec::new() };
+    let accepted = policy::valid_finding_fields(&no_code);
+    assert(!accepted);
+    let no_message = policy::Finding { code: code.to_owned(), message: "".to_owned(),
+        level: level.to_owned(), delta_refs: refs, causes: Vec::new() };
+    let accepted = policy::valid_finding_fields(&no_message);
+    assert(!accepted);
+    let no_refs = policy::Finding { code: code.to_owned(), message: message.to_owned(),
+        level: level.to_owned(), delta_refs: Vec::new(), causes: Vec::new() };
+    let accepted = policy::valid_finding_fields(&no_refs);
+    assert(!accepted);
+}
+
+fn noncanonical_finding_level_is_rejected(level: &str)
+    requires level@ != "info"@, level@ != "warning"@, level@ != "error"@,
+{
+    let finding = policy::Finding { code: "E".to_owned(), message: "m".to_owned(),
+        level: level.to_owned(), delta_refs: vec!["/x".to_owned()], causes: Vec::new() };
+    let accepted = policy::valid_finding_fields(&finding);
+    assert(!accepted);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn finding_fields_keep_exact_levels_and_independent_empty_boundaries() {
+    proof {
+        reveal_strlit("E"); reveal_strlit("message"); reveal_strlit("根\0");
+        reveal_strlit("é\n"); reveal_strlit(" "); reveal_strlit("\0");
+        reveal_strlit(""); reveal_strlit("info"); reveal_strlit("warning"); reveal_strlit("error");
+        reveal_strlit("Info"); reveal_strlit("warning "); reveal_strlit("error\0");
+        reveal_strlit("information");
+        assert(""@.len() == 0 && "info"@.len() == 4 && "warning"@.len() == 7
+            && "error"@.len() == 5);
+        assert("Info"@.len() == 4 && "Info"@[0] != "info"@[0]);
+        assert("warning "@.len() == 8 && "error\0"@.len() == 6 && "information"@.len() == 11);
+    }
+    finding_fields_preserve_nonempty_full_text("E", "message", "/records/x");
+    finding_fields_preserve_nonempty_full_text("根\0", "é\n", "");
+    finding_fields_preserve_nonempty_full_text(" ", "\0", "路径\0");
+    empty_finding_fields_are_rejected("E", "message", "info");
+    empty_finding_fields_are_rejected("", "", "warning");
+    noncanonical_finding_level_is_rejected("");
+    noncanonical_finding_level_is_rejected("Info");
+    noncanonical_finding_level_is_rejected("warning ");
+    noncanonical_finding_level_is_rejected("error\0");
+    noncanonical_finding_level_is_rejected("information");
+}
+
+proof fn zero_evidence_digest_is_valid()
+    ensures policy::identifiers::digest_format(vstd::utf8::encode_utf8(
+        "0000000000000000000000000000000000000000000000000000000000000000"@)),
+{
+    reveal_strlit("0000000000000000000000000000000000000000000000000000000000000000");
+    assert(vstd::string::is_ascii("0000000000000000000000000000000000000000000000000000000000000000"));
+    vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000000000000000000000000000");
+    assert("0000000000000000000000000000000000000000000000000000000000000000"@.len() == 64);
+}
+
+fn evidence_kind_keeps_arbitrary_nonempty_text(kind: &str)
+    requires kind@.len() > 0,
+{
+    proof {
+        zero_evidence_digest_is_valid(); unicode_evidence_prefix_encoding();
+        assert(".chrono-harness/state/".spec_bytes().len() == 22);
+        assert(".chrono-harness/state/".spec_bytes().take(22) =~= ".chrono-harness/state/".spec_bytes());
+        assert(policy::identifiers::digest_format(
+            "0000000000000000000000000000000000000000000000000000000000000000".spec_bytes()));
+        assert(policy::evidence_identity(".chrono-harness/state/", kind,
+            "0000000000000000000000000000000000000000000000000000000000000000"));
+    }
+    let accepted = policy::valid_evidence_identity(".chrono-harness/state/", kind,
+        "0000000000000000000000000000000000000000000000000000000000000000");
+    assert(accepted);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn evidence_identity_keeps_exact_prefix_and_nonempty_kind() {
+    proof {
+        reveal_strlit(".chrono-harness/state/"); reveal_strlit("report"); reveal_strlit("原件\0");
+        reveal_strlit(".chrono-harness/state/../x");
+        reveal_strlit(""); reveal_strlit(".chrono-harness/state"); reveal_strlit(".chrono-harness/states/x");
+        reveal_strlit("/.chrono-harness/state/x"); reveal_strlit(".chrono-harness/State/x");
+        reveal_strlit(".chrono-harness/state/x");
+        zero_evidence_digest_is_valid(); unicode_evidence_prefix_encoding();
+        assert(vstd::string::is_ascii(".chrono-harness/state/"));
+        assert(vstd::string::is_ascii(""));
+        assert(vstd::string::is_ascii(".chrono-harness/state"));
+        assert(vstd::string::is_ascii(".chrono-harness/states/x"));
+        assert(vstd::string::is_ascii("/.chrono-harness/state/x"));
+        assert(vstd::string::is_ascii(".chrono-harness/State/x"));
+        assert(vstd::string::is_ascii(".chrono-harness/state/x"));
+        assert(vstd::string::is_ascii(".chrono-harness/state/../x"));
+        assert(""@.len() == 0 && "report"@.len() == 6 && "原件\0"@.len() == 3);
+        assert(".chrono-harness/state"@.len() == 21 && ".chrono-harness/states/x"@.len() == 24);
+        assert("/.chrono-harness/state/x"@.len() == 24 && ".chrono-harness/State/x"@.len() == 23);
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/");
+        vstd::string::is_ascii_spec_bytes("");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/states/x");
+        vstd::string::is_ascii_spec_bytes("/.chrono-harness/state/x");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/State/x");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/x");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/../x");
+        assert(".chrono-harness/state/../x".spec_bytes().take(22)
+            =~= ".chrono-harness/state/".spec_bytes());
+        assert(".chrono-harness/states/x".spec_bytes()[21] == 115);
+        assert(".chrono-harness/state/".spec_bytes()[21] == 47);
+        assert("/.chrono-harness/state/x".spec_bytes()[0] == 47
+            && ".chrono-harness/state/".spec_bytes()[0] == 46);
+        assert(".chrono-harness/State/x".spec_bytes()[16] == 83
+            && ".chrono-harness/state/".spec_bytes()[16] == 115);
+    }
+    let zero = "0000000000000000000000000000000000000000000000000000000000000000";
+    evidence_kind_keeps_arbitrary_nonempty_text("report");
+    evidence_kind_keeps_arbitrary_nonempty_text("原件\0");
+    let accepted = policy::valid_evidence_identity(".chrono-harness/state/../x", "report", zero);
+    assert(accepted);
+    let empty = policy::valid_evidence_identity("", "report", zero);
+    let short = policy::valid_evidence_identity(".chrono-harness/state", "report", zero);
+    let similar = policy::valid_evidence_identity(".chrono-harness/states/x", "report", zero);
+    let absolute = policy::valid_evidence_identity("/.chrono-harness/state/x", "report", zero);
+    let case = policy::valid_evidence_identity(".chrono-harness/State/x", "report", zero);
+    assert(!empty); assert(!short); assert(!similar); assert(!absolute); assert(!case);
+    let no_kind = policy::valid_evidence_identity(".chrono-harness/state/x", "", zero);
+    assert(!no_kind);
+}
+
+proof fn unicode_evidence_prefix_encoding()
+    ensures vstd::utf8::encode_utf8(".chrono-harness/state/"@).len() == 22,
+        vstd::utf8::encode_utf8(".chrono-harness/state/中文\0"@).len() >= 22,
+        vstd::utf8::encode_utf8(".chrono-harness/state/中文\0"@).take(22)
+            == vstd::utf8::encode_utf8(".chrono-harness/state/"@),
+{
+    reveal_strlit(".chrono-harness/state/");
+    reveal_strlit(".chrono-harness/state/中文\0");
+    reveal_with_fuel(vstd::utf8::encode_utf8, 24);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn evidence_identity_keeps_unicode_and_nul_suffix() {
+    proof {
+        unicode_evidence_prefix_encoding(); zero_evidence_digest_is_valid();
+        reveal_strlit("report"); assert("report"@.len() == 6);
+    }
+    let accepted = policy::valid_evidence_identity(".chrono-harness/state/中文\0", "report",
+        "0000000000000000000000000000000000000000000000000000000000000000");
+    assert(accepted);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn evidence_identity_rejects_missing_short_long_and_uppercase_digest() {
+    proof {
+        reveal_strlit("");
+        reveal_strlit("000000000000000000000000000000000000000000000000000000000000000");
+        reveal_strlit("00000000000000000000000000000000000000000000000000000000000000000");
+        reveal_strlit("A000000000000000000000000000000000000000000000000000000000000000");
+        assert(vstd::string::is_ascii(""));
+        assert(vstd::string::is_ascii("000000000000000000000000000000000000000000000000000000000000000"));
+        assert(vstd::string::is_ascii("00000000000000000000000000000000000000000000000000000000000000000"));
+        assert(vstd::string::is_ascii("A000000000000000000000000000000000000000000000000000000000000000"));
+        assert(""@.len() == 0);
+        assert("000000000000000000000000000000000000000000000000000000000000000"@.len() == 63);
+        assert("00000000000000000000000000000000000000000000000000000000000000000"@.len() == 65);
+        assert("A000000000000000000000000000000000000000000000000000000000000000"@.len() == 64);
+        assert("A000000000000000000000000000000000000000000000000000000000000000"@[0] == 'A');
+        vstd::string::is_ascii_spec_bytes("");
+        vstd::string::is_ascii_spec_bytes("000000000000000000000000000000000000000000000000000000000000000");
+        vstd::string::is_ascii_spec_bytes("00000000000000000000000000000000000000000000000000000000000000000");
+        vstd::string::is_ascii_spec_bytes("A000000000000000000000000000000000000000000000000000000000000000");
+        assert("A000000000000000000000000000000000000000000000000000000000000000".spec_bytes()[0] == 65);
+        assert(!policy::identifiers::oid_byte(
+            "A000000000000000000000000000000000000000000000000000000000000000".spec_bytes()[0]));
+    }
+    let no_digest = policy::valid_evidence_identity(".chrono-harness/state/x", "report", "");
+    let short_digest = policy::valid_evidence_identity(".chrono-harness/state/x", "report",
+        "000000000000000000000000000000000000000000000000000000000000000");
+    let long_digest = policy::valid_evidence_identity(".chrono-harness/state/x", "report",
+        "00000000000000000000000000000000000000000000000000000000000000000");
+    let upper_digest = policy::valid_evidence_identity(".chrono-harness/state/x", "report",
+        "A000000000000000000000000000000000000000000000000000000000000000");
+    assert(!no_digest); assert(!short_digest); assert(!long_digest); assert(!upper_digest);
 }
 
 }
