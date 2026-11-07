@@ -386,6 +386,14 @@
       "build.cache": [
         "cache",
         "release-build-integration"
+      ],
+      "verify.owner-publication-tests": [
+        "worktree",
+        "worktree-adoption"
+      ],
+      "verify.owner-publication": [
+        "worktree",
+        "worktree-adoption"
       ]
     },
     "facts_config": ".chrono-harness/config.json",

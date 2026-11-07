@@ -3462,6 +3462,24 @@
             "--manifest-path",
             "crates/worktree/Cargo.toml"
           ]
+        },
+        "verify_owner_publication": {
+          "operation": "verify.owner-publication",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.owner-publication.rlib,dep-info=.chrono-harness/state/verify.owner-publication.rlib.d",
+            "crates/worktree/src/verified_owner_publication.rs",
+            "-o",
+            ".chrono-harness/state/verify.owner-publication.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "test_project": "worktree-tests",
@@ -3631,6 +3649,24 @@
             "crates/worktree-tests/Cargo.toml",
             "--package",
             "chrono-worktree-tests"
+          ]
+        },
+        "verify_owner_publication": {
+          "operation": "verify.owner-publication-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.owner-publication-tests.rlib,dep-info=.chrono-harness/state/verify.owner-publication-tests.rlib.d",
+            "crates/worktree-tests/tests/verified_owner_publication.rs",
+            "-o",
+            ".chrono-harness/state/verify.owner-publication-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },

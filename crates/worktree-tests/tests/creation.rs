@@ -125,6 +125,7 @@ mod owner_deployment;
 mod policy_migration;
 mod rebind;
 mod temporary;
+mod verified_owner_publication;
 
 enum HostDirectory {
     Ephemeral(tempfile::TempDir),
