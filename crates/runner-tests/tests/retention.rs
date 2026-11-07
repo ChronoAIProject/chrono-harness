@@ -1763,7 +1763,7 @@ fn completed_child_original_transfers_to_parent_before_its_success_root_is_relea
     };
     assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
     let between = maintenance(h.path());
-    assert_eq!(between["remaining_outputs"], 1, "{between}");
+    assert_eq!(fixture_remaining(h.path(), &between), 1, "{between}");
     assert!(!h.path().join(unrelated).exists());
     assert_eq!(
         fs::read(h.path().join(&child_path).join("stdout")).unwrap(),

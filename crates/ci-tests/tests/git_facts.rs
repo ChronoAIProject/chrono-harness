@@ -230,6 +230,14 @@ fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
 
 fn prepare_cli(h: &Host, event: &str, payload: &Value) -> Value {
     write(&h.root, ".chrono-harness/state/payload.json", &payload);
+    let revision = if event == "pull_request" {
+        payload["pull_request"]["merge_commit_sha"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    } else {
+        h.candidate.clone()
+    };
     let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
     let out = Command::new(binary)
         .current_dir("/")
@@ -250,7 +258,7 @@ fn prepare_cli(h: &Host, event: &str, payload: &Value) -> Value {
                 .to_str()
                 .unwrap(),
             "--workflow-revision",
-            &h.candidate,
+            &revision,
         ])
         .output()
         .unwrap();
@@ -279,11 +287,21 @@ fn native_platform_policy_serves_real_push_and_pr_cli_acquisition() {
         );
         generate(&h.root, SOURCE, false).unwrap();
         h.revise();
-        let (_remote, base) = h.remote();
+        let (remote, base) = h.remote();
         let payload = if event == "push" {
             json!({"before":base,"after":h.candidate,"created":false})
         } else {
-            json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate}}})
+            git(
+                remote.path(),
+                &[
+                    "fetch",
+                    "--no-write-fetch-head",
+                    h.root.to_str().unwrap(),
+                    &h.candidate,
+                ],
+            );
+            let merge = tools::pr_workflow_merge(remote.path(), &base, &h.candidate);
+            json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate},"merge_commit_sha":merge}})
         };
         let report = prepare_cli(&h, event, &payload);
         assert_eq!(report["base"], base);
@@ -445,16 +463,17 @@ fn initial_pr_and_configured_baseline_routes_share_the_declared_reader() {
             .iter()
             .any(|p| p["argv"].as_array().unwrap().contains(&json!("ls-remote")))
     );
+    let merge = tools::pr_workflow_merge(&h.root, &base, &h.candidate);
     let pr = prepare(
         &h.root,
         &h.config(),
         "pull_request",
         &json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate}}}),
-        &base,
+        &merge,
     )
     .unwrap();
     assert_eq!(pr["candidate"], h.candidate);
-    assert_eq!(pr["workflow_source_revision"], base);
+    assert_eq!(pr["workflow_source_revision"], merge);
 }
 
 #[test]
