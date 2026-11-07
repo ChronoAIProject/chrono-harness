@@ -292,6 +292,20 @@ filemap 的原 `valid_types` 已移到现役 `verified_graph.rs`，直接消费�
 JSON 解码、节点提取、诊断和完整图外层组合继续保留未完成义务。
 额外证明、编译、运行、CI与存储总成本未测；不据此声明全仓覆盖门已完成。
 
+## full 准备状态
+
+`judge-registration::readiness` 的五份登记状态与输入闭合判断由
+`verified_readiness.rs` 负责。实际 Serde `as_str`／`as_array` 观察直接借用给同源函数：
+只有精确的 `active` 接纳登记；只有 `enabled`、`declared-complete` 和存在的空数组
+同时满足时，输入准备判断才通过。缺值、错型、文本不符或非空未解决项均拒绝。
+数组元素类型保持泛型，不把 JSON 元素再映射成另一份状态。
+
+**产品与宿主政策同时变更：**生产调用替换原有普通 Rust 比较；两项整 crate 证明作为
+registration 专属计划的必需前置，独立预期和 Rust 测试编译同一生产源。
+沿用固定 Verus、完整验证参数和原错误码 `E_ACTIVATION`／`E_EVIDENCE_UNRESOLVED`。
+新增依赖为零，验证与存储总成本未测；JSON 解析、错误记录、其余准备判断及 full 启用仍待完成。
+本节描述实现范围，成功验收须消费实际证明和真实 registration 进程原结果。
+
 ## 固定执行入口
 
 宿主 bootstrap 的 Rust 迁移正在实施。公开 core／shared 仍保留 Python 入口，

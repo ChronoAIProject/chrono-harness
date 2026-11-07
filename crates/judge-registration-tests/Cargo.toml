@@ -37,5 +37,9 @@ path = "tests/languages.rs"
 name = "verified_nodes"
 path = "tests/verified_nodes.rs"
 
+[[test]]
+name = "verified_readiness"
+path = "tests/verified_readiness.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3
