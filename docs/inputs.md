@@ -29,9 +29,11 @@ v3 将输入范围标为 `declared-complete` 时，必须提供 `bindings`，每
 
 当前 macOS 27 政策声明了标准输入选择、CI 事件／Git／传输环境、获取凭据、测试原件目的和已安装工具消费者，绑定覆盖全部配置环境与工具节点。公共 FILEMAP 点名实际消费者，包括使用 `CARGO_INCREMENTAL` 的 34 个 Cargo 构建／测试负责人；它们也绑定 `CARGO_TERM_COLOR`。执行器按这些原样声明操作，`GH_TOKEN` 仍是获取凭据，不进入检查业务输入。
 
-macOS 27 政策仍为 `chrono-ci`、`chrono-worktree` 和 `chrono-inputs` 登记安装文件摘要；这些固定本机身份的当前必要性另行审计，不能直接作为其他构建或平台的身份。`cargo-guard` 已无现役项目操作使用，其工具声明和公共依赖边已退役；runner 和 diagnostics 的专属保护输入也已退役。普通构建与行为测试沿各自登记计划执行。
+macOS 27 不再把某次源码 bootstrap 的 `chrono-ci`、`chrono-worktree`、`chrono-inputs` 安装摘要作为后续构建的固定预期。三个文件输入、对应绑定引用和配置专属 FILEMAP 边一同删除；工具名、版本及其实际消费者继续由现有工具登记和依赖边负责。本次安装的文件身份由实际 bootstrap／检查报告产生，按其消费者与保留期使用，不复制回跟踪政策。
 
-macOS 27 另在现有 `runner.sha256` 和七条判官的 `sha256` 中绑定实际安装文件。该政策通过 `registries.judges` 选择独立的 `.chrono-harness/judges-macos-27.json`；各判官的调用参数、顺序、版本和职责沿用当前登记。共享判官登记继续由其他配置选择，本机字节不作为其他构建或平台的预期。摘要取自本独立工作树的源码 bootstrap，并核对安装报告和实际文件；不重复添加同一执行物的文件输入。此采用保持 proposed／not-implemented／incomplete，完整输入和真实 full 验收仍待完成。
+`cargo-guard` 已无现役项目操作使用，其工具声明和公共依赖边已退役；runner 和 diagnostics 的专属保护输入也已退役。普通构建与行为测试沿各自登记计划执行。
+
+macOS 27 与其他直接配置一样使用共享判官登记，`runner.sha256` 保持未绑定；删除仅在七个旧安装摘要上有差异的独立判官清单。调用参数、顺序、版本和职责继续由共享登记负责。这是退役过期宿主观察，不能解释为省略实际执行物验证后的 full 通过：该采用仍为 proposed／not-implemented／incomplete，现有 full 绑定检查继续拒绝缺失身份，完整治理及真实 full 验收仍待完成。
 
 其他消费者、原快照、完整编译器／SDK 输入和真实 CI 采用仍不齐，政策保持 `status: proposed`、`enforcement: not-implemented`、`input_closure.status: incomplete`。验证沿用候选 bootstrap、标准变更检查和真实 PR／落地检查，总验证及存储成本未测。
 
