@@ -10,10 +10,15 @@ chrono-cache = { path = "../cache" }
 serde_json = "1"
 sha2 = "0.10"
 tempfile = "3"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 
 [[test]]
 name = "keys"
 path = "tests/keys.rs"
+
+[[test]]
+name = "verified_planner"
+path = "tests/verified_planner.rs"
 
 [[bin]]
 name = "chrono-cache-test-probe"
