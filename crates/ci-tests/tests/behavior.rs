@@ -562,7 +562,7 @@ fn event_context_contains_same_canonical_entry() {
     assert_eq!(argv, vec![".chrono-harness/bin/chrono-harness", "check"]);
 }
 #[test]
-fn cli_preserves_context_and_outputs_full_identity() {
+fn standalone_prepare_is_rejected_before_context_and_output_publication() {
     let (d, b, c) = repo();
     let cfg = d.path().join(".chrono-harness/ci/github.json");
     write(&cfg, &config());
@@ -573,7 +573,7 @@ fn cli_preserves_context_and_outputs_full_identity() {
     )
     .unwrap();
     let output = d.path().join("github-output");
-    fs::write(&output, "").unwrap();
+    fs::write(&output, "untouched\n").unwrap();
     let a = vec![
         "prepare",
         "--host-root",
@@ -592,14 +592,10 @@ fn cli_preserves_context_and_outputs_full_identity() {
     .into_iter()
     .map(str::to_string)
     .collect::<Vec<_>>();
-    let r: Value = serde_json::from_str(&chrono_ci::dispatch(&a).unwrap()).unwrap();
-    assert_eq!(r["workflow_source_revision"], b);
-    assert!(
-        fs::read_to_string(output)
-            .unwrap()
-            .contains(&format!("candidate={c}"))
-    );
-    assert!(d.path().join(".chrono-harness/state/context.json").exists());
+    let result = chrono_ci::dispatch(&a);
+    assert!(result.is_err(), "retired prepare accepted: {result:?}");
+    assert_eq!(fs::read_to_string(output).unwrap(), "untouched\n");
+    assert!(!d.path().join(".chrono-harness/state/context.json").exists());
 }
 fn retain_command_result(
     root: &Path,
