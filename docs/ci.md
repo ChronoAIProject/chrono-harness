@@ -99,11 +99,11 @@ full v1 重复准备若只差进程所有权描述符编号，则返回原准备
 
 ### 从候选构建工具
 
-检查前必须从候选检出 bootstrap。runner 报告实际 runner／judge／operation 执行物摘要。所采用 core、cache、default profile 还把 rustup 所选 Cargo／rustc 绑定到声明 SHA-256、版本，明确有效 `RUSTC`，在报告保留本地实际路径。
+检查前必须从候选检出 bootstrap。runner 报告实际 runner／judge／operation 执行物摘要。所采用 core、cache profile 还把 rustup 所选 Cargo／rustc 绑定到声明 SHA-256、版本，明确有效 `RUSTC`，在报告保留本地实际路径。
 
 共享 startup 在安装、verify 前复核同一身份；字节／版本相等时允许等价迁移，安装报告保留生产路径和本地执行路径。绑定缺失、冲突或变化，在 bootstrap 验收前拒绝。这不证明可复现构建或编译器／后端／SDK／输入完整。
 
-core、cache、detector、default 共用源码登记 `.chrono-harness/ci/bootstrap-toolchains.json`，明确声明 Darwin／arm64（macos-26 CI）及 Linux／x86_64（ubuntu-24.04 发布 cache-bootstrap）。未知／缺少组合在准备工具前失败。
+core、cache、detector 共用源码登记 `.chrono-harness/ci/bootstrap-toolchains.json`，明确声明 Darwin／arm64（macos-26 CI）及 Linux／x86_64（ubuntu-24.04 发布 cache-bootstrap）。未知／缺少组合在准备工具前失败。
 
 每个执行物 SHA-256 都从官方 Rust 1.95.0 组件归档的精确 Cargo／rustc 成员取得，独立于本机安装。登记保留官方 manifest URL／摘要／日期及组件 URL、归档摘要、成员、大小、版本来源。归档摘要只说明来源，不能代替执行物字节预期。Cargo 上游版本实现解释 package 0.96.0／CLI 1.95.0 的区别。
 
