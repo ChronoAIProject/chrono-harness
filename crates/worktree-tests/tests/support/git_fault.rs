@@ -103,6 +103,61 @@ fn main() {
     let git = config["git"].as_str().unwrap();
     let arg = |index: usize, expected: &str| args.get(index).is_some_and(|value| value == expected);
     match config["mode"].as_str().unwrap() {
+        "owner-publication" => {
+            if config["publication"]
+                .as_str()
+                .is_some_and(|path| Path::new(path).exists())
+            {
+                let root = Path::new(config["root"].as_str().unwrap());
+                let dir = root.join(".chrono-harness/state/automatic-cleanup");
+                let claim = root.join(".chrono-harness/state/owner-exclusions-checked");
+                if let Ok(_claim) = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(claim)
+                {
+                    assert!(
+                        chrono_harness::ownership::Lease::acquire(
+                            &dir.join("deployment.lease"),
+                            None,
+                            false,
+                            true,
+                            None,
+                        )
+                        .unwrap()
+                        .is_none(),
+                        "original deployment EX must remain held after publication"
+                    );
+                    for item in fs::read_dir(dir.join("enrollments")).unwrap() {
+                        let ledger: Value = serde_json::from_slice(
+                            &fs::read(item.unwrap().path().join("ledger.json")).unwrap(),
+                        )
+                        .unwrap();
+                        for e in ledger["entries"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .filter(|e| e["status"] != "disposed")
+                        {
+                            let path = root.join(e["ownership"]["path"].as_str().unwrap());
+                            assert!(
+                                chrono_harness::ownership::Lease::acquire(
+                                    &path, None, false, true, None
+                                )
+                                .unwrap()
+                                .is_none(),
+                                "original enrollment EX must remain held"
+                            );
+                        }
+                    }
+                    if config["drift"] == true {
+                        let lease = dir.join("deployment.lease");
+                        fs::rename(&lease, lease.with_extension("original-lease")).unwrap();
+                        fs::write(lease, "different physical input").unwrap();
+                    }
+                }
+            }
+        }
         "cleanup-io" => {
             if std::env::current_dir().unwrap() == Path::new(config["target"].as_str().unwrap())
                 && arg(1, "ls-files")
