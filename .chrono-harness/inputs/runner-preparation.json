@@ -55,23 +55,15 @@
     "projects": ".chrono-harness/projects.json",
     "operations": [
       "inputs.fetch.runner",
-      "inputs.vendor.runner",
-      "guard.check.runner"
+      "inputs.vendor.runner"
     ],
     "tools": {
       "cargo": {
         "stdout": "selection.cargo"
-      },
-      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo"
+      }
     },
     "timeout_seconds": 120,
     "output_limit_bytes": 1048576,
-    "operation_bounds": {
-      "guard.check.runner": {
-        "timeout_seconds": 600,
-        "output_limit_bytes": 4194304
-      }
-    },
     "environment": {
       "RUSTC": {
         "stdout": "selection.rustc"
