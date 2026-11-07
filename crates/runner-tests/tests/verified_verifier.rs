@@ -13,6 +13,43 @@ use vstd::prelude::*;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_checksum_preserves_the_full_path_hash_and_decimal_length() {
+    let line = b"# checksum:sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef file_len:0 crates/space name/\xe4\xb8\xad.rs";
+    let parsed = policy::sources::parse_checksum_line(line);
+    assert(parsed.is_ok());
+    let record = parsed.unwrap();
+    assert(record.path@ == b"crates/space name/\xe4\xb8\xad.rs"@);
+    assert(record.sha256@ == b"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"@);
+    assert(record.length@ == b"0"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_checksum_never_truncates_large_lengths_or_parent_components() {
+    let line = b"# checksum:sha256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff file_len:184467440737095516160000 crates/a/../../other.rs";
+    let parsed = policy::sources::parse_checksum_line(line);
+    assert(parsed.is_ok());
+    let record = parsed.unwrap();
+    assert(record.path@ == b"crates/a/../../other.rs"@);
+    assert(record.length@ == b"184467440737095516160000"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn malformed_compiler_checksum_fields_are_rejected() {
+    let missing = policy::sources::parse_checksum_line(b"# checksum:sha256=");
+    assert(missing.is_err());
+    let uppercase = policy::sources::parse_checksum_line(b"# checksum:sha256=FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF file_len:1 x");
+    assert(uppercase.is_err());
+    let zero_prefix = policy::sources::parse_checksum_line(b"# checksum:sha256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff file_len:01 x");
+    assert(zero_prefix.is_err());
+    let signed = policy::sources::parse_checksum_line(b"# checksum:sha256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff file_len:-1 x");
+    assert(signed.is_err());
+    let no_path = policy::sources::parse_checksum_line(b"# checksum:sha256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff file_len:1 ");
+    assert(no_path.is_err());
+    let nul = policy::sources::parse_checksum_line(b"# checksum:sha256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff file_len:1 x\0y");
+    assert(nul.is_err());
+}
+
 fn contract() -> (out: Option<OutputContract>)
     ensures out.is_some(), out.unwrap().version@ == "v"@, out.unwrap().commit@ == "c"@,
         policy::valid_contract(&out),

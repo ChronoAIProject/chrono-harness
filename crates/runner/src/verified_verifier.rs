@@ -11,6 +11,9 @@ pub mod identifiers;
 use crate::verified_identifiers as identifiers;
 use identifiers::{equal_bytes, equal_text};
 
+#[path = "verified_sources.rs"]
+pub mod sources;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
