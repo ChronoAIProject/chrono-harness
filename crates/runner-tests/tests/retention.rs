@@ -2936,7 +2936,7 @@ fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
         "operation":"release-preserved",
         "original":original_identity(h.path(), &id, path),
         "roles":[role],
-        "survivor_root":survivor.path(),
+        "survivor_root":fs::canonicalize(survivor.path()).unwrap(),
         "survivor_path":"original.json",
         "sha256":chrono_harness::sha256(raw),
         "length":raw.len(),
@@ -3013,7 +3013,7 @@ fn preserved_original_release_keeps_other_members_of_the_same_consumer() {
         "sha256":chrono_harness::sha256(b"original"),"length":8,
         "current_consumers_released":true,"reason":"Only the first member has been preserved and released"});
     assert_eq!(consumer_call(h.path(), request.clone()).exit_code, 2);
-    request["survivor_root"] = json!(survivor.path());
+    request["survivor_root"] = json!(fs::canonicalize(survivor.path()).unwrap());
     request["survivor_path"] = json!("original.json");
     fs::write(survivor.path().join("original.json"), b"modified").unwrap();
     assert_eq!(consumer_call(h.path(), request.clone()).exit_code, 2);
