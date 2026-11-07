@@ -63,8 +63,8 @@
     {"path":".chrono-harness/projects.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:projects"},{"kind":"judge-trigger","to":"judge:routes"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"runtime-input","to":"project:judge-routes-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
     {"path":".chrono-harness/FILEMAP.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"runtime-input","to":"project:judge-routes-tests"}]},
     {"path":".chrono-harness/workflow.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
-    {"path":"crates/runner/Cargo.toml","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"build-input","to":"project:diagnostics"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
-    {"path":"crates/runner/Cargo.lock","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"build-input","to":"project:diagnostics"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
+    {"path":"crates/runner/Cargo.toml","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
+    {"path":"crates/runner/Cargo.lock","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"}]},
     {"path":"crates/runner/src/lib.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner/src/short_console.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/main.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -1529,8 +1529,6 @@
       "operations": [
         "fmt.diagnostics",
         "fmt.diagnostics-tests",
-        "inputs.fetch.runner",
-        "inputs.vendor.runner",
         "build.diagnostics",
         "test.diagnostics-tests"
       ],
@@ -1999,18 +1997,6 @@
       "fmt.diagnostics-tests": {
         "resources": [],
         "outputs": []
-      },
-      "inputs.fetch.runner": {
-        "resources": [],
-        "outputs": [
-          ".chrono-harness/cache/bootstrap-owner-tooling/cargo/"
-        ]
-      },
-      "inputs.vendor.runner": {
-        "resources": [],
-        "outputs": [
-          ".chrono-harness/cache/runner-vendor/"
-        ]
       },
       "build.diagnostics": {
         "resources": [],

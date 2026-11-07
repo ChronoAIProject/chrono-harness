@@ -2,7 +2,7 @@
 
 本机 diagnostics 与 runner 通过同一份 `.chrono-harness/cargo/runner-vendor.toml` 读取当前工作树的 Cargo vendor 来源。diagnostics 的 26 个锁定包复用已有的 1,113 个输入身份，包含 1,087 份共有源码和 26 份 Cargo 校验清单；配置另有明确绑定。它不再单独登记同一批包的 1,127 个 registry 文件。包版本、锁文件 checksum 和共有源码摘要保持原值；原生 diagnostics 继续消费其独立登记的来源。
 
-**可见宿主政策与消费者修改：**本机 diagnostics 的 metadata、离线 build、配置清单、输入绑定和配置级 FILEMAP 边一起选择现有 vendor 来源。Cargo 未复制的 26 个解包完成标记、13 份 `.gitignore`（含嵌套文件）及一份 `.gitattributes` 不再属于此消费者输入。diagnostics 标准计划先执行已有 `inputs.fetch.runner`、`inputs.vendor.runner`，再执行 `build.diagnostics`，让准备与消费保持在同一次受保护调用中。FILEMAP 登记这两个操作的输出及 runner manifest／lock 的实际使用方；独立准备调用产生的缓存可能在下一次准入时回收，不能当作构建前置已经满足。源码、SDK／工具链和每次子进程后的复核仍适用。该修改须由实际受保护构建、标准 DELTA 及原生检查验收，运行、CI 和存储收益尚未测量。
+**可见宿主政策与消费者修改：**本机 diagnostics 的 metadata、离线 build、配置清单、输入绑定和配置级 FILEMAP 边一起选择现有 vendor 来源。Cargo 未复制的 26 个解包完成标记、13 份 `.gitignore`（含嵌套文件）及一份 `.gitattributes` 不再属于此消费者输入。准备仍使用 `inputs.prepare-runner` 中现有的 fetch／vendor，不增加共享缓存、发现器或兼容分支；源码、SDK／工具链和每次子进程后的复核仍适用。该修改须由实际受保护构建、标准 DELTA 及原生检查验收，运行、CI 和存储收益尚未测量。
 
 `judge-cargo`／`judge-cargo-tests` 是独立的生产／测试项目对。通用 registration、projects 不依赖它或 TOML。宿主通过登记二进制、参数、政策输入和 FILEMAP 边采用此适配器。Go／TS／脚本宿主不会因为出现类似 Cargo 的文件或目录名，就必须采用 Cargo 政策。
 
