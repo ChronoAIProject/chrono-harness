@@ -40,9 +40,17 @@ fn stage_report_value_drift_and_incomplete_processes_are_rejected() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn stage_report_names_reject_missing_or_reused_originals() {
-    let unique = policy::StageRequirement::Names {
-        names: vec!["stdout".to_string(), "stderr".to_string()], nonempty: true,
-    };
+    let names = vec!["stdout".to_string(), "stderr".to_string()];
+    proof {
+        reveal_strlit(""); reveal_strlit("stdout"); reveal_strlit("stderr");
+        assert("stdout"@[3] != "stderr"@[3]);
+        assert forall|i: int| 0 <= i < names.len() implies names[i]@ != ""@ by {
+            assert(i == 0 || i == 1);
+        }
+        assert forall|i: int, j: int| 0 <= i < j < names.len()
+            implies names[i]@ != names[j]@ by { assert(i == 0 && j == 1); }
+    }
+    let unique = policy::StageRequirement::Names { names, nonempty: true };
     let duplicate = policy::StageRequirement::Names {
         names: vec!["stdout".to_string(), "stdout".to_string()], nonempty: false,
     };
@@ -54,20 +62,57 @@ fn stage_report_names_reject_missing_or_reused_originals() {
     let valid = policy::valid_stage_requirement(&unique);
     let reused = policy::valid_stage_requirement(&duplicate);
     let unnamed = policy::valid_stage_requirement(&empty);
-    assert(valid && !reused && !unnamed);
+    assert(valid);
+    assert(!reused);
+    assert(!unnamed);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn stage_report_collects_the_first_failed_requirement() {
     let checks = vec![
-        policy::StageRequirement::Process { exit: Some(0), pid: Some(1) },
-        policy::StageRequirement::Process { exit: Some(0), pid: Some(0) },
-        policy::StageRequirement::Process { exit: Some(1), pid: Some(1) },
+        policy::StageCheck { requirement: policy::StageRequirement::Process {
+            exit: Some(0), pid: Some(1) }, diagnostic: "first".to_string() },
+        policy::StageCheck { requirement: policy::StageRequirement::Process {
+            exit: Some(0), pid: Some(0) }, diagnostic: "second".to_string() },
+        policy::StageCheck { requirement: policy::StageRequirement::Process {
+            exit: Some(1), pid: Some(1) }, diagnostic: "third".to_string() },
     ];
     let first = policy::first_stage_failure(&checks);
     assert(first == Some(1usize));
     let empty = policy::first_stage_failure(&Vec::new());
     assert(empty is None);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn stage_report_digest_path_and_relocation_boundaries() {
+    let zeros = vec![48u8; 64];
+    let uppercase = vec![65u8; 64];
+    let short = vec![48u8; 63];
+    let valid = policy::valid_stage_digest(&zeros);
+    let bad_case = policy::valid_stage_digest(&uppercase);
+    let bad_length = policy::valid_stage_digest(&short);
+    assert(valid && !bad_case && !bad_length);
+    let absolute = policy::valid_stage_requirement(
+        &policy::StageRequirement::AbsolutePath { bytes: vec![47u8, 97] });
+    let relative = policy::valid_stage_requirement(
+        &policy::StageRequirement::AbsolutePath { bytes: vec![97u8] });
+    let missing = policy::valid_stage_requirement(
+        &policy::StageRequirement::AbsolutePath { bytes: Vec::new() });
+    assert(absolute && !relative && !missing);
+    let registry = policy::valid_stage_requirement(
+        &policy::StageRequirement::BindingPath { registry: true, declared: false });
+    let inline_missing = policy::valid_stage_requirement(
+        &policy::StageRequirement::BindingPath { registry: false, declared: false });
+    assert(registry && !inline_missing);
+    let fixed = policy::valid_stage_requirement(&policy::StageRequirement::Relocation {
+        allowed: false, actual: vec![47u8, 97], declared: Some(vec![47u8, 97]) });
+    let drift = policy::valid_stage_requirement(&policy::StageRequirement::Relocation {
+        allowed: false, actual: vec![47u8, 98], declared: Some(vec![47u8, 97]) });
+    let moved = policy::valid_stage_requirement(&policy::StageRequirement::Relocation {
+        allowed: true, actual: vec![47u8, 98], declared: None });
+    let undeclared = policy::valid_stage_requirement(&policy::StageRequirement::Relocation {
+        allowed: false, actual: vec![47u8, 98], declared: None });
+    assert(fixed && !drift && moved && !undeclared);
 }
 
 fn binding(identity: &str, hash: &str, size: u64) -> (out: Binding)

@@ -31,12 +31,54 @@ fn stage_registration(
     path: &str,
 ) -> Result<Vec<u8>, String> {
     let bytes = fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?;
-    if r.blob(root, head, path)? != bytes {
+    let declared = r.blob(root, head, path)?;
+    if !publication_policy::valid_stage_requirement(&publication_policy::StageRequirement::Equal {
+        actual: bytes.clone(), expected: declared,
+    }) {
         return Err(format!(
             "owner stage registration differs from source: {path}"
         ));
     }
     Ok(bytes)
+}
+
+// Decoding, serialization, hashing and path/OS observations are interface
+// operations. The finite predicates over their results use the required root.
+fn stage_claim(
+    checks: &mut Vec<publication_policy::StageCheck>,
+    requirement: publication_policy::StageRequirement,
+    diagnostic: impl Into<String>,
+) {
+    checks.push(publication_policy::StageCheck { requirement, diagnostic: diagnostic.into() });
+}
+
+fn stage_value(
+    checks: &mut Vec<publication_policy::StageCheck>,
+    actual: &Value,
+    expected: &Value,
+    diagnostic: impl Into<String>,
+) -> Result<(), String> {
+    stage_claim(checks, publication_policy::StageRequirement::Equal {
+        actual: serde_json::to_vec(actual).map_err(|e| e.to_string())?,
+        expected: serde_json::to_vec(expected).map_err(|e| e.to_string())?,
+    }, diagnostic);
+    Ok(())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StageToolBinding {
+    #[serde(default, deserialize_with = "present_stage_binding")]
+    path: Option<String>,
+    sha256: String,
+    version: String,
+    #[serde(default, deserialize_with = "present_stage_binding")]
+    allow_relocation: Option<bool>,
+}
+
+fn present_stage_binding<'de, D, T>(decoder: D) -> Result<Option<T>, D::Error>
+where D: serde::Deserializer<'de>, T: serde::Deserialize<'de> {
+    T::deserialize(decoder).map(Some)
 }
 
 fn validate_stage(
@@ -47,23 +89,18 @@ fn validate_stage(
     policy: &Value,
     stage: &Value,
 ) -> Result<(), String> {
+    use publication_policy::StageRequirement as Requirement;
+    let mut checks = Vec::new();
     let tree = r.oid(root, &format!("{head}^{{tree}}"))?;
     let observed = value!({"commit":head,"tree":tree,"dirty":false,"error":null});
-    if stage["source"]
-        != value!({"state":"clean","commit":head,"tree":tree,
-        "before":observed,"after":observed})
-        || stage["installed"] != value!([])
-    {
-        return Err("owner stage requires its original clean source and no installations".into());
-    }
+    stage_value(&mut checks, &stage["source"],
+        &value!({"state":"clean","commit":head,"tree":tree,"before":observed,"after":observed}),
+        "owner stage requires its original clean source and no installations")?;
+    stage_value(&mut checks, &stage["installed"], &value!([]),
+        "owner stage requires its original clean source and no installations")?;
     let projects_path = policy["projects"].as_str().ok_or("owner stage projects")?;
-    let mut paths = vec![
-        profile,
-        projects_path,
-        ".chrono-harness/ci/bootstrap.py",
-        ".chrono-harness/ci/bootstrap_owner.py",
-        ".chrono-harness/ci/bootstrap_shared.py",
-    ];
+    let mut paths = vec![profile, projects_path, ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_owner.py", ".chrono-harness/ci/bootstrap_shared.py"];
     if let Some(path) = policy.get("tool_bindings_registry") {
         paths.push(path.as_str().ok_or("owner stage toolchain registry path")?);
     }
@@ -77,296 +114,178 @@ fn validate_stage(
         registrations.insert(path.into(), value!(sha256(&bytes)));
         registration_bytes.insert(path, bytes);
     }
-    if stage["registrations"] != Value::Object(registrations) {
-        return Err("owner stage execution registrations differ".into());
-    }
+    stage_value(&mut checks, &stage["registrations"], &Value::Object(registrations),
+        "owner stage execution registrations differ")?;
     if let Some(homes) = policy.get("host_environment") {
-        if stage["host_environment"] != *homes {
-            return Err("owner stage host environment differs".into());
-        }
+        stage_value(&mut checks, &stage["host_environment"], homes,
+            "owner stage host environment differs")?;
         for (key, path) in homes.as_object().ok_or("owner stage host environment")? {
             let path = path.as_str().ok_or("owner stage host environment path")?;
             relative_path(path)?;
+            // This retained path policy is an existing IO boundary.
             if !path.starts_with(".chrono-harness/") {
                 return Err("owner stage host environment must be a host path".into());
             }
-            if stage["environment"][key] != value!(root.join(path)) {
-                return Err(format!(
-                    "owner stage producer host environment differs: {key}"
-                ));
-            }
+            stage_value(&mut checks, &stage["environment"][key], &value!(root.join(path)),
+                format!("owner stage producer host environment differs: {key}"))?;
         }
     }
     let registry_bindings;
     let bindings = if let Some(path) = policy.get("tool_bindings_registry") {
-        if policy.get("tool_bindings").is_some() || policy.get("native_platform").is_some() {
-            return Err("conflicting owner stage binding declarations".into());
-        }
+        stage_value(&mut checks, &value!([policy.get("tool_bindings").is_some(), policy.get("native_platform").is_some()]),
+            &value!([false, false]), "conflicting owner stage binding declarations")?;
         let path = path.as_str().ok_or("owner stage toolchain registry")?;
         if !path.starts_with(".chrono-harness/ci/") {
             return Err("owner stage toolchain registry must be a CI path".into());
         }
-        let registry = json(
-            registration_bytes
-                .get(path)
-                .ok_or("owner stage registry input")?,
-        )?;
-        if registry["schema"] != "chrono-bootstrap-toolchains/v1"
-            || registry["rust_toolchain"] != policy["rust_toolchain"]
-        {
-            return Err("owner stage toolchain registry differs".into());
-        }
+        let registry = json(registration_bytes.get(path).ok_or("owner stage registry input")?)?;
+        stage_value(&mut checks, &registry["schema"], &value!("chrono-bootstrap-toolchains/v1"),
+            "owner stage toolchain registry differs")?;
+        stage_value(&mut checks, &registry["rust_toolchain"], &policy["rust_toolchain"],
+            "owner stage toolchain registry differs")?;
         let system = match std::env::consts::OS {
-            "macos" => "Darwin",
-            "linux" => "Linux",
+            "macos" => "Darwin", "linux" => "Linux",
             _ => return Err("unsupported owner stage native platform".into()),
         };
         let machine = match (std::env::consts::OS, std::env::consts::ARCH) {
-            ("macos", "aarch64") => "arm64",
-            (_, arch) => arch,
+            ("macos", "aarch64") => "arm64", (_, arch) => arch,
         };
         let tools = registry["platforms"][format!("{system}/{machine}")]["tools"]
-            .as_object()
-            .ok_or("missing owner stage native toolchain registration")?;
-        registry_bindings = Value::Object(
-            tools
-                .iter()
-                .map(|(name, item)| {
-                    (
-                        name.clone(),
-                        value!({
-            "sha256":item["sha256"],"version":item["version"],"allow_relocation":true}),
-                    )
-                })
-                .collect(),
-        );
+            .as_object().ok_or("missing owner stage native toolchain registration")?;
+        registry_bindings = Value::Object(tools.iter().map(|(name, item)| (name.clone(),
+            value!({"sha256":item["sha256"],"version":item["version"],"allow_relocation":true}))).collect());
         Some(&registry_bindings)
     } else {
         if policy["require_tool_bindings"] == true {
             let system = match std::env::consts::OS {
-                "macos" => "Darwin",
-                "linux" => "Linux",
-                _ => "unsupported",
+                "macos" => "Darwin", "linux" => "Linux", _ => "unsupported",
             };
             let machine = match (std::env::consts::OS, std::env::consts::ARCH) {
-                ("macos", "aarch64") => "arm64",
-                (_, arch) => arch,
+                ("macos", "aarch64") => "arm64", (_, arch) => arch,
             };
-            if policy.get("tool_bindings").is_none()
-                || policy["native_platform"] != value!({"system":system,"machine":machine})
-            {
-                return Err("missing owner stage native binding declarations".into());
-            }
+            stage_value(&mut checks, &value!(policy.get("tool_bindings").is_some()), &value!(true),
+                "missing owner stage native binding declarations")?;
+            stage_value(&mut checks, &policy["native_platform"], &value!({"system":system,"machine":machine}),
+                "missing owner stage native binding declarations")?;
         }
         policy.get("tool_bindings")
     };
     let mut selected = BTreeMap::new();
     if let Some(bindings) = bindings {
-        let object = bindings
-            .as_object()
-            .ok_or("owner stage executable bindings")?;
-        let rows = stage["executables"]
-            .as_array()
-            .ok_or("owner stage executable observations")?;
-        if object.len() != 2
-            || !object.contains_key("cargo")
-            || !object.contains_key("rustc")
-            || rows.len() != 2
-        {
-            return Err("owner stage requires exactly Cargo and rustc bindings".into());
-        }
+        let object = bindings.as_object().ok_or("owner stage executable bindings")?;
+        let rows = stage["executables"].as_array().ok_or("owner stage executable observations")?;
+        stage_value(&mut checks, &value!(object.keys().collect::<Vec<_>>()), &value!(["cargo", "rustc"]),
+            "owner stage requires exactly Cargo and rustc bindings")?;
+        stage_value(&mut checks, &value!(rows.len()), &value!(2),
+            "owner stage requires exactly Cargo and rustc bindings")?;
         for (name, row) in ["cargo", "rustc"].into_iter().zip(rows) {
-            let binding = &bindings[name];
-            let fields = binding
-                .as_object()
-                .ok_or("owner stage executable binding")?;
-            let digest = binding["sha256"]
-                .as_str()
-                .ok_or("owner stage executable digest")?;
-            if fields.keys().any(|key| {
-                !["path", "sha256", "version", "allow_relocation"].contains(&key.as_str())
-            }) || digest.len() != 64
-                || !digest
-                    .bytes()
-                    .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
-                || binding["version"].as_str().is_none()
-                || binding.get("path").is_some_and(|v| !v.is_string())
-                || (binding.get("path").is_none() && policy.get("tool_bindings_registry").is_none())
-                || binding
-                    .get("allow_relocation")
-                    .is_some_and(|v| !v.is_boolean())
-            {
-                return Err("invalid owner stage executable binding".into());
-            }
+            let binding: StageToolBinding = serde_json::from_value(bindings[name].clone())
+                .map_err(|_| "invalid owner stage executable binding")?;
+            stage_claim(&mut checks, Requirement::Digest { bytes: binding.sha256.as_bytes().to_vec() },
+                "invalid owner stage executable binding");
+            stage_claim(&mut checks, Requirement::BindingPath {
+                registry: policy.get("tool_bindings_registry").is_some(), declared: binding.path.is_some(),
+            }, "invalid owner stage executable binding");
             let path = row["path"].as_str().ok_or("owner stage executable path")?;
-            if !Path::new(path).is_absolute()
-                || row["sha256"] != binding["sha256"]
-                || row["version"] != binding["version"]
-            {
-                return Err(format!("owner stage executable binding differs: {name}"));
-            }
-            if binding["allow_relocation"] != true {
-                let declared = binding["path"]
-                    .as_str()
-                    .ok_or("owner stage declared executable path")?;
-                if root.join(declared) != Path::new(path) {
-                    return Err("owner stage executable relocation is not permitted".into());
-                }
-            }
+            stage_claim(&mut checks, Requirement::AbsolutePath { bytes: path.as_bytes().to_vec() },
+                format!("owner stage executable binding differs: {name}"));
+            stage_value(&mut checks, &row["sha256"], &value!(binding.sha256),
+                format!("owner stage executable binding differs: {name}"))?;
+            stage_value(&mut checks, &row["version"], &value!(binding.version),
+                format!("owner stage executable binding differs: {name}"))?;
+            stage_claim(&mut checks, Requirement::Relocation {
+                allowed: binding.allow_relocation.unwrap_or(false), actual: path.as_bytes().to_vec(),
+                declared: binding.path.map(|declared| root.join(declared).into_os_string()
+                    .into_string().map(String::into_bytes).map_err(|_| "owner stage executable UTF-8"))
+                    .transpose()?,
+            }, "owner stage executable relocation is not permitted");
             selected.insert(name, path);
         }
-        if stage["selection"]
-            != value!({"cargo":selected["cargo"],"rustc":selected["rustc"],
-            "toolchain":policy["rust_toolchain"],"compiler":selected["rustc"]})
-            || stage["versions"]
-                != value!({"cargo":bindings["cargo"]["version"],"rustc":bindings["rustc"]["version"]})
-        {
-            return Err("owner stage executable selection differs".into());
+        // Keep malformed counts from reaching indexed selection construction.
+        if let Some(index) = publication_policy::first_stage_failure(&checks) {
+            return Err(checks[index].diagnostic.clone());
         }
-        let mut environment = value!({"RUSTUP_TOOLCHAIN":policy["rust_toolchain"],"RUSTC":selected["rustc"],"RUSTC_WRAPPER":"","RUSTC_WORKSPACE_WRAPPER":""});
+        stage_value(&mut checks, &stage["selection"],
+            &value!({"cargo":selected["cargo"],"rustc":selected["rustc"],
+                "toolchain":policy["rust_toolchain"],"compiler":selected["rustc"]}),
+            "owner stage executable selection differs")?;
+        stage_value(&mut checks, &stage["versions"],
+            &value!({"cargo":bindings["cargo"]["version"],"rustc":bindings["rustc"]["version"]}),
+            "owner stage executable selection differs")?;
+        let mut environment = value!({"RUSTUP_TOOLCHAIN":policy["rust_toolchain"],"RUSTC":selected["rustc"],
+            "RUSTC_WRAPPER":"","RUSTC_WORKSPACE_WRAPPER":""});
         if let Some(incremental) = policy.get("rust_incremental") {
-            environment["CARGO_INCREMENTAL"] = value!(if incremental
-                .as_bool()
-                .ok_or("owner stage incremental declaration")?
-            {
-                "1"
-            } else {
-                "0"
-            });
+            environment["CARGO_INCREMENTAL"] = value!(if incremental.as_bool().ok_or("owner stage incremental declaration")? { "1" } else { "0" });
         }
         for (key, value) in environment.as_object().unwrap() {
-            if stage["environment"][key] != *value {
-                return Err(format!("owner stage compiler environment differs: {key}"));
-            }
+            stage_value(&mut checks, &stage["environment"][key], value,
+                format!("owner stage compiler environment differs: {key}"))?;
         }
     }
-    let projects = json(
-        registration_bytes
-            .get(projects_path)
-            .ok_or("owner stage projects input")?,
-    )?;
-    let mut actions = BTreeMap::new();
-    for owner in projects["projects"]
-        .as_array()
-        .ok_or("owner stage projects")?
-        .iter()
-        .chain(
-            projects["scripts"]
-                .as_array()
-                .ok_or("owner stage scripts")?,
-        )
-    {
-        for action in owner["actions"]
-            .as_object()
-            .ok_or("owner stage actions")?
-            .values()
-        {
-            let name = action["operation"]
-                .as_str()
-                .ok_or("owner stage operation")?;
-            if actions.insert(name, action).is_some() {
-                return Err(format!("duplicate owner stage operation: {name}"));
-            }
+    let projects = json(registration_bytes.get(projects_path).ok_or("owner stage projects input")?)?;
+    let mut actions: BTreeMap<&str, Vec<&Value>> = BTreeMap::new();
+    for owner in projects["projects"].as_array().ok_or("owner stage projects")?.iter()
+        .chain(projects["scripts"].as_array().ok_or("owner stage scripts")?) {
+        for action in owner["actions"].as_object().ok_or("owner stage actions")?.values() {
+            let name = action["operation"].as_str().ok_or("owner stage operation")?;
+            actions.entry(name).or_default().push(action);
         }
     }
     let mut sequence = Vec::new();
     if let Some(prerequisites) = policy.get("prerequisites") {
-        sequence.extend(
-            prerequisites
-                .as_array()
-                .ok_or("owner stage prerequisites")?
-                .iter(),
-        );
+        sequence.extend(prerequisites.as_array().ok_or("owner stage prerequisites")?.iter());
     }
-    sequence.extend(
-        policy["operations"]
-            .as_array()
-            .ok_or("owner stage operations")?
-            .iter(),
-    );
-    let mut unique = std::collections::BTreeSet::new();
-    for name in &sequence {
-        let name = name.as_str().ok_or("owner stage operation name")?;
-        if name.is_empty() || !unique.insert(name) {
-            return Err("duplicate or empty owner stage operation".into());
-        }
-    }
-    let actual = stage["operations"]
-        .as_array()
-        .ok_or("owner stage original operations")?;
-    if actual
-        .iter()
-        .map(|row| &row["operation"])
-        .collect::<Vec<_>>()
-        != sequence
-    {
-        return Err("owner stage producer operations differ".into());
-    }
-    let mut streams = std::collections::BTreeSet::new();
+    sequence.extend(policy["operations"].as_array().ok_or("owner stage operations")?.iter());
+    let names = sequence.iter().map(|name| name.as_str().ok_or("owner stage operation name").map(str::to_owned))
+        .collect::<Result<Vec<_>, _>>()?;
+    stage_claim(&mut checks, Requirement::Names { names, nonempty: true },
+        "duplicate or empty owner stage operation");
+    let actual = stage["operations"].as_array().ok_or("owner stage original operations")?;
+    stage_value(&mut checks, &value!(actual.iter().map(|row| &row["operation"]).collect::<Vec<_>>()),
+        &value!(sequence), "owner stage producer operations differ")?;
+    let mut streams = Vec::new();
     for row in actual {
-        let name = row["operation"]
-            .as_str()
-            .ok_or("owner stage operation name")?;
-        let action = actions
-            .get(name)
-            .ok_or("owner stage operation is not registered")?;
-        let tool = action["tool"]
-            .as_str()
-            .ok_or("owner stage operation tool")?;
+        let name = row["operation"].as_str().ok_or("owner stage operation name")?;
+        let declarations = actions.get(name).ok_or("owner stage operation is not registered")?;
+        stage_value(&mut checks, &value!(declarations.len()), &value!(1),
+            format!("duplicate owner stage operation: {name}"))?;
+        let action = declarations.first().ok_or("owner stage operation is not registered")?;
+        let tool = action["tool"].as_str().ok_or("owner stage operation tool")?;
         let program = match selected.get(tool) {
             Some(path) => *path,
-            None => policy["tools"][tool]
-                .as_str()
-                .ok_or("owner stage operation executable")?,
+            None => policy["tools"][tool].as_str().ok_or("owner stage operation executable")?,
         };
         let program = if !Path::new(program).is_absolute() && program.contains('/') {
-            root.join(program)
-                .to_str()
-                .ok_or("owner stage executable UTF-8")?
-                .to_owned()
-        } else {
-            program.to_owned()
-        };
+            root.join(program).to_str().ok_or("owner stage executable UTF-8")?.to_owned()
+        } else { program.to_owned() };
         let mut argv = vec![value!(program)];
-        argv.extend(
-            action["argv"]
-                .as_array()
-                .ok_or("owner stage operation argv")?
-                .iter()
-                .cloned(),
-        );
-        if row["tool"] != action["tool"]
-            || row["argv"] != value!(argv)
-            || row["cwd"] != value!(root)
-            || row["exit_code"].as_i64() != Some(0)
-            || row["pid"].as_u64().unwrap_or(0) == 0
-        {
-            return Err(format!(
-                "owner stage producer operation execution differs: {name}"
-            ));
-        }
-        if selected.contains_key(tool)
-            && row["executable_sha256"] != bindings.unwrap()[tool]["sha256"]
-        {
-            return Err("owner stage operation executable differs".into());
+        argv.extend(action["argv"].as_array().ok_or("owner stage operation argv")?.iter().cloned());
+        let message = format!("owner stage producer operation execution differs: {name}");
+        stage_value(&mut checks, &row["tool"], &action["tool"], &message)?;
+        stage_value(&mut checks, &row["argv"], &value!(argv), &message)?;
+        stage_value(&mut checks, &row["cwd"], &value!(root), &message)?;
+        stage_claim(&mut checks, Requirement::Process { exit: row["exit_code"].as_i64(), pid: row["pid"].as_u64() }, message);
+        if selected.contains_key(tool) {
+            stage_value(&mut checks, &row["executable_sha256"], &bindings.unwrap()[tool]["sha256"],
+                "owner stage operation executable differs")?;
         }
         for channel in ["stdout", "stderr"] {
             let reference = &row[channel];
-            let path = reference["path"]
-                .as_str()
-                .ok_or("owner stage original stream path")?;
+            let path = reference["path"].as_str().ok_or("owner stage original stream path")?;
             let bytes = crate::recovery::state_bytes(root, path)?;
-            if !streams.insert(path)
-                || reference["sha256"] != sha256(&bytes)
-                || reference["size"].as_u64() != Some(bytes.len() as u64)
-            {
-                return Err(format!(
-                    "owner stage original process stream differs: {path}"
-                ));
-            }
+            streams.push(path.to_owned());
+            let message = format!("owner stage original process stream differs: {path}");
+            stage_value(&mut checks, &reference["sha256"], &value!(sha256(&bytes)), &message)?;
+            // Decode integer observations, preserving the prior as_u64 contract.
+            stage_value(&mut checks, &value!(reference["size"].as_u64()), &value!(Some(bytes.len() as u64)), message)?;
         }
     }
-    Ok(())
+    stage_claim(&mut checks, Requirement::Names { names: streams, nonempty: false },
+        "owner stage original process stream differs: duplicate address");
+    match publication_policy::first_stage_failure(&checks) {
+        Some(index) => Err(checks[index].diagnostic.clone()),
+        None => Ok(()),
+    }
 }
 
 fn owner_binding(path: &Path) -> Result<publication_policy::Binding, String> {
