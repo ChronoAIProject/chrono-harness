@@ -49,7 +49,7 @@ fn stage_report_names_reject_missing_or_reused_originals() {
     let empty = policy::StageRequirement::Names {
         names: vec!["".to_string()], nonempty: true,
     };
-    proof { reveal_strlit("stdout"); reveal_strlit("stderr");
+    proof { reveal_strlit(""); reveal_strlit("stdout"); reveal_strlit("stderr");
         assert("stdout"@[3] != "stderr"@[3]); }
     let valid = policy::valid_stage_requirement(&unique);
     let reused = policy::valid_stage_requirement(&duplicate);

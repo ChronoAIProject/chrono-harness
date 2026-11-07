@@ -32,6 +32,7 @@ pub open spec fn distinct_stage_names(names: Seq<String>, nonempty: bool) -> boo
 pub fn valid_stage_names(names: &Vec<String>, nonempty: bool) -> (valid: bool)
     ensures valid <==> distinct_stage_names(names@, nonempty),
 {
+    proof { reveal_strlit(""); }
     let mut i = 0;
     while i < names.len()
         invariant
