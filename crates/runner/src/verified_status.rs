@@ -147,6 +147,33 @@ pub open spec fn finding_level_present(findings: Seq<Finding>, level: Seq<char>)
     exists|i: int| 0 <= i < findings.len() && (#[trigger] findings[i]).level@ == level
 }
 
+proof fn finding_level_prefix_step(findings: Seq<Finding>, level: Seq<char>, at: int)
+    requires 0 <= at < findings.len(),
+    ensures finding_level_present(findings.take(at + 1), level)
+        == (finding_level_present(findings.take(at), level) || findings[at].level@ == level),
+{
+    let before = findings.take(at);
+    let after = findings.take(at + 1);
+    if finding_level_present(after, level) {
+        let i = choose|i: int| 0 <= i < after.len() && after[i].level@ == level;
+        if i < at {
+            assert(before[i].level@ == level);
+            assert(finding_level_present(before, level));
+        } else {
+            assert(i == at && findings[at].level@ == level);
+        }
+    }
+    if finding_level_present(before, level) {
+        let i = choose|i: int| 0 <= i < before.len() && before[i].level@ == level;
+        assert(after[i].level@ == level);
+        assert(finding_level_present(after, level));
+    }
+    if findings[at].level@ == level {
+        assert(after[at].level@ == level);
+        assert(finding_level_present(after, level));
+    }
+}
+
 pub open spec fn finding_status_agreement(status: &WireStatus, findings: Seq<Finding>) -> bool {
     let errors = finding_level_present(findings, "error"@);
     let warnings = finding_level_present(findings, "warning"@);
@@ -172,8 +199,8 @@ pub fn findings_match_status(status: &WireStatus, findings: &[Finding]) -> (matc
         errors = errors || identifiers::equal_text(level, "error");
         warnings = warnings || identifiers::equal_text(level, "warning");
         proof {
-            assert forall|i: int| 0 <= i < at + 1 implies
-                (#[trigger] findings@.take(at + 1)[i]).level@ == findings@[i].level@ by { }
+            finding_level_prefix_step(findings@, "error"@, at as int);
+            finding_level_prefix_step(findings@, "warning"@, at as int);
         }
         at += 1;
     }
