@@ -269,7 +269,7 @@ impl ShortHost {
             .args(args);
         c
     }
-    fn command(&self, args: &[&str]) -> Command {
+    pub(super) fn command(&self, args: &[&str]) -> Command {
         let mut command = self.prepared_command(args);
         self._dir.bind_command(&mut command).unwrap();
         command
