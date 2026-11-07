@@ -762,9 +762,14 @@ core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候�
 
 **产品与宿主政策曾同步修改：**去掉已采用 main 的重复 owner 构建，避免临时重建替换部署字节。登记 bootstrap 测试覆盖复用、选择、原绑定拒绝，再验源码 bootstrap 及受影响标准／原生范围；总节时未测。
 
-普通共享 bootstrap 复用相同协调者字节，改变须走 owner 部署回调。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
+普通共享 bootstrap 复用相同协调者字节，改变须走现有 owner 部署入口。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
 
 真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。Python 负责构建与已采用生产者原件的资格读取；Rust 的现有部署所有者直接核构建报告、登记摘要、工具链绑定、原操作与两流，并负责原 inode 保全、原子替换、中断发布重入、原准入／登记 EX 和采用检查。发布不再调用构建解释器，不生成不存在的 managed_process；不可变 intent／result 继续由实际发布者产生。
+
+发布的身份／内容比较、发布意图的完整阶段绑定、原件／意图／替换状态选择由同源 Verus 实现，
+worktree core／adoption 计划都先执行生产根和独立边界根的整 crate 证明。
+原件存在时仍需核其完整旧绑定；孤立准备文件、错绑意图或意外所选 inode 拒绝。
+局部证明与真实文件系统测试的边界见 [Verus 实施范围](verus.md#所有者可执行文件发布)。
 
 部署从逐工作树记录和 Git inventory 产生真实排除集合。独占发布阻止新登记／use，在改所选字节前，为该物理协调者每个未解决登记（含 linked）取得原 EX，贯穿发布／采用，并复核准入、账本字节、inventory、关联、协调政策、租约身份。
 

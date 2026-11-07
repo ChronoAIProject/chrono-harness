@@ -1,16 +1,23 @@
 //! Selected coordinator bytes change only under original affected enrollment EX leases.
 use super::*;
+use crate::verified_owner_publication as publication_policy;
 
 fn executable_binding(path: &Path) -> Result<Value, String> {
+    use std::os::unix::fs::MetadataExt;
     let id = crate::ownership::identity(path)?;
     let before = fs::metadata(path).map_err(|e| e.to_string())?;
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
     let after = fs::metadata(path).map_err(|e| e.to_string())?;
-    if crate::ownership::identity(path)? != id
-        || before.len() != after.len()
-        || before.modified().map_err(|e| e.to_string())?
-            != after.modified().map_err(|e| e.to_string())?
-    {
+    if !publication_policy::stable_observation(
+        &id,
+        &crate::ownership::identity(path)?,
+        before.len(),
+        after.len(),
+        before.mtime(),
+        after.mtime(),
+        before.mtime_nsec(),
+        after.mtime_nsec(),
+    ) {
         return Err("deployment executable identity changed".into());
     }
     Ok(value!({"identity":id,"sha256":sha256(&bytes),"size":bytes.len()}))
@@ -362,16 +369,26 @@ fn validate_stage(
     Ok(())
 }
 
+fn owner_binding(path: &Path) -> Result<publication_policy::Binding, String> {
+    serde_json::from_value(executable_binding(path)?).map_err(|e| e.to_string())
+}
+
 fn publication_original(path: &Path, value: &Value) -> Result<(), String> {
     let mut raw = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
     raw.push(b'\n');
-    if path.exists() {
+    let exists = path.exists();
+    let original = if exists {
         crate::ownership::identity(path)?;
-        if fs::read(path).map_err(|e| e.to_string())? != raw {
+        fs::read(path).map_err(|e| e.to_string())?
+    } else {
+        Vec::new()
+    };
+    match publication_policy::immutable_original(exists, &original, &raw) {
+        publication_policy::OriginalAction::Create => write_bytes(path, &raw, true)?,
+        publication_policy::OriginalAction::Keep => {}
+        publication_policy::OriginalAction::Reject => {
             return Err("owner publication original collision".into());
         }
-    } else {
-        write_bytes(path, &raw, true)?;
     }
     Ok(())
 }
@@ -380,20 +397,16 @@ fn publication_original(path: &Path, value: &Value) -> Result<(), String> {
 // enrollment remain exclusive. Intent and the retained inode survive interruption
 // after rename; publication alone claims neither adoption nor task completion.
 fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
-    let staged_path = record["staged"]["path"]
-        .as_str()
-        .ok_or("staged owner path")?;
-    let selected_path = record["selected"].as_str().ok_or("selected owner path")?;
-    if !staged_path.starts_with(".chrono-harness/bin/owner-stages/")
-        || !selected_path.starts_with(".chrono-harness/bin/")
-    {
+    let expected: publication_policy::Stage =
+        serde_json::from_value(record.clone()).map_err(|e| e.to_string())?;
+    let staged_path = expected.staged.path.as_str();
+    let selected_path = expected.selected.as_str();
+    if !publication_policy::retained_paths(staged_path.as_bytes(), selected_path.as_bytes()) {
         return Err("owner publication requires retained executable paths".into());
     }
     let staged = no_symlink_parents(root, staged_path)?;
     let target = no_symlink_parents(root, selected_path)?;
-    let mut binding = executable_binding(&staged)?;
-    binding["path"] = value!(staged_path);
-    if binding != record["staged"] {
+    if !publication_policy::staged_binding_equal(&owner_binding(&staged)?, &expected.staged) {
         return Err("retained owner stage changed before publication".into());
     }
     let parent = staged_path.rsplit_once('/').ok_or("stage directory")?.0;
@@ -401,66 +414,89 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
     let intent = no_symlink_parents(root, &format!("{parent}/publication-intent.json"))?;
     let next = no_symlink_parents(root, &format!("{parent}/publication-next-owner"))?;
     let result_path = no_symlink_parents(root, &format!("{parent}/publication-result.json"))?;
-    if !previous.exists() {
-        if executable_binding(&target)? != record["previous"] {
+    let previous_exists = previous.exists();
+    let selected_before = if previous_exists {
+        None
+    } else {
+        Some(owner_binding(&target)?)
+    };
+    match publication_policy::preserve_original(
+        previous_exists,
+        selected_before.as_ref(),
+        &expected.previous,
+    ) {
+        publication_policy::OriginalAction::Create => {
+            fs::hard_link(&target, &previous).map_err(|e| e.to_string())?;
+        }
+        publication_policy::OriginalAction::Keep => {}
+        publication_policy::OriginalAction::Reject => {
             return Err("selected owner changed before original preservation".into());
         }
-        fs::hard_link(&target, &previous).map_err(|e| e.to_string())?;
     }
-    if executable_binding(&previous)? != record["previous"] {
+    if !publication_policy::binding_equal(&owner_binding(&previous)?, &expected.previous) {
         return Err("retained original owner changed".into());
     }
-    let planned = if intent.exists() {
-        let planned = json(&fs::read(&intent).map_err(|e| e.to_string())?)?;
-        if planned.as_object().map(|o| o.len()) != Some(3)
-            || planned["schema"] != "chrono-bootstrap-owner-publication-intent/v1"
-            || planned["stage"] != *record
-        {
-            return Err("owner publication intent binding differs".into());
+    let intent_exists = intent.exists();
+    let prepared_exists = !intent_exists && next.exists();
+    let planned = match publication_policy::intent_action(intent_exists, prepared_exists) {
+        publication_policy::IntentAction::Read => {
+            json(&fs::read(&intent).map_err(|e| e.to_string())?)?
         }
-        planned
-    } else {
-        // Never adopt a replacement whose preparation has no original intent.
-        let mut output = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&next)
-            .map_err(|e| format!("prepare owner publication: {e}"))?;
-        output
-            .write_all(&fs::read(&staged).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
+        publication_policy::IntentAction::Reject => {
+            return Err("unqualified prepared owner without publication intent".into());
+        }
+        publication_policy::IntentAction::Prepare => {
+            // Never adopt a replacement whose preparation has no original intent.
+            let mut output = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&next)
+                .map_err(|e| format!("prepare owner publication: {e}"))?;
             output
-                .set_permissions(fs::Permissions::from_mode(0o755))
+                .write_all(&fs::read(&staged).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
-        }
-        output.sync_all().map_err(|e| e.to_string())?;
-        let planned = value!({"schema":"chrono-bootstrap-owner-publication-intent/v1",
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                output
+                    .set_permissions(fs::Permissions::from_mode(0o755))
+                    .map_err(|e| e.to_string())?;
+            }
+            output.sync_all().map_err(|e| e.to_string())?;
+            let planned = value!({"schema":"chrono-bootstrap-owner-publication-intent/v1",
             "stage":record,"replacement":executable_binding(&next)?});
-        publication_original(&intent, &planned)?;
-        planned
+            publication_original(&intent, &planned)?;
+            planned
+        }
     };
-    if planned["replacement"]["sha256"] != record["staged"]["sha256"]
-        || planned["replacement"]["size"] != record["staged"]["size"]
-    {
+    let planned: publication_policy::Intent = serde_json::from_value(planned)
+        .map_err(|_| "owner publication intent binding differs".to_string())?;
+    if !publication_policy::valid_intent(&planned, &expected) {
+        return Err("owner publication intent binding differs".into());
+    }
+    if !publication_policy::staged_bytes_equal(&planned.replacement, &expected.staged) {
         return Err("prepared publication owner differs from retained stage".into());
     }
-    let current = executable_binding(&target)?;
-    if current == record["previous"] {
-        if executable_binding(&next)? != planned["replacement"] {
-            return Err("prepared publication owner changed".into());
+    let current = owner_binding(&target)?;
+    match publication_policy::selected_action(&current, &expected.previous, &planned.replacement) {
+        publication_policy::SelectedAction::Replace => {
+            if !publication_policy::binding_equal(&owner_binding(&next)?, &planned.replacement) {
+                return Err("prepared publication owner changed".into());
+            }
+            fs::rename(&next, &target).map_err(|e| e.to_string())?;
         }
-        fs::rename(&next, &target).map_err(|e| e.to_string())?;
-    } else if current != planned["replacement"] {
-        return Err("selected owner drifted after publication intent".into());
+        publication_policy::SelectedAction::Keep => {}
+        publication_policy::SelectedAction::Reject => {
+            return Err("selected owner drifted after publication intent".into());
+        }
     }
-    let installed = executable_binding(&target)?;
-    if installed != planned["replacement"]
-        || installed["sha256"] != record["staged"]["sha256"]
-        || executable_binding(&previous)? != record["previous"]
-    {
+    let installed = owner_binding(&target)?;
+    if !publication_policy::valid_publication(
+        &installed,
+        &planned.replacement,
+        &owner_binding(&previous)?,
+        &expected,
+    ) {
         return Err("installed owner verification failed".into());
     }
     let result = value!({"schema":"chrono-bootstrap-owner-publication/v1","stage":record,
