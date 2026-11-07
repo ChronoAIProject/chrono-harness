@@ -5,7 +5,7 @@
     {
       "id": "registration",
       "executable": ".chrono-harness/bin/chrono-judge-registration",
-      "sha256": "9f5dedd37c314de2d9623a21b1c0bbe666c7800c2c8a12c6b3d0611e32951565",
+      "sha256": "5e0b8251e7450a5dc30c9faadd8fe62d899efaf123745fbcf259f5023adf95cb",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -20,7 +20,7 @@
     {
       "id": "filemap",
       "executable": ".chrono-harness/bin/chrono-judge-filemap",
-      "sha256": "fd11649272ff4a02f79dd3e685bf7952540cd8851fdca6b9c8714bbb8483c5a6",
+      "sha256": "15ed9412155d2aa4b98eccf70cb581fc045c08274f82e482bec39714228a010b",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -37,7 +37,7 @@
     {
       "id": "projects",
       "executable": ".chrono-harness/bin/chrono-judge-projects",
-      "sha256": "1279b61cdf57855e906dcf71c8dc3c8e0f8951dd584711952ce2a764969291c9",
+      "sha256": "64b45a8e8cdaeda40b379fe5980c317c67f8c6e49f730bc1c3e32192ecee73b2",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -56,7 +56,7 @@
     {
       "id": "routes",
       "executable": ".chrono-harness/bin/chrono-judge-routes",
-      "sha256": "ed5e48d72fd3df922d19221bea3f4a4de35697cc6b03c8cf3e4c13b5eb8a917e",
+      "sha256": "373f303b98be1a834a866d6f38aff9e735e07676838c7f1eca09ee9b3e133b26",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -74,7 +74,7 @@
     {
       "id": "cost",
       "executable": ".chrono-harness/bin/chrono-judge-cost",
-      "sha256": "8971617f09a96f32a61bf55207c02f8003fca9fde198de8f42c73a5447a4636a",
+      "sha256": "9eac7e61148a6a32a40c50f467e4015a5d0379385149fecef7b9248d956067af",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -92,7 +92,7 @@
     {
       "id": "mixed",
       "executable": ".chrono-harness/bin/chrono-judge-mixed",
-      "sha256": "d6ea6a2e90407fede852d144a5e20c522d45d22f3409039decd81a1b098d8ca8",
+      "sha256": "a478f77f4a0ad3905eaa218eb075b627f963b97a48b0d3f7ef92cc7fdc267ad3",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -111,7 +111,7 @@
     {
       "id": "workflow",
       "executable": ".chrono-harness/bin/chrono-judge-workflow",
-      "sha256": "84769aa78e408c4632da240fb14d5b4dfe37bb4fdcbc59b9d04d2bccfb146c56",
+      "sha256": "e019856286c3c5dbf4e74e6396b7b7ed45ba13426f34175e2ff6d0af2f175b54",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
