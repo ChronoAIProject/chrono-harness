@@ -1,5 +1,4 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
-#![allow(unexpected_cfgs)]
 mod backend;
 mod content;
 mod probe;

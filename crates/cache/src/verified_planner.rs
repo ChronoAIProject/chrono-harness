@@ -1,4 +1,5 @@
 //! 缓存报告和封存共用的当前 planner 身份判断。
+#![allow(unexpected_cfgs)]
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
