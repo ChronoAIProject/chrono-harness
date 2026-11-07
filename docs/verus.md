@@ -133,8 +133,18 @@ Rust 测试另外验证真实消费者，不替代证明。
 
 ## 此批使用的外部接口
 
-明确采用固定 Verus／vstd 对 `Vec`、`String`／`str`、UTF-8、`Option` 与标准 trait 的规格；
-这些是外部库合同，不是本仓自写的受信实现。没有新增 `external_body`、`assume` 或证明过滤。
+本批新增生产逻辑采用下表的具体外部接口，合同来自固定 Verus／vstd；
+类型或库名本身不授予其他仓内逻辑豁免。没有新增 `external_body`、`assume` 或证明过滤。
+其余存量证明根和程序使用的外部接口仍须完整清点，不据本表主张全仓覆盖。
+
+| 外部接口 | 本批用途及采用的合同 |
+| --- | --- |
+| `str::as_bytes` | 借用完整 UTF-8 字节，返回切片视图等于 `str::spec_bytes()`；后者由固定 vstd 定义为字符串字符序列的 UTF-8 编码。摘要判断读取原字节。 |
+| `String::as_str` | 借用原字符串，字符视图相等；finding 判断读取真实 level。 |
+| 切片 `len`、`<[T] as Index<usize>>::index` 及 `<usize as SliceIndex<[T]>>::index` | 长度和逐项读取对应切片视图；本仓循环另行证明索引界限、完整遍历、返回条件及终止。`T` 在本批为 `u8` 或 `Finding`。 |
+| `<String as Clone>::clone` | 复制完整字符串；本仓 Finding 克隆证明各实际字符串字段均保留。 |
+| `<Vec<String> as Clone>::clone` | 保留长度和逐项克隆关系；本仓 Finding 克隆证明两个引用数组的完整字段、顺序和重复均保留。 |
+
 `Status`／`WireStatus`／`CheckResult`／`Finding` 的 Debug 与 Serde 派生是明确保留的外部编码接口，沿用原 JSON 名称和字段合同，
 不据这些派生主张解码、协议校验或仓内决策已经证明。工具下载、摘要、进程与 IO 的现有接口继续保留原验收义务。
 `TraversedEdge` 的原 Debug／Serde 派生同样只承担外部编码。
