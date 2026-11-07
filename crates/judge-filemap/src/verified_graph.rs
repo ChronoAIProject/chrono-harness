@@ -4,6 +4,13 @@ use chrono_harness::verus;
 use core::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 #[cfg(verus_keep_ghost)]
+#[path = "../../judge-registration/src/verified_nodes.rs"]
+pub mod nodes;
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_judge_registration::NodeKind;
+#[cfg(verus_keep_ghost)]
+pub use nodes::NodeKind;
+#[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
@@ -172,6 +179,46 @@ impl PartialEq for EdgeKind {
 }
 
 impl Eq for EdgeKind {}
+
+/// Complete allowed relation, stated by destination rather than dispatch order.
+pub open spec fn permitted_types(kind: EdgeKind, from: NodeKind, to: NodeKind) -> bool {
+    let source = from == NodeKind::File || from == NodeKind::Project
+        || from == NodeKind::Script || from == NodeKind::Input
+        || from == NodeKind::Tool || from == NodeKind::Environment;
+    match to {
+        NodeKind::Project => (kind == EdgeKind::Compile
+            && (from == NodeKind::File || from == NodeKind::Project))
+            || ((kind == EdgeKind::BuildInput || kind == EdgeKind::RuntimeInput) && source),
+        NodeKind::Script => (kind == EdgeKind::BuildInput || kind == EdgeKind::RuntimeInput) && source,
+        NodeKind::Test => kind == EdgeKind::TestExecution && source,
+        NodeKind::Judge => (kind == EdgeKind::RuntimeInput && source)
+            || (kind == EdgeKind::JudgeTrigger && source && from != NodeKind::Script),
+        _ => false,
+    }
+}
+
+pub fn valid_types(kind: EdgeKind, from: NodeKind, to: NodeKind) -> (valid: bool)
+    ensures valid == permitted_types(kind, from, to),
+{
+    use NodeKind::*;
+    match kind {
+        EdgeKind::Compile => matches!(from, File | Project) && to == Project,
+        EdgeKind::BuildInput => {
+            matches!(from, File | Project | Script | Input | Tool | Environment)
+                && matches!(to, Project | Script)
+        }
+        EdgeKind::RuntimeInput => {
+            matches!(from, File | Project | Script | Input | Tool | Environment)
+                && matches!(to, Project | Script | Judge)
+        }
+        EdgeKind::TestExecution => {
+            matches!(from, File | Project | Script | Input | Tool | Environment) && to == Test
+        }
+        EdgeKind::JudgeTrigger => {
+            matches!(from, File | Project | Input | Tool | Environment) && to == Judge
+        }
+    }
+}
 
 #[cfg(verus_keep_ghost)]
 impl vstd::std_specs::cmp::OrdSpecImpl for EdgeKind {
@@ -2609,7 +2656,14 @@ proof fn predecessor_path_edge(rows: Seq<Predecessor>, node: Seq<u8>, path: Seq<
         predecessor_at(rows, predecessor_path_nodes(node, path)[at + 1]) matches Some(row)
             && row.parent matches Some(parent) && parent.key() == path[at],
 {
-    if at > 0 { assert(path[at - 1].2 == path[at].0); }
+    hide(predecessor_at);
+    let nodes = predecessor_path_nodes(node, path);
+    assert(nodes.len() == path.len() + 1);
+    assert(nodes[at + 1] == path[at].2);
+    if at > 0 {
+        assert(nodes[at] == path[at - 1].2);
+        assert(path[at - 1].2 == path[at].0);
+    } else { assert(nodes[at] == path[at].0); }
     assert(predecessor_at(rows, path[at].2) matches Some(row)
         && row.parent matches Some(parent) && parent.key() == path[at]);
 }
@@ -3506,6 +3560,36 @@ impl<'t, 'a> Iterator for SeedPropagations<'t, 'a> {
         self.next = at + 1;
         Some(item)
     }
+}
+
+/// 按完整 ID 借用首个起点；未找到时不提供替代起点。
+pub fn seed_by_id<'a>(seeds: &'a [Seed], id: &str) -> (out: Option<&'a Seed>)
+    ensures
+        out.is_some() <==> exists|at: int| 0 <= at < seeds.len()
+            && seeds@[at].id@ == id@,
+        out matches Some(seed) ==> exists|at: int| 0 <= at < seeds.len()
+            && *seed == seeds@[at] && seed.id@ == id@
+            && forall|before: int| 0 <= before < at
+                ==> seeds@[before].id@ != id@,
+{
+    let mut at: usize = 0;
+    while at < seeds.len()
+        invariant at <= seeds.len(),
+            forall|before: int| 0 <= before < at
+                ==> seeds@[before].id@ != id@,
+        decreases seeds.len() - at,
+    {
+        if compare_bytes(seeds[at].id.as_str().as_bytes(), id.as_bytes()) == 0 {
+            assert(seeds@[at as int].key().0 == id.spec_bytes());
+            proof {
+                vstd::utf8::encode_utf8_decode_utf8(seeds@[at as int].id@);
+                vstd::utf8::encode_utf8_decode_utf8(id@);
+            }
+            return Some(&seeds[at]);
+        }
+        at += 1;
+    }
+    None
 }
 
 }
