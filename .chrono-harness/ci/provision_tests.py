@@ -206,7 +206,7 @@ class NativeCargoDomains(unittest.TestCase):
         selector = json.loads((SOURCE.parents[1] / entry).read_text())
         rows = selector["platforms"]["macos-aarch64"]["configurations"]
         selected = [row for row in rows if row["sha256"] ==
-                    "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"]
+                    "aaed7cacc9a5187b973dc1b9bd079b8c26842c57b49bacb2883c4ddc91b0e771"]
         self.assertEqual(len(selected), 1)
         return json.loads((SOURCE.parents[1] / selected[0]["path"]).read_text())
 
