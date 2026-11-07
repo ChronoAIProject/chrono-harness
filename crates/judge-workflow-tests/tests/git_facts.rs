@@ -680,14 +680,11 @@ fn full_ci_consumer(selected: bool) {
         for path in [linked_entry, ".chrono-harness/linked directory/config.json"] {
             let mut request = delivery["preparation"]["request"].clone();
             request["profile"] = json!(path);
-            let input = root.join(".chrono-harness/state/linked-policy-request.json");
-            fs::write(&input, serde_json::to_vec(&request).unwrap()).unwrap();
             let trace = fs::read(root.join(".chrono-harness/state/git-trace")).unwrap();
             let order = fs::read(root.join(".chrono-harness/state/order")).unwrap();
-            let out = h.capture_native(
+            let out = h.capture_native_input(
                 Command::new(&ci)
                     .current_dir(&root)
-                    .stdin(fs::File::open(input).unwrap())
                     .env("GITHUB_EVENT_NAME", "workflow_dispatch")
                     .env(
                         "GITHUB_EVENT_PATH",
@@ -705,6 +702,7 @@ fn full_ci_consumer(selected: bool) {
                         "--revision-env",
                         "CHRONO_WORKFLOW_REVISION",
                     ]),
+                &serde_json::to_vec(&request).unwrap(),
             );
             assert_eq!(out.status.code(), Some(1));
             assert!(out.stdout.is_empty());
