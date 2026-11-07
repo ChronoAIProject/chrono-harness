@@ -41,10 +41,13 @@ fn stage_report_value_drift_and_incomplete_processes_are_rejected() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn stage_report_names_reject_missing_or_reused_originals() {
     broadcast use vstd::string::group_string_axioms;
+    broadcast use vstd::array::group_array_axioms;
     let names = vec!["stdout".to_string(), "stderr".to_string()];
     proof {
         reveal_strlit(""); reveal_strlit("stdout"); reveal_strlit("stderr");
         assert("stdout"@[3] != "stderr"@[3]);
+        assert(names[0]@ == "stdout"@);
+        assert(names[1]@ == "stderr"@);
         assert forall|i: int| 0 <= i < names.len() implies names[i]@ != ""@ by {
             assert(i == 0 || i == 1);
         }
@@ -90,10 +93,15 @@ fn stage_report_digest_path_and_relocation_boundaries() {
     let zeros = [48u8; 64];
     let uppercase = [65u8; 64];
     let short = [48u8; 63];
+    assert(zeros@.len() == 64 && uppercase@.len() == 64 && short@.len() == 63);
+    assert forall|i: int| 0 <= i < zeros@.len() implies zeros@[i] == 48u8 by { }
+    assert(uppercase@[0] == 65u8);
     let valid = policy::valid_stage_digest(&zeros);
     let bad_case = policy::valid_stage_digest(&uppercase);
     let bad_length = policy::valid_stage_digest(&short);
-    assert(valid && !bad_case && !bad_length);
+    assert(valid);
+    assert(!bad_case);
+    assert(!bad_length);
     let absolute = policy::valid_stage_requirement(
         &policy::StageRequirement::AbsolutePath { bytes: vec![47u8, 97] });
     let relative = policy::valid_stage_requirement(
