@@ -47,7 +47,14 @@ fn installer_digest_comes_from_the_declared_producer_output_before_execution() {
             format!("${{{{ steps.chrono_startup.outputs['{name}'] }}}}")
         );
     }
-    for name in ["", "bad name", "bad\nname", "${{ expression }}", "name'", "名字"] {
+    for name in [
+        "",
+        "bad name",
+        "bad\nname",
+        "${{ expression }}",
+        "name'",
+        "名字",
+    ] {
         value["job_gating"]["startup"]["installer_sha256_output"] = json!(name);
         let config = serde_json::from_value(value.clone()).unwrap();
         assert!(
