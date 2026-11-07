@@ -97,23 +97,23 @@ fn runtime_state_inputs_consume_observation_manifests_and_reject_drift() {
 
     let host = TempDir::new().unwrap();
     let root = host.path().canonicalize().unwrap();
-    let observation = ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json";
+    let observation = ".chrono-harness/state/fixture-inputs/observation.json";
     fs::create_dir_all(root.join(observation).parent().unwrap()).unwrap();
     let entries = [
         (
             "rust",
             "toolchain.rust.inventory",
-            ".chrono-harness/state/units/diagnostics/runtime-inputs/rust.json",
+            ".chrono-harness/state/fixture-inputs/rust.json",
         ),
         (
             "developer",
             "toolchain.developer.inventory",
-            ".chrono-harness/state/diagnostics-native/guard-inputs/xcode-contents.json",
+            ".chrono-harness/state/fixture-inputs/xcode-contents.json",
         ),
         (
             "sdk",
             "toolchain.sdk.inventory",
-            ".chrono-harness/state/diagnostics-native/guard-inputs/sdk.json",
+            ".chrono-harness/state/fixture-inputs/sdk.json",
         ),
     ];
     let mut directories = serde_json::Map::new();
