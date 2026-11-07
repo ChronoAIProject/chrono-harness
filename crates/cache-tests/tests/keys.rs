@@ -845,6 +845,12 @@ fn registration_rejects_missing_ambiguous_and_cross_owner_references() {
     ] {
         let mut changed = config.clone();
         *changed.pointer_mut(pointer).unwrap() = value;
+        if pointer == "/caches/project/consumers" {
+            changed["consumer_operations"]
+                .as_object_mut()
+                .unwrap()
+                .remove("check.two");
+        }
         assert!(
             plan(root.path(), &changed, "check.one")
                 .unwrap_err()
