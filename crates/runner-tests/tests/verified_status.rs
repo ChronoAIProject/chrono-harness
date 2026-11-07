@@ -138,7 +138,12 @@ fn protocol_findings_cover_the_complete_presence_truth_table() {
     let empty: Vec<policy::Finding> = Vec::new();
     expected_statuses(&empty, true, false, false, false);
     let only_info = vec![finding("info"), finding("info")];
-    proof { known_levels(only_info@, seq!["info"@, "info"@]); }
+    proof {
+        known_levels(only_info@, seq!["info"@, "info"@]);
+        assert(!policy::finding_level_present(only_info@, "error"@));
+        assert(!policy::finding_level_present(only_info@, "warning"@));
+        assert(policy::finding_status_agreement(&WireStatus::Pass, only_info@));
+    }
     expected_statuses(&only_info, true, false, false, false);
     let warning = vec![finding("info"), finding("warning"), finding("warning")];
     proof { known_levels(warning@, seq!["info"@, "warning"@, "warning"@]); }
