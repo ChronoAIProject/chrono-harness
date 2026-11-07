@@ -156,11 +156,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-cost/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-cost/"
@@ -172,11 +170,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-mixed/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-mixed/"
@@ -188,11 +184,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow/"
@@ -264,11 +258,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-units/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-units/"
@@ -280,11 +272,9 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-short/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-short/"

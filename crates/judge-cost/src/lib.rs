@@ -165,33 +165,41 @@ pub fn judge(req: &Request) -> Response {
     match result {
         Ok(costs) => {
             if !costs["unknown"].as_array().unwrap().is_empty() {
-                response.status = Status::Warn;
-                response.findings.push(Finding {
-                    code: "W_COST_UNKNOWN".into(),
-                    level: "warning".into(),
-                    message:
-                        "Affected declared costs contain unknown coordinates; see costs.unknown"
-                            .into(),
-                    delta_refs: vec!["/impact".into()],
-                    causes: vec!["/outputs/costs/unknown".into()],
-                });
+                chrono_harness::wire::append_finding(
+                    &mut response.status,
+                    &mut response.findings,
+                    Status::Warn,
+                    Finding {
+                        code: "W_COST_UNKNOWN".into(),
+                        level: "warning".into(),
+                        message:
+                            "Affected declared costs contain unknown coordinates; see costs.unknown"
+                                .into(),
+                        delta_refs: vec!["/impact".into()],
+                        causes: vec!["/outputs/costs/unknown".into()],
+                    },
+                );
             }
             response.outputs.insert("costs".into(), costs);
         }
         Err(message) => {
-            response.status = Status::Error;
-            response.findings.push(Finding {
-                code: message
-                    .split(':')
-                    .next()
-                    .filter(|s| s.starts_with("E_"))
-                    .unwrap_or("E_INPUT")
-                    .into(),
-                level: "error".into(),
-                message,
-                delta_refs: vec!["/request".into()],
-                causes: vec![],
-            });
+            chrono_harness::wire::append_finding(
+                &mut response.status,
+                &mut response.findings,
+                Status::Error,
+                Finding {
+                    code: message
+                        .split(':')
+                        .next()
+                        .filter(|s| s.starts_with("E_"))
+                        .unwrap_or("E_INPUT")
+                        .into(),
+                    level: "error".into(),
+                    message,
+                    delta_refs: vec!["/request".into()],
+                    causes: vec![],
+                },
+            );
         }
     }
     response
