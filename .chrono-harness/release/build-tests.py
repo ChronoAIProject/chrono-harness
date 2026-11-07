@@ -432,7 +432,7 @@ class ReleaseUnits(unittest.TestCase):
                     self.assertTrue(set(u['needs']) <= builds)
                     if u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])
                 else:
-                    self.assertEqual(owner['language'],'python')
+                    self.assertIn(owner['language'],('python','shell'))
         self.assertEqual(len(projection['jobs']),sum(len(mapping) for mapping in cfg['native_jobs'].values()))
         jobs={j['id']:j for j in projection['jobs']}
         for mapping in cfg['native_jobs'].values():

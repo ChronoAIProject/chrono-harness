@@ -9,5 +9,6 @@ pub mod lifecycle;
 pub mod original;
 pub mod owner;
 pub mod profile;
+pub mod shared;
 pub mod source;
 pub mod verified_bindings;
