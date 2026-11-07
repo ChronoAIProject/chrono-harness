@@ -1059,7 +1059,7 @@ context 可通过 retained_inputs 引用两固定端点的外部文件原字节�
 
 旧 scoped provider v1／v2／v3 已退役；v4 可明确加入 initial 清单投影，不会推断。固定旧发布包的登记不产生当前源码的兼容义务。绑定不证明网络／凭据／Git 配置完整或当前候选的原生采用，见 [CI 说明](docs/ci.md)。
 
-CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹配的 integration 创建／修复 push，以完整候选对比固定观察 dev 顶端；未配置 push 仍用 before／after，见 docs/ci.md。准备不认证 workflow 义务。workflow 用真实观察和完成报告核有限分支、integration、退役、迁移合同，见 [workflow 说明](docs/workflow.md)。
+CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹配的 integration 创建／修复 push，以完整候选对比固定观察 dev 顶端；未配置 push 仍用 before／after，见 docs/ci.md。PR 以同次运行固定 workflow merge commit 的第一父提交为基线、事件 head 为候选；必须恰有两个父提交且第二父提交与 head 完整身份相等，否则失败。事件载荷中较早的 base SHA 不决定选测，依赖 job 消费 detector 已固定的两端。准备不认证 workflow 义务。workflow 用真实观察和完成报告核有限分支、integration、退役、迁移合同，见 [workflow 说明](docs/workflow.md)。
 
 完整 Cargo／SDK／外部输入、超出明确根清单 profile 的 initial 采用／bootstrap 来源、原生 full CI／同判、AI 协调与陈旧重建全流程、PR／merge／落地及最终完整 SPEC 审计仍未完成。单个执行者的本地行为检查不证明独立评审、原生 CI 或落地；指令生成的平台／崩溃／并发限制仍有效。原编号要求和每项验收目标全部保留。
 

@@ -16,6 +16,42 @@ pub fn fixture_git() -> PathBuf {
     chrono_harness::resolve_program(&source, program, None).unwrap()
 }
 
+/// Produce the fixed workflow merge object without changing the fixture checkout.
+pub fn pr_workflow_merge(root: &Path, base: &str, head: &str) -> String {
+    let git = fixture_git();
+    let tree = std::process::Command::new(&git)
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", &format!("{head}^{{tree}}")])
+        .output()
+        .unwrap();
+    assert!(
+        tree.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tree.stderr)
+    );
+    let tree = String::from_utf8(tree.stdout).unwrap();
+    let merge = std::process::Command::new(&git)
+        .arg("-C")
+        .arg(root)
+        .args([
+            "-c", "user.name=Fixture",
+            "-c", "user.email=fixture@example.invalid",
+            "-c", "commit.gpgsign=false",
+            "commit-tree", tree.trim(),
+            "-p", base, "-p", head,
+            "-m", "fixed PR workflow merge",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        merge.status.success(),
+        "{}",
+        String::from_utf8_lossy(&merge.stderr)
+    );
+    String::from_utf8(merge.stdout).unwrap().trim().into()
+}
+
 /// Event fixtures commit this policy before either endpoint is created.
 pub fn write_event_facts(root: &Path) {
     let program = fixture_git();
