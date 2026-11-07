@@ -400,7 +400,7 @@ pub fn prepare(
         }
         let report = json!({"schema":"chrono-full-ci-inputs/v1","status":"prepared",
             "workflow_source_revision":workflow_revision,"config_path":path,"config_sha256":sha256(&source),
-            "base":base,"candidate":candidate,"context":{"path":c.context_path,"sha256":sha256(context),"input_bytes":context},
+            "base":base,"candidate":candidate,"context":{"path":c.context_path,"sha256":sha256(context)},
             "canonical_argv":argv(c),"governance":"not-evaluated","parity":"unestablished"});
         Ok(report)
     })();

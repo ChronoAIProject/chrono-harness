@@ -62,7 +62,9 @@
 
 checkout 使用给定 candidate。候选绑定的 Git 核对 HEAD、完整配置、provider 源字节及指定 `github.workflow_sha` 的投影 blob。只有精确确认缺对象后才从 `origin` 获取固定基线或 workflow OID；失败保留原进程字节、摘要和退出。此绑定不独立认证 GitHub 来源、凭据、Git 配置或输入齐全。
 
-准备器原样保留 context 字符串的 UTF-8 字节，包括空白。`chrono-full-ci-inputs/v1` 报告含原上下文字节／哈希、固定源、Git 进程和短 `canonical_argv`；`prepared`、`governance: not-evaluated`、`parity: unestablished` 均不表示检查通过。陈旧时间等领域语义由实际判官裁决。
+准备器原样保留 context 字符串的 UTF-8 字节，包括空白。`chrono-full-ci-inputs/v1` 报告含原上下文路径／SHA-256、固定源、Git 进程和短 `canonical_argv`；`prepared`、`governance: not-evaluated`、`parity: unestablished` 均不表示检查通过。陈旧时间等领域语义由实际判官裁决。
+
+**报告合同与产品同步收窄：**删除没有运行消费者的 `context.input_bytes` 数字字节数组；上下文正文由已有不可变原件保存，消费者沿路径与摘要读取。实际原件、当前视图和输入接口保留。完整构建、CI、存储及维护成本未测。
 
 生成器直接生成短检查步骤。输入 action 保留不可变上下文、准备报告和原始进程结果；当前 context／preparation 文件只是可替换视图，原件以路径与摘要消费。重试保存实际本次观察，不归一化进程 PID 或所有权载体，也不复用旧报告冒充新观察。Git 获取会改变后续观察，但不覆盖已有不可变原件。
 
