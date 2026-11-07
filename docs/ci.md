@@ -49,6 +49,10 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及两流，再交出现有 stage 描述符；
 阶段校验读取同一生产者的固定原件。shell 只转交参数，不复制构建配方或解释报告。
 普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再执行该保留文件；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
+
+本宿主只维护当前采用的安装 profile。Python 入口省略配置时也选择现有 `bootstrap-core.json`；
+旧的全工具 `bootstrap.json` 与未被执行计划调用的 `host.bootstrap` 操作已退役。
+detector、缓存和各单元仍消费各自显式登记的 profile，不因默认安装而取得额外工具。
 共享启动当前仍由 Python 编排，但 produce 按所选 profile 的 `entrypoint` 和工具声明调用真实生产者，因此 core 产物来自 Rust。其余 Python profile 和测试仍待迁移，外部宿主不运行本仓这项源码构建。
 **实现与宿主政策同时变更：**本批修改 core／Verus 的正式方法及所属登记，增加前端安装和共享生产入口的行为验证；原生构建、真实升级及受影响标准／CI 消费分别验收。新增前端构建、验证和存储总成本未测。
 
@@ -58,7 +62,7 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 .chrono-harness/bin/chrono-harness check --unit ci
 ```
 
-bootstrap 最后参数明确选择宿主 CI 配置，省略沿用 full bootstrap 默认。生成的单元／汇总工作流选择 runner、judge-ci、ci、本地 worktree 输入生产者；其余构建来自原完整测试计划。并发运行单元须用不同检出。
+生成的单元／汇总工作流选择 runner、judge-ci、ci、本地 worktree 输入生产者；其余构建来自原完整测试计划。并发运行单元须用不同检出。
 
 本地不带 `--unit` 时，按 FILEMAP 调度执行整个所选 DELTA；同一入口加无值 `--collect`，则准备声明清单、核单元证据，不执行业务。
 
@@ -95,11 +99,11 @@ full v1 重复准备若只差进程所有权描述符编号，则返回原准备
 
 ### 从候选构建工具
 
-检查前必须从候选检出 bootstrap。runner 报告实际 runner／judge／operation 执行物摘要。所采用 core、cache、default profile 还把 rustup 所选 Cargo／rustc 绑定到声明 SHA-256、版本，明确有效 `RUSTC`，在报告保留本地实际路径。
+检查前必须从候选检出 bootstrap。runner 报告实际 runner／judge／operation 执行物摘要。所采用 core、cache profile 还把 rustup 所选 Cargo／rustc 绑定到声明 SHA-256、版本，明确有效 `RUSTC`，在报告保留本地实际路径。
 
 共享 startup 在安装、verify 前复核同一身份；字节／版本相等时允许等价迁移，安装报告保留生产路径和本地执行路径。绑定缺失、冲突或变化，在 bootstrap 验收前拒绝。这不证明可复现构建或编译器／后端／SDK／输入完整。
 
-core、cache、detector、default 共用源码登记 `.chrono-harness/ci/bootstrap-toolchains.json`，明确声明 Darwin／arm64（macos-26 CI）及 Linux／x86_64（ubuntu-24.04 发布 cache-bootstrap）。未知／缺少组合在准备工具前失败。
+core、cache、detector 共用源码登记 `.chrono-harness/ci/bootstrap-toolchains.json`，明确声明 Darwin／arm64（macos-26 CI）及 Linux／x86_64（ubuntu-24.04 发布 cache-bootstrap）。未知／缺少组合在准备工具前失败。
 
 每个执行物 SHA-256 都从官方 Rust 1.95.0 组件归档的精确 Cargo／rustc 成员取得，独立于本机安装。登记保留官方 manifest URL／摘要／日期及组件 URL、归档摘要、成员、大小、版本来源。归档摘要只说明来源，不能代替执行物字节预期。Cargo 上游版本实现解释 package 0.96.0／CLI 1.95.0 的区别。
 

@@ -4592,15 +4592,6 @@
       "path": ".chrono-harness/ci/bootstrap.py",
       "test_script": "host-bootstrap-tests",
       "actions": {
-        "execute": {
-          "operation": "host.bootstrap",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            "."
-          ]
-        },
         "cache": {
           "operation": "host.bootstrap-cache",
           "tool": "python3",
