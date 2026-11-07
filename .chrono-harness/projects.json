@@ -39,6 +39,8 @@
     "diagnostics-tests",
     "host-bootstrap",
     "host-bootstrap-tests",
+    "host-bootstrap-native",
+    "host-bootstrap-native-tests",
     "cache",
     "cache-tests"
   ],
@@ -4195,6 +4197,195 @@
       },
       "tests_for": "cache",
       "language": "rust"
+    },
+    {
+      "id": "host-bootstrap-native",
+      "kind": "production",
+      "manifest": ".chrono-harness/ci/native/Cargo.toml",
+      "lockfile": ".chrono-harness/ci/native/Cargo.lock",
+      "root": ".chrono-harness/ci/native",
+      "actions": {
+        "validate_original_execution": {
+          "operation": "host.bootstrap-native-original-execution",
+          "tool": "cargo",
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            ".chrono-harness/ci/native/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/host-bootstrap-native/target",
+            "--bin",
+            "chrono-host-bootstrap",
+            "--",
+            "validate-original-execution",
+            ".",
+            ".chrono-harness/state/bootstrap.json"
+          ]
+        },
+        "build": {
+          "operation": "build.host-bootstrap-native",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            ".chrono-harness/ci/native/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/host-bootstrap-native/target"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.host-bootstrap-native",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            ".chrono-harness/ci/native/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.host-bootstrap-native",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            ".chrono-harness/ci/native/Cargo.toml"
+          ]
+        },
+        "lockfile": {
+          "operation": "inputs.lockfile.host-bootstrap-native",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--workspace",
+            "--manifest-path",
+            ".chrono-harness/ci/native/Cargo.toml"
+          ]
+        },
+        "verify_bindings": {
+          "operation": "verify.bootstrap-bindings",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.bootstrap-bindings.rlib,dep-info=.chrono-harness/state/verify.bootstrap-bindings.rlib.d",
+            ".chrono-harness/ci/native/src/verified_bindings.rs",
+            "-o",
+            ".chrono-harness/state/verify.bootstrap-bindings.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "owner_stage": {
+          "operation": "host.bootstrap-owner-stage",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-owner-stage.json"
+          ]
+        }
+      },
+      "language": "rust",
+      "test_project": "host-bootstrap-native-tests"
+    },
+    {
+      "id": "host-bootstrap-native-tests",
+      "kind": "test",
+      "manifest": ".chrono-harness/ci/native-tests/Cargo.toml",
+      "lockfile": ".chrono-harness/ci/native-tests/Cargo.lock",
+      "root": ".chrono-harness/ci/native-tests",
+      "actions": {
+        "build": {
+          "operation": "build.host-bootstrap-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            ".chrono-harness/ci/native-tests/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/host-bootstrap-native-tests/target"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.host-bootstrap-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            ".chrono-harness/ci/native-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.host-bootstrap-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            ".chrono-harness/ci/native-tests/Cargo.toml"
+          ]
+        },
+        "lockfile": {
+          "operation": "inputs.lockfile.host-bootstrap-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--workspace",
+            "--manifest-path",
+            ".chrono-harness/ci/native-tests/Cargo.toml"
+          ]
+        },
+        "verify_bindings": {
+          "operation": "verify.bootstrap-bindings-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.bootstrap-bindings-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-bindings-tests.rlib.d",
+            ".chrono-harness/ci/native-tests/tests/verified_bindings.rs",
+            "-o",
+            ".chrono-harness/state/verify.bootstrap-bindings-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "execute": {
+          "operation": "test.host-bootstrap-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            ".chrono-harness/ci/native-tests/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/host-bootstrap-native-tests/target"
+          ]
+        }
+      },
+      "language": "rust",
+      "tests_for": "host-bootstrap-native"
     }
   ],
   "scripts": [
@@ -4604,16 +4795,6 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-diagnostics-guard.json"
-          ]
-        },
-        "owner-stage": {
-          "operation": "host.bootstrap-owner-stage",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-owner-stage.json"
           ]
         },
         "owner-verify": {
