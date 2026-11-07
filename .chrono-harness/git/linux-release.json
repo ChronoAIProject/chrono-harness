@@ -242,7 +242,9 @@
       "owner": "host-bootstrap",
       "kind": "startup-transfer",
       "tracked": false
-    }
+    },
+    "crates/pr/target/",
+    "crates/pr-tests/target/"
   ],
   "facts_git": {
     "tool": "git",

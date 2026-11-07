@@ -460,7 +460,9 @@
       "owner": "host-bootstrap",
       "kind": "startup-transfer",
       "tracked": false
-    }
+    },
+    "crates/pr/target/",
+    "crates/pr-tests/target/"
   ],
   "environment": {
     "credential_environment": [
