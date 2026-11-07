@@ -133,7 +133,7 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 已有原生 Rust 发布构建／验证单元选择自己的项目输出，Python 发布验证和包收集器无登记编译缓存。分组测试中不同生产者使用不同条目。
 
-缓存种子运行 `host.bootstrap-cache`，通过已有 bootstrap 所有者和 `build.cache` 构建候选 planner，再安装二进制。其配方明确 `report_path: .chrono-harness/state/cache-bootstrap.json`；之后 core bootstrap 保留默认 `.chrono-harness/state/bootstrap.json`。
+缓存种子运行 `host.bootstrap-cache`，由薄 shell 进入已有 Rust bootstrap，通过原所有者保护和 `build.cache` 构建候选 planner，再安装二进制。其配方明确 `report_path: .chrono-harness/state/cache-bootstrap.json`；之后 core bootstrap 保留默认 `.chrono-harness/state/bootstrap.json`。
 
 宿主 bootstrap 接受可选的 `.chrono-harness/state/` 下字面报告文件，拒绝越界或符号链接位置，并传递报告发布错误。各配方拥有自己的报告位置；重复用同一位置会替换最新结果。已有产物上传保留两份独立记录。
 

@@ -344,10 +344,8 @@ class Bootstrap(unittest.TestCase):
     def declare(self, *args):
         self.write_json(self.registry, self.declarations(*args))
 
-    def invoke(self, selected=None):
-        args = [sys.executable, "-B", str(self.ci / "bootstrap.py"), str(self.root)]
-        if selected is not None:
-            args.append(selected)
+    def invoke(self, selected=".chrono-harness/ci/bootstrap.json"):
+        args = [sys.executable, "-B", str(self.ci / "bootstrap.py"), str(self.root), selected]
         return subprocess.run(args, cwd=tempfile.gettempdir(), env=self.environment,
                               pass_fds=PASS_FDS, capture_output=True)
 

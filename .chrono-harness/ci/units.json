@@ -896,8 +896,8 @@
         "need": "Build the current candidate detector and shared startup tools once.",
         "output_use": "Restore the registered core bootstrap targets, build them and publish startup binaries for the explicitly registered consumers.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],

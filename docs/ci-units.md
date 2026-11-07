@@ -141,7 +141,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
   "detector": {
     "runs_on": "macos-26",
     "timeout_minutes": 45,
-    "bootstrap": ["/usr/bin/python3", ".chrono-harness/ci/bootstrap.py", ".", ".chrono-harness/ci/bootstrap-detector.json"],
+    "bootstrap": ["/bin/bash", ".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-core.json"],
     "sparse_checkout": [".chrono-harness/", "crates/", "assets/", ".github/workflows/chrono-ci.yml", ".gitignore"]
   }
 }

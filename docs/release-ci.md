@@ -52,6 +52,8 @@ v1 输出和无依赖行为保留。v2 增加固定提交的 `download_artifact_
 
 ## v5 构建配方
 
+发布 job 的缓存准备使用登记的 Rust bootstrap／薄 shell 入口，和本地／主 CI 复用同一 cache profile；发布编排本身仍待迁移。
+
 宿主唯一调度入口是 `.chrono-harness/release/build.py`。`build.json` 管理 unit ID、manifest／asset 或原始 operation、依赖、handoff 目录、成本、原生 job 对应、局部并发和时限。`projects.json` 独自管理原测试 argv，`plan.json` 独自管理资产源路径，`consumer_staging` 列全部保留目的路径；不扫描目录、名称或测试正文找单元。
 
 ```sh
