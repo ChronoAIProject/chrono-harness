@@ -13,10 +13,160 @@ use vstd::prelude::*;
 
 verus! {
 
+fn source_observation(commit: &str, tree: &str, dirty: bool, error: Option<String>) -> (out: policy::SourceObservation)
+    ensures
+        out.commit is Some, out.commit.unwrap()@ == commit@,
+        out.tree is Some, out.tree.unwrap()@ == tree@,
+        out.dirty == Some(dirty), out.error == error,
+{
+    policy::SourceObservation {
+        commit: Some(commit.to_string()), tree: Some(tree.to_string()), dirty: Some(dirty), error,
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn source_identity_only_exposes_commit_and_tree_for_unchanged_clean_observations() {
+    proof { reveal_strlit("c"); reveal_strlit("cc"); reveal_strlit("t"); reveal_strlit("tt"); }
+    let clean = policy::source_identity(source_observation("c", "t", false, None), source_observation("c", "t", false, None));
+    let dirty = policy::source_identity(source_observation("c", "t", true, None), source_observation("c", "t", true, None));
+    let commit = policy::source_identity(source_observation("c", "t", false, None), source_observation("cc", "t", false, None));
+    let tree = policy::source_identity(source_observation("c", "t", false, None), source_observation("c", "tt", false, None));
+    let status = policy::source_identity(source_observation("c", "t", false, None), source_observation("c", "t", true, None));
+    let failed_before = policy::source_identity(source_observation("c", "t", true, Some("failed".to_string())), source_observation("cc", "tt", false, None));
+    let failed_after = policy::source_identity(source_observation("c", "t", false, None), source_observation("cc", "tt", true, Some("failed".to_string())));
+    assert(clean.state is Clean && clean.commit is Some && clean.tree is Some);
+    assert(clean.commit.unwrap()@ == "c"@ && clean.tree.unwrap()@ == "t"@);
+    assert(dirty.state is Dirty && dirty.commit is None && dirty.tree is None);
+    proof {
+        assert(commit.before.commit.unwrap()@.len() == 1);
+        assert(commit.after.commit.unwrap()@.len() == 2);
+        assert(!policy::source_observations_same(&commit.before, &commit.after));
+        assert(tree.before.tree.unwrap()@.len() == 1);
+        assert(tree.after.tree.unwrap()@.len() == 2);
+        assert(!policy::source_observations_same(&tree.before, &tree.after));
+    }
+    assert(commit.state is Changed && commit.commit is None && commit.tree is None);
+    assert(tree.state is Changed && tree.commit is None && tree.tree is None);
+    assert(status.state is Changed && status.commit is None && status.tree is None);
+    assert(failed_before.state is Unavailable && failed_before.commit is None && failed_before.tree is None);
+    assert(failed_after.state is Unavailable && failed_after.commit is None && failed_after.tree is None);
+    assert(failed_before.before.error is Some && failed_after.after.error is Some);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn exit_status_keeps_original_codes_and_only_negates_positive_signals() {
+    let success = policy::process_exit(Some(0), None);
+    let failure = policy::process_exit(Some(17), None);
+    let precedence = policy::process_exit(Some(17), Some(9));
+    let signal = policy::process_exit(None, Some(9));
+    let missing = policy::process_exit(None, None);
+    let zero_signal = policy::process_exit(None, Some(0));
+    let negative_signal = policy::process_exit(None, Some(-1));
+    let minimum_code = policy::process_exit(Some(-2147483648i32), Some(9));
+    let maximum_code = policy::process_exit(Some(2147483647i32), None);
+    let maximum_signal = policy::process_exit(None, Some(2147483647i32));
+    let minimum_signal = policy::process_exit(None, Some(-2147483648i32));
+    assert(success == Some(0i32) && failure == Some(17i32) && precedence == Some(17i32));
+    assert(signal == Some(-9i32) && missing is None);
+    assert(zero_signal is None && negative_signal is None && minimum_signal is None);
+    assert(minimum_code == Some(-2147483648i32) && maximum_code == Some(2147483647i32));
+    assert(maximum_signal == Some(-2147483647i32));
+}
+
 fn executable(path: &str, hash: &str, version: &str) -> (out: Executable)
     ensures out.path@ == path@, out.sha256@ == hash@, out.version@ == version@,
 {
     Executable { path: path.to_string(), sha256: hash.to_string(), version: version.to_string() }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn environment_names_reject_only_the_reserved_prefix_equals_and_nul() {
+    let empty: [u8; 0] = [];
+    let normal = policy::environment_key(&[65u8]);
+    let missing = policy::environment_key(&empty);
+    let equals = policy::environment_key(&[65u8, 61]);
+    let nul = policy::environment_key(&[65u8, 0]);
+    let reserved = policy::environment_key(&[67u8, 72, 82, 79, 78, 79, 95]);
+    let shorter = policy::environment_key(&[67u8, 72, 82, 79, 78, 79]);
+    let value_empty = policy::environment_value(&empty);
+    let value_lines = policy::environment_value(&[10u8, 13, 61]);
+    let value_nul = policy::environment_value(&[10u8, 0]);
+    assert(normal && !missing && !equals && !nul && !reserved && shorter);
+    assert(value_empty && value_lines && !value_nul);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn host_paths_require_the_declared_prefix_and_exact_normal_components() {
+    let prefix = [97u8, 47];
+    let good_bytes = [97u8, 47, 98];
+    let hidden_bytes = [97u8, 47, 46, 98];
+    let repeated_bytes = [97u8, 47, 47, 98];
+    let current_bytes = [97u8, 47, 46, 47, 98];
+    let parent_bytes = [97u8, 47, 46, 46];
+    let trailing_bytes = [97u8, 47, 98, 47];
+    let nul_bytes = [97u8, 47, 0];
+    proof {
+        assert forall|i: int| 0 <= i < good_bytes@.len() implies !policy::bad_path_byte(good_bytes@, i) by {
+            assert(i == 0 || i == 1 || i == 2);
+        }
+        assert forall|i: int| 0 <= i < hidden_bytes@.len() implies !policy::bad_path_byte(hidden_bytes@, i) by {
+            assert(i == 0 || i == 1 || i == 2 || i == 3);
+        }
+        assert(policy::bad_path_byte(repeated_bytes@, 2));
+        assert(policy::bad_path_byte(current_bytes@, 2));
+        assert(policy::bad_path_byte(parent_bytes@, 2));
+        assert(policy::bad_path_byte(trailing_bytes@, 3));
+        assert(policy::bad_path_byte(nul_bytes@, 2));
+    }
+    let good = policy::host_path(&good_bytes, &prefix);
+    let hidden = policy::host_path(&hidden_bytes, &prefix);
+    let repeated = policy::host_path(&repeated_bytes, &prefix);
+    let current = policy::host_path(&current_bytes, &prefix);
+    let parent = policy::host_path(&parent_bytes, &prefix);
+    let trailing = policy::host_path(&trailing_bytes, &prefix);
+    let nul = policy::host_path(&nul_bytes, &prefix);
+    let wrong_prefix = policy::host_path(&[98u8, 47, 97], &prefix);
+    assert(good && hidden && !repeated && !current && !parent && !trailing && !nul && !wrong_prefix);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn private_homes_compare_full_components_and_default_profile_is_exact() {
+    proof {
+        reveal_strlit("default"); reveal_strlit("minimal");
+        reveal_strlit("HOME"); reveal_strlit("TMPDIR"); reveal_strlit("CARGO_HOME"); reveal_strlit("RUSTUP_HOME");
+        assert("default"@[0] != "minimal"@[0]);
+        assert("RUSTUP_HOME"@.len() != "HOME"@.len());
+        assert("RUSTUP_HOME"@.len() != "TMPDIR"@.len());
+        assert("RUSTUP_HOME"@.len() != "CARGO_HOME"@.len());
+    }
+    let separate = policy::disjoint_homes(&[97u8], &[98u8]);
+    let neighbor = policy::disjoint_homes(&[97u8], &[97u8, 98]);
+    let same = policy::disjoint_homes(&[97u8], &[97u8]);
+    let child = policy::disjoint_homes(&[97u8], &[97u8, 47, 98]);
+    let parent = policy::disjoint_homes(&[97u8, 47, 98], &[97u8]);
+    let profile = policy::default_profile("default");
+    let minimal = policy::default_profile("minimal");
+    let home = policy::host_variable("HOME");
+    let cargo = policy::host_variable("CARGO_HOME");
+    let temp = policy::host_variable("TMPDIR");
+    let rustup = policy::host_variable("RUSTUP_HOME");
+    assert(separate && neighbor && !same && !child && !parent);
+    assert(profile && !minimal && home && cargo && temp && !rustup);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn private_probe_failures_refuse_and_only_ordinary_probes_choose_repairs() {
+    let private_cargo = policy::probe_action(true, false, true);
+    let private_format = policy::probe_action(true, false, false);
+    let ordinary_cargo = policy::probe_action(false, false, true);
+    let ordinary_format = policy::probe_action(false, false, false);
+    let ready_pc = policy::probe_action(true, true, true);
+    let ready_pf = policy::probe_action(true, true, false);
+    let ready_oc = policy::probe_action(false, true, true);
+    let ready_of = policy::probe_action(false, true, false);
+    assert(private_cargo is Refuse && private_format is Refuse);
+    assert(ordinary_cargo is InstallMinimal && ordinary_format is AddFormat);
+    assert(ready_pc is Ready && ready_pf is Ready && ready_oc is Ready && ready_of is Ready);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

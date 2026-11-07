@@ -15,5 +15,33 @@ tempfile = "3"
 name = "bindings"
 path = "tests/bindings.rs"
 
+[[test]]
+name = "environment"
+path = "tests/environment.rs"
+
+[[bin]]
+name = "chrono-test-bootstrap-tool"
+path = "tests/support/tool.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-bootstrap-operation"
+path = "../../../crates/judge-projects-tests/tests/support/execution_child.rs"
+test = false
+bench = false
+
+[[test]]
+name = "execution"
+path = "tests/execution.rs"
+
+[[test]]
+name = "source"
+path = "tests/source.rs"
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
 [profile.dev.package.sha2]
 opt-level = 3

@@ -247,12 +247,12 @@ fn executable(
     })
 }
 
-fn capture(
+pub(crate) fn command(
     root: &Path,
     program: &Path,
     args: &[&str],
     environment: &Environment,
-) -> Result<Output, String> {
+) -> Result<Command, String> {
     let mut command = Command::new(program);
     command.current_dir(root).args(args).env_clear();
     // 租约载体由现有所有者产生，不能把继承值当成新命令的显式绑定。
@@ -262,10 +262,21 @@ fn capture(
             .filter(|(key, _)| key.as_os_str() != OsStr::new(process_fds::ENV)),
     );
     process_fds::forward_command(&mut command, &[])?;
-    command.output().map_err(|error| error.to_string())
+    Ok(command)
 }
 
-fn output_text(output: Output, name: &str) -> Result<String, String> {
+pub(crate) fn capture(
+    root: &Path,
+    program: &Path,
+    args: &[&str],
+    environment: &Environment,
+) -> Result<Output, String> {
+    command(root, program, args, environment)?
+        .output()
+        .map_err(|error| error.to_string())
+}
+
+pub(crate) fn output_text(output: Output, name: &str) -> Result<String, String> {
     if !output.status.success() {
         return Err(format!(
             "{name} failed: {}; stderr: {}",

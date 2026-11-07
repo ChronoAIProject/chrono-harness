@@ -2,4 +2,7 @@
 #![allow(unexpected_cfgs)]
 
 pub mod bindings;
+pub mod environment;
+pub mod execution;
+pub mod source;
 pub mod verified_bindings;

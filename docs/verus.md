@@ -180,13 +180,24 @@ JSON 解码、哈希、metadata／inode 观察、路径解析、Git、文件系�
 
 宿主 bootstrap 的 Rust 迁移正在实施，尚未替换当前 Python 入口。
 `.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
-字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断。
+字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
+以及环境名／值、宿主路径、私有 homes、default profile、SDK 探测分支和进程退出状态。
 版本前缀另要求完整空格分隔；Cargo 可接受精确版本字符串，rustc 必须保留版本后的空格。
+私有 SDK 探测失败必须拒绝，只有普通环境选择 minimal 安装或补充 rustfmt；
+退出状态保留原退出码，缺退出码时仅把正信号转换为负数，无有效终态时返回缺失。
+同一根还拥有实际源码观察的四种状态与报告投影。任一观察失败优先为 unavailable，
+字段改变为 changed，相同脏树为 dirty；只有相同 clean 观察向报告提供 commit／tree。
+原 before／after 字段在报告中保持不变；比较保留可选字符串的完整字节身份。
 独立根按成功、缺输入、冲突和边界声明预期；生产根和独立根都登记整 crate 证明。
 普通 Rust 适配已直接调用这些判断来解析声明、查询 Rustup 和观察真实工具；
-JSON 解码、字段提取、路径和环境处理、进程与文件 IO，以及完整启动组合仍未证明。
-Rust 回归另核真实 Cargo／rustc 的身份、重定位和继承选择；它不替代证明，
-也不证明共享安装、冷启动和发布调用方已迁移。
+环境适配先解析完整选择，再允许安装，不修改全局环境或默认工具链；
+操作执行复用 registration 的方法读取器和 runner 的摘要／描述符转交接口，
+实时保存并转交两条原字节流，等待原始子进程和两个转交任务结束后返回。
+Git 适配只观察当前检出；失败保留已有字段和错误，不执行历史程序。
+JSON 解码、字段提取、环境和文件系统操作、Git／进程 IO，以及完整启动组合仍未证明。
+Rust 回归另核真实 Cargo／rustc 的身份、环境选择、安装器退出、
+非 UTF-8 两流在子进程结束前的转交和原件摘要，以及实际 Git clean／dirty／changed／unavailable 观察。
+这些回归不替代证明，也不证明共享安装、冷启动和发布调用方已迁移。
 
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
 `test:runner-tests` 先运行八项整 crate Verus 操作及编译，registration 先运行四项，

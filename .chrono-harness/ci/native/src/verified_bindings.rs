@@ -15,6 +15,237 @@ verus! {
 
 pub enum DeclarationSource { Registry, Direct, Unbound, Reject }
 
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct SourceObservation {
+    pub commit: Option<String>,
+    pub tree: Option<String>,
+    pub dirty: Option<bool>,
+    pub error: Option<String>,
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "lowercase"))]
+pub enum SourceState { Unavailable, Changed, Dirty, Clean }
+
+pub open spec fn optional_text_same(a: &Option<String>, b: &Option<String>) -> bool {
+    (a is None && b is None)
+        || (a is Some && b is Some && a.unwrap()@ == b.unwrap()@)
+}
+
+pub fn optional_text_equal(a: &Option<String>, b: &Option<String>) -> (equal: bool)
+    ensures equal <==> optional_text_same(a, b),
+{
+    match (a, b) {
+        (Some(left), Some(right)) => equal_text(left.as_str(), right.as_str()),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+pub open spec fn source_observations_same(a: &SourceObservation, b: &SourceObservation) -> bool {
+    optional_text_same(&a.commit, &b.commit) && optional_text_same(&a.tree, &b.tree)
+        && a.dirty == b.dirty && optional_text_same(&a.error, &b.error)
+}
+
+pub open spec fn source_state_spec(before: &SourceObservation, after: &SourceObservation) -> SourceState {
+    if before.error is Some || after.error is Some { SourceState::Unavailable }
+    else if !source_observations_same(before, after) { SourceState::Changed }
+    else if before.dirty == Some(true) { SourceState::Dirty }
+    else { SourceState::Clean }
+}
+
+pub fn source_state(before: &SourceObservation, after: &SourceObservation) -> (out: SourceState)
+    ensures out == source_state_spec(before, after),
+{
+    if before.error.is_some() || after.error.is_some() { SourceState::Unavailable }
+    else if !optional_text_equal(&before.commit, &after.commit)
+        || !optional_text_equal(&before.tree, &after.tree)
+        || before.dirty != after.dirty { SourceState::Changed }
+    else if before.dirty == Some(true) { SourceState::Dirty }
+    else { SourceState::Clean }
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct SourceIdentity {
+    pub state: SourceState,
+    pub commit: Option<String>,
+    pub tree: Option<String>,
+    pub before: SourceObservation,
+    pub after: SourceObservation,
+}
+
+fn copy_optional_text(value: &Option<String>) -> (out: Option<String>)
+    ensures optional_text_same(value, &out),
+{
+    match value { Some(text) => Some(text.clone()), None => None }
+}
+
+pub fn source_identity(before: SourceObservation, after: SourceObservation) -> (out: SourceIdentity)
+    ensures
+        out.state == source_state_spec(&before, &after),
+        out.before == before, out.after == after,
+        out.state is Clean ==> optional_text_same(&out.commit, &before.commit)
+            && optional_text_same(&out.tree, &before.tree),
+        !(out.state is Clean) ==> out.commit is None && out.tree is None,
+{
+    let state = source_state(&before, &after);
+    let (commit, tree) = if matches!(state, SourceState::Clean) {
+        (copy_optional_text(&before.commit), copy_optional_text(&before.tree))
+    } else { (None, None) };
+    SourceIdentity { state, commit, tree, before, after }
+}
+
+pub fn process_exit(code: Option<i32>, signal: Option<i32>) -> (out: Option<i32>)
+    ensures
+        code is Some ==> out == code,
+        code is None && signal is Some && signal.unwrap() > 0
+            ==> out is Some && out.unwrap() == -signal.unwrap(),
+        code is None && (signal is None || signal.unwrap() <= 0) ==> out is None,
+{
+    match code {
+        Some(value) => Some(value),
+        None => match signal {
+            Some(value) => if value > 0 { Some(-value) } else { None },
+            None => None,
+        },
+    }
+}
+
+pub enum ProbeAction { Ready, Refuse, InstallMinimal, AddFormat }
+
+pub fn probe_action(private: bool, ready: bool, cargo: bool) -> (out: ProbeAction)
+    ensures
+        (out is Ready) <==> ready,
+        (out is Refuse) <==> (!ready && private),
+        (out is InstallMinimal) <==> (!ready && !private && cargo),
+        (out is AddFormat) <==> (!ready && !private && !cargo),
+{
+    if ready { ProbeAction::Ready }
+    else if private { ProbeAction::Refuse }
+    else if cargo { ProbeAction::InstallMinimal }
+    else { ProbeAction::AddFormat }
+}
+
+pub fn default_profile(profile: &str) -> (valid: bool)
+    ensures valid <==> (profile@ == "default"@),
+{
+    equal_text(profile, "default")
+}
+
+pub fn environment_key(bytes: &[u8]) -> (valid: bool)
+    ensures valid <==> (bytes@.len() > 0
+        && !(bytes@.len() >= 7 && bytes@[0] == 67 && bytes@[1] == 72
+            && bytes@[2] == 82 && bytes@[3] == 79 && bytes@[4] == 78
+            && bytes@[5] == 79 && bytes@[6] == 95)
+        && forall|i: int| 0 <= i < bytes@.len() ==> bytes@[i] != 0 && bytes@[i] != 61),
+{
+    if bytes.len() == 0 || byte_prefix(bytes, &[67u8, 72, 82, 79, 78, 79, 95]) { return false; }
+    let mut i = 0;
+    while i < bytes.len()
+        invariant
+            0 <= i <= bytes.len(),
+            forall|j: int| 0 <= j < i ==> bytes@[j] != 0 && bytes@[j] != 61,
+        decreases bytes.len() - i,
+    {
+        if bytes[i] == 0 || bytes[i] == 61 { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub fn environment_value(bytes: &[u8]) -> (valid: bool)
+    ensures valid <==> (forall|i: int| 0 <= i < bytes@.len() ==> bytes@[i] != 0),
+{
+    let mut i = 0;
+    while i < bytes.len()
+        invariant
+            0 <= i <= bytes.len(),
+            forall|j: int| 0 <= j < i ==> bytes@[j] != 0,
+        decreases bytes.len() - i,
+    {
+        if bytes[i] == 0 { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub fn host_variable(key: &str) -> (valid: bool)
+    ensures valid <==> (key@ == "HOME"@ || key@ == "CARGO_HOME"@ || key@ == "TMPDIR"@),
+{
+    equal_text(key, "HOME") || equal_text(key, "CARGO_HOME") || equal_text(key, "TMPDIR")
+}
+
+pub open spec fn bad_path_byte(bytes: Seq<u8>, i: int) -> bool {
+    bytes[i] == 0 || bytes[i] == 10 || bytes[i] == 13 || bytes[i] == 92
+    || (bytes[i] == 47 && (i == 0 || i + 1 == bytes.len() || bytes[i - 1] == 47))
+    || (bytes[i] == 46 && (i == 0 || bytes[i - 1] == 47)
+        && (i + 1 == bytes.len() || bytes[i + 1] == 47
+            || (bytes[i + 1] == 46 && (i + 2 == bytes.len() || bytes[i + 2] == 47))))
+}
+
+pub fn host_path(bytes: &[u8], prefix: &[u8]) -> (valid: bool)
+    ensures valid <==> (bytes@.len() > 0 && prefix@.len() <= bytes@.len()
+        && (forall|i: int| 0 <= i < prefix@.len() ==> bytes@[i] == prefix@[i])
+        && forall|i: int| 0 <= i < bytes@.len() ==> !bad_path_byte(bytes@, i)),
+{
+    if bytes.len() == 0 || !byte_prefix(bytes, prefix) { return false; }
+    let mut i = 0;
+    while i < bytes.len()
+        invariant
+            bytes.len() > 0,
+            prefix.len() <= bytes.len(),
+            forall|j: int| 0 <= j < prefix@.len() ==> bytes@[j] == prefix@[j],
+            0 <= i <= bytes.len(),
+            forall|j: int| 0 <= j < i ==> !bad_path_byte(bytes@, j),
+        decreases bytes.len() - i,
+    {
+        let b = bytes[i];
+        if b == 0 || b == 10 || b == 13 || b == 92 {
+            assert(bad_path_byte(bytes@, i as int));
+            return false;
+        }
+        if b == 47 && (i == 0 || i + 1 == bytes.len() || bytes[i - 1] == 47) {
+            assert(bad_path_byte(bytes@, i as int));
+            return false;
+        }
+        if b == 46 && (i == 0 || bytes[i - 1] == 47) {
+            if i + 1 == bytes.len() || bytes[i + 1] == 47 {
+                assert(bad_path_byte(bytes@, i as int));
+                return false;
+            }
+            if bytes[i + 1] == 46 && (i + 2 == bytes.len() || bytes[i + 2] == 47) {
+                assert(bad_path_byte(bytes@, i as int));
+                return false;
+            }
+        }
+        i += 1;
+    }
+    true
+}
+
+pub fn path_contains(parent: &[u8], child: &[u8]) -> (contains: bool)
+    ensures contains <==> (parent@.len() <= child@.len()
+        && (forall|i: int| 0 <= i < parent@.len() ==> parent@[i] == child@[i])
+        && (parent@.len() == child@.len() || child@[parent@.len() as int] == 47)),
+{
+    byte_prefix(child, parent)
+        && (parent.len() == child.len() || child[parent.len()] == 47)
+}
+
+pub fn disjoint_homes(a: &[u8], b: &[u8]) -> (valid: bool)
+    ensures valid <==> (
+        !(a@.len() <= b@.len()
+            && (forall|i: int| 0 <= i < a@.len() ==> a@[i] == b@[i])
+            && (a@.len() == b@.len() || b@[a@.len() as int] == 47))
+        && !(b@.len() <= a@.len()
+            && (forall|i: int| 0 <= i < b@.len() ==> b@[i] == a@[i])
+            && (b@.len() == a@.len() || a@[b@.len() as int] == 47))),
+{
+    !path_contains(a, b) && !path_contains(b, a)
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct NativePlatform {

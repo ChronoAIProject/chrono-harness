@@ -72,8 +72,19 @@ name = "chrono-host-bootstrap"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
+ "chrono-judge-registration",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "chrono-judge-registration"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "serde",
+ "serde_json",
+ "time",
 ]
 
 [[package]]
