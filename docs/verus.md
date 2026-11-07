@@ -41,7 +41,8 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 实际 `wire::Status` 也归 `verified_status.rs`，保持 pass／warn／fail／error 的外部编码。
 身份比较、`pass < warn < fail < error` 的完整顺序、克隆和退出码 0／0／1／2 均由同源 Verus 证明；
 真实 `Finding` 的克隆保留 code、level、message 及两个引用数组的完整字符串、顺序和重复。
-`validate_response_at` 直接消费 `findings_match_status`，只读取原 finding 的完整 level 字段：
+`wire::validate_response_at` 和 `full::validate_record_response` 直接消费同一 `findings_match_status`，
+只读取原 finding 的完整 level 字段：
 fail／error 当且仅当存在 `error`，pass 不允许 `warning`，warn 必须存在 `warning`。
 该循环证明完整列表的存在量词及终止，不由调用方提供预先计算的标志。
 
