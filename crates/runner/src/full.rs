@@ -298,11 +298,17 @@ pub fn retained_judges(
             || binding.sha256.as_deref() != Some(process.sha256.as_str())
             || process.argv != argv
             || process.environment != environment
-            || response.protocol != wire::PROTOCOL
-            || response.judge_id != binding.id
-            || response.request_id != request.request_id
+            || !crate::verified_status::wire_header_matches(
+                &response.protocol,
+                &response.request_id,
+                &response.judge_id,
+                &response.status,
+                process.exit_code,
+                wire::PROTOCOL,
+                &request.request_id,
+                &binding.id,
+            )
             || response.status >= Status::Fail
-            || response.status.exit_code() != process.exit_code
             || json(&process.stdout_bytes)?
                 != serde_json::to_value(&response).map_err(|e| e.to_string())?
             || record
@@ -946,11 +952,16 @@ fn validate_record_response(
     request: &Request,
     exit_code: i32,
 ) -> Result<(), String> {
-    if response.protocol != wire::PROTOCOL
-        || response.judge_id != request.judge_id
-        || response.request_id != request.request_id
-        || response.status.exit_code() != exit_code
-    {
+    if !crate::verified_status::wire_header_matches(
+        &response.protocol,
+        &response.request_id,
+        &response.judge_id,
+        &response.status,
+        exit_code,
+        wire::PROTOCOL,
+        &request.request_id,
+        &request.judge_id,
+    ) {
         return Err("response identity/status/exit mismatch".into());
     }
     if !crate::verified_status::findings_match_status(&response.status, &response.findings) {
