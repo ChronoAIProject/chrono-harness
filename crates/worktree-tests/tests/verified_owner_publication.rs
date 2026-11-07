@@ -13,6 +13,63 @@ use vstd::prelude::*;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn stage_report_value_drift_and_incomplete_processes_are_rejected() {
+    broadcast use vstd::array::group_array_axioms;
+    let same = policy::StageRequirement::Equal {
+        actual: vec![0u8, 255], expected: vec![0u8, 255],
+    };
+    let changed = policy::StageRequirement::Equal {
+        actual: vec![0u8, 254], expected: vec![0u8, 255],
+    };
+    let accepted = policy::valid_stage_requirement(&same);
+    let rejected = policy::valid_stage_requirement(&changed);
+    assert(accepted && !rejected);
+    let complete = policy::valid_stage_requirement(
+        &policy::StageRequirement::Process { exit: Some(0), pid: Some(1) });
+    let failed = policy::valid_stage_requirement(
+        &policy::StageRequirement::Process { exit: Some(1), pid: Some(1) });
+    let absent_exit = policy::valid_stage_requirement(
+        &policy::StageRequirement::Process { exit: None, pid: Some(1) });
+    let absent_pid = policy::valid_stage_requirement(
+        &policy::StageRequirement::Process { exit: Some(0), pid: None });
+    let zero_pid = policy::valid_stage_requirement(
+        &policy::StageRequirement::Process { exit: Some(0), pid: Some(0) });
+    assert(complete && !failed && !absent_exit && !absent_pid && !zero_pid);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn stage_report_names_reject_missing_or_reused_originals() {
+    let unique = policy::StageRequirement::Names {
+        names: vec!["stdout".to_string(), "stderr".to_string()], nonempty: true,
+    };
+    let duplicate = policy::StageRequirement::Names {
+        names: vec!["stdout".to_string(), "stdout".to_string()], nonempty: false,
+    };
+    let empty = policy::StageRequirement::Names {
+        names: vec!["".to_string()], nonempty: true,
+    };
+    proof { reveal_strlit("stdout"); reveal_strlit("stderr");
+        assert("stdout"@[3] != "stderr"@[3]); }
+    let valid = policy::valid_stage_requirement(&unique);
+    let reused = policy::valid_stage_requirement(&duplicate);
+    let unnamed = policy::valid_stage_requirement(&empty);
+    assert(valid && !reused && !unnamed);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn stage_report_collects_the_first_failed_requirement() {
+    let checks = vec![
+        policy::StageRequirement::Process { exit: Some(0), pid: Some(1) },
+        policy::StageRequirement::Process { exit: Some(0), pid: Some(0) },
+        policy::StageRequirement::Process { exit: Some(1), pid: Some(1) },
+    ];
+    let first = policy::first_stage_failure(&checks);
+    assert(first == Some(1usize));
+    let empty = policy::first_stage_failure(&Vec::new());
+    assert(empty is None);
+}
+
 fn binding(identity: &str, hash: &str, size: u64) -> (out: Binding)
     ensures out.identity@ == identity@, out.sha256@ == hash@, out.size == size,
 {
