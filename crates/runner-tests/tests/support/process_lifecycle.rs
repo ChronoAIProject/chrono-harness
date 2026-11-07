@@ -158,8 +158,10 @@ fn controller(case: &str) {
     let exit = Exit::register(pid);
     thread::sleep(Duration::from_millis(150));
     let stopped = now();
+    // Setup uses the original one-second deadline. Each case separately checks
+    // the child's terminal timing after the launcher is suspended.
     assert!(
-        (0.0..0.75).contains(&(stopped - started)),
+        (0.0..1.0).contains(&(stopped - started)),
         "fixture missed the original deadline: started={started}, stopped={stopped}"
     );
     assert_eq!(unsafe { libc::kill(launcher_pid, libc::SIGSTOP) }, 0);
