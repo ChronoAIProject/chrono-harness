@@ -6,7 +6,7 @@
 
 ## GitHub 配置
 
-宿主使用 GitHub 原生规则集，关闭 `strict_required_status_checks_policy`，保留必需汇总检查、既有评审要求和禁止绕过的设置。默认无需 merge queue、独立合并机器人、轮询服务或新增权限。
+宿主使用 GitHub 原生规则集，关闭 `strict_required_status_checks_policy`，保留必需汇总检查、既有评审要求和禁止绕过的设置。已有宿主先验证并合入合并树校验工作流，再关闭 strict。默认无需 merge queue、独立合并机器人、轮询服务或新增权限。
 
 本仓唯一采用文件为 [.chrono-harness/ci/admission.json](../.chrono-harness/ci/admission.json)，目标为 dev，必需检查为 `chrono / collection`，评审人数保持现有的 0。部署入口是：
 

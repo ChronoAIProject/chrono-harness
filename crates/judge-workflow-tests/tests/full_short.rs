@@ -2011,7 +2011,14 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         ],
     );
     fs::write(&payload, serde_json::to_vec(&json!({"merge_commit_sha":workflow_merge,"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate,"ref":"integration/short-full"}}})).unwrap()).unwrap();
-    detect(delivery_root.path(), "930");
+    git(
+        delivery_root.path(),
+        &["checkout", "--detach", &workflow_merge],
+    );
+    let delivery_detection = detect(delivery_root.path(), "930");
+    assert_eq!(delivery_detection["base"], h.base);
+    assert_eq!(delivery_detection["candidate"], workflow_merge);
+    assert_eq!(delivery_detection["event_head"], h.candidate);
     let published = native(delivery_root.path(), "publish", None, "930");
     assert!(
         published.status.success(),
