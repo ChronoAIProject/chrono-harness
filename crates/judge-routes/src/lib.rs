@@ -517,6 +517,8 @@ pub struct Receipt {
     pub method: String,
     pub process: ProcessResult,
     pub compiler_dependency: Option<Result<Vec<u8>, String>>,
+    pub compiler_artifact:
+        Option<Result<chrono_harness::verified_verifier::CompiledArtifact, String>>,
     pub digest: String,
 }
 
@@ -538,6 +540,16 @@ impl chrono_harness::verified_verifier::sources::DependencyRead for DependencyIo
     }
 }
 
+impl chrono_harness::verified_verifier::ArtifactRead for DependencyIo<'_> {
+    fn identity(&self, path: &[u8]) -> Result<(Vec<u8>, u64), String> {
+        std::str::from_utf8(path)
+            .map_err(|e| e.to_string())
+            .and_then(|path| chrono_harness::no_symlink_parents(self.0, path))
+            .and_then(|path| chrono_harness::file_identity(&path))
+            .map(|(digest, length)| (digest.into_bytes(), length))
+    }
+}
+
 impl Receipt {
     pub fn new(plan: &Execution, op: &Operation, process: ProcessResult) -> Result<Self, String> {
         let mut receipt = Self {
@@ -550,6 +562,13 @@ impl Receipt {
                 process.exit_code,
                 process.failure.is_some(),
                 op.output_limit_bytes,
+                &DependencyIo(&plan.root),
+            ),
+            compiler_artifact: chrono_harness::verified_verifier::observe_artifact(
+                &op.method.output_contract,
+                &op.method.argv,
+                process.exit_code,
+                process.failure.is_some(),
                 &DependencyIo(&plan.root),
             ),
             process,
@@ -612,6 +631,7 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
         p.failure.is_some(),
         &r.compiler_dependency,
         op.output_limit_bytes,
+        &r.compiler_artifact,
     )
 }
 pub fn execute_actions(r: &Registrations) -> BTreeMap<String, String> {

@@ -26,6 +26,82 @@ fn p(ops: &[&str]) -> Plan {
         operation_bounds: BTreeMap::new(),
     }
 }
+
+/// 核真实文件 IO、原进程和回执往返；夹具报告不代表实际 Verus 证明。
+#[test]
+fn compiler_receipt_observes_original_library_and_preserves_io_failure() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let args: Vec<String> = [
+        "--crate-type=lib", "--no-cheating", "--no-external-by-default", "--num-threads", "2",
+        "--output-json", "--compile", "--emit=link=library out.rlib,dep-info=library out.rlib.d",
+        "root.rs", "-o", "library out.rlib", "-Zchecksum-hash-algorithm=sha256",
+    ].into_iter().map(str::to_owned).collect();
+    let mut compiler = method("compile-fixture", args);
+    compiler.output_contract = Some(chrono_harness::verified_verifier::OutputContract {
+        version: "fixture".into(), commit: "fixture".into(),
+    });
+    let plans = BTreeMap::from([("test:compiler".into(), p(&["compile-fixture"]))]);
+    let methods = BTreeMap::from([("compile-fixture".into(), vec![compiler])]);
+    let exec = BTreeMap::from([("test:compiler".into(), "compile-fixture".into())]);
+    let plan = prepare(root, json!({}), &plans.keys().cloned().collect(), &plans, &methods,
+        &exec, &declarations(), BTreeMap::new(), &BTreeMap::new()).unwrap();
+    let op = &plan.operations[0];
+    let tool = &plan.tools["routes-helper"];
+    let command = CommandSpec {
+        program: tool.path.to_str().unwrap().into(), args: op.method.argv.clone(),
+        env: plan.environment.clone(), timeout_seconds: 10, output_limit_bytes: 4096,
+    };
+    let run = || run_process_observed(root, &command, &[], &tool.sha256).unwrap();
+
+    let missing = Receipt::new(&plan, op, run()).unwrap();
+    assert_eq!(missing.process.exit_code, 0);
+    assert!(missing.compiler_dependency.as_ref().unwrap().is_ok());
+    assert!(missing.compiler_artifact.as_ref().unwrap().is_err());
+    assert!(compare(&plan, op, Some(&missing)).unwrap_err().starts_with("E_VERUS_ARTIFACT:"));
+
+    // 大于 stdout 限额的库也按实际长度流式计算摘要，不复制进报告。
+    let content = vec![255u8; 65537];
+    fs::write(root.join("library.fixture"), &content).unwrap();
+    let original = Receipt::new(&plan, op, run()).unwrap();
+    let artifact = original.compiler_artifact.as_ref().unwrap().as_ref().unwrap();
+    assert_eq!(artifact.path, b"library out.rlib");
+    assert_eq!(artifact.sha256, sha256(&content).as_bytes());
+    assert_eq!(artifact.length, content.len() as u64);
+    let encoded = serde_json::to_vec(&original).unwrap();
+    assert!(encoded.len() < content.len());
+    let retained: Receipt = serde_json::from_slice(&encoded).unwrap();
+    // 离线消费原身份，不要求编译输出仍在，也不补读／覆盖原 IO 失败。
+    fs::remove_file(root.join("library out.rlib")).unwrap();
+    compare(&plan, op, Some(&retained)).unwrap();
+    assert!(compare(&plan, op, Some(&missing)).is_err());
+
+    for field in ["path", "sha256", "length"] {
+        let mut changed = retained.clone();
+        let artifact = changed.compiler_artifact.as_mut().unwrap().as_mut().unwrap();
+        match field {
+            "path" => artifact.path.push(0),
+            "sha256" => artifact.sha256 = b"invalid".to_vec(),
+            _ => artifact.length = 0,
+        }
+        let mut value = serde_json::to_value(&changed).unwrap();
+        value.as_object_mut().unwrap().remove("digest");
+        changed.digest = wire::digest(&value).unwrap();
+        assert!(compare(&plan, op, Some(&changed)).unwrap_err().starts_with("E_VERUS_ARTIFACT:"));
+    }
+
+    fs::write(root.join("library.fixture"), []).unwrap();
+    let empty = Receipt::new(&plan, op, run()).unwrap();
+    assert!(empty.compiler_artifact.as_ref().unwrap().is_err());
+    assert!(compare(&plan, op, Some(&empty)).is_err());
+    fs::remove_file(root.join("library out.rlib")).unwrap();
+    fs::remove_file(root.join("library.fixture")).unwrap();
+    fs::write(root.join("actual-library"), b"actual").unwrap();
+    symlink("actual-library", root.join("library out.rlib")).unwrap();
+    let linked = Receipt::new(&plan, op, run()).unwrap();
+    assert!(linked.compiler_artifact.as_ref().unwrap().is_err());
+    assert!(compare(&plan, op, Some(&linked)).is_err());
+}
 #[test]
 fn shared_prerequisites_order_and_dedup() {
     let plans = BTreeMap::from([

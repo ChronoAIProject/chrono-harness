@@ -171,12 +171,90 @@ fn extra_filtered_or_rebound_verifier_arguments_are_rejected() {
 
 struct UnavailableSources;
 
+fn library(length: u64) -> (out: policy::CompiledArtifact)
+    ensures out.length == length,
+        out.path@ == vstd::utf8::encode_utf8("out"@),
+        policy::identifiers::digest_format(out.sha256@),
+{
+    let path = "out".as_bytes();
+    let original = metadata_fixture(policy::sources::copy_range(path, 0, path.len()), length);
+    policy::CompiledArtifact { path: original.path, sha256: original.sha256, length }
+}
+
+impl policy::ArtifactRead for UnavailableSources {
+    fn identity(&self, path: &[u8]) -> Result<(Vec<u8>, u64), String> {
+        Err("original library read error\0é".to_string())
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn library_admission_requires_original_path_nonempty_length_and_digest() {
+    let args = arguments();
+    let good = policy::admit_artifact_observation(&contract(), &Some(Ok(library(1))), &args);
+    let large = policy::admit_artifact_observation(&contract(), &Some(Ok(library(u64::MAX))), &args);
+    let empty = policy::admit_artifact_observation(&contract(), &Some(Ok(library(0))), &args);
+    let missing = policy::admit_artifact_observation(&contract(), &None, &args);
+    let failed = policy::admit_artifact_observation(
+        &contract(), &Some(Err("original error".to_string())), &args,
+    );
+    assert(good.is_ok() && large.is_ok());
+    assert(empty.is_err() && missing.is_err() && failed.is_err());
+    let mut wrong_path = library(1); wrong_path.path.push(0u8);
+    let rebound = policy::admit_artifact_observation(&contract(), &Some(Ok(wrong_path)), &args);
+    assert(rebound.is_err());
+    let mut bad_digest = library(1); bad_digest.sha256 = vec![48u8];
+    let short = policy::admit_artifact_observation(&contract(), &Some(Ok(bad_digest)), &args);
+    assert(short.is_err());
+    let mut invalid = library(1); invalid.sha256.set(17, 65u8);
+    let uppercase = policy::admit_artifact_observation(&contract(), &Some(Ok(invalid)), &args);
+    assert(uppercase.is_err());
+    let no_args = policy::admit_artifact_observation(&contract(), &Some(Ok(library(1))), &Vec::new());
+    let ordinary = policy::admit_artifact_observation(&None, &None, &Vec::new());
+    let extra = policy::admit_artifact_observation(&None, &Some(Ok(library(1))), &args);
+    assert(no_args.is_err() && ordinary.is_ok() && extra.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn library_observation_keeps_original_io_error_and_rejects_failed_process() {
+    let io = UnavailableSources;
+    let ordinary = policy::observe_artifact(&None, &Vec::new(), 0, false, &io);
+    let failed = policy::observe_artifact(&contract(), &arguments(), 7, false, &io);
+    let interrupted = policy::observe_artifact(&contract(), &arguments(), 0, true, &io);
+    let invalid = policy::observe_artifact(&contract(), &Vec::new(), 0, false, &io);
+    let unavailable = policy::observe_artifact(&contract(), &arguments(), 0, false, &io);
+    assert(ordinary.is_none());
+    assert(failed.is_some() && failed.unwrap().is_err());
+    assert(interrupted.is_some() && interrupted.unwrap().is_err());
+    assert(invalid.is_some() && invalid.unwrap().is_err());
+    // trait 获取结果没有预先保证；这里只核原观察始终拒绝成功准入。
+    let admitted = policy::admit_artifact_observation(&contract(), &unavailable, &arguments());
+    if unavailable.is_some() && unavailable.unwrap().is_err() { assert(admitted.is_err()); }
+}
+
+fn any_accepted_compiler_receipt_has_the_same_library(
+    contract: &Option<OutputContract>, report: &Option<CompilerReport>, args: &Vec<String>,
+    exit: i32, failed: bool, dependency: &Option<Result<Vec<u8>, String>>, limit: usize,
+    artifact: &Option<Result<policy::CompiledArtifact, String>>,
+)
+    requires contract.is_some(),
+{
+    let accepted = policy::admit_observed_output(contract, report, args, exit, failed,
+        dependency, limit, artifact);
+    if accepted.is_ok() {
+        assert(exit == 0 && !failed);
+        assert(artifact.is_some() && artifact.unwrap().is_ok());
+        assert(artifact.unwrap().unwrap().path@ == vstd::utf8::encode_utf8(args[10]@));
+        assert(artifact.unwrap().unwrap().length > 0);
+        assert(policy::identifiers::digest_format(artifact.unwrap().unwrap().sha256@));
+    }
+}
+
 /// 成功报告与 dep-info 不能替代实际编译库；当前尚无库观察。
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn successful_report_without_compiled_library_is_rejected() {
     let original = Some(Ok(vec![0u8, 255u8]));
     let accepted = policy::admit_observed_output(
-        &contract(), &report(verification()), &arguments(), 0, false, &original, 2,
+        &contract(), &report(verification()), &arguments(), 0, false, &original, 2, &None,
     );
     assert(accepted.is_err());
 }
@@ -198,19 +276,19 @@ impl policy::sources::CandidateSourceRead for UnavailableSources {
 fn original_success_report_cannot_bypass_missing_failed_or_oversize_sources() {
     let args = arguments();
     let report = report(verification());
-    let missing = policy::admit_observed_output(&contract(), &report, &args, 0, false, &None, 1);
+    let missing = policy::admit_observed_output(&contract(), &report, &args, 0, false, &None, 1, &Some(Ok(library(1))));
     assert(missing.is_err());
     let failure = Some(Err("original read error\0é".to_string()));
-    let failed = policy::admit_observed_output(&contract(), &report, &args, 0, false, &failure, 1);
+    let failed = policy::admit_observed_output(&contract(), &report, &args, 0, false, &failure, 1, &Some(Ok(library(1))));
     assert(failed.is_err());
     let original = Some(Ok(vec![0u8, 255u8]));
-    let too_large = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 1);
-    let exact = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 2);
-    let zero_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 0);
-    let over_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 67_108_865);
+    let too_large = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 1, &Some(Ok(library(1))));
+    let exact = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 2, &Some(Ok(library(1))));
+    let zero_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 0, &Some(Ok(library(1))));
+    let over_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 67_108_865, &Some(Ok(library(1))));
     assert(too_large.is_err() && exact.is_ok() && zero_bound.is_err() && over_bound.is_err());
-    let ordinary = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &None, 0);
-    let unexpected = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &original, 2);
+    let ordinary = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &None, 0, &None);
+    let unexpected = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &original, 2, &None);
     assert(ordinary.is_ok() && unexpected.is_err());
 }
 
@@ -221,7 +299,7 @@ fn any_admitted_proof_receipt_has_original_dependency(
 )
     requires contract.is_some(),
 {
-    let admitted = policy::admit_observed_output(contract, report, args, exit, failed, original, limit);
+    let admitted = policy::admit_observed_output(contract, report, args, exit, failed, original, limit, &Some(Ok(library(1))));
     if admitted.is_ok() {
         assert(original.is_some());
         assert(original.unwrap().is_ok());
