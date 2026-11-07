@@ -1363,6 +1363,140 @@ fn cause_set_normalizes_unordered_unicode_nul_and_repeated_input() {
     assert(policy::ordered_causes(entries@));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn seed_propagation_stream_keeps_every_position_and_all_seed_fields() {
+    let edges: Vec<policy::UnionEdge> = vec![];
+    let seeds = vec![seed("same", "根\0", "first", "one"),
+        seed("same", "", "second", "two"), seed("same", "根\0", "first", "one")];
+    let topology = policy::seed_topology(&edges, &seeds);
+    let mut stream = policy::SeedPropagations::new(&topology, &seeds);
+    assert(stream.cursor() == 0);
+    let first = stream.next().unwrap();
+    assert(stream.cursor() == 1);
+    assert(first.seed.id@ == "same"@ && first.seed.node@ == "根\0"@);
+    assert(first.seed.reference@ == "first"@ && first.seed.reason@ == "one"@);
+    assert(policy::seed_propagation_matches(first, &topology, seeds@, 0));
+    let second = stream.next().unwrap();
+    assert(stream.cursor() == 2);
+    assert(second.seed.id@ == "same"@ && second.seed.node@ == ""@);
+    assert(second.seed.reference@ == "second"@ && second.seed.reason@ == "two"@);
+    assert(policy::seed_propagation_matches(second, &topology, seeds@, 1));
+    let third = stream.next().unwrap();
+    assert(stream.cursor() == 3);
+    assert(third.seed.key() == first.seed.key());
+    assert(policy::seed_propagation_matches(third, &topology, seeds@, 2));
+    let end = stream.next();
+    assert(end.is_none() && stream.cursor() == 3);
+    let stable_end = stream.next();
+    assert(stable_end.is_none() && stream.cursor() == 3);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn empty_seed_stream_stays_finished_and_mismatched_root_counts_are_inadmissible() {
+    let edges: Vec<policy::UnionEdge> = vec![];
+    let seeds: Vec<policy::Seed> = vec![];
+    let topology = policy::seed_topology(&edges, &seeds);
+    let mut stream = policy::SeedPropagations::new(&topology, &seeds);
+    let end = stream.next();
+    assert(end.is_none() && stream.cursor() == 0);
+    let end_again = stream.next();
+    assert(end_again.is_none() && stream.cursor() == 0);
+    let other_seeds = vec![seed("other", "root", "ref", "reason")];
+    assert(!policy::seed_topology_matches(&topology, other_seeds@));
+    let other_topology = policy::seed_topology(&edges, &other_seeds);
+    assert(!policy::seed_topology_matches(&other_topology, seeds@));
+}
+
+fn traversed(from: &str, kind: policy::EdgeKind, to: &str, cause: &str) -> (out: policy::TraversedEdge)
+    ensures out.edge.key() == (from.spec_bytes(), kind.rank_spec(), to.spec_bytes()),
+        out.seeds.keys().to_set() == Set::<Seq<u8>>::empty().insert(cause.spec_bytes()),
+{
+    let mut seeds = policy::CauseSet::default();
+    seeds.insert(cause);
+    policy::TraversedEdge { edge: edge(from, kind, to), seeds }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_rejects_every_nonexecution_kind_and_empty_inventory() {
+    let empty: Vec<policy::TraversedEdge> = vec![];
+    let no_targets = policy::selected_test_targets(&empty);
+    proof {
+        reveal_with_fuel(policy::selected_target_keys, 6);
+        assert(policy::selected_target_keys(empty@) == Set::<Seq<u8>>::empty());
+        empty_target_keys_mean_no_names(no_targets@);
+    }
+    assert(no_targets.len() == 0);
+    let rows = vec![
+        traversed("test:source", policy::EdgeKind::Compile, "test:t", "cause"),
+        traversed("test:source", policy::EdgeKind::BuildInput, "test:t", "cause"),
+        traversed("test:source", policy::EdgeKind::RuntimeInput, "test:t", "cause"),
+        traversed("test:source", policy::EdgeKind::JudgeTrigger, "test:t", "cause"),
+    ];
+    let targets = policy::selected_test_targets(&rows);
+    proof {
+        reveal_with_fuel(policy::selected_target_keys, 6);
+        assert(policy::selected_target_keys(rows@) == Set::<Seq<u8>>::empty());
+        empty_target_keys_mean_no_names(targets@);
+    }
+    assert(targets.len() == 0);
+}
+
+proof fn empty_target_keys_mean_no_names(names: Seq<String>)
+    requires policy::cause_keys(names).to_set() == Set::<Seq<u8>>::empty(),
+    ensures names.len() == 0,
+{
+    reveal(policy::cause_keys);
+    let keys = policy::cause_keys(names);
+    assert(keys.len() == names.len());
+    if names.len() > 0 {
+        assert(keys.to_set().contains(keys[0]));
+    }
+}
+
+proof fn selected_prefix_step(rows: Seq<policy::TraversedEdge>, at: int)
+    requires 0 <= at < rows.len(),
+    ensures policy::selected_target_keys(rows.take(at + 1)) ==
+        if rows[at].edge.kind == policy::EdgeKind::TestExecution {
+            policy::selected_target_keys(rows.take(at)).insert(rows[at].edge.to_bytes())
+        } else { policy::selected_target_keys(rows.take(at)) },
+{
+    reveal(policy::selected_target_keys);
+    assert(rows.take(at + 1).drop_last() =~= rows.take(at));
+    assert(rows.take(at + 1).last() == rows[at]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_is_sorted_unique_and_keeps_complete_unicode_nul_targets() {
+    let original = traversed("source\0", policy::EdgeKind::TestExecution, "根\0", "原因\0");
+    let copied = original.clone();
+    assert(copied.edge.key() == original.edge.key());
+    assert(copied.seeds.keys() == original.seeds.keys());
+    let rows = vec![original,
+        traversed("other", policy::EdgeKind::TestExecution, "z", ""),
+        traversed("other", policy::EdgeKind::TestExecution, "", "unrelated"),
+        traversed("other", policy::EdgeKind::TestExecution, "é", "cause"),
+        copied,
+        traversed("test:ignored", policy::EdgeKind::Compile, "not-selected", "cause"),
+    ];
+    let targets = policy::selected_test_targets(&rows);
+    proof {
+        assert(policy::selected_target_keys(rows@.take(0)) == Set::<Seq<u8>>::empty()) by {
+            reveal(policy::selected_target_keys);
+        }
+        selected_prefix_step(rows@, 0);
+        selected_prefix_step(rows@, 1);
+        selected_prefix_step(rows@, 2);
+        selected_prefix_step(rows@, 3);
+        selected_prefix_step(rows@, 4);
+        selected_prefix_step(rows@, 5);
+        assert(rows@.take(6) =~= rows@);
+    }
+    assert(policy::cause_keys(targets@).to_set() == Set::<Seq<u8>>::empty()
+        .insert("".spec_bytes()).insert("z".spec_bytes())
+        .insert("é".spec_bytes()).insert("根\0".spec_bytes()));
+    assert(policy::ordered_causes(targets@));
+}
+
 fn seed(id: &str, node: &str, reference: &str, reason: &str) -> (out: policy::Seed)
     ensures out.key() == (id.spec_bytes(), node.spec_bytes(), reference.spec_bytes(), reason.spec_bytes()),
         out.id@ == id@, out.node@ == node@, out.reference@ == reference@, out.reason@ == reason@,
