@@ -22,7 +22,7 @@ fn installer_digest_comes_from_the_declared_producer_output_before_execution() {
         serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
     assert_eq!(
         yaml["jobs"]["detect"]["outputs"]["startup_installer_sha256"],
-        "${{ steps.chrono_startup.outputs.installer_sha256 }}"
+        "${{ steps.chrono_startup.outputs['installer_sha256'] }}"
     );
     for job in ["unit_example", "aggregate"] {
         let install = yaml["jobs"][job]["steps"]
@@ -36,7 +36,18 @@ fn installer_digest_comes_from_the_declared_producer_output_before_execution() {
             "${{ needs.detect.outputs.startup_installer_sha256 }}"
         );
     }
-    for name in ["", "bad.name", "bad\nname", "${{ expression }}", "0bad"] {
+    for name in ["installer.sha256", "installer-sha256", "0digest"] {
+        value["job_gating"]["startup"]["installer_sha256_output"] = json!(name);
+        let config = serde_json::from_value(value.clone()).unwrap();
+        let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+        let yaml: Value =
+            serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+        assert_eq!(
+            yaml["jobs"]["detect"]["outputs"]["startup_installer_sha256"],
+            format!("${{{{ steps.chrono_startup.outputs['{name}'] }}}}")
+        );
+    }
+    for name in ["", "bad name", "bad\nname", "${{ expression }}", "name'", "名字"] {
         value["job_gating"]["startup"]["installer_sha256_output"] = json!(name);
         let config = serde_json::from_value(value.clone()).unwrap();
         assert!(

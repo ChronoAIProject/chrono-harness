@@ -177,7 +177,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 可选 `job_gating.startup` 使用 `chrono-shared-startup/v1`，声明字面宿主 `directory`、产物名、固定 `download_action`，以及按明确 job ID 索引的 `consumers`。每个消费者有非空 `need`、`output_use`、字面 `install` argv。已有 detector bootstrap 是唯一生产者，向 `GITHUB_OUTPUT` 写不透明 `binding`，不加 job。
 
-需要从传递产物运行安装器时，宿主用可选 `installer_sha256_output` 点名生产者的 SHA-256 输出字段。字段名只能含 ASCII 字母、数字和下划线，首字符不能是数字。provider 将该值作为 `startup_installer_sha256` job 输出，传给安装步骤的 `CHRONO_STARTUP_INSTALLER_SHA256`。本仓选择 `installer_sha256`；薄 shell 在 chmod 和执行前核原字节，完整产物校验继续归 Rust 安装器。这条绑定复用现有 step／job output，不增加下载或构建步骤。
+需要从传递产物运行安装器时，宿主用可选 `installer_sha256_output` 点名生产者的 SHA-256 输出字段。字段名复用已证明的 `verified_identifiers::valid_id`：非空，只含 ASCII 字母、数字、点、下划线和连字符；生成器使用 GitHub 表达式的括号索引读取它。provider 将该值作为 `startup_installer_sha256` job 输出，传给安装步骤的 `CHRONO_STARTUP_INSTALLER_SHA256`。本仓选择 `installer_sha256`；薄 shell 在 chmod 和执行前核原字节，完整产物校验继续归 Rust 安装器。这条绑定复用现有 step／job output，不增加下载或构建步骤。
 
 provider 在检测前上传声明目录，将生产 binding 和真实上传 artifact ID 作为 detector 输出。消费者按该 ID 下载，包括后续 attempt 只重跑失败 job 时；空 ID 不能触发下载全部。安装器须拒绝 binding 或传递文件缺失，无成功豁免。
 

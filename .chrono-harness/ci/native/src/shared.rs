@@ -237,21 +237,24 @@ impl Shared {
         }
         let available = profiles.keys().cloned().collect();
         let installer = &registration.installer;
-        if !profiles.get(&installer.profile).is_some_and(|selected| {
-            selected
-                .producer
-                .profile
-                .install
-                .iter()
-                .any(|item| item.destination == installer.destination)
-        }) {
+        let required_profile = vec![installer.profile.clone()];
+        if !policy::names_subset(&required_profile, &available) {
+            return Err("startup installer requires an explicitly installed tool".into());
+        }
+        let installed = profiles[&installer.profile]
+            .producer
+            .profile
+            .install
+            .iter()
+            .map(|item| item.destination.clone())
+            .collect();
+        if !policy::names_subset(&vec![installer.destination.clone()], &installed) {
             return Err("startup installer requires an explicitly installed tool".into());
         }
         for selected in registration.consumers.values() {
-            if selected.is_empty()
-                || !policy::valid_names(selected)
+            if !policy::valid_names(selected)
                 || !policy::names_subset(selected, &available)
-                || !selected.contains(&installer.profile)
+                || !policy::names_subset(&required_profile, selected)
             {
                 return Err("startup consumer requires explicit unique profiles".into());
             }

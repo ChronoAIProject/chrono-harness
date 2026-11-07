@@ -1,6 +1,6 @@
 //! Explicit startup transfer; hosts own production, identity and installation.
 use crate::{action, gating, overlap, scalar, shell, units};
-use chrono_harness::relative_path;
+use chrono_harness::{relative_path, verified_identifiers};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -47,15 +47,10 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
         );
     }
     action(&s.download_action, "actions/download-artifact")?;
-    if s.installer_sha256_output.as_ref().is_some_and(|name| {
-        name.is_empty()
-            || name.len() > 128
-            || !name
-                .bytes()
-                .next()
-                .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
-            || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
-    }) {
+    if s.installer_sha256_output
+        .as_ref()
+        .is_some_and(|name| !verified_identifiers::valid_id(name.as_bytes()))
+    {
         return Err("startup installer digest requires a literal producer output name".into());
     }
     if matches!(

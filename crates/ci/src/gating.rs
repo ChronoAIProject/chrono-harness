@@ -245,7 +245,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         .and_then(|s| s.installer_sha256_output.as_ref())
     {
         outputs.push_str(&format!(
-            "      startup_installer_sha256: ${{{{ steps.chrono_startup.outputs.{name} }}}}\n"
+            "      startup_installer_sha256: ${{{{ steps.chrono_startup.outputs['{name}'] }}}}\n"
         ));
     }
     for id in c.units.keys() {
