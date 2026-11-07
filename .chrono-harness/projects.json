@@ -1257,7 +1257,7 @@
             "--manifest-path",
             "crates/ci-tests/Cargo.toml",
             "--test",
-            "behavior",
+            "cache",
             "startup::"
           ]
         }
