@@ -20,6 +20,55 @@ fn executable(path: &str, hash: &str, version: &str) -> (out: Executable)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn native_binding_requires_both_fields_and_an_explicit_platform() {
+    proof {
+        reveal_strlit("Darwin"); reveal_strlit("Linux");
+        reveal_strlit("arm64"); reveal_strlit("x86_64");
+        assert("Darwin"@.len() != "Linux"@.len());
+        assert("arm64"@.len() != "x86_64"@.len());
+    }
+    let native = policy::NativePlatform { system: "Darwin".to_string(), machine: "arm64".to_string() };
+    let system = policy::NativePlatform { system: "Linux".to_string(), machine: "arm64".to_string() };
+    let machine = policy::NativePlatform { system: "Darwin".to_string(), machine: "x86_64".to_string() };
+    let exact = policy::platform_matches(Some(&native), &native);
+    let absent = policy::platform_matches(None, &native);
+    let wrong_system = policy::platform_matches(Some(&system), &native);
+    let wrong_machine = policy::platform_matches(Some(&machine), &native);
+    assert(exact && !absent && !wrong_system && !wrong_machine);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_identity_binds_schema_and_toolchain_independently() {
+    proof {
+        reveal_strlit("chrono-bootstrap-toolchains/v1");
+        reveal_strlit("chrono-bootstrap-toolchains/v2");
+        reveal_strlit("1.95.0"); reveal_strlit("1.95.0x");
+        assert("chrono-bootstrap-toolchains/v1"@[29] != "chrono-bootstrap-toolchains/v2"@[29]);
+        assert("1.95.0"@.len() != "1.95.0x"@.len());
+    }
+    let exact = policy::registry_matches("chrono-bootstrap-toolchains/v1", "1.95.0", "1.95.0");
+    let schema = policy::registry_matches("chrono-bootstrap-toolchains/v2", "1.95.0", "1.95.0");
+    let version = policy::registry_matches("chrono-bootstrap-toolchains/v1", "1.95.0x", "1.95.0");
+    assert(exact && !schema && !version);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn version_prefix_requires_a_delimiter_and_only_cargo_allows_an_exact_version() {
+    let prefix = [97u8];
+    let exact = [97u8];
+    let spaced = [97u8, 32, 98];
+    let glued = [97u8, 98];
+    let wrong = [98u8, 32];
+    let cargo = policy::version_matches(&exact, &prefix, true);
+    let rustc = policy::version_matches(&exact, &prefix, false);
+    let with_suffix = policy::version_matches(&spaced, &prefix, false);
+    let without_delimiter = policy::version_matches(&glued, &prefix, true);
+    let wrong_prefix = policy::version_matches(&wrong, &prefix, true);
+    let short = policy::version_matches(&prefix, &spaced, true);
+    assert(cargo && !rustc && with_suffix && !without_delimiter && !wrong_prefix && !short);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn registry_rejects_direct_or_native_overrides_even_when_bindings_are_optional() {
     let normal = policy::declaration_source(true, false, false, true, false);
     let direct = policy::declaration_source(true, true, false, false, true);
@@ -121,11 +170,16 @@ fn sha256_allows_zero_but_requires_exact_lowercase_hex_length() {
     let long_hash = policy::valid_sha256(&long);
     let upper_hash = policy::valid_sha256(&upper);
     let nul_hash = policy::valid_sha256(&nul);
+    let direct = policy::binding_valid(&zeros, false, true);
+    let missing = policy::binding_valid(&zeros, false, false);
+    let registry = policy::binding_valid(&zeros, true, false);
+    let invalid_registry = policy::binding_valid(&upper, true, true);
     assert(accepted);
     assert(!short_hash);
     assert(!long_hash);
     assert(!upper_hash);
     assert(!nul_hash);
+    assert(direct && !missing && registry && !invalid_registry);
 }
 
 }

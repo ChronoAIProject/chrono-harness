@@ -8,10 +8,12 @@ autotests = false
 [dependencies]
 chrono-harness = { path = "../../../crates/runner" }
 chrono-host-bootstrap = { path = "../native" }
+serde_json = "1"
+tempfile = "3"
 
 [[test]]
-name = "verified_bindings"
-path = "tests/verified_bindings.rs"
+name = "bindings"
+path = "tests/bindings.rs"
 
 [profile.dev.package.sha2]
 opt-level = 3

@@ -178,6 +178,16 @@ JSON 解码、哈希、metadata／inode 观察、路径解析、Git、文件系�
 
 ## 固定执行入口
 
+宿主 bootstrap 的 Rust 迁移正在实施，尚未替换当前 Python 入口。
+`.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
+字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断。
+版本前缀另要求完整空格分隔；Cargo 可接受精确版本字符串，rustc 必须保留版本后的空格。
+独立根按成功、缺输入、冲突和边界声明预期；生产根和独立根都登记整 crate 证明。
+普通 Rust 适配已直接调用这些判断来解析声明、查询 Rustup 和观察真实工具；
+JSON 解码、字段提取、路径和环境处理、进程与文件 IO，以及完整启动组合仍未证明。
+Rust 回归另核真实 Cargo／rustc 的身份、重定位和继承选择；它不替代证明，
+也不证明共享安装、冷启动和发布调用方已迁移。
+
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
 `test:runner-tests` 先运行八项整 crate Verus 操作及编译，registration 先运行四项，
 routes、filemap 与 CI 汇总各先运行两项；同一计划内共用的证明操作只执行一次，

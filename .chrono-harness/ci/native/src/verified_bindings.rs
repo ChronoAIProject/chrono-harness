@@ -15,6 +15,61 @@ verus! {
 
 pub enum DeclarationSource { Registry, Direct, Unbound, Reject }
 
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct NativePlatform {
+    pub system: String,
+    pub machine: String,
+}
+
+pub fn platform_matches(declared: Option<&NativePlatform>, native: &NativePlatform) -> (valid: bool)
+    ensures valid <==> (declared is Some
+        && declared.unwrap().system@ == native.system@
+        && declared.unwrap().machine@ == native.machine@),
+{
+    match declared {
+        None => false,
+        Some(value) => equal_text(value.system.as_str(), native.system.as_str())
+            && equal_text(value.machine.as_str(), native.machine.as_str()),
+    }
+}
+
+pub fn registry_matches(schema: &str, version: &str, expected_version: &str) -> (valid: bool)
+    ensures valid <==> (schema@ == "chrono-bootstrap-toolchains/v1"@ && version@ == expected_version@),
+{
+    equal_text(schema, "chrono-bootstrap-toolchains/v1") && equal_text(version, expected_version)
+}
+
+pub fn byte_prefix(bytes: &[u8], prefix: &[u8]) -> (matched: bool)
+    ensures matched <==> (prefix@.len() <= bytes@.len()
+        && forall|i: int| 0 <= i < prefix@.len() ==> bytes@[i] == prefix@[i]),
+{
+    if prefix.len() > bytes.len() { return false; }
+    let mut i = 0;
+    while i < prefix.len()
+        invariant
+            prefix.len() <= bytes.len(),
+            0 <= i <= prefix.len(),
+            forall|j: int| 0 <= j < i ==> bytes@[j] == prefix@[j],
+        decreases prefix.len() - i,
+    {
+        if bytes[i] != prefix[i] { return false; }
+        i += 1;
+    }
+    true
+}
+
+// prefix 是调用方组装的精确工具名、空格和工具链版本。
+pub fn version_matches(bytes: &[u8], prefix: &[u8], allow_exact: bool) -> (valid: bool)
+    ensures valid <==> (prefix@.len() <= bytes@.len()
+        && (forall|i: int| 0 <= i < prefix@.len() ==> bytes@[i] == prefix@[i])
+        && ((allow_exact && bytes@.len() == prefix@.len())
+            || (bytes@.len() > prefix@.len() && bytes@[prefix@.len() as int] == 32))),
+{
+    byte_prefix(bytes, prefix) && ((allow_exact && bytes.len() == prefix.len())
+        || (bytes.len() > prefix.len() && bytes[prefix.len()] == 32))
+}
+
 pub fn declaration_source(
     registry: bool, direct: bool, native: bool, required: bool, native_matches: bool,
 ) -> (out: DeclarationSource)
@@ -57,6 +112,14 @@ pub fn valid_sha256(bytes: &[u8]) -> (valid: bool)
         i += 1;
     }
     true
+}
+
+pub fn binding_valid(bytes: &[u8], registry: bool, has_path: bool) -> (valid: bool)
+    ensures valid <==> (bytes@.len() == 64
+        && (forall|i: int| 0 <= i < bytes@.len() ==> hash_byte(bytes@[i]))
+        && (registry || has_path)),
+{
+    valid_sha256(bytes) && (registry || has_path)
 }
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize, serde::Serialize))]

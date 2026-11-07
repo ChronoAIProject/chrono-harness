@@ -11,6 +11,8 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/ci/native/src/bindings.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/bindings.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native/Cargo.toml","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native/Cargo.lock","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native/src/lib.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},

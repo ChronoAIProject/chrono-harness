@@ -73,6 +73,7 @@ version = "0.1.0"
 dependencies = [
  "chrono-harness",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -81,6 +82,8 @@ version = "0.1.0"
 dependencies = [
  "chrono-harness",
  "chrono-host-bootstrap",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
