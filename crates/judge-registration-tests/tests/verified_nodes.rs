@@ -28,6 +28,7 @@ fn node_variants_retain_identity_and_are_distinct() {
         while j < kinds.len()
             invariant 0 <= j <= kinds.len(), 0 <= i < kinds.len(), kinds.len() == 8,
                 kinds@ == seq![File, Project, Script, Input, Test, Judge, Tool, Environment],
+                copy == kinds@[i as int],
             decreases kinds.len() - j,
         {
             let equal = copy == kinds[j];
