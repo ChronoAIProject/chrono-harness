@@ -42,7 +42,7 @@ fn fixture() -> (Host, Value) {
     fs::create_dir(root.path().join(".chrono-harness")).unwrap();
     fs::write(root.path().join("compiler"), b"compiler-one").unwrap();
     fs::write(root.path().join("source"), b"source-one").unwrap();
-    let config = json!({"schema":"chrono-cache/v1","namespace":"fixture","artifact_registry":".chrono-harness/artifacts.json",
+    let mut config = json!({"schema":"chrono-cache/v2","namespace":"fixture","artifact_registry":".chrono-harness/artifacts.json",
         "inputs":{
             "compiler":{"kind":"file","path":"compiler","presence":"present"},
             "source":{"kind":"file","path":"source","presence":"present"},
@@ -56,6 +56,7 @@ fn fixture() -> (Host, Value) {
                 "artifacts":["target"],"compatibility_inputs":["compiler","profile"],"source_inputs":["source"],"restore":"compatible"},
             "other":{"owner":"other","producer":"build.other","consumers":["check.other"],
                 "artifacts":["other-target"],"compatibility_inputs":["compiler"],"source_inputs":["other"],"restore":"exact"}}});
+    register_consumer_contract(root.path(), &mut config);
     register_artifacts(root.path(), &config);
     (root, config)
 }
@@ -113,29 +114,27 @@ fn failed_test_retains_probe_originals_and_success_removes_its_host() {
     assert!(!removed.exists());
 }
 
-fn adopt_consumer_contract(root: &Path, config: &mut Value) {
+fn register_consumer_contract(root: &Path, config: &mut Value) {
     fs::write(
         root.join(".chrono-harness/operations.json"),
         br#"{"build":["build.project"],"other":"build.other"}"#,
     )
     .unwrap();
-    config["schema"] = json!("chrono-cache/v2");
     config["consumer_operations"] = json!({
         "check.one":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
         "check.two":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
-        "check.other":[{"registry":".chrono-harness/missing-other.json","pointer":"/other"}]
+        "check.other":[{"registry":".chrono-harness/operations.json","pointer":"/other"}]
     });
 }
 
 #[test]
 fn only_current_cache_registration_is_admitted() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     let current = plan(root.path(), &config, "check.one").unwrap();
     assert_eq!(current["schema"], "chrono-cache-plan/v2");
-    println!(
-        "CURRENT_V2_PROJECT_KEY={}",
-        current["caches"]["project"]["key"]
+    assert_eq!(
+        current["caches"]["project"]["key"],
+        "chrono-v2-9f71474db4351e9476d1494c918fb420df36237fa619af8b33b7e53530413577-2817b202120fe2d9d5434847a76c712e5a06002285d5d0d51d404cfc72ea60e7"
     );
     // A retired registration must fail even without the current contract map.
     config
@@ -156,10 +155,13 @@ fn only_current_cache_registration_is_admitted() {
 
 #[test]
 fn transport_report_rejects_retired_plan_schema() {
-    let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
+    let (root, config) = fixture();
     let mut prepared = plan(root.path(), &config, "check.one").unwrap();
     assert!(chrono_cache::transport_report(&prepared, &json!({}), "work", None).is_ok());
+    let state = root.path().join(".chrono-harness/state");
+    fs::create_dir(&state).unwrap();
+    let path = state.join("plan.json");
+    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
     for schema in [
         json!("chrono-cache-plan/v1"),
         json!("chrono-cache-plan/v3"),
@@ -171,6 +173,31 @@ fn transport_report_rejects_retired_plan_schema() {
                 .unwrap_err()
                 .contains("E_CACHE_REPORT")
         );
+        let raw = serde_json::to_vec(&prepared).unwrap();
+        fs::write(&path, &raw).unwrap();
+        let output = Command::new(&binary)
+            .args([
+                "report",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--plan",
+                ".chrono-harness/state/plan.json",
+                "--report-directory",
+                ".chrono-harness/state/rejected/",
+                "--steps-env",
+                "CACHE_TEST_STEPS",
+                "--work",
+                "work",
+            ])
+            .env("CACHE_TEST_STEPS", "{}")
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("expected cache plan"));
+        assert_eq!(fs::read(&path).unwrap(), raw);
+        assert!(!state.join("rejected").exists());
+        assert!(!state.join("cache-reports").exists());
     }
 }
 
@@ -227,6 +254,8 @@ fn consumers_select_only_registered_inputs_and_never_fall_back_to_all() {
             .unwrap_err()
             .contains("unavailable-other-input")
     );
+    config["consumer_operations"]["check.other"][0]["registry"] =
+        json!(".chrono-harness/missing-other.json");
     config["caches"]["other"]["producer"] = json!("build.changed-other");
     assert_eq!(first, plan(root.path(), &config, "check.one").unwrap());
     assert_eq!(first["execution"], "not-started");
@@ -241,7 +270,6 @@ fn consumers_select_only_registered_inputs_and_never_fall_back_to_all() {
 #[test]
 fn adding_a_consumer_does_not_invalidate_an_unchanged_producer_cache() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     let first = plan(root.path(), &config, "check.one").unwrap();
     config["caches"]["project"]["consumers"] = json!(["check.one", "check.two", "check.new"]);
     config["consumer_operations"]["check.new"] = config["consumer_operations"]["check.one"].clone();
@@ -254,7 +282,6 @@ fn adding_a_consumer_does_not_invalidate_an_unchanged_producer_cache() {
 #[test]
 fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     let source = root.path().join(".chrono-harness/operations.json");
     fs::write(
         &source,
@@ -289,7 +316,6 @@ fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
 #[test]
 fn consumer_operation_references_reject_missing_ambiguous_and_nonoperation_values() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     config["consumer_operations"] = json!({
         "check.one":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
         "check.two":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
@@ -375,7 +401,6 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
 #[test]
 fn a_consumer_registry_cannot_be_restored_as_a_cache_artifact() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     config["artifacts"]["target"]["path"] = json!(".chrono-harness/operations.json");
     register_artifacts(root.path(), &config);
     let error = plan(root.path(), &config, "check.one").unwrap_err();
@@ -730,6 +755,11 @@ fn report_requires_current_planner_identity_before_publication() {
 #[test]
 fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
     let (root, config) = fixture();
+    fs::write(
+        root.path().join(".chrono-harness/operations.json"),
+        br#"{"build":["build.project","changed"],"other":"build.other"}"#,
+    )
+    .unwrap();
     let first = plan(root.path(), &config, "check.one").unwrap();
     for pointer in [
         "/namespace",
@@ -964,7 +994,7 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
     );
     assert!(!String::from_utf8_lossy(&first.stdout).contains("first-private-value"));
     let first: Value = serde_json::from_slice(&first.stdout).unwrap();
-    assert_eq!(first["schema"], "chrono-cache-plan/v1");
+    assert_eq!(first["schema"], "chrono-cache-plan/v2");
     assert_eq!(first["consumer"], "check.one");
     assert_eq!(first["execution"], "not-started");
     let next = run(Some("second-private-value"));
@@ -977,21 +1007,15 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
 }
 
 #[test]
-fn consumer_registration_and_restore_policy_are_bound_without_list_order() {
+fn restore_policy_is_bound_without_consumer_list_order() {
     let (root, mut config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
     config["caches"]["project"]["consumers"] = json!(["check.two", "check.one"]);
     assert_eq!(first, plan(root.path(), &config, "check.one").unwrap());
-    config["caches"]["project"]["consumers"] = json!(["check.one", "check.three"]);
-    let changed = plan(root.path(), &config, "check.one").unwrap();
-    assert_ne!(
-        first["caches"]["project"]["key"],
-        changed["caches"]["project"]["key"]
-    );
     config["caches"]["project"]["restore"] = json!("exact");
     let exact = plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(
-        changed["caches"]["project"]["key"],
+        first["caches"]["project"]["key"],
         exact["caches"]["project"]["key"]
     );
     assert_eq!(exact["caches"]["project"]["restore_keys"], json!([]));
@@ -1015,6 +1039,15 @@ fn cli_rejects_unknown_actions_and_ambiguous_options() {
 fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
     let (root, mut config) = fixture();
     config["caches"]["other"]["consumers"] = json!(["check.one"]);
+    config["consumer_operations"]
+        .as_object_mut()
+        .unwrap()
+        .remove("check.other");
+    fs::write(
+        root.path().join(".chrono-harness/operations.json"),
+        br#"{"build":["build.project","build.other"]}"#,
+    )
+    .unwrap();
     fs::write(root.path().join("unavailable-other-input"), b"other source").unwrap();
     config["artifacts"]["target"]["path"] = json!("outputs with spaces/target");
     register_artifacts(root.path(), &config);

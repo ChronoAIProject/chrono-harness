@@ -81,11 +81,7 @@ fn transport_report_with_saves(
     bootstrap: Option<&str>,
     saves: Option<&[String]>,
 ) -> Result<Value, String> {
-    if !matches!(
-        plan["schema"].as_str(),
-        Some("chrono-cache-plan/v1" | "chrono-cache-plan/v2")
-    ) || !steps.is_object()
-    {
+    if !crate::verified_planner::current_plan(plan["schema"].as_str()) || !steps.is_object() {
         return Err("E_CACHE_REPORT: expected cache plan and native step observations".into());
     }
     let selected: BTreeMap<_, _> = plan["caches"]

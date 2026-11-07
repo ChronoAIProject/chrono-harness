@@ -1,4 +1,4 @@
-//! 缓存报告和封存共用的当前 planner 身份判断。
+//! 当前缓存格式及报告和封存共用的 planner 身份判断。
 #![allow(unexpected_cfgs)]
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
@@ -12,6 +12,28 @@ mod identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
+
+pub fn current_registration(schema: &str) -> (valid: bool)
+    ensures valid <==> schema@ == "chrono-cache/v2"@,
+{
+    identifiers::equal_text(schema, "chrono-cache/v2")
+}
+
+pub open spec fn current_plan_schema(schema: Option<&str>) -> bool {
+    match schema {
+        Some(schema) => schema@ == "chrono-cache-plan/v2"@,
+        None => false,
+    }
+}
+
+pub fn current_plan(schema: Option<&str>) -> (valid: bool)
+    ensures valid <==> current_plan_schema(schema),
+{
+    match schema {
+        Some(schema) => identifiers::equal_text(schema, "chrono-cache-plan/v2"),
+        None => false,
+    }
+}
 
 pub open spec fn planner_identity_matches(
     declared_sha256: Option<&str>, declared_version: Option<&str>,
