@@ -260,11 +260,12 @@ impl Inventory {
             "legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"});
         let mut nodes = 0usize;
         let mut complete = true;
+        let global = crate::verified_release::global_maintenance(originals);
         if let Some(originals) = originals {
             result["scope"]["kind"] = json!("declared-components");
             result["scope"]["originals"] = json!(originals);
         }
-        for key in if originals.is_some() {
+        for key in if !global {
             Vec::new()
         } else {
             self.transaction_keys()?
@@ -379,7 +380,7 @@ impl Inventory {
                 }
             }
         }
-        match if originals.is_some() {
+        match if !global {
             Ok(Vec::new())
         } else {
             self.prune_roles(observed, &mut nodes)

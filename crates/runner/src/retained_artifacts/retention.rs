@@ -1244,16 +1244,15 @@ impl Inventory {
         current_consumers_released: bool,
         reason: &str,
     ) -> Result<Value, String> {
-        let selected: BTreeSet<_> = roles.iter().cloned().collect();
-        if !current_consumers_released
-            || reason.trim().is_empty()
-            || reason.len() > 4096
-            || roles.is_empty()
-            || roles.len() > self.policy.max_related_outputs
-            || selected.len() != roles.len()
-            || roles.iter().any(|r| r.is_empty() || r.len() > 256)
-            || !crate::wire::is_digest(digest)
-            || length > self.policy.max_output_bytes
+        if !crate::verified_release::valid_request(
+            roles,
+            self.policy.max_related_outputs,
+            reason.trim(),
+            reason.len(),
+            current_consumers_released,
+            length,
+            self.policy.max_output_bytes,
+        ) || !crate::wire::is_digest(digest)
             || !survivor_root.is_absolute()
             || fs::canonicalize(survivor_root).map_err(|e| e.to_string())? != survivor_root
         {
@@ -1316,13 +1315,13 @@ impl Inventory {
                 "preserved release requires an explicitly retained regular original".into(),
             );
         }
-        let actual: BTreeSet<_> = ledger
+        let actual: Vec<_> = ledger
             .roots
             .iter()
-            .filter(|(_, ids)| ids.contains(&original.id))
+            .filter(|(_, ids)| crate::verified_release::contains(ids, &original.id))
             .map(|(role, _)| role.clone())
             .collect();
-        if actual != selected {
+        if !crate::verified_release::same_members(&actual, roles) {
             return Err(
                 "preserved release roots differ from the current original consumers".into(),
             );
@@ -1333,11 +1332,7 @@ impl Inventory {
             return Err("preserved release original identity changed".into());
         }
         for role in roles {
-            let remaining: Vec<_> = ledger.roots[role]
-                .iter()
-                .filter(|id| **id != original.id)
-                .cloned()
-                .collect();
+            let remaining = crate::verified_release::without(&ledger.roots[role], &original.id);
             self.reference_locked(&mut ledger, role, &remaining)?;
         }
         for lease in &leases {
@@ -1395,10 +1390,7 @@ impl Inventory {
     /// A caller can name its actual remaining originals without re-enumerating
     /// unrelated diagnostic metadata. The same limits and dependency guards apply.
     pub fn maintain_originals(&self, originals: &[String]) -> Result<Value, String> {
-        if originals.is_empty()
-            || originals.len() > self.policy.max_related_outputs
-            || originals.iter().collect::<BTreeSet<_>>().len() != originals.len()
-        {
+        if !crate::verified_release::unique_selection(originals, self.policy.max_related_outputs) {
             return Err(
                 "explicit maintenance originals are empty, duplicated or over capacity".into(),
             );

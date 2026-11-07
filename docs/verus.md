@@ -8,6 +8,24 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 新增规格、决策、状态维护与独立边界预期直接写在 Verus 中，登记整 crate 证明并由实际消费计划强制执行。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
+## 原件交接与定向维护
+
+`crates/runner/src/retained_artifacts/verified_release.rs` 负责 `release-preserved`
+请求的数量、字节与唯一性边界、完整角色集合比较，以及仅移除所选原件的成员变换。
+`maintain` 的显式清单准入和是否进入全库枚举的选择也直接消费此实现。
+独立 Verus 边界预期覆盖空／重复／超额清单、缺少或多出角色、仍在使用、理由和原件大小边界，
+并核对释放后其他成员的原顺序和内容。
+
+本仓在 `runner-tests` 的现有执行计划中先运行 `verify.retention-release` 和
+`verify.retention-release-tests`，两项都执行整 crate 证明并编译，使用现役固定 Verus、
+`--no-cheating` 和 `--no-external-by-default`。Rust 生产调用和专属测试导入同一源码。
+标准字符串接口提供 UTF-8 字节和 Unicode `trim`；文件系统接口提供物理路径、身份、时间和长度，
+既有摘要／租约／JSON 适配器继续负责真实 IO。上述接口和保留模块的其余组合仍是完整证明边界，
+不能以本节的局部证明代替全仓覆盖或真实宿主验收。
+
+**源码与政策同改：**本批新增两项证明前置及相应 FILEMAP 登记；原维护节点、字节和 25 ms
+上限不变，不新增共享清单或锁。新增证明和总生命周期成本在正式检查前未测。
+
 ## CI 配置的字面文本
 
 `crates/ci/src/verified_literals.rs` 统一负责 full 与 release 的单行文本判断。
