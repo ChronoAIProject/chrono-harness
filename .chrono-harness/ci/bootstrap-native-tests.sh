@@ -88,5 +88,59 @@ case "$task_calls" in 'rustup
 exec 9<&-
 if [ -n "$task_inherited_fds" ]; then export CHRONO_PROCESS_FDS="$task_inherited_fds"; else unset CHRONO_PROCESS_FDS; fi
 unset CHRONO_WORKTREE_BOOTSTRAP
+
+# 共享消费者先核生产者单独绑定的安装器字节，再恢复下载丢失的执行位。
+task_entry="$task_repo/.chrono-harness/ci/bootstrap-shared.sh"
+task_host="$task_temporary/shared host"
+mkdir -p "$task_host/.chrono-harness/startup/tools/core" "$task_host/.chrono-harness/bin" "$task_host/.chrono-harness/ci"
+task_installer="$task_host/.chrono-harness/startup/tools/core/chrono-host-bootstrap"
+cp "$task_fixture" "$task_installer"
+chmod 644 "$task_installer"
+task_digest=$(/usr/bin/shasum -a 256 "$task_installer")
+export CHRONO_STARTUP_INSTALLER_SHA256=${task_digest%% *}
+reset_calls
+export CHRONO_LAUNCHER_NATIVE_EXIT=23
+invoke "$task_host" .chrono-harness/ci/bootstrap-shared.json install unit_runner
+test "$task_status" -eq 23 || fail 'shared installer exit was lost'
+task_expected=$(printf '%s\n' chrono-host-bootstrap "<$task_host>" '<.chrono-harness/ci/bootstrap-shared.json>' '<install>' '<unit_runner>')
+test "$(cat "$CHRONO_LAUNCHER_CALLS")" = "$task_expected" || fail 'shared installer arguments differ'
+test -x "$task_installer" || fail 'downloaded installer mode was not restored'
+unset CHRONO_LAUNCHER_NATIVE_EXIT
+
+for task_bad_binding in '' invalid 0000000000000000000000000000000000000000000000000000000000000000; do
+    reset_calls
+    chmod 644 "$task_installer"
+    export CHRONO_STARTUP_INSTALLER_SHA256=$task_bad_binding
+    invoke "$task_host" .chrono-harness/ci/bootstrap-shared.json install unit_runner
+    test "$task_status" -ne 0 || fail 'missing or incorrect installer binding was accepted'
+    test ! -s "$CHRONO_LAUNCHER_CALLS" || fail 'executed an unbound installer'
+    test ! -x "$task_installer" || fail 'changed mode before validating installer'
+done
+export CHRONO_STARTUP_INSTALLER_SHA256=${task_digest%% *}
+mv "$task_host/.chrono-harness/startup/tools/core" "$task_host/.chrono-harness/startup/tools/physical-core"
+ln -s physical-core "$task_host/.chrono-harness/startup/tools/core"
+reset_calls
+invoke "$task_host" .chrono-harness/ci/bootstrap-shared.json install unit_runner
+test "$task_status" -ne 0 || fail 'symlink in installer path was accepted'
+test ! -s "$CHRONO_LAUNCHER_CALLS" || fail 'executed installer through symlink'
+rm "$task_host/.chrono-harness/startup/tools/core"
+mv "$task_host/.chrono-harness/startup/tools/physical-core" "$task_host/.chrono-harness/startup/tools/core"
+
+cp "$task_fixture" "$task_host/.chrono-harness/bin/chrono-host-bootstrap"
+reset_calls
+invoke "$task_host" .chrono-harness/ci/bootstrap-shared.json verify core
+test "$task_status" -eq 0 || fail 'installed shared verifier was refused'
+task_expected=$(printf '%s\n' chrono-host-bootstrap "<$task_host>" '<.chrono-harness/ci/bootstrap-shared.json>' '<verify>' '<core>')
+test "$(cat "$CHRONO_LAUNCHER_CALLS")" = "$task_expected" || fail 'shared verifier arguments differ'
+
+# 生产者仍走已有的受保护编译入口；薄入口不复制构建规则。
+cp "$task_fixture" "$task_host/.chrono-harness/ci/bootstrap-native.sh"
+reset_calls
+export CHRONO_LAUNCHER_NATIVE_EXIT=29
+invoke "$task_host" .chrono-harness/ci/bootstrap-shared.json produce
+test "$task_status" -eq 29 || fail 'shared producer exit was lost'
+task_expected=$(printf '%s\n' bootstrap-native.sh "<$task_host>" '<.chrono-harness/ci/bootstrap-shared.json>' '<produce>')
+test "$(cat "$CHRONO_LAUNCHER_CALLS")" = "$task_expected" || fail 'shared producer arguments differ'
+unset CHRONO_LAUNCHER_NATIVE_EXIT CHRONO_STARTUP_INSTALLER_SHA256
 /usr/bin/git -C "$task_main" worktree remove --force "$task_linked"
 echo 'launcher behavior: passed'

@@ -38,6 +38,8 @@ Rust、发布资产和验证操作由该宿主入口及配方管理，生成器�
 
 宿主 Rust bootstrap 的 `test.host-bootstrap-native-tests` 也纳入两平台发布验证。它直接编译源码与 Rust 测试工具，不消费发布二进制，`needs` 为空且 `rust_toolchain=true`；原始未过滤操作保留登记的独立 `--target-dir`。这只新增发布验证 job，日常 scoped 检查仍归现有 `host-bootstrap` 单元，成本未测。
 
+Python 外层的诊断组合测试调用真实 Rust 共享接口。测试驱动复用 `projects.json` 的 `build.host-bootstrap-native` 操作准备候选工具，因此直接执行原始 `host.bootstrap-tests` 也会完成该前置；FILEMAP 不再重复安排它。发布验证明确采用 `rust_toolchain=true`，保留原有 worktree／runner 发布资产依赖；Rust 启动工具仅由测试构建，不增加公开发行资产。新增构建及验证总成本未测。
+
 薄 shell 启动入口的 `test.host-bootstrap-launcher-tests` 同样纳入两平台发布验证。它使用独立登记的 shell 命令替身，验证协调者拒绝、保护描述符与参数转交，以及原退出码；不预编译 Rust 测试工具，也不消费发布二进制，`needs` 为空且 `rust_toolchain=false`。发布验证保留原未过滤操作；新增 job 的实际总成本未测。
 
 ## v2 的依赖与传输

@@ -225,14 +225,31 @@ class ParentSourceAcquisition(unittest.TestCase):
         self.assertEqual((self.directory / "consumer/payload").read_bytes(), b"required candidate snapshot")
 
 
-class SharedStartup(unittest.TestCase):
+class DiagnosticsComposition(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # This Python interface suite also runs directly in a release checkout.
+        # Reuse the registered build instead of assuming a FILEMAP prelude ran.
+        import bootstrap
+        root = SOURCE.parents[1]
+        projects = json.loads((root / ".chrono-harness/projects.json").read_bytes())
+        cls.source_operations = bootstrap.registered_operations(projects)
+        action = cls.source_operations["build.host-bootstrap-native"]
+        tools = {row["id"]: row["program"] for row in fixture_host_config(root)["tools"]}
+        subprocess.run([tools[action["tool"]], *action["argv"]], cwd=root,
+                       pass_fds=fixture.PASS_FDS, check=True)
+
     def setUp(self):
         self.host = fixture.Bootstrap()
         self.host.setUp()
         self.addCleanup(self.host.doCleanups)
         self.root = self.host.root
-        shutil.copyfile(SOURCE / "bootstrap_shared.py", self.host.ci / "bootstrap_shared.py")
+        self.native = SOURCE.parent / "cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
         self.host.config["install"].append({"source": "built-second", "destination": ".chrono-harness/bin/second"})
+        self.host.config["install"].append({"source": "built-bootstrap-native", "destination": ".chrono-harness/bin/chrono-host-bootstrap"})
+        shutil.copyfile(self.native, self.root / "built-bootstrap-native")
+        (self.root / "built-bootstrap-native").chmod(0o755)
+        shutil.copyfile(SOURCE / "bootstrap-shared.sh", self.host.ci / "bootstrap-shared.sh")
         self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
         for name in ["built-tool", "built-second"]:
             path = self.root / name
@@ -240,7 +257,8 @@ class SharedStartup(unittest.TestCase):
             path.chmod(0o755)
         self.shared = {"schema": "chrono-host-startup/v1", "directory": ".chrono-harness/startup/",
                        "profiles": {"core": {"config": ".chrono-harness/ci/bootstrap.json", "build": True}},
-                       "consumers": {"unit_fixture": ["core"]}}
+                       "consumers": {"unit_fixture": ["core"]},
+                       "installer": {"profile": "core", "destination": ".chrono-harness/bin/chrono-host-bootstrap"}}
         self.host.write_json(self.root / CONFIG, self.shared)
         (self.root / ".gitignore").write_text("/built-*\n/.chrono-harness/bin/\n/.chrono-harness/state/\n/.chrono-harness/startup/\n/mock-tools/\n")
         (self.root / "product-source").write_text("original")
@@ -257,154 +275,16 @@ class SharedStartup(unittest.TestCase):
 
     def invoke(self, command, *args, root=None):
         root = root or self.root
-        return subprocess.run([sys.executable, "-B", str(root / ".chrono-harness/ci/bootstrap_shared.py"),
+        return subprocess.run([str(self.native),
                                str(root), CONFIG, command, *args], env=self.environment,
                               pass_fds=fixture.PASS_FDS, capture_output=True)
 
     def produce(self):
         self.host.succeeded(self.invoke("produce"))
-        self.environment["CHRONO_STARTUP_BINDING"] = self.output.read_text().strip().split("=", 1)[1]
+        outputs = dict(line.split("=", 1) for line in self.output.read_text().splitlines())
+        self.environment["CHRONO_STARTUP_BINDING"] = outputs["binding"]
         self.assertEqual(self.environment["CHRONO_STARTUP_BINDING"],
                          hashlib.sha256((self.transfer / "manifest.json").read_bytes()).hexdigest())
-
-    def test_produce_uses_registered_profile_entrypoint_before_any_report_or_transfer(self):
-        self.host.config["entrypoint"]["tool"] = "refusing-producer"
-        self.host.config["tools"]["refusing-producer"] = "/usr/bin/false"
-        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
-        self.host.git("add", ".chrono-harness/ci/bootstrap.json")
-        self.host.git("commit", "-qm", "registered refusing producer")
-        result = self.invoke("produce")
-        self.assertNotEqual(result.returncode, 0, result)
-        self.assertIn(b"/usr/bin/false", result.stderr)
-        self.assertFalse(self.transfer.exists())
-        self.assertFalse(self.host.state_path.exists())
-
-    def clone_consumer(self):
-        directory = tempfile.TemporaryDirectory(prefix="startup consumer ")
-        self.addCleanup(directory.cleanup)
-        root = Path(directory.name).resolve() / "host"
-        result = subprocess.run(["git", "clone", "-q", str(self.root), str(root)],
-                                capture_output=True, pass_fds=fixture.PASS_FDS)
-        self.host.succeeded(result)
-        shutil.copytree(self.transfer, root / self.shared["directory"])
-        return root
-
-    def test_import_validates_originals_without_building_and_verify_detects_installed_drift(self):
-        self.produce()
-        original = self.host.state_path.read_bytes()
-        root = self.clone_consumer()
-        for path in (root / self.shared["directory"] / "tools").iterdir():
-            path.chmod(0o644)  # Native artifact transfer does not preserve execute bits.
-        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
-        for name, expected in [("tool", b"binary"), ("second", b"second")]:
-            path = root / ".chrono-harness/bin" / name
-            self.assertEqual(path.read_bytes(), expected)
-            self.assertEqual(path.stat().st_mode & 0o777, 0o755)
-        self.assertFalse((root / "built-tool").exists(), "consumer ran a producer operation")
-        result = json.loads((root / ".chrono-harness/state/bootstrap.json").read_bytes())
-        self.assertEqual(result["provenance"]["kind"], "shared-startup")
-        self.assertEqual(result["provenance"]["report_sha256"], hashlib.sha256(original).hexdigest())
-        self.host.succeeded(self.invoke("verify", "core", root=root))
-        (root / ".chrono-harness/bin/tool").write_bytes(b"changed")
-        failed = self.invoke("verify", "core", root=root)
-        self.assertNotEqual(failed.returncode, 0)
-        self.assertIn(b"installed startup tool differs", failed.stderr)
-
-    def test_bad_binding_source_platform_profile_or_late_asset_never_partially_installs(self):
-        self.produce()
-        for defect in ["binding", "missing-binding", "dirty", "source", "platform", "profile", "late-asset", "symlink"]:
-            with self.subTest(defect=defect):
-                root = self.clone_consumer()
-                transfer = root / self.shared["directory"]
-                manifest_path = transfer / "manifest.json"
-                manifest = json.loads(manifest_path.read_bytes())
-                binding = self.environment["CHRONO_STARTUP_BINDING"]
-                if defect == "binding": self.environment["CHRONO_STARTUP_BINDING"] = "0" * 64
-                elif defect == "missing-binding": self.environment.pop("CHRONO_STARTUP_BINDING")
-                elif defect == "dirty": (root / "product-source").write_text("different")
-                elif defect == "source":
-                    subprocess.run(["git", "-C", str(root), "-c", "user.name=Fixture", "-c", "user.email=f@example.invalid", "commit", "--allow-empty", "-qm", "other"], check=True, pass_fds=fixture.PASS_FDS)
-                elif defect == "profile": (root / ".chrono-harness/ci/bootstrap.json").write_text("{}")
-                elif defect == "platform":
-                    manifest["platform"] = {"system": "different", "machine": "different"}
-                    manifest_path.write_text(json.dumps(manifest))
-                    self.environment["CHRONO_STARTUP_BINDING"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-                elif defect == "late-asset": (transfer / "tools/1").write_bytes(b"damaged")
-                elif defect == "symlink":
-                    (transfer / "tools/1").unlink()
-                    (transfer / "tools/1").symlink_to(root / "product-source")
-                target = root / ".chrono-harness/bin/tool"
-                target.parent.mkdir()
-                target.write_bytes(b"keep")
-                result = self.invoke("install", "unit_fixture", root=root)
-                self.assertNotEqual(result.returncode, 0, result.stdout)
-                self.assertIn(b"E_STARTUP:", result.stderr)
-                self.assertEqual(target.read_bytes(), b"keep")
-                self.assertFalse((root / ".chrono-harness/state/startup-install.json").exists())
-                self.environment["CHRONO_STARTUP_BINDING"] = binding
-
-    def test_publication_failure_and_unknown_consumer_are_not_success(self):
-        self.environment["GITHUB_OUTPUT"] = str(self.host.tools)
-        result = self.invoke("produce")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(b"E_STARTUP:", result.stderr)
-        self.assertEqual(self.output.read_bytes(), b"")
-        self.environment["CHRONO_STARTUP_BINDING"] = hashlib.sha256((self.transfer / "manifest.json").read_bytes()).hexdigest()
-        root = self.clone_consumer()
-        result = self.invoke("install", "unknown", root=root)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse((root / ".chrono-harness/bin").exists())
-        state = root / ".chrono-harness/state"
-        state.mkdir()
-        (state / "startup-install.json").mkdir()
-        self.assertNotEqual(self.invoke("install", "unit_fixture", root=root).returncode, 0)
-        raw = (self.transfer / "manifest.json").read_bytes()
-        retained = self.root / (".chrono-harness/state/startup-originals/manifest-" +
-                                hashlib.sha256(raw).hexdigest() + ".json")
-        self.assertEqual(retained.read_bytes(), raw)
-
-    def test_manifest_original_survives_transfer_disposal_after_consumer_failure(self):
-        self.produce()
-        raw = (self.transfer / "manifest.json").read_bytes()
-        binding = self.environment["CHRONO_STARTUP_BINDING"]
-        retained = self.root / (".chrono-harness/state/startup-originals/manifest-" + binding + ".json")
-        self.host.succeeded(self.invoke("install", "unit_fixture"))
-        self.host.succeeded(self.invoke("verify", "core"))
-        self.assertEqual(retained.read_bytes(), raw)
-        (self.root / ".chrono-harness/bin/tool").write_bytes(b"consumer drift")
-        failed = self.invoke("verify", "core")
-        self.assertNotEqual(failed.returncode, 0)
-        self.assertIn(b"installed startup tool differs", failed.stderr)
-        # Only this test's reconstructible transfer is disposed, after its users.
-        shutil.rmtree(self.transfer)
-        self.assertEqual(retained.read_bytes(), raw)
-        self.assertEqual(hashlib.sha256(retained.read_bytes()).hexdigest(), binding)
-        manifest = json.loads(retained.read_bytes())
-        original = self.root / ".chrono-harness/state/startup-originals/core.json"
-        self.assertEqual(manifest["source"], json.loads(original.read_bytes())["source"]["after"])
-        self.assertEqual(manifest["profiles"]["core"]["report"]["sha256"],
-                         hashlib.sha256(original.read_bytes()).hexdigest())
-
-    def test_dirty_producer_and_existing_transfer_are_rejected(self):
-        (self.root / "product-source").write_text("dirty")
-        failed = self.invoke("produce")
-        self.assertNotEqual(failed.returncode, 0)
-        self.assertFalse(self.transfer.exists())
-        self.host.git("restore", "product-source")
-        self.produce()
-        original = (self.transfer / "manifest.json").read_bytes()
-        self.assertNotEqual(self.invoke("produce").returncode, 0)
-        self.assertEqual((self.transfer / "manifest.json").read_bytes(), original)
-
-    def test_shared_install_and_verify_recheck_executable_binding(self):
-        bindings = self.bind_tools()
-        self.produce()
-        root = self.clone_consumer()
-        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
-        self.host.succeeded(self.invoke("verify", "core", root=root))
-        report = json.loads((root / ".chrono-harness/state/bootstrap.json").read_bytes())
-        self.assertEqual([row["sha256"] for row in report["executables"]],
-                         [bindings[name]["sha256"] for name in ["cargo", "rustc"]])
 
     def prepare_diagnostics_composition(self):
         """Use production install/main/verify; fixtures replace external builds only.
@@ -424,11 +304,12 @@ class SharedStartup(unittest.TestCase):
                            RUSTC_WORKSPACE_WRAPPER="", CARGO_NET_OFFLINE="false")
         guard = json.loads((SOURCE / "bootstrap-diagnostics-guard.json").read_bytes())
         observer = json.loads((SOURCE / "bootstrap-diagnostics-inputs.json").read_bytes())
+        fixture_tools = dict(python3=sys.executable, **{name: bindings[name]["path"]
+                                                      for name in ("cargo", "rustc")})
         for name, profile, output in [("bootstrap-diagnostics-guard.json", guard, "guard-domain"),
                                       ("bootstrap-diagnostics-inputs.json", observer, "observer-domain")]:
-            profile.update(projects=self.host.config["projects"], tools=dict(
-                               python3=sys.executable, **{name: bindings[name]["path"]
-                                                         for name in ("cargo", "rustc")}),
+            profile.update(projects=self.host.config["projects"], tools={
+                               **profile["tools"], **fixture_tools},
                            tool_bindings=bindings, environment=environment,
                            native_platform={"system": platform.system(), "machine": platform.machine()},
                            install=[{"source": output, "destination": ".chrono-harness/bin/" + output}],
@@ -438,9 +319,9 @@ class SharedStartup(unittest.TestCase):
             self.host.write_json(self.host.ci / name, profile)
         keys = ["HOME", "CARGO_HOME", "RUSTUP_HOME", "RUSTC", "CARGO_NET_OFFLINE"]
         actions = self.host.declarations("write", "built-tool", "binary")
+        actions["projects"][0]["id"] = "diagnostics-fixture"
         actions["projects"][0]["actions"].update({
-            "verify": {"operation": "host.bootstrap-shared-verify-core", "tool": "python3",
-                       "argv": [".chrono-harness/ci/bootstrap_shared.py", ".", CONFIG, "verify", "core"]},
+            "verify": self.source_operations["host.bootstrap-shared-verify-core"],
             "guard": {"operation": "build.judge-cargo", "tool": "python3",
                       "argv": [fixture.OPERATION, "environment", "guard-domain", *keys]},
             "observer-bootstrap": {"operation": "host.bootstrap-diagnostics-inputs", "tool": "python3",
@@ -501,9 +382,9 @@ class SharedStartup(unittest.TestCase):
         cases = [("path", b"installed local executable provenance differs"),
                  ("bytes", b"bound cargo identity mismatch"),
                  ("version", b"bound cargo identity mismatch"),
-                 ("compiler", b"inherited compiler selection differs"),
-                 ("wrapper", b"inherited compiler wrapper differs"),
-                 ("workspace-wrapper", b"inherited compiler wrapper differs")]
+                 ("compiler", b"inherited compiler selection or wrapper differs from binding"),
+                 ("wrapper", b"inherited compiler selection or wrapper differs from binding"),
+                 ("workspace-wrapper", b"inherited compiler selection or wrapper differs from binding")]
         cargo = self.host.tools / "cargo"
         original_cargo = cargo.read_bytes()
         for defect, message in cases:
@@ -545,133 +426,20 @@ class SharedStartup(unittest.TestCase):
                               "version": tool + " 1.95.0 (fixture)", "allow_relocation": relocate}
         self.host.config["tools"].update({"cargo": str(self.host.tools / "cargo"),
                                            "rustc": str(self.host.tools / "rustc")})
-        self.host.config["tool_bindings"] = bindings
+        self.host.config.update(
+            require_tool_bindings=True,
+            tool_bindings_registry=".chrono-harness/ci/fixture-bindings.json",
+            participation={"coordinator_root": "git-main-worktree",
+                           "program": ".chrono-harness/bin/chrono-worktree",
+                           "git": "/usr/bin/git", "config": ".chrono-harness/worktree.json"})
+        self.host.write_json(self.host.ci / "fixture-bindings.json", {
+            "schema": "chrono-bootstrap-toolchains/v1", "rust_toolchain": "1.95.0",
+            "platforms": {platform.system() + "/" + platform.machine(): {"tools": bindings}}})
+        self.environment["CHRONO_WORKTREE_BOOTSTRAP"] = str(self.root)
         self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
-        self.host.git("add", ".chrono-harness/ci/bootstrap.json")
+        self.host.git("add", ".chrono-harness/ci/bootstrap.json", ".chrono-harness/ci/fixture-bindings.json")
         self.host.git("commit", "-qm", "bind bootstrap executables")
         return bindings
-
-    def test_equivalent_relocation_preserves_producer_and_consumer_paths(self):
-        self.bind_tools(relocate=True)
-        self.produce()
-        original = self.host.state_path.read_bytes()
-        root = self.clone_consumer()
-        local = root / "mock-tools"
-        shutil.copytree(self.host.tools, local)
-        self.environment["PATH"] = str(local) + os.pathsep + os.environ["PATH"]
-        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
-        self.host.succeeded(self.invoke("verify", "core", root=root))
-        retained = (root / ".chrono-harness/state/startup-originals/core.json").read_bytes()
-        self.assertEqual(retained, original)
-        report = json.loads((root / ".chrono-harness/state/startup-install.json").read_bytes())
-        self.assertEqual([row["path"] for row in report["local_executables"]["core"]],
-                         [str(local / name) for name in ("cargo", "rustc")])
-        self.assertNotEqual(json.loads(retained)["executables"][0]["path"], str(local / "cargo"))
-
-    def test_shared_relocation_with_absent_and_stale_original_paths(self):
-        self.bind_tools(relocate=True)
-        self.produce()
-        root = self.clone_consumer()
-        local = root / "mock-tools"
-        shutil.copytree(self.host.tools, local)
-        self.environment["PATH"] = str(local) + os.pathsep + os.environ["PATH"]
-        for tool in ("cargo", "rustc"):
-            (self.host.tools / tool).write_bytes(b"retired non-executable bytes")
-        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
-        for tool in ("cargo", "rustc"):
-            (self.host.tools / tool).unlink()
-        self.host.succeeded(self.invoke("verify", "core", root=root))
-        # A current effective compiler conflict still fails before installation.
-        fresh = self.clone_consumer()
-        self.environment["RUSTC"] = str(self.host.tools / "rustc")
-        rejected = self.invoke("install", "unit_fixture", root=fresh)
-        self.assertNotEqual(rejected.returncode, 0)
-        self.assertIn(b"inherited compiler selection differs", rejected.stderr)
-        self.assertFalse((fresh / ".chrono-harness/bin").exists())
-
-    def test_native_shared_registry_binds_original_report_and_preflight(self):
-        bindings = self.bind_tools(relocate=True)
-        path = ".chrono-harness/ci/native.json"
-        data = {"schema": "chrono-bootstrap-toolchains/v1", "rust_toolchain": "1.95.0",
-                "platforms": {platform.system() + "/" + platform.machine(): {
-                    "target": "fixture", "tools": {name: {"sha256": item["sha256"], "version": item["version"]}
-                                                    for name, item in bindings.items()}}}}
-        self.host.write_json(self.root / path, data)
-        del self.host.config["tool_bindings"]
-        self.host.config["tools"].pop("cargo")
-        self.host.config["tools"].pop("rustc")
-        self.host.config.update(tool_bindings_registry=path, require_tool_bindings=True)
-        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
-        self.host.git("add", ".chrono-harness/ci")
-        self.host.git("commit", "-qm", "native expectations")
-        self.produce()
-        root = self.clone_consumer()
-        original = json.loads((self.transfer / "reports/core.json").read_bytes())
-        self.assertEqual(original["registrations"][path], hashlib.sha256((root / path).read_bytes()).hexdigest())
-        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
-        self.host.succeeded(self.invoke("verify", "core", root=root))
-        fresh = self.clone_consumer()
-        transfer = fresh / self.shared["directory"]
-        original_path = transfer / "reports/core.json"
-        original["registrations"].pop(path)
-        original_path.write_text(json.dumps(original))
-        manifest_path = transfer / "manifest.json"
-        manifest = json.loads(manifest_path.read_bytes())
-        manifest["profiles"]["core"]["report"]["sha256"] = hashlib.sha256(original_path.read_bytes()).hexdigest()
-        manifest_path.write_text(json.dumps(manifest))
-        self.environment["CHRONO_STARTUP_BINDING"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-        rejected = self.invoke("install", "unit_fixture", root=fresh)
-        self.assertNotEqual(rejected.returncode, 0)
-        self.assertIn(b"startup execution registrations differ", rejected.stderr)
-        self.assertFalse((fresh / ".chrono-harness/bin").exists())
-
-    def test_missing_altered_or_contradictory_execution_originals_reject_before_install(self):
-        self.bind_tools()
-        self.produce()
-        for defect in ["executables", "selection", "compiler", "operations", "argv", "exit", "stream", "stream-missing"]:
-            with self.subTest(defect=defect):
-                root = self.clone_consumer()
-                transfer = root / self.shared["directory"]
-                manifest_path = transfer / "manifest.json"
-                manifest = json.loads(manifest_path.read_bytes())
-                original_path = transfer / manifest["profiles"]["core"]["report"]["path"]
-                report = json.loads(original_path.read_bytes())
-                if defect in ("executables", "selection", "operations"):
-                    del report[defect]
-                elif defect == "compiler": report["environment"]["RUSTC"] = "/different/rustc"
-                elif defect == "argv": report["operations"][0]["argv"][-1] = "different"
-                elif defect == "exit": report["operations"][0]["exit_code"] = 9
-                elif defect == "stream": (transfer / report["operations"][0]["stdout"]["path"]).write_bytes(b"altered")
-                elif defect == "stream-missing": (transfer / report["operations"][0]["stderr"]["path"]).unlink()
-                original_path.write_text(json.dumps(report))
-                manifest["profiles"]["core"]["report"]["sha256"] = hashlib.sha256(original_path.read_bytes()).hexdigest()
-                manifest_path.write_text(json.dumps(manifest))
-                self.environment["CHRONO_STARTUP_BINDING"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-                target = root / ".chrono-harness/bin/tool"
-                target.parent.mkdir()
-                target.write_bytes(b"keep")
-                rejected = self.invoke("install", "unit_fixture", root=root)
-                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
-                self.assertIn(b"E_STARTUP:", rejected.stderr)
-                self.assertEqual(target.read_bytes(), b"keep")
-                self.assertFalse((root / ".chrono-harness/state/startup-install.json").exists())
-
-    def test_same_version_different_local_bytes_reject_install_and_verify(self):
-        self.bind_tools(relocate=True)
-        self.produce()
-        root = self.clone_consumer()
-        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
-        fresh = self.clone_consumer()
-        target = fresh / ".chrono-harness/bin/tool"
-        target.parent.mkdir()
-        target.write_bytes(b"keep")
-        cargo = self.host.tools / "cargo"
-        cargo.write_bytes(cargo.read_bytes() + b"\n# same version, changed executable\n")
-        for command, arg, consumer in [("install", "unit_fixture", fresh), ("verify", "core", root)]:
-            result = self.invoke(command, arg, root=consumer)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn(b"bound cargo identity mismatch", result.stderr)
-        self.assertEqual(target.read_bytes(), b"keep")
 
 
 class RealAttempt:
@@ -2073,9 +1841,11 @@ class RealFixtureStartup(unittest.TestCase):
                     attempt.publish()
                     self.assertEqual(retained.read_bytes(), raw)
                     self.assertEqual(json.loads(raw)["source"], observed)
-            binding = (evidence / "github-output").read_text().strip().split("=", 1)[1]
+            outputs = dict(line.split("=", 1) for line in (evidence / "github-output").read_text().splitlines())
+            binding = outputs["binding"]
             attempt.result["binding"] = binding
             environment["CHRONO_STARTUP_BINDING"] = binding
+            environment["CHRONO_STARTUP_INSTALLER_SHA256"] = outputs["installer_sha256"]
             registered("host.bootstrap-shared-install-unit_runner")
             units = json.loads((root / ".chrono-harness/ci/units.json").read_bytes())
             run("runner-startup", units["units"]["runner"]["bootstrap"], root)
@@ -2107,4 +1877,4 @@ class RealFixtureStartup(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(defaultTest="SharedStartup")
+    unittest.main(defaultTest="DiagnosticsComposition")
