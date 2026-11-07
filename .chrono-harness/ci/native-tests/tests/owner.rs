@@ -237,7 +237,10 @@ fn owner_stage_rejects_an_original_from_another_physical_host() {
         Some(&chrono_harness::sha256(&raw)),
         None,
     );
-    assert!(result.is_err(), "a foreign host's stage original was accepted");
+    assert!(
+        result.is_err(),
+        "a foreign host's stage original was accepted"
+    );
 }
 
 #[test]

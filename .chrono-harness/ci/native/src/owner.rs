@@ -430,6 +430,9 @@ pub fn stage_report(
         }
     }
     let decoded: Report = decode(&raw)?;
+    if Path::new(&decoded.host_root) != root {
+        return Err("owner stage producer belongs to another host".into());
+    }
     let fixed;
     let current;
     let input: Box<dyn Fn(&str) -> Result<Vec<u8>, String> + '_>;
@@ -443,7 +446,7 @@ pub fn stage_report(
             .commit
             .as_deref()
             .ok_or("owner stage commit is missing")?;
-        if commit != expected || Path::new(&decoded.host_root) != root {
+        if commit != expected {
             return Err("selected owner stage producer differs".into());
         }
         fixed = source::Committed::new(

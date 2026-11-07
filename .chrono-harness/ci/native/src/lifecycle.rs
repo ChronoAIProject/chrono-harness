@@ -8,7 +8,7 @@ use crate::{
 };
 use chrono_harness::{ProcessResult, decode, file_identity, json, sha256};
 use serde::Deserialize;
-use serde_json::{Value, json as value};
+use serde_json::Value;
 use std::{ffi::OsStr, fs, io::Write, os::unix::fs::PermissionsExt, path::Path};
 
 fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
