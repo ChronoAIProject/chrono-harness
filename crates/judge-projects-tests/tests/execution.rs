@@ -137,6 +137,7 @@ fn plan(
                     operation: id.to_string(),
                     tool: "fixture".into(),
                     argv: vec!["run".into(), serde_json::to_string(steps).unwrap()],
+                    output_contract: None,
                 }],
             )
         })

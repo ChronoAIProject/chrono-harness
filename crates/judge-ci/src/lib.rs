@@ -77,7 +77,15 @@ struct Snapshot {
     owner_nodes: BTreeMap<String, String>,
     files: BTreeMap<String, Value>,
     projects: BTreeMap<String, Value>,
-    operations: BTreeMap<String, (String, String, Vec<String>)>,
+    operations: BTreeMap<
+        String,
+        (
+            String,
+            String,
+            Vec<String>,
+            Option<chrono_harness::verified_verifier::OutputContract>,
+        ),
+    >,
     edges: BTreeSet<Edge>,
     tree: BTreeMap<String, (String, String)>,
     policy: Policy,
@@ -339,22 +347,28 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
                 .ok_or("actions object required")?
                 .values()
             {
-                let operation = text(a, "operation")?;
+                let action: chrono_harness::verified_verifier::RegisteredAction =
+                    serde_json::from_value(a.clone()).map_err(|e| e.to_string())?;
+                chrono_harness::verified_verifier::validate_contract(&action.output_contract)?;
+                let operation = action.operation.as_str();
                 id(operation)?;
-                let tool = text(a, "tool")?;
+                let tool = action.tool.as_str();
                 if !p.tools.contains_key(tool) {
                     return Err(format!("unknown tool {tool}"));
                 }
-                let argv = strings(&a["argv"])?;
-                if a.as_object().is_none_or(|o| o.len() != 3)
-                    || argv.iter().any(|s| s.contains('\0'))
-                {
+                let argv = action.argv;
+                if argv.iter().any(|s| s.contains('\0')) {
                     return Err(format!("invalid action {operation}"));
                 }
                 if ops
                     .insert(
                         operation.to_string(),
-                        (name.to_string(), tool.to_string(), argv),
+                        (
+                            name.to_string(),
+                            tool.to_string(),
+                            argv,
+                            action.output_contract,
+                        ),
                     )
                     .is_some()
                 {
@@ -586,7 +600,7 @@ fn ci_impact(
         }
         for op in changed(&old.operations, &new.operations) {
             for s in [old, new] {
-                if let Some((owner, _, _)) = s.operations.get(&op) {
+                if let Some((owner, _, _, _)) = s.operations.get(&op) {
                     seeds.insert(s.owner_nodes[owner].clone());
                 }
                 for (test, ops) in &s.policy.bindings {
@@ -690,7 +704,7 @@ fn ci_impact(
                         || ops.iter().any(|op| {
                             s.operations
                                 .get(op)
-                                .is_some_and(|(_, tool, _)| changed_tools.contains(tool))
+                                .is_some_and(|(_, tool, _, _)| changed_tools.contains(tool))
                         })
                     {
                         let reasons = extras.entry(test.clone()).or_default();
@@ -698,10 +712,9 @@ fn ci_impact(
                             reasons.insert("changed environment".into());
                         }
                         for tool in &changed_tools {
-                            if ops
-                                .iter()
-                                .any(|op| s.operations.get(op).is_some_and(|(_, t, _)| t == tool))
-                            {
+                            if ops.iter().any(|op| {
+                                s.operations.get(op).is_some_and(|(_, t, _, _)| t == tool)
+                            }) {
                                 reasons.insert(format!("changed bound tool: {tool}"));
                             }
                         }
@@ -1477,7 +1490,7 @@ fn inventory_profile(
     let methods: BTreeMap<_, _> = new
         .operations
         .iter()
-        .map(|(id, (owner, tool, argv))| {
+        .map(|(id, (owner, tool, argv, output_contract))| {
             (
                 id.clone(),
                 vec![chrono_judge_registration::execution::Method {
@@ -1485,6 +1498,7 @@ fn inventory_profile(
                     operation: id.clone(),
                     tool: tool.clone(),
                     argv: argv.clone(),
+                    output_contract: output_contract.clone(),
                 }],
             )
         })

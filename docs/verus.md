@@ -158,11 +158,32 @@ Rust 所有者在原准入和全部受影响登记的独占租约内直接消费
 JSON 解码、哈希、metadata／inode 观察、路径解析、Git、文件系统操作和外层部署／采用组合不在此局部证明内；
 不据判断证明声称整个文件系统事务已证明。
 
+## 真实 Verus 结果准入
+
+`crates/runner/src/verified_verifier.rs` 拥有真实 `OutputContract`、类型化 `CompilerReport`、
+合同字段校验、完整参数形状与结果准入。action／Method 显式登记可选 `output_contract`，
+其 version／commit 由计划摘要、回执 Method 摘要和两端操作比较一并绑定；未按名称推断证明操作。
+仓内选择、字段比较、失败返回及遍历都直接使用同源 Verus，独立边界预期也直接使用 Verus。
+
+routes 原回执身份及 stdout 字节摘要通过后，只对已声明合同的原 stdout 作一次类型化解码。
+准入要求同一进程退出 0 且无失败，精确保留完整 crate、两项强制参数、JSON、编译、固定线程和 checksum 参数，
+link／dep-info／`-o` 输出同源，源码和输出参数非空。额外参数和函数过滤均拒绝。
+同一份报告必须同时满足固定版本／完整 commit、success、两类错误标记为假、零 errors、
+至少一项 verified 和整个 crate；缺失或错型字段不能从另一份报告补齐。
+普通操作向解码接口传空字节，不解析其业务输出；其既有退出规则由原所有者保留。
+本地 projects 和离线 collection 都消费 routes 的同一准入结果。
+
+本宿主为十八项证明操作逐项登记固定 Verus 版本及 commit；新增两项整 crate 根作为
+runner、registration、routes、judge-ci 和 CI 生成器测试计划的必需前置。
+未执行的证明、未声明合同的普通操作及现有原件身份核验，不因此取得全仓覆盖保证。
+源码、真实编译依赖／dep-info checksum、完整 SPEC 对应及全仓新增逻辑覆盖门仍须继续实施。
+新增检查为固定形状比较和原报告解码，完整构建、验证、CI、存储及运行成本未测。
+
 ## 固定执行入口
 
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
-`test:runner-tests` 先运行八项整 crate Verus 操作及编译，registration 先运行四项，
-routes、filemap 与 CI 汇总各先运行两项；同一计划内共用的证明操作只执行一次，
+`test:runner-tests` 先运行十项整 crate Verus 操作及编译，registration 先运行六项，
+routes 与 CI 汇总各先运行四项，filemap 与 CI 生成器各先运行两项；同一计划内共用的证明操作只执行一次，
 worktree 的 core／adoption 两个消费计划共用两项发布证明，再执行各自原 Rust 构建和测试。
 独立根直接读取生产源码，声明成功、失败和边界预期；
 Rust 测试另外验证真实消费者，不替代证明。
@@ -170,7 +191,7 @@ Rust 测试另外验证真实消费者，不替代证明。
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
 现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
-七个证明单元先核共享 core，再安装工具。
+八个证明单元先核共享 core，再安装工具。
 当前归档只适用于 macOS arm64。
 
 ## 此批使用的外部接口
@@ -187,6 +208,9 @@ Rust 测试另外验证真实消费者，不替代证明。
 | 切片 `len`、`<[T] as Index<usize>>::index` 及 `<usize as SliceIndex<[T]>>::index` | 长度和逐项读取对应切片视图；本仓循环另行证明索引界限、完整遍历、返回条件及终止。`T` 在本批为 `u8` 或 `Finding`。 |
 | `<String as Clone>::clone` | 复制完整字符串；本仓 Finding 克隆证明各实际字符串字段均保留。 |
 | `<Vec<String> as Clone>::clone` | 保留长度和逐项克隆关系；本仓 Finding 克隆证明两个引用数组的完整字段、顺序和重复均保留。 |
+| `serde_json::from_slice::<CompilerReport>` 与该类型的 Serde `Deserialize` 派生 | 从本次调用传入的完整字节解码；必需字段、JSON 类型、整数范围和重复具名字段按固定 Serde 合同校验。未知的 Verus 统计字段忽略；所需字段不设默认值。此处明确采用外部解码合同，不声称本仓证明了 JSON 解析器。 |
+| `serde_json::from_value::<RegisteredAction>`、`from_value::<Option<OutputContract>>` 及对应 Serde 派生 | 一次转换对应输入对象；action／合同拒绝未知字段，合同缺失或 null 对应 None，非空要求由 Verus 判断。现有 owner、ID、工具与 argv 登记校验保留。 |
+| `Result::ok`、`Option::is_some` | 解码 Err 对应 None、Ok 对应同一完整报告；进程 failure 的 Some／None 原样转发，仓内不拼接成功字段。 |
 
 实际字段借用使用固定 vstd 的 `String::as_str` 合同；协议和模式比较复用已证明的
 `equal_text`／`equal_bytes`，其 UTF-8 转换采用 `str::as_bytes` 的完整字节合同、
