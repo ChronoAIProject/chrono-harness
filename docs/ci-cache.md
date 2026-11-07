@@ -46,7 +46,7 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 - namespace 和 `artifact_registry` 路径。宿主缓存产物精确引用该登记的 `artifacts` 路径，所有者须相同、`tracked: false`，且不得为执行证据。明确的外部依赖缓存可用绝对路径，其他产物相对宿主。不发现目录或语言。
 - 具名输入。各种输入的具体规则见下表。
-- 具名产物，声明 `owner`、`path`、`kind`（`dependencies`、`compilation`、`executable-candidate`）和明确 `external` 布尔值。
+- 具名产物，声明 `owner`、`path`、`kind`（`dependencies`、`compilation`）和明确 `external` 布尔值。
 - 具名缓存，声明 `owner`、登记 `producer` 操作 ID、`consumers`、产物 ID、互不相交的 `compatibility_inputs`／`source_inputs`、`restore`（`exact` 或 `compatible`）。每个列表均非空且成员唯一。
 - `consumer_operations`，将每个消费者绑定到已有方法登记。每个引用用字面宿主 `registry` 路径和 JSON `pointer` 选择一个操作 ID，或非空且唯一的 ID 数组。引用缺失、值错误、订阅缓存的 producer 不在消费者所选操作内，都会在输入探测和原生恢复前失败。计划保留来源摘要和所选 ID，不从语言、路径或运行活动猜方法；声明有效也不证明实际执行。
 
@@ -71,7 +71,7 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 `compatible` 只提供一个到兼容摘要为止的恢复前缀，使源码变化可找到同范围旧编译数据。适用的编译器、target、profile、标志、SDK、构建脚本、配置、环境身份都须由宿主明确登记到兼容范围；planner 不推断这些依赖，也不证明列表完整。lockfile、manifest 也须按真实兼容作用归类。
 
-`executable-candidate` 只允许精确恢复。每项计划仍要求登记构建生产者，绝不授权直接执行恢复的历史判官。当前执行物核验也检查缓存 planner／report 执行物身份，但不能证明恢复的项目执行物已重建。所选判断／测试仍由消费流程执行。
+每项计划仍要求登记构建生产者，绝不授权直接执行恢复的历史判官。当前执行物核验也检查缓存 planner／report 执行物身份，但不能证明恢复的项目执行物已重建。所选判断／测试仍由消费流程执行。
 
 字面路径拒绝穿越、glob、符号链接组件。所选输出不能互相重叠、包含 Git metadata／harness 执行状态或任何声明文件输入。这只是有限路径／登记检查，不证明任意缓存内容安全或重建输入齐全。恢复和保存还须持有已采用生命周期保护，直到生产者全部等待结束且保存完成。
 

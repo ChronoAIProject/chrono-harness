@@ -36,15 +36,6 @@ pub(crate) fn retain_for_upload(
     })
 }
 
-pub fn transport_report(
-    plan: &Value,
-    steps: &Value,
-    work: &str,
-    bootstrap: Option<&str>,
-) -> Result<Value, String> {
-    transport_report_with_saves(plan, steps, work, bootstrap, None)
-}
-
 pub(crate) fn restore_status(cache: &Value, restore: &Value) -> &'static str {
     let matched = restore["outputs"]["cache-matched-key"]
         .as_str()
@@ -72,7 +63,7 @@ pub(crate) fn restore_status(cache: &Value, restore: &Value) -> &'static str {
     }
 }
 
-fn transport_report_with_saves(
+pub fn transport_report(
     plan: &Value,
     steps: &Value,
     work: &str,
@@ -206,7 +197,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             serde_json::from_str(raw).map_err(|e| format!("E_CACHE_REPORT: save selection: {e}"))
         })
         .transpose()?;
-    let mut report = transport_report_with_saves(
+    let mut report = transport_report(
         &plan,
         &steps,
         required("--work")?,

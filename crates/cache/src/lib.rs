@@ -100,7 +100,6 @@ pub enum Presence {
 pub enum Kind {
     Dependencies,
     Compilation,
-    ExecutableCandidate,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -334,11 +333,6 @@ pub fn validate(c: &Config) -> Result<(), String> {
                 return Err(format!(
                     "E_CACHE_CONFIG: artifact {artifact} owner differs from cache {id}"
                 ));
-            }
-            if a.kind == Kind::ExecutableCandidate && cache.restore != Restore::Exact {
-                return Err(
-                    "E_CACHE_CONFIG: executable candidates require exact restoration".into(),
-                );
             }
         }
     }

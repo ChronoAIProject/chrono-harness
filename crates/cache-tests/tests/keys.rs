@@ -157,7 +157,7 @@ fn only_current_cache_registration_is_admitted() {
 fn transport_report_rejects_retired_plan_schema() {
     let (root, config) = fixture();
     let mut prepared = plan(root.path(), &config, "check.one").unwrap();
-    assert!(chrono_cache::transport_report(&prepared, &json!({}), "work", None).is_ok());
+    assert!(chrono_cache::transport_report(&prepared, &json!({}), "work", None, None).is_ok());
     let state = root.path().join(".chrono-harness/state");
     fs::create_dir(&state).unwrap();
     let path = state.join("plan.json");
@@ -169,7 +169,7 @@ fn transport_report_rejects_retired_plan_schema() {
     ] {
         prepared["schema"] = schema;
         assert!(
-            chrono_cache::transport_report(&prepared, &json!({}), "work", None)
+            chrono_cache::transport_report(&prepared, &json!({}), "work", None, None)
                 .unwrap_err()
                 .contains("E_CACHE_REPORT")
         );
@@ -420,7 +420,8 @@ fn transport_report_distinguishes_restore_evidence_and_unconfirmed_save_outcome(
         "cache_0_save":{"outcome":"skipped","outputs":{}},
         "build":{"outcome":"success"},"work":{"outcome":"failure"}
     });
-    let report = chrono_cache::transport_report(&prepared, &steps, "work", Some("build")).unwrap();
+    let report =
+        chrono_cache::transport_report(&prepared, &steps, "work", Some("build"), None).unwrap();
     assert_eq!(report["caches"]["project"]["restore"]["status"], "exact");
     assert_eq!(
         report["caches"]["project"]["save"]["status"],
@@ -439,7 +440,7 @@ fn transport_report_distinguishes_restore_evidence_and_unconfirmed_save_outcome(
             json!({"outcome":outcome,"outputs":{"cache-matched-key":matched}});
         steps["cache_0_save"]["outcome"] = json!("success");
         let report =
-            chrono_cache::transport_report(&prepared, &steps, "work", Some("build")).unwrap();
+            chrono_cache::transport_report(&prepared, &steps, "work", Some("build"), None).unwrap();
         assert_eq!(report["caches"]["project"]["restore"]["status"], expected);
         assert_eq!(report["caches"]["project"]["save"]["status"], "unconfirmed");
         assert_eq!(report["caches"]["project"]["save"]["confirmed"], false);
@@ -458,12 +459,12 @@ fn transport_report_distinguishes_restore_evidence_and_unconfirmed_save_outcome(
     steps["cache_0_restore"]["outputs"]["cache-matched-key"] =
         json!(format!("{prefix}older-source"));
     assert_eq!(
-        chrono_cache::transport_report(&prepared, &steps, "work", None).unwrap()["caches"]["project"]
+        chrono_cache::transport_report(&prepared, &steps, "work", None, None).unwrap()["caches"]["project"]
             ["restore"]["status"],
         "compatible"
     );
     steps["cache_0_restore"]["outputs"]["cache-matched-key"] = json!("different-domain");
-    let report = chrono_cache::transport_report(&prepared, &steps, "work", None).unwrap();
+    let report = chrono_cache::transport_report(&prepared, &steps, "work", None, None).unwrap();
     assert_eq!(
         report["caches"]["project"]["restore"]["status"],
         "incompatible"
