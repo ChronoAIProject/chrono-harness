@@ -18,6 +18,7 @@
     "build.worktree",
     "build.judge-cargo",
     "build.inputs",
+    "build.host-bootstrap-native",
     "host.bootstrap-verus"
   ],
   "install": [
@@ -44,6 +45,10 @@
     {
       "source": "crates/worktree/target/debug/chrono-worktree",
       "destination": ".chrono-harness/bin/chrono-worktree"
+    },
+    {
+      "source": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap",
+      "destination": ".chrono-harness/bin/chrono-host-bootstrap"
     }
   ],
   "participation": {

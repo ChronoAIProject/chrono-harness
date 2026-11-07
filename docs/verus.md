@@ -370,8 +370,8 @@ registration 专属计划的必需前置，独立预期和 Rust 测试编译同�
 
 ## 固定执行入口
 
-宿主 bootstrap 的 Rust 迁移正在实施。公开 core／shared 仍保留 Python 入口，
-所有者阶段 profile 已选择薄 shell 和 Rust 生产者。
+宿主 bootstrap 的 Rust 迁移正在实施。core／Verus 和所有者阶段 profile 已选择薄 shell 与 Rust，
+共享入口与生成工作流已切到 Rust，旧 Python 共享 CLI 及重复行为测试已退役；完整使用方验收仍未完成。
 `.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
 字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
 以及环境名／值、宿主路径、私有 homes、default profile、SDK 探测分支和进程退出状态。
@@ -387,6 +387,10 @@ registration 专属计划的必需前置，独立预期和 Rust 测试编译同�
 操作执行复用 registration 的方法读取器和 runner 的摘要／描述符转交接口，
 实时保存并转交两条原字节流，等待原始子进程和两个转交任务结束后返回。
 Git 适配只观察当前检出；失败保留已有字段和错误，不执行历史程序。
+共享安装器的 profile、目的地和每个使用方的 profile 集合直接交给同源 `names_subset` 判断；
+安装器必须属于声明的安装集，且每个使用方都必须包含安装器 profile。
+CI 的可选安装器摘要输出字段直接调用 `verified_identifiers::valid_id`，以括号索引生成 GitHub 表达式。
+CI 测试计划显式加入身份生产根与独立边界根的证明前置；启动绑定沿用现有的两个整 crate 证明入口。
 JSON 解码、字段提取、环境和文件系统操作、Git／进程 IO，以及完整启动组合仍未证明。
 Rust 回归另核真实 Cargo／rustc 的身份、环境选择、安装器退出、
 非 UTF-8 两流在子进程结束前的转交和原件摘要，以及实际 Git clean／dirty／changed／unavailable 观察。
