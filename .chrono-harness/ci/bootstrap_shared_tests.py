@@ -267,6 +267,18 @@ class SharedStartup(unittest.TestCase):
         self.assertEqual(self.environment["CHRONO_STARTUP_BINDING"],
                          hashlib.sha256((self.transfer / "manifest.json").read_bytes()).hexdigest())
 
+    def test_produce_uses_registered_profile_entrypoint_before_any_report_or_transfer(self):
+        self.host.config["entrypoint"]["tool"] = "refusing-producer"
+        self.host.config["tools"]["refusing-producer"] = "/usr/bin/false"
+        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
+        self.host.git("add", ".chrono-harness/ci/bootstrap.json")
+        self.host.git("commit", "-qm", "registered refusing producer")
+        result = self.invoke("produce")
+        self.assertNotEqual(result.returncode, 0, result)
+        self.assertIn(b"/usr/bin/false", result.stderr)
+        self.assertFalse(self.transfer.exists())
+        self.assertFalse(self.host.state_path.exists())
+
     def clone_consumer(self):
         directory = tempfile.TemporaryDirectory(prefix="startup consumer ")
         self.addCleanup(directory.cleanup)

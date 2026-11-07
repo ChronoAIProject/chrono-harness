@@ -38,6 +38,8 @@ Rust、发布资产和验证操作由该宿主入口及配方管理，生成器�
 
 宿主 Rust bootstrap 的 `test.host-bootstrap-native-tests` 也纳入两平台发布验证。它直接编译源码与 Rust 测试工具，不消费发布二进制，`needs` 为空且 `rust_toolchain=true`；原始未过滤操作保留登记的独立 `--target-dir`。这只新增发布验证 job，日常 scoped 检查仍归现有 `host-bootstrap` 单元，成本未测。
 
+薄 shell 启动入口的 `test.host-bootstrap-launcher-tests` 同样纳入两平台发布验证。它使用独立登记的 shell 命令替身，验证协调者拒绝、保护描述符与参数转交，以及原退出码；不预编译 Rust 测试工具，也不消费发布二进制，`needs` 为空且 `rust_toolchain=false`。发布验证保留原未过滤操作；新增 job 的实际总成本未测。
+
 ## v2 的依赖与传输
 
 v1 输出和无依赖行为保留。v2 增加固定提交的 `download_artifact_action`；每个 job 可明确列出 `needs`、`downloads`（生产 job 与以 `/` 结尾的字面目的目录）、`always`、`dependency_metadata`（字面文件）。生成器拒绝重复／未知依赖、循环和下载／输出／metadata 路径重叠，不按语言、命令或资产推断依赖。
