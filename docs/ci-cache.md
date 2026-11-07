@@ -8,29 +8,9 @@
 
 ## 真实 CI 已验证的范围
 
-本宿主的 `cache` 单元已有真实 GitHub Actions 消费者。[运行 37627480033](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033) 首次为冷运行：`check.cache`、`check.cache-tests` 都未命中，继续执行原 bootstrap 和标准检查，并完成原生保存。后一次重跑观察到平台缓存可见性延迟，再次保存；这只是当次观察，不能推广为通用缓存行为。
+本宿主的 `cache` 单元消费 `check.cache`、`check.cache-tests`。两项 `producer-manifest/v1` 缓存已有有限原生观察，覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
 
-同一固定提交的[第 3 次尝试](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033/attempts/3) 中，两项都以 `exact` 恢复。传输报告记录 `current_executable_verification: matched`、`recovery.status: not-required`、无警告、原业务成功及 `verdict: not-a-judgment`。命中后仍运行标准 bootstrap／检查，精确命中这次没有尝试保存。
-
-这证明了登记消费者有限的冷未命中／保存、精确命中恢复路径，以及当前缓存执行物身份和恢复证据。尚不证明源码变化复用、不兼容输入分域、损坏或不可用归档处理、并发生产／重跑、完整后端生命周期保护或其他消费者缓存完整。
-
-当前 `producer-manifest/v1` 范围在 macos-26、Rust／Cargo 1.95.0、PR #207 的 `refs/pull/207/merge` 下还有以下有限证据，两项缓存均适用：
-
-| 场景 | 固定原生观察 |
-| --- | --- |
-| 生产范围冷启动 | [39688684172/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172/attempts/1)，种子 `98615238`：原 Cargo 操作、封存／保存、汇总通过 |
-| 兼容源码变更 | [39690377913/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/1)，生产 `72b1d08`：兼容前缀相同、源码后缀不同，恢复种子键并匹配生产者清单，保留增量数据，当前登记重建／测试通过 |
-| 健康精确命中 | [39690377913/2](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/2)：两个主键匹配，清单验证、原标准操作／汇总通过；detector／startup 保留原 attempt 1 身份 |
-| 不兼容生产环境 | [39695762671/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671/attempts/1)，场景 `c515cd05`：两个兼容范围改变，均未恢复匹配键；原优化 Cargo 构建／测试、封存、汇总通过 |
-| 不可用内容、恢复、持久修复及修复后精确命中 | 初次被 Variables GET／list HTTP 403 阻断。后续 C1 部分观察到坏内容恢复／重建和替换缓存，但原兼容范围的健康精确命中仍未达成，见末尾退役说明 |
-
-不兼容场景只改变所选 `check.environment` 观察，其他运行／探测／缺失观察和生产者 argv 均与生产相同。`check.cache` 兼容摘要从 `d24c19748a988bdb5732af429ed07932e5e4ac25774ef4d4613b5be87ce34c6f` 变为 `b9653959eb2bc10a7a166822f4e59c4374d31105acf865a8b980c372c4af7987`；`check.cache-tests` 从 `070f000f3499ba497fc6d1c4eac347720586017d61c114954293f69c21964228` 变为 `17b22e6e2b9ea72b6eb2afdc98a63075b62fe778baba507511337f259b317cbc`。
-
-每次恢复只暴露新范围前缀，因此声明键集合无法回退到生产缓存。两个真实 Cargo 生产者都收到 `CARGO_INCREMENTAL=1` 和两个优化值，报告优化的 dev／test 输出。传输保留 `miss-or-unavailable`、原业务成功和当前 planner 身份匹配。观察到后端条目 `9310328424`／`9310330849`，创建者未确认。这是分域／重建证据，没有测试这些场景归档的精确恢复。
-
-场景原产物为 cache `12391316467`、detector `12391201225`、startup `12391076536`、runner `12390726564`、collection `12391598633`，均来自 attempt 1。汇总核验 26 个单元原件，27 条结果全部通过。按原生开始／完成时间，cache、collection job 分别耗时 113、106 秒；该窗口不代表计费、加速或完整生命周期成本。传输／存储和总增量成本未知。
-
-普通 revert `c72c141` 恢复与生产 `72b1d08` 完全相同的树，移除两项临时优化设置，保留场景提交。不可用内容仍须验收，访问失败不豁免。下文已退役可选远端激活层，其历史部分观察不证明修复后精确命中。其他消费者、并发、linked 所有权及完整编译器／SDK／输入范围仍待完成。
+这些观察只覆盖原候选和登记消费者，不能证明当前候选、其他消费者或完整缓存行为正确。不可用内容恢复、持久修复及修复后在原兼容范围健康精确命中的验收仍未完成；访问失败及部分观察见[退役说明](#retired-remote-acceptance-controls)。实验中的临时优化设置已移除，当前参数以现役登记为准；历史摘要、后端条目、artifact ID 和耗时归原运行。并发、linked 所有权、完整编译器／SDK／输入范围，以及传输、存储和总生命周期成本仍待验收或测量。
 
 planner 准备身份；GitHub provider 在原 bootstrap 和检查／发布命令两侧生成固定版本的原生 restore／save action。本宿主在检查、发布登记中明确采用。计划或工作流生成成功，不代表真实恢复／保存、编译器复用或验收通过。SPEC §4.2 仍要求后端证据、冷／热／源码变化／失败／并发验收和当前执行物验证。
 
@@ -129,7 +109,7 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 ### 本仓的缓存归属
 
-本仓 detector 构建共享启动 profile，选择四项登记编译缓存。26 个检查单元和汇总安装绑定源码的 startup 产物。单元缓存登记只选择各 FILEMAP 计划仍实际存在的 Cargo 生产者；汇总和没有编译操作的单元不订阅编译缓存。
+本仓 detector 构建共享启动 profile，选择登记的编译缓存。检查单元和汇总安装绑定源码的 startup 产物，当前单元与缓存集合分别归 units.json／cache.json。单元缓存登记只选择各 FILEMAP 计划仍实际存在的 Cargo 生产者；汇总和没有编译操作的单元不订阅编译缓存。
 
 已有原生 Rust 发布构建／验证单元选择自己的项目输出，Python 发布验证和包收集器无登记编译缓存。分组测试中不同生产者使用不同条目。
 

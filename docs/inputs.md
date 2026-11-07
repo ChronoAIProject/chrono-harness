@@ -27,7 +27,7 @@ v3 将输入范围标为 `declared-complete` 时，必须提供 `bindings`，每
 
 登记要求和选中义务都通过后，普通完整检查可以在这个值下通过，只表示该次变更满足现役登记要求。普通验收不要求普遍证明隐藏输入不存在，也不要求虚拟机。本仓声明仍为 proposed／incomplete。
 
-当前 macOS 27 政策声明了标准输入选择、CI 事件／Git／传输环境、获取凭据、测试原件目的和已安装工具消费者，绑定覆盖全部配置环境与工具节点。公共 FILEMAP 点名实际消费者，包括使用 `CARGO_INCREMENTAL` 的 34 个 Cargo 构建／测试负责人；它们也绑定 `CARGO_TERM_COLOR`。执行器按这些原样声明操作，`GH_TOKEN` 仍是获取凭据，不进入检查业务输入。
+当前 macOS 27 政策声明了标准输入选择、CI 事件／Git／传输环境、获取凭据、测试原件目的和已安装工具消费者，绑定覆盖全部配置环境与工具节点。公共 FILEMAP 点名实际消费者，包括使用 `CARGO_INCREMENTAL` 和 `CARGO_TERM_COLOR` 的 Cargo 构建／测试负责人。执行器按这些原样声明操作，`GH_TOKEN` 仍是获取凭据，不进入检查业务输入。
 
 macOS 27 不再把某次源码 bootstrap 的 `chrono-ci`、`chrono-worktree`、`chrono-inputs` 安装摘要作为后续构建的固定预期。三个文件输入、对应绑定引用和配置专属 FILEMAP 边一同删除；工具名、版本及其实际消费者继续由现有工具登记和依赖边负责。本次安装的文件身份由实际 bootstrap／检查报告产生，按其消费者与保留期使用，不复制回跟踪政策。
 
@@ -123,7 +123,7 @@ v2 采集生成 `chrono-input-snapshot/v2`，普通文件仍用 blob，实际缺
 
 来源 `pair` 地址也可指另一端存在前采到的一份真实单端快照，由其 commit 决定所属端。两端仍须从明确来源取得完整覆盖。原快照／pair 字节保存在 `.chrono-harness/state/inputs/originals/`，独立 `chrono-input-composition-result/v1` 回执点名清单、组成项和输出。快照 v2／v3 形状不变，回执仍为 `completeness_proven: false`。
 
-**产品与宿主政策同步修改：**快照 v3 校验接受现役 Git v3 选择器生产的 `selection.registry_path`，要求它为有效相对路径；组合仍核对完整选择身份与固定端点登记，路径漂移继续拒绝。Rust 真实采集／配对／组合用例覆盖该字段及无效路径，真实本机两端组合另作验收。本机 diagnostics 同时迁到现有 vendor 输入；产品格式修复与宿主采用分别保留证据，完整输入／治理和同判仍未建立，新增验证总成本未测。
+快照 v3 校验接受现役 Git v3 选择器生产的 `selection.registry_path`，要求它为有效相对路径；组合仍核对完整选择身份与固定端点登记，路径漂移继续拒绝。Rust 真实采集／配对／组合用例覆盖该字段及无效路径，真实宿主两端组合另作验收。完整输入／治理和同判仍未建立，验证总成本未测。
 
 `chrono-inputs capture-governance --host-root H --config P --base OID --candidate OID --manifest P --output P` 使用同一原来源清单提供基线检查程序输入投影，再单独观察已检出候选，不把候选字节当历史基线。必需输入来自 registration 已有的空业务计划投影。
 
@@ -149,7 +149,7 @@ Cargo 保护保留有关联的已声明缺失，并在真实操作后复核。ab
 
 Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩展、运行时镜像和配置位置，不声称整个 Python 基目录都是输入。
 
-登记的原生来源链为：`host.acquire-native-{macos,linux}` → 所选 bootstrap-acquire 配置 → 源码构建的 14 个安装参与工具 → `inputs.acquire-PLATFORM` → `inputs.provision-native` → 全部 34 个登记 fetch → `inputs.observe-PLATFORM`，包含全部 34 组 fetch／metadata。
+登记的原生来源链为：`host.acquire-native-{macos,linux}` → 所选 bootstrap-acquire 配置中的安装工具 → `inputs.acquire-PLATFORM` → `inputs.provision-native` → 明确登记的 fetch → `inputs.observe-PLATFORM`。工具和 fetch／metadata 操作的实际集合归[项目登记](../.chrono-harness/projects.json)及其所选声明，不另维护计数。
 
 原 macOS／Linux 编译器、SDK／完整 Developer、运行时／配置和失败别名范围仍保留。只有配置操作成功后才安装，获取失败不能推定二进制已经安装。构建前存活的协调所有者是另一个参与者，仍须实际源码／政策／工具链／安装身份和受保护关联工作树使用。bootstrap 在 stderr 转交原所有者报告路径；该保留报告才是受管理进程和租约的依据。
 
@@ -157,9 +157,9 @@ Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩�
 
 获取参与仍保留当前根 worktree v3 政策。这些来源声明没有采用 Linux 关联／协调政策或完整 Linux 宿主配置，真实平台采用仍待完成。
 
-新增真实 CI 工作流选择有限输入集成分支并传递两份登记配置。原事件、参数、输出、退出、run／attempt、工作流修订随获取原件及 14 个安装目的保存。工作流 job 键不等于远端数字 job ID，须从原运行解析真实 job、artifact 和生产 attempt。提交工作流不代表已经运行、已消费安装工具或已落地。
+原生获取工作流按[自身声明](../.github/workflows/chrono-native-acquisition.yml)选择输入集成分支并传递登记配置。原事件、参数、输出、退出、run／attempt、工作流修订和安装目的随获取原件保存。工作流 job 键不等于远端数字 job ID，须从原运行解析真实 job、artifact 和生产 attempt。提交工作流不代表已经运行、已消费安装工具或已落地。
 
-根 `chrono-git-configs/v3` 绑定两个当前原生可执行身份，明确共用固定数据路径；worktree v3 允许这两个身份，未知字节仍失败。格式与不可变数据范围见[Git 选择](git-facts.md#exact-host-executable-selection)。没有额外采用输入集合扩展、历史完整执行政策、beta.21 安装或新安装器。
+根 `chrono-git-configs/v3` 及 worktree v3 的实际身份归各自登记，未知字节仍失败。格式与不可变数据范围见[Git 选择](git-facts.md#exact-host-executable-selection)。
 
 旧原生 config／runner 样本及过时比较、FILEMAP 项已经移除，固定来源仍在 Git。当前获取测试直接读取现役观察声明；保留的遗漏和原件不同的纠正见[输入来源保管](input-source-custody.md)。全面启用、输入齐全、固定两端原件、真实 CI 验收和同判仍未完成。
 
@@ -180,11 +180,7 @@ Cargo／rustc；编译器、wrapper 和实际路径观察沿该生产者报告�
 
 diagnostics 的路径依赖使用方会自行编译源码，不消费独立受保护构建的产物。当前没有额外环境保护的必要验收终点；本仓恢复普通锁定 Cargo 构建，退役专属观察、私有 Cargo home 准备、vendor 目录来源、主机快照、配置级输入和启动 profile。实际修改与保留边界见 [Cargo 所有者](cargo-projects.md#本仓已退役的额外保护链)。
 
-专属声明、主机输入及对应边已随保护链退役。当前安装身份由 bootstrap／检查原件提供；其余 native 和 acquisition 声明仍须分别核对实际必要性，现有引用不证明永久保留。
-
-随该使用方退役，专为这条链引入的运行时来源解析、端点快照例外和 Cargo 动态摘要路径一并移除；其余跟踪宿主未采用该输入模式。专属合成测试不构成产品保留理由。普通输入继续按显式摘要、端点快照及实际消费前的字节检查处理；普通 diagnostics 格式、构建和未过滤测试仍执行。历史原件、真实失败及未完成工作的保管义务不变。输入闭包继续 incomplete，完整同判未建立，成本收益未知。
-
-两项只登记自身、没有执行计划或工作流调用的本机 isolated／developer 观察入口也已退役，对应的个人绝对路径声明和 FILEMAP 边一并删除。当前原生获取与观察继续使用各自现役登记。
+当前安装身份由 bootstrap／检查原件提供；普通输入按显式摘要、端点快照及实际消费前的字节检查处理，diagnostics 格式、构建和未过滤测试仍执行。其余 native 和 acquisition 声明仍须分别核对实际必要性，现有引用不证明永久保留。输入闭包继续 incomplete，完整同判未建立，成本收益未知；历史原件按真实调试／验收义务保管。
 
 <a id="native-diagnostics-originals-before-guard-adoption"></a>
 
