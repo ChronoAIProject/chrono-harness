@@ -1689,7 +1689,7 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
             .exists()
     );
     let child = env!("CARGO_BIN_EXE_chrono-test-retention-child");
-    let result = chrono_harness::run_process(
+    let result = chrono_harness::run_process_observed(
         h.path(),
         &chrono_harness::CommandSpec {
             program: child.into(),
@@ -1699,13 +1699,17 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
                 original["lease_id"].as_str().unwrap().into(),
                 unrelated.into(),
             ],
-            env: Default::default(),
+            // Preserve the inherited environment while retaining the original
+            // process result when the existing deadline or ownership bound fires.
+            env: std::env::vars().collect(),
             timeout_seconds: 5,
             output_limit_bytes: 4096,
         },
         b"",
+        &chrono_harness::sha256(&fs::read(child).unwrap()),
     )
     .unwrap();
+    assert!(result.failure.is_none(), "{result:#?}");
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert_eq!(result.stdout.trim(), "exact input capability inherited");
     assert!(
@@ -3107,8 +3111,8 @@ fn declared_consumer_survives_killed_real_reader_and_ordinary_reentry() {
     assert_eq!(maintain_fixture_to(h.path(), 1), 1);
     let release = consumer_release(h.path(), &declaration, "released");
     assert_eq!(consumer_call(h.path(), release).exit_code, 0);
-    retained_artifacts::retention::maintain_adopted(h.path()).unwrap();
-    assert!(!h.path().join(path).exists());
+    let round = retained_artifacts::retention::maintain_adopted(h.path()).unwrap();
+    assert!(!h.path().join(path).exists(), "{round:?}");
 }
 
 #[test]
