@@ -428,37 +428,74 @@ fn public_bootstrap_seeds_a_real_git_main_and_keeps_the_actual_failed_child_exit
         let native = native_platform().unwrap();
         let registry_path = fixture.root.join(".chrono-harness/ci/registry.json");
         let mut registry = read_json(&registry_path);
-        registry["platforms"][format!("{}/{}", native.system, native.machine)] = registry["platforms"]["fixture/native"].clone();
+        registry["platforms"][format!("{}/{}", native.system, native.machine)] =
+            registry["platforms"]["fixture/native"].clone();
         write_json(&registry_path, &registry);
         fixture.config["participation"]["git"] = json!("/usr/bin/git");
-        if let Some(exit) = failure { fixture.failed_operation("build", exit); }
-        fixture.commit();
-        let output = Staged::invoke(&fixture, &[".", ".chrono-harness/ci/build.json"], false, false, None);
         if let Some(exit) = failure {
-            assert_eq!(output.status.code(), Some(exit), "{}", String::from_utf8_lossy(&output.stderr));
-            assert!(output.stdout.ends_with(&[0,255,10]));
-            assert!(output.stderr.windows(3).any(|bytes| bytes == [254,0,10]));
+            fixture.failed_operation("build", exit);
+        }
+        fixture.commit();
+        let output = Staged::invoke(
+            &fixture,
+            &[".", ".chrono-harness/ci/build.json"],
+            false,
+            false,
+            None,
+        );
+        if let Some(exit) = failure {
+            assert_eq!(
+                output.status.code(),
+                Some(exit),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(output.stdout.ends_with(&[0, 255, 10]));
+            assert!(output.stderr.windows(3).any(|bytes| bytes == [254, 0, 10]));
             assert!(!fixture.root.join(".chrono-harness/bin/cargo").exists());
-            assert!(!fixture.root.join(".chrono-harness/state/bootstrap.json").exists());
+            assert!(
+                !fixture
+                    .root
+                    .join(".chrono-harness/state/bootstrap.json")
+                    .exists()
+            );
         } else {
-            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
             let report = read_json(&fixture.root.join(".chrono-harness/state/bootstrap.json"));
             assert_eq!(report["status"], "passed");
             assert_eq!(report["operations"].as_array().unwrap().len(), 2);
             assert_eq!(report["source"]["state"], "clean");
-            assert_eq!(fs::read(fixture.root.join(".chrono-harness/bin/cargo")).unwrap(), fs::read(fixture.root.join("out/cargo")).unwrap());
+            assert_eq!(
+                fs::read(fixture.root.join(".chrono-harness/bin/cargo")).unwrap(),
+                fs::read(fixture.root.join("out/cargo")).unwrap()
+            );
         }
-        let entries: Vec<_> = fs::read_dir(fixture.root.join(".chrono-harness/state")).unwrap()
-            .map(|entry| entry.unwrap().path()).filter(|path| path.is_dir()).collect();
+        let entries: Vec<_> = fs::read_dir(fixture.root.join(".chrono-harness/state"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.is_dir())
+            .collect();
         assert_eq!(entries.len(), 1);
         let original = read_json(&entries[0].join("report.json"));
-        assert_eq!(original["status"], if failure.is_some() { "failed" } else { "passed" });
+        assert_eq!(
+            original["status"],
+            if failure.is_some() {
+                "failed"
+            } else {
+                "passed"
+            }
+        );
         assert_eq!(original["operations"][1]["exit_code"], failure.unwrap_or(0));
     }
 }
 
 #[test]
-fn owner_reuse_preserves_actual_original_operations_and_rejects_changed_selection_without_reexecution() {
+fn owner_reuse_preserves_actual_original_operations_and_rejects_changed_selection_without_reexecution()
+ {
     let staged = Staged::new();
     staged.publish_external_inputs();
     let fixture = &staged.fixture;
@@ -467,27 +504,61 @@ fn owner_reuse_preserves_actual_original_operations_and_rejects_changed_selectio
     config["owner_stage"] = Value::Null;
     config["owner_upgrade"] = json!(".chrono-harness/ci/upgrade.json");
     config["reuse_owner_operations"] = json!(["build"]);
-    let profile = chrono_host_bootstrap::profile::Profile::parse(&serde_json::to_vec(&config).unwrap()).unwrap();
-    let report: chrono_host_bootstrap::construction::Report = serde_json::from_value(staged.report.clone()).unwrap();
+    let profile =
+        chrono_host_bootstrap::profile::Profile::parse(&serde_json::to_vec(&config).unwrap())
+            .unwrap();
+    let report: chrono_host_bootstrap::construction::Report =
+        serde_json::from_value(staged.report.clone()).unwrap();
     let observed = chrono_host_bootstrap::source::observe(root, &fixture.environment);
     let native = native_platform().unwrap();
     let calls = fs::read(fixture.tools.join("calls.json")).unwrap();
-    let reused = owner::reuse_construction(root, &fixture.environment, &native, &profile, &report, &observed).unwrap();
+    let reused = owner::reuse_construction(
+        root,
+        &fixture.environment,
+        &native,
+        &profile,
+        &report,
+        &observed,
+    )
+    .unwrap();
     assert_eq!(reused.operations.len(), 1);
     let row = &reused.operations["build"];
     let original = &staged.report["operations"][1];
     assert_eq!(serde_json::to_value(&row.argv).unwrap(), original["argv"]);
     assert_eq!(row.pid as u64, original["pid"].as_u64().unwrap());
-    assert_eq!(serde_json::to_value(&row.stdout).unwrap(), original["stdout"]);
-    assert_eq!(serde_json::to_value(&row.stderr).unwrap(), original["stderr"]);
+    assert_eq!(
+        serde_json::to_value(&row.stdout).unwrap(),
+        original["stdout"]
+    );
+    assert_eq!(
+        serde_json::to_value(&row.stderr).unwrap(),
+        original["stderr"]
+    );
     assert_eq!(row.reused_from.as_ref().unwrap().path, staged.reference);
     assert_eq!(row.reused_from.as_ref().unwrap().sha256, staged.digest);
     assert_eq!(reused.source.unwrap(), staged.stage_path());
-    for changed in ["environment", "host_environment", "versions", "selection", "executables"] {
+    for changed in [
+        "environment",
+        "host_environment",
+        "versions",
+        "selection",
+        "executables",
+    ] {
         let mut value = staged.report.clone();
         value[changed] = json!({"changed":"observed value"});
         if let Ok(report) = serde_json::from_value(value) {
-            assert!(owner::reuse_construction(root, &fixture.environment, &native, &profile, &report, &observed).is_err(), "accepted {changed}");
+            assert!(
+                owner::reuse_construction(
+                    root,
+                    &fixture.environment,
+                    &native,
+                    &profile,
+                    &report,
+                    &observed
+                )
+                .is_err(),
+                "accepted {changed}"
+            );
         }
     }
     assert_eq!(fs::read(fixture.tools.join("calls.json")).unwrap(), calls);

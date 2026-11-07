@@ -178,7 +178,8 @@ JSON 解码、哈希、metadata／inode 观察、路径解析、Git、文件系�
 
 ## 固定执行入口
 
-宿主 bootstrap 的 Rust 迁移正在实施，尚未替换当前 Python 入口。
+宿主 bootstrap 的 Rust 迁移正在实施。公开 core／shared 仍保留 Python 入口，
+所有者阶段 profile 已选择薄 shell 和 Rust 生产者。
 `.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
 字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
 以及环境名／值、宿主路径、私有 homes、default profile、SDK 探测分支和进程退出状态。
@@ -209,7 +210,8 @@ Rust 回归另核真实 Cargo／rustc 的身份、环境选择、安装器退出
 缺执行／安装不发布成功，以及报告 IO 失败时仍保留原安装器退出码。
 临时目录复用本仓已有版本的 tempfile，原目录回收仍归宿主生命周期所有者；
 没有增加独立清理账本或调度协议。JSON、文件与进程 IO、报告字段投影和完整外层组合仍未证明，
-这些模块尚未接管现役 Python 入口。新增构建、验证、CI 和存储成本未测。
+这些模块已接通所有者阶段的登记入口；外层 core／shared 的迁移和实际消费者验收仍分别完成。
+新增构建、验证、CI 和存储成本未测。
 
 原生 `original.rs` 校验固定 producer 的原始源码、登记、SDK 选择、操作和两条原字节流。
 候选 Git 只按完整且非零的 commit／tree 读取固定对象，先核实际 tree 和普通 blob 类型；
@@ -224,6 +226,13 @@ Rust 行为测试另核真实子进程报告、非 UTF-8 流、固定源码漂�
 登记的 `host.bootstrap-native-original-execution` 操作用候选源码执行该 CLI，读取本机实际原件；
 其结果只覆盖源码、登记、执行和两流，不声称安装集、owner stage、发布或整个升级事务通过。
 JSON、Git、文件系统、平台识别、字段投影和完整消费组合仍不在上述局部证明内。
+
+`owner.rs` 的身份、阶段、意图及发布比较直接复用 worktree 的 `verified_owner_publication.rs`，
+不另造一份宿主私有定义。新增同源谓词只核 publication／adoption 头和阶段声明绑定。
+原生回归覆盖真实构建的 stage、原件损坏／缺失、当前候选改变后的固定读取、
+原操作沿用而不重执行，以及真实子进程失败退出和非 UTF-8 输出。
+`lifecycle.rs` 委托原生命周期入口，不取得或解释租约，也不自行替换选中所有者。
+解码、Git／文件观察、编排、报告消费和整个升级事务仍须各自行为验收，不属于这些局部证明。
 
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
 `test:runner-tests` 先运行八项整 crate Verus 操作及编译，registration 先运行四项，

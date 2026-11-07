@@ -764,7 +764,7 @@ core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候�
 
 普通共享 bootstrap 复用相同协调者字节，改变须走 Rust owner 部署入口。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
 
-真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。Python 负责构建及完整阶段报告校验，内部 `--owner-stage-validation` 回调只返回已校验的阶段记录和原报告摘要。Rust 所有者在原准入／全部登记 EX 下完成旧 inode 保全、发布意图、原子替换、中断发布重入和采用检查；回调不再写安装字节。
+真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。本宿主的阶段 profile 通过薄 shell 选择 Rust 构建生产者；内部 `--owner-stage-validation` 回调同样由该 Rust 程序读取原报告、固定登记与原流，只返回已校验的阶段记录和原报告摘要。外层 core／shared 的 Python 编排仍在迁移。Rust 生命周期所有者在原准入／全部登记 EX 下完成旧 inode 保全、发布意图、原子替换、中断发布重入和采用检查；构建生产者不写选中所有者的安装字节。
 
 发布的身份／内容比较、阶段及回调绑定、原件／意图／替换状态选择由同源 Verus 实现，
 worktree core／adoption 计划都先执行生产根和独立边界根的整 crate 证明。
