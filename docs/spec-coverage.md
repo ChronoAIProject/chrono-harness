@@ -422,6 +422,10 @@ CI full／release 的字面单行判断由 CI 自己的同源 Verus 模块统一
 
 ## runner 的 Verus 分批迁移
 
+projects 的实际语言配对条件由同源 Verus 定义并调用，独立根覆盖相等文本与精确、有方向的
+shell→python 例外及大小写／NUL／Unicode 边界；两项证明是原 projects 测试计划的必需前置。
+正式候选、本地／原生 CI 和实际落地仍须验收；配对身份、JSON、错误分类和全仓覆盖门未完成。
+
 registration 的实际八种 `NodeKind` 以及其复制／相等已迁入同源 Verus。
 full 准备状态的五份登记是否为 `active`、治理是否为 `enabled`、输入是否
 `declared-complete` 且存在空的未解决项数组，也已接到同源 `verified_readiness.rs`。

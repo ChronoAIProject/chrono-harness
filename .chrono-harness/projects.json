@@ -2074,6 +2074,28 @@
       "root": "crates/judge-projects",
       "test_project": "judge-projects-tests",
       "actions": {
+        "verify_languages": {
+          "operation": "verify.project-languages",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.project-languages.rlib,dep-info=.chrono-harness/state/verify.project-languages.rlib.d",
+            "crates/judge-projects/src/verified_languages.rs",
+            "-o",
+            ".chrono-harness/state/verify.project-languages.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
         "build": {
           "operation": "build.judge-projects",
           "tool": "cargo",
@@ -2164,6 +2186,28 @@
       "root": "crates/judge-projects-tests",
       "tests_for": "judge-projects",
       "actions": {
+        "verify_languages": {
+          "operation": "verify.project-languages-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.project-languages-tests.rlib,dep-info=.chrono-harness/state/verify.project-languages-tests.rlib.d",
+            "crates/judge-projects-tests/tests/verified_languages.rs",
+            "-o",
+            ".chrono-harness/state/verify.project-languages-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
         "build": {
           "operation": "build.judge-projects-tests",
           "tool": "cargo",
