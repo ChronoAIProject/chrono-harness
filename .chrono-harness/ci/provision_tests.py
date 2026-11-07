@@ -79,6 +79,25 @@ class IsolatedProvision(unittest.TestCase):
                     bootstrap.toolchain_environment(dict(self.config, environment=values), self.root)
                 run.assert_not_called()
 
+    def test_host_home_rebinding_preserves_the_selected_rustup_installation(self):
+        config = {"host_environment": {"HOME": ".chrono-harness/cache/private-home",
+                                      "CARGO_HOME": ".chrono-harness/cache/private-cargo"}}
+        for inherited, expected in [({"HOME": "/worker"}, "/worker/.rustup"),
+                                    ({"HOME": "/worker", "RUSTUP_HOME": "/sdk/rustup"}, "/sdk/rustup")]:
+            with self.subTest(inherited=inherited), mock.patch.dict(os.environ, inherited, clear=True):
+                original = dict(os.environ)
+                env = bootstrap.provision_environment(self.root, config)
+                self.assertEqual(env["RUSTUP_HOME"], expected)
+                self.assertEqual(env["HOME"], str(self.root / config["host_environment"]["HOME"]))
+                self.assertEqual(env["CARGO_HOME"], str(self.root / config["host_environment"]["CARGO_HOME"]))
+                self.assertEqual(dict(os.environ), original)
+                self.assertFalse((self.root / ".chrono-harness").exists())
+        with mock.patch.dict(os.environ, {"HOME": "/worker"}, clear=True):
+            explicit = dict(config, environment={"RUSTUP_HOME": "/selected/rustup"})
+            self.assertEqual(bootstrap.provision_environment(self.root, explicit)["RUSTUP_HOME"], "/selected/rustup")
+            private = bootstrap.provision_environment(self.root, dict(self.config, **config))
+            self.assertEqual(private["RUSTUP_HOME"], str(self.root / self.config["toolchain_provision"]["rustup_home"]))
+
     def test_install_failure_stops_before_selection_and_preserves_exit(self):
         failure = subprocess.CalledProcessError(17, ["rustup", "toolchain", "install"])
         with mock.patch.object(bootstrap.subprocess, "run", side_effect=failure), \
