@@ -16,7 +16,7 @@ fn run() -> u8 {
         Ok(r) => r,
         Err(e) => {
             eprintln!("E_REQUEST: {e}");
-            return 2
+            return 2;
         }
     };
     let response = chrono_judge_ci::judge(&request);
@@ -30,7 +30,7 @@ fn run() -> u8 {
         || output.write_all(b"\n").is_err()
         || output.flush().is_err()
     {
-        return 2
+        return 2;
     }
     if failed { 1 } else { 0 }
 }

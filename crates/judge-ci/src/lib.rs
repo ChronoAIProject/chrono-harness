@@ -801,7 +801,8 @@ pub fn judge_with_diagnostic_sink<W: std::io::Write + Send + 'static>(
             "chrono-judge-ci",
             chrono_diagnostics::logging::Level::INFO,
             sink,
-        ).map_err(|error| {
+        )
+        .map_err(|error| {
             diagnostic_errors.push(error.record());
             error.to_string()
         })?;

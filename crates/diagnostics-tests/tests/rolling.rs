@@ -1,27 +1,44 @@
 use chrono_diagnostics::{logging::Logger, rolling::RollingFile, runtime};
 use serde_json::{Value, json};
-use std::{fs, io::{self, Write}, path::{Path, PathBuf}, process::Command, sync::atomic::{AtomicU64, Ordering}};
+use std::{
+    fs,
+    io::{self, Write},
+    path::{Path, PathBuf},
+    process::Command,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!("chrono-rolling-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        let path = std::env::temp_dir().join(format!(
+            "chrono-rolling-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
         fs::create_dir(&path).unwrap();
         Self(fs::canonicalize(path).unwrap())
     }
     fn policy(&self, max_bytes: u64, max_files: usize, level: &str) {
         fs::create_dir_all(self.0.join(".chrono-harness")).unwrap();
-        fs::write(self.0.join(runtime::CONFIG_PATH), serde_json::to_vec(&json!({
-            "schema":"chrono-runtime-logging/v1", "level":level,
-            "directory":".chrono-harness/state/logs/", "max_bytes":max_bytes,
-            "max_files":max_files,"stderr":false,
-        })).unwrap()).unwrap();
+        fs::write(
+            self.0.join(runtime::CONFIG_PATH),
+            serde_json::to_vec(&json!({
+                "schema":"chrono-runtime-logging/v1", "level":level,
+                "directory":".chrono-harness/state/logs/", "max_bytes":max_bytes,
+                "max_files":max_files,"stderr":false,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     }
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
-        if !std::thread::panicking() { fs::remove_dir_all(&self.0).unwrap(); }
+        if !std::thread::panicking() {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
     }
 }
 fn records(directory: &Path) -> Vec<Value> {
@@ -31,7 +48,12 @@ fn records(directory: &Path) -> Vec<Value> {
         if path.extension().is_some_and(|ext| ext == "jsonl") {
             let bytes = fs::read(path).unwrap();
             assert!(bytes.ends_with(b"\n"));
-            records.extend(std::str::from_utf8(&bytes).unwrap().lines().map(|line| serde_json::from_str::<Value>(line).unwrap()));
+            records.extend(
+                std::str::from_utf8(&bytes)
+                    .unwrap()
+                    .lines()
+                    .map(|line| serde_json::from_str::<Value>(line).unwrap()),
+            );
         }
     }
     records
@@ -42,9 +64,13 @@ fn exact_boundary_rotation_restart_and_reduced_retention() {
     let fixture = Fixture::new();
     let row = b"{\"message\":\"hello\"}\n";
     let mut writer = RollingFile::open(&fixture.0, row.len() as u64 * 2, 3).unwrap();
-    for _ in 0..2 { writer.write_all(row).unwrap(); }
+    for _ in 0..2 {
+        writer.write_all(row).unwrap();
+    }
     assert!(!fixture.0.join("runtime.1.jsonl").exists());
-    for _ in 0..7 { writer.write_all(row).unwrap(); }
+    for _ in 0..7 {
+        writer.write_all(row).unwrap();
+    }
     assert_eq!(fs::read(fixture.0.join("runtime.jsonl")).unwrap(), row);
     assert_eq!(records(&fixture.0).len(), 5);
     drop(writer);
@@ -97,15 +123,26 @@ fn aliases_and_unknown_member_types_are_preserved() {
 #[test]
 fn configured_logger_preserves_json_fields_filtering_and_failure_records() {
     let fixture = Fixture::new();
-    assert!(runtime::configured_logger(&fixture.0, "fixture", io::sink()).unwrap().is_none());
+    assert!(
+        runtime::configured_logger(&fixture.0, "fixture", io::sink())
+            .unwrap()
+            .is_none()
+    );
     fixture.policy(4096, 3, "info");
-    let logger = runtime::configured_logger(&fixture.0, "fixture", io::sink()).unwrap().unwrap();
+    let logger = runtime::configured_logger(&fixture.0, "fixture", io::sink())
+        .unwrap()
+        .unwrap();
     logger.run(|| {
         let span = tracing::info_span!("operation", request_id = "r-1");
         let _entered = span.enter();
         tracing::debug!(event_id = "hidden", "debug detail");
         tracing::info!(event_id = "operation.started", "正常运行");
-        chrono_diagnostics::logging::failure("operation.failed", "failed", &chrono_diagnostics::error::Failure::new("E_FIXTURE", "original").record()).unwrap();
+        chrono_diagnostics::logging::failure(
+            "operation.failed",
+            "failed",
+            &chrono_diagnostics::error::Failure::new("E_FIXTURE", "original").record(),
+        )
+        .unwrap();
     });
     logger.finish().unwrap();
     let rows = records(&fixture.0.join(".chrono-harness/state/logs"));
@@ -114,7 +151,9 @@ fn configured_logger_preserves_json_fields_filtering_and_failure_records() {
     assert_eq!(rows[0]["context"]["request_id"], "r-1");
     assert_eq!(rows[1]["error"]["error"]["code"], "E_FIXTURE");
     fixture.policy(1, 1, "info");
-    let logger = runtime::configured_logger(&fixture.0, "fixture", io::sink()).unwrap().unwrap();
+    let logger = runtime::configured_logger(&fixture.0, "fixture", io::sink())
+        .unwrap()
+        .unwrap();
     logger.run(|| tracing::info!("too large"));
     let failures = logger.finish().unwrap_err();
     assert!(!failures.is_empty());
@@ -130,20 +169,35 @@ fn explicit_library_sink_survives_file_adoption_and_dual_failure_keeps_both_caus
             self.0.lock().unwrap().extend_from_slice(bytes);
             Ok(bytes.len())
         }
-        fn flush(&mut self) -> io::Result<()> { Ok(()) }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
     }
     let fixture = Fixture::new();
     fixture.policy(4096, 2, "info");
     let captured = Captured(Arc::new(Mutex::new(Vec::new())));
-    let logger = runtime::logger(&fixture.0, "fixture", tracing::Level::INFO, captured.clone()).unwrap();
+    let logger = runtime::logger(
+        &fixture.0,
+        "fixture",
+        tracing::Level::INFO,
+        captured.clone(),
+    )
+    .unwrap();
     logger.run(|| tracing::info!(event_id = "original.sink", "retained evidence"));
     logger.finish().unwrap();
     let original: Value = serde_json::from_slice(&captured.0.lock().unwrap()).unwrap();
-    assert_eq!(original, records(&fixture.0.join(".chrono-harness/state/logs"))[0]);
+    assert_eq!(
+        original,
+        records(&fixture.0.join(".chrono-harness/state/logs"))[0]
+    );
     struct Failed;
     impl Write for Failed {
-        fn write(&mut self, _: &[u8]) -> io::Result<usize> { Err(io::Error::from_raw_os_error(5)) }
-        fn flush(&mut self) -> io::Result<()> { Ok(()) }
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::Error::from_raw_os_error(5))
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
     }
     fixture.policy(1, 2, "info");
     let logger = runtime::logger(&fixture.0, "fixture", tracing::Level::INFO, Failed).unwrap();
@@ -154,7 +208,10 @@ fn explicit_library_sink_survives_file_adoption_and_dual_failure_keeps_both_caus
     let file = &node.source.as_ref().unwrap().source.as_ref().unwrap();
     assert_eq!(file.code, "E_RUNTIME_LOG");
     assert_eq!(file.related[0].role, "stderr");
-    assert_eq!(file.related[0].error.source.as_ref().unwrap().native_code, Some(5));
+    assert_eq!(
+        file.related[0].error.source.as_ref().unwrap().native_code,
+        Some(5)
+    );
 }
 
 #[test]
@@ -163,12 +220,21 @@ fn malformed_and_escaping_policy_is_rejected_before_creating_logs() {
     fixture.policy(100, 2, "verbose");
     assert!(runtime::configured_logger(&fixture.0, "fixture", io::sink()).is_err());
     let path = fixture.0.join(runtime::CONFIG_PATH);
-    for directory in ["../outside/", ".chrono-harness/state/", ".chrono-harness/state/../outside/", ".chrono-harness/state/./logs/", ".chrono-harness/state//logs/"] {
+    for directory in [
+        "../outside/",
+        ".chrono-harness/state/",
+        ".chrono-harness/state/../outside/",
+        ".chrono-harness/state/./logs/",
+        ".chrono-harness/state//logs/",
+    ] {
         fixture.policy(100, 2, "info");
         let mut policy: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         policy["directory"] = json!(directory);
         fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
-        assert!(runtime::configured_logger(&fixture.0, "fixture", io::sink()).is_err(), "{directory}");
+        assert!(
+            runtime::configured_logger(&fixture.0, "fixture", io::sink()).is_err(),
+            "{directory}"
+        );
     }
     fs::write(&path, b"{\"schema\":").unwrap();
     assert!(runtime::configured_logger(&fixture.0, "fixture", io::sink()).is_err());
@@ -181,15 +247,38 @@ fn concurrent_processes_reopen_after_rotation_and_keep_whole_records() {
     let helper = env!("CARGO_BIN_EXE_chrono-test-log-writer");
     let mut children = Vec::new();
     for id in 0..4 {
-        children.push(Command::new(helper).arg(&fixture.0).arg(id.to_string()).spawn().unwrap());
+        children.push(
+            Command::new(helper)
+                .arg(&fixture.0)
+                .arg(id.to_string())
+                .spawn()
+                .unwrap(),
+        );
     }
-    for mut child in children { assert!(child.wait().unwrap().success()); }
+    for mut child in children {
+        assert!(child.wait().unwrap().success());
+    }
     let rows = records(&fixture.0);
     assert_eq!(rows.len(), 160);
-    let mut ids = rows.iter().map(|r| (r["producer"].as_str().unwrap().to_owned(), r["fields"]["sequence"].as_u64().unwrap())).collect::<Vec<_>>();
-    ids.sort(); ids.dedup();
+    let mut ids = rows
+        .iter()
+        .map(|r| {
+            (
+                r["producer"].as_str().unwrap().to_owned(),
+                r["fields"]["sequence"].as_u64().unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    ids.sort();
+    ids.dedup();
     assert_eq!(ids.len(), rows.len());
-    let logs = fs::read_dir(&fixture.0).unwrap().map(|e|e.unwrap().path()).filter(|p|p.extension().is_some_and(|e|e=="jsonl")).collect::<Vec<_>>();
+    let logs = fs::read_dir(&fixture.0)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "jsonl"))
+        .collect::<Vec<_>>();
     assert!(logs.len() > 1 && logs.len() <= 64);
-    for path in logs { assert!(fs::metadata(path).unwrap().len() <= 2048); }
+    for path in logs {
+        assert!(fs::metadata(path).unwrap().len() <= 2048);
+    }
 }
