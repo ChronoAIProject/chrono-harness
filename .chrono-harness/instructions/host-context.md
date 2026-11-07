@@ -44,7 +44,7 @@
 
 候选必须已提交，且检出干净。`--unit ID` 和无值的 `--collect` 分别选择同一入口的单元模式与汇总模式；汇总不重执行业务。schema4 从 config.json 的 `canonical_check` 选择 profile 和输入 action。`CHRONO_CHECK_SOURCE` 未设置或为 `local` 时，使用登记的工作树输入程序；为 `ci` 时，使用登记的 CI 事件输入程序。其他值或缺输入都报错，不猜范围、不回退。本地固定登记 remote 的 workflow target 和干净 HEAD，不手工 prepare。
 
-本宿主采用 scoped `chrono-ci-check/v3`：23 个单元、一个 DELTA detector 和始终运行的汇总任务，唯一必需检查是 `chrono / collection`。工作流检查 dev、integration/** 的 push，以及目标为这些分支的 PR。integration push 按 units.json 的 push_baselines 与一次观察后固定的 dev 顶端比较；dev push 检查落地 before／after，PR 使用事件 base／head。父运行按 PR 号替换旧运行，push 则按 run ID 保留每次运行。单元和报告由 check.json 维护，拓扑、共享启动和上传由 units.json 维护。
+本宿主采用 scoped `chrono-ci-check/v3`：23 个单元、一个 DELTA detector 和始终运行的汇总任务，唯一必需检查是 `chrono / collection`。目标为 dev 或 integration/** 的 PR 以固定 workflow 合并提交的第一父提交为基线、事件 head 为候选，dev push 检查落地 before／after。integration 分支需要候选检查时创建 PR，草稿 PR 也支持；推送本身不另行触发主 CI。父运行按 PR 号替换旧运行，push 则按 run ID 保留每次运行。单元和报告由 check.json 维护，拓扑、共享启动和上传由 units.json 维护。
 
 [CI 单元说明](../../docs/ci-units.md#conditional-jobs-and-the-required-aggregate)规定如何核对原始 producer／artifact attempt、沿用成功前置结果，以及共享安装。不能按当前重跑 attempt 猜产物归属。业务构建仍使用独立计划；本地和发布继续保留源码构建。
 
