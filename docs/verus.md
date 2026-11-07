@@ -70,6 +70,19 @@ FIFO 首次发现生成确定的最短跳数和前驱；传播行逐槽对应原
 外层节点／边关联、seed-ID 映射、完整原因合并、JSON／诊断适配、
 外层额外选测和完整 SPEC 对应仍未证明。局部图证明不证明实际登记完整，也不代表全仓覆盖完成。
 
+## 执行资源上限
+
+`crates/runner/src/verified_limits.rs` 负责执行资源准入的唯一判断：超时为正 `u64`，
+输出为 1 至 67,108,864 字节（64 MiB，含两端）的 `usize`。
+`valid_execution_bounds` 和单独的 `valid_output_limit` 分别证明返回值与规格充要相等。
+实际执行器的命令检查、不可变输入传输、registration 的默认／逐操作上限和 routes 的计划检查直接调用它们；
+使用真实字段类型，无中间数组、整数转换或新增外部接口假设。
+独立 Verus 根直接调用实现，核任意参数的精确条件，以及零值、最小值、最大值、越界一字节、
+`u64::MAX` 超时与 `usize::MAX` 输出。原 Rust 消费者测试仍负责外围计划和进程行为。
+runner、registration 和 routes 的登记计划把两项整 crate 证明放在原构建和测试之前。
+判断使用常量时间与额外空间，不增加运行时进程；构建、验证、CI 和存储的实际成本未测。
+外层解析、计划组合、启动状态和完整 SPEC 对应仍待证明。
+
 ## CI 离线汇总的结果集合
 
 `crates/judge-ci/src/verified_collection.rs` 是离线汇总实际消费的结果 ID 集合比较。
@@ -95,14 +108,15 @@ FIFO 首次发现生成确定的最短跳数和前驱；传播行逐槽对应原
 ## 固定执行入口
 
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
-`test:runner-tests` 先运行六项整 crate Verus 操作及编译，registration、filemap 与 CI 汇总各先运行两项，
+`test:runner-tests` 先运行八项整 crate Verus 操作及编译，registration 先运行四项，
+routes、filemap 与 CI 汇总各先运行两项；同一计划内共用的证明操作只执行一次，
 再执行各自原 Rust 构建和未过滤测试。独立根直接读取生产源码，声明成功、失败和边界预期；
 Rust 测试另外验证真实消费者，不替代证明。
 
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
 现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
-四个证明单元先核共享 core，再安装工具；Python bootstrap 源码和测试无修改。
+五个证明单元先核共享 core，再安装工具；Python bootstrap 源码和测试无修改。
 当前归档只适用于 macOS arm64。
 
 ## 此批使用的外部接口
@@ -123,7 +137,7 @@ O(E(1 + (L+1)log(U+1)) + U²)，再有原标准库集合转换。
 这是当前算法的上界估计，不是 Verus 机械成本证明。临时向量保留 U 个目标字符串及句柄，
 不增加运行时进程；完整运行、构建、验证、CI 和存储成本未测。
 
-**产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十二项证明。
+**产品与宿主政策同时变更：**实际判断、状态类型与图改为同源 Verus，FILEMAP、工具、启动及执行计划登记十四项证明。
 固定宏依赖通过 runner 传播到现役依赖方的独立 lockfile，没有升级其他包。
 runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` 定位需要 O(log C) 次字节比较，
 新增插入最多移动 C 个字符串句柄，存储为 O(C)。原图索引与遍历成本继续保留；
