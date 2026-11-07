@@ -27,10 +27,10 @@
 | SPEC 章节 | 状态 | 生产者与直接证据 | 仍需完成 |
 | --- | --- | --- | --- |
 | 1 权威与边界 | 部分 | runner `full.rs` 的外部 DAG；R `dag_*` | 其余判官政策和生命周期 |
-| 1 真实消费者与用途 | 部分：带版本的内部共享启动消费合同 | registration 的 `chrono-internal-causal-consumption/v1`；本仓采用已有 runner-startup，复用 need／output_use、生产／调用 action、profile 安装对、claim、真实消费证据。标准 scoped 准入核两端受影响关系，要求原真实消费者测试；Rust 成功／失败／边界及固定 Git 端点回归 | 是否有用仍由 AI 负责判断。`72b1d08`、`c515cd05` 已观察有限 Darwin detector／startup／install／当前 runner／collection 消费；Linux、外部／全消费者采用、完整路径执行尚缺。仅有测试／分发资产不构成真实消费者 |
+| 1 真实消费者与用途 | 部分：带版本的内部共享启动消费合同 | registration 的 `chrono-internal-causal-consumption/v1`；本仓采用已有 runner-startup，复用 need／output_use、生产／调用 action、profile 安装对、claim、真实消费证据。标准 scoped 准入核两端受影响关系，要求原真实消费者测试；Rust 成功／失败／边界及固定 Git 端点回归。必要性链的递归终点与全对象适用仍待实现 | 是否有用仍由 AI 负责判断。`72b1d08`、`c515cd05` 已观察有限 Darwin detector／startup／install／当前 runner／collection 消费；Linux、外部／全消费者采用、完整路径执行尚缺。仅有测试／分发资产不构成真实消费者 |
 | 2 独立项目与采用 | 部分 | 独立 manifest／lock／bootstrap 构建登记；SPEC §2.1 将共享数学归 trureturing、运行／模型对应归 chrono-harness | 通用完整 bootstrap 来源及启用；源码归属不证明实现满足模型 |
 | 2.1.1 Verus 规范性权威 | 规范已明确；实现部分完成 | SPEC 统一定义真实使用方、证明与生产调用绑定及 `E_VERUS_COVERAGE`；现役局部证明和结果合同见 Verus 实施说明 | 全仓覆盖门、源码／编译结果／实际调用完整绑定、其余逻辑与 SPEC 对应仍未完成；不以当前 scoped 成功宣称本节已验收 |
-| 2.2 实现／测试语言 | 部分：指令、full／scoped projects v2 配对、原生 helper | 中英文 test.same-language 原子用于新宿主默认及本仓指南；项目／脚本明确语言，受影响配对须同 ID 或 shell→python。Rust schema／配对／语言 metadata DELTA 用例及登记 CI transport、context judge、protocol judge、CLI child、生命周期、Cargo、Git fault helper；本仓 v2、Rust 显式 workflow 清单及配对测试、worktree 核心／采用分组及完整覆盖。固定历史支持退役后 projects 保留原未过滤 action；Python 发布配方／测试对不需 manifest，单元／真实二进制集成组独立 | 完整候选验收、示例采用；迁移剩余内嵌跨语言测试／helper，真实外部接口 fixture 单独登记。声明不能证明实际源码语言 |
+| 2.2 实现／测试语言 | 部分：指令、full／scoped projects v2 配对、原生 helper | 中英文 test.same-language 原子用于新宿主默认及本仓指南；项目／脚本明确语言，受影响配对须同 ID 或 shell→python。Rust schema／配对／语言 metadata DELTA 用例及登记 CI transport、context judge、protocol judge、CLI child、生命周期、Cargo、Git fault helper；本仓 v2、Rust 显式 workflow 清单及配对测试、worktree 核心／采用分组及完整覆盖。固定历史支持退役后 projects 保留原未过滤 action；owner 字节发布与 stage 原件核验迁入现有 Rust worktree 所有者，Python 保留构建／资格读取；Rust 用例覆盖原回调义务，候选验收另记。Python 构建配方／测试对不需 manifest，单元／真实二进制集成组独立 | 完整候选验收、示例采用；迁移剩余内嵌跨语言测试／helper，真实外部接口 fixture 单独登记。声明不能证明实际源码语言 |
 | 2.2 routes 回归 helper 迁移 | 已实现，范围有限 | 八项 judge-routes-tests 回归改用 Rust 测试自有子进程 helper。`tests/support/tool.rs` 是明确 Cargo binary 和 FILEMAP compile 输入，原 test:judge-routes-tests 计划沿用 Cargo test。保留字面／空／换行 argv、cwd／环境、回执篡改、错版本／执行物替换、PATH、版本观察复用、循环／预检拒绝、标准调用、汇总身份。候选 `af0e2432d849fddbcd233491d428d7322fd32925` 对基线 `c159392f0a9c16049be11933013ab946ddc22293` 的标准 DELTA judge passed，报告 `.chrono-harness/state/preparation/check-a6eeb18c816192599c44d33a6532c4215da67c8d35b700dc5c0671d07ce77472.json` | 仅限此测试所有者。其余跨语言逻辑／helper、外部接口 fixture 登记、完整输入、启用、同判仍缺 |
 | 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入；有限配对、routes、迁移、快照、v5 工具链清单已实现 |
 | 4 固定快照／上下文／CI | 部分 | runner facts.rs、registration lib.rs；G `context_and_config_identity_mismatch`、`ignored_untracked_staged_and_wrong_checkout_fail` | config v3 已为完整／初始消费者、明确 scoped v2、当前 provider v4 事件读取／fetch 绑定 Git，见 git-facts.md。完整原生 CI／同判及 Git／委托／Cargo／SDK 输入仍缺 |
@@ -406,6 +406,13 @@ PR #221 落地为 `3b605cf80aa9e96a6442b2e54991602713acca31`，树与受验候�
 该批源码与政策同步交付于 PR #273，dev 落地 `1cc909d9999baed15bd2f43135debe85e1abe605` 的文件树与受验候选 `69c1d8541614cdd6cd58a99f9acd06099d917560` 相同。PR 原生运行 `42265991709` 和落地运行 `42269755637` 均成功，原汇总各 21 行全部通过，归档长度／摘要、原报告和输出流摘要均已核对。这些结果覆盖对应 macOS scoped DELTA，不能证明 Linux、两平台公开发布或完整宿主采用。
 
 测试清单验证由 Rust `chrono-ci test-inventory` 负责，两个宿主配置继续显式绑定原 Cargo action、分组和二进制清单。Rust 配对测试保留完整／互斥覆盖、ignored、漂移、损坏清单、非零退出及有界失败原件；worktree 的真实后代租约消费者同步调用 Rust CLI。Python 实现、导入／字节码测试、独立 CI 单元和重复发布验证任务退役。程序与宿主政策同时改变；当前候选的正式检查、原生结果和 dev 落地分别需要实际证据。
+
+## CI 字面文本的 Verus 迁移
+
+CI full／release 的字面单行判断由 CI 自己的同源 Verus 模块统一负责，拒绝 NUL、LF、CR 和精确 `${{`，
+保留空串、普通 UTF-8 与不完整模板开头的原语义。独立边界根和真实渲染消费者复用当前 CI 测试计划，
+新增两项整 crate 证明及原生 Verus 前置；程序与宿主政策同时改变。
+范围与限制见 [CI 配置的字面文本](verus.md#ci-配置的字面文本)；当前候选正式验证与实际交付仍待核验。
 
 ## runner 的 Verus 分批迁移
 

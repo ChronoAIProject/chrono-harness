@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 fn state(root: &Path, path: &str) -> Result<PathBuf, String> {
-    if !path.starts_with(".chrono-harness/state/") {
+    if !chrono_harness::verified_paths::valid_host_state_path(path.as_bytes()) {
         return Err("E_INPUT_PATH: output/reference must be within host state".into());
     }
     no_symlink_parents(root, path)

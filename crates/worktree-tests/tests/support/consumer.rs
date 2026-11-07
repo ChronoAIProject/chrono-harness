@@ -34,7 +34,21 @@ fn python_holder() {
 fn main() -> ExitCode {
     let invocation = std::env::args_os().next().unwrap();
     match Path::new(&invocation).file_name().and_then(|s| s.to_str()) {
-        Some("rustup") => return ExitCode::SUCCESS,
+        Some("rustup") => {
+            if std::env::args().nth(1).as_deref() == Some("which") {
+                let name = std::env::args().last().unwrap();
+                println!(
+                    "{}",
+                    std::env::current_exe()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .join(name)
+                        .display()
+                );
+            }
+            return ExitCode::SUCCESS;
+        }
         Some(name @ ("cargo" | "rustc")) => {
             println!("{name} 1.95.0 (fixture)");
             return ExitCode::SUCCESS;

@@ -569,6 +569,16 @@
               "target": null
             }
           ]
+        },
+        {
+          "package": "verus_builtin_macros@0.0.0-2026-04-20-1748",
+          "name": "verus_builtin_macros",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
         }
       ]
     },
@@ -1838,7 +1848,9 @@
       ],
       "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
       "features": [
-        "proc-macro"
+        "default",
+        "proc-macro",
+        "span-locations"
       ],
       "dependencies": [
         {
@@ -1899,6 +1911,7 @@
       ],
       "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
       "features": [
+        "default",
         "proc-macro"
       ],
       "dependencies": [
@@ -4130,6 +4143,560 @@
       "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
       "features": [],
       "dependencies": []
+    },
+    {
+      "id": "syn@2.0.119",
+      "name": "syn",
+      "version": "2.0.119",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "runner.e1496a8ab9b1215c",
+      "inputs": [
+        "runner.476ea2795b1f8a10",
+        "runner.f732e4f9541f0f34",
+        "runner.e1496a8ab9b1215c",
+        "runner.9f1b26cf5f5744d0",
+        "runner.cb9709a89a428895",
+        "runner.695a2b3fdfa55d14",
+        "runner.5acf4342fc3a0f7d",
+        "runner.6f46cb59d8e4e0c5",
+        "runner.919e3416e38118b5",
+        "runner.f08e762a342b634c",
+        "runner.2c11ddb34d4fd281",
+        "runner.afc57f42849be8b7",
+        "runner.e0cb00bb8e993d74",
+        "runner.13665ee2dc7c0433",
+        "runner.4da764230823a837",
+        "runner.a0b6b91f430259d8",
+        "runner.d72ac04886b14796",
+        "runner.0ccf28ceb2312308",
+        "runner.90e907689cb4ec62",
+        "runner.0259ddd247348b61",
+        "runner.19640ff61682d21f",
+        "runner.5147eee48eccf20c",
+        "runner.057f6088c826711f",
+        "runner.b9c08e74174714db",
+        "runner.5fa10484d96898b8",
+        "runner.70194cd0da17ec9a",
+        "runner.ee411ec234b286c5",
+        "runner.c10022d1b0d1c582",
+        "runner.2fccd2fb90a410eb",
+        "runner.3ddb9577d2e30223",
+        "runner.ac9e626f25a39e60",
+        "runner.0fca12d02cdcb5e9",
+        "runner.dc3443e1325b39e2",
+        "runner.899386d50293bd37",
+        "runner.55c90928a2259234",
+        "runner.7fe33feb44a25753",
+        "runner.be1abdbfe7cca6b2",
+        "runner.c14acb8ad971b6c5",
+        "runner.40414167e08b10b6",
+        "runner.3ccc8fd39d5625de",
+        "runner.4a36838ea8214277",
+        "runner.c103222cd861cfb6",
+        "runner.1b5389294bcbbfdf",
+        "runner.a1d2d654c11dc318",
+        "runner.7da48ddf3cbc808a",
+        "runner.89d5d58d60f1aa96",
+        "runner.25f38acd5d14a954",
+        "runner.b3e485f48a15fdea",
+        "runner.02ca82142cce5bfb",
+        "runner.9de934dc0aec64d1",
+        "runner.855c28e124de105b",
+        "runner.0cdc684d5370a0e8",
+        "runner.c143975ea915b853",
+        "runner.652508b986c8b26e",
+        "runner.713b7c1303d922aa",
+        "runner.77bbad6d06533646",
+        "runner.64a02a61a776ac9a",
+        "runner.10b61a123a9c6576",
+        "runner.10d7e2afb15a2c0a",
+        "runner.6703db5c8002ae14",
+        "runner.c41a7e5bf703c75f",
+        "runner.5d64e45fafa9a61e",
+        "runner.cd711612850d6833",
+        "runner.f7ae5e80ddb3455e",
+        "runner.c00e4acf4c7db17f",
+        "runner.127ba2b6bda35057",
+        "runner.fb1b2033283c0006",
+        "runner.5c42ff7348d4519f",
+        "runner.52864f862d3bf527",
+        "runner.5aef7c81a267123d",
+        "runner.82bbed53c863f586",
+        "runner.4b6808f9b7bb4f7c",
+        "runner.45e2ccf83af29c2a",
+        "runner.f4423614525331bf",
+        "runner.a448637c9b642356",
+        "runner.81e4a172d7693a36",
+        "runner.4ec30c516a0984e2",
+        "runner.4ee5385f2cafece2",
+        "runner.84faaa69a5aef1e1",
+        "runner.a691a6930237946b",
+        "runner.4ad7193d176ed97a",
+        "runner.dbd2013148ab7986",
+        "runner.e13981b13cb77ce9",
+        "runner.4911c65e0be0b33f",
+        "runner.c3360bc614903e7c",
+        "runner.3cb705c88ac60d63",
+        "runner.ff9a0d69cbbd7d86",
+        "runner.44cbb9156f58015e",
+        "runner.f573e7e35a6969da",
+        "runner.fcc0e4b708ed6eda",
+        "runner.03e7b0a6c2db5871",
+        "runner.54f833bfa4a914ae",
+        "runner.c422e94f01d79b1a",
+        "runner.799a9032a4dae512",
+        "runner.fe6cda2ad29d016a",
+        "runner.eafdb788922dacdb",
+        "runner.41d45e113ce9d43e",
+        "runner.796d23b9609ce2a1",
+        "runner.bb4c654c29eb5710",
+        "runner.68094a23e1f8dd42",
+        "runner.cb17d945325acf6b",
+        "runner.23f47e19d81e30c0",
+        "runner.d4eeb46b7357e368",
+        "runner.ae827a7c34887bfb",
+        "runner.70c7b2f2849d43d5",
+        "runner.5ff9dc69c66d7f54"
+      ],
+      "checksum": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297",
+      "features": [
+        "clone-impls",
+        "default",
+        "derive",
+        "extra-traits",
+        "full",
+        "parsing",
+        "printing",
+        "proc-macro",
+        "visit",
+        "visit-mut"
+      ],
+      "dependencies": [
+        {
+          "package": "proc-macro2@1.0.107",
+          "name": "proc_macro2",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "quote@1.0.47",
+          "name": "quote",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "unicode-ident@1.0.26",
+          "name": "unicode_ident",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synstructure@0.13.2",
+      "name": "synstructure",
+      "version": "0.13.2",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "runner.8ec155b038009a90",
+      "inputs": [
+        "runner.64443ea028acd6d6",
+        "runner.46a631dd04180615",
+        "runner.8ec155b038009a90",
+        "runner.58f807f6c71fa823",
+        "runner.3cc78b9aa86f0917",
+        "runner.37ff81120041cc45",
+        "runner.a50d507fb347b15b",
+        "runner.5c8eb7c327b3660f",
+        "runner.7361e7d8c46618a3"
+      ],
+      "checksum": "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2",
+      "features": [
+        "default",
+        "proc-macro"
+      ],
+      "dependencies": [
+        {
+          "package": "proc-macro2@1.0.107",
+          "name": "proc_macro2",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "quote@1.0.47",
+          "name": "quote",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "syn@2.0.119",
+          "name": "syn",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verus_builtin_macros@0.0.0-2026-04-20-1748",
+      "name": "verus_builtin_macros",
+      "version": "0.0.0-2026-04-20-1748",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "runner.f2301498c3841fee",
+      "inputs": [
+        "runner.b50d4124e8fe0bf1",
+        "runner.c8c20afd796ef8bf",
+        "runner.f2301498c3841fee",
+        "runner.698a7e9eddeca8c8",
+        "runner.fe003f14dc51fbc9",
+        "runner.d9f58680d75b2733",
+        "runner.84f1820e522368cc",
+        "runner.bedb79da85cb8d41",
+        "runner.44e0726b8af72559",
+        "runner.958ae4d70df1ddbf",
+        "runner.9bf904b6347778eb",
+        "runner.e1bea194f56d5fe2",
+        "runner.a384053ec640ca21",
+        "runner.616d041ef5021703",
+        "runner.8ca9edb794912364",
+        "runner.b5da7f58e1ac1f21",
+        "runner.e90523ff6f16fbcd",
+        "runner.86d6f762cfb16314",
+        "runner.813b593d8b2230c1",
+        "runner.dbff8787822a674f",
+        "runner.21ba60a16bdbbbf1",
+        "runner.78319b1ecc51a00a",
+        "runner.ad3b390ef0f2c6b4",
+        "runner.ea552d0bca77f81e",
+        "runner.00a54e050ec398ed",
+        "runner.15bf53e9755c3db6"
+      ],
+      "checksum": "3131a0e0b0dc9272cb574ad1f8506d8e25ba33c9f9972151866c34cad12bb076",
+      "features": [],
+      "dependencies": [
+        {
+          "package": "proc-macro2@1.0.107",
+          "name": "proc_macro2",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "quote@1.0.47",
+          "name": "quote",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "syn@2.0.119",
+          "name": "syn",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "synstructure@0.13.2",
+          "name": "synstructure",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "verus_prettyplease@0.0.0-2026-04-12-0118",
+          "name": "verus_prettyplease",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "verus_syn@0.0.0-2026-04-05-0114",
+          "name": "verus_syn",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verus_prettyplease@0.0.0-2026-04-12-0118",
+      "name": "verus_prettyplease",
+      "version": "0.0.0-2026-04-12-0118",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "runner.8f15c171a74fd5c6",
+      "inputs": [
+        "runner.3502a5851af32d11",
+        "runner.c3f4ac40a83f00f7",
+        "runner.b3326ef5bf43c7c6",
+        "runner.e5911fd796dfc718",
+        "runner.8f15c171a74fd5c6",
+        "runner.7cedfbd79531f3fd",
+        "runner.296dd471b63141df",
+        "runner.7af247a70752ff2d",
+        "runner.2453325f0f529e63",
+        "runner.41aff35d39731a4f",
+        "runner.1a3a9218c0ccf6df",
+        "runner.03b329acfd4be809",
+        "runner.5470af3f09fdb377",
+        "runner.e7ca664f5006de9b",
+        "runner.025d51993fe2dc5b",
+        "runner.bfbbbf5dc57cd47f",
+        "runner.d702f046436316b5",
+        "runner.7e90438c7ac53df7",
+        "runner.124df94c78deecbc",
+        "runner.17d9da6c72b24cde",
+        "runner.532e85d0bff27be8",
+        "runner.50598704bba71199",
+        "runner.42819671129a6a58",
+        "runner.0d944f493c734a78",
+        "runner.502f9590322d28e0",
+        "runner.a25e2dfb509505e7",
+        "runner.0e0328be926574bd",
+        "runner.9b74e4d7744a433c",
+        "runner.fabf81077c779a61",
+        "runner.ca1c0bc39b6232bd",
+        "runner.95388e2e07681a1d",
+        "runner.e7733ef156ab3a4f",
+        "runner.609f093ed43b4875",
+        "runner.b4043de55ba77039",
+        "runner.c9b5152247fc5dbe",
+        "runner.44537286fb84f08e",
+        "runner.2f3a7942b038e298",
+        "runner.5f07eec00f50c3f5",
+        "runner.153422e4d075ba50",
+        "runner.f448fe662cff25e1"
+      ],
+      "checksum": "4b246e61b068e807cb05a030fc1d7efa83d2a0d227eaf67921661419edfe8e83",
+      "features": [],
+      "dependencies": [
+        {
+          "package": "proc-macro2@1.0.107",
+          "name": "proc_macro2",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "verus_syn@0.0.0-2026-04-05-0114",
+          "name": "verus_syn",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verus_syn@0.0.0-2026-04-05-0114",
+      "name": "verus_syn",
+      "version": "0.0.0-2026-04-05-0114",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "runner.de5d715556e2d583",
+      "inputs": [
+        "runner.c9ba4cc8b934c575",
+        "runner.dad7761003ee2567",
+        "runner.de5d715556e2d583",
+        "runner.015e41061fb7f147",
+        "runner.9db2f3d6d31df55a",
+        "runner.9b1896bdd628135f",
+        "runner.b43eb1048724778b",
+        "runner.aa05149e4d35c03d",
+        "runner.9d3566110687edfe",
+        "runner.d2faae2330965793",
+        "runner.e4e41064e91eff27",
+        "runner.73ac0ee73387b758",
+        "runner.8d51092306013d3c",
+        "runner.fa2ef89caff45e4e",
+        "runner.622c40ea7f693e0e",
+        "runner.802542b99e31208c",
+        "runner.1ff43cffd46eefde",
+        "runner.2a2a917fb9fa6773",
+        "runner.997c718cdb733b4b",
+        "runner.6faf31bc93dceb3b",
+        "runner.4534271f9c00bd67",
+        "runner.f42895746eb7070e",
+        "runner.ba04bd29538db3f9",
+        "runner.3dc929504c91027e",
+        "runner.8f4abfe9bc64815d",
+        "runner.dbbb9443794f7cac",
+        "runner.9d85f66d548a34d8",
+        "runner.222319cb11bd9025",
+        "runner.9757eb4385860b12",
+        "runner.937341af4b1f69b5",
+        "runner.744447a7a5103ff8",
+        "runner.151f6b1acd95f72b",
+        "runner.a3b1bc1abacb31b2",
+        "runner.ce1d8714a69cca51",
+        "runner.1303bf2d4ae0fbe9",
+        "runner.0f68217b6dd38063",
+        "runner.0e4fa5df8968192b",
+        "runner.851f3c5fe05c5d7e",
+        "runner.fec018f46f683bae",
+        "runner.f56236206257fd4b",
+        "runner.364769126d44f44a",
+        "runner.ea462c9178d20651",
+        "runner.65e30e95fb4a5a9a",
+        "runner.09b641bf9cf8ecb1",
+        "runner.e4b5d7b928b9ebb6",
+        "runner.c2e7324b0b905d35",
+        "runner.93ee9356537baff3",
+        "runner.edc240fce0a49418",
+        "runner.dc3452faac22f27f",
+        "runner.3a3a8a4a7bcd3463",
+        "runner.74b21f262ef2b03d",
+        "runner.b155cd5ed65e8d6e",
+        "runner.d91ce2b5f1dfeba6",
+        "runner.81f29264e4a903d2",
+        "runner.11f899eb130f03d7",
+        "runner.3bd7eb50fae608ea",
+        "runner.53ecde4f826ff8eb",
+        "runner.68f18bf0d8a28420",
+        "runner.374e3641a52792d2",
+        "runner.6363a292f123b6ae",
+        "runner.f2ed5a1b5cd880e4",
+        "runner.236933644cb22b09",
+        "runner.a1a1e979fb2124ac",
+        "runner.30824af88f6e2117",
+        "runner.3a56306ae4a0002d",
+        "runner.6aabcb29766ec886",
+        "runner.2862b172e073b697",
+        "runner.7e88b30130bb5af8",
+        "runner.7105b86b1e33391c",
+        "runner.f79e1f9f46341a3b",
+        "runner.93e962cc1bd60608",
+        "runner.f02d3bee2a649f63",
+        "runner.995a9dcd7d30f0d2",
+        "runner.d54a86faa2e7ad42",
+        "runner.f638bcf2117e93d6",
+        "runner.4d8e2012f79f39aa",
+        "runner.1f77732aae7d9c87",
+        "runner.e7a0275a921af86b",
+        "runner.595055dfb69fe289",
+        "runner.8365150324608855",
+        "runner.4e4671d24d6d2603",
+        "runner.b3b1bc32e4e58b77",
+        "runner.774ae10ebe458e5c",
+        "runner.256db49f6948a7c1",
+        "runner.d4e9e2d1b3d9c8fc",
+        "runner.ce481156d3e2bae0",
+        "runner.ecf11b9df9a89478",
+        "runner.6d315f6bfa4de464",
+        "runner.7713924516d893e5",
+        "runner.d2b6ca9d385ba41e",
+        "runner.6c4ac63622444493",
+        "runner.7bd8311b778f0ff4",
+        "runner.735965312ca09426",
+        "runner.b2f975ee66fb4f29",
+        "runner.5b4c4a0d12bcbea0",
+        "runner.f023a186815acd2b",
+        "runner.c0fe063611027b79",
+        "runner.b4440c931c7a9a1c",
+        "runner.6d4384f244f88601",
+        "runner.e42bee807155fafc",
+        "runner.c7ed9abbf623458c",
+        "runner.e27b228a0e48b3aa",
+        "runner.f35b741b7e3ab1a8",
+        "runner.05446b4136d9fa0f",
+        "runner.1015b14bf29aaaf8",
+        "runner.70af260106a69e87",
+        "runner.a323be020a6bd9f6",
+        "runner.05c6589761ead790"
+      ],
+      "checksum": "285b554a87b470ee705634ea1cdc92c14ba088a7b8bdacbb9116b32e832fe272",
+      "features": [
+        "clone-impls",
+        "default",
+        "derive",
+        "extra-traits",
+        "full",
+        "parsing",
+        "printing",
+        "proc-macro",
+        "visit",
+        "visit-mut"
+      ],
+      "dependencies": [
+        {
+          "package": "proc-macro2@1.0.107",
+          "name": "proc_macro2",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "quote@1.0.47",
+          "name": "quote",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "unicode-ident@1.0.26",
+          "name": "unicode_ident",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
     }
   ],
   "timeout_seconds": 600,

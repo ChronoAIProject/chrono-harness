@@ -274,13 +274,26 @@ fn native_platform_policy_serves_real_push_and_pr_acquisition() {
         );
         generate(&h.root, SOURCE, false).unwrap();
         h.revise();
-        let (_remote, base) = h.remote();
+        let (remote, base) = h.remote();
         let payload = if event == "push" {
             json!({"before":base,"after":h.candidate,"created":false})
         } else {
-            json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate}}})
+            git(
+                remote.path(),
+                &[
+                    "fetch",
+                    "--no-write-fetch-head",
+                    h.root.to_str().unwrap(),
+                    &h.candidate,
+                ],
+            );
+            let merge = tools::pr_workflow_merge(remote.path(), &base, &h.candidate);
+            json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate},"merge_commit_sha":merge}})
         };
-        let report = prepare(&h.root, &h.config(), event, &payload, &h.candidate).unwrap();
+        let revision = payload["pull_request"]["merge_commit_sha"]
+            .as_str()
+            .unwrap_or(&h.candidate);
+        let report = prepare(&h.root, &h.config(), event, &payload, revision).unwrap();
         assert_eq!(report["base"], base);
         assert_eq!(report["candidate"], h.candidate);
         let facts = &report["git_facts"];
@@ -440,16 +453,17 @@ fn initial_pr_and_configured_baseline_routes_share_the_declared_reader() {
             .iter()
             .any(|p| p["argv"].as_array().unwrap().contains(&json!("ls-remote")))
     );
+    let merge = tools::pr_workflow_merge(&h.root, &base, &h.candidate);
     let pr = prepare(
         &h.root,
         &h.config(),
         "pull_request",
         &json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate}}}),
-        &base,
+        &merge,
     )
     .unwrap();
     assert_eq!(pr["candidate"], h.candidate);
-    assert_eq!(pr["workflow_source_revision"], base);
+    assert_eq!(pr["workflow_source_revision"], merge);
 }
 
 #[test]
