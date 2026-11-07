@@ -961,6 +961,17 @@
             ".chrono-harness/ci/units.json"
           ]
         },
+        "generate_job_gating_example": {
+          "operation": "ci.generate-job-gating-example",
+          "tool": "chrono-ci",
+          "argv": [
+            "generate",
+            "--host-root",
+            "examples/ci-host-job-gating",
+            "--config",
+            ".chrono-harness/ci/units.json"
+          ]
+        },
         "format": {
           "operation": "format.ci",
           "tool": "cargo",

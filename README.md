@@ -20,6 +20,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 | --- | --- |
 | 生成 AI 工作指南和技能文件 | [指南生成](docs/instructions.md) |
 | 生成 CI、准备事件输入 | [CI 使用说明](docs/ci.md) |
+| 提高合并效率、配置默认合并规则 | [宿主默认合并方案](docs/merging.md) |
 | 按单元检查、汇总原始报告 | [CI 单元与汇总](docs/ci-units.md) |
 | 理解如何按变更选择测试 | [文件影响范围](docs/filemap-impact.md)、[执行检查](docs/execution.md) |
 | 同时修改检查规则和产品 | [混合修改警告](docs/mixed.md)、[成本报告](docs/costs.md) |
