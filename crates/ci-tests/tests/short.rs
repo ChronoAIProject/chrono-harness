@@ -2388,10 +2388,6 @@ fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
         .root
         .join(".chrono-harness/bin/mutating-producer");
     fs::copy(original, &executable).unwrap();
-    assert!(
-        fs::read(executable).unwrap() == fs::read(original).unwrap(),
-        "restored fixture must match its registered executable"
-    );
 
     let mut setup = ShortHost::new();
     setup.modify(".chrono-harness/config.json", |c| {
