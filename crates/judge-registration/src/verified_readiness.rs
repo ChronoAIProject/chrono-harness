@@ -47,4 +47,30 @@ pub fn input_ready<T>(
         && (match unresolved { Some(inputs) => inputs.len() == 0, None => false })
 }
 
+pub open spec fn snapshot_bound(
+    schema_present: bool, files: usize, strict_environment: bool, inherited: usize,
+    actual: Option<&str>, expected: &str,
+) -> bool {
+    (schema_present || files > 0 || (strict_environment && inherited > 0))
+        ==> (match actual { Some(text) => text@ == expected@, None => false })
+}
+
+pub fn endpoint_snapshot_matches(
+    schema_present: bool, files: usize, strict_environment: bool, inherited: usize,
+    actual: Option<&str>, expected: &str,
+) -> (matches: bool)
+    ensures matches == snapshot_bound(
+        schema_present, files, strict_environment, inherited, actual, expected,
+    ),
+{
+    if schema_present || files > 0 || (strict_environment && inherited > 0) {
+        match actual {
+            Some(text) => equal_text(text, expected),
+            None => false,
+        }
+    } else {
+        true
+    }
+}
+
 }

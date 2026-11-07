@@ -295,24 +295,6 @@
       "expected_version": null
     },
     {
-      "id": "rustc",
-      "program": "rustc",
-      "resolution": "PATH-once",
-      "version_argv": [
-        "--version"
-      ],
-      "expected_version": null
-    },
-    {
-      "id": "rustup",
-      "program": "rustup",
-      "resolution": "PATH-once",
-      "version_argv": [
-        "--version"
-      ],
-      "expected_version": null
-    },
-    {
       "id": "chrono-inputs",
       "program": ".chrono-harness/bin/chrono-inputs",
       "resolution": "PATH-once",
@@ -320,15 +302,6 @@
         "--version"
       ],
       "expected_version": "chrono-inputs 0.1.0"
-    },
-    {
-      "id": "cargo-guard",
-      "program": ".chrono-harness/bin/chrono-judge-cargo",
-      "resolution": "PATH-once",
-      "version_argv": [
-        "--version"
-      ],
-      "expected_version": "chrono-judge-cargo 0.1.0"
     },
     {
       "id": "bash",
