@@ -11,6 +11,7 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/ci/bootstrap-frontend.json","owner":"host-bootstrap-launcher","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native/src/shared.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native-tests/tests/shared.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/bootstrap-native.sh","owner":"host-bootstrap-launcher","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
