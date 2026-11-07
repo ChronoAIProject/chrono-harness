@@ -214,7 +214,8 @@ Rust 测试另外验证真实消费者，不替代证明。
 
 ## 此批使用的外部接口
 
-本批新增生产逻辑采用下表的具体外部接口，合同来自固定 Verus／vstd；
+本批新增生产逻辑采用下表的具体外部接口。证明内的标准接口合同来自固定 Verus／vstd；
+边界转发采用固定 Rust 1.95.0，以及各使用方 lockfile 绑定的 Serde 接口。
 类型或库名本身不授予其他仓内逻辑豁免。没有新增 `external_body`、`assume` 或证明过滤。
 其余存量证明根和程序使用的外部接口仍须完整清点，不据本表主张全仓覆盖。
 
@@ -231,7 +232,11 @@ Rust 测试另外验证真实消费者，不替代证明。
 | `Option::as_ref`、`Option::map` | 无回执保持 None，有回执仅转发同一原记录的 `process.exit_code`；不在适配器中计算状态或选择退出。 |
 | `serde_json::from_slice::<CompilerReport>` 与该类型的 Serde `Deserialize` 派生 | 从本次调用传入的完整字节解码；必需字段、JSON 类型、整数范围和重复具名字段按固定 Serde 合同校验。未知的 Verus 统计字段忽略；所需字段不设默认值。此处明确采用外部解码合同，不声称本仓证明了 JSON 解析器。 |
 | `serde_json::from_value::<RegisteredAction>`、`from_value::<Option<OutputContract>>` 及对应 Serde 派生 | 一次转换对应输入对象；action／合同拒绝未知字段，合同缺失或 null 对应 None，非空要求由 Verus 判断。现有 owner、ID、工具与 argv 登记校验保留。 |
+| `<serde_json::Value as Clone>::clone`、`<serde_json::Value as Index<&str>>::index` | 复制完整 JSON 值；`output_contract` 键存在时读取该原值，缺失时得到 Null，再交给上述同一次类型化解码，不在边界适配器中构造或筛选合同字段。 |
+| `Result::map_err`、`<serde_json::Error as ToString>::to_string` 及此处 Result 的 `?` 传播 | Ok 保留原解码值，Err 转交外部解析器的完整诊断字符串；`?` 直接返回这个错误。边界不自行解释错误种类或生成准入状态。 |
 | `Result::ok`、`Option::is_some` | 解码 Err 对应 None、Ok 对应同一完整报告；进程 failure 的 Some／None 原样转发，仓内不拼接成功字段。 |
+| `<Option<OutputContract> as Clone>::clone`、`<Option<OutputContract> as PartialEq>::eq` | 克隆保留 None／Some 及其中完整合同；相等要求同为 None，或同为 Some 且内部合同相等。Some 的字段复制及比较直接调用本仓已证明的 `OutputContract` 实现。 |
+| `<(String, String, Vec<String>, Option<OutputContract>) as PartialEq>::eq`、`<String as PartialEq>::eq`、`<Vec<String> as PartialEq>::eq` | 两端操作比较要求 owner、tool、按原顺序及重复保留的 argv、可选输出合同四项全部相等；字符串按完整内容比较，合同按上一行比较。此固定标准库接口未在本仓机械精化，不据它豁免仓内额外选择或状态逻辑。 |
 | `OutputContract` 的 Serde `Serialize` 与各类型的 Debug 派生 | 原 version／commit 字段进入 Method JSON 身份；Debug 仅用于标准诊断。这些外部派生不产生本仓准入状态或成功标记。 |
 
 实际字段借用使用固定 vstd 的 `String::as_str` 合同；协议和模式比较复用已证明的
