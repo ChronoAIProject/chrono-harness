@@ -106,16 +106,6 @@ fn run() -> Result<(), BuildFailure> {
         }
         [command, host, config] if command == "bootstrap" => bootstrap(host, config, false),
         [host, config] => bootstrap(host, config, false),
-        [host, config, mode, reference, digest] if mode == "--owner-stage-validation" => {
-            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
-            let validation =
-                owner::validate_stage(&root, &environment, &native, config, reference, digest)?;
-            println!(
-                "{}",
-                serde_json::to_string(&validation).map_err(|error| error.to_string())?
-            );
-            Ok(())
-        }
         _ => Err("unknown native bootstrap command or arguments".into()),
     }
 }
