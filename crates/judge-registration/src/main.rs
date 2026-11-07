@@ -7,7 +7,9 @@ fn run() -> u8 {
     }
     let initial = args == ["--protocol", chrono_harness::initial::PROTOCOL];
     if !initial && args != ["--protocol", "chrono-judge/v1"] {
-        chrono_harness::log_cli_error(&format!("E_USAGE: --protocol chrono-judge/v1 or chrono-initial-judge/v1"));
+        chrono_harness::log_cli_error(&format!(
+            "E_USAGE: --protocol chrono-judge/v1 or chrono-initial-judge/v1"
+        ));
         eprintln!("E_USAGE: --protocol chrono-judge/v1 or chrono-initial-judge/v1");
         return 2;
     }
@@ -51,5 +53,8 @@ fn run() -> u8 {
 }
 
 fn main() -> std::process::ExitCode {
-    std::process::ExitCode::from(chrono_harness::logged_main("chrono-judge-registration", run))
+    std::process::ExitCode::from(chrono_harness::logged_main(
+        "chrono-judge-registration",
+        run,
+    ))
 }
