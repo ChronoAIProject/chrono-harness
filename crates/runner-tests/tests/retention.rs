@@ -2908,6 +2908,64 @@ fn consumer_release(root: &Path, declaration: &Value, state: &str) -> Value {
     fs::write(root.join("repair-result.json"), &raw).unwrap();
     json!({"operation":"release-consumer","declaration":declaration,"receipt":{"path":"repair-result.json","sha256":chrono_harness::sha256(&raw)},"pointer":"/repair"})
 }
+
+#[test]
+fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
+    if !isolated_capability_test(
+        "preserved_original_release_requires_exact_archive_roles_and_closed_users",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let survivor = tempfile::tempdir().unwrap();
+    let path = ".chrono-harness/state/fixtures/interrupted.json";
+    let raw = b"{\"exit\":101,\"completion\":\"unknown\"}\n";
+    fs::write(h.path().join(path), raw).unwrap();
+    fs::write(survivor.path().join("original.json"), raw).unwrap();
+    let role = format!("recovery:{path}");
+    let publication = inventory(h.path())
+        .begin_rooted("fixture", path, json!({"completion":"unknown"}), &[role.clone()])
+        .unwrap();
+    let id = publication.id().to_owned();
+    let declaration = json!({
+        "operation":"release-preserved",
+        "original":original_identity(h.path(), &id, path),
+        "roles":[role],
+        "survivor_root":survivor.path(),
+        "survivor_path":"original.json",
+        "sha256":chrono_harness::sha256(raw),
+        "length":raw.len(),
+        "current_consumers_released":true,
+        "reason":"The responsible caller joined the interrupted producer and preserves its exact unknown result outside the retired checkout"
+    });
+    let live = consumer_call(h.path(), declaration.clone());
+    assert_eq!(live.exit_code, 2, "{}", live.stdout);
+    drop(publication);
+    let before = ledger(h.path());
+    for field in ["sha256", "roles", "current_consumers_released", "survivor_path"] {
+        let mut rejected = declaration.clone();
+        rejected[field] = match field {
+            "sha256" => json!("0".repeat(64)),
+            "roles" => json!([]),
+            "current_consumers_released" => json!(false),
+            _ => json!("missing.json"),
+        };
+        assert_eq!(consumer_call(h.path(), rejected).exit_code, 2);
+        assert_eq!(ledger(h.path())["outputs"], before["outputs"]);
+        assert_eq!(ledger(h.path())["roots"], before["roots"]);
+    }
+    let result = consumer_call(h.path(), declaration.clone());
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    let output = &ledger(h.path())["outputs"][0];
+    assert_eq!(output["outcome"], json!({"completion":"unknown"}));
+    assert_eq!(output["phase"], "publishing");
+    assert_eq!(output["expires"], before["outputs"][0]["expires"]);
+    assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
+    assert_eq!(consumer_call(h.path(), declaration.clone()).exit_code, 0);
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+    assert_eq!(fs::read(survivor.path().join("original.json")).unwrap(), raw);
+    assert_eq!(consumer_call(h.path(), declaration).exit_code, 0);
+}
 #[test]
 fn declared_consumer_cli_protects_existing_original_and_requires_real_release() {
     if !isolated_capability_test(
