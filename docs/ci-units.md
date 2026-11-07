@@ -227,6 +227,8 @@ full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语�
 
 这样去掉重复迁移逻辑，以及普通生成时额外渲染／读取旧拓扑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。旧 ci-host 和已发布 Go／TS／mix provider 在公开二进制可用、调用方明确迁移前保留历史形式。
 
+本仓通过 projects.json 的 `ci.generate-job-gating-example` 操作维护该示例的生成工作流，委托同一 Rust 生成器；执行时沿用登记的 `chrono-worktree use` 保护。
+
 ## 分配与执行
 
 保留原 scoped 字段，设 `schema: chrono-ci-check/v3`，增加明确政策：
