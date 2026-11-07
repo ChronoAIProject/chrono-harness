@@ -1521,6 +1521,12 @@ fn seed_before(a: &policy::Seed, b: &policy::Seed)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn seed_id_lookup_uses_only_complete_ids_and_preserves_all_borrowed_fields() {
+    proof {
+        reveal_strlit(""); reveal_strlit("root\0尾"); reveal_strlit("根é"); reveal_strlit("last");
+        reveal_strlit("missing"); reveal_strlit("root"); reveal_strlit("root\0");
+        reveal_strlit("root\0尾x"); reveal_strlit("LAST"); reveal_strlit("根e\u{301}");
+        reveal_strlit("第三节点"); reveal_strlit("第二引用"); reveal_strlit("末原因");
+    }
     let empty: Vec<policy::Seed> = vec![];
     let missing = policy::seed_by_id(&empty, "");
     assert(missing.is_none());
