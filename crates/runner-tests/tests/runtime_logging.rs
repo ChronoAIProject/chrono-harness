@@ -23,7 +23,9 @@ fn actual_cli_records_success_failure_and_rotates_without_stdout_changes() {
     let fixture = tempfile::tempdir().unwrap();
     let root = fs::canonicalize(fixture.path()).unwrap();
     policy(&root, 1024);
-    for arg in ["--version", "unknown-command", "--version", "--version"] {
+    // Check the diagnostic while it is in the retained window, after enough normal
+    // invocations to exercise rotation. Old records may correctly have expired.
+    for arg in ["--version", "--version", "--version", "unknown-command"] {
         let expected = chrono_harness::dispatch(&[arg]);
         let actual = Command::new(binary())
             .arg(arg)

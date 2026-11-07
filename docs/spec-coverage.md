@@ -6,10 +6,6 @@
 
 本地／CI 须用同一登记命令。普遍同判还要求完整有效输入相同、求值确定。当前输入生产者仍报 completeness_proven:false，报告保留 parity 未建立，不另阻断普通完整检查。独立比较器和固定 spec-status 已退役，因为没有当前成功生产者或实际宿主状态观察；报告匹配不证明输入完整或普遍确定性。
 
-## 运行日志与滚动清理（本次候选）
-
-SPEC §7.1 新增文件运行日志和按大小、份数自动轮换。候选复用 diagnostics 的 JSONL／tracing 层，接入 runner、worktree、CI、cache、inputs、distribution 及 Rust 判官入口；主宿主配置为每份 10 MiB、共 5 份。CI 原 stderr 和报告原件保留机制继续独立。新增 Rust 行为回归已登记，实际检查结果待执行；这里不手填通过，也不声称原生 CI、落地、Python／独立 instructions 或完整异常链迁移已完成。
-
 ## 测试来源
 
 下文保留代码里的名称，方便查找实现。`full` 是完整治理检查，`scoped` 是限定范围的检查，`initial` 用于没有基线的首次检查；三者的证据不能互相替代。fixture 是测试用的临时宿主或输入材料，guard 是执行前后核验输入的保护程序。所谓“输入闭合”，指所有适用输入及其依赖都已明确登记、绑定并验证。
@@ -43,7 +39,7 @@ SPEC §7.1 新增文件运行日志和按大小、份数自动轮换。候选复
 | 5.2 从消费者需要出发重构依赖 | 部分 | 已有 DELTA 合并／传递／所有者检查。无独立结构报告或自检，未用 SCC／深度／排名／claim 摘要已退役，循环、类型边、有限见证保留 | 真实消费者重构、适用本地／原生验证及核实落地 |
 | 6 演进与移除 | 部分 | W 实际替换、共同退役、别名修复、候选迁移认证；registration workflow v3 明确选端点版本。自含 fixture 用当前 decoder 确认真实登记数据转换 | 当前 schema 演进消费者验收，只在真实需要处转换数据，完整启用 |
 | 7 协议 | 已实现，有限普通双提交 v1 及明确初始 profile；部分同源 Verus 证明 | runner wire.rs／full.rs／initial.rs、共享进程引擎；verified_identifiers.rs 证明实际摘要文本的完整 64 位小写十六进制格式，包含全零及非法字节边界；协议四态身份／顺序／克隆／退出码、实际 finding 克隆及 finding／状态一致性由 verified_status.rs 证明，独立根核完整比较与存在组合。独立完整 DAG 执行自检，含启动前错误、进程环境、输出回执、伪传输失败、身份／证据变异。R 传输／故障注入，G 真实根消费者 | 外层响应身份、finding 格式／引用、JSON／证据 IO 与完整协议仍待证明；bootstrap 来源及启用。初始清单不声称 DELTA 绿；平台仅已测 Unix。自检核一致性，不证明判官语义完整或全部运行错误可发现 |
-| 7.1 标准日志 | 部分：独立 Rust 库、无效参数入口、runner 分发后发布 | diagnostics JSONL／tracing，专属目的／上下文测试。所有 CliOutput 消费者独立尝试写／flush 两通道，含用法错误；失败尝试一条正确分行 stderr 事件并保留 logging／finish 失败。直接用例和真实二进制回归含只读 stdout 的成功 help，健康字节／状态和原协议／进程通道保留 | 全生产者、非 Rust 适配、登记格式／目的、子进程上下文、统一应急／持久证据发布；目的失败不宣称持久保留。候选标准／原生验收另验 |
+| 7.1 标准日志 | 部分：Rust JSONL、运行入口和有界滚动日志 | diagnostics 的 Logger／runtime／RollingFile；本仓 logging.json 采用 10 MiB／份、共 5 份。runner、worktree、CI、cache、inputs、distribution 和 Rust 判官入口记录开始、返回及现有诊断文本；CI 阶段记录同时进入滚动文件和原 stderr。20 项诊断库测试及 4 项真实 CLI 回归覆盖大小／份数／重启／四进程并发、原始通道／错误链、非法配置和失败输出；细节归[诊断说明](diagnostics.md) | 独立 instructions、Python／非 Rust 和其他全部生产者接入，完整领域异常链、子进程上下文及持久证据发布仍缺；本地标准检查和原生 CI／落地分别验收，目的失败不宣称已持久保存 |
 | 7.2 异常链与通用处理 | 部分：原生 IO、真实 judge 启动前／报告有类型传播 | diagnostics::error 包装／导入 chrono-error/v1；NativeIoError 保留原种类／消息／OS 码，LogFailure 共用 IO 模块。Unix 原生 writer 保留只读描述符 EBADF；发布错误保留通道／阶段／原业务、独立次要输出／诊断失败。专属原生／无原生／部分／flush 测试。完整 judge 以 chrono-runner-transport-failure/v1 保留准备原因／码、封存请求／judge／operation，区分未启动，保留子原件，晚期报告发布失败关联原原因。真实 IO、协议／schema／上下文变异、次要发布回归，见[诊断边界](diagnostics.md) | `72b1d08`／`c515cd05` Darwin 原流有 166 通过、1 已有忽略及具名 prelaunch。Linux、其他产品原生适配／类型传播、非 Unix 输出、任意自定义原因序列化、协议采用、持久引用、其他次要失败发布仍缺；完整输入／启用／SPEC 未完成 |
 | 7.3 自我检测 | 部分 | 原接收器描述符耗尽回归保留 spawn 原错／共享观察；后端缺失／歧义／格式／失败回归不造可用性。资源比较消费登记实测，恢复保留失败／未确认 outcome、逐项清理和原报告。真实文件系统／CLI 回归；最终传输拒绝恢复观察缺失／变化，保留两快照 | 全生产者、原生后端及历史超时根因；有限故障测试不证明普遍检测 |
 | 7.4 完成归属与等待 | 部分：原生引擎及生命周期等待 | runner 用一个已有内核退出观察器／私有通知。静默期间阻塞到真实事件或原期限，取消／释放／关闭提示沿原 socket；mapping v5 拒绝不兼容嵌套观察器。独立原生计数及原退出／期限／输出／launcher 中断／描述符预算回归 | 外部宿主／调用方通道选择、句柄、丢通道后不重复启动的恢复尚未实现；不控制其他任务，原生 Linux 待验 |
