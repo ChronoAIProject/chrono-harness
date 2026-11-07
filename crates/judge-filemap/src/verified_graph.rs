@@ -3235,6 +3235,81 @@ impl Clone for CauseSet {
     }
 }
 
+/// 完整的有类型边身份；重复槽位只贡献同一个 map 键。
+pub open spec fn outgoing_members(edges: Seq<&Edge>) -> Set<Edge> {
+    edges.map_values(|edge: &Edge| *edge).to_set()
+}
+
+pub open spec fn edge_causes(rows: Map<Edge, CauseSet>, edge: Edge) -> Set<Seq<u8>> {
+    if rows.contains_key(edge) { rows[edge].keys().to_set() } else { Set::empty() }
+}
+
+/// 真实遍历状态更新：只为提供的完整边键增加本次起点 ID。
+pub fn merge_traversed_causes(
+    rows: &mut BTreeMap<Edge, CauseSet>, outgoing: &[&Edge], cause: &str,
+)
+    ensures rows@.dom() == old(rows)@.dom() + outgoing_members(outgoing@),
+        forall|edge: Edge| #[trigger] edge_causes(rows@, edge)
+            == edge_causes(old(rows)@, edge) + if outgoing_members(outgoing@).contains(edge) {
+                Set::empty().insert(cause.spec_bytes())
+            } else { Set::empty() },
+        forall|edge: Edge| old(rows)@.contains_key(edge)
+            && !outgoing_members(outgoing@).contains(edge)
+            ==> rows@[edge].view() == old(rows)@[edge].view(),
+{
+    proof { edge_obeys_cmp(); }
+    broadcast use vstd::std_specs::btree::axiom_maps_deref_key_to_value;
+    broadcast use vstd::std_specs::btree::axiom_contains_deref_key;
+    broadcast use vstd::std_specs::btree::axiom_deref_key_removed;
+    let ghost before = rows@;
+    let mut at: usize = 0;
+    while at < outgoing.len()
+        invariant at <= outgoing.len(), vstd::laws_cmp::obeys_cmp::<Edge>(),
+            rows@.dom() == before.dom() + outgoing_members(outgoing@.take(at as int)),
+            forall|edge: Edge| #[trigger] edge_causes(rows@, edge)
+                == edge_causes(before, edge) + if outgoing_members(outgoing@.take(at as int)).contains(edge) {
+                    Set::empty().insert(cause.spec_bytes())
+                } else { Set::empty() },
+            forall|edge: Edge| before.contains_key(edge)
+                && !outgoing_members(outgoing@.take(at as int)).contains(edge)
+                ==> rows@[edge].view() == before[edge].view(),
+        decreases outgoing.len() - at,
+    {
+        let edge = outgoing[at];
+        let ghost previous = rows@;
+        let mut causes = match rows.remove(edge) {
+            Some(causes) => causes,
+            None => CauseSet::default(),
+        };
+        assert(causes.keys().to_set() == edge_causes(previous, *edge));
+        causes.insert(cause);
+        rows.insert(edge.clone(), causes);
+        proof {
+            let prefix = outgoing@.take(at as int);
+            assert(outgoing@.take(at as int + 1) =~= prefix.push(edge));
+            assert(prefix.push(edge).map_values(|e: &Edge| *e)
+                =~= prefix.map_values(|e: &Edge| *e).push(*edge));
+            prefix.map_values(|e: &Edge| *e).lemma_push_to_set_commute(*edge);
+            assert(outgoing_members(outgoing@.take(at as int + 1))
+                =~= outgoing_members(prefix).insert(*edge));
+            assert(rows@.dom() =~= before.dom() + outgoing_members(outgoing@.take(at as int + 1)));
+            assert forall|key: Edge| #[trigger] edge_causes(rows@, key)
+                == edge_causes(before, key) + if outgoing_members(outgoing@.take(at as int + 1)).contains(key) {
+                    Set::empty().insert(cause.spec_bytes())
+                } else { Set::empty() } by {
+                if key == *edge {
+                    assert(edge_causes(rows@, key) == edge_causes(previous, key).insert(cause.spec_bytes()));
+                } else {
+                    assert(rows@.contains_key(key) == previous.contains_key(key));
+                    assert(previous.contains_key(key) ==> rows@[key] == previous[key]);
+                }
+            }
+        }
+        at += 1;
+    }
+    assert(outgoing@.take(at as int) =~= outgoing@);
+}
+
 /// 实际遍历记录；编码和诊断继续使用原外部派生接口。
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 pub struct TraversedEdge {

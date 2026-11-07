@@ -216,12 +216,9 @@ pub fn closure(edges: &[UnionEdge], seeds: &[Seed]) -> Closure {
                 .entry(row.node.to_owned())
                 .or_default()
                 .insert(seed.id.as_str());
-            for edge in row.outgoing {
-                traversed
-                    .entry((*edge).clone())
-                    .or_default()
-                    .insert(seed.id.as_str());
-            }
+            crate::verified_graph::merge_traversed_causes(
+                &mut traversed, row.outgoing, seed.id.as_str(),
+            );
         }
         out.predecessors
             .insert(seed.id.clone(), propagation.predecessors);
