@@ -34,7 +34,7 @@
 | 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入；有限配对、routes、迁移、快照、v5 工具链清单已实现 |
 | 4 固定快照／上下文／CI | 部分 | runner facts.rs、registration lib.rs；G `context_and_config_identity_mismatch`、`ignored_untracked_staged_and_wrong_checkout_fail` | config v3 已为完整／初始消费者、明确 scoped v2、当前 provider v4 事件读取／fetch 绑定 Git，见 git-facts.md。完整原生 CI／同判及 Git／委托／Cargo／SDK 输入仍缺 |
 | 4.2 CI 缓存及增量构建 | 部分：两项采用编译缓存已有键、生产／内容绑定及有限原生冷／保存、兼容源码重建、健康精确命中、不兼容环境分域／重建 | 独立 Rust chrono-cache plan 消费明确消费者／输入／产物，分开源码／兼容键；JSON pointer 只绑定所选值，整文件来源在键外，回归区分单元 metadata／构建参数。v2 探测前解析消费操作引用，只改消费者不改生产键。引用原输出登记，拒绝重叠或缓存证据／源码。Rust 失效、选择、缺失、路径、真实 CLI 环境、planner 不符回归；check.unit_cache 两项绑定真实 action／Cargo，消费命中前核 producer manifest。真实 Cargo 重建／恢复仍属本地证据，见[缓存合同](ci-cache.md)。bootstrap／check／release 明确增量，发布汇总核值。provider 为 main 消费者生成固定 restore／save，保存先保持未确认；可选 GitHub 查询保留原有限进程，区分 key／ref 可用性与创建来源，失败／歧义不确认，无待确认保存不查。声明启动缓存可在后续失败后保存，每键至多一保存 job，冲突在生成前拒绝。[有限原生验收](ci-cache.md#bounded-native-acceptance)保留两项原标准操作／汇总 | C1 部分观察坏内容恢复／重建／替换，rustup 漂移及最新 collection HTTP 502 后，原范围修复后健康精确命中仍缺。Variables／PR 正文控制和专用 fixture 已退役。并发、完整后端生命周期、依赖／当前判官／bootstrap／逐项目输入仍缺，须扩大真实消费者验收 |
-| 5 DELTA 图 | 部分 | filemap 类型化合并／记录／传递及 CI 适配；F 全部，P actual_runner_registration_filemap_*。SPEC §5.1 固定两态局部性及定理 6 有条件节点集结论（trureturing PR #10868 已合），复用冻结 ConsequenceClosure，保留先前精确应用编译和旧 execution-edge 反例 | 同源 Verus 图内核覆盖类型并集、名称／槽位索引、FIFO 最短前驱、有限原因链、行投影、原因集合、逐 seed 迭代状态／根对应及真实遍历记录选测；返回集合沿用明确列出的外部标准库转换。外层原因关联与合并、seed-ID 映射、JSON 适配、额外选测和完整 SPEC 对应仍待证明；完整宿主输入及原生启用未完成 |
+| 5 DELTA 图 | 部分 | filemap 类型化合并／记录／传递及 CI 适配；F 全部，P actual_runner_registration_filemap_*。SPEC §5.1 固定两态局部性及定理 6 有条件节点集结论（trureturing PR #10868 已合），复用冻结 ConsequenceClosure，保留先前精确应用编译和旧 execution-edge 反例 | 同源 Verus 图内核覆盖类型并集、名称／槽位索引、FIFO 最短前驱、有限原因链、行投影、原因集合、逐 seed 迭代状态／根对应及真实遍历记录选测；两处诊断按完整 seed ID 查找首个原记录也由同源根证明。返回集合沿用明确列出的外部标准库转换。外层原因关联与合并、seed-ID 生产及关联完整性、JSON 适配、额外选测和完整 SPEC 对应仍待证明；完整宿主输入及原生启用未完成 |
 | 5.2 从消费者需要出发重构依赖 | 部分 | 已有 DELTA 合并／传递／所有者检查。无独立结构报告或自检，未用 SCC／深度／排名／claim 摘要已退役，循环、类型边、有限见证保留 | 真实消费者重构、适用本地／原生验证及核实落地 |
 | 6 演进与移除 | 部分 | W 实际替换、共同退役、别名修复、候选迁移认证；registration workflow v3 明确选端点版本。自含 fixture 用当前 decoder 确认真实登记数据转换 | 当前 schema 演进消费者验收，只在真实需要处转换数据，完整启用 |
 | 7 协议 | 已实现，有限普通双提交 v1 及明确初始 profile；部分同源 Verus 证明 | runner wire.rs／full.rs／initial.rs、共享进程引擎；verified_identifiers.rs 证明实际摘要文本的完整 64 位小写十六进制格式，包含全零及非法字节边界；协议四态身份／顺序／克隆／退出码、实际 finding 克隆及 finding／状态一致性由 verified_status.rs 证明，独立根核完整比较与存在组合。独立完整 DAG 执行自检，含启动前错误、进程环境、输出回执、伪传输失败、身份／证据变异。R 传输／故障注入，G 真实根消费者 | 外层响应身份、finding 格式／引用、JSON／证据 IO 与完整协议仍待证明；bootstrap 来源及启用。初始清单不声称 DELTA 绿；平台仅已测 Unix。自检核一致性，不证明判官语义完整或全部运行错误可发现 |
@@ -408,6 +408,12 @@ PR #221 落地为 `3b605cf80aa9e96a6442b2e54991602713acca31`，树与受验候�
 
 ## runner 的 Verus 分批迁移
 
+registration 的实际八种 `NodeKind` 以及其复制／相等已迁入同源 Verus。
+FILEMAP 原边类型准入直接消费该类型；独立40行表覆盖320种边／起点／终点组合，
+节点独立根覆盖64对相等／不等与克隆。生产／独立证明已登记为真实 registration／filemap
+计划的必需前置；此处列明实现范围，尚不声明本候选已执行通过或交付。
+JSON 节点提取、外层原因关联／合并、seed-ID 映射及完整图与 SPEC 对应仍未完成。
+
 普通与初始库存请求的头部判断已由同源 Verus 实现：协议与模式精确匹配，judge ID 非空。
 生产调用方传递实际字段和各自协议／模式，独立根核交叉组合、空值、大小写、后缀、
 Unicode／NUL／换行及任意非空名称。复用现有标识符证明操作；封存、JSON／摘要和外层组合仍待证明。
@@ -429,7 +435,7 @@ Unicode／NUL／换行及任意非空名称。复用现有标识符证明操作�
 本地执行及离线 collection 共用同源 Verus 判断，合同变化进入两端操作比较和计划／Method 身份。
 要求同一原进程退出 0、无进程失败，版本／commit 精确匹配，完整 crate、非零 verified、零 errors 及两类错误标记为假；
 额外／过滤参数、link／dep-info 路径不符、缺失或错型报告均拒绝。独立边界直接使用 Verus。
-兼容读取器已通过正式 bootstrap 部署到本次独立协调宿主，候选已逐项采用十八项操作合同及两项新根，仍须完成最终候选正式检查和原生验收。
+兼容读取器已通过正式 bootstrap 部署到本次独立协调宿主，候选已逐项采用证明操作合同及报告准入两根；正式检查和原生验收仍按各候选实际结果判定。
 Serde 类型化解码是逐项列明的外部接口假设；源码／dep-info 原件绑定、完整输入、完整 SPEC 和新增逻辑覆盖门仍未完成。
 
 FILEMAP 的实际边原因归并已改为同源 Verus：键集合为原键与实际出边的并集，
