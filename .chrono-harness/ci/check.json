@@ -235,6 +235,8 @@
       }
     },
     "shared_operations": {
+      "verify.runner-status": ["judge-cost", "judge-filemap", "judge-mixed", "judge-projects", "judge-registration", "judge-routes", "judge-workflow", "judge-workflow-short", "judge-workflow-units", "runner"],
+      "verify.runner-status-tests": ["judge-cost", "judge-filemap", "judge-mixed", "judge-projects", "judge-registration", "judge-routes", "judge-workflow", "judge-workflow-short", "judge-workflow-units", "runner"],
       "verify.runner-limits": [
         "judge-registration",
         "judge-routes",

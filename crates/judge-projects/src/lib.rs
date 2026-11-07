@@ -1682,16 +1682,18 @@ pub fn judge(req: &Request) -> Response {
     match result {
         Ok(()) => {}
         Err(message) => {
-            if response.status != Status::Error {
-                response.status = Status::Fail;
-            }
-            response.findings.push(Finding {
-                code: message.split(':').next().unwrap_or("E_PROJECTS").into(),
-                level: "error".into(),
-                message,
-                delta_refs: vec!["/request".into()],
-                causes: vec![],
-            });
+            wire::append_finding(
+                &mut response.status,
+                &mut response.findings,
+                Status::Fail,
+                Finding {
+                    code: message.split(':').next().unwrap_or("E_PROJECTS").into(),
+                    level: "error".into(),
+                    message,
+                    delta_refs: vec!["/request".into()],
+                    causes: vec![],
+                },
+            );
         }
     }
     response
@@ -1738,9 +1740,11 @@ fn evaluate(req: &Request, response: &mut Response, reader: &facts::Reader) -> R
             &inputs,
         )?;
         if !completion.warnings.is_empty() {
-            response.status = Status::Warn;
             for source in &completion.warnings {
-                response.findings.push(
+                wire::append_finding(
+                    &mut response.status,
+                    &mut response.findings,
+                    Status::Warn,
                     serde_json::from_value(source["finding"].clone()).map_err(|e| e.to_string())?,
                 );
             }
