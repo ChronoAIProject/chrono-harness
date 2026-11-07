@@ -11,6 +11,14 @@ verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn request_header_profiles_and_empty_judge() {
+    proof {
+        reveal_strlit("chrono-judge/v1");
+        reveal_strlit("chrono-initial-judge/v1");
+        reveal_strlit("evaluate");
+        reveal_strlit("inventory");
+        reveal_strlit("judge");
+        reveal_strlit("");
+    }
     let evaluation = policy::valid_request_header(
         "chrono-judge/v1", "evaluate", "judge", "chrono-judge/v1", "evaluate",
     );
@@ -41,6 +49,17 @@ fn request_header_profiles_and_empty_judge() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn request_header_preserves_full_text_and_nonempty_name_contract() {
+    proof {
+        reveal_strlit("chrono-judge/v1");
+        reveal_strlit("evaluate");
+        reveal_strlit("判官/\0\n");
+        reveal_strlit("chrono-judge/v1\0");
+        reveal_strlit("evaluate\n");
+        reveal_strlit("Evaluate");
+        reveal_strlit("chrono-initial-judge/v10");
+        reveal_strlit("chrono-initial-judge/v1");
+        reveal_strlit("inventory");
+    }
     let unicode_judge = policy::valid_request_header(
         "chrono-judge/v1", "evaluate", "判官/\0\n", "chrono-judge/v1", "evaluate",
     );
