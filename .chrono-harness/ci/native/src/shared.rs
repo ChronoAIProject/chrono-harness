@@ -1,6 +1,6 @@
 //! 本宿主共享启动产物；安装前校验全部原件，SDK 和工具不从产物中执行。
 use crate::{
-    bindings::{Environment, NativePlatform},
+    bindings::{self, Environment, NativePlatform},
     construction::{BuildFailure, Report},
     environment,
     original::Producer,
@@ -8,7 +8,7 @@ use crate::{
     source::{self, SourceObservation},
     verified_bindings::{self as policy, Executable},
 };
-use chrono_harness::{decode, sha256};
+use chrono_harness::{decode, resolve_program, sha256};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -275,20 +275,52 @@ impl Shared {
         Ok(())
     }
 
+    fn build_profile(
+        &self,
+        root: &Path,
+        name: &str,
+        config: &str,
+        environment: &Environment,
+    ) -> Result<(), BuildFailure> {
+        let profile = &self.profiles[name].producer.profile;
+        let tool = &profile.entrypoint.tool;
+        let selected = profile.tools.get(tool).unwrap_or(tool);
+        let search = environment
+            .get(std::ffi::OsStr::new("PATH"))
+            .map(|value| value.to_str().ok_or("non UTF-8 PATH"))
+            .transpose()?;
+        let program = resolve_program(root, selected, search)?;
+        let script = profile::path(root, &profile.entrypoint.script, b".chrono-harness/ci/")?;
+        let status = bindings::command(root, &program, &[], environment)?
+            .arg(script)
+            .arg(root)
+            .arg(config)
+            .status()
+            .map_err(|error| error.to_string())?;
+        use std::os::unix::process::ExitStatusExt;
+        let exit = policy::process_exit(status.code(), status.signal());
+        if !policy::all_successful(&vec![exit.unwrap_or(-1)]) {
+            return Err(BuildFailure {
+                message: format!("startup producer {name} failed: {status}"),
+                exit_code: exit,
+            });
+        }
+        Ok(())
+    }
+
     pub fn produce(
         &self,
         root: &Path,
         environment: &Environment,
         native: &NativePlatform,
-        mut build: impl FnMut(&str) -> Result<(), BuildFailure>,
     ) -> Result<(), BuildFailure> {
         let observed = source(root, environment)?;
         if self.transfer.exists() {
             return Err("startup transfer already exists".into());
         }
-        for entry in self.registration.profiles.values() {
+        for (name, entry) in &self.registration.profiles {
             if entry.build {
-                build(&entry.config)?;
+                self.build_profile(root, name, &entry.config, environment)?;
             }
         }
         if !policy::observation_matches(&observed, &source(root, environment)?) {

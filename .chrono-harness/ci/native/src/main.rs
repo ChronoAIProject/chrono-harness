@@ -91,12 +91,7 @@ fn run() -> Result<(), BuildFailure> {
     match arguments.as_slice() {
         [host, config, command] if command == "produce" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
-            shared::Shared::read(&root, config, &native)?.produce(
-                &root,
-                &environment,
-                &native,
-                |profile| bootstrap(host, profile, false),
-            )
+            shared::Shared::read(&root, config, &native)?.produce(&root, &environment, &native)
         }
         [host, config, command, selected] if command == "install" || command == "verify" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
