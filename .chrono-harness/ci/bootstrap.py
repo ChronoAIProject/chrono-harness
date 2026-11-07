@@ -252,10 +252,10 @@ def binding_declarations(root, config, read_input=None):
 
 
 def registration_paths(config_path, config):
-    paths = [config_path, config["projects"], ".chrono-harness/ci/bootstrap.py"]
+    paths = [config_path, config["projects"], config["entrypoint"]["script"]]
     if "tool_bindings_registry" in config:
         paths.append(config["tool_bindings_registry"])
-    if "owner_upgrade" in config or "owner_stage" in config:
+    if config["entrypoint"]["script"] == ".chrono-harness/ci/bootstrap.py" and ("owner_upgrade" in config or "owner_stage" in config):
         paths.extend([".chrono-harness/ci/bootstrap_owner.py", ".chrono-harness/ci/bootstrap_shared.py"])
     if "owner_upgrade" in config:
         paths.append(config["owner_upgrade"])

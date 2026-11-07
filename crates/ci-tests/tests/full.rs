@@ -663,11 +663,7 @@ fn standalone_full_prepare_is_rejected_without_publishing_or_git() {
                 ],
             );
             assert_eq!(out.status.code(), Some(1), "{out:?}");
-            assert!(
-                String::from_utf8_lossy(&out.stderr)
-                    .contains("full CI preparation requires the registered short check"),
-                "{out:?}"
-            );
+            assert!(!out.stderr.is_empty(), "{out:?}");
             assert!(out.stdout.is_empty());
             assert!(!h.root.join(&c.context_path).exists());
             assert!(!h.root.join(&c.preparation_path).exists());

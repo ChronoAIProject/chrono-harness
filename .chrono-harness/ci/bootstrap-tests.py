@@ -309,6 +309,7 @@ class Bootstrap(unittest.TestCase):
         shutil.copyfile(SOURCE / "fixtures/bootstrap-operation.py", self.root / OPERATION)
         self.config = {
             "schema": "chrono-bootstrap/v1", "projects": ".chrono-harness/projects.json",
+            "entrypoint": {"tool": "python", "script": ".chrono-harness/ci/bootstrap.py"},
             "rust_toolchain": "1.95.0", "tools": {"python": sys.executable},
             "operations": ["make.tool"],
             "install": [{"source": "built-tool", "destination": ".chrono-harness/bin/tool"}],

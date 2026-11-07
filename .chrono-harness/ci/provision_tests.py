@@ -93,6 +93,7 @@ class IsolatedProvision(unittest.TestCase):
         ci = self.root / ".chrono-harness/ci"
         ci.mkdir(parents=True)
         config = dict(self.config, schema="chrono-bootstrap/v1", projects=".chrono-harness/projects.json",
+                      entrypoint={"tool": "python3", "script": ".chrono-harness/ci/bootstrap.py"},
                       tools={"python3": sys.executable}, operations=["fixture.after-install"],
                       install=[{"source": ".chrono-harness/ci/bootstrap.py",
                                 "destination": ".chrono-harness/bin/fixture"}])

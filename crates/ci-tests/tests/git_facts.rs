@@ -61,7 +61,6 @@ struct Host {
     root: PathBuf,
     trace: PathBuf,
     program: PathBuf,
-    shadow: PathBuf,
     candidate: String,
 }
 impl Host {
@@ -83,9 +82,6 @@ impl Host {
         assert!(version.status.success());
         let helper = env!("CARGO_BIN_EXE_chrono-ci-test-git");
         fs::copy(helper, &program).unwrap();
-        let shadow = external.join("ambient-bin");
-        fs::create_dir(&shadow).unwrap();
-        fs::copy(helper, shadow.join("git")).unwrap();
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut source = read(&repo, ".chrono-harness/ci/units.json")["collection"].clone();
         source["schema"] = "chrono-github-ci/v4".into();
@@ -112,7 +108,6 @@ impl Host {
             root,
             trace,
             program,
-            shadow,
             candidate,
         }
     }
@@ -204,10 +199,13 @@ fn event_binding_is_versioned_explicit_and_generation_preserves_customization() 
 }
 
 #[test]
-fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
+fn bound_event_preparation_ignores_ambient_git_and_retains_original_processes() {
+    if isolated_event_test() {
+        return;
+    }
     let h = Host::new("pass");
     let payload = json!({"before":h.candidate,"after":h.candidate,"created":false});
-    let report = prepare_cli(&h, "push", &payload);
+    let report = prepare(&h.root, &h.config(), "push", &payload, &h.candidate).unwrap();
     let facts = &report["git_facts"];
     assert_eq!(facts["binding"]["path"], json!(h.program));
     assert_eq!(facts["input_closure_complete"], false);
@@ -228,44 +226,41 @@ fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
     );
 }
 
-fn prepare_cli(h: &Host, event: &str, payload: &Value) -> Value {
-    write(&h.root, ".chrono-harness/state/payload.json", &payload);
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
-    let out = Command::new(binary)
+// Re-execute the real test so API calls observe an isolated ambient environment
+// without changing the environment of concurrently running tests.
+fn isolated_event_test() -> bool {
+    let name = std::thread::current().name().unwrap().to_owned();
+    if std::env::var("CHRONO_EVENT_TEST_CHILD").as_deref() == Ok(name.as_str()) {
+        return false;
+    }
+    let shadow = tempfile::tempdir().unwrap();
+    fs::copy(
+        env!("CARGO_BIN_EXE_chrono-ci-test-git"),
+        shadow.path().join("git"),
+    )
+    .unwrap();
+    let out = Command::new(std::env::current_exe().unwrap())
         .current_dir("/")
         .env_clear()
-        .env("PATH", &h.shadow)
+        .env("PATH", shadow.path())
         .env("CHRONO_EVENT_AMBIENT", "must-not-leak")
-        .args([
-            "prepare",
-            "--host-root",
-            h.root.to_str().unwrap(),
-            "--config",
-            SOURCE,
-            "--event",
-            event,
-            "--payload",
-            h.root
-                .join(".chrono-harness/state/payload.json")
-                .to_str()
-                .unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-        ])
+        .env("CHRONO_EVENT_TEST_CHILD", &name)
+        .args(["--exact", &name, "--nocapture"])
         .output()
         .unwrap();
+    assert!(out.status.success(), "{out:?}");
     assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
+        String::from_utf8_lossy(&out.stdout).contains("1 passed; 0 failed;"),
+        "{out:?}"
     );
-    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(read(&h.root, &h.config().context_path), report);
-    report
+    true
 }
 
 #[test]
-fn native_platform_policy_serves_real_push_and_pr_cli_acquisition() {
+fn native_platform_policy_serves_real_push_and_pr_acquisition() {
+    if isolated_event_test() {
+        return;
+    }
     for event in ["push", "pull_request"] {
         let mut h = Host::new("pass");
         let chosen = ".chrono-harness/native event.json";
@@ -285,7 +280,7 @@ fn native_platform_policy_serves_real_push_and_pr_cli_acquisition() {
         } else {
             json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate}}})
         };
-        let report = prepare_cli(&h, event, &payload);
+        let report = prepare(&h.root, &h.config(), event, &payload, &h.candidate).unwrap();
         assert_eq!(report["base"], base);
         assert_eq!(report["candidate"], h.candidate);
         let facts = &report["git_facts"];
@@ -508,41 +503,18 @@ fn binding_source_and_executable_failures_precede_network_observation() {
 
 #[test]
 fn relative_host_root_uses_the_same_bound_checkout() {
+    if isolated_event_test() {
+        return;
+    }
     let h = Host::new("pass");
-    write(
-        &h.root,
-        ".chrono-harness/state/relative-payload.json",
+    let report = prepare(
+        h.root.strip_prefix("/").unwrap(),
+        &h.config(),
+        "push",
         &json!({"before":h.candidate,"after":h.candidate,"created":false}),
-    );
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
-    let out = Command::new(binary)
-        .current_dir(h.root.parent().unwrap())
-        .env_clear()
-        .env("PATH", &h.shadow)
-        .args([
-            "prepare",
-            "--host-root",
-            h.root.file_name().unwrap().to_str().unwrap(),
-            "--config",
-            SOURCE,
-            "--event",
-            "push",
-            "--payload",
-            h.root
-                .join(".chrono-harness/state/relative-payload.json")
-                .to_str()
-                .unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "relative host root must work: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+        &h.candidate,
+    )
+    .expect("relative host root must work");
     assert_eq!(report["candidate"], h.candidate);
     assert_eq!(report["base"], h.candidate);
     for process in processes(&report["git_facts"]) {

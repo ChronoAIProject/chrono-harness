@@ -88,6 +88,12 @@ fn inherited() -> Result<Vec<RawFd>, ProcessFailure> {
         })
         .collect()
 }
+/// 查询原始继承能力是否存在；解析和 fd 有效性仍由同一个负责方维护。
+pub fn inherited_available() -> Result<bool, String> {
+    inherited()
+        .map(|fds| !fds.is_empty())
+        .map_err(|error| error.message)
+}
 pub(crate) struct Transfer {
     _copies: std::sync::Arc<Vec<OwnedFd>>,
     pub(crate) value: Option<String>,

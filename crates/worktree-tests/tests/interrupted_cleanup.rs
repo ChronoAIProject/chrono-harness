@@ -2220,6 +2220,7 @@ fn registered_consumers_forward_leases_after_both_wrappers_die() {
                         "projects":".chrono-harness/projects.json",
                         "rust_toolchain":"1.95.0",
                         "tools":{"consumer":consumer},
+                        "entrypoint":{"tool":"python3","script":".chrono-harness/ci/bootstrap.py"},
                         "operations":["test.consumer"],"install":[]
                     }))
                     .unwrap(),
