@@ -1567,7 +1567,6 @@
       "worktree-test-inventory"
     ],
     "claims": {
-      "build.host-bootstrap-native-tests": {"resources":[],"outputs":[".chrono-harness/cache/"]},
       "test.host-bootstrap-launcher-tests": {"resources":[],"outputs":[]},
       "build.host-bootstrap-native": {
         "resources": [
