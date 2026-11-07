@@ -551,6 +551,8 @@
     {"path":"crates/runner/src/verified_status.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"compile","to":"project:judge-ci"},{"kind":"compile","to":"project:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"}]},
     {"path":"crates/runner-tests/tests/verified_paths.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
     {"path":"crates/runner-tests/tests/verified_status.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
+    {"path":"crates/judge-registration/src/verified_nodes.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"compile","to":"project:judge-filemap"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"}]},
+    {"path":"crates/judge-registration-tests/tests/verified_nodes.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
     {"path":"crates/judge-registration/src/verified_consumption.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/verified_consumption.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
     {"path":"crates/judge-ci/src/verified_collection.rs","owner":"judge-ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"compile","to":"project:judge-ci-tests"}]},
@@ -1253,6 +1255,8 @@
         "verify.verus-result-tests",
         "verify.runner-limits",
         "verify.runner-limits-tests",
+        "verify.registration-nodes",
+        "verify.registration-nodes-tests",
         "verify.registration-preparation-tests",
         "verify.registration-preparation",
         "fmt.judge-registration",
@@ -2071,6 +2075,18 @@
         ]
       },
       "verify.runner-limits-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "verify.registration-nodes": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "verify.registration-nodes-tests": {
         "resources": [],
         "outputs": [
           ".chrono-harness/state/"

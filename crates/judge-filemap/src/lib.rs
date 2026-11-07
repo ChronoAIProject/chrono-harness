@@ -14,6 +14,7 @@ pub use records::{Change, Record, RecordPair};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
+use verified_graph::valid_types;
 
 pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v2";
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -96,26 +97,6 @@ pub fn edges(r: &Registrations) -> BTreeSet<Edge> {
         add(e["from"].as_str().unwrap(), e);
     }
     out
-}
-fn valid_types(kind: EdgeKind, from: NodeKind, to: NodeKind) -> bool {
-    use NodeKind::*;
-    match kind {
-        EdgeKind::Compile => matches!(from, File | Project) && to == Project,
-        EdgeKind::BuildInput => {
-            matches!(from, File | Project | Script | Input | Tool | Environment)
-                && matches!(to, Project | Script)
-        }
-        EdgeKind::RuntimeInput => {
-            matches!(from, File | Project | Script | Input | Tool | Environment)
-                && matches!(to, Project | Script | Judge)
-        }
-        EdgeKind::TestExecution => {
-            matches!(from, File | Project | Script | Input | Tool | Environment) && to == Test
-        }
-        EdgeKind::JudgeTrigger => {
-            matches!(from, File | Project | Input | Tool | Environment) && to == Judge
-        }
-    }
 }
 fn cost(r: &Registrations, test: &str) -> Option<Value> {
     r.filemap()["test_costs"].as_array().unwrap().iter().find(|c| c["test"].as_str() == test.strip_prefix("test:")).map(|c| {
@@ -360,7 +341,7 @@ fn produce_environment(
                     continue;
                 }
                 let cause = causes.first().unwrap();
-                let seed = seeds.iter().find(|s| &s.id == cause).unwrap();
+                let seed = verified_graph::seed_by_id(&seeds, cause).unwrap();
                 let mut witness = vec![seed.node.clone()];
                 witness.extend(
                     closure
@@ -429,7 +410,7 @@ fn produce_environment(
                     .or_else(|| closure.reached.get(&edge.to).map(|s| (&edge.to, s)));
                 if let Some((node, causes)) = reached {
                     let cause = causes.first().unwrap();
-                    let seed = seeds.iter().find(|s| &s.id == cause).unwrap();
+                    let seed = verified_graph::seed_by_id(&seeds, cause).unwrap();
                     let path = closure.witness(cause, node).unwrap();
                     let mut witness = vec![seed.node.clone()];
                     witness.extend(path.iter().map(|e| e.to.clone()));
