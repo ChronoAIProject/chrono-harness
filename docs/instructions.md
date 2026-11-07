@@ -167,8 +167,8 @@ cargo check --tests --locked --manifest-path crates/instructions-tests/Cargo.tom
 cargo test --locked --manifest-path crates/instructions-tests/Cargo.toml
 ```
 
-产品默认根包含同语言测试规则，以及 sh／bash 可以用 Python 测试的例外。[实际消费者边界](methodology-extraction.md#实际消费者边界)记录本仓根、上下文和 skill 的消费读数。编辑内容须复核完整载荷，不截尾，也不靠全局配置扩限。单独选择 `core.behavior` 也包含同语言要求；生成指南不代表语言配对判官已执行。
+产品默认根包含同语言测试规则，以及 sh／bash 可以用 Python 测试的例外。[实际消费者边界](methodology-extraction.md#实际消费者边界)说明本仓根、上下文和 skill 的内容范围与测量口径。编辑内容须复核完整载荷，不截尾，也不靠全局配置扩限。单独选择 `core.behavior` 也包含同语言要求；生成指南不代表语言配对判官已执行。
 
-专属行为测试覆盖依赖图顺序、去重和错误，明确语言选择，精确字节，布局重排、双语复用、深度和完整覆盖，写入前拒绝，所有权和路径预检，不支持格式时保护原件，原文、别名和无改动生成，以及普通与注入失败恢复。test-support 没有生产开关。测试真实复制二进制后验证默认 init，再明确添加多输出配方；消费读数和外部 skill 格式检查的适用范围见[迁移说明](methodology-extraction.md#实际消费者边界)。它们不增加生产依赖，也不证明语义。
+专属行为测试覆盖依赖图顺序、去重和错误，明确语言选择，精确字节，布局重排、双语复用、深度和完整覆盖，写入前拒绝，所有权和路径预检，不支持格式时保护原件，原文、别名和无改动生成，以及普通与注入失败恢复。test-support 没有生产开关。测试真实复制二进制后验证默认 init，再明确添加多输出配方；内容测量和外部 skill 格式检查的适用范围见[迁移说明](methodology-extraction.md#实际消费者边界)。它们不增加生产依赖，也不证明语义。
 
 FILEMAP 的 proposed projection 元数据使用明确的 `sources` 数组，取代单一 `source`，列出 catalog、manifest 和被引用的 file 输入；producer／scope 不变。根框架中的路径引用也由 manifest 决定。产品资产属于 build-input／test-execution；宿主数据和现有生成副本属于 runtime-input。五份完整治理登记仍为 proposed，成本仍有 unmeasured 项。指令专用 schema 校验不能冒称治理判官已执行。独立 CI 范围检查的实际 DELTA、协议和生成范围见 [CI 说明](ci.md)。
