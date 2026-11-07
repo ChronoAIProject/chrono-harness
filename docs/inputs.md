@@ -153,9 +153,7 @@ Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩�
 
 原 macOS／Linux 编译器、SDK／完整 Developer、运行时／配置和失败别名范围仍保留。只有配置操作成功后才安装，获取失败不能推定二进制已经安装。构建前存活的协调所有者是另一个参与者，仍须实际源码／政策／工具链／安装身份和受保护关联工作树使用。bootstrap 在 stderr 转交原所有者报告路径；该保留报告才是受管理进程和租约的依据。
 
-本机 runner 准备的唯一登记入口为 `inputs.prepare-runner` → 已有 worktree `use inputs.prepare-runner-body` → `.chrono-harness/inputs/runner-preparation.json` → `inputs.fetch.runner` → `inputs.vendor.runner` → `guard.check.runner`。沿用所选宿主环境，以 Rustup 的两次路径选择绑定 Cargo／rustc；可变 Cargo home 位于当前工作树。保护配置点名当前直接政策 `.chrono-harness/git/macos-27.json`，不把根 Git 身份选择器重新解释成直接政策。
-
-该消费者仍为 proposed，实际 Cargo、编译器、package／resolver、SDK、配置和保留输入绑定尚未解决。政策保留必需领域和预期包参数，不采用历史机器字节。有源码不等于保护机制已采用。执行前，负责人须核对观察器选中的 Cargo／Rustup home、rustc 与当前宿主环境及保护配置一致；继承环境本身不证明输入完整。
+本机 vendor 准备入口为 `inputs.prepare-runner` → worktree `use inputs.prepare-runner-body` → `.chrono-harness/inputs/runner-preparation.json` → `inputs.fetch.runner` → `inputs.vendor.runner`。现有 Cargo fetch／vendor 为本机 diagnostics 准备目录来源，Rustup 的两次路径选择提供实际 Cargo／rustc。准备不再额外运行 runner guard；正式 runner 检查继续使用原 `check.runner` 和专属测试。
 
 获取参与仍保留当前根 worktree v3 政策。这些来源声明没有采用 Linux 关联／协调政策或完整 Linux 宿主配置，真实平台采用仍待完成。
 
@@ -165,25 +163,15 @@ Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩�
 
 旧原生 config／runner 样本及过时比较、FILEMAP 项已经移除，固定来源仍在 Git。当前获取测试直接读取现役观察声明；保留的遗漏和原件不同的纠正见[输入来源保管](input-source-custody.md)。全面启用、输入齐全、固定两端原件、真实 CI 验收和同判仍未完成。
 
-### 本机 runner 的输入政策
+### 本机 diagnostics 的输入政策
 
-macOS 27 直接政策通过按配置选择的 FILEMAP 表，把 runner v6 每个字面输入 ID 连到 `project:runner`；固定原生政策保持公共图。包文件和 crate 归档预期来自保留的 PR163，须匹配独立下载的包。所选私有 Rustup 1.29.1 来自官方版本归档及公开校验值，旧 1.29.2 观察仍是失败选择，不能变成预期。
+本机 diagnostics 的 metadata／build 通过 `.chrono-harness/cargo/runner-vendor.toml` 读取当前工作树的目录来源。26 个锁定包使用 1,087 份源码和 26 份 Cargo 校验清单，包 checksum 和文件身份继续由当前 diagnostics 政策绑定。准备沿用 Cargo 自带的 `vendor --locked --offline --versioned-dirs`，不增加包解析器或共享缓存。
 
-准备入口先在当前工作树的 bootstrap Cargo 缓存中获取锁定依赖，再调用登记的 `inputs.vendor.runner`。它用 Cargo 自带的 `vendor --locked --offline --versioned-dirs`，把固定包源码和校验清单放入 `.chrono-harness/cache/runner-vendor/`。`guard.check.runner` 的 metadata／check 和本机 diagnostics 的 metadata／build 均通过 `.chrono-harness/cargo/runner-vendor.toml` 读取各自声明的目录来源，不读取在线 registry 索引。配置显式登记并核摘要，源码和校验清单也逐文件登记；共享只读 Rust 工具链、空包装器、sysroot、链接器和 SDK 环境继续适用。包参数包含当前 runner 直接依赖 `tracing`，锁文件、包校验值及采用源码的预期摘要不变。
+**可见宿主政策与退役修改：**删除未接入正式 runner 检查的 `guard.check.runner` 及其政策、两个专属观察实验和无读取入口的 Cargo 观察声明。日常 runner 构建、检查及测试仍走已有锁定 Cargo 操作。macOS 27 的两个专属 guard 绑定、1,710 项独占输入声明和 2,847 条配置级依赖边同步删除；Git 事实与 bootstrap 工具选择各自保留独立 runner 关系。
 
-**可见宿主方法修改：**runner 准备移除写入旧工作树的独立 home、仅用于该路径的组件卸载／安装配方和 33 次无关 fetch。现役观察器及两项 Rust 实验同步迁移，保留原进程驱动、断言、600 秒保护期限和 300 秒实验窗口。通用 bootstrap 工具链配置及更广的原生获取／输入观察不变。实际耗时、IO 和存储收益未知，须由当前准备及保护消费者验证。
+diagnostics 仍使用的 1,130 项输入声明、配置和共享 Rust／SDK／Developer 清单不属于这次退役。`local-rust-build.json`、`local-xcode-build.json` 及旧 SDK 路径仍是待处理的本机运行事实；真实引用不能单独证明永久入库必要，后续须继续核对 diagnostics 的必要性链，再迁移或退役。运行、CI 和存储总收益未测，完整输入与同判仍未建立。
 
-**宿主方法与输入政策同步修改：**固定源码的 runner 检查曾因 registry 索引追加未使用的新版本而在 metadata 前拒绝。当前方法复用 Cargo 的目录来源，不增加索引等价解析或自动刷新预期摘要。runner 退役原 101 项 registry 缓存输入，改为 50 包的 2,313 个原源码文件和 50 份 Cargo 生成的 `.cargo-checksum.json`。Cargo 省略了 50 个解包完成标记、22 个 `.gitignore` 和 2 个 `.gitattributes`；原源码摘要与包校验值均保留，实际构建仍须验证这份来源是否足够。
-
-**本机 diagnostics 的政策与消费者同步修改：**其 26 个锁定包现在复用现有 vendor 输入，删除 1,127 项重复 registry 文件声明。1,087 份共有源码的摘要和包 checksum 与原固定输入一致，另采用已有的 26 份 Cargo 校验清单；Cargo 排除的 40 份完成标记／ignore 文件不再绑定。metadata、离线 build、配置清单和配置级 FILEMAP 边同步选择同一来源，macOS 27 配置的输入声明由 3,678 项减至 2,551 项。准备仍走现有 fetch／vendor；普通 bootstrap 和原生 diagnostics 获取各自采用原登记。真实受保护构建、两端快照组合、标准 DELTA 和原生验收仍须完成，不据声明数或文件体积减少推定运行及存储收益。
-
-当前 runner 的 Verus 宏依赖另增加五个锁定包，通过同一 fetch／vendor 路径取得。284 份包文件和五份 Cargo 校验清单逐项绑定锁文件 checksum 与实际源码，新增 289 项输入及到 runner 的明确边；当前共有 55 个外部包、2,597 份包文件和 55 份校验清单，macOS 27 配置共有 2,840 项输入声明。现有包的文件身份保留，runner 的直接依赖及 proc-macro2／quote 的 feature 选择同步当前真实 metadata。本机 diagnostics 的 26 包消费范围保持其独立声明。实际保护、快照、标准 DELTA 和原生验收继续分别执行，完整输入与同判仍未建立。
-
-当前 Xcode 获取识别 Xcode 26.5／17F42。只登记 Developer 时，`usr/bin/altool` 别名指向兄弟 SharedFrameworks，因越出范围被拒绝。因此选中的目录清单改覆盖外层 `Xcode.app/Contents`，directory v3 检查不变；`DEVELOPER_DIR` 仍指 Developer，`CHRONO_XCODE_CONTENTS` 选择外层清单。当前本机 runner 和 diagnostics 的构建政策从原清单选择 `.chrono-harness/inputs/local-xcode-build.json`：声明的链接工具、四个发行库、clang 21 资源及别名，以及发行／工具链 metadata。文件摘要和精确父目录子项名不变。移动 SDK 和图形应用内容不属于此构建子集；完整 macOS SDK 仍单独绑定。[Cargo 说明](cargo-projects.md)记录了依赖审计和政策边界。SDK、Developer、配置、运行时范围仍明确。
-
-原拒绝获取和后续成功结果分别保留。生成 Rust、SDK、Xcode 清单是登记状态模块下的必需原输入，摘要在所选政策中；只有来源声明，不能提供或证明这些字节。
-
-输入位置变化属于宿主政策和登记迁移，不启用完整检查。当前 Git 选择另行登记。保护执行、干净候选 bootstrap／标准变更、真实获取和安装后消费证据都须分别标明实际来源。历史端点原件缺失、完整输入／同判、其他受保护项目、批次评审和实际交付仍待完成。获取／构建／检查窗口及保留字节须分别测量，总成本和节省未知。
+原宿主实验失败和原始采集结果继续按既有保管义务保留；删除实验入口不表示实验通过，也不把历史原件恢复成当前输入。当前正式候选仍须经过源码 bootstrap、按 DELTA 选择的检查、原生 CI 和实际落地验证。
 
 登记的 macOS 原生获取对已声明 Xcode 26.6 也使用外层根，保留 `xcodebuild -version`，发布独立 `guard-inputs/xcode-contents.json`。Contents 根直接登记绝对位置，观察要求拒绝 `..` 后缀，原拒绝尝试保留。34 组 fetch／metadata、14 安装目标、目录项上限、失败不安装都不变。真实完整保护须先明确绑定新原件／根，获取本身不启用它。
 
