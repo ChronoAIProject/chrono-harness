@@ -89,6 +89,59 @@ fn finding(level: &str) -> (out: policy::Finding)
         message: "independent expectation".to_owned(), delta_refs: Vec::new(), causes: Vec::new() }
 }
 
+fn append_case(mut status: WireStatus, severity: WireStatus, expected: WireStatus)
+    requires expected == (if status.rank_spec() >= severity.rank_spec() { status } else { severity }),
+{
+    let mut rows: Vec<policy::Finding> = Vec::new();
+    policy::append_finding(&mut status, &mut rows, severity, finding("error"));
+    assert(status == expected);
+    assert(rows.len() == 1 && rows@[0].level@ == "error"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recording_finding_keeps_the_highest_of_all_sixteen_status_pairs() {
+    append_case(WireStatus::Pass, WireStatus::Pass, WireStatus::Pass);
+    append_case(WireStatus::Pass, WireStatus::Warn, WireStatus::Warn);
+    append_case(WireStatus::Pass, WireStatus::Fail, WireStatus::Fail);
+    append_case(WireStatus::Pass, WireStatus::Error, WireStatus::Error);
+    append_case(WireStatus::Warn, WireStatus::Pass, WireStatus::Warn);
+    append_case(WireStatus::Warn, WireStatus::Warn, WireStatus::Warn);
+    append_case(WireStatus::Warn, WireStatus::Fail, WireStatus::Fail);
+    append_case(WireStatus::Warn, WireStatus::Error, WireStatus::Error);
+    append_case(WireStatus::Fail, WireStatus::Pass, WireStatus::Fail);
+    append_case(WireStatus::Fail, WireStatus::Warn, WireStatus::Fail);
+    append_case(WireStatus::Fail, WireStatus::Fail, WireStatus::Fail);
+    append_case(WireStatus::Fail, WireStatus::Error, WireStatus::Error);
+    append_case(WireStatus::Error, WireStatus::Pass, WireStatus::Error);
+    append_case(WireStatus::Error, WireStatus::Warn, WireStatus::Error);
+    append_case(WireStatus::Error, WireStatus::Fail, WireStatus::Error);
+    append_case(WireStatus::Error, WireStatus::Error, WireStatus::Error);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recording_findings_keeps_history_duplicates_and_complete_fields() {
+    let first = finding("info");
+    let next = policy::Finding {
+        code: "根\0".to_owned(), level: "warning".to_owned(), message: "é\0".to_owned(),
+        delta_refs: vec!["/根\0".to_owned(), "".to_owned(), "/根\0".to_owned()],
+        causes: vec!["z".to_owned(), "原因\0".to_owned()],
+    };
+    let mut rows = vec![first, next.clone()];
+    let mut status = WireStatus::Error;
+    policy::append_finding(&mut status, &mut rows, WireStatus::Warn, next);
+    assert(status == WireStatus::Error && rows.len() == 3);
+    assert(rows@[0].level@ == "info"@);
+    assert(rows@[1].code@ == rows@[2].code@ && rows@[2].code@ == "根\0"@);
+    assert(rows@[1].level@ == rows@[2].level@ && rows@[2].level@ == "warning"@);
+    assert(rows@[1].message@ == rows@[2].message@ && rows@[2].message@ == "é\0"@);
+    assert(rows@[1].delta_refs@ == rows@[2].delta_refs@);
+    assert(rows@[2].delta_refs.len() == 3);
+    assert(rows@[2].delta_refs@[0]@ == "/根\0"@ && rows@[2].delta_refs@[1]@ == ""@
+        && rows@[2].delta_refs@[2]@ == "/根\0"@);
+    assert(rows@[1].causes@ == rows@[2].causes@ && rows@[2].causes.len() == 2);
+    assert(rows@[2].causes@[0]@ == "z"@ && rows@[2].causes@[1]@ == "原因\0"@);
+}
+
 fn expected_statuses(findings: &[policy::Finding], pass: bool, warn: bool, fail: bool, error: bool)
     requires
         pass == policy::finding_status_agreement(&WireStatus::Pass, findings@),
