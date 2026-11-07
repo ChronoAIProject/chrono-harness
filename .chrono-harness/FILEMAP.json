@@ -1209,10 +1209,10 @@
       "operations": [
         "verify.verus-result",
         "verify.verus-result-tests",
-        "verify.runner-paths",
-        "verify.runner-paths-tests",
         "verify.runner-limits",
         "verify.runner-limits-tests",
+        "verify.runner-paths",
+        "verify.runner-paths-tests",
         "verify.registration-preparation-tests",
         "verify.registration-preparation",
         "fmt.judge-registration",
