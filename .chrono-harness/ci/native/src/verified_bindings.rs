@@ -35,6 +35,36 @@ pub fn owner_stage_input(installed_empty: bool, declared: bool, selected: &str, 
 
 pub enum DeclarationSource { Registry, Direct, Unbound, Reject }
 
+pub fn startup_schema(actual: &str, expected: &str) -> (valid: bool)
+    ensures valid <==> actual@ == expected@,
+{ equal_text(actual, expected) }
+
+pub fn startup_mode(mode: u32) -> (valid: bool)
+    ensures valid <==> (0 < mode <= 511 && mode & 73u32 != 0),
+{ 0 < mode && mode <= 511 && mode & 73u32 != 0 }
+
+pub open spec fn startup_name_byte(b: u8) -> bool {
+    (65 <= b <= 90) || (97 <= b <= 122) || (48 <= b <= 57) || b == 95 || b == 45
+}
+
+pub fn startup_name(bytes: &[u8]) -> (valid: bool)
+    ensures valid <==> (bytes@.len() > 0
+        && forall|i: int| 0 <= i < bytes@.len() ==> startup_name_byte(bytes@[i])),
+{
+    if bytes.len() == 0 { return false; }
+    let mut i = 0;
+    while i < bytes.len()
+        invariant 0 <= i <= bytes.len(), bytes.len() > 0,
+            forall|j: int| 0 <= j < i ==> startup_name_byte(bytes@[j]),
+        decreases bytes.len() - i,
+    {
+        let b = bytes[i];
+        if !((65 <= b && b <= 90) || (97 <= b && b <= 122) || (48 <= b && b <= 57) || b == 95 || b == 45) { return false; }
+        i += 1;
+    }
+    true
+}
+
 pub fn immutable_producer(commit: &[u8], tree: &[u8]) -> (valid: bool)
     ensures valid <==> (identifiers::oid(commit@) && identifiers::oid(tree@)),
 { identifiers::valid_oid(commit) && identifiers::valid_oid(tree) }
@@ -473,7 +503,7 @@ pub fn disjoint_homes(a: &[u8], b: &[u8]) -> (valid: bool)
     !path_contains(a, b) && !path_contains(b, a)
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize, serde::Serialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct NativePlatform {
     pub system: String,
