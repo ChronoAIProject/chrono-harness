@@ -211,6 +211,8 @@ Rust 测试另外验证真实消费者，不替代证明。
 | `serde_json::from_slice::<CompilerReport>` 与该类型的 Serde `Deserialize` 派生 | 从本次调用传入的完整字节解码；必需字段、JSON 类型、整数范围和重复具名字段按固定 Serde 合同校验。未知的 Verus 统计字段忽略；所需字段不设默认值。此处明确采用外部解码合同，不声称本仓证明了 JSON 解析器。 |
 | `serde_json::from_value::<RegisteredAction>`、`from_value::<Option<OutputContract>>` 及对应 Serde 派生 | 一次转换对应输入对象；action／合同拒绝未知字段，合同缺失或 null 对应 None，非空要求由 Verus 判断。现有 owner、ID、工具与 argv 登记校验保留。 |
 | `Result::ok`、`Option::is_some` | 解码 Err 对应 None、Ok 对应同一完整报告；进程 failure 的 Some／None 原样转发，仓内不拼接成功字段。 |
+| `str::to_string`、`Vec::new`、`Vec::push`、`Vec::len`、`Vec::as_slice` 及 `Vec<String>` 的逐项读取 | 构造完整失败文字、空序列、按原顺序追加字节、读取完整长度和切片；Verus 另行证明参数完整形状、拼接、索引界限和终止。独立边界的 `Vec` 索引赋值采用固定 vstd 的单槽更新合同。 |
+| `OutputContract` 的 Serde `Serialize` 与各类型的 Debug 派生 | 原 version／commit 字段进入 Method JSON 身份；Debug 仅用于标准诊断。这些外部派生不产生本仓准入状态或成功标记。 |
 
 实际字段借用使用固定 vstd 的 `String::as_str` 合同；协议和模式比较复用已证明的
 `equal_text`／`equal_bytes`，其 UTF-8 转换采用 `str::as_bytes` 的完整字节合同、

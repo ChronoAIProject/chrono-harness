@@ -26,15 +26,19 @@ impl Clone for OutputContract {
     { Self { version: self.version.clone(), commit: self.commit.clone() } }
 }
 
+pub open spec fn same_contract(first: &OutputContract, second: &OutputContract) -> bool {
+    first.version@ == second.version@ && first.commit@ == second.commit@
+}
+
 #[cfg(verus_keep_ghost)]
 impl vstd::std_specs::cmp::PartialEqSpecImpl for OutputContract {
     open spec fn obeys_eq_spec() -> bool { true }
-    open spec fn eq_spec(&self, other: &Self) -> bool { *self == *other }
+    open spec fn eq_spec(&self, other: &Self) -> bool { same_contract(self, other) }
 }
 
 impl PartialEq for OutputContract {
     fn eq(&self, other: &Self) -> (same: bool)
-        ensures same == (*self == *other),
+        ensures same == same_contract(self, other),
     {
         equal_text(self.version.as_str(), other.version.as_str())
             && equal_text(self.commit.as_str(), other.commit.as_str())
@@ -87,6 +91,7 @@ pub open spec fn valid_contract(contract: &Option<OutputContract>) -> bool {
 
 pub fn validate_contract(contract: &Option<OutputContract>) -> (out: Result<(), String>)
     ensures out.is_ok() == valid_contract(contract),
+        out.is_err() ==> out.unwrap_err()@ == "E_VERUS_CONTRACT: version and commit must be nonempty"@,
 {
     match contract {
         None => Ok(()),
@@ -211,12 +216,38 @@ pub open spec fn output_accepted(
     }
 }
 
+pub open spec fn output_error(
+    contract: &Option<OutputContract>, decoded: &Option<CompilerReport>,
+    args: Seq<String>, exit: i32, process_failed: bool,
+) -> Option<Seq<char>> {
+    match contract {
+        None => None,
+        Some(value) => {
+            if !valid_contract(contract) {
+                Some("E_VERUS_CONTRACT: version and commit must be nonempty"@)
+            } else if exit != 0 || process_failed || !verifier_arguments(args) {
+                Some("E_VERUS_RESULT: process or verifier arguments rejected"@)
+            } else {
+                match decoded {
+                    None => Some("E_VERUS_RESULT: missing or malformed typed report"@),
+                    Some(report) => if report_accepted(report, value) { None }
+                        else { Some("E_VERUS_RESULT: incomplete, failed or mismatched verification"@) },
+                }
+            }
+        },
+    }
+}
+
 /// 直接消费同一原进程的退出、失败、参数和一次解码得到的完整报告。
 pub fn admit_output(
     contract: &Option<OutputContract>, decoded: &Option<CompilerReport>,
     args: &Vec<String>, exit: i32, process_failed: bool,
 ) -> (out: Result<(), String>)
     ensures out.is_ok() == output_accepted(contract, decoded, args@, exit, process_failed),
+        match out {
+            Ok(()) => output_error(contract, decoded, args@, exit, process_failed).is_none(),
+            Err(message) => output_error(contract, decoded, args@, exit, process_failed) == Some(message@),
+        },
 {
     let value = match contract { None => { return Ok(()); }, Some(value) => value };
     match validate_contract(contract) {

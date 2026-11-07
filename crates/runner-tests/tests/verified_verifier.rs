@@ -15,7 +15,11 @@ verus! {
 
 fn contract() -> (out: Option<OutputContract>)
     ensures out.is_some(), out.unwrap().version@ == "v"@, out.unwrap().commit@ == "c"@,
-{ Some(OutputContract { version: "v".to_string(), commit: "c".to_string() }) }
+        policy::valid_contract(&out),
+{
+    proof { reveal_strlit("v"); reveal_strlit("c"); }
+    Some(OutputContract { version: "v".to_string(), commit: "c".to_string() })
+}
 
 fn verification() -> (out: Verification)
     ensures out.success, !out.encountered_error, !out.encountered_vir_error,
@@ -36,11 +40,15 @@ fn report(verification: Verification) -> (out: Option<CompilerReport>)
 
 fn arguments() -> (out: Vec<String>)
     ensures policy::verifier_arguments(out@),
+        out[7]@ == "--emit=link=out,dep-info=out.d"@,
+        out[8]@ == "root"@, out[10]@ == "out"@,
 {
     proof {
         reveal_strlit("--emit=link="); reveal_strlit(",dep-info=");
         reveal_strlit("out"); reveal_strlit(".d"); reveal_strlit("root");
         reveal_strlit("--emit=link=out,dep-info=out.d");
+        assert("--emit=link=out,dep-info=out.d"@ =~=
+            "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
     }
     vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
         "--no-external-by-default".to_string(), "--num-threads".to_string(),
@@ -108,7 +116,10 @@ fn each_compiler_failure_flag_and_count_independently_rejects_the_report() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn version_and_commit_must_match_one_explicit_nonempty_contract() {
-    proof { reveal_strlit("v"); reveal_strlit("c"); reveal_strlit(""); }
+    proof {
+        reveal_strlit("v"); reveal_strlit("c"); reveal_strlit("");
+        assert("v"@[0] != "c"@[0]);
+    }
     let wrong_version = Some(OutputContract { version: "c".to_string(), commit: "c".to_string() });
     let a = policy::admit_output(&wrong_version, &report(verification()), &arguments(), 0, false);
     assert(a.is_err());
@@ -130,15 +141,27 @@ fn extra_filtered_or_rebound_verifier_arguments_are_rejected() {
         reveal_strlit("--compile"); reveal_strlit("--verify-function=one");
         reveal_strlit("out"); reveal_strlit("other");
         reveal_strlit("--no-cheating"); reveal_strlit("--no-verify");
+        reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+        assert("--compile"@.len() == 9 && "--verify-function=one"@.len() == 21);
+        assert("--no-cheating"@.len() == 13 && "--no-verify"@.len() == 11);
+        assert("out"@.len() == 3 && "other"@.len() == 5);
+        assert("--emit=link="@.len() == 12 && ",dep-info="@.len() == 10 && ".d"@.len() == 2);
+        assert("--emit=link=out,dep-info=out.d"@.len() == 30);
+        assert("--compile"@ != "--verify-function=one"@);
+        assert("--no-cheating"@ != "--no-verify"@);
     }
     let mut filtered = arguments(); filtered[6] = "--verify-function=one".to_string();
+    assert(filtered[6]@ != "--compile"@);
     let a = policy::admit_output(&contract(), &report(verification()), &filtered, 0, false);
     assert(a.is_err());
     let mut extra = arguments(); extra.push("--verify-function=one".to_string());
     let b = policy::canonical_verifier_arguments(&extra); assert(!b);
     let mut unchecked = arguments(); unchecked[1] = "--no-verify".to_string();
+    assert(unchecked[1]@ != "--no-cheating"@);
     let c = policy::canonical_verifier_arguments(&unchecked); assert(!c);
     let mut rebound = arguments(); rebound[10] = "other".to_string();
+    assert(rebound[7]@.len() == 30 && rebound[10]@.len() == 5);
     let d = policy::canonical_verifier_arguments(&rebound); assert(!d);
     let missing = Vec::new();
     let e = policy::canonical_verifier_arguments(&missing); assert(!e);
