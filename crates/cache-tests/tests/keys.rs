@@ -1391,7 +1391,12 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
     )
     .unwrap();
     let launcher_change = plan(root.path(), &config, "check.detect").unwrap();
-    for id in ["detect.ci", "detect.runner", "detect.judge-ci", "detect.worktree"] {
+    for id in [
+        "detect.ci",
+        "detect.runner",
+        "detect.judge-ci",
+        "detect.worktree",
+    ] {
         assert_ne!(
             build_change["caches"][id]["restore_keys"],
             launcher_change["caches"][id]["restore_keys"],
