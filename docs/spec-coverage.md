@@ -70,7 +70,7 @@
 | 7 合法退役 | 有限实现：W 共同移除生产／测试、明确别名修复 | 完整原生启用 |
 | 8 移除必需测试 | 有限实现：W 明确成功替换或已验共同退役 | 完整原生启用 |
 | 9 配对不唯一／缺失 | 有限实现：projects 和真实消费者负例 | 完整原生启用 |
-| 10 manifest 依赖未声明 | 有限实现：可选 Cargo 明确政策、TOML 路径依赖、缺边拒绝；v4 绑定 Cargo／编译器，v5 增 sysroot／后端／链接器／SDK／脚本清单，有直接／完整／scoped 真实消费者；diagnostics Rust inventory 已迁移为 producer observation manifest→runtime-state Cargo guard 的第一批运行时事实 | 编译器库／后端／链接器／SDK 语义输入完整；其余运行时 inventory 迁移、受保护 registry／Git 解析、完整宿主启用 |
+| 10 manifest 依赖未声明 | 有限实现：可选 Cargo 明确政策、TOML 路径依赖、缺边拒绝；v4 绑定 Cargo／编译器，v5 增 sysroot／后端／链接器／SDK／脚本清单，有直接／完整／scoped 真实消费者；diagnostics Rust、Developer、SDK inventory 已由 producer observation manifest 提供给 runtime-state Cargo guard，Git 只保留引用合同 | 编译器库／后端／链接器／SDK 语义输入完整；其余运行时 inventory 迁移、受保护 registry／Git 解析、完整宿主启用 |
 | 11 已知缺输入／必需依赖未解决 | 有限实现：明确外部节点、必需项目边、declared-complete v3 回归、v5 清单、可选版本化输入范围，以及 proposed_and_incomplete_never_receive_governance_success | 本仓 Cargo／SDK／配置仍未完整，不发现依赖或证明普遍完整 |
 | 12 README 不全测 | 有限实现：F、C、projects 真实不执行无关历史缺陷 | 完整原生启用 |
 | 13 独立脚本测试 | 有限实现：真实完整链脚本对 | 完整原生启用 |
