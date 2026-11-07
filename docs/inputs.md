@@ -168,6 +168,8 @@ Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩�
 普通本机操作按有效 `PATH` 解析登记的 Cargo 一次，仍核对精确版本。macOS 27 保留
 `RUSTUP_TOOLCHAIN=1.95.0`，继承实际 `PATH`、`RUSTC`、`RUSTFLAGS` 和 `RUSTUP_HOME`，
 不把某次个人 checkout 的工具链目录写成后续候选的运行预期。
+调用环境须能找到已有 Cargo，bootstrap 另须能找到 rustup；使用私有 Rust 安装时由调用方
+在进程环境提供其 `PATH`／`RUSTUP_HOME`。缺工具时保留原失败，不在 Git 中补个人路径。
 
 bootstrap 使用已有 profile、`rustup which --toolchain` 与官方组件摘要选择并重核
 Cargo／rustc；编译器、wrapper 和实际路径观察沿该生产者报告消费。完整宿主工具表
