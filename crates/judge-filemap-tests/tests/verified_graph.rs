@@ -51,6 +51,20 @@ fn check_type_row(kind: policy::EdgeKind, from: policy::NodeKind, mask: u8)
 fn all_320_edge_type_combinations_match_the_independent_table() {
     use policy::EdgeKind::*;
     use policy::NodeKind::*;
+    proof {
+        assert((0u8 & 1u8) == 0u8 && (0u8 & 2u8) == 0u8 && (0u8 & 4u8) == 0u8 && (0u8 & 8u8) == 0u8
+            && (0u8 & 16u8) == 0u8 && (0u8 & 32u8) == 0u8 && (0u8 & 64u8) == 0u8 && (0u8 & 128u8) == 0u8) by(bit_vector);
+        assert((2u8 & 1u8) == 0u8 && (2u8 & 2u8) == 2u8 && (2u8 & 4u8) == 0u8 && (2u8 & 8u8) == 0u8
+            && (2u8 & 16u8) == 0u8 && (2u8 & 32u8) == 0u8 && (2u8 & 64u8) == 0u8 && (2u8 & 128u8) == 0u8) by(bit_vector);
+        assert((6u8 & 1u8) == 0u8 && (6u8 & 2u8) == 2u8 && (6u8 & 4u8) == 4u8 && (6u8 & 8u8) == 0u8
+            && (6u8 & 16u8) == 0u8 && (6u8 & 32u8) == 0u8 && (6u8 & 64u8) == 0u8 && (6u8 & 128u8) == 0u8) by(bit_vector);
+        assert((16u8 & 1u8) == 0u8 && (16u8 & 2u8) == 0u8 && (16u8 & 4u8) == 0u8 && (16u8 & 8u8) == 0u8
+            && (16u8 & 16u8) == 16u8 && (16u8 & 32u8) == 0u8 && (16u8 & 64u8) == 0u8 && (16u8 & 128u8) == 0u8) by(bit_vector);
+        assert((32u8 & 1u8) == 0u8 && (32u8 & 2u8) == 0u8 && (32u8 & 4u8) == 0u8 && (32u8 & 8u8) == 0u8
+            && (32u8 & 16u8) == 0u8 && (32u8 & 32u8) == 32u8 && (32u8 & 64u8) == 0u8 && (32u8 & 128u8) == 0u8) by(bit_vector);
+        assert((38u8 & 1u8) == 0u8 && (38u8 & 2u8) == 2u8 && (38u8 & 4u8) == 4u8 && (38u8 & 8u8) == 0u8
+            && (38u8 & 16u8) == 0u8 && (38u8 & 32u8) == 32u8 && (38u8 & 64u8) == 0u8 && (38u8 & 128u8) == 0u8) by(bit_vector);
+    }
     check_type_row(Compile, File, 2);
     check_type_row(Compile, Project, 2);
     check_type_row(Compile, Script, 0);
