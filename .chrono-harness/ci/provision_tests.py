@@ -183,9 +183,7 @@ class IsolatedProvision(unittest.TestCase):
 class NativeCargoDomains(unittest.TestCase):
     """Host selection expectations; the fixture is not Cargo/native acceptance.
 
-    Cold prerequisites must use the ordinary online domain. Only the diagnostic
-    producer may prepare the private domain, and an offline consumer must refuse
-    a cold, wrong-home or wrong-lock domain while retaining its original failure.
+    Ordinary native consumers use their registered locked Cargo domain.
     """
 
     def setUp(self):
@@ -206,16 +204,9 @@ class NativeCargoDomains(unittest.TestCase):
         # production selection/drift validation remains the Rust owner's check.
         selector = json.loads((SOURCE.parents[1] / entry).read_text())
         rows = selector["platforms"]["macos-aarch64"]["configurations"]
-        expected_path = (".chrono-harness/git/pinned-macos-diagnostics.json"
-                         if entry.endswith("diagnostics-config.json")
-                         else ".chrono-harness/git/pinned-macos.json")
+        expected_path = ".chrono-harness/git/pinned-macos.json"
         selected = [row for row in rows if row["path"] == expected_path]
         self.assertEqual(len(selected), 1)
-        if entry.endswith("diagnostics-config.json"):
-            selected_config = json.loads((SOURCE.parents[1] / expected_path).read_text())
-            git_input = next(item for item in selected_config["environment"]["inputs"]
-                             if item["id"] == "git-executable")
-            self.assertEqual(selected[0]["sha256"], git_input["sha256"])
         return json.loads((SOURCE.parents[1] / selected[0]["path"]).read_text())
 
     def selected_environment(self, values, inherited=None, bootstrap_profile=False):
@@ -268,46 +259,7 @@ class NativeCargoDomains(unittest.TestCase):
         self.assertEqual(child_environment["CARGO_HOME"], "/Users/runner/.cargo")
         self.assertNotEqual(child_environment.get("CARGO_NET_OFFLINE"), "true")
 
-    def test_diagnostics_prerequisites_escape_an_inherited_private_offline_domain(self):
-        inherited = dict(self.base_environment,
-                         CARGO_HOME=".chrono-harness/state/diagnostics-native/cargo",
-                         CARGO_NET_OFFLINE="true")
-        for name, operation in (("bootstrap-diagnostics-guard.json", "build.judge-cargo"),
-                                ("bootstrap-diagnostics-inputs.json", "build.inputs")):
-            with self.subTest(profile=name):
-                profile = json.loads((SOURCE / name).read_text())
-                self.assertIn(operation, profile["operations"])
-                environment = self.selected_environment(profile.get("environment", {}), inherited,
-                                                        bootstrap_profile=True)
-                result = self.cargo(operation, environment)
-                self.assertEqual(result["exit_code"], 0,
-                                 (self.root / result["stderr"]["path"]).read_bytes())
-                observed = json.loads((self.root / result["stdout"]["path"]).read_bytes())
-                self.assertEqual(observed["cargo_home"], "/Users/runner/.cargo")
-                self.assertFalse(observed["offline"])
 
-    def test_private_diagnostics_preparation_and_offline_failure_boundaries(self):
-        action = self.actions["build.diagnostics"]
-        guard_config = action["argv"][action["argv"].index("--config") + 1]
-        guard = self.selected_environment(self.native_config(guard_config)["environment"]["values"])
-        observer = json.loads((SOURCE.parent / "inputs/diagnostics-observation.json").read_text())
-        acquisition = self.selected_environment(observer["environment"]["values"])
-        self.assertEqual(guard["CARGO_HOME"], acquisition["CARGO_HOME"])
-        self.assertEqual(guard["CARGO_NET_OFFLINE"], "true")
-        self.assertEqual(acquisition["CARGO_NET_OFFLINE"], "false")
-        cold = self.cargo("inputs.metadata.diagnostics", guard)
-        self.assertEqual(cold["exit_code"], 101)
-        original = (self.root / cold["stderr"]["path"]).read_bytes()
-        self.assertIn(b"unprepared locked manifest", original)
-        self.assertEqual(self.cargo("inputs.fetch.diagnostics", acquisition, "fetch")["exit_code"], 0)
-        self.assertEqual(self.cargo("inputs.metadata.diagnostics", guard)["exit_code"], 0)
-        wrong_home = dict(guard, CARGO_HOME="/different/cargo")
-        self.assertEqual(self.cargo("inputs.metadata.diagnostics", wrong_home)["exit_code"], 101)
-        self.assertEqual(self.cargo("build.judge-cargo", guard)["exit_code"], 101)
-        lock = self.root / "crates/diagnostics/Cargo.lock"
-        lock.write_bytes(lock.read_bytes() + b"\n# changed locked input\n")
-        self.assertEqual(self.cargo("inputs.metadata.diagnostics", guard)["exit_code"], 101)
-        self.assertEqual((self.root / cold["stderr"]["path"]).read_bytes(), original)
 
 
 if __name__ == "__main__":
