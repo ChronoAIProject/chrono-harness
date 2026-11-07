@@ -33,5 +33,9 @@ path = "tests/registration_contract.rs"
 name = "languages"
 path = "tests/languages.rs"
 
+[[test]]
+name = "verified_nodes"
+path = "tests/verified_nodes.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3
