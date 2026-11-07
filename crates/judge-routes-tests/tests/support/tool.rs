@@ -38,12 +38,15 @@ fn main() {
                 fs::copy("library.fixture", &argv[10]).unwrap();
             }
             fs::write(format!("{}.d", argv[10]), b"original dependency bytes").unwrap();
-            println!("{}", serde_json::json!({
-                "verus": {"version":"fixture", "commit":"fixture"},
-                "verification-results": {"encountered-error":false,
-                    "encountered-vir-error":false,"success":true,"verified":1,"errors":0,
-                    "is-verifying-entire-crate":true}
-            }));
+            println!(
+                "{}",
+                serde_json::json!({
+                    "verus": {"version":"fixture", "commit":"fixture"},
+                    "verification-results": {"encountered-error":false,
+                        "encountered-vir-error":false,"success":true,"verified":1,"errors":0,
+                        "is-verifying-entire-crate":true}
+                })
+            );
         }
         mode => panic!("unknown route test helper mode: {mode:?}"),
     }
