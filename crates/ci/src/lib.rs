@@ -386,7 +386,7 @@ fn render_job(
       - name: Check out exact candidate
         uses: {checkout}
         with:
-          ref: ${{{{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}}}
+          ref: ${{{{ inputs.candidate || github.sha }}}}
           fetch-depth: 0
           persist-credentials: true
       - name: Bootstrap registered tools
@@ -622,12 +622,12 @@ fn prepare_policy_fixed(
         return Err("workflow source revision must be full OID".into());
     }
     let event_candidate = match event {
-        "push" => &payload["after"],
-        "pull_request" => &payload["pull_request"]["head"]["sha"],
-        "workflow_dispatch" => &payload["inputs"]["candidate"],
-        _ => &Value::Null,
+        "push" => payload["after"].as_str(),
+        "pull_request" => Some(workflow_revision),
+        "workflow_dispatch" => payload["inputs"]["candidate"].as_str(),
+        _ => None,
     };
-    let facts = event_git::EventGit::new(root, c, event_candidate.as_str().unwrap_or(""))?;
+    let facts = event_git::EventGit::new(root, c, event_candidate.unwrap_or(""))?;
     let result = (|| {
         let string = |v: &Value| {
             v.as_str()
@@ -696,9 +696,14 @@ fn prepare_policy_fixed(
                     }
                 }
                 "pull_request" => {
-                    let candidate = string(&payload["pull_request"]["head"]["sha"])?;
-                    let base = facts.pull_request_baseline(workflow_revision, &candidate)?;
-                    (false, Some(base), candidate, "pr-workflow-merge-head")
+                    let head = string(&payload["pull_request"]["head"]["sha"])?;
+                    let base = facts.pull_request_baseline(workflow_revision, &head)?;
+                    (
+                        false,
+                        Some(base),
+                        workflow_revision.to_owned(),
+                        "pr-workflow-merge-tree",
+                    )
                 }
                 "workflow_dispatch" => {
                     let initial = match &payload["inputs"]["initial"] {
@@ -743,7 +748,7 @@ fn prepare_policy_fixed(
         }.into());
         }
         Ok(
-            json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":vec![c.runner.clone(),"check".into()]}),
+            json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"event_head":if event == "pull_request" {string(&payload["pull_request"]["head"]["sha"])?} else {candidate.clone()},"initial":initial,"canonical_argv":vec![c.runner.clone(),"check".into()]}),
         )
     })();
     match result {

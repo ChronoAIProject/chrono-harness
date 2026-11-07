@@ -293,9 +293,15 @@ fn native_platform_policy_serves_real_push_and_pr_acquisition() {
         let revision = payload["pull_request"]["merge_commit_sha"]
             .as_str()
             .unwrap_or(&h.candidate);
+        if event == "pull_request" {
+            // Checkout needs M itself; leave its target parent absent so the
+            // bound event reader must still acquire and re-probe that input.
+            git(&h.root, &["fetch", "--depth=1", "origin", revision]);
+            git(&h.root, &["checkout", "--detach", revision]);
+        }
         let report = prepare(&h.root, &h.config(), event, &payload, revision).unwrap();
         assert_eq!(report["base"], base);
-        assert_eq!(report["candidate"], h.candidate);
+        assert_eq!(report["candidate"], revision);
         let facts = &report["git_facts"];
         assert_eq!(facts["selection"]["platform"], platform);
         assert_eq!(facts["selection"]["path"], FACTS);
@@ -454,6 +460,7 @@ fn initial_pr_and_configured_baseline_routes_share_the_declared_reader() {
             .any(|p| p["argv"].as_array().unwrap().contains(&json!("ls-remote")))
     );
     let merge = tools::pr_workflow_merge(&h.root, &base, &h.candidate);
+    git(&h.root, &["checkout", "--detach", &merge]);
     let pr = prepare(
         &h.root,
         &h.config(),
@@ -462,7 +469,8 @@ fn initial_pr_and_configured_baseline_routes_share_the_declared_reader() {
         &merge,
     )
     .unwrap();
-    assert_eq!(pr["candidate"], h.candidate);
+    assert_eq!(pr["candidate"], merge);
+    assert_eq!(pr["event_head"], h.candidate);
     assert_eq!(pr["workflow_source_revision"], merge);
 }
 

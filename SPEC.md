@@ -439,7 +439,7 @@ CI 的执行结果转换与终态使用同源 Verus：完整 passed／blocked �
 
 `job_gating` 是 `chrono-github-units/v1` scoped／v2 full 的显式可选采用；缺字段保持旧语义，不追溯重解释历史证据。检测复用 judge-ci collection inventory；full 调度复用 FILEMAP/routes 的纯声明选测及两端 assignment，SDK 输入快照仍归实际 full 准入。检测不得调用业务 check/probe、选全兜底或推断目录／语言／import；允许按宿主显式 source inputs 启动产品本身。
 
-Git 完整树／登记 blob 在不物化全部宿主源时可读，PR 固定 event base/head、默认 push 完整 before/after，既有 integration `push_baselines` 保留并由 detector 一次固定。浅 blobless depth2 是可用起点，缺端点明确补取；禁止静默 HEAD^／merge-base 和 workflow paths／paths-ignore。完整 Git DELTA 不设路径数量门，超过平台 API 路径上限仍完整处理。
+Git 完整树／登记 blob 在不物化全部宿主源时可读，PR 固定原生 workflow 合并提交 M 及其第一父 B，校验第二父为事件 head H；所有作业检出 M，`candidate=M` 与 `event_head=H` 分别绑定测试和 GitHub 运行归属、默认 push 完整 before/after，既有 integration `push_baselines` 保留并由 detector 一次固定。浅 blobless depth2 是可用起点，缺端点明确补取；禁止静默 HEAD^／merge-base 和 workflow paths／paths-ignore。完整 Git DELTA 不设路径数量门，超过平台 API 路径上限仍完整处理。
 
 aggregate 的 Rust provider 必须拒绝 detection 失败及任一 required 单元非 success（含 cancelled、missing、unexpected skip）；仅 nonrequired 单元允许 skip。汇总仍经固定 `check --collect` 核原始报告及最终判官，不以 GitHub 状态代替准入。
 
@@ -843,6 +843,10 @@ parent CI 的可选 `gather.resource_observation` 用宿主显式 `step_categori
 这两个入口已通过 beta.11 的原生发布测试与公开混合宿主消费验证；完整格式与边界见 [元数据重建](docs/worktree.md#explicit-metadata-rebind)。
 
 所有交付最终进入 dev；feature 与 integration 均从当时最新 dev 创建。
+
+宿主默认采用[并行验收、按依赖合并](docs/merging.md)：GitHub 关闭 strict，保留必需汇总检查；PR 验固定合并树，目标 push 验完整实际落地 DELTA。独立 PR 不按编号或创建时间排队，也不因 dev 单纯推进而强制追平或全部重验。检查后形成的新落地树由 push 检测并及时修复；这个默认不承诺严格同树。需要该保证的操作须另行登记并实证其合并执行方案。
+
+下述新鲜度阈值及精确 integration 凭据是显式 full 工作流的合同；本仓仍为 proposed，不是默认 scoped CI 已启用的合并门禁。不能据此重新要求所有普通 PR 串行追平。
 
 现役源码新增 `cleanup-remote`，按显式计划与登记 remote 核对唯一 push URL、工作分支期望 OID、固定本地及远端目标提交，复用 ancestor／same-tree 保留检查，以精确 OID lease 删除并核对远端缺失。真实退出、部分效果与显式缺失重试分别报告；不清理本地工作，不推断 PR 或治理成功。目标引用、配置与服务器观察不构成原子事务；目标在删除期间变化可导致删除后的失败。该入口已包含在公开 beta.10，合同见 [远端分支退役](docs/worktree.md#remote-branch-retirement)。
 
