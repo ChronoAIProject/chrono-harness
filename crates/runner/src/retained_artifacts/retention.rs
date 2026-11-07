@@ -561,20 +561,21 @@ impl Inventory {
         }
         Ok(Some(record))
     }
-    // Enumerate owner declarations only for finite admission/maintenance. No
-    // output tree or unknown legacy artifact is discovered or enrolled here.
+    // Every transaction publishes its address gate before its declaration and
+    // removes that gate after retiring the declaration. Enumerate that existing
+    // namespace, so unrelated output capabilities do not consume the round.
     fn transaction_keys(&self) -> Result<Vec<String>, String> {
         let mut keys = Vec::new();
-        for entry in fs::read_dir(&self.directory).map_err(|e| e.to_string())? {
+        for entry in
+            fs::read_dir(self.directory.join("transaction-gates")).map_err(|e| e.to_string())?
+        {
             let entry = entry.map_err(|e| e.to_string())?;
-            let name = entry.file_name();
-            let Some(name) = name.to_str() else { continue };
-            if let Some(key) = name
-                .strip_prefix("transaction-")
-                .and_then(|n| n.strip_suffix(".json"))
-            {
-                keys.push(key.to_owned());
-            }
+            keys.push(
+                entry
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| "transaction address UTF8")?,
+            );
         }
         keys.sort();
         Ok(keys)
@@ -1230,6 +1231,124 @@ impl Inventory {
         self.save(&l, &gate)?;
         Ok(receipt)
     }
+    /// A terminal caller preserves an exact original outside the retired host.
+    /// This ends only its explicitly named roots; maintenance still owns disposal.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn release_preserved(
+        &self,
+        original: &OriginalIdentity,
+        roles: &[String],
+        survivor_root: &Path,
+        survivor_path: &str,
+        digest: &str,
+        length: u64,
+        current_consumers_released: bool,
+        reason: &str,
+    ) -> Result<Value, String> {
+        if !crate::verified_release::valid_request(
+            roles,
+            self.policy.max_related_outputs,
+            reason.trim(),
+            reason.len(),
+            current_consumers_released,
+            length,
+            self.policy.max_output_bytes,
+        ) || !crate::wire::is_digest(digest)
+            || !survivor_root.is_absolute()
+            || fs::canonicalize(survivor_root).map_err(|e| e.to_string())? != survivor_root
+        {
+            return Err("preserved release requires exact roots, external original and explicit current consumer release".into());
+        }
+        crate::relative_path(&original.path)?;
+        let survivor = no_symlink_parents(survivor_root, survivor_path)?;
+        if survivor.starts_with(&self.root) {
+            return Err("preserved original must survive outside the retired host".into());
+        }
+        let verify = |path: &Path| -> Result<String, String> {
+            let before = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+            if !before.is_file() || before.file_type().is_symlink() || before.len() != length {
+                return Err(
+                    "preserved release requires a physical file with the declared length".into(),
+                );
+            }
+            let signature = identity(path)?;
+            let file = fs::File::open(path).map_err(|e| e.to_string())?;
+            if identity(path)? != signature
+                || crate::copy_hashed(&file, std::io::sink())? != (digest.into(), length)
+                || identity(path)? != signature
+                || before.modified().map_err(|e| e.to_string())?
+                    != fs::symlink_metadata(path)
+                        .map_err(|e| e.to_string())?
+                        .modified()
+                        .map_err(|e| e.to_string())?
+            {
+                return Err("preserved original bytes or identity changed".into());
+            }
+            Ok(signature)
+        };
+        let survivor_identity = verify(&survivor)?;
+        let receipt = json!({"schema":"chrono-preserved-original-release/v1","id":original.id,
+            "original":original,"roles":roles,"survivor_root":survivor_root,
+            "survivor_path":survivor_path,"survivor_identity":survivor_identity,
+            "sha256":digest,"length":length,"reason":reason,
+            "effects":"consumer-root-release-only","disposal":"not-attempted",
+            "completion":"not-established"});
+        let gate = self.addressed_gate(
+            &[original.id.clone()],
+            &[original.path.clone()],
+            roles,
+            None,
+            false,
+            true,
+        )?;
+        let mut ledger = self.load(&gate)?;
+        if ledger.summaries.iter().any(|s| s == &receipt) {
+            self.stable(&gate)?;
+            return Ok(receipt);
+        }
+        let output = ledger
+            .outputs
+            .iter()
+            .find(|o| o.id == original.id)
+            .ok_or("preserved original is unavailable")?;
+        if output.tree {
+            return Err(
+                "preserved release requires an explicitly retained regular original".into(),
+            );
+        }
+        let actual: Vec<_> = ledger
+            .roots
+            .iter()
+            .filter(|(_, ids)| crate::verified_release::contains(ids, &original.id))
+            .map(|(role, _)| role.clone())
+            .collect();
+        if !crate::verified_release::same_members(&actual, roles) {
+            return Err(
+                "preserved release roots differ from the current original consumers".into(),
+            );
+        }
+        let leases = self.original_leases(&ledger, std::slice::from_ref(original), true)?;
+        let source = no_symlink_parents(&self.root, &original.path)?;
+        if verify(&source)? != original.identity || verify(&survivor)? != survivor_identity {
+            return Err("preserved release original identity changed".into());
+        }
+        for role in roles {
+            let remaining = crate::verified_release::without(&ledger.roots[role], &original.id);
+            self.reference_locked(&mut ledger, role, &remaining)?;
+        }
+        for lease in &leases {
+            lease.stable()?;
+        }
+        self.stable(&gate)?;
+        ledger.summaries.push(receipt.clone());
+        let excess = ledger
+            .summaries
+            .len()
+            .saturating_sub(self.policy.max_summaries);
+        ledger.summaries.drain(..excess);
+        self.save(&ledger, &gate)?;
+        Ok(receipt)
+    }
     /// Edges are not roots. Released historical cycles can be reclaimed.
     pub fn dependencies(&self, id: &str, references: &[String]) -> Result<(), String> {
         let gate = self.addressed_gate(
@@ -1265,7 +1384,30 @@ impl Inventory {
     pub fn maintain_at(&self, observed: u64) -> Result<Value, String> {
         self.round_metadata
             .set(Some(self.policy.max_metadata_bytes_per_round));
-        let result = self.maintain_round(observed);
+        let result = self.maintain_round(observed, None);
+        self.round_metadata.set(None);
+        result
+    }
+    /// A caller can name its actual remaining originals without re-enumerating
+    /// unrelated diagnostic metadata. The same limits and dependency guards apply.
+    pub fn maintain_originals(&self, originals: &[String]) -> Result<Value, String> {
+        if !crate::verified_release::unique_selection(originals, self.policy.max_related_outputs) {
+            return Err(
+                "explicit maintenance originals are empty, duplicated or over capacity".into(),
+            );
+        }
+        for id in originals {
+            let path = self.object_directory(id)?.join("record.json");
+            if !fs::symlink_metadata(path)
+                .map_err(|e| e.to_string())?
+                .is_file()
+            {
+                return Err("explicit maintenance original declaration is unavailable".into());
+            }
+        }
+        self.round_metadata
+            .set(Some(self.policy.max_metadata_bytes_per_round));
+        let result = self.maintain_round(now()?, Some(originals));
         self.round_metadata.set(None);
         result
     }
@@ -1274,11 +1416,11 @@ impl Inventory {
     pub fn maintain_available(&self) -> Result<Value, String> {
         self.maintain()
     }
-    fn maintain_round(&self, observed: u64) -> Result<Value, String> {
+    fn maintain_round(&self, observed: u64, originals: Option<&[String]>) -> Result<Value, String> {
         self.round_began.set(Some(Instant::now()));
         self.round_node_limit
             .set(Some(self.policy.max_nodes_per_round));
-        let result = self.partition_round(observed);
+        let result = self.partition_round(observed, originals);
         self.round_node_limit.set(None);
         self.round_began.set(None);
         result

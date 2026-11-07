@@ -236,7 +236,11 @@ impl Inventory {
             None,
         )
     }
-    pub(super) fn partition_round(&self, observed: u64) -> Result<Value, String> {
+    pub(super) fn partition_round(
+        &self,
+        observed: u64,
+        originals: Option<&[String]>,
+    ) -> Result<Value, String> {
         let began = self
             .round_began
             .get()
@@ -256,7 +260,16 @@ impl Inventory {
             "legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"});
         let mut nodes = 0usize;
         let mut complete = true;
-        for key in self.transaction_keys()? {
+        let global = crate::verified_release::global_maintenance(originals);
+        if let Some(originals) = originals {
+            result["scope"]["kind"] = json!("declared-components");
+            result["scope"]["originals"] = json!(originals);
+        }
+        for key in if !global {
+            Vec::new()
+        } else {
+            self.transaction_keys()?
+        } {
             if nodes >= self.policy.max_nodes_per_round
                 || !self.metadata_room()
                 || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
@@ -273,12 +286,22 @@ impl Inventory {
             }
         }
         let mut seen = BTreeSet::new();
-        for entry in fs::read_dir(self.directory.join("objects")).map_err(|e| e.to_string())? {
-            let entry = entry.map_err(|e| e.to_string())?;
-            let id = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| "output registration address UTF8")?;
+        let addresses: Box<dyn Iterator<Item = Result<String, String>> + '_> = match originals {
+            Some(originals) => Box::new(originals.iter().cloned().map(Ok)),
+            None => Box::new(
+                fs::read_dir(self.directory.join("objects"))
+                    .map_err(|e| e.to_string())?
+                    .map(|entry| {
+                        entry
+                            .map_err(|e| e.to_string())?
+                            .file_name()
+                            .into_string()
+                            .map_err(|_| "output registration address UTF8".into())
+                    }),
+            ),
+        };
+        for id in addresses {
+            let id = id?;
             if seen.contains(&id) {
                 continue;
             }
@@ -357,7 +380,11 @@ impl Inventory {
                 }
             }
         }
-        match self.prune_roles(observed, &mut nodes) {
+        match if !global {
+            Ok(Vec::new())
+        } else {
+            self.prune_roles(observed, &mut nodes)
+        } {
             Ok(errors) => result["accounting_errors"]
                 .as_array_mut()
                 .unwrap()
@@ -378,7 +405,7 @@ impl Inventory {
         }
         Ok(result)
     }
-    fn object_directory(&self, id: &str) -> Result<PathBuf, String> {
+    pub(super) fn object_directory(&self, id: &str) -> Result<PathBuf, String> {
         if !id.starts_with("output-")
             || id.len() > 128
             || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')

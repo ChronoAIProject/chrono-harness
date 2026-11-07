@@ -36,6 +36,9 @@ pub mod verified_limits;
 #[allow(unexpected_cfgs)]
 pub mod verified_paths;
 #[allow(unexpected_cfgs)]
+#[path = "retained_artifacts/verified_release.rs"]
+pub mod verified_release;
+#[allow(unexpected_cfgs)]
 pub mod verified_status;
 #[allow(unexpected_cfgs)]
 pub mod verified_verifier;
