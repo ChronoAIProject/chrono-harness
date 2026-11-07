@@ -106,6 +106,7 @@ fn expected_statuses(findings: &[policy::Finding], pass: bool, warn: bool, fail:
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn protocol_findings_cover_the_complete_presence_truth_table() {
+    proof { reveal_strlit("info"); reveal_strlit("warning"); reveal_strlit("error"); }
     let empty: Vec<policy::Finding> = Vec::new();
     expected_statuses(&empty, true, false, false, false);
     let only_info = vec![finding("info"), finding("info")];
@@ -122,6 +123,10 @@ fn protocol_findings_cover_the_complete_presence_truth_table() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn protocol_level_matching_uses_the_entire_real_field() {
+    proof {
+        reveal_strlit("info"); reveal_strlit("warning"); reveal_strlit("error");
+        reveal_strlit("ERROR"); reveal_strlit("warning\0"); reveal_strlit("警告"); reveal_strlit("");
+    }
     let irrelevant = vec![finding("ERROR"), finding("warning\0"), finding("警告"), finding("")];
     expected_statuses(&irrelevant, true, false, false, false);
     let misleading_fields = policy::Finding {

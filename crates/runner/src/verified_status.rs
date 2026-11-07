@@ -155,7 +155,7 @@ proof fn finding_level_prefix_step(findings: Seq<Finding>, level: Seq<char>, at:
     let before = findings.take(at);
     let after = findings.take(at + 1);
     if finding_level_present(after, level) {
-        let i = choose|i: int| 0 <= i < after.len() && after[i].level@ == level;
+        let i = choose|i: int| 0 <= i < after.len() && (#[trigger] after[i]).level@ == level;
         if i < at {
             assert(before[i].level@ == level);
             assert(finding_level_present(before, level));
@@ -164,7 +164,7 @@ proof fn finding_level_prefix_step(findings: Seq<Finding>, level: Seq<char>, at:
         }
     }
     if finding_level_present(before, level) {
-        let i = choose|i: int| 0 <= i < before.len() && before[i].level@ == level;
+        let i = choose|i: int| 0 <= i < before.len() && (#[trigger] before[i]).level@ == level;
         assert(after[i].level@ == level);
         assert(finding_level_present(after, level));
     }
