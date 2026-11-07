@@ -3,6 +3,8 @@
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
@@ -45,6 +47,41 @@ pub fn equal_bytes(actual: &[u8], expected: &[u8]) -> (equal: bool)
 #[verifier::inline]
 pub open spec fn oid_byte(byte: u8) -> bool {
     48 <= byte <= 57 || 97 <= byte <= 102
+}
+
+#[verifier::inline]
+pub open spec fn digest_format(bytes: Seq<u8>) -> bool {
+    bytes.len() == 64
+        && forall|i: int| 0 <= i < bytes.len() ==> oid_byte(#[trigger] bytes[i])
+}
+
+pub fn valid_digest(bytes: &[u8]) -> (valid: bool)
+    ensures valid == digest_format(bytes@),
+{
+    if bytes.len() != 64 {
+        return false;
+    }
+    let mut i = 0;
+    while i < bytes.len()
+        invariant
+            0 <= i <= bytes.len(),
+            bytes.len() == 64,
+            forall|j: int| 0 <= j < i ==> oid_byte(#[trigger] bytes[j]),
+        decreases bytes.len() - i,
+    {
+        let byte = bytes[i];
+        if !((48 <= byte && byte <= 57) || (97 <= byte && byte <= 102)) {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+pub fn valid_digest_text(text: &str) -> (valid: bool)
+    ensures valid == digest_format(text.spec_bytes()),
+{
+    valid_digest(text.as_bytes())
 }
 
 #[verifier::inline]
