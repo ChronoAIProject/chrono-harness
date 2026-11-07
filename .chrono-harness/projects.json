@@ -1410,6 +1410,28 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "verify_readiness": {
+          "operation": "verify.registration-readiness",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-readiness.rlib,dep-info=.chrono-harness/state/verify.registration-readiness.rlib.d",
+            "crates/judge-registration/src/verified_readiness.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-readiness.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
@@ -1550,6 +1572,28 @@
             "crates/judge-registration-tests/tests/verified_nodes.rs",
             "-o",
             ".chrono-harness/state/verify.registration-nodes-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_readiness": {
+          "operation": "verify.registration-readiness-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-readiness-tests.rlib,dep-info=.chrono-harness/state/verify.registration-readiness-tests.rlib.d",
+            "crates/judge-registration-tests/tests/verified_readiness.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-readiness-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
