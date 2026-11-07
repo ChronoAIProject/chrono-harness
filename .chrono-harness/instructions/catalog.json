@@ -26,14 +26,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "先说清需求。行动前，核对用户的目标、范围、限制、谁会实际使用成果，以及怎样才算通过验收，并与当前 SPEC 对照。按“需求→审计→重构→开发”推进；确认成果被正确使用后，再核对 SPEC。先考虑受影响的各方关系，再选择足以解决问题的最小改动。"
+            "text": "先说清需求。行动前，核对用户的目标、范围、限制、谁会实际使用成果，以及怎样才算通过验收，并与当前 SPEC 对照。按“需求→审计→重构→开发”推进；确认成果被正确使用后，再核对 SPEC。先考虑受影响的各方关系，再选择足以解决问题的最小改动。\n\n逐项追问为什么。对功能、字段、输入、依赖、测试、脚本、判官、CI 任务、缓存、报告、文档和生成副本，连续问“谁正在使用、解决什么问题、删去会使哪个当前结果失败、该结果又由谁使用”，直到落到当前已接入的用户行为、生产／发布／外部接口义务，或真实需求绑定的可观察正确性、完整性、安全和恢复结果。每一跳记录问题、生产者、使用方、输入、输出用途、替代方案和验收证据；共享对象沿各个使用分支分别核实。登记、引用、仅有专属测试、未来使用、方便审计、保持一致或一次 CI 通过，不能自证必要。到达身份固定、当前已接入且可观察验收的终点即可停止。\n\n缺证就保留未知。使用方身份、版本、入口或证据不可取得时保持 unknown；没有必要性终点的对象不得新增、激活、加入构建／CI／缓存／报告保留或成为新依赖。已有对象在保护未完工作和真实失败原件后补证、迁移或退役；只阻断依赖该缺口的工作，独立工作继续。需求、使用方或终点变化时重新核对，不增加人工审批关卡。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Clarify requirements. Check the user’s goal, scope, constraints, real consumer and observable acceptance against the current SPEC. Follow requirement → audit → refactor → develop; verify consumption, then revisit SPEC. Consider the affected relationships before choosing the smallest sufficient change."
+            "text": "Clarify requirements. Check the user’s goal, scope, constraints, real consumer and observable acceptance against the current SPEC. Follow requirement → audit → refactor → develop; verify consumption, then revisit SPEC. Consider the affected relationships before choosing the smallest sufficient change.\n\nAsk why for every object. For features, fields, inputs, dependencies, tests, scripts, judges, CI jobs, caches, reports, documents and generated projections, keep asking who currently consumes it, what problem that solves, which current result would fail without it, and who consumes that result. Stop at a fixed, currently connected endpoint with observable acceptance: user behavior, a production/release/external-interface obligation, or a correctness, completeness, safety or recovery result bound to a real requirement. Record each hop’s problem, producer, consumer, inputs, output use, alternatives and acceptance evidence; verify every consumer branch of shared objects. Registration, references, dedicated tests alone, future use, audit convenience, consistency or one green CI run cannot establish necessity.\n\nKeep missing evidence unknown. If consumer identity, version, entrypoint or evidence is unavailable, retain unknown. Objects without a necessity endpoint must not be added, activated, included in builds/CI/caches/report retention or used as new dependencies. For existing objects, protect unfinished work and original failures, then obtain evidence, migrate or retire them. Block only work that depends on the gap and continue independent work. Recheck when requirements, consumers or endpoints change; add no human approval gate."
           }
         }
       ]
