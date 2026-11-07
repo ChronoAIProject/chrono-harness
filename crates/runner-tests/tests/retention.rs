@@ -1762,8 +1762,7 @@ fn completed_child_original_transfers_to_parent_before_its_success_root_is_relea
         id
     };
     assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
-    let between = maintenance(h.path());
-    assert_eq!(fixture_remaining(h.path(), &between), 1, "{between}");
+    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
     assert!(!h.path().join(unrelated).exists());
     assert_eq!(
         fs::read(h.path().join(&child_path).join("stdout")).unwrap(),
@@ -2194,8 +2193,14 @@ fn historical_cli_requires_registered_producer_receipt_exclusion_and_release_evi
         call(json!({"operation":"release","enrollment":"cohort"})).exit_code,
         0
     );
-    let round = maintenance(h.path());
-    assert_eq!(round["removed_logical_bytes"], 2048);
+    let rounds = maintain_fixture_rounds_to(h.path(), 0);
+    assert_eq!(
+        rounds
+            .iter()
+            .map(|round| round["removed_logical_bytes"].as_u64().unwrap())
+            .sum::<u64>(),
+        2048
+    );
     assert_eq!(
         ledger(h.path())["summaries"][0]["original_outcome"]["original_outcome"]["exit"],
         101
@@ -3480,11 +3485,11 @@ fn addressed_records_observe_changed_rows_roots_and_dependency_refusals() {
     inventory(h.path())
         .reference("current", &[ids[1].clone()])
         .unwrap();
-    maintenance(h.path());
+    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
     assert!(!h.path().join(&first).exists());
     assert!(h.path().join(&second).exists());
     inventory(h.path()).reference("current", &[]).unwrap();
-    maintenance(h.path());
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert!(!h.path().join(&second).exists());
     let state = ledger(h.path());
     for (id, exit) in [(&ids[0], 202), (&ids[1], 7)] {
