@@ -561,20 +561,21 @@ impl Inventory {
         }
         Ok(Some(record))
     }
-    // Enumerate owner declarations only for finite admission/maintenance. No
-    // output tree or unknown legacy artifact is discovered or enrolled here.
+    // Every transaction publishes its address gate before its declaration and
+    // removes that gate after retiring the declaration. Enumerate that existing
+    // namespace, so unrelated output capabilities do not consume the round.
     fn transaction_keys(&self) -> Result<Vec<String>, String> {
         let mut keys = Vec::new();
-        for entry in fs::read_dir(&self.directory).map_err(|e| e.to_string())? {
+        for entry in fs::read_dir(self.directory.join("transaction-gates"))
+            .map_err(|e| e.to_string())?
+        {
             let entry = entry.map_err(|e| e.to_string())?;
-            let name = entry.file_name();
-            let Some(name) = name.to_str() else { continue };
-            if let Some(key) = name
-                .strip_prefix("transaction-")
-                .and_then(|n| n.strip_suffix(".json"))
-            {
-                keys.push(key.to_owned());
-            }
+            keys.push(
+                entry
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| "transaction address UTF8")?,
+            );
         }
         keys.sort();
         Ok(keys)
