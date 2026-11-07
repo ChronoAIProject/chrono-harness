@@ -503,7 +503,7 @@ pub fn disjoint_homes(a: &[u8], b: &[u8]) -> (valid: bool)
     !path_contains(a, b) && !path_contains(b, a)
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize, serde::Serialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct NativePlatform {
     pub system: String,
