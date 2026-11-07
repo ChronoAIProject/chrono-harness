@@ -1989,11 +1989,27 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         fs::Permissions::from_mode(0o755),
     )
     .unwrap();
-    let tree = git(delivery_root.path(), &["rev-parse", &format!("{}^{{tree}}", h.candidate)]);
-    let workflow_merge = git(delivery_root.path(), &[
-        "commit-tree", &tree, "-p", &h.base, "-p", &h.candidate,
-        "-m", "Fixture native PR workflow merge",
-    ]);
+    let tree = git(
+        delivery_root.path(),
+        &["rev-parse", &format!("{}^{{tree}}", h.candidate)],
+    );
+    let workflow_merge = git(
+        delivery_root.path(),
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit-tree",
+            &tree,
+            "-p",
+            &h.base,
+            "-p",
+            &h.candidate,
+            "-m",
+            "Fixture native PR workflow merge",
+        ],
+    );
     fs::write(&payload, serde_json::to_vec(&json!({"merge_commit_sha":workflow_merge,"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate,"ref":"integration/short-full"}}})).unwrap()).unwrap();
     detect(delivery_root.path(), "930");
     let published = native(delivery_root.path(), "publish", None, "930");
