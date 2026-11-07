@@ -2011,9 +2011,60 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         ],
     );
     fs::write(&payload, serde_json::to_vec(&json!({"merge_commit_sha":workflow_merge,"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate,"ref":"integration/short-full"}}})).unwrap()).unwrap();
-    git(
+    // Business snapshots also bind the tested merge endpoint. Produce fresh
+    // originals at B and M instead of reusing the integration head's snapshot.
+    let capture_delivery = |endpoint: &str, output: &str| {
+        git(delivery_root.path(), &["checkout", "--detach", endpoint]);
+        let captured = host::capture_native(
+            delivery_root.path(),
+            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                .current_dir(delivery_root.path())
+                .env("CHRONO_CHECK_SOURCE", "ci")
+                .env("DECLARED_EMPTY", "")
+                .env_remove("DECLARED_ABSENT")
+                .args([
+                    "capture",
+                    "--host-root",
+                    ".",
+                    "--config",
+                    CONFIG,
+                    "--commit",
+                    endpoint,
+                    "--output",
+                    output,
+                ]),
+        );
+        assert!(
+            captured.status.success(),
+            "{}",
+            String::from_utf8_lossy(&captured.stderr)
+        );
+    };
+    capture_delivery(&h.base, ".chrono-harness/state/base-delivery.json");
+    capture_delivery(
+        &workflow_merge,
+        ".chrono-harness/state/candidate-delivery.json",
+    );
+    let paired = host::capture_native(
         delivery_root.path(),
-        &["checkout", "--detach", &workflow_merge],
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(delivery_root.path())
+            .args([
+                "pair",
+                "--host-root",
+                ".",
+                "--base-snapshot",
+                ".chrono-harness/state/base-delivery.json",
+                "--candidate-snapshot",
+                ".chrono-harness/state/candidate-delivery.json",
+                "--output",
+                ".chrono-harness/state/inputs.json",
+            ]),
+    );
+    assert!(
+        paired.status.success(),
+        "{}",
+        String::from_utf8_lossy(&paired.stderr)
     );
     let delivery_detection = detect(delivery_root.path(), "930");
     assert_eq!(delivery_detection["base"], h.base);
