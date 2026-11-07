@@ -216,18 +216,6 @@ Config 接受明确的 `schema_version: 1 | 2 | 3 | 4`；projects 接受 1／2�
 | artifacts | `{path, owner, kind, tracked: false}[]`；明确生成目录白名单 |
 | enforcement | `not-implemented` 或 `enabled`；proposed 不产生通过报告 |
 
-Config v2/v3/v4 可为本轮生产、由明确消费者读取的状态输入登记
-`{id, location, presence: "present", source: {schema: "chrono-runtime-state/v1", manifest, pointer}}`，
-不同时登记 `sha256`。`location` 与 `manifest` 都必须是 `.chrono-harness/state/` 下的规范相对路径；
-消费时沿既有路径检查拒绝符号链接。`manifest` 必须是成功的
-`chrono-input-observation-result/v2`（`status: "observed"`），`pointer` 是交由
-`serde_json::Value::pointer` 解释的非空 JSON Pointer，选择包含 `{path, sha256}` 的对象。
-所选 path 必须等于 location，消费者在实际操作前重新计算活文件摘要；缺失、失败观察、
-无效指针、不同路径或内容漂移均失败，不启动受保护 Cargo 操作。
-运行时状态不进入历史端点快照，端点不得保留该输入的字节表示；快照成功不豁免实际消费前置。
-生产者、消费者与有限保留／释放要求沿 §2.3 登记，不把本轮来源变成固定执行物身份，
-也不据此声明输入完整、full 启用或同判。
-
 tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次，报告绝对路径、文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。Config v3 在读取 Git 对象前，从显式 candidate 配置绑定 `facts_git`；该配置的原始字节随后必须与固定 candidate 中的 blob 相同。
 
 tool 的 program 按已声明 PATH 或显式路径解析，input.location 必须指向同一执行物，present 摘要先于任何启动核验，expected_version 必须为非空字符串并匹配 version_argv 的实际 UTF-8 stdout（只去末尾空白）。相同 candidate 绑定读取 base 与 candidate，不启动 base 工具。

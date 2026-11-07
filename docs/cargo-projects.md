@@ -198,6 +198,6 @@ diagnostics 是独立 Rust 库。runner、judge-ci 和专属测试通过 Cargo �
 
 **可见宿主政策与 CI 消费修改：**删除 diagnostics 专属 Cargo 政策、Git 选择器及两个直接配置、两个 bootstrap profile、观察声明、本机 Rust／Xcode 快照、vendor 配置和准备声明。同步移除 macOS 27 的 1,125 项独占输入声明、专属 file-input binding、3,430 条配置级边及三个公共 guard 依赖。Git、bootstrap 和三个独立工具输入仍有现役消费者，保留各自声明；其他普通 Cargo 环境绑定不受此次退役影响。
 
-专属宿主组合测试和私有离线领域测试随功能退役；通用 bootstrap 的工具漂移、安装验证、普通 Cargo 领域及通用 Cargo guard 的成功／失败／边界行为测试继续执行。runtime-state 输入测试使用自含 fixture，保留原全部断言。这里只退役宿主采用，不据此声明通用 guard 产品能力必要性或完整输入已验收。
+专属宿主组合测试和私有离线领域测试随功能退役；通用 bootstrap 的工具漂移、安装验证、普通 Cargo 领域及通用 Cargo guard 的成功／失败／边界行为测试继续执行。专为该采用引入的运行时来源输入模式及其合成测试也已退役，Cargo 消费恢复统一的显式摘要绑定。通用 guard 产品能力仍须单独审计必要性，完整输入尚未验收。
 
 历史失败和原件由既有保管者按原义务保留；删除入口不表示历史实验通过，也不删除其他工作树或 state。验证走候选 bootstrap、两端 DELTA 的正式检查、PR CI 和落地后验；总运行、CI、存储收益未测，输入完整性与同判仍未建立。
