@@ -59,6 +59,21 @@ impl WireStatus {
     }
 }
 
+/// 普通响应和保留报告共用实际头部字段；不另加名称或协议内容限制。
+pub fn wire_header_matches(
+    protocol: &str, request_id: &str, judge_id: &str, status: &WireStatus, exit: i32,
+    expected_protocol: &str, expected_request_id: &str, expected_judge_id: &str,
+) -> (matches: bool)
+    ensures matches <==> protocol@ == expected_protocol@
+        && request_id@ == expected_request_id@ && judge_id@ == expected_judge_id@
+        && exit == status.exit_spec(),
+{
+    identifiers::equal_text(protocol, expected_protocol)
+        && identifiers::equal_text(request_id, expected_request_id)
+        && identifiers::equal_text(judge_id, expected_judge_id)
+        && exit == status.exit_code()
+}
+
 pub proof fn wire_status_order_laws(a: WireStatus, b: WireStatus, c: WireStatus)
     ensures
         (a.rank_spec() == b.rank_spec()) == (a == b),

@@ -176,6 +176,7 @@ pub fn unit_originals(
 
 pub(super) fn collect(
     req: &Request,
+    reader: &Reader,
     manifest: &str,
     config: &CheckConfig,
     snapshot: &Snapshot,
@@ -186,6 +187,11 @@ pub(super) fn collect(
 ) -> Result<Response, String> {
     let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(&req.host_root)?;
     let p = &snapshot.policy;
+    let source_io = super::source_binding::CandidateIo {
+        reader,
+        request: req,
+        tree: &snapshot.tree,
+    };
     let units = p
         .units
         .as_ref()
@@ -479,6 +485,12 @@ pub(super) fn collect(
             original["process"] = chrono_harness::full::expand_process(&original["process"])?;
             let receipt: Receipt = serde_json::from_value(original).map_err(|e| e.to_string())?;
             chrono_judge_routes::compare(&plan, operation, Some(&receipt))?;
+            chrono_harness::verified_verifier::sources::bind_process_sources(
+                "passed",
+                Some((&receipt.process.argv, &receipt.compiler_dependency)),
+                &snapshot.source_registry,
+                &source_io,
+            )?;
             if row["operation"] != operation.method.operation
                 || receipt.process.exit_code != 0
                 || receipt.process.failure.is_some()

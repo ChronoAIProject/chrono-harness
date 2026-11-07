@@ -76,6 +76,33 @@ fn operation_cause_preserves_empty_unicode_nul_and_default() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn source_binding_failure_cannot_reuse_success_or_fabricate_process_exit() {
+    proof { reveal_strlit("failed"); reveal_strlit("passed");
+        assert("failed"@[0] != "passed"@[0]); }
+    let zero = policy::operation_result_with_sources("proof\0é", "passed", &None, Some(0),
+        Err("original source mismatch\0é".to_string()));
+    assert(zero.id@ == "proof\0é"@ && zero.status == Status::Failed);
+    assert(zero.cause@ == "original source mismatch\0é"@ && zero.exit_code.is_none());
+    let nonzero = policy::operation_result_with_sources("proof", "passed", &None, Some(-7),
+        Err("".to_string()));
+    assert(nonzero.status == Status::Failed && nonzero.exit_code == Some(-7i32));
+    assert(nonzero.cause@ == ""@);
+    let passed = policy::operation_result_with_sources("proof", "passed", &None, Some(0), Ok(()));
+    assert(passed.status == Status::Passed && passed.exit_code == Some(0i32));
+    let blocked = policy::operation_result_with_sources("proof", "blocked",
+        &Some("original block".to_string()), Some(0), Err("later binding".to_string()));
+    proof {
+        reveal_strlit("blocked"); reveal_strlit("passed");
+        assert("blocked"@[0] != "passed"@[0]);
+    }
+    assert(blocked.status == Status::Blocked && blocked.exit_code.is_none());
+    assert(blocked.cause@ == "original block"@);
+    let rows = vec![passed, zero];
+    let terminal = policy::response_status(&rows);
+    assert(terminal == Status::Failed);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_status_uses_all_original_result_states() {
     let empty: Vec<CheckResult> = Vec::new();
     let empty_status = policy::response_status(&empty);

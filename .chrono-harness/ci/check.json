@@ -405,6 +405,7 @@
       "verify.verus-result": [
         "ci",
         "judge-ci",
+        "judge-projects",
         "judge-registration",
         "judge-routes",
         "runner"
@@ -412,6 +413,7 @@
       "verify.verus-result-tests": [
         "ci",
         "judge-ci",
+        "judge-projects",
         "judge-registration",
         "judge-routes",
         "runner"
