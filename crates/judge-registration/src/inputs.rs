@@ -369,12 +369,7 @@ pub fn required_plan_files(
         .ok_or("inputs missing")?
     {
         if runtime_state_source(input)?.is_none() {
-            all.insert(
-                input["id"]
-                    .as_str()
-                    .ok_or("input id missing")?
-                    .to_owned(),
-            );
+            all.insert(input["id"].as_str().ok_or("input id missing")?.to_owned());
         }
     }
     let Some(selected) = selected else {
@@ -714,7 +709,9 @@ fn validate_inner(
             let id = input["id"].as_str().unwrap();
             if runtime_state_source(input)?.is_some() {
                 if retained["files"].get(id).is_some() {
-                    return Err(format!("{name}: runtime-state input cannot be retained: {id}"));
+                    return Err(format!(
+                        "{name}: runtime-state input cannot be retained: {id}"
+                    ));
                 }
                 continue;
             }

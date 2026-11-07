@@ -200,13 +200,13 @@ class NativeCargoDomains(unittest.TestCase):
                                  "CARGO_HOME": "/Users/runner/.cargo",
                                  "FIXTURE_DOMAIN_ROOT": str(self.root / "domains")}
 
-    def native_config(self, entry):
+    def native_config(self, entry, expected_sha256="b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"):
         # This test supplies the already registered native identity as input;
         # production selection/drift validation remains the Rust owner's check.
         selector = json.loads((SOURCE.parents[1] / entry).read_text())
         rows = selector["platforms"]["macos-aarch64"]["configurations"]
         selected = [row for row in rows if row["sha256"] ==
-                    "aaed7cacc9a5187b973dc1b9bd079b8c26842c57b49bacb2883c4ddc91b0e771"]
+                    expected_sha256]
         self.assertEqual(len(selected), 1)
         return json.loads((SOURCE.parents[1] / selected[0]["path"]).read_text())
 
@@ -281,7 +281,10 @@ class NativeCargoDomains(unittest.TestCase):
     def test_private_diagnostics_preparation_and_offline_failure_boundaries(self):
         action = self.actions["build.diagnostics"]
         guard_config = action["argv"][action["argv"].index("--config") + 1]
-        guard = self.selected_environment(self.native_config(guard_config)["environment"]["values"])
+        guard = self.selected_environment(self.native_config(
+            guard_config,
+            "aaed7cacc9a5187b973dc1b9bd079b8c26842c57b49bacb2883c4ddc91b0e771",
+        )["environment"]["values"])
         observer = json.loads((SOURCE.parent / "inputs/diagnostics-observation.json").read_text())
         acquisition = self.selected_environment(observer["environment"]["values"])
         self.assertEqual(guard["CARGO_HOME"], acquisition["CARGO_HOME"])
