@@ -327,8 +327,8 @@ link／dep-info／`-o` 输出同源，源码和输出参数非空。额外参数
 普通操作向解码接口传空字节，不解析其业务输出；其既有退出规则由原所有者保留。
 本地 projects 和离线 collection 都消费 routes 的同一准入结果。
 
-本宿主为各项证明操作逐项登记固定 Verus 版本及 commit；报告准入的两项整 crate 根作为
-runner、registration、routes、judge-ci 和 CI 生成器测试计划的必需前置。
+本宿主为各项证明操作逐项登记固定 Verus 版本及 commit；报告准入的两项整 crate 根归
+runner 所有者计划。同次 DELTA 汇总核受影响证明及 registration、routes、judge-ci 和 CI 生成器的实际消费测试。
 未执行的证明、未声明合同的普通操作及现有原件身份核验，不因此取得全仓覆盖保证。
 真实编译依赖的候选绑定见下一节；完整 SPEC 对应及全仓新增逻辑覆盖门仍须继续实施。
 新增检查为固定形状比较和原报告解码，完整构建、验证、CI、存储及运行成本未测。
