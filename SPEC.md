@@ -425,6 +425,12 @@ worktree v2 的 start/reconstruct 自动发布目的地 birth association，full
 
 同一入口的 `--collect MANIFEST` 只重建当前义务并核所需原始单元报告，不能重跑业务测试。它检查完整报告集合、固定端点／配置／执行物 pin、原始判官输出、计划身份及候选操作／顺序／边界、工具观察、逐操作原始回执和成功状态；缺漏、重复、陈旧或失败报告不得全局通过。执行物 pin 由明确调用输入承担，不宣称据此证明构建产地、外部输入完整或跨环境同判。
 
+CI 的执行结果转换与终态使用同源 Verus：完整 passed／blocked 状态分别映射为 Passed／Blocked，其余均 Failed，
+原因保留原错误或既有默认值；退出只在原 Passed 或原非零退出时保留。
+单元和 collection 的终态由真实结果列表产生，存在 Failed／Blocked 当且仅当失败；
+库存异常及诊断失败由同一证明所有者产生对应失败记录和状态。
+这些局部证明不替代 projects 原结果生产、原件准入、JSON 解码和完整覆盖门，范围见 [Verus 说明](docs/verus.md)。
+
 `chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。
 
 完整字段、共享／重试合同、初始输入及当前采用边界见 [并发 CI 合同](docs/ci-units.md)。此扩展不自动启用完整七判官治理；产品仓库按登记将完整测试计划分配给显式单元，当前通过 `job_gating` 投影为一份 parent 内的独立条件 job；启动核心及共享操作也由宿主登记。

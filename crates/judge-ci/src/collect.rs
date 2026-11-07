@@ -511,15 +511,10 @@ pub(super) fn collect(
             exit_code: None,
         });
     }
-    let failed = results.iter().any(|r| r.status == Status::Failed);
     Ok(Response {
         protocol: units::scope_protocol(req).into(),
         request_id: req.request_id.clone(),
-        status: if failed {
-            Status::Failed
-        } else {
-            Status::Passed
-        },
+        status: verified_collection::response_status(&results),
         results,
         evidence: object!({"scope":config.schema,"execution_scope":req.scope,"base":req.base,"candidate":req.candidate,
             "global_selected":selected,"required_units":required,"manifest_sha256":sha256(&manifest_bytes),"reports":verified,
