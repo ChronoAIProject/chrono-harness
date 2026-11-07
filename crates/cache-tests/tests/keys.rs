@@ -138,7 +138,10 @@ fn only_current_cache_registration_is_admitted() {
         current["caches"]["project"]["key"]
     );
     // A retired registration must fail even without the current contract map.
-    config.as_object_mut().unwrap().remove("consumer_operations");
+    config
+        .as_object_mut()
+        .unwrap()
+        .remove("consumer_operations");
     for schema in ["chrono-cache/v1", "chrono-cache/v3", ""] {
         config["schema"] = json!(schema);
         let config: Config = serde_json::from_value(config.clone()).unwrap();
