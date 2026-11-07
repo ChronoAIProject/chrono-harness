@@ -566,8 +566,8 @@ impl Inventory {
     // namespace, so unrelated output capabilities do not consume the round.
     fn transaction_keys(&self) -> Result<Vec<String>, String> {
         let mut keys = Vec::new();
-        for entry in fs::read_dir(self.directory.join("transaction-gates"))
-            .map_err(|e| e.to_string())?
+        for entry in
+            fs::read_dir(self.directory.join("transaction-gates")).map_err(|e| e.to_string())?
         {
             let entry = entry.map_err(|e| e.to_string())?;
             keys.push(
