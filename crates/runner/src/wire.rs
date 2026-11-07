@@ -224,9 +224,9 @@ impl Request {
     }
     fn validate_header(&self) -> Result<(), String> {
         if !crate::verified_identifiers::valid_request_header(
-            &self.protocol,
-            &self.mode,
-            &self.judge_id,
+            self.protocol.as_str(),
+            self.mode.as_str(),
+            self.judge_id.as_str(),
             PROTOCOL,
             "evaluate",
         ) {

@@ -18,6 +18,10 @@ fn request_header_profiles_and_empty_judge() {
         reveal_strlit("inventory");
         reveal_strlit("judge");
         reveal_strlit("");
+        assert("chrono-judge/v1"@.len() == 15);
+        assert("chrono-initial-judge/v1"@.len() == 23);
+        assert("evaluate"@.len() == 8 && "inventory"@.len() == 9);
+        assert("judge"@.len() == 5 && ""@.len() == 0);
     }
     let evaluation = policy::valid_request_header(
         "chrono-judge/v1", "evaluate", "judge", "chrono-judge/v1", "evaluate",
@@ -32,6 +36,14 @@ fn request_header_profiles_and_empty_judge() {
         "chrono-judge/v1", "evaluate", "", "chrono-judge/v1", "evaluate",
     );
     assert(!empty);
+    let empty_protocol = policy::valid_request_header(
+        "", "evaluate", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!empty_protocol);
+    let empty_mode = policy::valid_request_header(
+        "chrono-judge/v1", "", "judge", "chrono-judge/v1", "evaluate",
+    );
+    assert(!empty_mode);
     let wrong_protocol = policy::valid_request_header(
         "chrono-initial-judge/v1", "evaluate", "judge", "chrono-judge/v1", "evaluate",
     );
@@ -59,6 +71,12 @@ fn request_header_preserves_full_text_and_nonempty_name_contract() {
         reveal_strlit("chrono-initial-judge/v10");
         reveal_strlit("chrono-initial-judge/v1");
         reveal_strlit("inventory");
+        assert("chrono-judge/v1"@.len() == 15 && "chrono-judge/v1\0"@.len() == 16);
+        assert("evaluate"@.len() == 8 && "evaluate\n"@.len() == 9);
+        assert("Evaluate"@.len() == 8 && "Evaluate"@[0] != "evaluate"@[0]);
+        assert("chrono-initial-judge/v1"@.len() == 23
+            && "chrono-initial-judge/v10"@.len() == 24);
+        assert("判官/\0\n"@.len() == 5);
     }
     let unicode_judge = policy::valid_request_header(
         "chrono-judge/v1", "evaluate", "判官/\0\n", "chrono-judge/v1", "evaluate",
