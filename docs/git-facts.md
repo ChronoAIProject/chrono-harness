@@ -84,7 +84,7 @@ v3／v4 绑定不能证明完整检查、Git 配置及委托依赖齐全、确�
 
 选择器、政策及实际 FILEMAP 依赖都要登记，选择配置不自动产生边。同一选择器现由完整 runner 根入口、初始配置、输入采集、按范围可选 registration 和完整 CI 配置消费，保持各已登记平台的命令与入口一致。
 
-不同所选政策就是不同输入，不能证明跨平台同判、输入齐全、本仓真实完整工作流采用或全面启用。Go PR #18 已用 beta.18 完成本地 macOS 和真实 Linux push／PR 单元及汇总，保留独立工作流和 SDK 配置；精确候选、事件和限制见[真实 CI 采用](native-ci-adoption.md#native-git-policy-adoption)。
+不同所选政策就是不同输入，不能证明跨平台同判、输入齐全、本仓真实完整工作流采用或全面启用。Go 的有限采用及原 CI 记录见 [PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/18)；当前接入方式与限制归[示例索引](examples.md)。
 
 <a id="exact-host-executable-selection"></a>
 

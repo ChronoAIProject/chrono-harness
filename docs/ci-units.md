@@ -422,11 +422,11 @@ push／pull_request 准备将生成 provider、工作流、profile 绑定候选�
 
 源码行为测试用独立克隆宿主中的真实候选二进制，覆盖并发、离线汇总、合成 GitHub 响应。公开 Go／TS／mix [示例](examples.md)使用独立原生工作流，已核本地／integration／PR／dev、真实取消及选择性重试、业务失败同时其他单元通过、恢复后零业务选择。首次清单仍是独立合同。
 
-本产品宿主当前在 `.chrono-harness/ci/units.json` 登记 24 个条件单元及汇总；早期独立工作流阶段为十六单元。当前 core bootstrap 明确构建 runner、judge-ci、ci、worktree、judge-cargo、inputs。各所选计划保留完整构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。选原配置仍可用默认 full bootstrap。
+本产品宿主的条件单元及汇总归 [.chrono-harness/ci/units.json](../.chrono-harness/ci/units.json) 维护，core 安装范围归 [bootstrap-core.json](../.chrono-harness/ci/bootstrap-core.json) 维护。各所选计划保留明确的构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。
 
 CI 生成器消费者在已提交 push 事件上执行生成单元的真实短 `chrono-harness check`，由登记输入程序准备绑定候选的工作流源码／上下文，再读取原报告。普通 `chrono-ci prepare` CLI 已退役；`prepare-endpoints` 与 `acquire-seed` 仍由原生采用流程调用。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
 
-Go／TS／mix 的真实 push／PR、汇总及全部单元见[原生采用证据](native-ci-adoption.md)，完成的是该有限 profile 的生成单元采用。有效输入完整、各 provider 版本宿主采用、确定同判及完整启用仍分别验收。
+Go／TS／mix 的接入方式与验证限制见[示例索引](examples.md)，原 CI 记录直接查各宿主的 Actions／PR。固定旧发布的有限采用不证明当前候选；有效输入完整、各 provider 版本宿主采用、确定同判及完整启用仍分别验收。
 
 <a id="host-customization-and-updates"></a>
 
