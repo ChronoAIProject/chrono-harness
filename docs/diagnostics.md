@@ -1,6 +1,6 @@
 # 结构化日志与错误
 
-`chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner、宿主目录或 Git。宿主明确登记它的构建、测试计划、输入、输出和 CI 单元。
+`chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner 或 Git。核心记录和 tracing 层不依赖宿主目录；`runtime` 适配器从明确宿主根读取日志选择。宿主登记它的构建、测试计划、输入、输出和 CI 单元。
 
 ## 保留原错误及其原因
 
@@ -13,6 +13,24 @@
 `ReceivedError` 导入记录并保留原因链，但不声称接收进程执行过原操作。未知格式版本和字段会被拒绝。这套记录独立于严格的 judge v1 协议；要加进检查请求或响应，须明确更新相应协议。
 
 ## 日志和上下文
+
+本仓通过 `.chrono-harness/logging.json` 采用统一文件日志。已接入的 Rust 命令入口在业务启动前初始化 logger，记录 `cli.started` 和 `cli.finished`，包含实际生产者、PID、操作、宿主路径和返回码。info 记录正常活动，失败返回用 error。运行日志位于 `.chrono-harness/state/logs/runtime.jsonl`；直接查看可用：
+
+```sh
+tail -F .chrono-harness/state/logs/runtime.jsonl
+```
+
+当前每份上限 10485760 字节（10 MiB），共保留 5 份，包含当前文件及 `runtime.1.jsonl` 至 `runtime.4.jsonl`。越接近 1 越新。下一条完整记录将超过上限时先轮换，删除最旧份。正文最多 50 MiB，另有一个空的 `runtime.lock`；不压缩、不按调用创建新文件、不启动清理线程或定时器。`max_files` 必须为 1 至 64，`max_bytes` 必须为 1 至 67108864，`level` 支持 trace、debug、info、warn、error。`stderr: false` 使普通入口的新增日志只写文件；已有业务输出仍走原通道。
+
+`chrono-diagnostics::runtime` 负责配置和入口，`rolling::RollingFile` 负责受限文件写入；已有 `Logger` 继续负责记录和格式。使用 Rust 标准库文件锁和文件操作，无新增外部依赖。已有 tracing 层不提供大小与份数轮换，因此在它的 `Write` 边界补齐文件目的。每次写入持有同一个日志家族的文件锁，在锁内核大小、轮换并重新打开当前文件；各进程不会持有轮换前的旧日志句柄。初始化只核登记的 64 个有限保留位置，不扫描其他 state 文件；降低份数后回收超出的日志成员。
+
+日志目录专用于当前家族。目录符号链接、成员符号链接或非普通文件会被拒绝；无关文件保持原状。单条记录超限不截断，日志失败由 `finish()` 保留，入口向 stderr 尝试发布 `runtime.logging_failed` 及原生原因／相关错误。初始化失败阻止业务启动；运行中失败保留原业务输出和返回码，入口最终退出 2。应急 stderr 也不可用时，只能保留失败退出，不能声称已经写下完整记录。文件关闭不代表 fsync；突然终止、断电和任意外部修改的完整恢复不在此保证内。
+
+入口使用明确 `--host-root`；Rust bootstrap 按实际命令选择位置参数中的宿主，再通过同一 `cli_at` 适配器记录。未指定宿主时使用真实 cwd，不向父目录搜索，也不使用新的环境开关。没有该文件时，沿用使用方原目的；这不证明该宿主已经采用文件日志。当前接入 runner、worktree、CI、cache、inputs、distribution、本宿主 Rust bootstrap 及 Rust 判官入口。独立 instructions 工具、Python 宿主脚本、非 Rust 适配和所有领域错误链的迁移仍待完成，不据此宣称完整 §7.1／§7.2 已实现。
+
+CI 的 `chrono-log-stderr/v1` 仍要求原 stderr：检查 logger 在保留该原通道的同时写入滚动文件，沿用原请求／计划／操作上下文与真实等待行为。`stderr` 配置只控制普通入口的新增副本，不能取消已登记的判官证据通道。机器 stdout 不加入日志。滚动文件不接受不可变证据引用；报告引用的原始输出和错误继续由现有 retention 所有者回收，不能让日志轮换删除它们。
+
+**产品与宿主政策同步修改：**本次增加标准诊断库的文件目的和入口接入，同时登记日志选择、FILEMAP 输入和 Rust 回归。验证包含真实 CLI 成功／失败与超限、轮换和重启、大小边界、降低保留份数、四进程并发、路径拒绝及原始输出保持。标准检查仍按两端明确变更依赖选测，完整构建／CI／维护成本未知。
 
 `Logger` 建立限定范围的 `tracing` 分发器，明确设置生产者、级别和 `Write` 目的。`Logger::stderr` 选择标准错误和 info。每个事件输出一行 UTF-8 JSON，时间为实际 UTC RFC3339。记录保留有类型字段，并合入外层 span 上下文，较近层优先。未指定 `event_id` 时使用 `tracing.external`。
 

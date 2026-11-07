@@ -537,6 +537,18 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "runtime_logging": {
+          "operation": "test.runner.runtime-logging",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--test",
+            "runtime_logging"
+          ]
         }
       },
       "language": "rust"
@@ -3330,6 +3342,15 @@
             "--manifest-path",
             "crates/distribution/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.distribution",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
         }
       },
       "test_project": "distribution-tests",
@@ -3501,6 +3522,15 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-cargo/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-cargo",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-cargo/Cargo.toml"
           ]
@@ -4060,6 +4090,15 @@
             "--manifest-path",
             "crates/diagnostics/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
         }
       },
       "test_project": "diagnostics-tests",
@@ -4150,6 +4189,15 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/diagnostics-tests/Cargo.toml"
           ]
@@ -4256,6 +4304,15 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "format": {
+          "operation": "format.cache",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
         }
       },
       "test_project": "cache-tests",
