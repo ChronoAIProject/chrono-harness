@@ -525,9 +525,9 @@
     {"path":"crates/ci-tests/tests/native.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
     {"path":"crates/ci/src/native.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":"crates/ci-tests/tests/fixtures/native-provider.json","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
-    {"path":".chrono-harness/ci/bootstrap-unit.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"test-execution","to":"test:inputs-tests"}]},
-    {"path":".chrono-harness/ci/bootstrap-verus.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:inputs-tests"}]},
-    {"path":".chrono-harness/ci/verus-macos-arm64.sha256","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
+    {"path":".chrono-harness/ci/bootstrap-unit.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/bootstrap-verus.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
+    {"path":".chrono-harness/ci/verus-macos-arm64.sha256","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
     {"path":"docs/verus.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/judge-filemap/src/verified_graph.rs","owner":"judge-filemap","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-filemap"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"}]},
     {"path":"crates/judge-filemap-tests/tests/verified_graph.rs","owner":"judge-filemap-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-filemap-tests"}]},
@@ -567,7 +567,15 @@
     {"from":"project:host-bootstrap-native","kind":"compile","to":"project:host-bootstrap-native-tests"},
     {"from":"project:host-bootstrap-native","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
     {"from":"project:host-bootstrap-native-tests","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
-    {"from":"tool:verus","kind":"build-input","to":"project:ci"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:runner-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:judge-ci-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:ci-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:judge-registration-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:judge-filemap-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:judge-projects-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:worktree-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:cache-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
     {"from":"project:runner","kind":"compile","to":"project:runner-tests"},
     {"from":"project:runner","kind":"runtime-input","to":"project:runner-tests"},
     {"from":"project:runner","kind":"test-execution","to":"test:runner-tests"},
@@ -1221,8 +1229,6 @@
     },
     "test:judge-ci-tests": {
       "operations": [
-        "verify.verus-result",
-        "verify.verus-result-tests",
         "verify.ci-collection-tests",
         "verify.ci-collection",
         "fmt.judge-ci",
@@ -1236,8 +1242,6 @@
     },
     "test:ci-tests": {
       "operations": [
-        "verify.verus-result",
-        "verify.verus-result-tests",
         "verify.ci-literals",
         "verify.ci-literals-tests",
         "fmt.ci",
@@ -1256,14 +1260,6 @@
     },
     "test:judge-registration-tests": {
       "operations": [
-        "verify.verus-result",
-        "verify.verus-result-tests",
-        "verify.runner-limits",
-        "verify.runner-limits-tests",
-        "verify.runner-paths",
-        "verify.runner-paths-tests",
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "verify.registration-readiness",
         "verify.registration-readiness-tests",
         "verify.registration-nodes",
@@ -1281,8 +1277,6 @@
     },
     "test:judge-filemap-tests": {
       "operations": [
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "verify.filemap-graph",
         "verify.filemap-graph-tests",
         "fmt.judge-filemap",
@@ -1299,12 +1293,6 @@
     },
     "test:judge-routes-tests": {
       "operations": [
-        "verify.verus-result",
-        "verify.verus-result-tests",
-        "verify.runner-limits",
-        "verify.runner-limits-tests",
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "fmt.judge-routes",
         "fmt.judge-routes-tests",
         "build.judge-routes",
@@ -1317,10 +1305,6 @@
       "operations": [
         "verify.project-languages",
         "verify.project-languages-tests",
-        "verify.verus-result",
-        "verify.verus-result-tests",
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "fmt.judge-projects",
         "fmt.judge-projects-tests",
         "build.runner",
@@ -1336,8 +1320,6 @@
     },
     "test:judge-cost-tests": {
       "operations": [
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "fmt.judge-cost",
         "fmt.judge-cost-tests",
         "build.runner",
@@ -1351,8 +1333,6 @@
     },
     "test:judge-mixed-tests": {
       "operations": [
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "fmt.judge-mixed",
         "fmt.judge-mixed-tests",
         "build.runner",
@@ -1367,8 +1347,6 @@
     },
     "test:judge-workflow-tests": {
       "operations": [
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.runner",
@@ -1390,8 +1368,6 @@
     },
     "test:inputs-tests": {
       "operations": [
-        "verify.runner-paths",
-        "verify.runner-paths-tests",
         "fmt.inputs",
         "fmt.inputs-tests",
         "build.runner",
@@ -1454,8 +1430,6 @@
     },
     "test:workflow-units": {
       "operations": [
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.runner",
@@ -1477,8 +1451,6 @@
     },
     "test:workflow-short": {
       "operations": [
-        "verify.runner-status",
-        "verify.runner-status-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.runner",
@@ -1516,8 +1488,6 @@
     },
     "test:worktree-adoption": {
       "operations": [
-        "verify.owner-publication-tests",
-        "verify.owner-publication",
         "fmt.worktree",
         "fmt.worktree-tests",
         "build.runner",
@@ -1550,8 +1520,6 @@
     },
     "test:cache-tests": {
       "operations": [
-        "verify.verus-result",
-        "verify.verus-result-tests",
         "verify.cache-planner",
         "verify.cache-planner-tests",
         "fmt.cache",
@@ -1560,17 +1528,7 @@
         "test.cache-tests"
       ],
       "timeout_seconds": 600,
-      "output_limit_bytes": 1048576,
-      "operation_bounds": {
-        "verify.verus-result": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        },
-        "verify.verus-result-tests": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        }
-      }
+      "output_limit_bytes": 1048576
     }
   },
   "execution_scheduling": {
