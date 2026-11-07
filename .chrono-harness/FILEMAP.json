@@ -2003,13 +2003,13 @@
       "inputs.fetch.runner": {
         "resources": [],
         "outputs": [
-          ".chrono-harness/cache/bootstrap-owner-tooling/cargo/"
+          ".chrono-harness/cache/"
         ]
       },
       "inputs.vendor.runner": {
         "resources": [],
         "outputs": [
-          ".chrono-harness/cache/runner-vendor/"
+          ".chrono-harness/cache/"
         ]
       },
       "build.diagnostics": {
