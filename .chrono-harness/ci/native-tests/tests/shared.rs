@@ -83,7 +83,8 @@ fn configured(build_at_export: bool) -> Fixture {
             "schema":"chrono-host-startup/v1", "directory":format!("{TRANSFER}/"),
             "profiles":{"core":{"config":".chrono-harness/ci/build.json","build":build_at_export},
                 "extra":{"config":".chrono-harness/ci/extra.json","build":false}},
-            "consumers":{"unit":["core"]}
+            "consumers":{"unit":["core"]},
+            "installer":{"profile":"core","destination":".chrono-harness/bin/cargo"}
         }))
         .unwrap(),
     )
@@ -123,7 +124,11 @@ fn export(fixture: &Fixture) -> String {
     environment.insert("GITHUB_OUTPUT".into(), output.as_os_str().to_owned());
     passed(cli(&fixture.root, &environment, &["produce"]));
     let output = fs::read_to_string(output).unwrap();
-    output.trim().strip_prefix("binding=").unwrap().to_owned()
+    let outputs: std::collections::BTreeMap<_, _> = output.lines()
+        .map(|line| line.split_once('=').unwrap()).collect();
+    assert_eq!(outputs["installer_sha256"], chrono_harness::file_identity(
+        &fixture.root.join(".chrono-harness/bin/cargo")).unwrap().0);
+    outputs["binding"].to_owned()
 }
 
 fn copy_tree(source: &Path, destination: &Path) {
@@ -170,6 +175,12 @@ fn exports_installs_and_verifies_original_bytes_with_relocated_local_sdk() {
     let binding = export(&fixture);
     let manifest = fs::read(fixture.root.join(TRANSFER).join("manifest.json")).unwrap();
     assert_eq!(chrono_harness::sha256(&manifest), binding);
+    let descriptor: Value = serde_json::from_slice(&manifest).unwrap();
+    assert_eq!(
+        descriptor["profiles"]["core"]["files"][0]["path"],
+        "tools/core/cargo",
+        "the startup launcher needs an explicit stable payload path"
+    );
     assert_eq!(
         fs::read(fixture.root.join(format!(
             ".chrono-harness/state/startup-originals/manifest-{binding}.json"

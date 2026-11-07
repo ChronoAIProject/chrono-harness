@@ -12,6 +12,29 @@ fn registration() -> Value {
 }
 
 #[test]
+fn installer_digest_comes_from_the_declared_producer_output_before_execution() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["job_gating"]["startup"] = registration();
+    value["job_gating"]["startup"]["installer_sha256_output"] = json!("installer_sha256");
+    let config = serde_json::from_value(value.clone()).unwrap();
+    let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    assert_eq!(yaml["jobs"]["detect"]["outputs"]["startup_installer_sha256"],
+        "${{ steps.chrono_startup.outputs.installer_sha256 }}");
+    for job in ["unit_example", "aggregate"] {
+        let install = yaml["jobs"][job]["steps"].as_array().unwrap().iter()
+            .find(|step| step["name"] == "Install registered startup tools").unwrap();
+        assert_eq!(install["env"]["CHRONO_STARTUP_INSTALLER_SHA256"],
+            "${{ needs.detect.outputs.startup_installer_sha256 }}");
+    }
+    for name in ["", "bad.name", "bad\nname", "${{ expression }}", "0bad"] {
+        value["job_gating"]["startup"]["installer_sha256_output"] = json!(name);
+        let config = serde_json::from_value(value.clone()).unwrap();
+        assert!(chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").is_err(), "{name}");
+    }
+}
+
+#[test]
 fn declared_startup_is_published_once_and_installed_before_each_actual_consumer() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     let base: chrono_ci::units::Config = serde_json::from_value(value.clone()).unwrap();

@@ -30,11 +30,18 @@ struct ProfileEntry {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Installer {
+    profile: String,
+    destination: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Registration {
     schema: String,
     directory: String,
     profiles: BTreeMap<String, ProfileEntry>,
     consumers: BTreeMap<String, Vec<String>>,
+    installer: Installer,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -103,6 +110,11 @@ fn encode(value: &impl Serialize) -> Result<Vec<u8>, String> {
     let mut bytes = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
     Ok(bytes)
+}
+fn payload_path(name: &str, destination: &str) -> Result<String, String> {
+    let tool = destination.strip_prefix(".chrono-harness/bin/")
+        .ok_or("startup payload requires a declared bin destination")?;
+    Ok(format!("tools/{name}/{tool}"))
 }
 fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::create_dir_all(path.parent().ok_or("missing startup parent")?)
@@ -223,10 +235,19 @@ impl Shared {
             );
         }
         let available = profiles.keys().cloned().collect();
+        let installer = &registration.installer;
+        if !profiles.get(&installer.profile).is_some_and(|selected| {
+            selected.producer.profile.install.iter().any(|item| {
+                item.destination == installer.destination
+            })
+        }) {
+            return Err("startup installer requires an explicitly installed tool".into());
+        }
         for selected in registration.consumers.values() {
             if selected.is_empty()
                 || !policy::valid_names(selected)
                 || !policy::names_subset(selected, &available)
+                || !selected.contains(&installer.profile)
             {
                 return Err("startup consumer requires explicit unique profiles".into());
             }
@@ -335,7 +356,6 @@ impl Shared {
         let staging = temporary.path().join("artifact");
         fs::create_dir(&staging).map_err(|e| e.to_string())?;
         let mut profiles = BTreeMap::new();
-        let mut index = 0;
         for (name, selected) in &self.profiles {
             let profile = &selected.producer.profile;
             let raw = fs::read(profile.report_destination(root)?).map_err(|e| e.to_string())?;
@@ -361,8 +381,7 @@ impl Shared {
                 if !policy::startup_mode(mode) {
                     return Err("startup tool is not executable".into());
                 }
-                let path = format!("tools/{index}");
-                index += 1;
+                let path = payload_path(name, &installed.destination)?;
                 write_new(&staging.join(&path), &bytes)?;
                 files.push(File {
                     path,
@@ -403,6 +422,10 @@ impl Shared {
             return Err("startup source changed before publication".into());
         }
         let binding = sha256(&raw);
+        let installer = &self.registration.installer;
+        let installer_sha256 = &manifest.profiles[&installer.profile]
+            .files.iter().find(|item| item.destination == installer.destination)
+            .ok_or("startup installer is missing from the manifest")?.sha256;
         let original = profile::path(
             root,
             &format!(".chrono-harness/state/startup-originals/manifest-{binding}.json"),
@@ -419,7 +442,7 @@ impl Shared {
             .append(true)
             .create(true)
             .open(output)
-            .and_then(|mut f| writeln!(f, "binding={binding}"))
+            .and_then(|mut f| writeln!(f, "binding={binding}\ninstaller_sha256={installer_sha256}"))
             .map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -475,6 +498,9 @@ impl Shared {
                 }
             }
             for item in &entry.files {
+                if item.path != payload_path(name, &item.destination)? {
+                    return Err("startup payload path differs from its declared destination".into());
+                }
                 let data = profile::read(&self.transfer, &item.path, b"tools/")?;
                 if !seen.insert(item.path.clone())
                     || !policy::stream_matches(
