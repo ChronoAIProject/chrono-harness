@@ -150,7 +150,7 @@
 | 日志、错误和协议 | runner、diagnostics；[诊断](diagnostics.md)、[执行](execution.md) | 真实进程、原退出／输出和有限故障边界有测试；跨产品诊断、完整响应组合、JSON／IO 和通用错误覆盖尚未完成 |
 | 工作树和任务等待 | worktree、runner；[工作树](worktree.md) | 已采用路径保护实际源码、消费者及可重建缓存，保留原失败／unknown；外部任务通道恢复、完整协作复用、PR／合并编排尚未实现 |
 | 原件及输出保留 | runner、worktree；[原件生命周期](artifact-retention.md) | 已采用原件引用、消费者保护和有限恢复／回收；所有历史输出、全部生产者接入、通用中断及原生交接尚未验收 |
-| 源码构建、安装与发布 | bootstrap、distribution、release；[CI](ci.md)、[发布](release-ci.md)、[分发](distribution.md) | core、共享启动和当前发布各有独立消费者；默认完整安装、原生获取、完整绑定和外部公开采用分别验收，不能由源码存在推导通过 |
+| 源码构建、安装与发布 | bootstrap、distribution、release；[CI](ci.md)、[发布](release-ci.md)、[分发](distribution.md) | core、共享启动和当前发布各有独立消费者；旧全工具安装已退役，原生获取、完整绑定和外部公开采用分别验收，不能由源码存在推导通过 |
 | 指令默认与宿主采用 | instructions；[指令](instructions.md)、[方法来源](methodology-extraction.md) | 默认与宿主选择独立维护，生成根指南和完整输出；生成不证明 AI 阅读、遵守或翻译等价 |
 | 形式证明 | 实际生产根及专属独立预期；[Verus](verus.md) | 同源证明、固定结果合同和部分生产调用已接入；未覆盖部分、外部合同及外围组合明确保留，不把局部成功当作完整 SPEC 证明 |
 
