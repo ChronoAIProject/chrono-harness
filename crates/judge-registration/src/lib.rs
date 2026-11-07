@@ -76,17 +76,18 @@ fn issue(
     reference: impl Into<String>,
     error: bool,
 ) {
-    r.status = r
-        .status
-        .clone()
-        .max(if error { Status::Error } else { Status::Fail });
-    r.findings.push(Finding {
-        code: code.into(),
-        level: "error".into(),
-        message: message.into(),
-        delta_refs: vec![reference.into()],
-        causes: vec![],
-    });
+    wire::append_finding(
+        &mut r.status,
+        &mut r.findings,
+        if error { Status::Error } else { Status::Fail },
+        Finding {
+            code: code.into(),
+            level: "error".into(),
+            message: message.into(),
+            delta_refs: vec![reference.into()],
+            causes: vec![],
+        },
+    );
 }
 fn rows(v: &Value, key: &str, id: &str) -> BTreeMap<String, Value> {
     v[key]
@@ -538,8 +539,7 @@ fn readiness(
         ),
     }
     for finding in input_closure_findings(n) {
-        r.status = r.status.clone().max(Status::Fail);
-        r.findings.push(finding);
+        wire::append_finding(&mut r.status, &mut r.findings, Status::Fail, finding);
     }
     input_coverage::validate(n, r);
     Ok(())

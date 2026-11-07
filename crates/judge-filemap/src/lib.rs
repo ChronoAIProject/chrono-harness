@@ -6,7 +6,7 @@ pub mod verified_graph;
 mod workflow;
 use chrono_harness::{
     facts,
-    wire::{Delta, Finding, Request, Response, Status},
+    wire::{Delta, Finding, Request, Response, Status, append_finding},
 };
 use chrono_judge_registration::{NodeKind, Registrations};
 use graph::{Closure, Edge, EdgeKind, Origin, Seed, UnionEdge};
@@ -583,21 +583,25 @@ pub fn judge(req: &Request) -> Response {
                 .insert("impact".into(), serde_json::to_value(impact).unwrap());
         }
         Err(message) => {
-            response.status = Status::Error;
-            response.findings.push(Finding {
-                code: message
-                    .split(':')
-                    .next()
-                    // Existing request/snapshot errors retain the public E_INPUT
-                    // contract; named semantic input errors are new in impact v2.
-                    .filter(|s| s.starts_with("E_SEMANTIC_"))
-                    .unwrap_or("E_INPUT")
-                    .into(),
-                level: "error".into(),
-                message,
-                delta_refs: vec!["/request".into()],
-                causes: vec![],
-            });
+            append_finding(
+                &mut response.status,
+                &mut response.findings,
+                Status::Error,
+                Finding {
+                    code: message
+                        .split(':')
+                        .next()
+                        // Existing request/snapshot errors retain the public E_INPUT
+                        // contract; named semantic input errors are new in impact v2.
+                        .filter(|s| s.starts_with("E_SEMANTIC_"))
+                        .unwrap_or("E_INPUT")
+                        .into(),
+                    level: "error".into(),
+                    message,
+                    delta_refs: vec!["/request".into()],
+                    causes: vec![],
+                },
+            );
         }
     }
     response

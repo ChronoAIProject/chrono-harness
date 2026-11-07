@@ -636,14 +636,18 @@ pub fn judge(req: &Request) -> Response {
     match result {
         Ok(outputs) => response.outputs.extend(outputs),
         Err(message) => {
-            response.status = Status::Fail;
-            response.findings.push(Finding {
-                code: message.split(':').next().unwrap_or("E_ROUTES").into(),
-                level: "error".into(),
-                message,
-                delta_refs: vec!["/request".into()],
-                causes: vec![],
-            });
+            chrono_harness::wire::append_finding(
+                &mut response.status,
+                &mut response.findings,
+                Status::Fail,
+                Finding {
+                    code: message.split(':').next().unwrap_or("E_ROUTES").into(),
+                    level: "error".into(),
+                    message,
+                    delta_refs: vec!["/request".into()],
+                    causes: vec![],
+                },
+            );
         }
     }
     response

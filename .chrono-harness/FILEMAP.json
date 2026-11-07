@@ -544,7 +544,7 @@
     {"path":"crates/runner/src/verified_limits.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"compile","to":"project:judge-registration"},{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"compile","to":"project:judge-routes"},{"kind":"compile","to":"project:judge-routes-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"}]},
     {"path":"crates/runner-tests/tests/verified_limits.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-routes-tests"}]},
     {"path":"crates/runner/src/verified_paths.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}]},
-    {"path":"crates/runner/src/verified_status.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"compile","to":"project:judge-ci"},{"kind":"compile","to":"project:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"}]},
+    {"path":"crates/runner/src/verified_status.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"compile","to":"project:judge-ci"},{"kind":"compile","to":"project:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"compile","to":"project:judge-registration"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"compile","to":"project:judge-filemap"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"compile","to":"project:judge-cost"},{"kind":"test-execution","to":"test:judge-cost-tests"},{"kind":"compile","to":"project:judge-mixed"},{"kind":"test-execution","to":"test:judge-mixed-tests"},{"kind":"compile","to":"project:judge-routes"},{"kind":"test-execution","to":"test:judge-routes-tests"},{"kind":"compile","to":"project:judge-projects"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"compile","to":"project:judge-workflow"},{"kind":"test-execution","to":"test:judge-workflow-tests"}]},
     {"path":"crates/runner-tests/tests/verified_paths.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
     {"path":"crates/runner-tests/tests/verified_status.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
     {"path":"crates/judge-registration/src/verified_nodes.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"compile","to":"project:judge-filemap"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"}]},
@@ -1268,6 +1268,8 @@
         "verify.runner-limits-tests",
         "verify.runner-paths",
         "verify.runner-paths-tests",
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "verify.registration-readiness",
         "verify.registration-readiness-tests",
         "verify.registration-nodes",
@@ -1285,6 +1287,8 @@
     },
     "test:judge-filemap-tests": {
       "operations": [
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "verify.filemap-graph",
         "verify.filemap-graph-tests",
         "fmt.judge-filemap",
@@ -1305,6 +1309,8 @@
         "verify.verus-result-tests",
         "verify.runner-limits",
         "verify.runner-limits-tests",
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "fmt.judge-routes",
         "fmt.judge-routes-tests",
         "build.judge-routes",
@@ -1317,6 +1323,8 @@
       "operations": [
         "verify.verus-result",
         "verify.verus-result-tests",
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "fmt.judge-projects",
         "fmt.judge-projects-tests",
         "build.runner",
@@ -1332,6 +1340,8 @@
     },
     "test:judge-cost-tests": {
       "operations": [
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "fmt.judge-cost",
         "fmt.judge-cost-tests",
         "build.runner",
@@ -1345,6 +1355,8 @@
     },
     "test:judge-mixed-tests": {
       "operations": [
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "fmt.judge-mixed",
         "fmt.judge-mixed-tests",
         "build.runner",
@@ -1359,6 +1371,8 @@
     },
     "test:judge-workflow-tests": {
       "operations": [
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.runner",
@@ -1444,6 +1458,8 @@
     },
     "test:workflow-units": {
       "operations": [
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.runner",
@@ -1465,6 +1481,8 @@
     },
     "test:workflow-short": {
       "operations": [
+        "verify.runner-status",
+        "verify.runner-status-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.runner",
