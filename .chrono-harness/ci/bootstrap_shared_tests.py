@@ -309,8 +309,7 @@ class DiagnosticsComposition(unittest.TestCase):
         for name, profile, output in [("bootstrap-diagnostics-guard.json", guard, "guard-domain"),
                                       ("bootstrap-diagnostics-inputs.json", observer, "observer-domain")]:
             profile.update(projects=self.host.config["projects"], tools={
-                               tool: fixture_tools.get(tool, program)
-                               for tool, program in profile["tools"].items()},
+                               **profile["tools"], **fixture_tools},
                            tool_bindings=bindings, environment=environment,
                            native_platform={"system": platform.system(), "machine": platform.machine()},
                            install=[{"source": output, "destination": ".chrono-harness/bin/" + output}],
