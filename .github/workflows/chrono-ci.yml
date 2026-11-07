@@ -965,7 +965,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1622,7 +1622,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1964,7 +1964,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -2423,7 +2423,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -2648,7 +2648,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -2873,7 +2873,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -3090,7 +3090,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -3704,7 +3704,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash

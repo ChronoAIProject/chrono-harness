@@ -128,9 +128,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-unit.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-routes/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-routes/"
@@ -156,9 +158,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-unit.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-cost/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-cost/"
@@ -170,9 +174,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-unit.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-mixed/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-mixed/"
@@ -184,9 +190,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-unit.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow/"
@@ -198,9 +206,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-unit.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/inputs/context.json",
       "artifact_directory": ".chrono-harness/state/units/inputs/"
@@ -258,9 +268,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-unit.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-units/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-units/"
@@ -272,9 +284,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-unit.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-short/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-short/"
@@ -318,9 +332,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-unit.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/worktree-adoption/context.json",
       "artifact_directory": ".chrono-harness/state/units/worktree-adoption/"
