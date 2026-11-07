@@ -28,7 +28,7 @@
 
 全部获取仍使用工作树政策绑定 Git、声明环境和进程限制。宿主配置只是数据，不会选择历史判官执行物。
 
-从宿主登记安装器安装固定公开 beta.8 的 `chrono-worktree`；产品仓库也可 bootstrap 候选。创建命令为：
+从宿主登记安装器安装所选发布的 `chrono-worktree`；产品仓库也可 bootstrap 候选。创建命令为：
 
 ```sh
 .chrono-harness/bin/chrono-worktree start \
@@ -100,7 +100,7 @@ Rust 消费者先用 `full::expand_process` 展开；宿主 bootstrap 用
 
 专属测试使用真实 bare remote、前进远端、任意布局、空格／Unicode 路径、脏／锁工作树、两端政策变化、remote 缺失、工具不符、真实 hook。采用政策有真实子进程消费者，宿主明确登记二进制及测试计划。
 
-公开 beta.8 含 macOS arm64、Linux x86_64 工具，原生发布每平台通过全部 49 项 worktree 测试。四个[示例宿主](examples.md)明确采用工具／政策，不靠语言或目录推断。
+[示例宿主](examples.md)明确采用工具和政策，实际版本与采用范围见示例索引；不靠语言或目录推断。
 
 下文增加恢复及明确清理。AI 语义协调、PR provider 操作、合并／落地编排仍未完成。后续治理仍用本地／CI 同一 `chrono-harness check`。此增量曾同改产品和采用政策，验证增加新项目／测试对及 bootstrap／发布登记；成本未知，不增加确认或人审。
 
@@ -718,9 +718,9 @@ CI 复制宿主断言复用专属测试独立 receipt 所有者及明确平台 G
 
 复制内容准入只在共享效果模块的紧邻 unlink 前回调执行一次，核当前成员内容／身份、保留原件身份、实时 Git source／index、协调政策／HEAD、allocation、消费者租约、最终原件排除，再由效果模块复核物理身份后删。
 
-intent 先于准入，因此拒绝成员仍有 intent／失败结果。原生迁移超时在嵌套 CI 命令已等待结束后到达该模块，留下 254 个完成 body-disposal 结果。去掉 intent 前重复读取，保留原 900 秒上限。
+intent 先于准入，因此拒绝成员仍有 intent／失败结果。准入只在实际效果前读取，不在 intent 前重复读取，执行仍受登记上限约束。
 
-本地 source／index 回归从两成员三次读取变为两次，七项 body-custody 测试通过，含同长度内容漂移；不证明原生端到端耗时或完整 SPEC。
+source／index 回归覆盖同长度内容漂移和成员保管；不证明原生端到端耗时或完整 SPEC。旧迁移的部分结果和失败直接查原报告，不在本文维护读数。
 
 受管 use／check／bootstrap 命令真实等待成功后，所有者返回前清理点名工作树。fixture 生产者维护只属明确 maintain，不先于无关操作。独立 `post_use_cleanup` 保留本轮，不替换准入 drain、原进程或 use 回执。
 
@@ -740,7 +740,7 @@ workflow 原生工具、历史迁移各有有限声明，源码、外部输入�
 
 共享 drain 还从 Git 明确 inventory 发布 `worktree_inventory`：当前 HEAD／分支、locked／prunable、物理关联、当前登记匹配和保留理由。inventory 进程失败在效果／准入前致命；不可读行只是被阻断诊断。没有账本、已变化、处置路径被复用的关联，不靠观察登记。
 
-可变 HEAD 与 birth 关联身份分开。这些行不授权处置，效果保护仍取新事实。五个共享测试所有者在各自 update_lockfile 登记 `lock.<owner>`，委托 Cargo 对精确本地测试包 offline update，保留独立 manifest／lock／target。
+可变 HEAD 与 birth 关联身份分开。这些行不授权处置，效果保护仍取新事实。共享测试所有者在各自 update_lockfile 登记 `lock.<owner>`，委托 Cargo 对精确本地测试包 offline update，保留独立 manifest／lock／target；实际集合归[项目登记](../.chrono-harness/projects.json)。
 
 本地标准验证、真实兼容协调者部署、精确原生汇总、独立审读、历史迁移、落地都须分别验收，源码适配本身不证明任何一项。
 
@@ -807,4 +807,4 @@ bootstrap fixture 保管者消费该声明，核真实生产路径、物理身�
 
 **产品／fixture 同改说明：**发布新增可选调用方消费者，本仓普通政策和零保留窗口不变。验证使用专属 runner／worktree Rust 及登记未过滤 bootstrap 测试。直接脏源码工程调用不是标准源码绑定验收。
 
-本次有限修复的临时进程原件归 `.chrono-harness/state/pr214-repair-engineering-20261103/`，供调用方查看。失败原件保留到调试／验收结束，再释放给已有生命周期所有者。各 action 保留原 900 秒／1 MiB，不重试、不改测试线程；超出这些实际观察的构建／CI／存储成本未知。
+临时进程原件由实际生产者在 state 中发布；失败原件保留到调试／验收结束，再释放给已有生命周期所有者。各 action 沿用登记的执行限制和测试线程；完整构建／CI／存储成本未知。

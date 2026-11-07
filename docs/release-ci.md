@@ -30,7 +30,7 @@ python3 .chrono-harness/release/build.py . .chrono-harness/cache/release-platfor
 
 Rust、发布资产和验证操作由该宿主入口及配方管理，生成器不解析它们。`ci.release.verify` 是明确登记的宿主操作，已加入 ci-tests 计划；发布源及输出也连接到 distribution-tests。迁移旧手写工作流时先核固定基线字节，生成器不自动接管其他文件。
 
-真实 CLI 和 shell 消费者测试覆盖字面参数、失败原件、定制保留、无写入复用、漂移、错误登记和输出归属；旧检查工作流测试保留各版本语义。原 v1 扩展已在 beta.10 发布。本仓生成工作流的[固定源码原生构建](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944)在两平台各通过 371 项登记测试，匿名下载的 macOS CI 二进制另核过发布投影。这些证据只覆盖实际消费者，不能证明其他宿主构建、full 工作流执行、完整输入或确定性同判。
+真实 CLI 和 shell 使用方测试覆盖字面参数、失败原件、定制保留、无写入复用、漂移、错误登记和输出归属。历史原生构建与公开包结果归[原运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944)及[发布](distribution.md)，不在这里维护测试数量或安装记录。每次交付须核所选候选、平台和实际使用方；旧结果不能证明当前候选、其他宿主、full 工作流执行、完整输入或确定性同判。
 
 当前本宿主采用 `chrono-github-release/v2` 和 `chrono-release-build/v5`：每平台的 build、verification 和 `always()` collector/package 均逐项登记。每个 job 和整个平台均受登记的 45 分钟时限约束。Rust 验证仍跑原始未过滤操作；测试清单与原生输入适配的验证归 Rust `ci-tests`，宿主 bootstrap、配方单元测试和真实打包集成测试继续各自登记。
 
