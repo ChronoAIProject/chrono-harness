@@ -553,8 +553,8 @@ pub fn load_config(path: &Path) -> Result<CheckConfig, String> {
         return Err("unsupported check profile; full governance remains not implemented".into());
     }
     validate_command(&c.judge)?;
-    relative_path(&c.report_path)?;
-    if !c.report_path.starts_with(".chrono-harness/state/") {
+    if !verified_paths::valid_host_state_path(c.report_path.as_bytes()) {
+        relative_path(&c.report_path)?;
         return Err("report_path must reside in .chrono-harness/state/".into());
     }
     units::reference_publication(&c)?;

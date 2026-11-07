@@ -335,7 +335,7 @@
       },
       "max_entries": 200000,
       "manifest": {
-        "path": ".chrono-harness/state/diagnostics-native/guard-inputs/rust.json",
+        "path": ".chrono-harness/state/units/diagnostics/runtime-inputs/rust.json",
         "root": "/Users/runner/.rustup/toolchains/1.95.0-aarch64-apple-darwin"
       }
     },

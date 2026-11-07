@@ -410,6 +410,16 @@
         "judge-registration",
         "judge-routes",
         "runner"
+      ],
+      "verify.runner-paths": [
+        "inputs",
+        "judge-registration",
+        "runner"
+      ],
+      "verify.runner-paths-tests": [
+        "inputs",
+        "judge-registration",
+        "runner"
       ]
     },
     "facts_config": ".chrono-harness/config.json",
