@@ -30,7 +30,7 @@
 
 核心 bootstrap 及所有者构建／验证 profile 把可写 HOME、CARGO_HOME、TMPDIR 放在 `.chrono-harness/cache/bootstrap-owner-tooling/`。可重建工具沿用已登记缓存生命周期；原报告、输出流、安装来源留在 `.chrono-harness/state/`。`host_environment` 只接受缓存路径，保留字面路径和符号链接检查。
 
-这曾同时修改 bootstrap 合同和宿主登记。原发布单元产物的工具部分有 556,290,234 逻辑字节（压缩后 179,203,963），其他成员共 5,382,827 逻辑字节（压缩后 636,057）。把工具移出上传证据，去掉了这份重复内容；原生总量和耗时收益尚未验证，原 bootstrap 和标准检查仍须执行。
+可重建工具不随证据重复上传；原生总量和耗时收益尚未验证，原 bootstrap 和标准检查仍须执行。
 
 CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选择 Git。准备命令和绑定 Git 消费者使用同一原生执行物，故障适配器在输入登记保留所选路径。平台缺登记就失败，不从环境 PATH 回退。这不改变消费宿主 Git 政策，也不证明 Git 输入完整。
 
@@ -363,11 +363,7 @@ GitHub bootstrap 要求自托管 runner 上明确配置的工具目录；托管 
 
 当前示例的真实执行测试覆盖首次单元清单、短命令、独立单元、汇总和失败原件；首次清单与空 DELTA 另有现役行为回归。旧 v1 示例包及三个仅服务该包的测试已退役，共享执行和回执辅助函数继续由当前单元测试使用。其他成功／失败子进程、协议错误／超时、范围选择、生成、漂移、归属和事件映射测试保留。本地测试不证明 GitHub 原生路由；宣称外部结果前，交付须核实际候选运行、选择、成功／失败及 PR head 行为。
 
-首次登记执行的原生 [36292159644](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36292159644) 在 macos-14-arm64 bootstrap 成功后，标准 harness 步骤失败。base `4f08aef7ab40d7b0a3fb6ba42af2620600f18d98`，candidate／工作流源码 `556fdb73b6f93275d18bd210b9b01be1173daec9`，原错误 `E_TOOL_BINDING: migration version mismatch`，未执行受治理操作。报告当时没保留解释器真实版本输出。
-
-修复后宿主使用明确系统解释器路径，避免 PATH 优先级影响，保留精确版本要求。本地 Darwin arm64 的 `/usr/bin/python3 --version` 返回 `Python 3.9.6`，修复后的 integration／PR／dev 也观察到该路径／版本。
-
-已验证 [dev 36295299904](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36295299904) 从同一 base 检查到落地 `f8338fd9496878914216e2c070d8320ea50fbb6e`，34 项操作、227 项 Rust 测试通过。树与独立审读候选相同，完整同判仍未建立。迁移绑定失败现在保留预期／观察版本诊断。
+仍使用 Python 的本仓 profile 明确选择系统解释器路径并保留精确版本要求，避免 PATH 优先级改变实际工具。工具绑定失败须保留预期／观察版本和原进程；bootstrap 完成不代表受治理操作已执行。历史解释器绑定失败和后续运行直接查[原失败](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36292159644)及[原 dev 运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36295299904)，不能据旧结果声明当前候选或完整同判已通过。
 
 ## 按需运行的独立 job
 

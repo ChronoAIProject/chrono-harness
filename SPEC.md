@@ -1136,7 +1136,7 @@ CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹�
 
 `chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。通用方法由双语内容叶子与普通空文本 aggregate 组成，既有 core 稳定入口及 core.general 保留；旧主题入口只组合原职责。聚焦 skill 选择修复产生处及其证据／复用前提。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
 
-`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合同语言测试要求与实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的双语简短流程根指南及本仓完整中文指南的读数见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
+`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合同语言测试要求与实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主和本仓根指南、完整指南的内容范围及测量口径见 [采用说明](docs/methodology-extraction.md#实际消费者边界)；观察结果归本轮 state／artifact，不维护长期读数表，也不设通用运行时预算门。
 
 当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。
 

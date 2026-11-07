@@ -135,30 +135,17 @@ config v3 可选择带版本的保护，不改旧快照：
 
 <a id="public-binary-consumption"></a>
 
-## 公开二进制的实际使用记录
+## 公开工具的使用边界
 
-公开 beta.16 曾在 macOS arm64 上匿名下载安装到[Go 示例仓库](https://github.com/ChronoAIProject/chrono-harness-examples-go)的本地克隆，基线为 `2d3bfb3d8cea0d9c0add957cca20ad4335d6601c`。消费者明确采用独立 full v3 facts 配置，登记实际本机 Git 摘要／版本、`.git/config` 内容身份及 `.git/config.worktree` 缺失。
+公开工具的安装和身份核验归[分发说明](distribution.md)，真实宿主及其固定发布选择归[示例索引](examples.md)。本地 Git 政策、已安装工具消费和远端 provider 采用须分别验证；本机专属配置不会自动成为远端示例的政策。旧发布的本地运行不能证明当前候选、输入齐全或同判，历史安装与容量实验归 Git／原发布材料。
 
-已有 scoped v3 配置选择这份 facts 政策；所有声明仍在 `.chrono-harness/`，原历史配置字节保留。安装后的公开工具运行原有标准命令：
-
-```sh
-.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json \
-  --base BASE_OID --candidate CANDIDATE_OID --unit rates
-```
-
-`rates` 执行 `build.rates`、`test.rates`；`harness` 执行 `ci.verify`、`test.bootstrap`，包括已安装的指令生成器。修改登记 Git 配置、或创建原声明缺失的 worktree 配置，都会在业务操作前失败；恢复输入后通过。六个工具保持公开清单身份。
-
-这只是使用本地登记 Git 的公开二进制消费，没有把机器专属配置采用到远端示例，也不证明真实 provider v3 采用、输入齐全或同判。
-
-Git 进程观察可能显著增大传输体积。该消费者最初的 8,388,608 字节检查输出限制因 `process output limit exceeded` 失败。用失败报告的精确 `request` 直接调用 `chrono-judge-ci`，退出 0，响应为 9,735,075 字节；其中 25 个 Git 进程观察占 9,685,756 字节，保留 2,056,371 原 stdout 字节及协议中的文本、字节表示。
-
-之后宿主明确登记 16,777,216 字节检查输出上限，标准检查和漂移／恢复用例通过。这是该宿主和调用的实测，不是通用容量建议。上限应依据实际报告大小登记，单次 Git 进程限制和完整输入义务不变。
+Git 原始进程观察会增加报告传输量。上限按实际待消费原件的大小登记，超限时保留原失败；一次容量实验不能成为其他宿主的通用限额。单次 Git 进程限制、原件摘要核对和完整输入义务继续适用。
 
 <a id="registered-artifact-inventory"></a>
 
 ## 在清单中排除明确登记的产物目录
 
-快照获取时，Git 不输出明确登记产物目录里的未跟踪内容。此前 beta.18 Go 消费者的两次未跟踪清单各输出 1,007,609 字节，接近单进程 1,048,576 上限，主要是允许存在的 SDK／状态输出。到调用方再过滤，会让这些路径先占满输入采集预算。
+快照获取时，Git 不输出明确登记产物目录里的未跟踪内容。到调用方再过滤，会让允许存在的 SDK／状态输出先占用输入采集预算。
 
 完整、初始、按范围采集、registration 复核、项目执行保护和迁移解码，现在共用字面排除参数生成逻辑，工作树清单也复用它。每个排除项只来自调用方明确声明的根层、区分大小写目录前缀，不发现产物归属、宿主布局或依赖。
 
