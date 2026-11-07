@@ -13,6 +13,140 @@ use identifiers::{equal_bytes, equal_text};
 
 verus! {
 
+// The JSON/IO adapter provides separate observed and declared values. All
+// decisions about those values and finite report-name sets live in this root.
+pub enum StageRequirement {
+    Equal { actual: Vec<u8>, expected: Vec<u8> },
+    Names { names: Vec<String>, nonempty: bool },
+    Process { exit: Option<i64>, pid: Option<u64> },
+    Digest { bytes: Vec<u8> },
+    AbsolutePath { bytes: Vec<u8> },
+    BindingPath { registry: bool, has_path: bool },
+    Relocation { allowed: bool, actual: Vec<u8>, declared: Option<Vec<u8>> },
+}
+
+pub struct StageCheck {
+    pub requirement: StageRequirement,
+    pub diagnostic: String,
+}
+
+pub open spec fn distinct_stage_names(names: Seq<String>, nonempty: bool) -> bool {
+    (forall|i: int| 0 <= i < names.len() ==> (!nonempty || names[i]@ != ""@))
+        && (forall|i: int, j: int| 0 <= i < j < names.len()
+            ==> names[i]@ != names[j]@)
+}
+
+pub fn valid_stage_names(names: &Vec<String>, nonempty: bool) -> (valid: bool)
+    ensures valid <==> distinct_stage_names(names@, nonempty),
+{
+    proof { reveal_strlit(""); }
+    let mut i = 0;
+    while i < names.len()
+        invariant
+            0 <= i <= names.len(),
+            forall|j: int| 0 <= j < i ==> (!nonempty || names[j]@ != ""@),
+            forall|j: int, k: int| 0 <= j < k < i ==> names[j]@ != names[k]@,
+        decreases names.len() - i,
+    {
+        if nonempty && equal_text(names[i].as_str(), "") { return false; }
+        let mut j = 0;
+        while j < i
+            invariant
+                0 <= j <= i < names.len(),
+                !nonempty || names[i as int]@ != ""@,
+                forall|k: int| 0 <= k < i ==> (!nonempty || names[k]@ != ""@),
+                forall|k: int, l: int| 0 <= k < l < i ==> names[k]@ != names[l]@,
+                forall|k: int| 0 <= k < j ==> names[k]@ != names[i as int]@,
+            decreases i - j,
+        {
+            if equal_text(names[j].as_str(), names[i].as_str()) { return false; }
+            j += 1;
+        }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn stage_digest(bytes: Seq<u8>) -> bool {
+    bytes.len() == 64 && forall|i: int| 0 <= i < bytes.len()
+        ==> identifiers::oid_byte(#[trigger] bytes[i])
+}
+
+pub fn valid_stage_digest(bytes: &[u8]) -> (valid: bool)
+    ensures valid <==> stage_digest(bytes@),
+{
+    if bytes.len() != 64 { return false; }
+    let mut i = 0;
+    while i < bytes.len()
+        invariant
+            bytes.len() == 64, 0 <= i <= bytes.len(),
+            forall|j: int| 0 <= j < i ==> identifiers::oid_byte(#[trigger] bytes[j]),
+        decreases bytes.len() - i,
+    {
+        let byte = bytes[i];
+        if !((48 <= byte && byte <= 57) || (97 <= byte && byte <= 102)) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn stage_requirement(check: &StageRequirement) -> bool {
+    match check {
+        StageRequirement::Equal { actual, expected } => actual@ == expected@,
+        StageRequirement::Names { names, nonempty } => distinct_stage_names(names@, *nonempty),
+        StageRequirement::Process { exit, pid } => *exit == Some(0i64)
+            && pid is Some && pid.unwrap() > 0,
+        StageRequirement::Digest { bytes } => stage_digest(bytes@),
+        StageRequirement::AbsolutePath { bytes } => bytes@.len() > 0 && bytes@[0] == 47,
+        StageRequirement::BindingPath { registry, has_path } => *registry || *has_path,
+        StageRequirement::Relocation { allowed, actual, declared } => *allowed
+            || (declared is Some && actual@ == declared.unwrap()@),
+    }
+}
+
+pub fn valid_stage_requirement(check: &StageRequirement) -> (valid: bool)
+    ensures valid <==> stage_requirement(check),
+{
+    match check {
+        StageRequirement::Equal { actual, expected } => equal_bytes(actual, expected),
+        StageRequirement::Names { names, nonempty } => valid_stage_names(names, *nonempty),
+        StageRequirement::Process { exit, pid } => match (exit, pid) {
+            (Some(code), Some(identity)) => *code == 0 && *identity > 0,
+            _ => false,
+        },
+        StageRequirement::Digest { bytes } => valid_stage_digest(bytes),
+        StageRequirement::AbsolutePath { bytes } => bytes.len() > 0 && bytes[0] == 47,
+        StageRequirement::BindingPath { registry, has_path } => *registry || *has_path,
+        StageRequirement::Relocation { allowed, actual, declared } => {
+            if *allowed { true } else {
+                match declared { Some(path) => equal_bytes(actual, path), None => false }
+            }
+        },
+    }
+}
+
+pub fn first_stage_failure(checks: &Vec<StageCheck>) -> (failed: Option<usize>)
+    ensures
+        failed is None <==> forall|i: int| 0 <= i < checks.len()
+            ==> stage_requirement(&checks[i].requirement),
+        failed is Some ==> (failed.unwrap() < checks.len()
+            && !stage_requirement(&checks[failed.unwrap() as int].requirement)
+            && forall|i: int| 0 <= i < failed.unwrap()
+                ==> stage_requirement(&checks[i].requirement)),
+{
+    let mut i = 0;
+    while i < checks.len()
+        invariant
+            0 <= i <= checks.len(),
+            forall|j: int| 0 <= j < i ==> stage_requirement(&checks[j].requirement),
+        decreases checks.len() - i,
+    {
+        if !valid_stage_requirement(&checks[i].requirement) { return Some(i); }
+        i += 1;
+    }
+    None
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct Binding {
@@ -44,14 +178,6 @@ pub struct Intent {
     pub schema: String,
     pub stage: Stage,
     pub replacement: Binding,
-}
-
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
-pub struct Validation {
-    pub schema: String,
-    pub stage_sha256: String,
-    pub stage: Stage,
 }
 
 pub open spec fn same_binding(a: &Binding, b: &Binding) -> bool {
@@ -192,18 +318,6 @@ pub fn valid_intent(intent: &Intent, expected: &Stage) -> (valid: bool)
 {
     equal_text(intent.schema.as_str(), "chrono-bootstrap-owner-publication-intent/v1")
         && stage_equal(&intent.stage, expected)
-}
-
-pub fn valid_validation(validation: &Validation, digest: &str, expected: &Stage)
-    -> (valid: bool)
-    ensures valid <==> (
-        validation.schema@ == "chrono-bootstrap-owner-stage-validation/v1"@
-            && validation.stage_sha256@ == digest@
-            && same_stage(&validation.stage, expected)),
-{
-    equal_text(validation.schema.as_str(), "chrono-bootstrap-owner-stage-validation/v1")
-        && equal_text(validation.stage_sha256.as_str(), digest)
-        && stage_equal(&validation.stage, expected)
 }
 
 pub enum SelectedAction { Replace, Keep, Reject }

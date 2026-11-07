@@ -362,32 +362,40 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
                 ])
             );
         }
-        // Explicit retention maintenance may retire unrelated released originals.
-        // Ordinary use/bootstrap leave them for this owner operation.
-        for _ in 0..8 {
-            let round = inventory().maintain().unwrap();
-            assert!(round["nodes"].as_u64().unwrap() <= 256);
-            if all_rooted
-                || state()["summaries"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
-            {
-                break;
+        // Only the explicit maintenance case consumes cross-object cleanup.
+        // Bootstrap admission must leave all unrelated originals intact even
+        // after the collector releases them; it has no global capacity gate.
+        if operation == "maintain" {
+            for _ in 0..8 {
+                let round = inventory().maintain().unwrap();
+                assert!(round["nodes"].as_u64().unwrap() <= 256);
+                if all_rooted
+                    || state()["summaries"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
+                {
+                    break;
+                }
+            }
+            if !all_rooted {
+                assert!(
+                    state()["summaries"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
+                );
             }
         }
-        if !all_rooted {
-            assert!(
-                state()["summaries"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|s| ids.iter().skip(8).any(|id| s["id"] == *id))
-            );
-        }
         let after = state();
-        for n in 0..if all_rooted { 512 } else { 8 } {
+        let retained = if all_rooted || operation == "bootstrap" {
+            512
+        } else {
+            8
+        };
+        for n in 0..retained {
             assert_eq!(
                 fs::read(
                     h.root
@@ -433,12 +441,12 @@ fn ordinary_report_capacity_maintenance_reclaims_only_eligible_originals() {
 }
 
 #[test]
-fn ordinary_report_capacity_bootstrap_admits_after_bounded_recovery() {
+fn ordinary_report_capacity_bootstrap_admits_without_unrelated_maintenance() {
     ordinary_report_capacity("bootstrap", false);
 }
 
 #[test]
-fn ordinary_report_capacity_required_originals_still_refuse_admission() {
+fn ordinary_report_capacity_maintenance_preserves_required_originals() {
     ordinary_report_capacity("maintain", true);
 }
 
