@@ -847,4 +847,76 @@ fn response_preflight_keeps_status_agreement_after_valid_fields() {
     expect_response_error(bad_error, "E_PROTOCOL: finding/status disagreement");
 }
 
+fn exact_record_header_accepts_empty_pass(protocol: &str, request: &str, judge: &str) {
+    let findings: Vec<policy::Finding> = Vec::new();
+    let accepted = policy::validate_record_response(protocol, request, judge, &WireStatus::Pass, 0,
+        protocol, request, judge, findings.as_slice());
+    assert(accepted.is_ok());
+}
+
+fn record_header_errors_precede_status(a: &str, b: &str)
+    requires a@ != b@,
+{
+    let findings = vec![complete_finding("warning", "/a")];
+    let protocol = policy::validate_record_response(b, a, a, &WireStatus::Pass, 0,
+        a, a, a, findings.as_slice());
+    expect_response_error(protocol, "response identity/status/exit mismatch");
+    let request = policy::validate_record_response(a, b, a, &WireStatus::Pass, 0,
+        a, a, a, findings.as_slice());
+    expect_response_error(request, "response identity/status/exit mismatch");
+    let judge = policy::validate_record_response(a, a, b, &WireStatus::Pass, 0,
+        a, a, a, findings.as_slice());
+    expect_response_error(judge, "response identity/status/exit mismatch");
+    let negative = policy::validate_record_response(a, a, a, &WireStatus::Pass, i32::MIN,
+        a, a, a, findings.as_slice());
+    expect_response_error(negative, "response identity/status/exit mismatch");
+    let large = policy::validate_record_response(a, a, a, &WireStatus::Pass, i32::MAX,
+        a, a, a, findings.as_slice());
+    expect_response_error(large, "response identity/status/exit mismatch");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_response_keeps_exact_headers_and_error_priority() {
+    exact_record_header_accepts_empty_pass("", "", "");
+    exact_record_header_accepts_empty_pass("协议\0", "é", "e\u{301}");
+    proof { reveal_strlit("a"); reveal_strlit("b"); assert("a"@[0] != "b"@[0]); }
+    record_header_errors_precede_status("a", "b");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_response_keeps_four_success_states() {
+    proof { response_fixture_texts(); }
+    let info = vec![complete_finding("info", "/a")];
+    let warning = vec![complete_finding("warning", "/a")];
+    let error = vec![complete_finding("error", "/a")];
+    let pass = policy::validate_record_response("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", info.as_slice());
+    let warn = policy::validate_record_response("p", "r", "j", &WireStatus::Warn, 0,
+        "p", "r", "j", warning.as_slice());
+    let fail = policy::validate_record_response("p", "r", "j", &WireStatus::Fail, 1,
+        "p", "r", "j", error.as_slice());
+    let failure = policy::validate_record_response("p", "r", "j", &WireStatus::Error, 2,
+        "p", "r", "j", error.as_slice());
+    assert(pass.is_ok() && warn.is_ok() && fail.is_ok() && failure.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_response_preserves_exact_status_errors() {
+    proof { response_fixture_texts(); }
+    let info = vec![complete_finding("info", "/a")];
+    let warning = vec![complete_finding("warning", "/a")];
+    let bad_pass = policy::validate_record_response("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", warning.as_slice());
+    expect_response_error(bad_pass, "response findings/status disagree");
+    let bad_warn = policy::validate_record_response("p", "r", "j", &WireStatus::Warn, 0,
+        "p", "r", "j", info.as_slice());
+    expect_response_error(bad_warn, "response findings/status disagree");
+    let bad_fail = policy::validate_record_response("p", "r", "j", &WireStatus::Fail, 1,
+        "p", "r", "j", warning.as_slice());
+    expect_response_error(bad_fail, "response findings/status disagree");
+    let bad_error = policy::validate_record_response("p", "r", "j", &WireStatus::Error, 2,
+        "p", "r", "j", info.as_slice());
+    expect_response_error(bad_error, "response findings/status disagree");
+}
+
 }

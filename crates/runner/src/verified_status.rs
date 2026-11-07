@@ -494,6 +494,45 @@ pub fn validate_response_fields(
     Ok(())
 }
 
+pub open spec fn record_response_error(
+    protocol: &str, request_id: &str, judge_id: &str, status: &WireStatus, exit: i32,
+    expected_protocol: &str, expected_request_id: &str, expected_judge_id: &str,
+    findings: Seq<Finding>,
+) -> Option<Seq<char>> {
+    if protocol@ != expected_protocol@ || request_id@ != expected_request_id@
+        || judge_id@ != expected_judge_id@ || exit != status.exit_spec() {
+        Some("response identity/status/exit mismatch"@)
+    } else if !finding_status_agreement(status, findings) {
+        Some("response findings/status disagree"@)
+    } else { None }
+}
+
+/// 留存报告的头部与状态审计；原件、JSON 与其它协议条件仍由其负责方处理。
+pub fn validate_record_response(
+    protocol: &str, request_id: &str, judge_id: &str, status: &WireStatus, exit: i32,
+    expected_protocol: &str, expected_request_id: &str, expected_judge_id: &str,
+    findings: &[Finding],
+) -> (out: Result<(), String>)
+    ensures
+        out.is_ok() == record_response_error(protocol, request_id, judge_id, status, exit,
+            expected_protocol, expected_request_id, expected_judge_id, findings@).is_none(),
+        match out {
+            Ok(()) => true,
+            Err(message) => record_response_error(protocol, request_id, judge_id, status, exit,
+                expected_protocol, expected_request_id, expected_judge_id, findings@)
+                    == Some(message@),
+        },
+{
+    if !wire_header_matches(protocol, request_id, judge_id, status, exit,
+        expected_protocol, expected_request_id, expected_judge_id) {
+        return Err("response identity/status/exit mismatch".to_string());
+    }
+    if !findings_match_status(status, findings) {
+        return Err("response findings/status disagree".to_string());
+    }
+    Ok(())
+}
+
 impl Clone for Status {
     fn clone(&self) -> (out: Self)
         ensures out == *self,

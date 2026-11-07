@@ -796,8 +796,18 @@ pub fn validate_execution(
                             || format!("E_SELF_DIAGNOSTIC: executed record {id} has no response"),
                         )?)
                         .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} response: {e}"))?;
-                    validate_record_response(&response, &request, process.exit_code)
-                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
+                    crate::verified_status::validate_record_response(
+                        &response.protocol,
+                        &response.request_id,
+                        &response.judge_id,
+                        &response.status,
+                        process.exit_code,
+                        wire::PROTOCOL,
+                        &request.request_id,
+                        &request.judge_id,
+                        &response.findings,
+                    )
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
                     if process.failure.is_some()
                         || json(&process.stdout_bytes).map_err(|e| {
                             format!("E_SELF_DIAGNOSTIC: record {id} original response: {e}")
@@ -943,29 +953,6 @@ fn validate_transport_failure(
     });
     if protocol_result.is_ok() {
         return Err("transport failure accompanies a valid protocol response".into());
-    }
-    Ok(())
-}
-
-fn validate_record_response(
-    response: &Response,
-    request: &Request,
-    exit_code: i32,
-) -> Result<(), String> {
-    if !crate::verified_status::wire_header_matches(
-        &response.protocol,
-        &response.request_id,
-        &response.judge_id,
-        &response.status,
-        exit_code,
-        wire::PROTOCOL,
-        &request.request_id,
-        &request.judge_id,
-    ) {
-        return Err("response identity/status/exit mismatch".into());
-    }
-    if !crate::verified_status::findings_match_status(&response.status, &response.findings) {
-        return Err("response findings/status disagree".into());
     }
     Ok(())
 }

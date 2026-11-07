@@ -682,6 +682,8 @@ pass 不允许 `warning`，warn 必须存在 `warning`；finding 克隆保留完
 普通与初始库存的响应前置校验直接调用同源 `validate_response_fields`：先核响应头和退出码，
 再逐项核完整 finding 数组的字段与引用，最后核 finding／状态一致性。
 失败分别保留原 `E_PROTOCOL` 完整消息及上述优先级；成功后仍须完成后续 evidence 检查。
+留存执行报告的头部／状态审计直接调用同源 `validate_record_response`：先核完整头部与原退出，
+再核实际 finding 列表的状态一致性，证明原两项错误的完整消息及优先级。
 这些局部判断不证明登记记录指针的语法／目标归属、完整响应组合、JSON 或证据 IO，
 范围见 [Verus 实施说明](docs/verus.md)。
 
