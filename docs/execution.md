@@ -118,6 +118,8 @@ action 名可为任意明确非空值，每项绑定全局唯一操作；测试 
 
 本仓测试项目由实际 `cargo test` 操作编译并执行，不另外登记没有当前调用方的 `cargo check` 或 `cargo build --tests`。生产构建、原行为测试、格式操作和同源 Verus 证明各保留其实际入口。缓存登记中的 `check.*` 是缓存 ID，生产者仍明确绑定 build／test 操作，不能把同名缓存误当成 Cargo check 的调用方。
 
+只登记自身、未接入计划或操作说明的临时过滤测试动作已经移除；测试本体继续由原未过滤操作或现役分组执行。macOS 27 政策也不再单独登记没有 action、输入绑定或 FILEMAP 使用方的 linker 工具；真实编译归原 Cargo 操作。
+
 语言检查由另选适配器承担。[chrono-judge-cargo](cargo-projects.md) 通过宿主明确政策保留 workspace 和 TOML 路径依赖检查。完整协议样本验证其失败阻止操作、纯文档变化不重判无关 Cargo 历史。通用样本覆盖无 manifest 项目、普通旧文件、自定义 action 和任意位置。真实 Go／TS／mix 声明可由通用格式和配对消费者接受，但这不证明 SDK 输入完整或全面启用检查。
 
 context 可以指向根目录相对的 `retained_inputs` JSON 文件。`base` 和 `candidate` 各含 `commit`、`environment`、`files`。继承环境变量映射到字符串（可为空）或表示缺失的 `null`。每个 `files[ID]` 要么含字节数组 `bytes`，要么精确为引用保留状态内容的 `{blob, sha256, length}`。[输入快照工具](inputs.md)可采集并传输，不必内嵌大文件。runner 传递快照元数据。
