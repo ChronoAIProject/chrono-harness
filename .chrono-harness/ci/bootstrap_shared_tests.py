@@ -739,7 +739,7 @@ class DiagnosticsComposition(unittest.TestCase):
         for name, profile, output in [("bootstrap-diagnostics-guard.json", guard, "guard-domain"),
                                       ("bootstrap-diagnostics-inputs.json", observer, "observer-domain")]:
             profile.update(projects=self.host.config["projects"], tools=dict(
-                               python3=sys.executable, **{name: bindings[name]["path"]
+                               python3=sys.executable, native=str(self.native), **{name: bindings[name]["path"]
                                                          for name in ("cargo", "rustc")}),
                            tool_bindings=bindings, environment=environment,
                            native_platform={"system": platform.system(), "machine": platform.machine()},
@@ -750,8 +750,9 @@ class DiagnosticsComposition(unittest.TestCase):
             self.host.write_json(self.host.ci / name, profile)
         keys = ["HOME", "CARGO_HOME", "RUSTUP_HOME", "RUSTC", "CARGO_NET_OFFLINE"]
         actions = self.host.declarations("write", "built-tool", "binary")
+        actions["projects"][0]["id"] = "diagnostics-fixture"
         actions["projects"][0]["actions"].update({
-            "verify": {"operation": "host.bootstrap-shared-verify-core", "tool": "python3",
+            "verify": {"operation": "host.bootstrap-shared-verify-core", "tool": "native",
                        "argv": [str(self.native), ".", CONFIG, "verify", "core"]},
             "guard": {"operation": "build.judge-cargo", "tool": "python3",
                       "argv": [fixture.OPERATION, "environment", "guard-domain", *keys]},
@@ -813,9 +814,9 @@ class DiagnosticsComposition(unittest.TestCase):
         cases = [("path", b"installed local executable provenance differs"),
                  ("bytes", b"bound cargo identity mismatch"),
                  ("version", b"bound cargo identity mismatch"),
-                 ("compiler", b"inherited compiler selection differs"),
-                 ("wrapper", b"inherited compiler wrapper differs"),
-                 ("workspace-wrapper", b"inherited compiler wrapper differs")]
+                 ("compiler", b"inherited compiler selection or wrapper differs from binding"),
+                 ("wrapper", b"inherited compiler selection or wrapper differs from binding"),
+                 ("workspace-wrapper", b"inherited compiler selection or wrapper differs from binding")]
         cargo = self.host.tools / "cargo"
         original_cargo = cargo.read_bytes()
         for defect, message in cases:
