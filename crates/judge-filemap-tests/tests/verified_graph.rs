@@ -1922,6 +1922,13 @@ fn empty_outgoing_preserves_all_existing_causes_and_absence() {
     assert(policy::edge_causes(rows@, kept) =~= set!["old".spec_bytes(), "older".spec_bytes()]);
 }
 
+proof fn singleton_set<A>(value: A)
+    ensures seq![value].to_set() =~= set![value],
+{
+    Seq::<A>::empty().lemma_push_to_set_commute(value);
+    assert(Seq::<A>::empty().to_set() =~= Set::<A>::empty());
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn outgoing_duplicates_merge_ids_without_changing_unrelated_edges() {
     broadcast use vstd::std_specs::btree::group_btree_axioms;
@@ -1939,6 +1946,7 @@ fn outgoing_duplicates_merge_ids_without_changing_unrelated_edges() {
     let mut rows = std::collections::BTreeMap::new();
     let names = vec!["old".to_owned()];
     assert(policy::cause_keys(names@) =~= seq!["old".spec_bytes()]);
+    proof { singleton_set("old".spec_bytes()); }
     assert(policy::cause_keys(names@).to_set() =~= set!["old".spec_bytes()]);
     let old_causes = policy::CauseSet::from_names(&names);
     assert(old_causes.keys().to_set() =~= set!["old".spec_bytes()]);
@@ -1964,8 +1972,11 @@ fn outgoing_duplicates_merge_ids_without_changing_unrelated_edges() {
     policy::merge_traversed_causes(&mut rows, &outgoing, "seed");
     assert(policy::edge_causes(rows@, shared) =~= set!["old".spec_bytes(), "seed".spec_bytes()]);
     assert(policy::edge_causes(rows@, added) =~= set!["seed".spec_bytes()]);
+    assert(rows@.contains_key(untouched));
+    assert(rows@[untouched].view() == kept);
     let subset = vec![&added];
     assert(subset@.map_values(|e: &policy::Edge| *e) =~= seq![added]);
+    proof { singleton_set(added); }
     assert(policy::outgoing_members(subset@) =~= set![added]);
     let ghost before_second = rows@;
     policy::merge_traversed_causes(&mut rows, &subset, "second");
@@ -2027,6 +2038,7 @@ fn edge_and_cause_keys_preserve_unicode_nul_case_and_prefixes() {
     policy::merge_traversed_causes(&mut rows, &outgoing, "");
     let subset = vec![&exact];
     assert(subset@.map_values(|e: &policy::Edge| *e) =~= seq![exact]);
+    proof { singleton_set(exact); }
     assert(policy::outgoing_members(subset@) =~= set![exact]);
     policy::merge_traversed_causes(&mut rows, &subset, "起点\0");
     assert(policy::edge_causes(rows@, exact) =~= set!["".spec_bytes(), "起点\0".spec_bytes()]);
