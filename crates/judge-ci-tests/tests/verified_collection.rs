@@ -10,6 +10,134 @@ use vstd::prelude::*;
 
 verus! {
 
+fn expect_operation(
+    state: &str, error: &Option<String>, exit: Option<i32>,
+    expected_state: Status, expected_exit: Option<i32>,
+)
+    requires expected_state == policy::operation_status(state@),
+        expected_exit == policy::operation_exit(state@, exit),
+{
+    let row = policy::operation_result("é\0operation", state, error, exit);
+    assert(row.id@ == "é\0operation"@);
+    assert(row.status == expected_state);
+    assert(row.exit_code == expected_exit);
+    assert(row.cause@ == policy::operation_cause(error));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn operation_state_and_exit_boundaries_use_the_original_fields() {
+    proof {
+        reveal_strlit("passed"); reveal_strlit("blocked"); reveal_strlit("failed");
+        reveal_strlit("error"); reveal_strlit("Passed"); reveal_strlit("passed\0");
+        assert("passed"@[0] != "blocked"@[0]);
+        assert("passed"@[0] != "failed"@[0]);
+        assert("passed"@[0] != "error"@[0]);
+        assert("blocked"@.len() != "failed"@.len());
+        assert("blocked"@.len() != "error"@.len());
+        assert("passed"@[0] != "Passed"@[0]);
+        assert("blocked"@.len() != "Passed"@.len());
+        assert("passed"@.len() != "passed\0"@.len());
+        assert("blocked"@[0] != "passed\0"@[0]);
+    }
+    let error = Some("original error\0é".to_string());
+    let no_error = None;
+    expect_operation("passed", &no_error, Some(0), Status::Passed, Some(0));
+    expect_operation("passed", &error, Some(-7), Status::Passed, Some(-7));
+    expect_operation("passed", &no_error, None, Status::Passed, None);
+    expect_operation("blocked", &error, Some(0), Status::Blocked, None);
+    expect_operation("blocked", &no_error, Some(7), Status::Blocked, Some(7));
+    expect_operation("blocked", &no_error, None, Status::Blocked, None);
+    expect_operation("failed", &error, Some(0), Status::Failed, None);
+    expect_operation("failed", &error, Some(i32::MIN), Status::Failed, Some(i32::MIN));
+    expect_operation("error", &error, Some(i32::MAX), Status::Failed, Some(i32::MAX));
+    expect_operation("Passed", &no_error, Some(0), Status::Failed, None);
+    expect_operation("passed\0", &no_error, Some(1), Status::Failed, Some(1));
+}
+
+/// 任意未知完整名称都失败；错误文本和退出码不反向改写原执行状态。
+fn arbitrary_operation_states_are_not_inferred_from_error_or_exit(state: &str, exit: i32)
+    requires state@ != "passed"@, state@ != "blocked"@,
+{
+    let row = policy::operation_result("operation", state, &None, Some(exit));
+    assert(row.status == Status::Failed);
+    assert(row.exit_code == if exit == 0 { None } else { Some(exit) });
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn operation_cause_preserves_empty_unicode_nul_and_default() {
+    let original = Some("é\0original error".to_string());
+    let row = policy::operation_result("operation", "failed", &original, Some(0));
+    assert(row.cause@ == "é\0original error"@);
+    let empty = Some("".to_string());
+    let empty_cause = policy::operation_result("operation", "passed", &empty, Some(0));
+    assert(empty_cause.cause@ == ""@);
+    let default_cause = policy::operation_result("operation", "passed", &None, Some(0));
+    assert(default_cause.cause@ == "registered command completed with matching receipt"@);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_status_uses_all_original_result_states() {
+    let empty: Vec<CheckResult> = Vec::new();
+    let empty_status = policy::response_status(&empty);
+    assert(empty_status == Status::Passed);
+    let success = vec![
+        result("a", Status::NotRequired, Some(-7)),
+        result("a", Status::Passed, None),
+        result("failed", Status::Passed, Some(1)),
+    ];
+    let passed = policy::response_status(&success);
+    assert(passed == Status::Passed);
+    let failed_first = vec![
+        result("a", Status::Failed, None), result("a", Status::Passed, Some(0)),
+    ];
+    let failed = policy::response_status(&failed_first);
+    assert(failed == Status::Failed);
+    let blocked_last = vec![
+        result("a", Status::Passed, Some(0)), result("a", Status::Blocked, None),
+    ];
+    let blocked = policy::response_status(&blocked_last);
+    assert(blocked == Status::Failed);
+    let duplicate_failures = vec![
+        result("é\0", Status::NotRequired, None),
+        result("é\0", Status::Failed, Some(0)),
+        result("é\0", Status::Blocked, Some(0)),
+    ];
+    let duplicates = policy::response_status(&duplicate_failures);
+    assert(duplicates == Status::Failed);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn diagnostic_failure_appends_the_real_record_without_replacing_prior_results() {
+    let mut rows = vec![result("é\0original", Status::Passed, Some(0))];
+    let status = policy::diagnostic_failure(&mut rows);
+    assert(status == Status::Failed);
+    assert(rows.len() == 2);
+    assert(rows[0].id@ == "é\0original"@);
+    assert(rows[0].status == Status::Passed);
+    assert(rows[0].cause@ == "original report"@);
+    assert(rows[0].exit_code == Some(0i32));
+    assert(rows[1].id@ == "ci.execution-diagnostics"@);
+    assert(rows[1].status == Status::Failed);
+    assert(rows[1].exit_code.is_none());
+    assert(rows[1].cause@ == "execution diagnostic publication failed; original errors retained"@);
+    let mut empty: Vec<CheckResult> = Vec::new();
+    let from_empty = policy::diagnostic_failure(&mut empty);
+    assert(from_empty == Status::Failed && empty.len() == 1);
+    let again = policy::diagnostic_failure(&mut empty);
+    assert(again == Status::Failed && empty.len() == 2);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_failure_produces_its_own_failed_terminal_state_and_original_cause() {
+    let (status, rows) = policy::inventory_failure("é\0original inventory error".to_string());
+    assert(status == Status::Failed);
+    assert(rows.len() == 1);
+    assert(rows[0].id@ == "ci.inventory"@);
+    assert(rows[0].status == Status::Failed);
+    assert(rows[0].cause@ == "é\0original inventory error"@);
+    assert(rows[0].exit_code.is_none());
+}
+
 fn result(id: &str, status: Status, exit_code: Option<i32>) -> (out: CheckResult)
     ensures out.id@ == id@, out.status == status, out.exit_code == exit_code,
         out.cause@ == "original report"@,
