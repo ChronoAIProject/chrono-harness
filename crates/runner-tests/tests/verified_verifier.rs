@@ -171,6 +171,16 @@ fn extra_filtered_or_rebound_verifier_arguments_are_rejected() {
 
 struct UnavailableSources;
 
+/// 成功报告与 dep-info 不能替代实际编译库；当前尚无库观察。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn successful_report_without_compiled_library_is_rejected() {
+    let original = Some(Ok(vec![0u8, 255u8]));
+    let accepted = policy::admit_observed_output(
+        &contract(), &report(verification()), &arguments(), 0, false, &original, 2,
+    );
+    assert(accepted.is_err());
+}
+
 impl policy::sources::DependencyRead for UnavailableSources {
     fn read(&self, path: &[u8], limit: u64) -> Result<Vec<u8>, String> {
         Err("original read error\0é".to_string())
