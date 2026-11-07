@@ -490,17 +490,17 @@ def source_identity(before, after):
 
 
 def main():
-    publication = len(sys.argv) == 6 and sys.argv[3] == "--owner-publication"
-    if len(sys.argv) not in (2, 3) and not publication:
+    validation = len(sys.argv) == 6 and sys.argv[3] == "--owner-stage-validation"
+    if len(sys.argv) not in (2, 3) and not validation:
         raise ValueError("usage: bootstrap.py HOST_ROOT [REGISTERED_CONFIG]")
     root = Path(sys.argv[1]).resolve()
     config_path = Path(sys.argv[2]) if len(sys.argv) >= 3 else Path(".chrono-harness/ci/bootstrap.json")
     if config_path.is_absolute() or ".." in config_path.parts or config_path.parts[:2] != (".chrono-harness", "ci"):
         raise ValueError("bootstrap config must be an explicit host CI path")
     config = json.loads((root / config_path).read_text())
-    if publication:
+    if validation:
         import bootstrap_owner
-        bootstrap_owner.publication(root, sys.argv[4], sys.argv[5])
+        bootstrap_owner.validate_stage(root, sys.argv[4], sys.argv[5])
         return
     report_destination(root, config)
     if "rust_incremental" in config and type(config["rust_incremental"]) is not bool:

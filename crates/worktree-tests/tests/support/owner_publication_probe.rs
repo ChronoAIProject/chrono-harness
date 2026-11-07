@@ -63,16 +63,16 @@ fn main() -> ExitCode {
         io::stdin().read_exact(&mut byte).unwrap();
         return ExitCode::SUCCESS;
     }
-    let publication = args.iter().any(|a| a == "--owner-publication");
+    let validation = args.iter().any(|a| a == "--owner-stage-validation");
     let root = Path::new(&args[1]);
-    if publication {
+    if validation {
         excluded(root);
     }
     let mut child = Command::new("/usr/bin/python3");
     child.args(&args);
     chrono_harness::process_fds::forward_command(&mut child, &[]).unwrap();
     let status = child.status().unwrap();
-    if publication {
+    if validation {
         excluded(root);
         if root
             .join(".chrono-harness/state/owner-probe-drift")
