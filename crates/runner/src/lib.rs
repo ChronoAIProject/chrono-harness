@@ -37,6 +37,8 @@ pub mod verified_limits;
 pub mod verified_paths;
 #[allow(unexpected_cfgs)]
 pub mod verified_status;
+#[allow(unexpected_cfgs)]
+pub mod verified_verifier;
 pub use verified_status::{CheckResult, Status};
 pub use verus_builtin_macros::verus;
 pub mod wire;

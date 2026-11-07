@@ -396,6 +396,20 @@
       "verify.owner-publication": [
         "worktree",
         "worktree-adoption"
+      ],
+      "verify.verus-result": [
+        "ci",
+        "judge-ci",
+        "judge-registration",
+        "judge-routes",
+        "runner"
+      ],
+      "verify.verus-result-tests": [
+        "ci",
+        "judge-ci",
+        "judge-registration",
+        "judge-routes",
+        "runner"
       ]
     },
     "facts_config": ".chrono-harness/config.json",
