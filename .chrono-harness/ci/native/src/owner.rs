@@ -381,40 +381,6 @@ pub fn stage(
     })
 }
 
-pub fn validate_stage(
-    root: &Path,
-    environment: &Environment,
-    native: &NativePlatform,
-    config: &str,
-    reference: &str,
-    expected_sha: &str,
-) -> Result<publication::Validation, String> {
-    require_capabilities(root, environment)?;
-    if environment
-        .get(OsStr::new("CHRONO_WORKTREE_OWNER_DEPLOYMENT"))
-        .and_then(|value| value.to_str())
-        != Some(expected_sha)
-    {
-        return Err("owner stage validation requires the exclusive deployment callback".into());
-    }
-    let qualified = stage_report(
-        root,
-        environment,
-        native,
-        reference,
-        Some(expected_sha),
-        None,
-    )?;
-    if qualified.report.config != config {
-        return Err("owner stage validation configuration differs".into());
-    }
-    Ok(publication::Validation {
-        schema: "chrono-bootstrap-owner-stage-validation/v1".into(),
-        stage_sha256: expected_sha.into(),
-        stage: qualified.stage,
-    })
-}
-
 pub fn stage_report(
     root: &Path,
     environment: &Environment,

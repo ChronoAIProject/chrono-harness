@@ -117,13 +117,19 @@ fn validate_stage(
         "owner stage requires its original clean source and no installations",
     )?;
     let projects_path = policy["projects"].as_str().ok_or("owner stage projects")?;
-    let mut paths = vec![
-        profile,
-        projects_path,
+    let entrypoint = policy["entrypoint"]["script"]
+        .as_str()
+        .ok_or("owner stage producer entrypoint")?;
+    let mut paths = vec![profile, projects_path, entrypoint];
+    if chrono_harness::verified_identifiers::equal_text(
+        entrypoint,
         ".chrono-harness/ci/bootstrap.py",
-        ".chrono-harness/ci/bootstrap_owner.py",
-        ".chrono-harness/ci/bootstrap_shared.py",
-    ];
+    ) {
+        paths.extend([
+            ".chrono-harness/ci/bootstrap_owner.py",
+            ".chrono-harness/ci/bootstrap_shared.py",
+        ]);
+    }
     if let Some(path) = policy.get("tool_bindings_registry") {
         paths.push(path.as_str().ok_or("owner stage toolchain registry path")?);
     }

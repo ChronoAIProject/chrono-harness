@@ -189,11 +189,8 @@ fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, St
 }
 #[test]
 fn owner_deployment_uses_the_declared_producer_entrypoint_for_stage_inputs() {
-    let (h, exe, path, sha) = fixture_with_entrypoint(
-        None,
-        true,
-        ".chrono-harness/ci/owner-stage-producer.py",
-    );
+    let (h, exe, path, sha) =
+        fixture_with_entrypoint(None, true, ".chrono-harness/ci/owner-stage-producer.py");
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_eq!(code, 0, "{report} {error}");
     assert!(report.get("managed_process").is_none(), "{report}");
