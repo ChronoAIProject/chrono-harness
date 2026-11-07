@@ -113,10 +113,15 @@ fn common_versions(v: &Value, fields: &[&str], versions: &[u64]) -> Result {
     choice(&v["status"], &["active", "proposed"])
 }
 fn action(v: &Value) -> Result {
-    object(v, &["operation", "tool", "argv"], &[])?;
+    object(v, &["operation", "tool", "argv"], &["output_contract"])?;
     string(&v["operation"])?;
     string(&v["tool"])?;
-    strings(&v["argv"])
+    strings(&v["argv"])?;
+    output_contract(&v["output_contract"])
+}
+fn output_contract(v: &Value) -> Result {
+    let contract = serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
+    chrono_harness::verified_verifier::validate_contract(&contract)
 }
 fn actions(v: &Value) -> Result {
     let o = v.as_object().ok_or("actions must be an object")?;
@@ -706,11 +711,16 @@ pub fn workflow(v: &Value) -> Result {
                     string(&replacement["reason"])?;
                     for side in ["from", "to"] {
                         let method = &replacement[side];
-                        object(method, &["owner", "operation", "tool", "argv"], &[])?;
+                        object(
+                            method,
+                            &["owner", "operation", "tool", "argv"],
+                            &["output_contract"],
+                        )?;
                         for key in ["owner", "operation", "tool"] {
                             string(&method[key])?;
                         }
                         strings(&method["argv"])?;
+                        output_contract(&method["output_contract"])?;
                     }
                     let operation = string(&replacement["from"]["operation"])?;
                     if !seen.insert(operation)
