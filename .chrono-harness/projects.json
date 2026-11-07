@@ -39,6 +39,8 @@
     "diagnostics-tests",
     "host-bootstrap",
     "host-bootstrap-tests",
+    "host-bootstrap-native",
+    "host-bootstrap-native-tests",
     "cache",
     "cache-tests"
   ],
