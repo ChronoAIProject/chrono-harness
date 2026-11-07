@@ -1,0 +1,16 @@
+[package]
+name = "chrono-host-bootstrap"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+chrono-harness = { path = "../../../crates/runner" }
+serde = { version = "1", features = ["derive"] }
+
+[profile.dev.package.sha2]
+opt-level = 3

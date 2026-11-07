@@ -11,6 +11,13 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/ci/native/Cargo.toml","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-bootstrap-native"}]},
+    {"path":".chrono-harness/ci/native/Cargo.lock","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-bootstrap-native"}]},
+    {"path":".chrono-harness/ci/native/src/lib.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
+    {"path":".chrono-harness/ci/native/src/verified_bindings.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
+    {"path":".chrono-harness/ci/native-tests/Cargo.toml","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/native-tests/Cargo.lock","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/verified_bindings.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":"crates/runner/src/process_child.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":".gitignore","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"README.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -530,6 +537,11 @@
     {"path":"crates/worktree-tests/tests/verified_owner_publication.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]}
   ],
   "project_edges": [
+    {"from":"project:runner","kind":"compile","to":"project:host-bootstrap-native"},
+    {"from":"project:runner","kind":"compile","to":"project:host-bootstrap-native-tests"},
+    {"from":"project:host-bootstrap-native","kind":"compile","to":"project:host-bootstrap-native-tests"},
+    {"from":"project:host-bootstrap-native","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
+    {"from":"project:host-bootstrap-native-tests","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
     {"from":"project:runner","kind":"compile","to":"project:runner-tests"},
     {"from":"project:runner","kind":"runtime-input","to":"project:runner-tests"},
     {"from":"project:runner","kind":"test-execution","to":"test:runner-tests"},
@@ -1111,6 +1123,7 @@
     {"from":"project:runner","kind":"runtime-input","to":"script:host-bootstrap-tests"}
   ],
   "test_costs": [
+    {"test":"host-bootstrap-native-tests","cost":"unmeasured"},
     {"test":"runner-tests","cost":"unmeasured"},
     {"test":"instructions-tests","cost":"unmeasured"},
     {"test":"judge-ci-tests","cost":"unmeasured"},
@@ -1136,6 +1149,18 @@
     {"test":"cache-tests","cost":"unmeasured"}
   ],
   "execution_plans": {
+    "test:host-bootstrap-native-tests": {
+      "operations": [
+        "verify.bootstrap-bindings-tests",
+        "verify.bootstrap-bindings",
+        "fmt.host-bootstrap-native",
+        "fmt.host-bootstrap-native-tests",
+        "build.host-bootstrap-native",
+        "test.host-bootstrap-native-tests"
+      ],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
     "test:runner-tests": {
       "operations": [
         "verify.runner-limits",
@@ -1490,6 +1515,60 @@
       "worktree-test-inventory"
     ],
     "claims": {
+      "build.host-bootstrap-native": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/cache/host-bootstrap-native/target/"
+        ]
+      },
+      "fmt.host-bootstrap-native": {
+        "resources": [],
+        "outputs": []
+      },
+      "format.host-bootstrap-native": {
+        "resources": [],
+        "outputs": []
+      },
+      "inputs.lockfile.host-bootstrap-native": {
+        "resources": [],
+        "outputs": []
+      },
+      "verify.bootstrap-bindings": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "build.host-bootstrap-native-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/cache/host-bootstrap-native-tests/target/"
+        ]
+      },
+      "fmt.host-bootstrap-native-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "format.host-bootstrap-native-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "inputs.lockfile.host-bootstrap-native-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "verify.bootstrap-bindings-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "test.host-bootstrap-native-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/cache/host-bootstrap-native-tests/target/"
+        ]
+      },
       "build.ci": {
         "resources": [],
         "outputs": [

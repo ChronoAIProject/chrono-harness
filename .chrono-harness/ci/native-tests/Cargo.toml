@@ -1,0 +1,17 @@
+[package]
+name = "chrono-host-bootstrap-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dependencies]
+chrono-harness = { path = "../../../crates/runner" }
+chrono-host-bootstrap = { path = "../native" }
+
+[[test]]
+name = "verified_bindings"
+path = "tests/verified_bindings.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3

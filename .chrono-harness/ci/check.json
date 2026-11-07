@@ -218,7 +218,8 @@
       },
       "host-bootstrap": {
         "tests": [
-          "test:host-bootstrap-tests"
+          "test:host-bootstrap-tests",
+          "test:host-bootstrap-native-tests"
         ],
         "report_path": ".chrono-harness/state/units/host-bootstrap/check.json"
       },
