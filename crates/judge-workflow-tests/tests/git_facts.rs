@@ -574,44 +574,8 @@ fn full_ci_consumer(selected: bool) {
             .unwrap(),
         )
         .unwrap();
-        let out = h.capture_native(Command::new(&ci).current_dir(&root).args([
-            "prepare",
-            "--host-root",
-            ".",
-            "--config",
-            source_path,
-            "--event",
-            "workflow_dispatch",
-            "--payload",
-            payload.to_str().unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-        ]));
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let prepared: Value = serde_json::from_slice(&out.stdout).unwrap();
-        assert_eq!(prepared["governance"], "not-evaluated");
-        assert_eq!(
-            prepared["canonical_argv"],
-            json!([".chrono-harness/bin/chrono-harness", "check"])
-        );
-        if selected {
-            assert_eq!(prepared["git_facts"]["selection"]["path"], CONFIG);
-            assert_eq!(
-                prepared["git_facts"]["selection"]["config_path"],
-                NATIVE_CONFIG
-            );
-        }
-        assert_eq!(
-            fs::read(root.join(".chrono-harness/state/context.json")).unwrap(),
-            context
-        );
-        let argv: Vec<String> = serde_json::from_value(prepared["canonical_argv"].clone()).unwrap();
         let out = h.capture_native(
-            Command::new(root.join(&argv[0]))
+            Command::new(root.join(".chrono-harness/bin/chrono-harness"))
                 .current_dir(&root)
                 .env("DECLARED_EMPTY", "")
                 .env_remove("DECLARED_ABSENT")
@@ -619,7 +583,7 @@ fn full_ci_consumer(selected: bool) {
                 .env("GITHUB_EVENT_NAME", "workflow_dispatch")
                 .env("GITHUB_EVENT_PATH", &payload)
                 .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-                .args(&argv[1..]),
+                .arg("check"),
         );
         h.retain_command_result("prepared-check", &out);
         assert!(
@@ -648,6 +612,27 @@ fn full_ci_consumer(selected: bool) {
                 .flatten()
                 .filter_map(|j| j["transport_failure"].as_str())
                 .collect::<Vec<_>>()
+        );
+        let prepared = &report["preparation"]["result"]["evidence"];
+        assert_eq!(prepared["governance"], "not-evaluated");
+        assert_eq!(
+            prepared["canonical_argv"],
+            json!([".chrono-harness/bin/chrono-harness", "check"])
+        );
+        if selected {
+            assert_eq!(prepared["git_facts"]["selection"]["path"], CONFIG);
+            assert_eq!(
+                prepared["git_facts"]["selection"]["config_path"],
+                NATIVE_CONFIG
+            );
+        }
+        assert_eq!(
+            fs::read(root.join(".chrono-harness/state/context.json")).unwrap(),
+            context
+        );
+        assert_eq!(
+            fs::read(root.join(prepared["context"]["path"].as_str().unwrap())).unwrap(),
+            context
         );
         fs::remove_file(root.join(".chrono-harness/state/preparation.json")).unwrap();
         report
@@ -699,21 +684,25 @@ fn full_ci_consumer(selected: bool) {
             .unwrap();
             let trace = fs::read(root.join(".chrono-harness/state/git-trace")).unwrap();
             let order = fs::read(root.join(".chrono-harness/state/order")).unwrap();
-            let out = h.capture_native(Command::new(&ci).current_dir(&root).args([
-                "prepare",
-                "--host-root",
-                ".",
-                "--config",
-                source_path,
-                "--event",
-                "workflow_dispatch",
-                "--payload",
-                ".chrono-harness/state/payload.json",
-                "--workflow-revision",
-                &h.candidate,
-            ]));
-            assert_eq!(out.status.code(), Some(1));
-            assert!(String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"));
+            let out = h.capture_native(
+                Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+                    .current_dir(&root)
+                    .env("DECLARED_EMPTY", "")
+                    .env_remove("DECLARED_ABSENT")
+                    .env("CHRONO_CHECK_SOURCE", "ci")
+                    .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+                    .env(
+                        "GITHUB_EVENT_PATH",
+                        root.join(".chrono-harness/state/payload.json"),
+                    )
+                    .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+                    .arg("check"),
+            );
+            assert_eq!(out.status.code(), Some(2));
+            assert!(
+                String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"),
+                "{out:?}"
+            );
             assert_eq!(
                 fs::read(root.join(".chrono-harness/state/git-trace")).unwrap(),
                 trace
