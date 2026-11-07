@@ -12,6 +12,36 @@ mod consumption;
 mod support;
 
 #[test]
+fn runtime_state_input_rejects_locations_outside_host_state() {
+    for location in [
+        ".chrono-harness/inputs/tracked-inventory.json",
+        "/tmp/runtime-inventory.json",
+        ".chrono-harness/state/../tracked-inventory.json",
+        ".chrono-harness/state/",
+    ] {
+        let input = json!({
+            "id": "runtime",
+            "location": location,
+            "presence": "present",
+            "source": {
+                "schema": "chrono-runtime-state/v1",
+                "manifest": ".chrono-harness/state/observation.json",
+                "pointer": "directories.rust.manifest"
+            }
+        });
+        assert!(
+            chrono_judge_registration::inputs::runtime_state_source(&input).is_err(),
+            "runtime state must not authorize a tracked or external location: {location}"
+        );
+        let mut values = support::values();
+        let config = values.get_mut(support::CONFIG).unwrap();
+        config["schema_version"] = json!(2);
+        config["environment"]["inputs"] = json!([input]);
+        assert!(chrono_judge_registration::schema::config(config).is_err());
+    }
+}
+
+#[test]
 fn runtime_state_input_consumes_observation_manifest_and_rejects_drift() {
     use chrono_judge_registration::inputs::{runtime_state_identity, runtime_state_source};
 
