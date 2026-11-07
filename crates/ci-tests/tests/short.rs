@@ -2381,6 +2381,14 @@ fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
     );
     assert!(entry.file_name().to_string_lossy().contains(&sha256(&raw)));
 
+    // Release the private copy with its registered bytes after checking the
+    // mutation and retained failure. A failed assertion keeps the diagnostic.
+    let original = Path::new(env!("CARGO_BIN_EXE_chrono-ci-test-transport"));
+    let executable = acquisition
+        .root
+        .join(".chrono-harness/bin/mutating-producer");
+    fs::copy(original, &executable).unwrap();
+
     let mut setup = ShortHost::new();
     setup.modify(".chrono-harness/config.json", |c| {
         c["protocol"]["timeout_seconds"] = json!(0)

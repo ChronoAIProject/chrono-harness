@@ -15,7 +15,7 @@ pub fn digest<T: Serialize>(value: &T) -> Result<String, String> {
     Ok(sha256(&canonical(value)?))
 }
 pub use crate::verified_identifiers::valid_digest_text as is_digest;
-pub use crate::verified_status::{Finding, WireStatus as Status};
+pub use crate::verified_status::{Finding, WireStatus as Status, append_finding};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Evidence {

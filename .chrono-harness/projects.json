@@ -1673,6 +1673,15 @@
             "crates/judge-filemap/Cargo.toml"
           ]
         },
+        "format": {
+          "operation": "format.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        },
         "inputs_metadata": {
           "operation": "inputs.metadata.judge-filemap",
           "tool": "cargo",
@@ -1908,6 +1917,15 @@
           "argv": [
             "fmt",
             "--check",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-routes/Cargo.toml"
           ]
@@ -2289,6 +2307,15 @@
             "crates/judge-cost/Cargo.toml"
           ]
         },
+        "format": {
+          "operation": "format.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        },
         "inputs_metadata": {
           "operation": "inputs.metadata.judge-cost",
           "tool": "cargo",
@@ -2459,6 +2486,15 @@
           "argv": [
             "fmt",
             "--check",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
             "--manifest-path",
             "crates/judge-mixed/Cargo.toml"
           ]
