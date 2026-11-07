@@ -49,6 +49,10 @@ const CARGO_FILES: &[(&str, &[u8])] = &[
 fn cargo_host() -> Host {
     let h = configure_main(Host::retained("payload"), "bounded-cargo");
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    cfg["environment"]["inherit"]
+        .as_array_mut()
+        .unwrap()
+        .extend([value!("HOME"), value!("RUSTUP_HOME"), value!("RUSTUP_TOOLCHAIN")]);
     let mut policy = json(&fs::read(h.root.join(".chrono-harness/cleanup.json")).unwrap()).unwrap();
     let mut map = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
     for (path, bytes) in CARGO_FILES {

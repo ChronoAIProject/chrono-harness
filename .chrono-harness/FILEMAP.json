@@ -958,6 +958,7 @@
     {"from":"environment:HOME","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:CARGO_HOME","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:RUSTUP_HOME","kind":"runtime-input","to":"project:worktree-tests"},
+    {"from":"environment:RUSTUP_TOOLCHAIN","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:TMPDIR","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:SDKROOT","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:worktree-tests"},
