@@ -140,18 +140,23 @@ fn execute() -> u8 {
 
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
-    let first = arguments.first().and_then(|argument| argument.to_str());
-    let (host, operation) = match first {
-        Some(command @ ("bootstrap" | "construct-owner-stage" | "validate-original-execution")) => {
-            (arguments.get(1), command)
+    let (host, operation) = match arguments.as_slice() {
+        [host, _, operation] if operation.to_str() == Some("produce") => (Some(host), "produce"),
+        [host, _, operation, _]
+            if matches!(operation.to_str(), Some("install" | "verify")) =>
+        {
+            (Some(host), operation.to_str().unwrap())
         }
-        _ => (
-            arguments.first(),
-            arguments
-                .get(2)
-                .and_then(|argument| argument.to_str())
-                .unwrap_or("bootstrap"),
-        ),
+        [operation, host, _]
+            if matches!(
+                operation.to_str(),
+                Some("bootstrap" | "construct-owner-stage" | "validate-original-execution")
+            ) =>
+        {
+            (Some(host), operation.to_str().unwrap())
+        }
+        [host, _] => (Some(host), "bootstrap"),
+        _ => (None, ""),
     };
     ExitCode::from(match host {
         Some(host) => chrono_harness::logged_main_at(

@@ -41,6 +41,8 @@ fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
         (vec![host, "missing.json"], "bootstrap"),
         (vec!["bootstrap", "missing.json"], "bootstrap"),
         (vec![host, "missing.json", "produce"], "produce"),
+        (vec!["bootstrap", "missing.json", "produce"], "produce"),
+        (vec!["bootstrap", "missing.json", "verify", "core"], "verify"),
         (
             vec!["validate-original-execution", host, "missing.json"],
             "validate-original-execution",
