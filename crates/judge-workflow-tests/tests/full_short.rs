@@ -1359,6 +1359,14 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     let payload = tools.path().join("authentic-event.json");
     fs::write(&payload,serde_json::to_vec(&json!({"before":h.base,"after":h.candidate,"ref":"refs/heads/integration/short-full","created":false,"deleted":false})).unwrap()).unwrap();
     let detection_path = tools.path().join("actual-detection.json");
+    let workflow_revision = || {
+        let event = chrono_harness::json(&fs::read(&payload).unwrap()).unwrap();
+        if event.get("pull_request").is_some() {
+            event["merge_commit_sha"].as_str().unwrap().to_owned()
+        } else {
+            h.candidate.clone()
+        }
+    };
     let detect = |root: &Path, run: &str| {
         let event = if chrono_harness::json(&fs::read(&payload).unwrap())
             .unwrap()
@@ -1375,7 +1383,7 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
                 .current_dir(root)
                 .env("GITHUB_EVENT_NAME", event)
                 .env("GITHUB_EVENT_PATH", &payload)
-                .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+                .env("CHRONO_WORKFLOW_REVISION", workflow_revision())
                 .env("GITHUB_REPOSITORY", "fixture/native")
                 .env("GITHUB_RUN_ID", run)
                 .env("GITHUB_RUN_ATTEMPT", "1")
@@ -1418,7 +1426,7 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
                 },
             )
             .env("GITHUB_EVENT_PATH", &payload)
-            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+            .env("CHRONO_WORKFLOW_REVISION", workflow_revision())
             .env("GITHUB_REPOSITORY", "fixture/native")
             .env("GITHUB_RUN_ID", run)
             .env(
@@ -1981,7 +1989,12 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         fs::Permissions::from_mode(0o755),
     )
     .unwrap();
-    fs::write(&payload, serde_json::to_vec(&json!({"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate,"ref":"integration/short-full"}}})).unwrap()).unwrap();
+    let tree = git(delivery_root.path(), &["rev-parse", &format!("{}^{{tree}}", h.candidate)]);
+    let workflow_merge = git(delivery_root.path(), &[
+        "commit-tree", &tree, "-p", &h.base, "-p", &h.candidate,
+        "-m", "Fixture native PR workflow merge",
+    ]);
+    fs::write(&payload, serde_json::to_vec(&json!({"merge_commit_sha":workflow_merge,"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate,"ref":"integration/short-full"}}})).unwrap()).unwrap();
     detect(delivery_root.path(), "930");
     let published = native(delivery_root.path(), "publish", None, "930");
     assert!(
