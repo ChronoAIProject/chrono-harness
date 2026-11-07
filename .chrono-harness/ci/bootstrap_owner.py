@@ -1,8 +1,8 @@
 """Bootstrap construction and original qualification, under the worktree owner.
 
 This module never interprets a lifecycle ledger or acquires a lease. The worktree
-owner supplies construction SH or validation EX and keeps its descriptors alive
-through this module's child processes. Rust owns byte publication and adoption.
+owner supplies construction SH and keeps its descriptors alive through this
+module's child processes. Rust owns stage validation, byte publication and adoption.
 """
 import json
 import os
@@ -232,16 +232,6 @@ def stage_report(root, reference, expected_sha=None, producer_commit=None):
     if record["selected"] != profile["owner_stage"]["selected"]:
         raise ValueError("owner stage selected destination differs")
     return report, profile
-
-
-def validate_stage(root, reference, expected_sha):
-    """Validate original construction facts; Rust owns byte publication under EX."""
-    require_capabilities(root)
-    if os.environ.get("CHRONO_WORKTREE_OWNER_DEPLOYMENT") != expected_sha:
-        raise ValueError("owner stage validation requires the exclusive deployment callback")
-    report, _ = stage_report(root, reference, expected_sha)
-    print(json.dumps({"schema": "chrono-bootstrap-owner-stage-validation/v1",
-                      "stage_sha256": expected_sha, "stage": report["owner_stage"]}, sort_keys=True))
 
 
 def run_owner(root, program, arguments, directory, name):

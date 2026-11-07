@@ -15,6 +15,7 @@ chrono-ci = { path = "../ci" }
 chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 tempfile = "3"
 serde_yaml_ng = "0.10"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 
 [[test]]
 name = "behavior"
@@ -43,6 +44,10 @@ path = "tests/inventory.rs"
 [[test]]
 name = "native"
 path = "tests/native.rs"
+
+[[test]]
+name = "verified_literals"
+path = "tests/verified_literals.rs"
 
 [[bin]]
 name = "chrono-ci-test-transport"

@@ -1143,6 +1143,28 @@
             "--config",
             ".chrono-harness/ci/worktree-inventory.json"
           ]
+        },
+        "verify_literals": {
+          "operation": "verify.ci-literals",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-literals.rlib,dep-info=.chrono-harness/state/verify.ci-literals.rlib.d",
+            "crates/ci/src/verified_literals.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-literals.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
@@ -1245,6 +1267,28 @@
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
           ]
+        },
+        "verify_literals": {
+          "operation": "verify.ci-literals-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-literals-tests.rlib,dep-info=.chrono-harness/state/verify.ci-literals-tests.rlib.d",
+            "crates/ci-tests/tests/verified_literals.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-literals-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
@@ -2931,7 +2975,7 @@
             "--manifest",
             ".chrono-harness/inputs/diagnostics-observation.json",
             "--output",
-            ".chrono-harness/state/diagnostics-native/observation.json"
+            ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json"
           ]
         },
         "prepare_runner": {
