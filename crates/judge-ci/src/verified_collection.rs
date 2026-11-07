@@ -64,6 +64,39 @@ pub fn operation_result(
     CheckResult { id: operation.to_string(), status, cause, exit_code }
 }
 
+pub open spec fn source_binding_failed(state: Seq<char>, binding: &Result<(), String>) -> bool {
+    state == "passed"@ && binding.is_err()
+}
+
+/// 源码绑定失败不能沿用原 passed；原进程及其真实零退出仍保留在原回执。
+pub fn operation_result_with_sources(
+    operation: &str, state: &str, error: &Option<String>, observed: Option<i32>,
+    binding: Result<(), String>,
+) -> (row: CheckResult)
+    ensures row.id@ == operation@,
+        row.status == if source_binding_failed(state@, &binding) { Status::Failed }
+            else { operation_status(state@) },
+        row.cause@ == if source_binding_failed(state@, &binding) { binding.unwrap_err()@ }
+            else { operation_cause(error) },
+        row.exit_code == if source_binding_failed(state@, &binding) {
+            operation_exit("failed"@, observed)
+        } else { operation_exit(state@, observed) },
+{
+    match binding {
+        Err(cause) => {
+            if equal_text(state, "passed") {
+                proof {
+                    reveal_strlit("failed"); reveal_strlit("passed"); reveal_strlit("blocked");
+                    assert("failed"@[0] != "passed"@[0]);
+                    assert("failed"@.len() != "blocked"@.len());
+                }
+                operation_result(operation, "failed", &Some(cause), observed)
+            } else { operation_result(operation, state, error, observed) }
+        },
+        Ok(()) => operation_result(operation, state, error, observed),
+    }
+}
+
 pub open spec fn report_failure(rows: Seq<CheckResult>) -> bool {
     exists|i: int| 0 <= i < rows.len()
         && ((#[trigger] rows[i]).status == Status::Failed || rows[i].status == Status::Blocked)

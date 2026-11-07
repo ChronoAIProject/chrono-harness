@@ -169,6 +169,127 @@ fn extra_filtered_or_rebound_verifier_arguments_are_rejected() {
     let e = policy::canonical_verifier_arguments(&missing); assert(!e);
 }
 
+struct UnavailableSources;
+
+impl policy::sources::DependencyRead for UnavailableSources {
+    fn read(&self, path: &[u8], limit: u64) -> Result<Vec<u8>, String> {
+        Err("original read error\0é".to_string())
+    }
+}
+
+impl policy::sources::CandidateSourceRead for UnavailableSources {
+    fn text(&self, path: &[u8]) -> Result<String, String> { Err("decode".to_string()) }
+    fn mode(&self, path: &str) -> Option<String> { None }
+    fn blob(&self, path: &str) -> Result<Vec<u8>, String> { Err("blob".to_string()) }
+    fn digest(&self, bytes: &[u8]) -> Vec<u8> { Vec::new() }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_success_report_cannot_bypass_missing_failed_or_oversize_sources() {
+    let args = arguments();
+    let report = report(verification());
+    let missing = policy::admit_observed_output(&contract(), &report, &args, 0, false, &None, 1);
+    assert(missing.is_err());
+    let failure = Some(Err("original read error\0é".to_string()));
+    let failed = policy::admit_observed_output(&contract(), &report, &args, 0, false, &failure, 1);
+    assert(failed.is_err());
+    let original = Some(Ok(vec![0u8, 255u8]));
+    let too_large = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 1);
+    let exact = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 2);
+    let zero_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 0);
+    let over_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 67_108_865);
+    assert(too_large.is_err() && exact.is_ok() && zero_bound.is_err() && over_bound.is_err());
+    let ordinary = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &None, 0);
+    let unexpected = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &original, 2);
+    assert(ordinary.is_ok() && unexpected.is_err());
+}
+
+/// 与源码绑定组合：声明证明合同的成功回执一定带有同一原观察，不能走 None 快径。
+fn any_admitted_proof_receipt_has_original_dependency(
+    contract: &Option<OutputContract>, report: &Option<CompilerReport>, args: &Vec<String>,
+    exit: i32, failed: bool, original: &Option<Result<Vec<u8>, String>>, limit: usize,
+)
+    requires contract.is_some(),
+{
+    let admitted = policy::admit_observed_output(contract, report, args, exit, failed, original, limit);
+    if admitted.is_ok() {
+        assert(original.is_some());
+        assert(original.unwrap().is_ok());
+        assert(original.unwrap().unwrap().len() <= limit);
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn observation_cannot_turn_failed_process_or_invalid_bound_into_source_evidence() {
+    let io = UnavailableSources;
+    let ordinary = policy::sources::observe_dependency(&None, &Vec::new(), 0, false, 1, &io);
+    assert(ordinary.is_none());
+    let nonzero = policy::sources::observe_dependency(&contract(), &arguments(), 7, false, 1, &io);
+    let process_failure = policy::sources::observe_dependency(&contract(), &arguments(), 0, true, 1, &io);
+    let no_bound = policy::sources::observe_dependency(&contract(), &arguments(), 0, false, 0, &io);
+    let huge_bound = policy::sources::observe_dependency(&contract(), &arguments(), 0, false, usize::MAX, &io);
+    assert(nonzero.is_some() && nonzero.unwrap().is_err());
+    assert(process_failure.is_some() && process_failure.unwrap().is_err());
+    assert(no_bound.is_some() && no_bound.unwrap().is_err());
+    assert(huge_bound.is_some() && huge_bound.unwrap().is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_argv_keeps_every_argument_and_missing_success_receipt_rejects() {
+    let original = vec!["verus\0é".to_string(), "root".to_string(), "root".to_string()];
+    let args = policy::sources::process_arguments(&original).unwrap();
+    assert(args.len() == 2 && args[0]@ == "root"@ && args[1]@ == "root"@);
+    let empty = policy::sources::process_arguments(&Vec::new());
+    assert(empty.is_err());
+    let io = UnavailableSources;
+    let registry = Err("registry read error".to_string());
+    let missing = policy::sources::bind_process_sources("passed", None, &registry, &io);
+    assert(missing.is_err());
+    let blocked = policy::sources::bind_process_sources("blocked", None, &registry, &io);
+    let failed = policy::sources::bind_process_sources("failed", None, &registry, &io);
+    proof {
+        reveal_strlit("blocked"); reveal_strlit("failed"); reveal_strlit("passed");
+        assert("blocked"@[0] != "passed"@[0]); assert("failed"@[0] != "passed"@[0]);
+    }
+    assert(blocked.is_ok() && failed.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn explicit_file_membership_uses_full_original_text() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("A"); reveal_strlit("a\0");
+        vstd::string::is_ascii_spec_bytes("a"); vstd::string::is_ascii_spec_bytes("A");
+        vstd::string::is_ascii_spec_bytes("a\0");
+    }
+    let files = vec![policy::sources::SourceFile { path: "a".to_string() }];
+    assert(files.len() == 1 && files[0].path@ == "a"@);
+    assert(vstd::utf8::encode_utf8(files[0].path@) =~= seq![97u8]);
+    assert(policy::sources::registered_source(files@, seq![97u8]));
+    let exact_input = [97u8];
+    let wrong_input = [65u8];
+    let suffix_input = [97u8, 0u8];
+    assert(exact_input@ == seq![97u8]);
+    assert(wrong_input@ == seq![65u8]);
+    assert(suffix_input@ == seq![97u8, 0u8]);
+    let exact = policy::sources::source_is_registered(&files, &exact_input);
+    let wrong_case = policy::sources::source_is_registered(&files, &wrong_input);
+    let suffix = policy::sources::source_is_registered(&files, &suffix_input);
+    assert forall|i: int| 0 <= i < files.len() implies
+        vstd::utf8::encode_utf8((#[trigger] files[i]).path@) != seq![65u8] by {
+        assert(i == 0); assert(seq![97u8][0] != seq![65u8][0]);
+        assert(seq![97u8] != seq![65u8]);
+    }
+    assert forall|i: int| 0 <= i < files.len() implies
+        vstd::utf8::encode_utf8((#[trigger] files[i]).path@) != seq![97u8, 0u8] by {
+        assert(i == 0); assert(seq![97u8].len() != seq![97u8, 0u8].len());
+    }
+    assert(!policy::sources::registered_source(files@, seq![65u8]));
+    assert(!policy::sources::registered_source(files@, seq![97u8, 0u8]));
+    assert(exact);
+    assert(!wrong_case);
+    assert(!suffix);
+}
+
 
 fn metadata_fixture(path: Vec<u8>, length: u64) -> (source: policy::sources::SourceBinding)
     ensures source.path@ == path@, source.length == length,
@@ -186,14 +307,13 @@ fn metadata_fixture(path: Vec<u8>, length: u64) -> (source: policy::sources::Sou
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn source_metadata_requires_normalized_identity_digest_length_root_and_claims() {
+fn source_metadata_requires_normalized_identity_digest_length_and_root() {
     reveal_with_fuel(policy::sources::path_scan, 8);
     reveal_with_fuel(policy::sources::joined_components, 3);
     let raw = metadata_fixture(vec![46u8, 47, 97], 7);
     let fixed = metadata_fixture(vec![97u8], 7);
     let sources = vec![raw];
     let candidate = vec![fixed];
-    let claims = vec![vec![97u8]];
     let root = [97u8];
     assert(sources[0].path@ == seq![46u8, 47u8, 97u8]);
     assert(candidate[0].path@ == seq![97u8]);
@@ -201,11 +321,11 @@ fn source_metadata_requires_normalized_identity_digest_length_root_and_claims() 
     assert(policy::sources::source_pair_matches(&sources[0], &candidate[0]));
     assert(policy::sources::listed_source_path(candidate@, root@, 1));
     assert(!policy::sources::listed_source_path(candidate@, candidate[0].path@, 0));
-    assert(policy::sources::source_metadata_admitted(sources@, candidate@, root@, claims@));
-    let accepted = policy::sources::admit_source_metadata(&sources, &candidate, &root, &claims);
+    assert(policy::sources::source_metadata_admitted(sources@, candidate@, root@));
+    let accepted = policy::sources::admit_source_metadata(&sources, &candidate, &root);
     assert(accepted);
     let changed_candidate = vec![metadata_fixture(vec![97u8], 8)];
-    let changed_length = policy::sources::admit_source_metadata(&sources, &changed_candidate, &root, &claims);
+    let changed_length = policy::sources::admit_source_metadata(&sources, &changed_candidate, &root);
     assert(!changed_length);
     let mut changed = metadata_fixture(vec![46u8, 47, 97], 7);
     changed.sha256[0] = 65u8;
@@ -213,30 +333,27 @@ fn source_metadata_requires_normalized_identity_digest_length_root_and_claims() 
     assert(changed_sources[0].sha256[0] == 65u8);
     assert(candidate[0].sha256[0] == 48u8);
     assert(!policy::sources::source_pair_matches(&changed_sources[0], &candidate[0]));
-    let changed_digest = policy::sources::admit_source_metadata(&changed_sources, &candidate, &root, &claims);
+    let changed_digest = policy::sources::admit_source_metadata(&changed_sources, &candidate, &root);
     assert(!changed_digest);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn source_metadata_rejects_missing_claims_roots_ambiguity_and_empty_inventories() {
+fn source_metadata_rejects_missing_roots_ambiguity_and_empty_inventories() {
     reveal_with_fuel(policy::sources::path_scan, 4);
     reveal_with_fuel(policy::sources::joined_components, 3);
     let mut sources = vec![metadata_fixture(vec![97u8], 0)];
     let mut candidate = vec![metadata_fixture(vec![97u8], 0)];
-    let claims = vec![vec![98u8]];
-    let empty_claims: Vec<Vec<u8>> = Vec::new();
-    let missing_claim = policy::sources::admit_source_metadata(&sources, &candidate, &[97u8], &claims);
-    let missing_root = policy::sources::admit_source_metadata(&sources, &candidate, &[98u8], &empty_claims);
-    assert(!missing_claim && !missing_root);
+    let missing_root = policy::sources::admit_source_metadata(&sources, &candidate, &[98u8]);
+    assert(!missing_root);
     sources.push(metadata_fixture(vec![46u8, 47, 97], 0));
     candidate.push(metadata_fixture(vec![97u8], 0));
     assert(candidate[0].path@ == candidate[1].path@);
     assert(policy::sources::listed_source_path(candidate@, candidate[1].path@, 1));
-    let duplicate = policy::sources::admit_source_metadata(&sources, &candidate, &[97u8], &empty_claims);
+    let duplicate = policy::sources::admit_source_metadata(&sources, &candidate, &[97u8]);
     assert(!duplicate);
     let empty: Vec<policy::sources::SourceBinding> = Vec::new();
-    let no_sources = policy::sources::admit_source_metadata(&empty, &empty, &[97u8], &empty_claims);
-    let unequal = policy::sources::admit_source_metadata(&sources, &empty, &[97u8], &empty_claims);
+    let no_sources = policy::sources::admit_source_metadata(&empty, &empty, &[97u8]);
+    let unequal = policy::sources::admit_source_metadata(&sources, &empty, &[97u8]);
     assert(!no_sources && !unequal);
 }
 
@@ -288,17 +405,22 @@ fn relative_source_paths_reject_absolute_empty_and_parent_escape() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn relative_source_paths_preserve_spaces_unicode_and_reject_control_bytes() {
-    reveal_with_fuel(policy::sources::path_scan, 10);
-    reveal(policy::sources::component_step);
-    reveal_with_fuel(policy::sources::joined_components, 4);
     let path = [97u8, 32, 47, 206, 187];
     assert(path@ =~= seq![97u8, 32u8, 47u8, 206u8, 187u8]);
+    assert(policy::sources::relative_components(seq![97u8, 32u8, 47u8, 206u8, 187u8])
+        == Some(seq![seq![97u8, 32u8], seq![206u8, 187u8]])) by (compute);
+    assert(policy::sources::joined_components(seq![seq![97u8, 32u8], seq![206u8, 187u8]])
+        == seq![97u8, 32u8, 47u8, 206u8, 187u8]) by (compute);
     let normalized = policy::sources::normalize_relative_path(&path).unwrap();
     assert(normalized@ == path@);
     let nul = policy::sources::normalize_relative_path(&[97u8, 0]);
     let lf = policy::sources::normalize_relative_path(&[97u8, 10]);
     let del = policy::sources::normalize_relative_path(&[97u8, 127]);
     let backslash = policy::sources::normalize_relative_path(&[97u8, 92, 98]);
+    assert(policy::sources::relative_components(seq![97u8, 0u8]).is_none()) by (compute);
+    assert(policy::sources::relative_components(seq![97u8, 10u8]).is_none()) by (compute);
+    assert(policy::sources::relative_components(seq![97u8, 127u8]).is_none()) by (compute);
+    assert(policy::sources::relative_components(seq![97u8, 92u8, 98u8]).is_none()) by (compute);
     assert(nul.is_none() && lf.is_none() && del.is_none() && backslash.is_none());
 }
 

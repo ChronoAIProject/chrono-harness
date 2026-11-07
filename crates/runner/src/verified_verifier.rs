@@ -274,4 +274,19 @@ pub fn admit_output(
     Ok(())
 }
 
+/// 本地与离线回执共同消费原报告及原依赖观察。
+pub fn admit_observed_output(
+    contract: &Option<OutputContract>, decoded: &Option<CompilerReport>,
+    args: &Vec<String>, exit: i32, process_failed: bool,
+    dependency: &Option<Result<Vec<u8>, String>>, limit: usize,
+) -> (out: Result<(), String>)
+    ensures out.is_ok() == (output_accepted(contract, decoded, args@, exit, process_failed)
+        && sources::dependency_observed(contract, dependency, limit)),
+{
+    match admit_output(contract, decoded, args, exit, process_failed) {
+        Err(error) => Err(error),
+        Ok(()) => sources::admit_dependency_observation(contract, dependency, limit),
+    }
+}
+
 }

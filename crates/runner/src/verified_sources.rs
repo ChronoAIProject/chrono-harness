@@ -8,6 +8,83 @@ use super::{append_bytes, equal_bytes};
 
 verus! {
 
+/// 仅获取指定路径的原字节；准入、路径选择和长度判断由下方实现负责。
+pub trait DependencyRead {
+    fn read(&self, path: &[u8], limit: u64) -> Result<Vec<u8>, String>;
+}
+
+pub open spec fn dependency_observed(
+    contract: &Option<super::OutputContract>, observed: &Option<Result<Vec<u8>, String>>,
+    limit: usize,
+) -> bool {
+    match contract {
+        None => observed.is_none(),
+        Some(_) => match observed {
+            Some(Ok(bytes)) => 0 < limit <= 67_108_864 && bytes.len() <= limit,
+            _ => false,
+        },
+    }
+}
+
+/// 原进程已结束后才获取编译器输出；失败观察仍进入原回执，不替换原进程。
+pub fn observe_dependency<I: DependencyRead>(
+    contract: &Option<super::OutputContract>, args: &Vec<String>,
+    exit: i32, process_failed: bool, limit: usize, io: &I,
+) -> (observed: Option<Result<Vec<u8>, String>>)
+    ensures observed.is_none() == contract.is_none(),
+        match observed {
+            Some(Ok(bytes)) => super::verifier_arguments(args@)
+                && exit == 0 && !process_failed && 0 < limit <= 67_108_864
+                && bytes.len() <= limit,
+            _ => true,
+        },
+{
+    if contract.is_none() { return None; }
+    if exit != 0 || process_failed || !super::canonical_verifier_arguments(args) {
+        return Some(Err("E_VERUS_SOURCES: original compiler process was not successful".to_string()));
+    }
+    if limit == 0 || limit > 67_108_864 {
+        return Some(Err("E_VERUS_SOURCES: invalid dependency observation bound".to_string()));
+    }
+    let mut path = Vec::new();
+    append_bytes(&mut path, args[10].as_str().as_bytes());
+    append_bytes(&mut path, &[46u8, 100u8]);
+    let read = io.read(path.as_slice(), limit as u64 + 1);
+    match read {
+        Err(error) => Some(Err(error)),
+        Ok(bytes) => {
+            if bytes.len() > limit {
+                Some(Err("E_VERUS_SOURCES: compiler dependency exceeds its bound".to_string()))
+            } else { Some(Ok(bytes)) }
+        },
+    }
+}
+
+pub fn admit_dependency_observation(
+    contract: &Option<super::OutputContract>, observed: &Option<Result<Vec<u8>, String>>,
+    limit: usize,
+) -> (out: Result<(), String>)
+    ensures out.is_ok() == dependency_observed(contract, observed, limit),
+{
+    match contract {
+        None => {
+            if observed.is_some() {
+                Err("E_VERUS_SOURCES: ordinary operation has compiler source evidence".to_string())
+            } else { Ok(()) }
+        },
+        Some(_) => {
+            if limit == 0 || limit > 67_108_864 {
+                return Err("E_VERUS_SOURCES: invalid dependency observation bound".to_string());
+            }
+            match observed {
+                Some(Ok(bytes)) => if bytes.len() <= limit { Ok(()) }
+                    else { Err("E_VERUS_SOURCES: compiler dependency exceeds its bound".to_string()) },
+                _ => Err("E_VERUS_SOURCES: missing or failed original dependency observation".to_string()),
+            }
+        },
+    }
+}
+
 /// Rust 1.95 的 dep-info 只转义 ASCII 空格。当前有界语法拒绝控制字节和
 /// 字面反斜杠，不额外解释 Make 语法。
 pub open spec fn dependency_byte(byte: u8) -> bool {
@@ -475,6 +552,216 @@ pub struct SourceBinding {
     pub length: u64,
 }
 
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+pub struct SourceRegistry {
+    pub files: Vec<SourceFile>,
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+pub struct SourceFile {
+    pub path: String,
+}
+
+/// 适配器只提供解码、固定候选字节、原模式和摘要观察，不能在此接口内决定准入。
+pub trait CandidateSourceRead {
+    fn text(&self, path: &[u8]) -> Result<String, String>;
+    fn mode(&self, path: &str) -> Option<String>;
+    fn blob(&self, path: &str) -> Result<Vec<u8>, String>;
+    fn digest(&self, bytes: &[u8]) -> Vec<u8>;
+}
+
+pub struct SourceAdmission {
+    pub compiled: Vec<SourceBinding>,
+    pub candidate: Vec<SourceBinding>,
+    pub modes: Vec<String>,
+}
+
+pub open spec fn registered_source(files: Seq<SourceFile>, path: Seq<u8>) -> bool {
+    exists|i: int| 0 <= i < files.len()
+        && vstd::utf8::encode_utf8((#[trigger] files[i]).path@) == path
+}
+
+pub fn source_is_registered(files: &Vec<SourceFile>, path: &[u8]) -> (found: bool)
+    ensures found == registered_source(files@, path@),
+{
+    let mut i = 0;
+    while i < files.len()
+        invariant 0 <= i <= files.len(),
+            forall|j: int| 0 <= j < i ==>
+                vstd::utf8::encode_utf8((#[trigger] files[j]).path@) != path@,
+        decreases files.len() - i,
+    {
+        if equal_bytes(files[i].path.as_str().as_bytes(), path) { return true; }
+        i += 1;
+    }
+    false
+}
+
+pub open spec fn regular_mode(mode: Seq<char>) -> bool {
+    mode == "100644"@ || mode == "100755"@
+}
+
+pub open spec fn admission_matches(
+    admission: &SourceAdmission, args: Seq<String>, dependency: Seq<u8>, files: Seq<SourceFile>,
+) -> bool {
+    super::verifier_arguments(args)
+        && source_metadata_admitted(admission.compiled@, admission.candidate@,
+            vstd::utf8::encode_utf8(args[8]@))
+        && dependency_content_matches(dependency, vstd::utf8::encode_utf8(args[10]@), admission.compiled@)
+        && admission.candidate.len() == admission.modes.len()
+        && (forall|i: int| 0 <= i < admission.candidate.len() ==>
+            registered_source(files, (#[trigger] admission.candidate[i]).path@)
+                && regular_mode(admission.modes[i]@))
+}
+
+/// 真实本地判官和离线汇总共用此入口。所有路径、注册成员、模式、完整内容和
+/// 失败分支都在此证明根内；固定候选的字节获取仍经现役 Git 观察接口。
+pub fn bind_compiler_sources<I: CandidateSourceRead>(
+    args: &Vec<String>,
+    observed: &Option<Result<Vec<u8>, String>>, registry: &Result<SourceRegistry, String>, io: &I,
+) -> (out: Result<Option<SourceAdmission>, String>)
+    ensures match out {
+        Ok(None) => observed.is_none(),
+        Ok(Some(admission)) => match (registry, observed) {
+                (Ok(registry), Some(Ok(bytes))) => admission_matches(&admission, args@, bytes@, registry.files@),
+                _ => false,
+            },
+        Err(_) => true,
+    },
+{
+    // 路由准入已证明合同与观察的有无一致；此层不再复制合同或按名称推断操作。
+    if observed.is_none() { return Ok(None); }
+    if !super::canonical_verifier_arguments(args) {
+        return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string());
+    }
+    let bytes = match observed {
+        Some(Ok(bytes)) => bytes,
+        _ => { return Err("E_VERUS_SOURCES: missing or failed original dependency observation".to_string()); },
+    };
+    let registry = match registry {
+        Ok(value) => value,
+        Err(error) => { return Err(error.clone()); },
+    };
+    let output = args[10].as_str();
+    let paths = match compiler_dependency_paths(bytes.as_slice(), output.as_bytes()) {
+        Some(paths) => paths,
+        None => { return Err("E_VERUS_SOURCES: invalid compiler dependency target".to_string()); },
+    };
+    let mut compiled: Vec<SourceBinding> = Vec::new();
+    let mut candidate: Vec<SourceBinding> = Vec::new();
+    let mut modes: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < paths.len()
+        invariant 0 <= i <= paths.len(),
+            compiled.len() == i, candidate.len() == i, modes.len() == i,
+            forall|j: int| 0 <= j < i ==>
+                registered_source(registry.files@, (#[trigger] candidate[j]).path@)
+                    && regular_mode(modes[j]@),
+        decreases paths.len() - i,
+    {
+        let path = &paths[i];
+        let normalized = match normalize_relative_path(path.as_slice()) {
+            Some(path) => path,
+            None => { return Err("E_VERUS_SOURCES: compiler source escapes the relative path domain".to_string()); },
+        };
+        let name = match io.text(normalized.as_slice()) {
+            Ok(name) => name,
+            Err(error) => { return Err(error); },
+        };
+        if !equal_bytes(name.as_str().as_bytes(), normalized.as_slice())
+            || !source_is_registered(&registry.files, normalized.as_slice()) {
+            return Err("E_VERUS_SOURCES: source is not an explicit candidate file".to_string());
+        }
+        let mode = match io.mode(name.as_str()) {
+            Some(mode) => mode,
+            None => { return Err("E_VERUS_SOURCES: source is absent from the fixed candidate".to_string()); },
+        };
+        if !super::identifiers::equal_text(mode.as_str(), "100644")
+            && !super::identifiers::equal_text(mode.as_str(), "100755") {
+            return Err("E_VERUS_SOURCES: candidate source is not a regular file".to_string());
+        }
+        let content = match io.blob(name.as_str()) {
+            Ok(content) => content,
+            Err(error) => { return Err(error); },
+        };
+        let digest = io.digest(content.as_slice());
+        if !super::identifiers::valid_digest(digest.as_slice()) {
+            return Err("E_VERUS_SOURCES: invalid observed source digest".to_string());
+        }
+        let length = content.len() as u64;
+        let raw_path = copy_range(path.as_slice(), 0, path.len());
+        let raw_digest = copy_range(digest.as_slice(), 0, digest.len());
+        compiled.push(SourceBinding { path: raw_path, sha256: raw_digest, length });
+        candidate.push(SourceBinding { path: normalized, sha256: digest, length });
+        modes.push(mode);
+        i += 1;
+    }
+    if !admit_source_metadata(&compiled, &candidate, args[8].as_str().as_bytes())
+        || !matches_dependency_content(bytes.as_slice(), output.as_bytes(), &compiled) {
+        return Err("E_VERUS_SOURCES: fixed source metadata or compiler checksums differ".to_string());
+    }
+    Ok(Some(SourceAdmission { compiled, candidate, modes }))
+}
+
+pub fn process_arguments(argv: &Vec<String>) -> (args: Result<Vec<String>, String>)
+    ensures args.is_ok() == (argv.len() > 0),
+        args.is_ok() ==> args.unwrap()@ == argv@.skip(1),
+{
+    if argv.len() == 0 {
+        return Err("E_VERUS_SOURCES: original process argv is empty".to_string());
+    }
+    let mut args = Vec::new();
+    let mut i = 1;
+    while i < argv.len()
+        invariant 1 <= i <= argv.len(), args@ == argv@.subrange(1, i as int),
+        decreases argv.len() - i,
+    {
+        args.push(argv[i].clone());
+        assert(argv@.subrange(1, i + 1) =~= argv@.subrange(1, i as int).push(argv[i as int]));
+        i += 1;
+    }
+    Ok(args)
+}
+
+pub fn admission_result(admission: Result<Option<SourceAdmission>, String>) -> (out: Result<(), String>)
+    ensures out.is_ok() == admission.is_ok(),
+        match (out, admission) {
+            (Err(first), Err(second)) => first@ == second@,
+            _ => true,
+        },
+{
+    match admission { Ok(_) => Ok(()), Err(error) => Err(error) }
+}
+
+/// 只对同一原回执的成功操作绑定源码；原失败、阻断及其原件交回既有结果生产者。
+pub fn bind_process_sources<I: CandidateSourceRead>(
+    state: &str, receipt: Option<(&Vec<String>, &Option<Result<Vec<u8>, String>>)>,
+    registry: &Result<SourceRegistry, String>, io: &I,
+) -> (out: Result<(), String>)
+    ensures state@ != "passed"@ ==> out.is_ok(),
+        state@ == "passed"@ && receipt.is_none() ==> out.is_err(),
+        state@ == "passed"@ && out.is_ok() ==> match receipt {
+            Some((argv, observed)) => argv.len() > 0 && match observed {
+                None => true,
+                Some(Ok(bytes)) => registry.is_ok() && exists|admission: SourceAdmission|
+                    admission_matches(&admission, argv@.skip(1), bytes@, registry.unwrap().files@),
+                Some(Err(_)) => false,
+            },
+            None => false,
+        },
+{
+    if !super::identifiers::equal_text(state, "passed") { return Ok(()); }
+    let (argv, observed) = match receipt {
+        Some(value) => value,
+        None => { return Err("E_VERUS_SOURCES: successful operation has no original receipt".to_string()); },
+    };
+    let args = match process_arguments(argv) {
+        Ok(args) => args,
+        Err(error) => { return Err(error); },
+    };
+    admission_result(bind_compiler_sources(&args, observed, registry, io))
+}
+
 pub open spec fn source_pair_matches(source: &SourceBinding, candidate: &SourceBinding) -> bool {
     relative_components(source.path@).is_some()
         && candidate.path@ == joined_components(relative_components(source.path@).unwrap())
@@ -514,7 +801,7 @@ pub fn contains_source_path(sources: &Vec<SourceBinding>, path: &[u8], limit: us
 }
 
 pub open spec fn source_metadata_admitted(
-    sources: Seq<SourceBinding>, candidate: Seq<SourceBinding>, root: Seq<u8>, claims: Seq<Vec<u8>>,
+    sources: Seq<SourceBinding>, candidate: Seq<SourceBinding>, root: Seq<u8>,
 ) -> bool {
     sources.len() > 0 && sources.len() == candidate.len()
         && (forall|i: int| 0 <= i < sources.len() ==>
@@ -522,16 +809,14 @@ pub open spec fn source_metadata_admitted(
         && (forall|i: int| 0 <= i < candidate.len() ==>
             !listed_source_path(candidate, (#[trigger] candidate[i]).path@, i))
         && listed_source_path(candidate, root, candidate.len() as int)
-        && (forall|i: int| 0 <= i < claims.len() ==>
-            listed_source_path(candidate, (#[trigger] claims[i])@, candidate.len() as int))
 }
 
 /// 每个编译器路径必须对应一个不同的候选条目，摘要与字节长度也须相同；
-/// 完整根路径与每项显式声明都必须出现。调用方须从固定登记／Git 取得预期条目。
+/// 完整根路径必须出现。调用方须从固定登记／Git 取得预期条目。
 pub fn admit_source_metadata(
-    sources: &Vec<SourceBinding>, candidate: &Vec<SourceBinding>, root: &[u8], claims: &Vec<Vec<u8>>,
+    sources: &Vec<SourceBinding>, candidate: &Vec<SourceBinding>, root: &[u8],
 ) -> (accepted: bool)
-    ensures accepted <==> source_metadata_admitted(sources@, candidate@, root@, claims@),
+    ensures accepted <==> source_metadata_admitted(sources@, candidate@, root@),
 {
     if sources.len() == 0 || sources.len() != candidate.len() { return false; }
     let mut i = 0;
@@ -547,23 +832,7 @@ pub fn admit_source_metadata(
         if contains_source_path(candidate, candidate[i].path.as_slice(), i) { return false; }
         i += 1;
     }
-    if !contains_source_path(candidate, root, candidate.len()) { return false; }
-    let mut j = 0;
-    while j < claims.len()
-        invariant 0 <= j <= claims.len(), 0 < sources.len() == candidate.len(),
-            forall|i: int| 0 <= i < sources.len() ==>
-                source_pair_matches(#[trigger] &sources[i], &candidate[i]),
-            forall|i: int| 0 <= i < candidate.len() ==>
-                !listed_source_path(candidate@, (#[trigger] candidate[i]).path@, i),
-            listed_source_path(candidate@, root@, candidate.len() as int),
-            forall|i: int| 0 <= i < j ==>
-                listed_source_path(candidate@, (#[trigger] claims[i])@, candidate.len() as int),
-        decreases claims.len() - j,
-    {
-        if !contains_source_path(candidate, claims[j].as_slice(), candidate.len()) { return false; }
-        j += 1;
-    }
-    true
+    contains_source_path(candidate, root, candidate.len())
 }
 
 pub open spec fn checksum_prefix(source: &SourceBinding) -> Seq<u8> {
