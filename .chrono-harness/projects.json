@@ -2829,7 +2829,7 @@
             "--manifest",
             ".chrono-harness/inputs/diagnostics-observation.json",
             "--output",
-            ".chrono-harness/state/diagnostics-native/observation.json"
+            ".chrono-harness/state/units/diagnostics/runtime-inputs/observation.json"
           ]
         },
         "prepare_runner": {
