@@ -823,18 +823,16 @@ pub fn judge_with_diagnostic_sink<W: std::io::Write + Send + 'static>(
     });
     let mut response = match result {
         Ok(r) => r,
-        Err(e) => Response {
-            protocol: units::scope_protocol(req).into(),
-            request_id: req.request_id.clone(),
-            status: Status::Failed,
-            results: vec![CheckResult {
-                id: "ci.inventory".into(),
-                status: Status::Failed,
-                cause: e,
-                exit_code: None,
-            }],
-            evidence: object!({"scope":scope,"candidate":req.candidate,"base":req.base,"selected":[],"executed":[],"blocked":["selection or snapshot validation failed"],"parity":"unestablished"}),
-        },
+        Err(e) => {
+            let (status, results) = verified_collection::inventory_failure(e);
+            Response {
+                protocol: units::scope_protocol(req).into(),
+                request_id: req.request_id.clone(),
+                status,
+                results,
+                evidence: object!({"scope":scope,"candidate":req.candidate,"base":req.base,"selected":[],"executed":[],"blocked":["selection or snapshot validation failed"],"parity":"unestablished"}),
+            }
+        }
     };
     if reader.is_bound() {
         response.evidence["git_facts"] = reader.observation();
@@ -842,13 +840,7 @@ pub fn judge_with_diagnostic_sink<W: std::io::Write + Send + 'static>(
         response.evidence["git_facts"] = opening;
     }
     if !diagnostic_errors.is_empty() {
-        response.status = Status::Failed;
-        response.results.push(CheckResult {
-            id: "ci.execution-diagnostics".into(),
-            status: Status::Failed,
-            cause: "execution diagnostic publication failed; original errors retained".into(),
-            exit_code: None,
-        });
+        response.status = verified_collection::diagnostic_failure(&mut response.results);
         response.evidence["diagnostic_errors"] = object!(diagnostic_errors);
     }
     response
@@ -1711,25 +1703,12 @@ fn evaluate(
     if let Some(plan) = &plan {
         let outcome = execute_plan(req, plan)?;
         for result in outcome.executed.iter().chain(&outcome.blocked) {
-            results.push(CheckResult {
-                id: result.operation.clone(),
-                status: match result.status.as_str() {
-                    "passed" => Status::Passed,
-                    "blocked" => Status::Blocked,
-                    _ => Status::Failed,
-                },
-                cause: result
-                    .error
-                    .clone()
-                    .unwrap_or_else(|| "registered command completed with matching receipt".into()),
-                // Infrastructure/receipt failures can follow a successful child.
-                // The summary has no failing subprocess exit in that case; the
-                // original zero exit and diagnostic remain in the receipt below.
-                exit_code: result.receipt.as_ref().and_then(|r| {
-                    (result.status == "passed" || r.process.exit_code != 0)
-                        .then_some(r.process.exit_code)
-                }),
-            });
+            results.push(verified_collection::operation_result(
+                result.operation.as_str(),
+                result.status.as_str(),
+                &result.error,
+                result.receipt.as_ref().map(|r| r.process.exit_code),
+            ));
             if let Some(receipt) = &result.receipt {
                 let mut original = serde_json::to_value(receipt).map_err(|e| e.to_string())?;
                 original["process"] = chrono_harness::full::compact_process(&original["process"])?;
@@ -1781,17 +1760,10 @@ fn evaluate(
             exit_code: None,
         })
     }
-    let failed = results
-        .iter()
-        .any(|r| matches!(r.status, Status::Failed | Status::Blocked));
     let mut response = Response {
         protocol: units::scope_protocol(req).into(),
         request_id: req.request_id.clone(),
-        status: if failed {
-            Status::Failed
-        } else {
-            Status::Passed
-        },
+        status: verified_collection::response_status(&results),
         results,
         evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"retirement_context":retirement_context,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };

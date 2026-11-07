@@ -72,6 +72,24 @@ FIFO 首次发现生成确定的最短跳数和前驱；传播行逐槽对应原
 
 ## CI 离线汇总的结果集合
 
+现役 `judge-ci` 的执行结果转换和终态也由同一证明根拥有。
+`operation_result` 精确保留原操作 ID 与错误文本，只把完整 `passed` 映射为 Passed、
+完整 `blocked` 映射为 Blocked，其余状态全部映射为 Failed。
+原错误缺失时采用既有默认原因；空错误和 Unicode／NUL 错误均原样保留。
+有原退出时，Passed 保留任何退出码，其余状态只保留非零退出；
+零退出后的回执／基础设施失败不伪造成非零子进程退出，原回执继续保留真实零值。
+来源是当前 projects 原结果的直接字段转发；projects 的状态生产、回执准入与 JSON 适配仍待证明。
+
+`response_status` 直接读取完整真实 `CheckResult` 列表：返回 Failed 当且仅当存在 Failed 或 Blocked，
+否则返回 Passed，包含空列表；ID、原因、退出码及重复不参与该终态规则。
+本地／单元执行和离线 collection 共用同一实现，循环证明完整遍历和终止。
+库存异常由 `inventory_failure` 同时生成原原因的唯一失败记录和失败状态；
+诊断发布失败由 `diagnostic_failure` 追加真实失败记录并返回失败，保全已有全部记录及顺序。
+独立 Verus 根核四态、未知／大小写／NUL 状态、缺失／零／正负及整数端点退出、
+默认／空／Unicode 错误、首尾失败、重复与空列表，以及两类失败状态与实际记录的对应。
+复用现有 CI 两项整 crate 操作，不增加证明进程、依赖或外部假设。
+终态最多遍历 N 条记录、使用常量额外状态；完整成本未知，不据此主张全仓覆盖门完成。
+
 `crates/judge-ci/src/verified_collection.rs` 是离线汇总实际消费的结果 ID 集合比较。
 期望列表由同一证明根构造，精确包含 `ci.inventory`、登记操作和未要求测试。
 返回真当且仅当实际 ID 与此期望列表互相包含；构造和两个方向的比较循环均证明终止，
@@ -125,6 +143,15 @@ Rust 测试另外验证真实消费者，不替代证明。
 当前归档只适用于 macOS arm64。
 
 ## 此批使用的外部接口
+
+CI 状态批次使用的具体外部接口如下；仓内状态比较、字段选择、循环和终态均在上述证明根中实现。
+
+| 外部接口 | 采用合同与实际用途 |
+| --- | --- |
+| `str::to_string`、`<String as Clone>::clone` | 生成或复制完整字符串；结果 ID、原错误及默认原因均保持完整字符／UTF-8 身份。 |
+| `String::as_str`、`str::as_bytes` | 借用完整字符串及 UTF-8 字节；精确状态名比较复用仓内已证明的 `equal_text`。 |
+| `Vec::new`、`Vec::push`、`Vec::len`、`Vec`／切片的 `Index<usize>` | 空序列、追加后保全原前缀、长度及逐项读取；本仓证明循环界限、完整遍历、记录对应与终止。 |
+| `Option::as_ref`、`Option::map` | 无回执保持 None，有回执仅转发同一原记录的 `process.exit_code`；不在适配器中计算状态或选择退出。 |
 
 明确采用固定 Verus／vstd 对 `Vec`、`String`／`str`、UTF-8、`Option` 与标准 trait 的规格；
 这些是外部库合同，不是本仓自写的受信实现。没有新增 `external_body`、`assume` 或证明过滤。
