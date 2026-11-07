@@ -2,7 +2,7 @@
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
-    lifecycle, original, owner, profile,
+    lifecycle, original, owner, profile, shared,
 };
 use serde_json::json;
 use std::{path::Path, process::ExitCode};
@@ -89,6 +89,19 @@ fn run() -> Result<(), BuildFailure> {
     let environment = std::env::vars_os().collect();
     let native = bindings::native_platform()?;
     match arguments.as_slice() {
+        [host, config, command] if command == "produce" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            shared::Shared::read(&root, config, &native)?.produce(&root, &environment, &native)
+        }
+        [host, config, command, selected] if command == "install" || command == "verify" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            let shared = shared::Shared::read(&root, config, &native)?;
+            if command == "install" {
+                shared.install(&root, &environment, &native, selected)
+            } else {
+                shared.verify(&root, &environment, &native, selected)
+            }
+        }
         [command, host, reference] if command == "validate-original-execution" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             let raw = profile::read(&root, reference, b".chrono-harness/state/")?;

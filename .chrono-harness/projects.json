@@ -41,6 +41,8 @@
     "host-bootstrap-tests",
     "host-bootstrap-native",
     "host-bootstrap-native-tests",
+    "host-bootstrap-launcher",
+    "host-bootstrap-launcher-tests",
     "cache",
     "cache-tests"
   ],
@@ -4434,6 +4436,37 @@
   ],
   "scripts": [
     {
+      "id": "host-bootstrap-launcher",
+      "language": "shell",
+      "path": ".chrono-harness/ci/bootstrap-native.sh",
+      "test_script": "host-bootstrap-launcher-tests",
+      "actions": {
+        "execute": {
+          "operation": "host.bootstrap-core",
+          "tool": "bash",
+          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-core.json"]
+        },
+        "verus": {
+          "operation": "host.bootstrap-verus",
+          "tool": "bash",
+          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-verus.json"]
+        }
+      }
+    },
+    {
+      "id": "host-bootstrap-launcher-tests",
+      "language": "shell",
+      "path": ".chrono-harness/ci/bootstrap-native-tests.sh",
+      "tests_for": "host-bootstrap-launcher",
+      "actions": {
+        "execute": {
+          "operation": "test.host-bootstrap-launcher-tests",
+          "tool": "bash",
+          "argv": [".chrono-harness/ci/bootstrap-native-tests.sh"]
+        }
+      }
+    },
+    {
       "id": "host-bootstrap",
       "language": "python",
       "path": ".chrono-harness/ci/bootstrap.py",
@@ -4446,16 +4479,6 @@
             "-B",
             ".chrono-harness/ci/bootstrap.py",
             "."
-          ]
-        },
-        "core": {
-          "operation": "host.bootstrap-core",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-core.json"
           ]
         },
         "cache": {
@@ -4849,16 +4872,6 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-owner-verification.json"
-          ]
-        },
-        "verus": {
-          "operation": "host.bootstrap-verus",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-verus.json"
           ]
         },
         "unit": {
