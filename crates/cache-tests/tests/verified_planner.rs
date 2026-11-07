@@ -34,6 +34,14 @@ fn only_current_registration_and_plan_schemas_are_accepted() {
         reveal_strlit("chrono-cache-plan/v2"); reveal_strlit("chrono-cache-plan/v1");
         reveal_strlit("chrono-cache-plan/v20"); reveal_strlit("chrono-cache-plan/v2\n");
         reveal_strlit("");
+        assert("chrono-cache/v2"@[14] != "chrono-cache/v1"@[14]);
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v20"@.len());
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v2\n"@.len());
+        assert("chrono-cache/v2"@.len() != ""@.len());
+        assert("chrono-cache-plan/v2"@[19] != "chrono-cache-plan/v1"@[19]);
+        assert("chrono-cache-plan/v2"@.len() != "chrono-cache-plan/v20"@.len());
+        assert("chrono-cache-plan/v2"@.len() != "chrono-cache-plan/v2\n"@.len());
+        assert("chrono-cache-plan/v2"@.len() != ""@.len());
     }
     expect_registration("chrono-cache/v2", true);
     expect_registration("chrono-cache/v1", false);

@@ -25,6 +25,10 @@ fn cache_registry_requires_current_schema_and_primary_checkout() {
         reveal_strlit("chrono-cache/v2"); reveal_strlit("chrono-cache/v1");
         reveal_strlit("chrono-cache/v20"); reveal_strlit("chrono-cache/v2\n");
         reveal_strlit("");
+        assert("chrono-cache/v2"@[14] != "chrono-cache/v1"@[14]);
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v20"@.len());
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v2\n"@.len());
+        assert("chrono-cache/v2"@.len() != ""@.len());
     }
     expect_cache_registry(Some("chrono-cache/v2"), true, true);
     expect_cache_registry(Some("chrono-cache/v2"), false, false);
