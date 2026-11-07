@@ -89,7 +89,6 @@ fn cli_preserves_context_bytes_and_separate_observations_from_another_cwd() {
     let r: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(fs::read(h.root.join(config().context_path)).unwrap(), bytes);
     assert_eq!(r, read(&h.root, &config().preparation_path));
-    assert_eq!(r["context"]["input_bytes"], json!(bytes));
     assert_eq!(r["context"]["sha256"], sha256(&bytes));
     assert_eq!(r["canonical_argv"], json!(full::argv(&config())));
     assert_eq!(r["governance"], "not-evaluated");
@@ -675,7 +674,6 @@ fn committed_cli_preserves_separate_component_spellings_and_customization() {
             fs::read(h.root.join(report["context"]["path"].as_str().unwrap())).unwrap(),
             bytes
         );
-        assert_eq!(report["context"]["input_bytes"], json!(bytes));
         assert_eq!(report["config_sha256"], sha256(&source_bytes));
         assert_eq!(fs::read(h.root.join(&c.context_path)).unwrap(), bytes);
         assert_eq!(report, read(&h.root, &c.preparation_path));

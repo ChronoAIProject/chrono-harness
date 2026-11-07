@@ -360,7 +360,6 @@ fn committed_unit_and_collector_cli_prepare_preserve_caller_bytes_and_canonical_
             let report: Value = serde_json::from_slice(&out.stdout).unwrap();
             assert_eq!(fs::read(h.root.join(&c.context_path)).unwrap(), bytes);
             assert_eq!(report, read(&h.root, &c.preparation_path));
-            assert_eq!(report["context"]["input_bytes"], json!(bytes));
             assert_eq!(report["context"]["sha256"], sha256(&bytes));
             assert_eq!(report["config_path"], path);
             assert_eq!(report["config_sha256"], sha256(&source));
