@@ -1229,6 +1229,14 @@ pub(super) fn native_consumer_actions(h: &Host, mode: &str, test_mode: &str) {
         "id":"consumer", "program":env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
         "resolution":"PATH-once", "version_argv":["--version"], "expected_version":"fixture"
     }));
+    if matches!(mode, "bounded-cargo" | "cargo-run") {
+        // Capture the actual Cargo selection before auto_command clears its environment.
+        for name in ["HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
+            if let Ok(value) = std::env::var(name) {
+                config["environment"]["values"][name] = value!(value);
+            }
+        }
+    }
     fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
     consuming_scripts(
         h,
