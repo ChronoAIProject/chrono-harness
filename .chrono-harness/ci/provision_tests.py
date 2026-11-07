@@ -1,7 +1,6 @@
 """Check isolated bootstrap selection without installing or changing a toolchain."""
 import importlib.util
 import io
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -213,10 +212,10 @@ class NativeCargoDomains(unittest.TestCase):
         selected = [row for row in rows if row["path"] == expected_path]
         self.assertEqual(len(selected), 1)
         if entry.endswith("diagnostics-config.json"):
-            self.assertEqual(
-                selected[0]["sha256"],
-                hashlib.sha256((SOURCE.parents[1] / expected_path).read_bytes()).hexdigest(),
-            )
+            selected_config = json.loads((SOURCE.parents[1] / expected_path).read_text())
+            git_input = next(item for item in selected_config["environment"]["inputs"]
+                             if item["id"] == "git-executable")
+            self.assertEqual(selected[0]["sha256"], git_input["sha256"])
         return json.loads((SOURCE.parents[1] / selected[0]["path"]).read_text())
 
     def selected_environment(self, values, inherited=None, bootstrap_profile=False):
