@@ -56,21 +56,30 @@ fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
         let output = child.wait_with_output().unwrap();
         assert_eq!(output.status.code(), Some(1));
         assert!(output.stdout.is_empty());
-        assert!(String::from_utf8(output.stderr).unwrap().starts_with("E_BOOTSTRAP:"));
-        let rows: Vec<Value> = fs::read_to_string(root.join(".chrono-harness/state/logs/runtime.jsonl"))
-            .expect("the positional host must receive native bootstrap logs")
-            .lines()
-            .map(|line| serde_json::from_str::<Value>(line).unwrap())
-            .filter(|row| row["context"]["pid"] == pid)
-            .collect();
+        assert!(
+            String::from_utf8(output.stderr)
+                .unwrap()
+                .starts_with("E_BOOTSTRAP:")
+        );
+        let rows: Vec<Value> =
+            fs::read_to_string(root.join(".chrono-harness/state/logs/runtime.jsonl"))
+                .expect("the positional host must receive native bootstrap logs")
+                .lines()
+                .map(|line| serde_json::from_str::<Value>(line).unwrap())
+                .filter(|row| row["context"]["pid"] == pid)
+                .collect();
         assert_eq!(rows.len(), 3);
-        assert!(rows.iter().all(|row| row["context"]["host_root"] == host
-            && row["context"]["operation"] == operation));
+        assert!(
+            rows.iter().all(|row| row["context"]["host_root"] == host
+                && row["context"]["operation"] == operation)
+        );
         assert!(rows.iter().any(|row| row["event"] == "cli.started"));
         assert!(rows.iter().any(|row| row["event"] == "cli.diagnostic"
             && row["message"].as_str().unwrap().starts_with("E_BOOTSTRAP:")));
-        assert!(rows.iter().any(|row| row["event"] == "cli.finished"
-            && row["fields"]["exit_code"] == 1));
+        assert!(
+            rows.iter()
+                .any(|row| row["event"] == "cli.finished" && row["fields"]["exit_code"] == 1)
+        );
     }
     assert!(!outside.path().join(".chrono-harness").exists());
 }
