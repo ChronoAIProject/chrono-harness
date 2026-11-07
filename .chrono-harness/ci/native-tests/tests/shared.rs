@@ -48,6 +48,7 @@ fn original() -> Fixture {
         registry["platforms"]["fixture/native"].clone();
     fs::write(path, serde_json::to_vec(&registry).unwrap()).unwrap();
     let mut extra = fixture.config.clone();
+    extra["prerequisites"] = json!([]);
     extra["report_path"] = json!(".chrono-harness/state/bootstrap-extra.json");
     extra["install"][0]["destination"] = json!(".chrono-harness/bin/extra");
     fs::write(
