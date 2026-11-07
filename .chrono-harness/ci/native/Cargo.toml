@@ -8,6 +8,12 @@ publish = false
 test = false
 doctest = false
 
+[[bin]]
+name = "chrono-host-bootstrap"
+path = "src/main.rs"
+test = false
+bench = false
+
 [dependencies]
 chrono-harness = { path = "../../../crates/runner" }
 chrono-judge-registration = { path = "../../../crates/judge-registration" }

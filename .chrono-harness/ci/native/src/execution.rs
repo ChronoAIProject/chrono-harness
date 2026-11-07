@@ -37,6 +37,15 @@ pub struct Operation {
     pub stdout: Stream,
     pub stderr: Stream,
     pub duration_seconds: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reused_from: Option<StreamOrigin>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StreamOrigin {
+    pub path: String,
+    pub sha256: String,
 }
 
 struct Tee<F: Write> {
@@ -133,5 +142,6 @@ pub fn run_operation(
         stdout,
         stderr,
         duration_seconds: started.elapsed().as_secs_f64(),
+        reused_from: None,
     })
 }

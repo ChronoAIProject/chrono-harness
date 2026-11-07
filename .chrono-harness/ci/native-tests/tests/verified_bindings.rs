@@ -14,6 +14,129 @@ use vstd::prelude::*;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn original_headers_require_success_identity_and_no_import_or_error() {
+    proof {
+        reveal_strlit("chrono-bootstrap-result/v1"); reveal_strlit("bad");
+        reveal_strlit("config"); reveal_strlit("other");
+        reveal_strlit(".chrono-harness/ci/bootstrap.py"); reveal_strlit("native.sh");
+        assert("config"@.len() != "other"@.len());
+        assert("chrono-bootstrap-result/v1"@.len() != "bad"@.len());
+        assert(".chrono-harness/ci/bootstrap.py"@.len() != "native.sh"@.len());
+    }
+    let good = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", true, false, false);
+    let schema = policy::original_header("bad", true, "config", "config", true, false, false);
+    let failed = policy::original_header("chrono-bootstrap-result/v1", false, "config", "config", true, false, false);
+    let config = policy::original_header("chrono-bootstrap-result/v1", true, "other", "config", true, false, false);
+    let host = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", false, false, false);
+    let imported = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", true, true, false);
+    let error = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", true, false, true);
+    let old = policy::python_owner_inputs(".chrono-harness/ci/bootstrap.py", true);
+    let native = policy::python_owner_inputs("native.sh", true);
+    let ordinary = policy::python_owner_inputs(".chrono-harness/ci/bootstrap.py", false);
+    assert(good && !schema && !failed && !config && !host && !imported && !error);
+    assert(old && !native && !ordinary);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_operations_and_streams_compare_exact_fields_and_terminal_status() {
+    proof {
+        reveal_strlit("cargo"); reveal_strlit("rustc"); reveal_strlit("arg"); reveal_strlit("changed");
+        reveal_strlit("host"); reveal_strlit("elsewhere"); reveal_strlit("hash"); reveal_strlit("different");
+        assert("cargo"@[0] != "rustc"@[0]);
+        assert("arg"@.len() != "changed"@.len());
+        assert("host"@.len() != "elsewhere"@.len());
+        assert("hash"@.len() != "different"@.len());
+    }
+    let mut argv = Vec::new(); argv.push("arg".to_string());
+    let mut other = Vec::new(); other.push("changed".to_string());
+    let empty: Vec<String> = Vec::new();
+    proof {
+        assert(policy::same_name_list(argv@, argv@));
+        assert(argv@[0]@.len() == 3 && other@[0]@.len() == 7);
+        assert(!policy::same_name_list(argv@, other@));
+        assert(argv@.len() == 1 && empty@.len() == 0);
+    }
+    let good = policy::operation_record_matches("cargo", "cargo", &argv, &argv, "host", "host", 1, 0);
+    let maximum = policy::operation_record_matches("cargo", "cargo", &argv, &argv, "host", "host", 4294967295u32, 0);
+    let tool = policy::operation_record_matches("rustc", "cargo", &argv, &argv, "host", "host", 1, 0);
+    let argument = policy::operation_record_matches("cargo", "cargo", &other, &argv, "host", "host", 1, 0);
+    let missing = policy::operation_record_matches("cargo", "cargo", &empty, &argv, "host", "host", 1, 0);
+    let cwd = policy::operation_record_matches("cargo", "cargo", &argv, &argv, "elsewhere", "host", 1, 0);
+    let pid = policy::operation_record_matches("cargo", "cargo", &argv, &argv, "host", "host", 0, 0);
+    let failed = policy::operation_record_matches("cargo", "cargo", &argv, &argv, "host", "host", 1, 17);
+    let signal = policy::operation_record_matches("cargo", "cargo", &argv, &argv, "host", "host", 1, -9);
+    let stream = policy::stream_matches("hash", "hash", 0, 0);
+    let large = policy::stream_matches("hash", "hash", 18446744073709551615u64, 18446744073709551615u64);
+    let digest = policy::stream_matches("different", "hash", 0, 0);
+    let size = policy::stream_matches("hash", "hash", 1, 0);
+    assert(good && maximum && !tool && !argument && !missing && !cwd && !pid && !failed && !signal);
+    assert(stream && large && !digest && !size);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_source_requires_both_exact_clean_observations_and_exposed_identity() {
+    proof { reveal_strlit("c"); reveal_strlit("cc"); reveal_strlit("t"); reveal_strlit("tt"); }
+    let expected = source_observation("c", "t", false, None);
+    let clean = policy::source_identity(source_observation("c", "t", false, None), source_observation("c", "t", false, None));
+    let good = policy::original_source(&clean, &expected);
+    assert(good);
+    let changed = policy::source_identity(source_observation("c", "t", false, None), source_observation("cc", "tt", false, None));
+    proof {
+        assert(changed.before.commit.unwrap()@.len() == 1);
+        assert(changed.after.commit.unwrap()@.len() == 2);
+        assert(!policy::source_observations_same(&changed.before, &changed.after));
+    }
+    let drift = policy::original_source(&changed, &expected);
+    assert(!drift);
+    let dirty = policy::source_identity(source_observation("c", "t", true, None), source_observation("c", "t", true, None));
+    let unclean = policy::original_source(&dirty, &expected);
+    assert(!unclean);
+    let error = source_observation("c", "t", false, Some("failed".to_string()));
+    let failed = policy::original_source(&clean, &error);
+    assert(!failed);
+    let mut forged = policy::source_identity(source_observation("c", "t", false, None), source_observation("c", "t", false, None));
+    forged.after.dirty = Some(true);
+    let bad_after = policy::original_source(&forged, &expected);
+    assert(!bad_after);
+    forged.after.dirty = Some(false);
+    forged.commit = None;
+    let hidden = policy::original_source(&forged, &expected);
+    assert(!hidden);
+    let mut incomplete = source_observation("c", "t", false, None);
+    incomplete.commit = None;
+    let missing = policy::original_source(&clean, &incomplete);
+    assert(good && !drift && !unclean && !failed && !bad_after && !hidden && !missing);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn immutable_producer_requires_two_full_lowercase_git_identities() {
+    broadcast use vstd::array::group_array_axioms;
+    let full = [49u8; 40];
+    let sha256 = [49u8; 64];
+    let zero = [48u8; 40];
+    let short = [49u8; 39];
+    let long = [49u8; 41];
+    let mut upper = [49u8; 40]; upper[39] = 65;
+    proof {
+        assert(full@.len() == 40 && short@.len() == 39 && long@.len() == 41);
+        assert forall|i: int| 0 <= i < full@.len() implies full@[i] == 49 by { }
+        assert(full@[0] != 48);
+        assert forall|i: int| 0 <= i < sha256@.len() implies sha256@[i] == 49 by { }
+        assert(sha256@.len() == 64 && sha256@[0] != 48);
+        assert forall|i: int| 0 <= i < zero@.len() implies zero@[i] == 48 by { }
+        assert(upper@[39] == 65);
+    }
+    let good = policy::immutable_producer(&full, &full);
+    let sha256_identity = policy::immutable_producer(&sha256, &sha256);
+    let zero_identity = policy::immutable_producer(&zero, &full);
+    let commit = policy::immutable_producer(&short, &full);
+    let tree = policy::immutable_producer(&full, &long);
+    let uppercase_commit = policy::immutable_producer(&upper, &full);
+    let uppercase_tree = policy::immutable_producer(&full, &upper);
+    assert(good && sha256_identity && !zero_identity && !commit && !tree && !uppercase_commit && !uppercase_tree);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn construction_success_requires_the_complete_ordered_execution_installation_and_owner_stage() {
     proof {
         reveal_strlit("a"); reveal_strlit("bb"); reveal_strlit("tool");

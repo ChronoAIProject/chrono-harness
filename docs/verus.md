@@ -211,6 +211,20 @@ Rust 回归另核真实 Cargo／rustc 的身份、环境选择、安装器退出
 没有增加独立清理账本或调度协议。JSON、文件与进程 IO、报告字段投影和完整外层组合仍未证明，
 这些模块尚未接管现役 Python 入口。新增构建、验证、CI 和存储成本未测。
 
+原生 `original.rs` 校验固定 producer 的原始源码、登记、SDK 选择、操作和两条原字节流。
+候选 Git 只按完整且非零的 commit／tree 读取固定对象，先核实际 tree 和普通 blob 类型；
+不执行旧 bootstrap、判官或 SDK，不以当前工作树文件替代固定输入。
+当前仍被已安装 owner 使用的 Python producer 原件，按其固定配置校验额外的 owner／shared 模块摘要；
+新 Rust producer 不因此增加这些旧文件的运行依赖。读取固定配置不选择或创建其可写环境。
+同源根证明原件头、精确源码观察、操作参数／cwd／PID／退出码和流摘要／长度的判断，
+完整 OID 复用 runner 的既有规则，接受 SHA-1／SHA-256，拒绝全零、短值和非小写十六进制。
+独立根核失败、导入、缺字段、观察漂移、参数变化和整数边界；
+Rust 行为测试另核真实子进程报告、非 UTF-8 流、固定源码漂移、符号链接、环境目录无副作用和原生 CLI。
+临时绕过流摘要／长度拒绝后，原流篡改用例按预期失败；恢复精确源码后全部行为测试通过。
+登记的 `host.bootstrap-native-original-execution` 操作用候选源码执行该 CLI，读取本机实际原件；
+其结果只覆盖源码、登记、执行和两流，不声称安装集、owner stage、发布或整个升级事务通过。
+JSON、Git、文件系统、平台识别、字段投影和完整消费组合仍不在上述局部证明内。
+
 本地和 CI 使用宿主上下文登记的 bootstrap 与 canonical check。
 `test:runner-tests` 先运行八项整 crate Verus 操作及编译，registration 先运行四项，
 routes、filemap 与 CI 汇总各先运行两项；同一计划内共用的证明操作只执行一次，

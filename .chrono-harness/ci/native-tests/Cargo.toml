@@ -47,6 +47,16 @@ path = "tests/profile.rs"
 name = "construction"
 path = "tests/construction.rs"
 
+[[test]]
+name = "original"
+path = "tests/original.rs"
+
+[[bin]]
+name = "chrono-test-bootstrap-native"
+path = "../native/src/main.rs"
+test = false
+bench = false
+
 [dependencies.serde]
 version = "1"
 features = ["derive"]

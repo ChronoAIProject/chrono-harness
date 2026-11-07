@@ -8,7 +8,7 @@ use crate::{
     verified_bindings::{self as policy, BuildStatus},
 };
 use chrono_harness::{file_identity, resolve_program};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -50,15 +50,17 @@ impl From<Failure> for BuildFailure {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Installed {
     pub path: String,
     pub sha256: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Report {
-    pub schema: &'static str,
+    pub schema: String,
     pub config: String,
     pub host_root: String,
     pub status: BuildStatus,
@@ -189,7 +191,7 @@ impl<'a> Construction<'a> {
             .map_err(|error| error.to_string())?
             .keep();
         let report = Report {
-            schema: "chrono-bootstrap-result/v1",
+            schema: "chrono-bootstrap-result/v1".into(),
             config: loaded.config,
             host_root,
             status: BuildStatus::Failed,

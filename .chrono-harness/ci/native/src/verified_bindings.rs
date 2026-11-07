@@ -15,6 +15,38 @@ verus! {
 
 pub enum DeclarationSource { Registry, Direct, Unbound, Reject }
 
+pub fn immutable_producer(commit: &[u8], tree: &[u8]) -> (valid: bool)
+    ensures valid <==> (identifiers::oid(commit@) && identifiers::oid(tree@)),
+{ identifiers::valid_oid(commit) && identifiers::valid_oid(tree) }
+
+/// 仅识别仍在使用的固定 Python producer 原件；从不执行这些历史文件。
+pub fn python_owner_inputs(entrypoint: &str, owner: bool) -> (required: bool)
+    ensures required <==> (entrypoint@ == ".chrono-harness/ci/bootstrap.py"@ && owner),
+{ equal_text(entrypoint, ".chrono-harness/ci/bootstrap.py") && owner }
+
+pub fn original_header(schema: &str, passed: bool, config: &str, expected: &str,
+    absolute_host: bool, imported: bool, errored: bool) -> (valid: bool)
+    ensures valid <==> (schema@ == "chrono-bootstrap-result/v1"@ && passed
+        && config@ == expected@ && absolute_host && !imported && !errored),
+{
+    equal_text(schema, "chrono-bootstrap-result/v1") && passed && equal_text(config, expected)
+        && absolute_host && !imported && !errored
+}
+
+pub fn operation_record_matches(tool: &str, expected_tool: &str,
+    argv: &Vec<String>, expected_argv: &Vec<String>, cwd: &str, expected_cwd: &str,
+    pid: u32, exit_code: i32) -> (valid: bool)
+    ensures valid <==> (tool@ == expected_tool@ && same_name_list(argv@, expected_argv@)
+        && cwd@ == expected_cwd@ && pid > 0 && exit_code == 0),
+{
+    equal_text(tool, expected_tool) && text_list_equal(argv, expected_argv)
+        && equal_text(cwd, expected_cwd) && pid > 0 && exit_code == 0
+}
+
+pub fn stream_matches(digest: &str, expected_digest: &str, size: u64, expected_size: u64) -> (valid: bool)
+    ensures valid <==> (digest@ == expected_digest@ && size == expected_size),
+{ equal_text(digest, expected_digest) && size == expected_size }
+
 pub fn participation_mode(coordinator: &str, absolute_git: bool) -> (valid: bool)
     ensures valid <==> (coordinator@ == "git-main-worktree"@ && absolute_git),
 {
@@ -201,6 +233,13 @@ pub open spec fn source_observations_same(a: &SourceObservation, b: &SourceObser
         && a.dirty == b.dirty && optional_text_same(&a.error, &b.error)
 }
 
+pub fn observation_matches(a: &SourceObservation, b: &SourceObservation) -> (same: bool)
+    ensures same <==> source_observations_same(a, b),
+{
+    optional_text_equal(&a.commit, &b.commit) && optional_text_equal(&a.tree, &b.tree)
+        && a.dirty == b.dirty && optional_text_equal(&a.error, &b.error)
+}
+
 pub open spec fn source_state_spec(before: &SourceObservation, after: &SourceObservation) -> SourceState {
     if before.error is Some || after.error is Some { SourceState::Unavailable }
     else if !source_observations_same(before, after) { SourceState::Changed }
@@ -227,6 +266,21 @@ pub struct SourceIdentity {
     pub tree: Option<String>,
     pub before: SourceObservation,
     pub after: SourceObservation,
+}
+
+pub fn original_source(identity: &SourceIdentity, expected: &SourceObservation) -> (valid: bool)
+    ensures valid <==> (identity.state is Clean && expected.commit is Some && expected.tree is Some
+        && expected.dirty == Some(false) && expected.error is None
+        && optional_text_same(&identity.commit, &expected.commit)
+        && optional_text_same(&identity.tree, &expected.tree)
+        && source_observations_same(&identity.before, expected)
+        && source_observations_same(&identity.after, expected)),
+{
+    matches!(identity.state, SourceState::Clean) && expected.commit.is_some() && expected.tree.is_some()
+        && expected.dirty == Some(false) && expected.error.is_none()
+        && optional_text_equal(&identity.commit, &expected.commit)
+        && optional_text_equal(&identity.tree, &expected.tree)
+        && observation_matches(&identity.before, expected) && observation_matches(&identity.after, expected)
 }
 
 fn copy_optional_text(value: &Option<String>) -> (out: Option<String>)

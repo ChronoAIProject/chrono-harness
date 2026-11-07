@@ -86,7 +86,8 @@ pub fn read(root: &Path, declared: &str, prefix: &[u8]) -> Result<Vec<u8>, Strin
 }
 
 impl Profile {
-    pub fn decode(root: &Path, bytes: &[u8]) -> Result<Self, String> {
+    /// 解析固定 producer 数据时不查询当前工作树，也不选择其可写环境。
+    pub fn parse(bytes: &[u8]) -> Result<Self, String> {
         let profile: Self =
             serde_json::from_value(json(bytes)?).map_err(|error| error.to_string())?;
         if !policy::profile_options(
@@ -106,6 +107,11 @@ impl Profile {
         {
             return Err("invalid bootstrap operation sequence or owner reuse".into());
         }
+        Ok(profile)
+    }
+
+    pub fn decode(root: &Path, bytes: &[u8]) -> Result<Self, String> {
+        let profile = Self::parse(bytes)?;
         path(root, &profile.projects, b".chrono-harness/")?;
         path(
             root,

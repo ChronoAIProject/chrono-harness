@@ -14,6 +14,22 @@ use std::{
 pub type Environment = BTreeMap<OsString, OsString>;
 pub use policy::NativePlatform;
 
+pub fn native_platform() -> Result<NativePlatform, String> {
+    let system = match std::env::consts::OS {
+        "macos" => "Darwin",
+        "linux" => "Linux",
+        other => return Err(format!("unsupported bootstrap platform: {other}")),
+    };
+    let machine = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "arm64",
+        (_, machine) => machine,
+    };
+    Ok(NativePlatform {
+        system: system.into(),
+        machine: machine.into(),
+    })
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Binding {
