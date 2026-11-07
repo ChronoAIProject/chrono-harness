@@ -570,7 +570,7 @@ fn gather_host_config(
             &root.join(format!(".chrono-harness/state/mock-artifacts/{unit}")),
         );
         if mode == "stale-context" {
-            let path = format!(".chrono-harness/state/mock-artifacts/{unit}/{unit}/context.json");
+            let path = format!(".chrono-harness/state/mock-artifacts/{unit}/context.json");
             let mut context: Value =
                 serde_json::from_slice(&fs::read(root.join(&path)).unwrap()).unwrap();
             context["base"] = json!(c);
