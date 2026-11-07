@@ -24,7 +24,7 @@ jobs:
       - name: Acquire declared detector source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 2
           filter: blob:none
           sparse-checkout-cone-mode: false
@@ -55,7 +55,7 @@ jobs:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
@@ -95,7 +95,7 @@ jobs:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
@@ -133,7 +133,7 @@ jobs:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true

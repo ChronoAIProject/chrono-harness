@@ -949,14 +949,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "小步完成交付，并确认实际落地。限制同时进行的工作，及时解决阻碍、合并符合验收的变更，不积压未交付 PR。按实际合并、发布和已验收范围报告进度。合并或发布后，要核对实际状态、落地 SHA、产物和必要的后续检查；提交、创建 PR、检查通过或状态为 CLOSED，都不能单独证明已交付。受验候选与落地树不同时，说明差异并核对受影响范围。生命周期由调用方负责时，要明确交接边界，不能把阶段完成说成已经交付。"
+            "text": "小步完成交付，并确认实际落地。限制同时进行的工作，及时解决阻碍、合并符合验收的变更，不积压未交付 PR。按实际合并、发布和已验收范围报告进度。合并或发布后，要核对实际状态、落地 SHA、产物和必要的后续检查；提交、创建 PR、检查通过或状态为 CLOSED，都不能单独证明已交付。受验候选与落地树不同时，说明差异并核对受影响范围。生命周期由调用方负责时，要明确交接边界，不能把阶段完成说成已经交付。\n\n宿主默认并行验收、按依赖合并。独立 PR 不按编号或创建顺序排队，也不因目标分支单纯前移而强制追平、重建或重跑全部检查。GitHub 默认关闭 strict（要求分支追平），保留必需的汇总检查；PR 各作业检查同一个固定合并提交，以第一父提交为基线，并核对第二父提交是事件 head。目标分支 push 按完整 before／after 检查实际落地变化，不取消彼此独立的落地运行。真实冲突、有效输入或明确依赖变化时补验受影响范围；检查后并发合入产生的新树由落地检查检测并及时修复。这个默认方案不保证检查时与落地时严格同树；有此要求的发布或不可逆操作须另有明确、已验证的合并执行方案，不能把串行追平当成默认。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Deliver small, complete increments and verify landing. Limit concurrent work, resolve blockers and merge accepted changes promptly instead of accumulating undelivered PRs; report actual merges/releases and accepted scope. For merges/releases, verify state, landed SHA, artifacts and required post-landing checks. Commits, open PRs, green checks or CLOSED alone prove no delivery. Explain tested/landed tree differences; validate affected scope. For caller-owned lifecycles, state handoff; this stage is not delivery."
+            "text": "Deliver small, complete increments and verify landing. Limit concurrent work, resolve blockers and merge accepted changes promptly instead of accumulating undelivered PRs; report actual merges/releases and accepted scope. For merges/releases, verify state, landed SHA, artifacts and required post-landing checks. Commits, open PRs, green checks or CLOSED alone prove no delivery. Explain tested/landed tree differences; validate affected scope. For caller-owned lifecycles, state handoff; this stage is not delivery.\n\nDefault to parallel host validation and dependency-based merging. Independent PRs need no number/creation-order queue or mandatory catch-up, reconstruction or blanket rerun merely because the target advances. On GitHub, disable strict up-to-date requirements and retain the required aggregate. Every PR job checks the same pinned merge commit against its first parent and verifies that its second parent is the event head. Target pushes check the complete before/after landing DELTA; retain independent push runs. Recheck affected scope for actual conflicts, effective-input or explicit-dependency changes. Landing checks detect and prompt repair of a new tree formed after concurrent merges. This default does not guarantee identical check-time and landing trees; releases or irreversible operations needing that guarantee require an explicit validated merge executor, not default serial catch-up."
           }
         }
       ]
