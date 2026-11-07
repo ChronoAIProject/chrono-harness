@@ -14,6 +14,31 @@ use vstd::prelude::*;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn startup_names_modes_and_headers_use_exact_boundaries() {
+    proof {
+        reveal_strlit("chrono-host-startup/v1"); reveal_strlit("other");
+        assert("chrono-host-startup/v1"@.len() != "other"@.len());
+    }
+    let schema = policy::startup_schema("chrono-host-startup/v1", "chrono-host-startup/v1");
+    let changed = policy::startup_schema("other", "chrono-host-startup/v1");
+    let empty = policy::startup_name(&[]);
+    let allowed = policy::startup_name(&[65u8, 90, 97, 122, 48, 57, 95, 45]);
+    let slash = policy::startup_name(&[65u8, 47]);
+    let unicode = policy::startup_name(&[195u8, 169]);
+    let nul = policy::startup_name(&[0u8]);
+    let newline = policy::startup_name(&[10u8]);
+    assert(schema && !changed && !empty && allowed && !slash && !unicode && !nul && !newline);
+    let executable = policy::startup_mode(493);
+    let lowest = policy::startup_mode(1);
+    let highest = policy::startup_mode(511);
+    let no_execute = policy::startup_mode(420);
+    let zero = policy::startup_mode(0);
+    let special = policy::startup_mode(512);
+    let maximum = policy::startup_mode(4294967295u32);
+    assert(executable && lowest && highest && !no_execute && !zero && !special && !maximum) by (bit_vector);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn original_headers_require_success_identity_and_no_import_or_error() {
     proof {
         reveal_strlit("chrono-bootstrap-result/v1"); reveal_strlit("bad");
