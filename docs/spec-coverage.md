@@ -221,7 +221,7 @@ beta.11 发布及[四个示例升级](examples.md)都有精确落地和 dev 证�
 
 当前源码已退役独立 `chrono-ci gather` CLI，报告收集由现役 `check --collect` 内部调用。原 CLI 的下载重试、时间与输出上限、凭据省略、固定来源与 attempt、陈旧上下文拒绝和重复收集原件保留测试，迁到真实短命令。内部 gather 实现和最终判官验收保留；公开二进制、原生采用与完整 SPEC 验收仍按实际验证范围报告。
 
-当前源码已退役普通 `chrono-ci prepare` CLI，事件准备继续由短 check 的登记输入程序调用内部 API；原生采用流程仍使用 `prepare-endpoints` 与 `acquire-seed`。基线对象获取和初始化定制保留用例改为消费当前内部 API；旧命令拒绝、真实 full 调用无 Git／无发布，以及现役短命令上下文用例保留。实际原生采用和完整 SPEC 验收仍按已取得的原件范围报告。
+当前源码已退役普通 `chrono-ci prepare` CLI，事件准备继续由短 check 的登记输入程序调用内部 API；原生采用流程仍使用 `prepare-endpoints` 与 `acquire-seed`。基线对象获取、初始化定制与 Git 绑定用例改为消费当前内部 API；Git 用例保留隔离子进程环境、实际指定 Git 的 push／PR 获取和相对根路径断言；旧命令拒绝、真实 full 调用无 Git／无发布，以及现役短命令上下文用例保留。实际原生采用和完整 SPEC 验收仍按已取得的原件范围报告。
 
 beta.13 加入从明确 scoped v1／units 源迁移到 units 的自有投影迁移。测试保全定制初始化、源字节和无关 workflow，在写入前拒绝旧编辑或新目的地冲突。真实公开 macOS 消费者迁移三个已交付宿主并核 workflow 字节。initial／full／release 迁移、多文件原子性、完整输入、full 启用、确定性同判和形式化细化不在保证内，见[定制与更新](ci-units.md#host-customization-and-updates)。
 
