@@ -2225,36 +2225,6 @@ pub struct Seed {
     pub reason: String,
 }
 
-/// 按完整 ID 借用首个起点；未找到时不提供替代起点。
-pub fn seed_by_id<'a>(seeds: &'a [Seed], id: &str) -> (out: Option<&'a Seed>)
-    ensures
-        out.is_some() <==> exists|at: int| 0 <= at < seeds.len()
-            && seeds@[at].id@ == id@,
-        out matches Some(seed) ==> exists|at: int| 0 <= at < seeds.len()
-            && *seed == seeds@[at] && seed.id@ == id@
-            && forall|before: int| 0 <= before < at
-                ==> seeds@[before].id@ != id@,
-{
-    let mut at: usize = 0;
-    while at < seeds.len()
-        invariant at <= seeds.len(),
-            forall|before: int| 0 <= before < at
-                ==> seeds@[before].id@ != id@,
-        decreases seeds.len() - at,
-    {
-        if compare_bytes(seeds[at].id.as_str().as_bytes(), id.as_bytes()) == 0 {
-            assert(seeds@[at as int].key().0 == id.spec_bytes());
-            proof {
-                vstd::utf8::encode_utf8_decode_utf8(seeds@[at as int].id@);
-                vstd::utf8::encode_utf8_decode_utf8(id@);
-            }
-            return Some(&seeds[at]);
-        }
-        at += 1;
-    }
-    None
-}
-
 impl Seed {
     pub open spec fn key(&self) -> (Seq<u8>, Seq<u8>, Seq<u8>, Seq<u8>) {
         (vstd::utf8::encode_utf8(self.id@), vstd::utf8::encode_utf8(self.node@),
@@ -3536,6 +3506,36 @@ impl<'t, 'a> Iterator for SeedPropagations<'t, 'a> {
         self.next = at + 1;
         Some(item)
     }
+}
+
+/// 按完整 ID 借用首个起点；未找到时不提供替代起点。
+pub fn seed_by_id<'a>(seeds: &'a [Seed], id: &str) -> (out: Option<&'a Seed>)
+    ensures
+        out.is_some() <==> exists|at: int| 0 <= at < seeds.len()
+            && seeds@[at].id@ == id@,
+        out matches Some(seed) ==> exists|at: int| 0 <= at < seeds.len()
+            && *seed == seeds@[at] && seed.id@ == id@
+            && forall|before: int| 0 <= before < at
+                ==> seeds@[before].id@ != id@,
+{
+    let mut at: usize = 0;
+    while at < seeds.len()
+        invariant at <= seeds.len(),
+            forall|before: int| 0 <= before < at
+                ==> seeds@[before].id@ != id@,
+        decreases seeds.len() - at,
+    {
+        if compare_bytes(seeds[at].id.as_str().as_bytes(), id.as_bytes()) == 0 {
+            assert(seeds@[at as int].key().0 == id.spec_bytes());
+            proof {
+                vstd::utf8::encode_utf8_decode_utf8(seeds@[at as int].id@);
+                vstd::utf8::encode_utf8_decode_utf8(id@);
+            }
+            return Some(&seeds[at]);
+        }
+        at += 1;
+    }
+    None
 }
 
 }
