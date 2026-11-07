@@ -1,8 +1,8 @@
-"""Bootstrap construction and byte publication, under the existing worktree owner.
+"""Bootstrap construction and original qualification, under the worktree owner.
 
 This module never interprets a lifecycle ledger or acquires a lease. The worktree
-owner supplies construction SH or publication EX and keeps its descriptors alive
-through this module's child processes and the final adoption checks.
+owner supplies construction SH or validation EX and keeps its descriptors alive
+through this module's child processes. Rust owns byte publication and adoption.
 """
 import json
 import os
@@ -162,7 +162,7 @@ def reuse_construction(root, config, result, observed):
     qualified_publication(root, current, selected)
     report, profile = stage_report(root, current["stage_result"], current["stage_sha256"])
     for field in ("projects", "rust_toolchain", "rust_incremental", "require_tool_bindings",
-                  "tool_bindings_registry", "tool_bindings", "native_platform", "tools",
+                  "tool_bindings_registry", "tool_bindings", "native_platform",
                   "host_environment", "environment", "toolchain_provision"):
         if profile.get(field) != config.get(field):
             raise ValueError("owner construction selection differs: " + field)
@@ -172,6 +172,9 @@ def reuse_construction(root, config, result, observed):
     rows = {row["operation"]: row for row in report["operations"]}
     if not set(names) <= set(rows):
         raise ValueError("owner construction is missing a declared operation")
+    for tool in sorted({rows[name]["tool"] for name in names}):
+        if profile.get("tools", {}).get(tool) != config.get("tools", {}).get(tool):
+            raise ValueError("owner construction selection differs: tool " + tool)
     source = shared.safe(root, report["owner_stage"]["staged"]["path"], STAGES)
     reused = {name: dict(rows[name], reused_from={"path": current["stage_result"],
                                                 "sha256": current["stage_sha256"]})
@@ -231,81 +234,14 @@ def stage_report(root, reference, expected_sha=None, producer_commit=None):
     return report, profile
 
 
-def write_new(path, value):
-    raw = shared.encode(value)
-    if path.exists():
-        if path.is_symlink() or path.read_bytes() != raw:
-            raise ValueError("owner publication original collision")
-    else:
-        shared.write_new(path, raw)
-
-
-def publish_bytes(root, record):
-    """The caller holds EX throughout. Keep the original inode before replacement.
-
-    Intent + retained original make an interruption after rename recoverable;
-    neither this result nor its existence declares lifecycle adoption.
-    """
-    staged = shared.safe(root, record["staged"]["path"], STAGES)
-    target = shared.safe(root, record["selected"], ".chrono-harness/bin/")
-    if file_binding(staged) != {k: v for k, v in record["staged"].items() if k != "path"}:
-        raise ValueError("retained owner stage changed before publication")
-    previous = staged.parent / "previous-owner"
-    intent = staged.parent / "publication-intent.json"
-    next_owner = staged.parent / "publication-next-owner"
-    result_path = staged.parent / "publication-result.json"
-    if previous.exists() or previous.is_symlink():
-        if file_binding(previous) != record["previous"]:
-            raise ValueError("retained original owner changed")
-    else:
-        if file_binding(target) != record["previous"]:
-            raise ValueError("selected owner changed before original preservation")
-        os.link(target, previous, follow_symlinks=False)
-    if file_binding(previous) != record["previous"]:
-        raise ValueError("original owner preservation identity differs")
-    if intent.exists():
-        if intent.is_symlink():
-            raise ValueError("owner publication intent is a symlink")
-        planned = json.loads(intent.read_bytes())
-        if (set(planned) != {"schema", "stage", "replacement"}
-                or planned["schema"] != "chrono-bootstrap-owner-publication-intent/v1"
-                or planned["stage"] != record):
-            raise ValueError("owner publication intent binding differs")
-    else:
-        if next_owner.exists() or next_owner.is_symlink():
-            raise ValueError("unqualified prepared owner without publication intent")
-        with next_owner.open("xb") as output:
-            output.write(staged.read_bytes())
-            os.fchmod(output.fileno(), 0o755)
-        planned = {"schema": "chrono-bootstrap-owner-publication-intent/v1",
-                   "stage": record, "replacement": file_binding(next_owner)}
-        write_new(intent, planned)
-    current = file_binding(target)
-    if current == record["previous"]:
-        if file_binding(next_owner) != planned["replacement"]:
-            raise ValueError("prepared publication owner changed")
-        os.replace(next_owner, target)
-    elif current != planned["replacement"]:
-        raise ValueError("selected owner drifted after publication intent")
-    installed = file_binding(target)
-    if (installed != planned["replacement"] or installed["sha256"] != record["staged"]["sha256"]
-            or file_binding(previous) != record["previous"]):
-        raise ValueError("installed owner verification failed")
-    result = {"schema": "chrono-bootstrap-owner-publication/v1", "stage": record,
-              "installed": installed, "adoption": "not-claimed", "task_completion": "not-claimed"}
-    write_new(result_path, result)
-    return result
-
-
-def publication(root, reference, expected_sha):
+def validate_stage(root, reference, expected_sha):
+    """Validate original construction facts; Rust owns byte publication under EX."""
     require_capabilities(root)
-    # A publication callback is selected only by the actual owner, separately
-    # from its construction marker. Marker-only ordinary invocation refuses.
     if os.environ.get("CHRONO_WORKTREE_OWNER_DEPLOYMENT") != expected_sha:
-        raise ValueError("owner publication requires the exclusive deployment callback")
+        raise ValueError("owner stage validation requires the exclusive deployment callback")
     report, _ = stage_report(root, reference, expected_sha)
-    result = publish_bytes(root, report["owner_stage"])
-    print(json.dumps(result, sort_keys=True))
+    print(json.dumps({"schema": "chrono-bootstrap-owner-stage-validation/v1",
+                      "stage_sha256": expected_sha, "stage": report["owner_stage"]}, sort_keys=True))
 
 
 def run_owner(root, program, arguments, directory, name):
