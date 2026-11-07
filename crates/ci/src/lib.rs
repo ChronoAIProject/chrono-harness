@@ -800,7 +800,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let command = args
         .first()
-        .ok_or("use init/generate/verify/migrate/prepare/gather --host-root H --config P")?;
+        .ok_or("use init/generate/verify/migrate/gather --host-root H --config P")?;
     let mut opts = std::collections::BTreeMap::new();
     let mut i = 1;
     while i < args.len() {
@@ -829,7 +829,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     let config = *opts.get("--config").ok_or("--config required")?;
     if !matches!(
         command.as_str(),
-        "prepare" | "prepare-endpoints" | "acquire-seed" | "gather" | "migrate"
+        "prepare-endpoints" | "acquire-seed" | "gather" | "migrate"
     ) && opts.len() != 2
     {
         return Err("extra arguments".into());
@@ -898,72 +898,34 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                 opts.get("--repository").ok_or("--repository required")?,
             )
         }
-        "prepare" | "prepare-endpoints" => {
+        "prepare-endpoints" => {
             if ["--repository", "--from", "--previous-config"]
                 .iter()
                 .any(|k| opts.contains_key(k))
             {
-                return Err("unexpected transport or migration option for prepare".into());
+                return Err("unexpected transport or migration option for prepare-endpoints".into());
             }
-            let projection = load_projection(&no_symlink_parents(&root, config)?)?;
-            if command == "prepare-endpoints" && !matches!(&projection, Projection::Units(_)) {
+            let Projection::Units(c) = load_projection(&no_symlink_parents(&root, config)?)? else {
                 return Err("early endpoints require full units".into());
-            }
-            if opts.contains_key("--unit") && !matches!(&projection, Projection::Units(_)) {
-                return Err("unit selection requires unit provider".into());
-            }
+            };
             let payload = chrono_harness::json(
                 &fs::read(opts.get("--payload").ok_or("--payload required")?)
                     .map_err(|e| e.to_string())?,
             )?;
-            let c = match projection {
-                Projection::Units(c) => {
-                    let producer = if command == "prepare-endpoints" {
-                        units::prepare_endpoints
-                    } else {
-                        units::prepare
-                    };
-                    let context = producer(
-                        &root,
-                        config,
-                        &c,
-                        opts.get("--unit").copied(),
-                        opts.get("--event").ok_or("--event required")?,
-                        &payload,
-                        opts.get("--workflow-revision")
-                            .ok_or("--workflow-revision required")?,
-                    )?;
-                    let workflow = c.workflow(opts.get("--unit").copied())?;
-                    store_context(
-                        &root,
-                        &workflow.context_path,
-                        &context,
-                        opts.get("--github-output").copied(),
-                    )?;
-                    return Ok(serde_json::to_string(&context).map_err(|e| e.to_string())? + "\n");
-                }
-                Projection::Full(_) => {
-                    return Err("full CI preparation requires the registered short check".into());
-                }
-                Projection::Check(c) => c,
-                Projection::Release(_) => {
-                    return Err("release projection has no check event preparation".into());
-                }
-            };
-            if opts.contains_key("--unit") {
-                return Err("unit selection requires unit provider".into());
-            }
-            let context = prepare(
+            let context = units::prepare_endpoints(
                 &root,
+                config,
                 &c,
+                opts.get("--unit").copied(),
                 opts.get("--event").ok_or("--event required")?,
                 &payload,
                 opts.get("--workflow-revision")
                     .ok_or("--workflow-revision required")?,
             )?;
+            let workflow = c.workflow(opts.get("--unit").copied())?;
             store_context(
                 &root,
-                &c.context_path,
+                &workflow.context_path,
                 &context,
                 opts.get("--github-output").copied(),
             )?;

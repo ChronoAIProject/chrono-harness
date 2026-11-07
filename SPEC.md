@@ -380,7 +380,7 @@ Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING
 
 `chrono-github-full-ci/v2` 是显式完整 context 的独立 dispatch 投影，使用宿主 schema4 登记的短 check 入口，旧 provider v1 拒绝。调用方提供context 原始 UTF-8 JSON 字符串与所有引用证据；生成器不推断角色、时间、宿主布局或证据获取方式。候选配置的 Git 绑定核对 HEAD、配置、provider 源和指定 workflow修订中的投影字节，只在精确缺对象读数后补取固定 OID。
 
-完整准备由短 check 的登记输入 action 执行，独立 full provider 的手工 `chrono-ci prepare` 拒绝。准备阶段保留 context 原字节，另存 Git 观察、源身份和所选短 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。不可变上下文／准备原件按路径与摘要保留，准备报告不再内嵌重复的 `context.input_bytes`；当前输出可替换，原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
+完整准备由短 check 的登记输入 action 执行，普通 `chrono-ci prepare` 手工入口已退役，调用在读取投影或发布准备输出前拒绝；内部事件准备 API，以及原生流程使用的 `prepare-endpoints`／`acquire-seed` 保留。准备阶段保留 context 原字节，另存 Git 观察、源身份和所选短 check argv；其 `prepared` 不承担治理裁决，parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。所有当前 full 投影以精确源路径标记归属，由共用输出预检直接核对；不解析旧 YAML 推断归属，也不自动接管只有历史通用标记的输出。不可变上下文／准备原件按路径与摘要保留，准备报告不再内嵌重复的 `context.input_bytes`；当前输出可替换，原始进程失败须保留并传播。单文件发布不认证并发或跨文件事务；此投影不自动启用完整宿主、PR/合并流程或 必需检查。
 
 字段、重试与采用边界见 [完整 CI 传输合同](docs/full-ci.md)。
 
