@@ -140,13 +140,7 @@ fn typed_union_has_exact_sorted_slots_and_all_three_origins() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn typed_edge_indices_preserve_parallel_slots_cycles_and_duplicate_roots() {
     use policy::EdgeKind::*;
-    proof {
-        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c");
-        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
-        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
-        vstd::utf8::is_ascii_chars_encode_utf8("c"@);
-        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
-    }
+    proof { abc_byte_order(); }
     let names: Vec<&str> = vec!["a", "b", "c"];
     proof {
         assert forall|i: int, j: int| 0 <= i < j < names.len()
@@ -947,13 +941,7 @@ fn source_rows_cover_empty_isolated_unicode_and_missing_source_boundaries() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn source_rows_group_unsorted_duplicate_edges_into_exact_typed_slots() {
     use policy::EdgeKind::*;
-    proof {
-        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c");
-        vstd::utf8::is_ascii_chars_encode_utf8("a"@);
-        vstd::utf8::is_ascii_chars_encode_utf8("b"@);
-        vstd::utf8::is_ascii_chars_encode_utf8("c"@);
-        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
-    }
+    proof { abc_byte_order(); }
     let names: Vec<&str> = vec!["a", "b", "c"];
     proof {
         assert forall|i: int, j: int| 0 <= i < j < names.len()
@@ -1819,6 +1807,24 @@ fn sparse_predecessors_keep_exact_reached_nodes_and_typed_search_slots() {
     assert forall|i: int| 0 <= i < entries.len() implies (#[trigger] entries@[i]).name() != "b".spec_bytes() by {
         assert(policy::predecessor_keys(entries@).to_set().contains(policy::predecessor_keys(entries@)[i]));
     }
+}
+
+/// 在局部引理中展开样本编码，使用方只消费明确的字节与顺序事实。
+proof fn abc_byte_order()
+    ensures "a".spec_bytes() == seq![97u8], "b".spec_bytes() == seq![98u8],
+        "c".spec_bytes() == seq![99u8],
+        policy::byte_lt("a".spec_bytes(), "b".spec_bytes()),
+        policy::byte_lt("a".spec_bytes(), "c".spec_bytes()),
+        policy::byte_lt("b".spec_bytes(), "c".spec_bytes()),
+{
+    reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c");
+    vstd::utf8::is_ascii_chars_encode_utf8("a"@);
+    vstd::utf8::is_ascii_chars_encode_utf8("b"@);
+    vstd::utf8::is_ascii_chars_encode_utf8("c"@);
+    reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+    assert(policy::byte_prefix("a".spec_bytes(), "b".spec_bytes(), 0));
+    assert(policy::byte_prefix("a".spec_bytes(), "c".spec_bytes(), 0));
+    assert(policy::byte_prefix("b".spec_bytes(), "c".spec_bytes(), 0));
 }
 
 }
