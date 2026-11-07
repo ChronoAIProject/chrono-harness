@@ -115,9 +115,9 @@ fn stage_report_digest_path_and_relocation_boundaries() {
         &policy::StageRequirement::AbsolutePath { bytes: Vec::new() });
     assert(absolute && !relative && !missing);
     let registry = policy::valid_stage_requirement(
-        &policy::StageRequirement::BindingPath { registry: true, declared: false });
+        &policy::StageRequirement::BindingPath { registry: true, has_path: false });
     let inline_missing = policy::valid_stage_requirement(
-        &policy::StageRequirement::BindingPath { registry: false, declared: false });
+        &policy::StageRequirement::BindingPath { registry: false, has_path: false });
     assert(registry && !inline_missing);
     let fixed = policy::valid_stage_requirement(&policy::StageRequirement::Relocation {
         allowed: false, actual: vec![47u8, 97], declared: Some(vec![47u8, 97]) });

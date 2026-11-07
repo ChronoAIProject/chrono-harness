@@ -21,7 +21,7 @@ pub enum StageRequirement {
     Process { exit: Option<i64>, pid: Option<u64> },
     Digest { bytes: Vec<u8> },
     AbsolutePath { bytes: Vec<u8> },
-    BindingPath { registry: bool, declared: bool },
+    BindingPath { registry: bool, has_path: bool },
     Relocation { allowed: bool, actual: Vec<u8>, declared: Option<Vec<u8>> },
 }
 
@@ -98,7 +98,7 @@ pub open spec fn stage_requirement(check: &StageRequirement) -> bool {
             && pid is Some && pid.unwrap() > 0,
         StageRequirement::Digest { bytes } => stage_digest(bytes@),
         StageRequirement::AbsolutePath { bytes } => bytes@.len() > 0 && bytes@[0] == 47,
-        StageRequirement::BindingPath { registry, declared } => *registry || *declared,
+        StageRequirement::BindingPath { registry, has_path } => *registry || *has_path,
         StageRequirement::Relocation { allowed, actual, declared } => *allowed
             || (declared is Some && actual@ == declared.unwrap()@),
     }
@@ -116,7 +116,7 @@ pub fn valid_stage_requirement(check: &StageRequirement) -> (valid: bool)
         },
         StageRequirement::Digest { bytes } => valid_stage_digest(bytes),
         StageRequirement::AbsolutePath { bytes } => bytes.len() > 0 && bytes[0] == 47,
-        StageRequirement::BindingPath { registry, declared } => *registry || *declared,
+        StageRequirement::BindingPath { registry, has_path } => *registry || *has_path,
         StageRequirement::Relocation { allowed, actual, declared } => {
             if *allowed { true } else {
                 match declared { Some(path) => equal_bytes(actual, path), None => false }

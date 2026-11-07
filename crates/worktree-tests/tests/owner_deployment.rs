@@ -641,6 +641,14 @@ fn owner_deployment_preserves_bytes_on_stage_original_or_execution_drift() {
         "compiler",
         "environment",
         "dirty-source",
+        "duplicate-stream",
+        "stream-size",
+        "missing-pid",
+        "missing-exit",
+        "compiler-relative",
+        "selection",
+        "versions",
+        "cwd",
     ] {
         let (h, exe, path, _) = fixture();
         let target = h.root.join(".chrono-harness/bin/chrono-worktree");
@@ -659,6 +667,26 @@ fn owner_deployment_preserves_bytes_on_stage_original_or_execution_drift() {
                     .join(stage["operations"][0]["stdout"]["path"].as_str().unwrap());
                 fs::write(path, "changed original output").unwrap();
             }
+            "duplicate-stream" => {
+                stage["operations"][0]["stderr"] = stage["operations"][0]["stdout"].clone()
+            }
+            "stream-size" => stage["operations"][0]["stdout"]["size"] = value!(u64::MAX),
+            "missing-pid" => {
+                stage["operations"][0]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("pid");
+            }
+            "missing-exit" => {
+                stage["operations"][0]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("exit_code");
+            }
+            "compiler-relative" => stage["executables"][1]["path"] = value!("relative/compiler"),
+            "selection" => stage["selection"]["rustc"] = value!("foreign compiler"),
+            "versions" => stage["versions"]["rustc"] = value!("foreign version"),
+            "cwd" => stage["operations"][0]["cwd"] = value!("/foreign"),
             "staged" => stage["owner_stage"]["staged"]["sha256"] = value!("0".repeat(64)),
             "compiler" => stage["executables"][1]["sha256"] = value!("0".repeat(64)),
             "environment" => stage["environment"]["RUSTC"] = value!("foreign compiler"),
