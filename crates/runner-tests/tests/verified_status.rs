@@ -104,20 +104,53 @@ fn expected_statuses(findings: &[policy::Finding], pass: bool, warn: bool, fail:
         && observed_fail == fail && observed_error == error);
 }
 
+proof fn level_projection(rows: Seq<policy::Finding>, levels: Seq<Seq<char>>, level: Seq<char>)
+    requires rows.len() == levels.len(),
+        forall|i: int| 0 <= i < rows.len() ==> (#[trigger] rows[i]).level@ == levels[i],
+    ensures policy::finding_level_present(rows, level) == levels.contains(level),
+{
+    if policy::finding_level_present(rows, level) {
+        let i = choose|i: int| 0 <= i < rows.len() && (#[trigger] rows[i]).level@ == level;
+        assert(levels[i] == level);
+        assert(levels.contains(level));
+    }
+    if levels.contains(level) {
+        let i = choose|i: int| 0 <= i < levels.len() && #[trigger] levels[i] == level;
+        assert(rows[i].level@ == level);
+        assert(policy::finding_level_present(rows, level));
+    }
+}
+
+proof fn known_levels(rows: Seq<policy::Finding>, levels: Seq<Seq<char>>)
+    requires rows.len() == levels.len(),
+        forall|i: int| 0 <= i < rows.len() ==> (#[trigger] rows[i]).level@ == levels[i],
+    ensures
+        policy::finding_level_present(rows, "error"@) == levels.contains("error"@),
+        policy::finding_level_present(rows, "warning"@) == levels.contains("warning"@),
+{
+    level_projection(rows, levels, "error"@);
+    level_projection(rows, levels, "warning"@);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn protocol_findings_cover_the_complete_presence_truth_table() {
     proof { reveal_strlit("info"); reveal_strlit("warning"); reveal_strlit("error"); }
     let empty: Vec<policy::Finding> = Vec::new();
     expected_statuses(&empty, true, false, false, false);
     let only_info = vec![finding("info"), finding("info")];
+    proof { known_levels(only_info@, seq!["info"@, "info"@]); }
     expected_statuses(&only_info, true, false, false, false);
     let warning = vec![finding("info"), finding("warning"), finding("warning")];
+    proof { known_levels(warning@, seq!["info"@, "warning"@, "warning"@]); }
     expected_statuses(&warning, false, true, false, false);
     let error = vec![finding("error"), finding("info"), finding("error")];
+    proof { known_levels(error@, seq!["error"@, "info"@, "error"@]); }
     expected_statuses(&error, false, false, true, true);
     let both = vec![finding("warning"), finding("error"), finding("info")];
+    proof { known_levels(both@, seq!["warning"@, "error"@, "info"@]); }
     expected_statuses(&both, false, false, true, true);
     let reversed = vec![finding("error"), finding("warning")];
+    proof { known_levels(reversed@, seq!["error"@, "warning"@]); }
     expected_statuses(&reversed, false, false, true, true);
 }
 
@@ -128,12 +161,14 @@ fn protocol_level_matching_uses_the_entire_real_field() {
         reveal_strlit("ERROR"); reveal_strlit("warning\0"); reveal_strlit("警告"); reveal_strlit("");
     }
     let irrelevant = vec![finding("ERROR"), finding("warning\0"), finding("警告"), finding("")];
+    proof { known_levels(irrelevant@, seq!["ERROR"@, "warning\0"@, "警告"@, ""@]); }
     expected_statuses(&irrelevant, true, false, false, false);
     let misleading_fields = policy::Finding {
         code: "error".to_owned(), level: "info".to_owned(), message: "warning".to_owned(),
         delta_refs: vec!["error".to_owned()], causes: vec!["warning".to_owned()],
     };
     let rows = vec![misleading_fields];
+    proof { known_levels(rows@, seq!["info"@]); }
     expected_statuses(&rows, true, false, false, false);
 }
 
