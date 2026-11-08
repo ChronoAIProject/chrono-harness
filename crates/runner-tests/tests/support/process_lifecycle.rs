@@ -169,8 +169,7 @@ fn controller(case: &str) {
             .filter(|line| line.ends_with(b"\n"))
             .map(|line| serde_json::from_slice::<serde_json::Value>(line).unwrap())
             .find(|record| {
-                record["event"] == "process.monitor_wait"
-                    && record["context"]["child_pid"] == pid
+                record["event"] == "process.monitor_wait" && record["context"]["child_pid"] == pid
             });
         if let Some(observed) = observed {
             break observed;

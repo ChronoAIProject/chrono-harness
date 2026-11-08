@@ -2603,24 +2603,39 @@ fn delayed_monitor_helper() {
         .unwrap(),
     )
     .unwrap();
-    assert_eq!(chrono_harness::logged_main_at(root, "delayed-monitor", "child", || {
-        let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
-        fs::write(root.join("result.json"), serde_json::to_vec(&result).unwrap()).unwrap();
+    assert_eq!(
+        chrono_harness::logged_main_at(root, "delayed-monitor", "child", || {
+            let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
+            fs::write(
+                root.join("result.json"),
+                serde_json::to_vec(&result).unwrap(),
+            )
+            .unwrap();
+            0
+        }),
         0
-    }), 0);
+    );
 }
 
 #[cfg(unix)]
 fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
     let mut root = tempfile::tempdir().unwrap();
     root.disable_cleanup(true);
-    eprintln!("delayed monitor originals ({case}): {}", root.path().display());
+    eprintln!(
+        "delayed monitor originals ({case}): {}",
+        root.path().display()
+    );
     fs::create_dir(root.path().join(".chrono-harness")).unwrap();
-    fs::write(root.path().join(".chrono-harness/logging.json"), serde_json::to_vec(&value!({
-        "schema":"chrono-runtime-logging/v1", "level":"debug",
-        "directory":".chrono-harness/state/monitor/", "max_bytes":65536,
-        "max_files":1, "stderr":false,
-    })).unwrap()).unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/logging.json"),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-runtime-logging/v1", "level":"debug",
+            "directory":".chrono-harness/state/monitor/", "max_bytes":65536,
+            "max_files":1, "stderr":false,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
     let exe = std::env::current_exe().unwrap();
     let digest = sha256(&fs::read(&exe).unwrap());
     // Only the nested launcher is suspended. The child and independent kernel
