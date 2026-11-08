@@ -761,8 +761,18 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         });
         let target = h.parent.join("console");
         let created = h.native_output(
-            h.auto_command("start", &["--kind", "feature", "--name", "console", "--path", target.to_str().unwrap()])
-                .env("CHRONO_TEST_AGENT_ID", "console-agent"),
+            h.auto_command(
+                "start",
+                &[
+                    "--kind",
+                    "feature",
+                    "--name",
+                    "console",
+                    "--path",
+                    target.to_str().unwrap(),
+                ],
+            )
+            .env("CHRONO_TEST_AGENT_ID", "console-agent"),
         );
         assert_eq!(h.received(created).0, 0);
         install_inner(&target, "original stdout\n", "original diagnostic\n", exit);
@@ -825,7 +835,10 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
                 .is_none()
         );
         let mut environment = std::collections::BTreeMap::from([
-            ("CHRONO_TEST_AGENT_ID".to_owned(), "console-agent".to_owned()),
+            (
+                "CHRONO_TEST_AGENT_ID".to_owned(),
+                "console-agent".to_owned(),
+            ),
             ("PATH".to_owned(), std::env::var("PATH").unwrap()),
             (
                 "CHRONO_TEST_AUTHENTICATION".to_owned(),
@@ -1018,7 +1031,10 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
         .unwrap();
     assert_eq!(checked.status.code(), Some(0), "{checked:?}");
     assert_eq!(checked.stdout, b"checked");
-    assert!(checked.stderr.starts_with(b"check warning\n"), "{checked:?}");
+    assert!(
+        checked.stderr.starts_with(b"check warning\n"),
+        "{checked:?}"
+    );
     assert!(String::from_utf8_lossy(&checked.stderr).contains("W_WORKTREE_AGENT_SCOPE"));
     let head = git(&h.root, &["rev-parse", "HEAD"]);
     let (code, rebuilt, error) = h.reconstruct(
