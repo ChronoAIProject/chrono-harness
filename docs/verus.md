@@ -201,7 +201,8 @@ String 借用／克隆与 Option 枚举沿用已列固定 vstd 合同，没有�
 实际 `facts::Tree` 的键现在是同根 `TreePath`；原文 String 不归一化，内容比较、
 UTF-8 字节词典序、Eq／Ord 法则、克隆和 `str`／String 借用都由 Verus 实现并证明。
 真实 Git 树解析使用 `from_text`／`from_owned` 构造；checkout、export、registration 和
-worktree 在明确文本边界借用或复制原文，不维护第二份键或比较实现。
+worktree 在明确文本边界借用或复制原文，judge-ci 向现役字符串库存移动原文；
+这些交接不维护第二份键或比较实现。
 独立 Verus 预期在普通 Rust 中也执行失败分支，覆盖不同分配的同文、空文本、Unicode、
 NUL／换行、不同 Unicode 表示，以及大小写、完整前缀和内部 NUL 的顺序。
 固定 vstd 的 String／str 借用、to_owned、clone、as_bytes 合同沿用现役外部边界；
