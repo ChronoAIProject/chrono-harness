@@ -32,20 +32,31 @@ fn native_frontends_have_exact_platforms_distinct_jobs_and_disjoint_paths() {
     for variant in 0..12 {
         let mut f = Fixture::new();
         match variant {
-            0 => { f.config.as_object_mut().unwrap().remove("native_frontends"); }
+            0 => {
+                f.config.as_object_mut().unwrap().remove("native_frontends");
+            }
             1 => f.config["native_frontends"] = json!({}),
-            2 => f.config["native_frontends"]["unknown"] = f.config["native_frontends"]["fixture"].clone(),
+            2 => {
+                f.config["native_frontends"]["unknown"] =
+                    f.config["native_frontends"]["fixture"].clone()
+            }
             3 => f.config["native_frontends"]["fixture"]["job"] = json!("native_build_a"),
             4 => f.config["native_frontends"]["fixture"]["job"] = json!("invalid job"),
             5 => f.config["native_frontends"]["fixture"]["cost"] = json!(" "),
             6 => f.config["native_frontends"]["fixture"]["directory"] = json!("handoffs/a/nested"),
             7 => f.config["native_frontends"]["fixture"]["directory"] = json!("consumer"),
             8 => f.config["native_frontends"]["fixture"]["executable"] = json!("../escape"),
-            9 => f.config["native_frontends"]["fixture"]["bootstrap_report"] = json!("chrono-host-release"),
-            10 => f.config["native_frontends"]["fixture"]["bootstrap_profile"] = json!("profile.json"),
+            9 => {
+                f.config["native_frontends"]["fixture"]["bootstrap_report"] =
+                    json!("chrono-host-release")
+            }
+            10 => {
+                f.config["native_frontends"]["fixture"]["bootstrap_profile"] = json!("profile.json")
+            }
             11 => {
                 f.config["native_jobs"]["second"] = f.config["native_jobs"]["fixture"].clone();
-                f.config["native_frontends"]["second"] = f.config["native_frontends"]["fixture"].clone();
+                f.config["native_frontends"]["second"] =
+                    f.config["native_frontends"]["fixture"].clone();
             }
             _ => unreachable!(),
         }

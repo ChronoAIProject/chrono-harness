@@ -19,24 +19,39 @@ fn native_frontend_is_required_separately_from_business_assets() {
     host.save();
     let loaded = Loaded::load(host.root()).unwrap();
     let parent = Lineage {
-        kind: Kind::Github, run_id:"1234".into(), attempt:"3".into(),
-        job:"native_test_none".into(),
+        kind: Kind::Github,
+        run_id: "1234".into(),
+        attempt: "3".into(),
+        job: "native_test_none".into(),
     };
     let input = json!({"native_frontend":{"result":"success","outputs":{
         "artifact_id":"98765","run_id":"1234","attempt":"1"
     }}});
-    let select = |input: &Value| receipt::select(&loaded, Scope::Unit("test_none"), &parent,
-        &serde_json::to_vec(input).unwrap());
+    let select = |input: &Value| {
+        receipt::select(
+            &loaded,
+            Scope::Unit("test_none"),
+            &parent,
+            &serde_json::to_vec(input).unwrap(),
+        )
+    };
     let value = serde_json::to_value(select(&input).unwrap()).unwrap();
     assert_eq!(value["units"], json!({}));
-    assert_eq!(value["frontend"], json!({"job":"native_frontend","artifact_id":"98765","run_id":"1234","attempt":"1"}));
+    assert_eq!(
+        value["frontend"],
+        json!({"job":"native_frontend","artifact_id":"98765","run_id":"1234","attempt":"1"})
+    );
     assert!(select(&json!({})).is_err());
     for outcome in ["failure", "cancelled", "skipped"] {
         let mut bad = input.clone();
         bad["native_frontend"]["result"] = json!(outcome);
         assert!(select(&bad).is_err(), "{outcome}");
     }
-    for (key, value) in [("run_id","foreign"),("attempt","4"),("artifact_id","by-name")] {
+    for (key, value) in [
+        ("run_id", "foreign"),
+        ("attempt", "4"),
+        ("artifact_id", "by-name"),
+    ] {
         let mut bad = input.clone();
         bad["native_frontend"]["outputs"][key] = json!(value);
         assert!(select(&bad).is_err(), "{key}");
@@ -123,7 +138,8 @@ fn native_receipt_matches_original_job_run_attempt_and_local_digest_is_not_optio
     f.parent.job = "native_collect".into();
     f.report["lineage"] =
         json!({"kind":"github","run_id":"same-run","attempt":"1","job":"native_test_none"});
-    f.report["frontend_selection"] = json!({"job":"native_frontend","artifact_id":"98766","run_id":"same-run","attempt":"1"});
+    f.report["frontend_selection"] =
+        json!({"job":"native_frontend","artifact_id":"98766","run_id":"same-run","attempt":"1"});
     f.report["dependency_input"] = original(&f.directory(), "dependency-context.json",
         &serde_json::to_vec(&json!({"native_frontend":{"result":"success","outputs":{"artifact_id":"98766","run_id":"same-run","attempt":"1"}}})).unwrap());
     let mut selected = f.save();
