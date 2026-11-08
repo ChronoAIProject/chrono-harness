@@ -732,13 +732,9 @@
           "operation": "ci.generate",
           "tool": "chrono-ci",
           "argv": [
-            "migrate",
+            "generate",
             "--host-root",
             ".",
-            "--from",
-            ".chrono-harness/state/audit-r64-previous-units.json",
-            "--previous-config",
-            ".chrono-harness/ci/units.json",
             "--config",
             ".chrono-harness/ci/units.json"
           ]
