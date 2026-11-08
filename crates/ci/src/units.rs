@@ -486,7 +486,7 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
             config_path,
             Some(&scope),
             &artifact,
-            unit.is_none() || c.native_adoption.is_some() || c.persistent_cache.is_some(),
+            unit.is_none() || c.native_adoption.is_some(),
             c.schema == FULL_SCHEMA,
         )?
         .replacen(super::MARKER, MARKER, 1);
