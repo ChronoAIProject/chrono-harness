@@ -3,6 +3,7 @@
 
 pub mod evidence;
 pub mod execution;
+pub mod local;
 pub mod process;
 pub mod receipt;
 pub mod recipe;

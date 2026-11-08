@@ -196,6 +196,10 @@ impl Fixture {
             String::from_utf8_lossy(&out.stderr)
         );
     }
+
+    pub fn local(&self, output: &Path) -> Output {
+        capture(Command::new(env!("CARGO_BIN_EXE_chrono-test-release-cli")).arg(self.root()).arg(output))
+    }
 }
 
 impl Drop for Fixture {

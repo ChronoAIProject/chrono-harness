@@ -1,4 +1,4 @@
-use chrono_host_release::{execution, recipe::Scope};
+use chrono_host_release::{execution, local, recipe::Scope};
 use std::{path::Path, process::ExitCode};
 
 fn run() -> Result<i32, String> {
@@ -10,6 +10,7 @@ fn run() -> Result<i32, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     match args.as_slice() {
+        [root, output] => local::run(Path::new(root), Path::new(output), std::env::vars_os().collect()),
         [root, output, flag, id] if flag == "--unit" => execution::scoped(
             Path::new(root),
             Path::new(output),
@@ -22,7 +23,7 @@ fn run() -> Result<i32, String> {
             Scope::Collect,
             std::env::vars_os().collect(),
         ),
-        _ => Err("usage: chrono-host-release ROOT ABSENT_OUTPUT (--unit ID | --collect)".into()),
+        _ => Err("usage: chrono-host-release ROOT ABSENT_OUTPUT [--unit ID | --collect]".into()),
     }
 }
 
