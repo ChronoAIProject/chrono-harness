@@ -148,10 +148,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             .as_str()
             .ok_or("E_CACHE_RECOVERY: consumer missing")?;
         let expected = super::prepare_with_inputs(&root, &config, consumer, Some(&plan["inputs"]))?;
-        // Recovery may run from the installed cache binary while the plan was
-        // prepared by the same release's bootstrap copy.  The report command
-        // performs the strict planner/current executable check; recovery binds
-        // the registration, host and selected observations independently.
+        // Recovery may use an installed binary after a bootstrap-produced plan.
+        // Revalidate registration, host and selected observations while retaining
+        // the original planner identity. Seal checks the current executable.
         let mut expected_binding = expected;
         expected_binding["planner"] = plan["planner"].clone();
         if expected_binding != plan {
