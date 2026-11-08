@@ -10,7 +10,11 @@ fn run() -> Result<i32, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     match args.as_slice() {
-        [root, output] => local::run(Path::new(root), Path::new(output), std::env::vars_os().collect()),
+        [root, output] => local::run(
+            Path::new(root),
+            Path::new(output),
+            std::env::vars_os().collect(),
+        ),
         [root, output, flag, id] if flag == "--unit" => execution::scoped(
             Path::new(root),
             Path::new(output),
