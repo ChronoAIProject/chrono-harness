@@ -589,6 +589,11 @@ fn declared_source_root(path: &str, operation: &str) -> (root: policy::sources::
 fn source_declaration(role: policy::sources::SourceRole, roots: Vec<policy::sources::SourceProofRoot>)
     -> (file: policy::sources::SourceFile)
     ensures file.path@ == "file"@, file.verification.is_some(),
+        file.verification.unwrap().role == role,
+        file.verification.unwrap().roots@ == roots@,
+        forall|i: int| 0 <= i < roots.len() ==>
+            file.verification.unwrap().roots[i].path@ == roots@[i].path@
+                && file.verification.unwrap().roots[i].operation@ == roots@[i].operation@,
 {
     policy::sources::SourceFile { path: "file".to_string(),
         verification: Some(policy::sources::SourceVerification { role, roots }) }
@@ -596,6 +601,7 @@ fn source_declaration(role: policy::sources::SourceRole, roots: Vec<policy::sour
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn explicit_program_specification_and_data_have_distinct_root_obligations() {
+    proof { reveal(policy::sources::source_declaration_valid); }
     let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
     expect_verifier_true(unknown.verification.is_none());
     let absent = policy::sources::validate_source_declaration(&unknown);
@@ -618,10 +624,11 @@ fn explicit_program_specification_and_data_have_distinct_root_obligations() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn declared_roots_require_canonical_paths_and_nonempty_operation_text() {
     proof {
-        reveal_strlit("r"); reveal_strlit("verify.r"); reveal_strlit("./r");
+        reveal(policy::sources::source_declaration_valid);
+        reveal_strlit(""); reveal_strlit("r"); reveal_strlit("verify.r"); reveal_strlit("./r");
         vstd::string::is_ascii_spec_bytes("r"); vstd::string::is_ascii_spec_bytes("./r");
-        reveal_with_fuel(policy::sources::path_scan, 5);
-        reveal_with_fuel(policy::sources::joined_components, 2);
+        reveal_with_fuel(policy::sources::path_scan, 8);
+        reveal_with_fuel(policy::sources::joined_components, 4);
     }
     let program = source_declaration(SourceRole::Program,
         vec![declared_source_root("r", "verify.r")]);
@@ -639,10 +646,12 @@ fn declared_roots_require_canonical_paths_and_nonempty_operation_text() {
     expect_verifier_true(rejected_path.is_err());
     let empty_operation = source_declaration(SourceRole::Program,
         vec![declared_source_root("r", "")]);
+    assert(empty_operation.verification.unwrap().roots@[0].operation@.len() == 0);
     let rejected_operation = policy::sources::validate_source_declaration(&empty_operation);
     expect_verifier_true(rejected_operation.is_err());
     let empty_path = source_declaration(SourceRole::Program,
         vec![declared_source_root("", "verify.r")]);
+    assert(!policy::sources::canonical_source_path(vstd::utf8::encode_utf8(""@)));
     let rejected_empty_path = policy::sources::validate_source_declaration(&empty_path);
     expect_verifier_true(rejected_empty_path.is_err());
 }
@@ -650,10 +659,12 @@ fn declared_roots_require_canonical_paths_and_nonempty_operation_text() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn duplicate_root_paths_are_rejected_even_with_different_operations() {
     proof {
-        reveal_strlit("r"); reveal_strlit("R"); reveal_strlit("verify.r");
+        reveal(policy::sources::source_declaration_valid);
+        reveal(policy::sources::distinct_proof_root);
+        reveal_strlit("r"); reveal_strlit("R"); reveal_strlit("verify.r"); reveal_strlit("verify.R");
         vstd::string::is_ascii_spec_bytes("r"); vstd::string::is_ascii_spec_bytes("R");
-        reveal_with_fuel(policy::sources::path_scan, 2);
-        reveal_with_fuel(policy::sources::joined_components, 2);
+        reveal_with_fuel(policy::sources::path_scan, 8);
+        reveal_with_fuel(policy::sources::joined_components, 4);
     }
     let duplicate = source_declaration(SourceRole::Program,
         vec![declared_source_root("r", "verify.r"), declared_source_root("r", "other")]);
@@ -664,18 +675,27 @@ fn duplicate_root_paths_are_rejected_even_with_different_operations() {
         vec![declared_source_root("r", "verify.r"), declared_source_root("R", "verify.R")]);
     assert("r"@[0] != "R"@[0]);
     assert("r"@ != "R"@);
+    assert(policy::sources::distinct_proof_root(different_case.verification.unwrap().roots@, 1));
     let distinct = policy::sources::validate_source_declaration(&different_case);
     expect_verifier_true(distinct.is_ok());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn proof_roots_must_name_registered_execution_operations() {
+    proof {
+        reveal(policy::sources::proof_roots_use_registered_operations);
+        reveal(policy::sources::proof_root_operation_registered);
+        reveal_strlit(""); reveal_strlit("other"); reveal_strlit("verify.r");
+    }
     let valid = source_declaration(SourceRole::Program,
         vec![declared_source_root("r", "verify.r")]);
     let operations = vec!["other".to_string(), "verify.r".to_string()];
     let accepted = policy::sources::proof_roots_have_registered_operations(&valid, &operations);
     expect_verifier_true(accepted);
     let missing = vec!["other".to_string()];
+    assert(valid.verification.unwrap().roots@[0].operation@ == "verify.r"@);
+    assert(missing@[0]@ == "other"@);
+    assert(missing@[0]@ != valid.verification.unwrap().roots@[0].operation@);
     let rejected = policy::sources::proof_roots_have_registered_operations(&valid, &missing);
     expect_verifier_true(!rejected);
     let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
