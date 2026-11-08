@@ -2908,10 +2908,12 @@
             "--proto",
             "=https",
             "--tlsv1.2",
+            "--header",
+            "Accept: application/octet-stream",
             "--create-dirs",
             "--output",
             ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
-            "https://github.com/verus-lang/verus/releases/download/release%2F0.2026.04.24.f8e1704/verus-0.2026.04.24.f8e1704-arm64-macos.zip"
+            "https://api.github.com/repos/verus-lang/verus/releases/assets/406260237"
           ]
         },
         "verus-checksum": {
