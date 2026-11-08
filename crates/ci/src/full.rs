@@ -4,7 +4,7 @@ use chrono_harness::{
     decode,
     facts::Reader,
     file_identity, no_symlink_parents, relative_path, sha256,
-    units::{self, Scope},
+    units::{self, Scope, overlap},
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
@@ -53,13 +53,6 @@ fn literal(value: &str) -> Result<(), String> {
         return Err("full CI settings must be literal single-line values".into());
     }
     Ok(())
-}
-
-fn overlap(a: &str, b: &str) -> bool {
-    // Match the filesystem components consumed by no_symlink_parents/write_file
-    // without changing any declared path bytes used in the source or argv.
-    let (a, b) = (Path::new(a), Path::new(b));
-    a.starts_with(b) || b.starts_with(a)
 }
 
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
