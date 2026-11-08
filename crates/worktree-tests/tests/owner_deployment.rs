@@ -7,14 +7,26 @@ fn fixture() -> (Host, PathBuf, String, String) {
     fixture_with_publication_probe(None)
 }
 fn fixture_with_publication_probe(drift: Option<bool>) -> (Host, PathBuf, String, String) {
-    fixture_with_entrypoint(drift, ".chrono-harness/ci/owner-stage-producer.sh")
+    fixture_with_entrypoint(drift, ".chrono-harness/ci/owner-stage-producer.sh", false)
 }
 fn fixture_with_entrypoint(
     drift: Option<bool>,
     entrypoint: &str,
+    retention: bool,
 ) -> (Host, PathBuf, String, String) {
     let h = Host::new("payload");
     h.kernel_cleanup();
+    if retention {
+        adopt_lifecycle_retention(&h);
+        let path = h.root.join(".chrono-harness/retention.json");
+        let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+        policy["producers"]["lifecycle-original"] =
+            value!([".chrono-harness/state/worktrees/", ".chrono-harness/state/automatic-cleanup/"]);
+        policy["producers"]["bootstrap-fixture"] = value!([".chrono-harness/state/bootstrap-"]);
+        policy["diagnostic_keep_seconds"] = value!(0);
+        policy["max_related_outputs"] = value!(512);
+        fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    }
     let cleanup = h.root.join(".chrono-harness/cleanup.json");
     let mut p = json(&fs::read(&cleanup).unwrap()).unwrap();
     p["main_cache_only"] = value!(true);
@@ -161,10 +173,79 @@ fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, St
 #[test]
 fn owner_deployment_uses_the_declared_producer_entrypoint_for_stage_inputs() {
     let (h, exe, path, sha) =
-        fixture_with_entrypoint(None, ".chrono-harness/ci/custom-owner-stage.sh");
+        fixture_with_entrypoint(None, ".chrono-harness/ci/custom-owner-stage.sh", false);
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_eq!(code, 0, "{report} {error}");
     assert!(report.get("managed_process").is_none(), "{report}");
+}
+
+#[test]
+fn current_owner_retains_its_adoption_and_stage_after_enrollment_refresh() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let (h, exe, path, sha) =
+        fixture_with_entrypoint(None, ".chrono-harness/ci/owner-stage-producer.sh", true);
+    // Enroll the fixture's actual completed stage bytes, without changing its result.
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .begin(
+            "bootstrap-fixture",
+            &path,
+            value!({"publication":"published"}),
+        )
+        .unwrap()
+        .complete(value!({"publication":"published"}))
+        .unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    let receipt = report["owner_deployment"]["receipt"]["path"]
+        .as_str()
+        .unwrap();
+    let originals: Vec<_> = [receipt, &path]
+        .into_iter()
+        .map(|path| (path.to_owned(), fs::read(h.root.join(path)).unwrap()))
+        .collect();
+    let (code, status, error) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {error}");
+    let state = retention_state::snapshot(&h.root);
+    let ids: Vec<String> = originals
+        .iter()
+        .map(|(path, _)| {
+            state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["path"] == *path)
+                .unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
+    let role = format!(
+        "current-report:{}",
+        sha256(b".chrono-harness/state/bootstrap-owner-current.json")
+    );
+    assert!(
+        state["roots"][&role]
+            .as_array()
+            .unwrap()
+            .contains(&value!(ids[0])),
+        "{state}"
+    );
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .maintain_originals(&ids)
+        .unwrap();
+    for (path, raw) in originals {
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), raw);
+    }
+    assert_eq!(
+        deploy(&h, &exe, &path, &sha).0,
+        0,
+        "current installation remains qualified"
+    );
 }
 
 #[test]

@@ -230,6 +230,8 @@ struct Policy {
     retained_producers: Vec<producer::ProducerPolicy>,
     #[serde(default)]
     terminal_history: Option<TerminalHistory>,
+    #[serde(default)]
+    cache_history: Option<TerminalHistory>,
     artifacts: Vec<Artifact>,
 }
 #[derive(Clone, Deserialize)]
@@ -297,6 +299,8 @@ struct CacheAttempt {
     intent: Receipt,
     generation: u64,
     receipt: Option<Receipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    completed_at: Option<u64>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -580,13 +584,16 @@ fn parse_policy(r: &mut Runner, root: &Path, policy_bytes: &[u8]) -> Result<Poli
     if !p.retained_producers.is_empty() && p.schema != "chrono-worktree-automatic-cleanup/v2" {
         return Err("retained producer references require kernel cleanup v2".into());
     }
-    if let Some(history) = &p.terminal_history {
+    for history in [&p.terminal_history, &p.cache_history]
+        .into_iter()
+        .flatten()
+    {
         if p.schema != "chrono-worktree-automatic-cleanup/v2"
             || history.max_entries == 0
             || history.max_bytes == 0
         {
             return Err(
-                "terminal history requires kernel cleanup v2 and positive record/byte limits"
+                "lifecycle history requires kernel cleanup v2 and positive record/byte limits"
                     .into(),
             );
         }
@@ -2143,6 +2150,7 @@ impl Manager {
             intent: intent.clone(),
             generation: owner.generation,
             receipt: None,
+            completed_at: None,
         });
         self.save()?;
         report["cache_intent"] = value!(intent);
@@ -2517,6 +2525,7 @@ impl Manager {
     ) -> Result<Vec<String>, String> {
         self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
+        failures.extend(self.rotate_cache_history(r, report)?);
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
             let cache =
@@ -2662,6 +2671,12 @@ impl Manager {
                                 sha256: sha256(&b),
                             });
                             if result["status"] == "cleaned" {
+                                a.completed_at = Some(
+                                    std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .map_err(|error| error.to_string())?
+                                        .as_secs(),
+                                );
                                 self.ledger.entries[i]
                                     .ownership
                                     .as_mut()
@@ -2728,6 +2743,121 @@ impl Manager {
                         .push(value!({"path":e.path,"status":"failed","error":error}));
                 }
             }
+        }
+        Ok(failures)
+    }
+    fn rotate_cache_history(
+        &mut self,
+        r: &mut Runner,
+        report: &mut Value,
+    ) -> Result<Vec<String>, String> {
+        let Some(history) = self.inputs.policy.cache_history.clone() else {
+            return Ok(vec![]);
+        };
+        let observed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| error.to_string())?
+            .as_secs();
+        let mut failures = vec![];
+        for i in 0..self.ledger.entries.len() {
+            let entry = self.ledger.entries[i].clone();
+            let Some(owner) = entry
+                .ownership
+                .as_ref()
+                .filter(|_| entry.status == "active")
+            else {
+                continue;
+            };
+            if !entry.uses.is_empty() || entry.cache_attempts.is_empty() {
+                continue;
+            }
+            let lease = match self.lease(&entry, true) {
+                Ok(Some(lease)) => lease,
+                Ok(None) => continue,
+                Err(error) => {
+                    failures.push(format!("{}: {error}", entry.path.display()));
+                    continue;
+                }
+            };
+            let mut count = entry.cache_attempts.len();
+            let sizes = entry
+                .cache_attempts
+                .iter()
+                .map(|attempt| serde_json::to_vec(attempt).map(|bytes| bytes.len() as u64))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| error.to_string())?;
+            let mut bytes = sizes
+                .iter()
+                .try_fold(0u64, |sum, size| sum.checked_add(*size))
+                .ok_or("cache history byte count overflow")?;
+            let mut removed = BTreeSet::new();
+            for (index, attempt) in entry.cache_attempts.iter().enumerate() {
+                if !crate::verified_lifecycle::retire_cache_history(
+                    attempt.receipt.is_some(),
+                    attempt.generation,
+                    owner.generation,
+                    true,
+                    attempt.completed_at,
+                    observed,
+                    history.keep_seconds,
+                    count > history.max_entries || bytes > history.max_bytes,
+                ) {
+                    continue;
+                }
+                let verified = (|| {
+                    let receipt = attempt
+                        .receipt
+                        .as_ref()
+                        .ok_or("cache history result missing")?;
+                    let result = json(&self.receipt(receipt)?)?;
+                    let intent = json(&self.receipt(&attempt.intent)?)?;
+                    if receipt.path != attempt.path
+                        || result["status"] != "cleaned"
+                        || result["destination"] != value!(entry.path)
+                        || result["cache_generation"] != attempt.generation
+                        || result["cache_intent"] != value!(attempt.intent)
+                        || intent["binding"]["path"] != value!(entry.path)
+                        || intent["binding"]["attachment"] != value!(entry.attachment)
+                        || intent["binding"]["generation"] != attempt.generation
+                        || intent["binding"]["lease_id"] != owner.id
+                    {
+                        return Err(
+                            "cache history original does not establish completed generation".into(),
+                        );
+                    }
+                    self.stable(r)?;
+                    lease.stable()
+                })();
+                match verified {
+                    Ok(()) => {
+                        removed.insert(index);
+                        count -= 1;
+                        bytes -= sizes[index];
+                    }
+                    Err(error) => failures.push(format!("{}: {error}", entry.path.display())),
+                }
+            }
+            if !removed.is_empty() {
+                let mut index = 0;
+                self.ledger.entries[i].cache_attempts.retain(|_| {
+                    let keep = !removed.contains(&index);
+                    index += 1;
+                    keep
+                });
+                // save publishes the replacement ledger before releasing its
+                // old original references. Physical disposal stays with retention.
+                self.save()?;
+            }
+            if report["cache_history_rotation"].is_null() {
+                report["cache_history_rotation"] = value!([]);
+            }
+            report["cache_history_rotation"]
+                .as_array_mut()
+                .ok_or("cache history rotation report is not an array")?
+                .push(value!({"path":entry.path,"removed_records":removed.len(),
+                    "remaining_records":count,"remaining_bytes":bytes,
+                    "over_limit":count > history.max_entries || bytes > history.max_bytes,
+                    "original_files":"retention-owner","task_completion":"not-claimed"}));
         }
         Ok(failures)
     }

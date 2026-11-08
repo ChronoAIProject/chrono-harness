@@ -11,6 +11,11 @@
     "max_entries": 64,
     "max_bytes": 4194304
   },
+  "cache_history": {
+    "keep_seconds": 86400,
+    "max_entries": 64,
+    "max_bytes": 4194304
+  },
   "artifacts": [
     {
       "path": ".chrono-harness/bin/",
