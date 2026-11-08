@@ -1382,7 +1382,7 @@ fn run_process_inner_with_stdout(
             failures: Vec<Failure>,
             complete: bool,
         }
-        fn reader<'scope, R: Read + Send + 'scope, W: Fn() + Send + 'scope>(
+        fn reader<'scope, 'output: 'scope, R: Read + Send + 'scope, W: Fn() + Send + 'scope>(
             scope: &'scope std::thread::Scope<'scope, '_>,
             mut r: R,
             limit: usize,
@@ -1391,7 +1391,7 @@ fn run_process_inner_with_stdout(
             mut original: Option<fs::File>,
             stream: &'static str,
             ready: Arc<Barrier>,
-            mut forward: Option<&'scope mut (dyn Write + Send)>,
+            mut forward: Option<&'scope mut (dyn Write + Send + 'output)>,
         ) -> std::thread::ScopedJoinHandle<'scope, StreamResult> {
             scope.spawn(move || {
                 let mut result = StreamResult {
