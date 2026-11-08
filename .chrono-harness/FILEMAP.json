@@ -1679,8 +1679,7 @@
         "resources": [],
         "outputs": [
           "crates/runner/target/",
-          ".chrono-harness/state/proved-builds/",
-          ".chrono-harness/state/output-retention-v1/"
+          ".chrono-harness/state/"
         ]
       },
       "build.worktree": {
