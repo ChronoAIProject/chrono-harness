@@ -2,7 +2,13 @@
 #[path = "support/recipe.rs"]
 mod recipe;
 use serde_json::{Value, json};
-use std::{cell::Cell, fs, os::unix::{fs::PermissionsExt,process::ExitStatusExt}, path::Path, process::Command};
+use std::{
+    cell::Cell,
+    fs,
+    os::unix::{fs::PermissionsExt, process::ExitStatusExt},
+    path::Path,
+    process::Command,
+};
 
 struct Fixture {
     case: tempfile::TempDir,
@@ -14,11 +20,18 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let state = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.chrono-harness/state/release-test-failures");
+        let state = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../.chrono-harness/state/release-test-failures");
         fs::create_dir_all(&state).unwrap();
-        let case = tempfile::Builder::new().prefix("rust-release-frontend-").tempdir_in(&state).unwrap();
+        let case = tempfile::Builder::new()
+            .prefix("rust-release-frontend-")
+            .tempdir_in(&state)
+            .unwrap();
         let mut host = recipe::Fixture::new();
-        host.temp = tempfile::Builder::new().prefix("source-").tempdir_in(case.path()).unwrap();
+        host.temp = tempfile::Builder::new()
+            .prefix("source-")
+            .tempdir_in(case.path())
+            .unwrap();
         host.save();
         let root = host.root();
         fs::write(
@@ -128,7 +141,10 @@ impl Fixture {
             "installed":[{"path":".chrono-harness/bin/chrono-host-release","sha256":chrono_harness::file_identity(&binary).unwrap().0}]});
         let fixture = Self {
             host,
-            output: tempfile::Builder::new().prefix("results-").tempdir_in(case.path()).unwrap(),
+            output: tempfile::Builder::new()
+                .prefix("results-")
+                .tempdir_in(case.path())
+                .unwrap(),
             case,
             report,
             calls: Cell::new(0),
@@ -157,16 +173,29 @@ impl Fixture {
             .env("CHRONO_RELEASE_ATTEMPT", "1")
             .env("CHRONO_RELEASE_JOB", "native_frontend");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-        let output=command.output().unwrap();
-        let index=self.calls.get();self.calls.set(index+1);
-        fs::write(self.output.path().join(format!("process-{index}.stdout")),&output.stdout).unwrap();
-        fs::write(self.output.path().join(format!("process-{index}.stderr")),&output.stderr).unwrap();
-        recipe::write(self.output.path(),&format!("process-{index}.json"),&json!({
-            "argv":std::iter::once(command.get_program()).chain(command.get_args()).map(|s|s.to_string_lossy().into_owned()).collect::<Vec<_>>(),
-            "cwd":std::env::current_dir().unwrap(),"exit_code":output.status.code(),"signal":output.status.signal(),
-            "stdout":{"size":output.stdout.len(),"sha256":chrono_harness::sha256(&output.stdout)},
-            "stderr":{"size":output.stderr.len(),"sha256":chrono_harness::sha256(&output.stderr)}
-        }));
+        let output = command.output().unwrap();
+        let index = self.calls.get();
+        self.calls.set(index + 1);
+        fs::write(
+            self.output.path().join(format!("process-{index}.stdout")),
+            &output.stdout,
+        )
+        .unwrap();
+        fs::write(
+            self.output.path().join(format!("process-{index}.stderr")),
+            &output.stderr,
+        )
+        .unwrap();
+        recipe::write(
+            self.output.path(),
+            &format!("process-{index}.json"),
+            &json!({
+                "argv":std::iter::once(command.get_program()).chain(command.get_args()).map(|s|s.to_string_lossy().into_owned()).collect::<Vec<_>>(),
+                "cwd":std::env::current_dir().unwrap(),"exit_code":output.status.code(),"signal":output.status.signal(),
+                "stdout":{"size":output.stdout.len(),"sha256":chrono_harness::sha256(&output.stdout)},
+                "stderr":{"size":output.stderr.len(),"sha256":chrono_harness::sha256(&output.stderr)}
+            }),
+        );
         output
     }
 
@@ -222,7 +251,10 @@ impl Drop for Fixture {
             self.host.temp.disable_cleanup(true);
             self.output.disable_cleanup(true);
             self.case.disable_cleanup(true);
-            eprintln!("original release frontend fixture retained: {}",self.case.path().display());
+            eprintln!(
+                "original release frontend fixture retained: {}",
+                self.case.path().display()
+            );
         }
     }
 }
