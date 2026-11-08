@@ -50,7 +50,7 @@ fn action<'a>(s: &'a mut Endpoint, op: &str) -> &'a mut Value {
 }
 
 #[test]
-fn real_registered_startup_chain_requires_original_consumer_evidence() {
+fn registered_startup_chain_requires_declared_mock_evidence() {
     let s = host();
     let result = consumption::validate_delta(None, &s, &BTreeSet::new(), &BTreeSet::new()).unwrap();
     assert_eq!(result.checked, paths(&["runner-startup"]));
@@ -213,7 +213,7 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
                     json!("absent-profile")
             }
             "evidence-method" => {
-                action(&mut s, "host.bootstrap-real-consumer")["operation"] =
+                action(&mut s, "host.bootstrap-command-tests")["operation"] =
                     json!("retired.evidence")
             }
             "evidence-plan" => {
@@ -221,8 +221,10 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
                     json!(["host.bootstrap-tests"])
             }
             "evidence-output" => {
-                s.filemap["execution_scheduling"]["claims"]["host.bootstrap-real-consumer"]["outputs"] =
-                    json!([])
+                s.filemap["execution_scheduling"]["claims"]["host.bootstrap-command-tests"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("outputs");
             }
             "missing-doc" => {
                 s.documents.remove(CORE);

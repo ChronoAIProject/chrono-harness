@@ -11,6 +11,9 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/ci/native/src/download.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/download.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/support/download.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":"crates/diagnostics/src/rolling.rs","owner":"diagnostics","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/diagnostics/src/runtime.rs","owner":"diagnostics","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/diagnostics-tests/tests/rolling.rs","owner":"diagnostics-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -26,11 +29,11 @@
     {"path":".chrono-harness/ci/native/src/owner.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native/src/lifecycle.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native-tests/tests/owner.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
-    {"path":".chrono-harness/ci/native/src/main.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"},{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/native/src/main.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"},{"kind":"compile","to":"project:host-bootstrap-native-tests"},{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":".chrono-harness/ci/native/src/original.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native-tests/tests/original.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native-tests/tests/support/construction.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
-    {"path":".chrono-harness/ci/native-tests/tests/support/producer.sh","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/support/producer.sh","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"},{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":".chrono-harness/ci/native/src/construction.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":".chrono-harness/ci/native-tests/tests/construction.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native/src/profile.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
@@ -106,6 +109,18 @@
     {"path":"crates/judge-ci-tests/Cargo.lock","owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-ci-tests"}]},
     {"path":"crates/judge-ci-tests/tests/behavior.rs","owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci-tests"}]},
     {"path":"crates/judge-ci-tests/tests/git_facts.rs","owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci-tests"}]},
+    {"path":"crates/pr/Cargo.toml","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr/Cargo.lock","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr/src/lib.rs","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr/src/main.rs","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"compile","to":"project:pr-tests"}]},
+    {"path":"crates/pr/src/snapshot.rs","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr-tests/Cargo.toml","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr-tests/Cargo.lock","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr-tests/tests/lifecycle.rs","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr-tests/tests/support/gh.rs","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr-tests/tests/fixtures/snapshot.json","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":".chrono-harness/pr.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"docs/pr.md","owner":"pr","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/ci/Cargo.toml","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci"}]},
     {"path":"crates/ci/Cargo.lock","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci"}]},
     {"path":"crates/ci/src/verified_literals.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
@@ -491,7 +506,7 @@
     {"path":"crates/ci/src/inventory.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":".chrono-harness/ci/bootstrap-unit.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"}]},
     {"path":".chrono-harness/ci/bootstrap-verus.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
-    {"path":".chrono-harness/ci/verus-macos-arm64.sha256","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/verus-macos-arm64.sha256","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"}]},
     {"path":"docs/verus.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/judge-filemap/src/verified_graph.rs","owner":"judge-filemap","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-filemap"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"}]},
     {"path":"crates/judge-filemap-tests/tests/verified_graph.rs","owner":"judge-filemap-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-filemap-tests"}]},
@@ -518,7 +533,9 @@
     {"path":"crates/judge-ci/src/verified_collection.rs","owner":"judge-ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"compile","to":"project:judge-ci-tests"}]},
     {"path":"crates/judge-ci-tests/tests/verified_collection.rs","owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"}]},
     {"path":"crates/worktree/src/verified_owner_publication.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"compile","to":"project:host-bootstrap-native"}]},
+    {"path":"crates/worktree/src/verified_attention.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":"crates/worktree-tests/tests/verified_owner_publication.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
+    {"path":"crates/worktree-tests/tests/verified_attention.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
     {"path":"crates/cache/src/verified_planner.rs","owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache"},{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
     {"path":"crates/cache-tests/tests/verified_planner.rs","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
     {"path":"crates/worktree/src/verified_lifecycle.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
@@ -534,6 +551,7 @@
     {"from":"project:runner","kind":"compile","to":"project:host-bootstrap-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-bootstrap-native-tests"},
     {"from":"project:host-bootstrap-native","kind":"compile","to":"project:host-bootstrap-native-tests"},
+    {"from":"project:host-bootstrap-native","kind":"compile","to":"project:worktree-tests"},
     {"from":"project:host-bootstrap-native","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
     {"from":"project:host-bootstrap-native-tests","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
     {"from":"tool:verus","kind":"test-execution","to":"test:runner-tests"},
@@ -899,6 +917,7 @@
     {"from":"environment:HOME","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:CARGO_HOME","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:RUSTUP_HOME","kind":"runtime-input","to":"project:worktree-tests"},
+    {"from":"environment:RUSTUP_TOOLCHAIN","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:TMPDIR","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:SDKROOT","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:worktree-tests"},
@@ -1076,7 +1095,7 @@
     {"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:cache"},
     {"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:cache-tests"},
     {"from":"project:runner","kind":"runtime-input","to":"script:host-bootstrap-tests"}
-  ],
+  ,{"from":"project:runner","kind":"compile","to":"project:pr"},{"from":"project:pr","kind":"compile","to":"project:pr-tests"},{"from":"project:pr","kind":"test-execution","to":"test:pr-tests"},{"from":"project:pr-tests","kind":"test-execution","to":"test:pr-tests"},{"from":"tool:cargo","kind":"runtime-input","to":"project:pr"},{"from":"environment:PATH","kind":"runtime-input","to":"project:pr"},{"from":"environment:HOME","kind":"runtime-input","to":"project:pr"},{"from":"environment:CARGO_HOME","kind":"runtime-input","to":"project:pr"},{"from":"environment:RUSTUP_HOME","kind":"runtime-input","to":"project:pr"},{"from":"environment:TMPDIR","kind":"runtime-input","to":"project:pr"},{"from":"environment:SDKROOT","kind":"runtime-input","to":"project:pr"},{"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:pr"},{"from":"tool:cargo","kind":"runtime-input","to":"project:pr-tests"},{"from":"environment:PATH","kind":"runtime-input","to":"project:pr-tests"},{"from":"environment:HOME","kind":"runtime-input","to":"project:pr-tests"},{"from":"environment:CARGO_HOME","kind":"runtime-input","to":"project:pr-tests"},{"from":"environment:RUSTUP_HOME","kind":"runtime-input","to":"project:pr-tests"},{"from":"environment:TMPDIR","kind":"runtime-input","to":"project:pr-tests"},{"from":"environment:SDKROOT","kind":"runtime-input","to":"project:pr-tests"},{"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:pr-tests"},{"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:pr"},{"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:pr-tests"}],
   "test_costs": [
     {"test":"host-bootstrap-launcher-tests","cost":"unmeasured"},
     {"test":"host-bootstrap-native-tests","cost":"unmeasured"},
@@ -1102,7 +1121,7 @@
     {"test":"diagnostics-tests","cost":"unmeasured"},
     {"test":"host-bootstrap-tests","cost":"unmeasured"},
     {"test":"cache-tests","cost":"unmeasured"}
-  ],
+  ,{"test":"pr-tests","cost":"unmeasured"}],
   "execution_plans": {
     "test:host-bootstrap-launcher-tests": {
       "operations": ["test.host-bootstrap-launcher-tests"],
@@ -1324,6 +1343,8 @@
       "operations": [
         "verify.worktree-lifecycle-tests",
         "verify.worktree-lifecycle",
+        "verify.worktree-attention-tests",
+        "verify.worktree-attention",
         "verify.owner-publication-tests",
         "verify.owner-publication",
         "fmt.worktree",
@@ -1422,7 +1443,7 @@
       "operations": [
         "host.bootstrap-provision-tests",
         "host.bootstrap-tests",
-        "host.bootstrap-real-consumer"
+        "host.bootstrap-command-tests"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
@@ -1439,7 +1460,7 @@
       "timeout_seconds": 600,
       "output_limit_bytes": 1048576
     }
-  },
+  ,"test:pr-tests":{"operations":["fmt.pr","fmt.pr-tests","build.pr","test.pr-tests"],"timeout_seconds":600,"output_limit_bytes":1048576}},
   "execution_scheduling": {
     "max_running": 2,
     "priority": [
@@ -1913,11 +1934,9 @@
           "crates/cache-tests/target/"
         ]
       },
-      "host.bootstrap-real-consumer": {
+      "host.bootstrap-command-tests": {
         "resources": [],
-        "outputs": [
-          ".chrono-harness/state/bootstrap-real/"
-        ]
+        "outputs": []
       },
       "host.bootstrap-provision-tests": {
         "resources": [],
@@ -2061,6 +2080,8 @@
           ".chrono-harness/state/"
         ]
       },
+      "verify.worktree-attention": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.worktree-attention-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.owner-publication-tests": {
         "resources": [],
         "outputs": [
@@ -2077,7 +2098,7 @@
       },
       "verify.cache-planner": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.cache-planner-tests": {"resources":[],"outputs":[".chrono-harness/state/"]}
-    }
+    ,"fmt.pr":{"resources":[],"outputs":[]},"fmt.pr-tests":{"resources":[],"outputs":[]},"build.pr":{"resources":[],"outputs":["crates/pr/target/"]},"test.pr-tests":{"resources":[],"outputs":["crates/pr-tests/target/"]}}
   },
   "configuration_edges": {
     "schema": "chrono-filemap-configuration-edges/v1",

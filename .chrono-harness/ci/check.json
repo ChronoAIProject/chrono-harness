@@ -21,7 +21,8 @@
       "verus": ".chrono-harness/bin/verus/verus",
       "curl": "/usr/bin/curl",
       "shasum": "/usr/bin/shasum",
-      "tar": "/usr/bin/tar"
+      "tar": "/usr/bin/tar",
+      "bootstrap-native": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -59,7 +60,9 @@
       "crates/diagnostics-tests/target/",
       "crates/cache/target/",
       "crates/cache-tests/target/",
-      ".chrono-harness/startup/"
+      ".chrono-harness/startup/",
+      "crates/pr/target/",
+      "crates/pr-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -169,7 +172,8 @@
       },
       "worktree": {
         "tests": [
-          "test:worktree-tests"
+          "test:worktree-tests",
+          "test:pr-tests"
         ],
         "report_path": ".chrono-harness/state/units/worktree/check.json"
       },
@@ -385,7 +389,7 @@
           },
           "evidence": {
             "test": "test:host-bootstrap-tests",
-            "operation": "host.bootstrap-real-consumer"
+            "operation": "host.bootstrap-command-tests"
           },
           "preparation": {
             "operation": "host.bootstrap-unit",

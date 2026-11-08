@@ -3,9 +3,9 @@
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
   "tools": {
-    "curl": "/usr/bin/curl",
     "shasum": "/usr/bin/shasum",
-    "tar": "/usr/bin/tar"
+    "tar": "/usr/bin/tar",
+    "bootstrap-native": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
   },
   "operations": [
     "host.verus-download",

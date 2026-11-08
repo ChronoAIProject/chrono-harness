@@ -1,4 +1,4 @@
-"""Check isolated bootstrap selection without installing or changing a toolchain."""
+"""Check the current bootstrap environment without changing an installed toolchain."""
 import importlib.util
 import io
 import json
@@ -19,46 +19,14 @@ bootstrap = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bootstrap)
 
 
-class IsolatedProvision(unittest.TestCase):
+class EnvironmentSelection(unittest.TestCase):
     def setUp(self):
-        directory = tempfile.TemporaryDirectory(prefix="isolated bootstrap ")
+        directory = tempfile.TemporaryDirectory(prefix="bootstrap environment ")
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name).resolve()
-        self.config = {
-            "rust_toolchain": "1.95.0", "tools": {},
-            "toolchain_provision": {
-                "profile": "default",
-                "rustup_home": ".chrono-harness/state/private-rust/rustup",
-                "cargo_home": ".chrono-harness/state/private-rust/cargo",
-            },
-        }
+        self.config = {"rust_toolchain": "1.95.0", "tools": {}}
 
-    def test_default_profile_uses_private_homes_for_every_child(self):
-        original = dict(os.environ)
-        calls = []
-
-        def run(argv, **kwargs):
-            calls.append((argv, kwargs))
-            return subprocess.CompletedProcess(argv, 0, b"", b"")
-
-        with mock.patch.object(bootstrap.subprocess, "run", side_effect=run), \
-                mock.patch.object(bootstrap, "declared_bindings", return_value=None), \
-                mock.patch.object(bootstrap.subprocess, "check_output", side_effect=[
-                    "cargo 1.95.0 (fixture)\n", "rustc 1.95.0 (fixture)\n"]):
-            env, versions, bindings = bootstrap.toolchain_environment(self.config, self.root)
-        self.assertEqual(calls[0][0], ["rustup", "toolchain", "install", "1.95.0",
-                                     "--profile", "default", "--no-self-update"])
-        self.assertEqual(versions["rustc"], "rustc 1.95.0 (fixture)")
-        self.assertIsNone(bindings)
-        for _, kwargs in calls:
-            self.assertEqual(kwargs["env"]["RUSTUP_HOME"],
-                             str(self.root / self.config["toolchain_provision"]["rustup_home"]))
-            self.assertEqual(kwargs["env"]["CARGO_HOME"],
-                             str(self.root / self.config["toolchain_provision"]["cargo_home"]))
-        self.assertEqual(env["RUSTUP_HOME"], calls[0][1]["env"]["RUSTUP_HOME"])
-        self.assertEqual(dict(os.environ), original, "selection changed the worker environment")
-
-    def test_source_bootstrap_selects_its_environment_before_private_production(self):
+    def test_source_bootstrap_selects_its_environment_without_changing_the_worker(self):
         values = {"CARGO_HOME": "/source/cargo", "RUSTUP_HOME": "/source/rustup",
                   "RUSTC": "/source/rustc", "RUSTFLAGS": "--sysroot=/source/sysroot"}
         original = dict(os.environ)
@@ -66,10 +34,6 @@ class IsolatedProvision(unittest.TestCase):
         for key, value in values.items():
             self.assertEqual(env[key], value)
         self.assertEqual(dict(os.environ), original)
-        private = bootstrap.provision_environment(self.root, dict(self.config, environment=values))
-        self.assertEqual(private["RUSTUP_HOME"],
-                         str(self.root / self.config["toolchain_provision"]["rustup_home"]))
-        self.assertEqual(private["RUSTC"], "")
 
     def test_invalid_bootstrap_environment_fails_before_installer_effects(self):
         for values in [None, [], {"": "x"}, {"bad=key": "x"}, {"RUSTC": None},
@@ -79,16 +43,24 @@ class IsolatedProvision(unittest.TestCase):
                     bootstrap.toolchain_environment(dict(self.config, environment=values), self.root)
                 run.assert_not_called()
 
-    def test_install_failure_stops_before_selection_and_preserves_exit(self):
-        failure = subprocess.CalledProcessError(17, ["rustup", "toolchain", "install"])
-        with mock.patch.object(bootstrap.subprocess, "run", side_effect=failure), \
-                mock.patch.object(bootstrap, "declared_bindings") as select:
-            with self.assertRaises(subprocess.CalledProcessError) as raised:
-                bootstrap.toolchain_environment(self.config, self.root)
-        self.assertEqual(raised.exception.returncode, 17)
-        select.assert_not_called()
+    def test_host_home_rebinding_preserves_the_selected_rustup_installation(self):
+        config = {"host_environment": {"HOME": ".chrono-harness/cache/private-home",
+                                      "CARGO_HOME": ".chrono-harness/cache/private-cargo"}}
+        for inherited, expected in [({"HOME": "/worker"}, "/worker/.rustup"),
+                                    ({"HOME": "/worker", "RUSTUP_HOME": "/sdk/rustup"}, "/sdk/rustup")]:
+            with self.subTest(inherited=inherited), mock.patch.dict(os.environ, inherited, clear=True):
+                original = dict(os.environ)
+                env = bootstrap.provision_environment(self.root, config)
+                self.assertEqual(env["RUSTUP_HOME"], expected)
+                self.assertEqual(env["HOME"], str(self.root / config["host_environment"]["HOME"]))
+                self.assertEqual(env["CARGO_HOME"], str(self.root / config["host_environment"]["CARGO_HOME"]))
+                self.assertEqual(dict(os.environ), original)
+                self.assertFalse((self.root / ".chrono-harness").exists())
+        with mock.patch.dict(os.environ, {"HOME": "/worker"}, clear=True):
+            explicit = dict(config, environment={"RUSTUP_HOME": "/selected/rustup"})
+            self.assertEqual(bootstrap.provision_environment(self.root, explicit)["RUSTUP_HOME"], "/selected/rustup")
 
-    def test_entry_preserves_the_isolated_installers_nonzero_exit(self):
+    def test_entry_preserves_the_minimal_installers_nonzero_exit(self):
         ci = self.root / ".chrono-harness/ci"
         ci.mkdir(parents=True)
         config = dict(self.config, schema="chrono-bootstrap/v1", projects=".chrono-harness/projects.json",
@@ -96,14 +68,16 @@ class IsolatedProvision(unittest.TestCase):
                       tools={"python3": sys.executable}, operations=["fixture.after-install"],
                       install=[{"source": ".chrono-harness/ci/bootstrap.py",
                                 "destination": ".chrono-harness/bin/fixture"}])
-        (ci / "isolated.json").write_text(json.dumps(config))
+        (ci / "build.json").write_text(json.dumps(config))
         (ci.parent / "projects.json").write_text(json.dumps({"projects": [], "scripts": [{
             "actions": {"execute": {"operation": "fixture.after-install", "tool": "python3",
                                     "argv": ["--version"]}}}]}))
         shutil.copyfile(SOURCE / "bootstrap.py", ci / "bootstrap.py")
         failure = subprocess.CalledProcessError(17, ["rustup", "toolchain", "install"])
-        with mock.patch.object(bootstrap.sys, "argv", ["bootstrap.py", str(self.root), ".chrono-harness/ci/isolated.json"]), \
-                mock.patch.object(bootstrap.subprocess, "run", side_effect=failure) as installer, \
+        with mock.patch.object(bootstrap.sys, "argv", ["bootstrap.py", str(self.root), ".chrono-harness/ci/build.json"]), \
+                mock.patch.object(bootstrap.subprocess, "run", side_effect=[
+                    subprocess.CompletedProcess(["rustup", "run", "1.95.0", "cargo", "--version"], 1),
+                    failure]) as installer, \
                 mock.patch.object(bootstrap.subprocess, "check_output", side_effect=
                                   subprocess.CalledProcessError(128, ["git"], stderr=b"fixture host")), \
                 mock.patch.object(bootstrap.subprocess, "Popen", side_effect=
@@ -114,12 +88,9 @@ class IsolatedProvision(unittest.TestCase):
             with self.assertRaises(SystemExit) as raised:
                 runpy.run_path(str(SOURCE / "bootstrap.py"), run_name="__main__")
         self.assertEqual(raised.exception.code, 17)
-        installer.assert_called_once()
+        self.assertEqual(installer.call_count, 2)
         self.assertEqual(installer.call_args[0][0], ["rustup", "toolchain", "install", "1.95.0",
-                                                   "--profile", "default", "--no-self-update"])
-        for key, field in [("RUSTUP_HOME", "rustup_home"), ("CARGO_HOME", "cargo_home")]:
-            self.assertEqual(installer.call_args[1]["env"][key],
-                             str(self.root / config["toolchain_provision"][field]))
+                                                   "--profile", "minimal", "--component", "rustfmt"])
         operation.assert_not_called()
         copy.assert_not_called()
         reports = list((self.root / ".chrono-harness/state").glob("bootstrap-*/report.json"))
@@ -132,52 +103,6 @@ class IsolatedProvision(unittest.TestCase):
         self.assertEqual(report["versions"], {})
         self.assertEqual(report["environment"], {})
         self.assertFalse((self.root / ".chrono-harness/state/bootstrap.json").exists())
-
-    def test_invalid_or_overlapping_homes_fail_before_any_child(self):
-        for update in [
-            {"profile": "complete"}, {"rustup_home": "/tmp/global-rust"},
-            {"rustup_home": ".chrono-harness/state/../global"},
-            {"cargo_home": self.config["toolchain_provision"]["rustup_home"]},
-            {"cargo_home": self.config["toolchain_provision"]["rustup_home"] + "/cargo"},
-            {"extra": True},
-        ]:
-            with self.subTest(update=update), mock.patch.object(bootstrap.subprocess, "run") as run:
-                config = dict(self.config, toolchain_provision={
-                    **self.config["toolchain_provision"], **update})
-                with self.assertRaises(ValueError):
-                    bootstrap.toolchain_environment(config, self.root)
-                run.assert_not_called()
-
-    def test_symlink_home_fails_before_any_child(self):
-        state = self.root / ".chrono-harness/state"
-        state.mkdir(parents=True)
-        (state / "private-rust").symlink_to(self.root, target_is_directory=True)
-        with mock.patch.object(bootstrap.subprocess, "run") as run:
-            with self.assertRaises(ValueError):
-                bootstrap.toolchain_environment(self.config, self.root)
-            run.assert_not_called()
-
-    def test_malformed_selection_fails_before_any_child(self):
-        for declaration in [None, {}, [], {**self.config["toolchain_provision"], "cargo_home": None}]:
-            with self.subTest(declaration=declaration), mock.patch.object(bootstrap.subprocess, "run") as run:
-                with self.assertRaises(ValueError):
-                    bootstrap.toolchain_environment(dict(self.config, toolchain_provision=declaration), self.root)
-                run.assert_not_called()
-
-    def test_failed_default_probe_does_not_fall_back_or_retry_install(self):
-        for probe in (1, 2):
-            calls = []
-
-            def run(argv, **kwargs):
-                calls.append(argv)
-                return subprocess.CompletedProcess(argv, 19 if len(calls) == probe + 1 else 0)
-
-            with self.subTest(probe=probe), mock.patch.object(bootstrap.subprocess, "run", side_effect=run), \
-                    mock.patch.object(bootstrap, "declared_bindings") as select:
-                with self.assertRaisesRegex(ValueError, "probe failed: 19"):
-                    bootstrap.toolchain_environment(self.config, self.root)
-                self.assertEqual(sum(argv[1:3] == ["toolchain", "install"] for argv in calls), 1)
-                select.assert_not_called()
 
 
 class NativeCargoDomains(unittest.TestCase):
@@ -240,7 +165,7 @@ class NativeCargoDomains(unittest.TestCase):
         environment = self.selected_environment(config["environment"]["values"])
         self.assertEqual(environment["CARGO_HOME"], "/Users/runner/.cargo")
         self.assertNotEqual(environment.get("CARGO_NET_OFFLINE"), "true")
-        # The five distinct locked manifests in the 21 original failing checks.
+        # Exercise distinct current consumers with their original locked manifests.
         for operation in ("build.runner", "build.cache", "build.distribution",
                           "build.instructions", "build.judge-routes"):
             with self.subTest(operation=operation):
@@ -249,8 +174,7 @@ class NativeCargoDomains(unittest.TestCase):
                 observed = json.loads((self.root / result["stdout"]["path"]).read_bytes())
                 self.assertEqual(observed["cargo_home"], "/Users/runner/.cargo")
                 self.assertFalse(observed["offline"])
-        # The terminal managed originals identify this same ordinary cache
-        # prerequisite inside RealFixtureStartup; retain its registered profile.
+        # The detector prepares this cache tooling profile before core bootstrap.
         cache = json.loads((SOURCE / "bootstrap-cache.json").read_text())
         self.assertEqual(cache["operations"], ["build.cache"])
         child_environment = self.selected_environment(cache.get("environment", {}), environment,

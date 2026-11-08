@@ -17,6 +17,14 @@ pub mod owner_publication;
 
 verus! {
 
+pub fn archive_matches(actual: &[u8], expected: &[u8]) -> (valid: bool)
+    ensures valid <==> (expected@.len() == 64
+        && (forall|i: int| 0 <= i < expected@.len() ==> hash_byte(expected@[i]))
+        && actual@ == expected@),
+{
+    valid_sha256(expected) && identifiers::equal_bytes(actual, expected)
+}
+
 pub fn owner_publication_header(schema: &str, adoption: &str, completion: &str) -> (valid: bool)
     ensures valid <==> (schema@ == "chrono-bootstrap-owner-publication/v1"@
         && adoption@ == "not-claimed"@ && completion@ == "not-claimed"@),
@@ -370,25 +378,17 @@ pub fn process_exit(code: Option<i32>, signal: Option<i32>) -> (out: Option<i32>
     }
 }
 
-pub enum ProbeAction { Ready, Refuse, InstallMinimal, AddFormat }
+pub enum ProbeAction { Ready, InstallMinimal, AddFormat }
 
-pub fn probe_action(private: bool, ready: bool, cargo: bool) -> (out: ProbeAction)
+pub fn probe_action(ready: bool, cargo: bool) -> (out: ProbeAction)
     ensures
         (out is Ready) <==> ready,
-        (out is Refuse) <==> (!ready && private),
-        (out is InstallMinimal) <==> (!ready && !private && cargo),
-        (out is AddFormat) <==> (!ready && !private && !cargo),
+        (out is InstallMinimal) <==> (!ready && cargo),
+        (out is AddFormat) <==> (!ready && !cargo),
 {
     if ready { ProbeAction::Ready }
-    else if private { ProbeAction::Refuse }
     else if cargo { ProbeAction::InstallMinimal }
     else { ProbeAction::AddFormat }
-}
-
-pub fn default_profile(profile: &str) -> (valid: bool)
-    ensures valid <==> (profile@ == "default"@),
-{
-    equal_text(profile, "default")
 }
 
 pub fn environment_key(bytes: &[u8]) -> (valid: bool)

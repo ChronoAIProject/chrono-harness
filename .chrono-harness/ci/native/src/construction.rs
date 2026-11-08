@@ -74,8 +74,6 @@ pub struct Report {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selection: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub toolchain_provision: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub host_environment: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner_stage: Option<Value>,
@@ -203,7 +201,6 @@ impl<'a> Construction<'a> {
             installed: vec![],
             executables: None,
             selection: None,
-            toolchain_provision: None,
             host_environment: None,
             owner_stage: None,
             source: None,
@@ -304,15 +301,6 @@ impl<'a> Construction<'a> {
                 json!({"toolchain":self.profile.rust_toolchain,"cargo":bindings.cargo.path,
                 "rustc":bindings.rustc.path,"compiler":environment_text(&selected.environment,"RUSTC")?}),
             );
-        }
-        if let Some(provision) = &self.profile.toolchain_provision {
-            self.report.toolchain_provision =
-                Some(serde_json::to_value(provision).map_err(|error| error.to_string())?);
-            for key in ["RUSTUP_HOME", "CARGO_HOME"] {
-                self.report
-                    .environment
-                    .insert(key.into(), environment_text(&selected.environment, key)?);
-            }
         }
         if let Some(values) = &self.profile.host_environment {
             self.report.host_environment = Some(values.clone());

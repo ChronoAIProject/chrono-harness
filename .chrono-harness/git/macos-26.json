@@ -421,6 +421,24 @@
       "owner": "host-bootstrap",
       "kind": "startup-transfer",
       "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-verus/",
+      "owner": "repository",
+      "kind": "download-cache",
+      "tracked": false
+    },
+    {
+      "path": "crates/pr/target/",
+      "owner": "pr",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/pr-tests/target/",
+      "owner": "pr-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {
@@ -432,6 +450,7 @@
       "HOME",
       "CARGO_HOME",
       "RUSTUP_HOME",
+      "RUSTUP_TOOLCHAIN",
       "TMPDIR",
       "SDKROOT",
       "CHRONO_CHECK_SOURCE",

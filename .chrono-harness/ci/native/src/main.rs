@@ -2,7 +2,7 @@
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
-    lifecycle, original, owner, profile, shared,
+    download, lifecycle, original, owner, profile, shared,
 };
 use serde_json::json;
 use std::{path::Path, process::ExitCode};
@@ -89,6 +89,16 @@ fn run() -> Result<(), BuildFailure> {
     let environment = std::env::vars_os().collect();
     let native = bindings::native_platform()?;
     match arguments.as_slice() {
+        [command, host, checksum, curl, headers, url] if command == "download" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            let archive =
+                download::prepare(&root, checksum, Path::new(curl), headers, url, &environment)?;
+            println!(
+                "{}",
+                serde_json::to_string(&archive).map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
         [host, config, command] if command == "produce" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             shared::Shared::read(&root, config, &native)?.produce(&root, &environment, &native)

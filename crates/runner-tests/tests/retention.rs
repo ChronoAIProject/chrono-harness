@@ -1929,6 +1929,98 @@ fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_mi
 }
 
 #[test]
+fn explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion() {
+    if !isolated_capability_test(
+        "explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+    let old_path = tree(h.path(), "prior-policy");
+    fs::write(h.path().join(&old_path).join("original"), b"old failure").unwrap();
+    let old = inventory(h.path())
+        .begin_rooted(
+            "fixture",
+            &old_path,
+            json!({"exit":9}),
+            &["old-reader".into()],
+        )
+        .unwrap();
+    let old_id = old.id().to_owned();
+    old.complete(json!({"exit":9})).unwrap();
+
+    let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+    policy["keep_seconds"] = json!(3600);
+    let current = serde_json::to_vec(&policy).unwrap();
+    fs::write(h.path().join(POLICY_PATH), &current).unwrap();
+    let new_path = tree(h.path(), "current-policy");
+    fs::write(h.path().join(&new_path).join("original"), b"new success").unwrap();
+    let new = inventory(h.path())
+        .begin_rooted(
+            "fixture",
+            &new_path,
+            json!({"exit":0}),
+            &["new-reader".into()],
+        )
+        .unwrap();
+    let new_id = new.id().to_owned();
+    new.complete(json!({"exit":0})).unwrap();
+    let original = ledger(h.path());
+
+    // Ordinary access still refuses the old binding, while independent current
+    // publications remain usable before the explicit owner migration.
+    assert!(inventory(h.path()).consume(&old_id).is_err());
+    let reader = inventory(h.path()).consume(&new_id).unwrap();
+    let blocked = inventory(h.path()).migrate_policy(&previous).unwrap_err();
+    assert!(blocked.contains("live output"), "{blocked}");
+    assert_eq!(ledger(h.path()), original);
+    drop(reader);
+
+    let mut unknown: Value = serde_json::from_slice(&previous).unwrap();
+    unknown["keep_seconds"] = json!(7200);
+    let unknown_binding = inventory(h.path())
+        .migrate_policy(&serde_json::to_vec(&unknown).unwrap())
+        .unwrap_err();
+    assert!(
+        unknown_binding.contains("migration required"),
+        "{unknown_binding}"
+    );
+    assert_eq!(ledger(h.path()), original);
+
+    let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+    assert_eq!(receipt["outputs_preserved"], 2);
+    assert_eq!(receipt["roots_preserved"], 2);
+    assert_eq!(
+        receipt["previous_policy_sha256"],
+        chrono_harness::sha256(&previous)
+    );
+    assert_eq!(receipt["policy_sha256"], chrono_harness::sha256(&current));
+    assert_eq!(receipt["effects"], "metadata-binding-only");
+    let mut after = ledger(h.path());
+    after["policy_sha256"] = original["policy_sha256"].clone();
+    assert_eq!(after, original);
+    for (id, path, bytes) in [
+        (&old_id, &old_path, b"old failure".as_slice()),
+        (&new_id, &new_path, b"new success".as_slice()),
+    ] {
+        assert_eq!(
+            fs::read(h.path().join(path).join("original")).unwrap(),
+            bytes
+        );
+        let record: Value =
+            serde_json::from_slice(&fs::read(retention_state::object_path(h.path(), id)).unwrap())
+                .unwrap();
+        assert_eq!(record["policy_sha256"], chrono_harness::sha256(&current));
+        drop(inventory(h.path()).consume(id).unwrap());
+    }
+    inventory(h.path()).migrate_policy(&previous).unwrap();
+    let mut repeated = ledger(h.path());
+    repeated["policy_sha256"] = original["policy_sha256"].clone();
+    assert_eq!(repeated, original);
+}
+
+#[test]
 fn addressed_reuse_refuses_equal_bytes_at_changed_identity_or_partial_disposal() {
     if !isolated_capability_test(
         "addressed_reuse_refuses_equal_bytes_at_changed_identity_or_partial_disposal",

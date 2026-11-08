@@ -480,9 +480,23 @@ cleanup 把明确生成目录处置与有限时 Git 检出移除分开。删任�
 chrono-worktree use --path /exact/worktree --operation test.example
 chrono-worktree finish --path /exact/worktree
 chrono-worktree maintain
+chrono-worktree status
+chrono-worktree status --path /exact/worktree
 chrono-worktree import --path /exact/existing-worktree
 chrono-worktree migrate --path /exact/enrolled-worktree
 ```
+
+### 本地状态与 AI 提醒
+
+`status` 从协调者已有的逐工作树账本和 Git inventory 观察本地状态。默认查看该协调者全部登记地址，包括物理检出已缺失的地址；`--path` 只查看指定地址。查询不导入、清理或补写任务终态。结果沿用生命周期报告及其现役保留政策，不另建成员清单或永久快照。
+
+报告的 `worktree_status.worktrees` 分别给出 `work_state`、`cleanup_state`、`attention_required`、`next_action`，并引用已有终态和清理原件。`active` 表示任务尚未交接，不能由空闲、缓存已清或构建成功推断完成。`terminal` 配合 `retained` 仍有保留事项；只有已有终态交接、账本记为 `disposed`，且物理路径与 Git 登记都已核实缺失，才停止该对象的清理提醒。长驻协调主检出正常时无需终结。
+
+无当前登记、记录损坏、附件变化和记录与检出不一致分别显示 `unregistered` 或 `unknown`，保留原件并提醒检查。单个损坏账本不会遮住其他可观察工作树；namespace 本身无法完整枚举时，结果另列未知项，不能据此声称清单完整。观察是本次快照，不授予之后删除或清理的资格。
+
+采用 automatic_cleanup 后，start／reconstruct、use／check／bootstrap、import／migrate／finish 在原报告中附当前目标状态；maintain 附协调者范围状态。未完成或清理待办以 `W_WORKTREE_ATTENTION` 写 stderr，stdout 仍为与存盘原件相同的完整 JSON，提醒本身不改变退出码。普通入口不读取其他工作树账本。AI 开始及交接工作时运行 `status`，根据下一步提示保全工作、解决保留条件，并在实际完成及加入消费者后执行 finish；提醒不代替这些义务。
+
+提醒分类由 `verified_attention.rs` 同源 Verus 判断，真实 Git／文件系统／JSON 适配与行为测试另验；证明范围见 [Verus 说明](verus.md#本地工作树提醒)。
 
 ### use 与 finish
 
@@ -562,7 +576,7 @@ Rust `RetainedArtifact` 接纳精确保留对象并发布 intent。采用 wrappe
 
 结果缺失／中断、关联／HEAD／政策／ref 变化、其他锁或源码损坏，均保留供明确协调。重试不覆盖原失败。存储失败、未登记并发写入、断电不保证事务；失效准入／use 记录须调用方等待原 job 后协调，v2 内核恢复的明确范围见后文。
 
-import 为一个明确已有 linked 工作树登记，核当前登记／关联并绑定原政策输入，含明确缺失。可导入旧检出而不编辑它，也不假装它采用新自动政策。处置路径须已在两端声明。观察为 import，不声称历史 birth，不枚举旧宿主。
+import 为一个明确已有 linked 工作树登记，核当前登记／关联并绑定原政策输入，含明确缺失。它接受其他客户端已有的本地分支名；feature／integration 前缀约束仍用于新建 birth。已导入对象的自动清理消费同一 enrollment 及其物理身份保护；直接 cleanup 计划仍要求登记前缀。当前仍要求直接附着的本地分支，不接管 detached HEAD。可导入旧检出而不编辑它，也不假装它采用新自动政策。处置路径须已在两端声明。观察为 import，不声称历史 birth；已有空地址记录也不能充当历史登记或完成证据。
 
 调用方 Git／GitHub、发布、立即回收旧宿主、证据结算仍不属本生产者。worktree fixture 从 `.chrono-harness/tests/worktree-tools.json` 按明确 OS／架构选 Git，再通过原绑定记录真实身份／版本；产品宿主 Git 政策独立。测试平台缺登记失败，不回退 PATH。
 
