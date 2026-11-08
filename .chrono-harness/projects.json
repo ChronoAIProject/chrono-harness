@@ -187,12 +187,11 @@
       "actions": {
         "build": {
           "operation": "build.runner",
-          "tool": "cargo",
+          "tool": "bootstrap-native",
           "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/runner/Cargo.toml"
+            "compile",
+            ".",
+            ".chrono-harness/ci/runner-build.json"
           ]
         },
         "format_check": {
@@ -333,6 +332,19 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "recover_proof": {
+          "operation": "recover.identifiers-proof",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--package",
+            "chrono-identifiers",
+            "--manifest-path",
+            "crates/runner/Cargo.toml",
+            "--target-dir",
+            "crates/runner/target"
+          ]
         }
       },
       "language": "rust"
@@ -2642,6 +2654,28 @@
             "--target-dir",
             ".chrono-harness/cache/host-bootstrap-native-tests/target"
           ]
+        },
+        "verify_cargo": {
+          "operation": "verify.bootstrap-cargo-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib.d",
+            ".chrono-harness/ci/native-tests/tests/verified_cargo.rs",
+            "-o",
+            ".chrono-harness/state/verify.bootstrap-cargo-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust",

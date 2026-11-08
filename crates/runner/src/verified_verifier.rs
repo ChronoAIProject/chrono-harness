@@ -11,6 +11,8 @@ pub mod identifiers;
 use crate::verified_identifiers as identifiers;
 use identifiers::{equal_bytes, equal_text};
 
+#[path = "verified_cargo.rs"]
+pub mod cargo;
 #[path = "verified_sources.rs"]
 pub mod sources;
 
