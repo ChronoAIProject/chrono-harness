@@ -327,7 +327,8 @@ fn consumer_and_collector_validate_original_production_without_rerunning_bootstr
 fn consumer_rejects_relabelled_source_platform_role_and_producer() {
     let f = Fixture::new();
     let directory = f.exported();
-    let original: Value = serde_json::from_slice(&fs::read(directory.join("frontend.json")).unwrap()).unwrap();
+    let original: Value =
+        serde_json::from_slice(&fs::read(directory.join("frontend.json")).unwrap()).unwrap();
     for (pointer, value) in [
         ("/schema", json!("other")),
         ("/source/commit", json!("0".repeat(40))),
@@ -343,8 +344,11 @@ fn consumer_rejects_relabelled_source_platform_role_and_producer() {
     ] {
         let mut changed = original.clone();
         *changed.pointer_mut(pointer).unwrap() = value;
-        recipe::write(&directory,"frontend.json",&changed);
-        assert!(f.validate(&directory,&f.selected(),None).is_err(),"{pointer}");
+        recipe::write(&directory, "frontend.json", &changed);
+        assert!(
+            f.validate(&directory, &f.selected(), None).is_err(),
+            "{pointer}"
+        );
     }
 }
 
