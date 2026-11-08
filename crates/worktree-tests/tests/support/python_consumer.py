@@ -10,8 +10,6 @@ route = sys.argv[2]
 spec = importlib.util.spec_from_file_location("consumer", source)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-root = Path.cwd()
-
 if route == "detached":
     config = json.loads(Path(".chrono-harness/state/python-consumer.json").read_text())
     subprocess.Popen(
