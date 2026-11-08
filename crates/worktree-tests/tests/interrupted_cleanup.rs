@@ -2444,13 +2444,17 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let library = target.join(".chrono-harness/state/cargo-case/src/lib.rs");
     let original_manifest = fs::read(&manifest).unwrap();
     let original_library = fs::read(&library).unwrap();
-    drop(h);
-    let reclaimed = maintain_allocation();
-    assert!(!cargo_output.exists(), "{reclaimed}");
+    // The target lifecycle must preserve source while this fixture's actual
+    // assertions still consume it. The outer allocation owns these synthetic
+    // sources and can roll as one directory only after their final assertion.
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
     assert_eq!(fs::read(target.join("payload")).unwrap(), original_payload);
     assert_eq!(fs::read(manifest).unwrap(), original_manifest);
     assert_eq!(fs::read(library).unwrap(), original_library);
+    drop(h);
+    let reclaimed = maintain_allocation();
+    assert!(!cargo_output.exists(), "{reclaimed}");
+    assert!(!allocation.exists(), "released fixture rolls as a whole: {reclaimed}");
 }
 
 #[test]
