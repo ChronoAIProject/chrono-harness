@@ -8,6 +8,90 @@ use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
+pub open spec fn git_inventory_complete(raw: Seq<u8>) -> bool {
+    raw.len() == 0 || raw[raw.len() - 1] == 0
+}
+
+/// 终止检查先于 UTF-8 解码，保留空库存与原错误。
+pub fn git_inventory_termination(raw: &[u8]) -> (out: Result<(), String>)
+    ensures out.is_ok() == git_inventory_complete(raw@),
+        match out {
+            Ok(()) => true,
+            Err(message) => message@ == "incomplete Git inventory"@,
+        },
+{
+    if raw.len() > 0 && raw[raw.len() - 1] != 0 {
+        return Err("incomplete Git inventory".to_string());
+    }
+    Ok(())
+}
+
+/// 标准 UTF-8 接口只提供观察；仓内错误分类由此函数拥有。
+pub fn git_inventory_text(decoded: Option<&str>) -> (out: Result<&str, String>)
+    ensures match (decoded, out) {
+        (Some(before), Ok(after)) => after@ == before@,
+        (None, Err(message)) => message@ == "non UTF-8 Git inventory"@,
+        _ => false,
+    },
+{
+    match decoded {
+        Some(text) => Ok(text),
+        None => Err("non UTF-8 Git inventory".to_string()),
+    }
+}
+
+/// 消费实际首 TAB 拆分结果；两份完整字段或调用方的完整原错误。
+pub fn git_inventory_row<'a>(
+    parts: Option<(&'a str, &'a str)>, missing_message: &str,
+) -> (out: Result<(&'a str, &'a str), String>)
+    ensures match (parts, out) {
+        (Some((meta, path)), Ok((actual_meta, actual_path))) =>
+            actual_meta@ == meta@ && actual_path@ == path@,
+        (None, Err(message)) => message@ == missing_message@,
+        _ => false,
+    },
+{
+    match parts {
+        Some(row) => Ok(row),
+        None => Err(missing_message.to_string()),
+    }
+}
+
+pub fn git_tree_metadata(fields: &[&str]) -> (out: Result<(), String>)
+    ensures out.is_ok() == (fields.len() == 3),
+        match out {
+            Ok(()) => true,
+            Err(message) => message@ == "invalid Git tree metadata"@,
+        },
+{
+    if fields.len() != 3 {
+        return Err("invalid Git tree metadata".to_string());
+    }
+    Ok(())
+}
+
+pub open spec fn git_index_metadata_format(fields: Seq<&str>) -> bool {
+    fields.len() == 3 && fields[2].spec_bytes().len() == 1
+        && 48 <= fields[2].spec_bytes()[0] <= 51
+}
+
+pub fn git_index_metadata(fields: &[&str]) -> (out: Result<(), String>)
+    ensures out.is_ok() == git_index_metadata_format(fields@),
+        match out {
+            Ok(()) => true,
+            Err(message) => message@ == "invalid Git index metadata"@,
+        },
+{
+    if fields.len() != 3 {
+        return Err("invalid Git index metadata".to_string());
+    }
+    let stage = fields[2].as_bytes();
+    if stage.len() != 1 || stage[0] < 48 || stage[0] > 51 {
+        return Err("invalid Git index metadata".to_string());
+    }
+    Ok(())
+}
+
 /// 一行在 LF 之前结束，或在完整输入末尾结束；CR 和 NUL 都保留。
 pub open spec fn first_header_line(raw: Seq<u8>, end: int) -> bool {
     0 <= end <= raw.len() && (end == raw.len() || raw[end] == 10)
