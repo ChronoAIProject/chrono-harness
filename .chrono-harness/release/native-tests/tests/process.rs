@@ -43,6 +43,19 @@ impl Write for BrokenForward {
 }
 
 #[test]
+fn original_parent_exit_does_not_leave_a_descendant_running_into_the_next_phase() {
+    let source = tempfile::tempdir().unwrap();
+    let output = tempfile::tempdir().unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-release-tool"));
+    command.current_dir(source.path()).arg("--process-parent");
+    let captured = execute(&mut command, output.path(), 0, io::sink(), io::sink()).unwrap();
+    assert_eq!(captured.child_exit, Some(0));
+    assert!(!source.path().join("late-descendant").exists());
+    assert!(!String::from_utf8_lossy(&captured.stdout.bytes).contains("late descendant tail"));
+    assert!(captured.passed(), "{:?}", captured.failures);
+}
+
+#[test]
 fn both_original_streams_are_live_before_child_exit_and_output_can_be_outside_source() {
     let source = tempfile::tempdir().unwrap();
     let output = tempfile::tempdir().unwrap();

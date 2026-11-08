@@ -10,6 +10,21 @@ use std::{
 
 fn run() -> Result<u8, String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args == ["--process-parent"] {
+        let child = Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
+            .arg("--process-tail")
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        println!("original descendant {}", child.id());
+        return Ok(0);
+    }
+    if args == ["--process-tail"] {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        fs::write("late-descendant", b"unexpected write after parent exit")
+            .map_err(|e| e.to_string())?;
+        println!("late descendant tail");
+        return Ok(0);
+    }
     if args == ["--fixture-asset"] {
         println!("fixture executable b");
         return Ok(0);
