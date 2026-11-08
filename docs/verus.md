@@ -449,7 +449,7 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 
 `crates/worktree/src/verified_lifecycle.rs` 直接供自动清理所有者调用：终态进入清理，活跃记录仅在有缓存责任时进入，等待整树回收的保留项仅由显式维护重试；指定 artifacts-only 的已完成处置不重试。证据阻挡要求实际存在且未经释放。清理原结果失败时记失败，缓存成功仅记缓存释放，整树成功还须有 `verified-absent` 或 `already-absent` 才记移除。
 
-`verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。现有分支的显式 import 与新建 birth 的分支规则由同一源码区分：import 不要求创建前缀，birth 仍要求已登记前缀，未知活动拒绝。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
+`verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。现有分支的显式 import 与新建 birth 的分支规则由同一源码区分：import 不要求创建前缀，birth 仍要求已登记前缀，未知活动拒绝。已登记 import 的自动清理消费原 enrollment kind 和身份 guard；直接 cleanup 的前缀边界另有同源独立预期。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
 
 ## 所有者可执行文件发布
 

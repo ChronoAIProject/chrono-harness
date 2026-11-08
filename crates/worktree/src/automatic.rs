@@ -2446,6 +2446,7 @@ impl Manager {
                     &manager.inputs.registrations,
                     token,
                     report,
+                    e.enrollment["kind"].as_str().unwrap_or(""),
                     |r| {
                         manager.stable(r)?;
                         manager.git_locks(&e, None)?;

@@ -65,4 +65,10 @@ pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: boo
     equal_text(kind, "import") || (equal_text(kind, "birth") && registered)
 }
 
+pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)
+    ensures accepted <==> (kind@ == "import"@ || registered),
+{
+    equal_text(kind, "import") || registered
+}
+
 }

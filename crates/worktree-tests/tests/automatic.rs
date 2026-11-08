@@ -1044,6 +1044,23 @@ fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_b
     let original_head = git(&target, &["rev-parse", "HEAD"]);
     let original_source = fs::read(target.join("payload")).unwrap();
 
+    let (code, explicit, error) = h.maintain(
+        "cleanup",
+        value!({"schema":"chrono-worktree-maintenance/v1","operation":"cleanup",
+            "path":target,"branch":"client/current-work","head":original_head,
+            "retained_ref":"refs/heads/dev","retained_commit":git(&h.root,&["rev-parse","dev"]),
+            "retention":"ancestor","discard_artifacts":[],"remove_branch":false,
+            "allow_absent_worktree":false}),
+    );
+    assert_ne!(code, 0, "{explicit} {error}");
+    assert!(
+        explicit["error"]
+            .as_str()
+            .unwrap()
+            .contains("registered work prefix")
+    );
+    assert!(target.exists());
+
     let (code, observation, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{observation} {error}");
     let missing = observation["worktree_inventory"]

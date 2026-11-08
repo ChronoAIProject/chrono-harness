@@ -92,6 +92,21 @@ fn explicit_import_preserves_external_branch_names_and_birth_keeps_its_rule() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn cleanup_of_an_import_uses_its_enrollment_and_explicit_cleanup_keeps_the_prefix_rule() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("import"); reveal_strlit("birth"); reveal_strlit("explicit");
+        assert("import"@.len() == 6 && "birth"@.len() == 5 && "explicit"@.len() == 8);
+    }
+    let imported = policy::accepts_cleanup_branch("import", false);
+    let named_import = policy::accepts_cleanup_branch("import", true);
+    let other_birth = policy::accepts_cleanup_branch("birth", false);
+    let other_explicit = policy::accepts_cleanup_branch("explicit", false);
+    let named_explicit = policy::accepts_cleanup_branch("explicit", true);
+    expect(imported && named_import && !other_birth && !other_explicit && named_explicit);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn only_a_successful_original_with_absence_verification_establishes_disposal() {
     broadcast use vstd::string::group_string_axioms;
     proof {
