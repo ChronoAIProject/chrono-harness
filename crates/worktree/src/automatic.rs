@@ -330,6 +330,16 @@ struct Entry {
     disposed_at: Option<u64>,
 }
 impl Entry {
+    fn report_handoff_pending(&self) -> bool {
+        ["completed_uses", "main_cache_releases"]
+            .iter()
+            .any(|field| {
+                !self.enrollment[*field].is_null()
+                    && self.enrollment[*field]
+                        .as_array()
+                        .is_none_or(|rows| !rows.is_empty())
+            })
+    }
     fn check_agents(&self) -> Result<(), String> {
         if self.creator_agent.as_ref().is_some_and(|a| !a.valid())
             || self.custodian_agent.as_ref().is_some_and(|a| !a.valid())
@@ -2771,6 +2781,7 @@ impl Manager {
                     .as_ref()
                     .ok_or("disposed record lacks its terminal handoff")?;
                 if !entry.uses.is_empty()
+                    || entry.report_handoff_pending()
                     || entry.cache_only
                     || terminal.artifacts_only
                     || entry
@@ -3080,17 +3091,25 @@ impl Manager {
                 Attention::Unknown => ("unknown", "inspect-original-state"),
             };
             let creator = entry.and_then(|e| e.creator_agent.as_ref());
+            let report_handoff_pending = entry.is_some_and(Entry::report_handoff_pending);
+            let attention_required = needs_attention(&view) || report_handoff_pending;
+            let action = if report_handoff_pending {
+                "recover-result-handoff"
+            } else {
+                action
+            };
             let agent_attention = pending_for_agent(
                 creator.map(|a| a.id.as_str()).unwrap_or(""),
                 current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
-                needs_attention(&view),
+                attention_required,
             );
             rows.push(value!({"path":path,"work_state":work,"cleanup_state":cleanup,
                 "branch":entry.map(|e| &e.branch),"creator_agent":creator,
                 "custodian_agent":entry.and_then(|e| e.custodian_agent.as_ref()),
                 "cleanup_progress":entry.and_then(|e| e.cleanup.as_ref()),
                 "agent_attention_required":agent_attention,
-                "attention_required":needs_attention(&view),"next_action":action,
+                "attention_required":attention_required,"next_action":action,
+                "report_handoff_pending":report_handoff_pending,
                 "ledger_path":record_directory(&self.directory, &path)?.join("ledger.json"),
                 "physical_present":physical.is_ok(),"git_registered":git.is_some(),
                 "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),

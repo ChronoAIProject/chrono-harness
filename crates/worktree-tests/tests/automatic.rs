@@ -1362,6 +1362,10 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
     ]);
     policy["max_related_outputs"] = value!(512);
     fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let cleanup_path = h.root.join(AUTO_POLICY);
+    let mut cleanup = json(&fs::read(&cleanup_path).unwrap()).unwrap();
+    cleanup["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(cleanup_path, serde_json::to_vec(&cleanup).unwrap()).unwrap();
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("pending-result-handoff");
@@ -1386,6 +1390,13 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
     );
     let report_path = h.root.join(used["report_path"].as_str().unwrap());
     let report_bytes = fs::read(&report_path).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths(
+            "fixture-use-report",
+            &[used["report_path"].as_str().unwrap().into()],
+        )
+        .unwrap();
     // Fault injection at the final report boundary: a partial JSON original
     // cannot discharge the pending handoff or establish a command outcome.
     fs::write(&report_path, b"{\"status\":").unwrap();
@@ -1406,14 +1417,33 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
         value!([receipt]),
         "matching JSON fields do not replace the sealed producer bytes"
     );
-    fs::write(&report_path, &report_bytes).unwrap();
-    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-    inventory
-        .reference_paths(
-            "fixture-use-report",
-            &[used["report_path"].as_str().unwrap().into()],
-        )
+    let (code, finished, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+    );
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists());
+    let (_code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(
+        h.ledger()["entries"].as_array().unwrap().len(),
+        1,
+        "an unresolved report handoff must survive disposed-history rotation: {maintained} {error}"
+    );
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt])
+    );
+    let row = maintained["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target))
         .unwrap();
+    assert_eq!(row["work_state"], "terminal");
+    assert_eq!(row["report_handoff_pending"], true);
+    assert_eq!(row["attention_required"], true);
+    assert_eq!(row["next_action"], "recover-result-handoff");
+    fs::write(&report_path, &report_bytes).unwrap();
     let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{observed} {error}");
     assert!(h.ledger()["entries"][0]["enrollment"]["completed_uses"].is_null());
@@ -1431,7 +1461,7 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
         !raw_path.exists(),
         "successful report handoff must not create permanent roots"
     );
-    assert!(target.join("payload").is_file());
+    assert!(!target.exists());
 }
 
 #[test]

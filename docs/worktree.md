@@ -654,7 +654,7 @@ v2 政策可登记 `terminal_history` 的 `keep_seconds`、`max_entries`、`max_
 
 自动所有者发布的不可变回执和保留字节，现也使用 `lifecycle-original`。物理字节出现前，将原件加入同一地址的 `worktree-enrollment` 引用；随后按 typed 输入字段登记依赖并封存发布。调用方实际读取／产生的原件能力持续保护报告交接，use 释放令牌前先把原结果依赖接到原报告。账本收窄或终态轮转后，仍被报告或其他使用方引用的原件继续保留，其余沿 retention 的有限维护回收。中断留下的现有登记按原身份恢复，不据新政策扫描、认领或删除未登记的历史文件。
 
-use 结果及 main-cache release 在最终报告交接前，暂存在所属 enrollment 的 `completed_uses`／`main_cache_releases`。后续打开该地址时，核对精确原回执、最终报告的绑定、retention 生产者封存的摘要／长度和物理身份，再登记报告依赖并释放临时引用。报告缺失、部分写入、字节变化或尚未封存时继续保留；这不是永久操作历史，也不改变工作树的工作终态。
+use 结果及 main-cache release 在最终报告交接前，暂存在所属 enrollment 的 `completed_uses`／`main_cache_releases`。后续打开该地址时，核对精确原回执、最终报告的绑定、retention 生产者封存的摘要／长度和物理身份，再登记报告依赖并释放临时引用。报告缺失、部分写入、字节变化或尚未封存时继续保留，并阻止该条目滚出历史；即使工作树已移除，仍用 `report_handoff_pending` 和 `recover-result-handoff` 提醒后续处理。这不是永久操作历史，也不改变工作树的工作终态。
 
 **产品与宿主政策同改：**宿主 `retention.json` 为 `lifecycle-original` 增加已采用的 automatic state 地址，只覆盖该生产者实际发布的文件。新增共享引用的原件发布行为及工作树回归；DELTA 沿 runner 和 worktree 的明确依赖验证。额外 IO、维护耗时和存储收益尚未实测。旧协调宿主仍须配套迁移，不能据候选提交宣称已部署。
 
