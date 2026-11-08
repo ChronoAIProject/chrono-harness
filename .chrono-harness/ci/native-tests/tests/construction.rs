@@ -59,7 +59,7 @@ fn native_entry_preserves_private_installer_exit_and_failed_original_without_bui
     assert_eq!(report["status"], "failed");
     assert_eq!(report["operations"], json!([]));
     assert_eq!(report["installed"], json!([]));
-    assert!(report["versions"].is_null());
+    assert_eq!(report["versions"], json!({}));
     assert!(report["environment"].as_object().unwrap().is_empty());
     assert!(
         !fixture
