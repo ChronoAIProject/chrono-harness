@@ -8,13 +8,15 @@
 
 宿主使用 GitHub 原生规则集，关闭 `strict_required_status_checks_policy`，保留必需汇总检查、既有评审要求和禁止绕过的设置。已有宿主先验证并合入合并树校验工作流，再关闭 strict。默认无需 merge queue、独立合并机器人、轮询服务或新增权限。
 
-本仓唯一采用文件为 [.chrono-harness/ci/admission.json](../.chrono-harness/ci/admission.json)，目标为 dev，必需检查为 `chrono / collection`，评审人数保持现有的 0。部署入口是：
+本仓唯一采用文件为 [.chrono-harness/ci/admission.json](../.chrono-harness/ci/admission.json)，覆盖 dev 与所有层级的 integration 分支，必需检查为 `chrono / collection`，评审人数保持现有的 0。规则集的 `refs/heads/integration/**/*` 使用 GitHub 的分支匹配语法；工作流已对目标为 dev 或 `integration/**` 的 PR 运行相同汇总。工作流触发和必需检查保护须分别配置，能运行 CI 不表示合并已受保护。部署入口是：
 
 ```sh
 gh api --method PUT repos/ChronoAIProject/chrono-harness/rulesets/24355777 --input .chrono-harness/ci/admission.json
 ```
 
-这个入口只使用调用方已有的仓库规则管理权限；普通 CI 仍只需 `contents: read` 和 `actions: read`。权限不足时保留原失败，不新增运输或激活机制。其他宿主复制采用文件后，明确修改仓库、规则集 ID、目标分支、汇总检查名称和既有评审要求，并登记其自己的部署入口。部署后读取实际规则集和目标分支有效规则，确认 strict 已关闭、必需检查及其他保护仍在。文件提交或请求退出成功不能代替生效核验。
+这个入口只使用调用方已有的仓库规则管理权限；普通 CI 仍只需 `contents: read` 和 `actions: read`。权限不足时保留原失败，不新增运输或激活机制。其他宿主复制采用文件后，明确修改仓库、规则集 ID、目标分支、汇总检查名称和既有评审要求，并登记其自己的部署入口。部署后读取实际规则集，并分别核 dev、单层与多层 integration 目标分支的有效规则，确认 strict 已关闭、必需检查及其他保护仍在。文件提交或请求退出成功不能代替生效核验。
+
+`do_not_enforce_on_create` 允许首次发布工作分支，避免要求一个尚未能运行 PR CI 的新引用先有检查；创建不表示候选通过。已有 integration 分支的后续更新与 dev 一样走 PR，修复从 feature 分支提交到该 integration；最终交付 dev 的 PR 仍验其固定合并树。直接 push 更新受保护目标继续受原生规则限制。
 
 ## 检查与落地
 
