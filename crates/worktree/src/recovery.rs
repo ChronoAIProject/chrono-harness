@@ -119,12 +119,16 @@ pub(crate) fn input_paths(root: &Path, report: &Value) -> Result<Vec<String>, St
         paths.insert(input.path);
     }
     if report["schema"] == "chrono-worktree-interrupted-use/v2" {
-        let path = report["intent"]["path"].as_str().ok_or("interrupted use intent path")?;
+        let path = report["intent"]["path"]
+            .as_str()
+            .ok_or("interrupted use intent path")?;
         state_path(root, path)?;
         paths.insert(path.into());
     }
     if report["schema"] == "chrono-worktree-owner-adoption/v1" {
-        let path = report["stage_result"].as_str().ok_or("owner adoption stage path")?;
+        let path = report["stage_result"]
+            .as_str()
+            .ok_or("owner adoption stage path")?;
         state_path(root, path)?;
         paths.insert(path.into());
     }
@@ -538,7 +542,10 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
             originals.push(path.into());
         }
     }
-    for pointer in ["/owner_deployment/receipt/path", "/owner_deployment/stage_result"] {
+    for pointer in [
+        "/owner_deployment/receipt/path",
+        "/owner_deployment/stage_result",
+    ] {
         if let Some(path) = report.pointer(pointer).and_then(Value::as_str) {
             originals.push(path.into());
         }

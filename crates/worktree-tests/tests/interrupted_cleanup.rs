@@ -1419,7 +1419,8 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     adopt_lifecycle_retention(&h);
     let policy_path = h.root.join(".chrono-harness/retention.json");
     let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
-    policy["producers"]["lifecycle-state-original"] = value!([".chrono-harness/state/automatic-cleanup/"]);
+    policy["producers"]["lifecycle-state-original"] =
+        value!([".chrono-harness/state/automatic-cleanup/"]);
     policy["diagnostic_keep_seconds"] = value!(0);
     policy["max_related_outputs"] = value!(512);
     fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
@@ -1470,10 +1471,22 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     let raw = fs::read(h.root.join(intent)).unwrap();
     assert_eq!(sha256(&raw), interrupted["intent"]["sha256"]);
     let state = retention_state::snapshot(&h.root);
-    let original = state["outputs"].as_array().unwrap().iter().find(|o| o["path"] == intent).unwrap();
-    chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root).unwrap().unwrap()
-        .maintain_originals(&[original["id"].as_str().unwrap().to_owned()]).unwrap();
-    assert_eq!(fs::read(h.root.join(intent)).unwrap(), raw, "interrupted-use recovery still consumes its original intent");
+    let original = state["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == intent)
+        .unwrap();
+    chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .maintain_originals(&[original["id"].as_str().unwrap().to_owned()])
+        .unwrap();
+    assert_eq!(
+        fs::read(h.root.join(intent)).unwrap(),
+        raw,
+        "interrupted-use recovery still consumes its original intent"
+    );
 }
 
 #[test]

@@ -44,7 +44,12 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
                     .join(attempt["intent"]["path"].as_str().unwrap())
                     .is_file()
             );
-            inventory().reference_paths("external-cache-diagnostic", &[attempt["path"].as_str().unwrap().into()]).unwrap();
+            inventory()
+                .reference_paths(
+                    "external-cache-diagnostic",
+                    &[attempt["path"].as_str().unwrap().into()],
+                )
+                .unwrap();
             old = Some(attempt);
         }
     }
@@ -58,15 +63,30 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     assert!(entry["terminal"].is_null());
     let old = old.unwrap();
     let state = retention_state::snapshot(&h.root);
-    let ids: Vec<_> = [&old["intent"]["path"], &old["path"]].into_iter().map(|path| {
-        state["outputs"].as_array().unwrap().iter().find(|o| o["path"] == *path).unwrap()["id"]
-            .as_str().unwrap().to_owned()
-    }).collect();
+    let ids: Vec<_> = [&old["intent"]["path"], &old["path"]]
+        .into_iter()
+        .map(|path| {
+            state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["path"] == *path)
+                .unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
     inventory().maintain_originals(&ids).unwrap();
     for path in [&old["intent"]["path"], &old["path"]] {
-        assert!(h.root.join(path.as_str().unwrap()).is_file(), "external report retains its declared closure");
+        assert!(
+            h.root.join(path.as_str().unwrap()).is_file(),
+            "external report retains its declared closure"
+        );
     }
-    inventory().reference_paths("external-cache-diagnostic", &[]).unwrap();
+    inventory()
+        .reference_paths("external-cache-diagnostic", &[])
+        .unwrap();
     inventory().maintain_originals(&ids).unwrap();
     assert!(
         !h.root

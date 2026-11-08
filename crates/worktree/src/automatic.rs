@@ -1837,12 +1837,15 @@ impl Manager {
                 if json(&bytes)? != *value {
                     return Err("interrupted use reconciliation receipt changed".into());
                 }
-                if let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(
-                    &self.inputs.policy.coordinator_root,
-                )? {
-                    inventory.dependencies_paths(&path, &crate::recovery::input_paths(
-                        &self.inputs.policy.coordinator_root, value,
-                    )?)?;
+                if let Some(inventory) =
+                    chrono_harness::retained_artifacts::retention::Inventory::adopted(
+                        &self.inputs.policy.coordinator_root,
+                    )?
+                {
+                    inventory.dependencies_paths(
+                        &path,
+                        &crate::recovery::input_paths(&self.inputs.policy.coordinator_root, value)?,
+                    )?;
                 }
                 Ok(Receipt {
                     path,

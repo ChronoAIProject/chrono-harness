@@ -12,7 +12,10 @@ fn adoption_paths(root: &Path, adoption: &Value) -> Result<Vec<String>, String> 
         .map_err(|e| format!("current owner adoption receipt: {e}"))?;
     let raw = crate::recovery::state_bytes(root, &receipt.path)?;
     let mut original = adoption.clone();
-    original.as_object_mut().ok_or("owner adoption object")?.remove("receipt");
+    original
+        .as_object_mut()
+        .ok_or("owner adoption object")?
+        .remove("receipt");
     if sha256(&raw) != receipt.sha256 || json(&raw)? != original {
         return Err("current owner adoption original changed".into());
     }
@@ -914,7 +917,10 @@ impl Manager {
         adoption["receipt"] = value!(receipt);
         let next_paths = adoption_paths(root, &adoption)?;
         if let Some(inventory) = &retention {
-            inventory.reference_paths(CURRENT_OWNER_ROLE, &[previous_paths, next_paths.clone()].concat())?;
+            inventory.reference_paths(
+                CURRENT_OWNER_ROLE,
+                &[previous_paths, next_paths.clone()].concat(),
+            )?;
         }
         write_json(&index, &adoption, false)?;
         if let Some(inventory) = &retention {
