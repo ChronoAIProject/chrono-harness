@@ -700,7 +700,6 @@
       ".chrono-harness/state/bootstrap-custody-tests/"
     ],
     "test.judge-projects-tests": [
-      ".chrono-harness/state/migration-tests/",
       ".chrono-harness/state/test-failures/"
     ],
     "test.ci-tests": [
