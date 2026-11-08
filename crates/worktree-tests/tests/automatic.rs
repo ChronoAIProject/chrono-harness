@@ -837,6 +837,107 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
 }
 
 #[test]
+fn creator_agent_and_pending_reminders_follow_the_original_creator() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    h.policy(|policy| {
+        policy["agent_identity_env"] = value!("CHRONO_TEST_AGENT_ID");
+        policy["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(value!("CHRONO_TEST_AGENT_ID"));
+    });
+    let invoke = |operation: &str, extra: &[&str], agent: Option<&str>| {
+        let mut command = h.auto_command(operation, extra);
+        if let Some(agent) = agent {
+            command.env("CHRONO_TEST_AGENT_ID", agent);
+        }
+        let output = h.native_output(&mut command);
+        h.received(output)
+    };
+    let a = h.parent.join("agent-a-work");
+    let b = h.parent.join("agent-b-work");
+    let unknown = h.parent.join("unknown-agent-work");
+    for (name, path, agent) in [
+        ("agent-a", &a, Some("agent-A")),
+        ("agent-b", &b, Some("agent-B")),
+        ("unknown-agent", &unknown, None),
+    ] {
+        let (code, created, error) = invoke(
+            "start",
+            &[
+                "--kind",
+                "integration",
+                "--name",
+                name,
+                "--path",
+                path.to_str().unwrap(),
+            ],
+            agent,
+        );
+        assert_eq!(code, 0, "{created} {error}");
+        if let Some(agent) = agent {
+            assert_eq!(created["agent"]["id"], agent);
+            let intent = json(
+                &fs::read(
+                    h.root
+                        .join(created["recovery_intent"]["path"].as_str().unwrap()),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(intent["creator_agent"]["id"], agent);
+        } else {
+            assert_eq!(created["agent"]["status"], "unknown");
+        }
+    }
+    let a_entry = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(a))
+        .unwrap()
+        .clone();
+    assert_eq!(a_entry["creator_agent"]["id"], "agent-A");
+    let (code, maintained, error) = invoke("maintain", &[], Some("agent-A"));
+    assert_eq!(code, 0, "{maintained} {error}");
+    let reminders = maintained["agent_reminders"]["pending"].as_array().unwrap();
+    assert_eq!(reminders.len(), 1, "{maintained}");
+    assert_eq!(reminders[0]["path"], value!(a));
+    assert_eq!(reminders[0]["work_status"], "active");
+    assert!(error.contains(a.to_str().unwrap()), "{error}");
+    assert!(!error.contains(b.to_str().unwrap()), "{error}");
+    assert!(
+        maintained["agent_reminders"]["unknown_creator_records"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    let (code, finished, error) =
+        invoke("finish", &["--path", a.to_str().unwrap()], Some("agent-B"));
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!a.exists());
+    let a_entry = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(a))
+        .unwrap()
+        .clone();
+    assert_eq!(a_entry["creator_agent"]["id"], "agent-A");
+    let (code, maintained, error) = invoke("maintain", &[], Some("agent-A"));
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(
+        maintained["agent_reminders"]["pending"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(b.join("payload").is_file());
+    assert!(unknown.join("payload").is_file());
+}
+
+#[test]
 fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_records() {
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -867,7 +968,15 @@ fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_r
     assert!(disposed["disposed_at"].as_u64().is_some());
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
-    assert_eq!(h.ledger()["entries"], value!([active_entry]));
+    let remaining = h.ledger();
+    assert_eq!(remaining["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(remaining["entries"][0]["path"], active_entry["path"]);
+    assert_eq!(
+        remaining["entries"][0]["attachment"],
+        active_entry["attachment"]
+    );
+    assert_eq!(remaining["entries"][0]["status"], "active");
+    assert!(remaining["entries"][0]["terminal"].is_null());
     assert!(active.join("payload").is_file());
     assert!(!target.exists());
     assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
