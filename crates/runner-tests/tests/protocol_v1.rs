@@ -2598,7 +2598,9 @@ fn delayed_monitor_helper() {
     assert!(ready.failure.is_none(), "{ready:?}");
     assert!(ready.stdout_bytes.is_empty(), "{ready:?}");
     assert!(ready.stderr_bytes.is_empty(), "{ready:?}");
-    let stream = std::os::unix::net::UnixStream::connect(root.join("monitor.sock")).unwrap();
+    // The launcher already runs in root. Its retained absolute path can exceed
+    // sockaddr_un's limit, so use the same relative address as the controller.
+    let stream = std::os::unix::net::UnixStream::connect("monitor.sock").unwrap();
     let logger = chrono_diagnostics::logging::Logger::new(
         "delayed-monitor",
         chrono_diagnostics::logging::Level::DEBUG,
