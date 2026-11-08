@@ -12,7 +12,8 @@ mkdir "$task_temporary/tools"
 cp "$task_fixture" "$task_temporary/tools/rustup"
 export PATH="$task_temporary/tools:$PATH"
 export CHRONO_LAUNCHER_CALLS="$task_temporary/calls"
-unset CHRONO_WORKTREE_BOOTSTRAP
+unset CHRONO_WORKTREE_BOOTSTRAP RUSTUP_HOME
+export CHRONO_LAUNCHER_RUSTUP_HOME="$task_temporary/selected-rustup"
 task_main="$task_temporary/main host"
 /usr/bin/git init --quiet "$task_main"
 /usr/bin/git -C "$task_main" -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet --allow-empty -m fixture
@@ -51,7 +52,7 @@ reset_calls
 export CHRONO_LAUNCHER_NATIVE_EXIT=23
 invoke "$task_linked" .chrono-harness/ci/bootstrap-shared.json install unit_runner
 test "$task_status" -eq 23 || fail 'native frontend exit was lost'
-task_expected=$(printf '%s\n' chrono-worktree '<bootstrap>' '<--host-root>' "<$task_linked>" '<--config>' '<.chrono-harness/worktree.json>' '<--bootstrap-config>' '<.chrono-harness/ci/bootstrap-frontend.json>' chrono-host-bootstrap "<$task_linked>" '<.chrono-harness/ci/bootstrap-shared.json>' '<install>' '<unit_runner>')
+task_expected=$(printf '%s\n' chrono-worktree '<bootstrap>' '<--host-root>' "<$task_linked>" '<--config>' '<.chrono-harness/worktree.json>' '<--bootstrap-config>' '<.chrono-harness/ci/bootstrap-frontend.json>' rustup '<run>' '<1.95.0>' "<$task_linked/.chrono-harness/bin/chrono-host-bootstrap>" "<$task_linked>" '<.chrono-harness/ci/bootstrap-shared.json>' '<install>' '<unit_runner>' chrono-host-bootstrap "<$task_linked>" '<.chrono-harness/ci/bootstrap-shared.json>' '<install>' '<unit_runner>')
 test "$(cat "$CHRONO_LAUNCHER_CALLS")" = "$task_expected" || fail 'coordinator/frontend invocation differs'
 unset CHRONO_LAUNCHER_NATIVE_EXIT
 
