@@ -74,13 +74,43 @@ pub struct Selection {
     pub attempt: String,
 }
 
-/// 原生 needs 必须精确等于业务依赖；工具产物不能默默混入或被丢弃。
+#[derive(Clone, Debug, Serialize)]
+pub struct Dependencies {
+    pub units: BTreeMap<String, Selection>,
+    pub frontend: Option<Selection>,
+}
+
+fn select_row(job: &str, row: &Value, lineage: &Lineage) -> Result<Selection, String> {
+    let result = match row["result"].as_str() {
+        Some("success") => DependencyResult::Success,
+        Some("failure") => DependencyResult::Failure,
+        Some("cancelled") => DependencyResult::Cancelled,
+        Some("skipped") => DependencyResult::Skipped,
+        _ => return Err(error(format!("invalid current dependency result: {job}"))),
+    };
+    let outputs = &row["outputs"];
+    let selection = Selection {
+        job: job.into(),
+        artifact_id: text(outputs, "artifact_id")?.into(),
+        run_id: text(outputs, "run_id")?.into(),
+        attempt: text(outputs, "attempt")?.into(),
+    };
+    if !policy::selected_producer(
+        &result, &selection.run_id, &lineage.run_id,
+        attempt(&selection.attempt)?, attempt(&lineage.attempt)?, &selection.artifact_id,
+    ) || (lineage.kind == Kind::Github && !decimal(&selection.artifact_id)) {
+        return Err(error(format!("failed or incompatible current dependency: {job}")));
+    }
+    Ok(selection)
+}
+
+/// 原生 needs 精确等于登记的业务依赖与发布工具；工具选择独立保留。
 pub fn select(
     loaded: &Loaded,
     scope: Scope<'_>,
     lineage: &Lineage,
     raw: &[u8],
-) -> Result<BTreeMap<String, Selection>, String> {
+) -> Result<Dependencies, String> {
     lineage.validate()?;
     let (id, needs) = match scope {
         Scope::Unit(id) => {
@@ -92,28 +122,29 @@ pub fn select(
             loaded.recipe.collector.needs.as_slice(),
         ),
     };
-    let bindings: BTreeMap<String, String> = if lineage.kind == Kind::Local {
+    let (bindings, frontend): (BTreeMap<String, String>, Option<&str>) = if lineage.kind == Kind::Local {
         if lineage.job != id {
             return Err(error("local producing job differs from selected unit"));
         }
-        needs.iter().map(|id| (id.clone(), id.clone())).collect()
+        (needs.iter().map(|id| (id.clone(), id.clone())).collect(), None)
     } else {
         let matching: Vec<_> = loaded
             .recipe
             .native_jobs
-            .values()
-            .filter(|b| b.get(id) == Some(&lineage.job))
+            .iter()
+            .filter(|(_, b)| b.get(id) == Some(&lineage.job))
             .collect();
         if matching.len() != 1 {
             return Err(error("unregistered or ambiguous native producing job"));
         }
-        matching[0].clone()
+        let (platform, bindings) = matching[0];
+        (bindings.clone(), Some(loaded.recipe.native_frontends[platform].job.as_str()))
     };
     let input = chrono_harness::json(raw)?;
     let rows = input
         .as_object()
         .ok_or_else(|| error("current dependency input must be an object"))?;
-    let jobs: BTreeSet<_> = needs
+    let mut jobs: BTreeSet<_> = needs
         .iter()
         .map(|id| {
             bindings
@@ -122,6 +153,9 @@ pub fn select(
                 .ok_or_else(|| error("missing native dependency binding"))
         })
         .collect::<Result<_, _>>()?;
+    if let Some(job) = frontend {
+        jobs.insert(job);
+    }
     if rows.keys().map(String::as_str).collect::<BTreeSet<_>>() != jobs {
         return Err(error(
             "current dependency membership differs from registered needs",
@@ -130,37 +164,12 @@ pub fn select(
     let mut selected = BTreeMap::new();
     for id in needs {
         let job = &bindings[id];
-        let row = &rows[job];
-        let result = match row["result"].as_str() {
-            Some("success") => DependencyResult::Success,
-            Some("failure") => DependencyResult::Failure,
-            Some("cancelled") => DependencyResult::Cancelled,
-            Some("skipped") => DependencyResult::Skipped,
-            _ => return Err(error(format!("invalid current dependency result: {id}"))),
-        };
-        let outputs = &row["outputs"];
-        let selection = Selection {
-            job: job.clone(),
-            artifact_id: text(outputs, "artifact_id")?.into(),
-            run_id: text(outputs, "run_id")?.into(),
-            attempt: text(outputs, "attempt")?.into(),
-        };
-        if !policy::selected_producer(
-            &result,
-            &selection.run_id,
-            &lineage.run_id,
-            attempt(&selection.attempt)?,
-            attempt(&lineage.attempt)?,
-            &selection.artifact_id,
-        ) || (lineage.kind == Kind::Github && !decimal(&selection.artifact_id))
-        {
-            return Err(error(format!(
-                "failed or incompatible current dependency: {id}"
-            )));
-        }
-        selected.insert(id.clone(), selection);
+        selected.insert(id.clone(), select_row(job, &rows[job], lineage)?);
     }
-    Ok(selected)
+    Ok(Dependencies {
+        units: selected,
+        frontend: frontend.map(|job| select_row(job, &rows[job], lineage)).transpose()?,
+    })
 }
 
 /// 只读普通、无链接的已登记原件；先核长度与摘要，再交给调用方读取。
@@ -597,7 +606,8 @@ pub fn read(
     }
     let input = fs::read(original(&directory, &receipt["dependency_input"])?).map_err(error)?;
     let selected = select(loaded, Scope::Unit(unit.id()), &lineage, &input)?;
-    if receipt["selected"] != json!(selected) {
+    if receipt["selected"] != json!(selected.units)
+        || receipt["frontend_selection"] != json!(selected.frontend) {
         return Err(error(
             "selected dependencies differ from original current input",
         ));

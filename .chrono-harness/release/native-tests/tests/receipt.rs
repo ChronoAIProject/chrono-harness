@@ -69,7 +69,7 @@ fn native_current_needs_select_original_earlier_attempt_without_accepting_old_fa
         attempt: "3".into(),
         job: "native_test_a".into(),
     };
-    let input = json!({"native_build_a":{"result":"success","outputs":{"artifact_id":"98765","run_id":"1234","attempt":"1"}}});
+    let input = json!({"native_build_a":{"result":"success","outputs":{"artifact_id":"98765","run_id":"1234","attempt":"1"}},"native_frontend":{"result":"success","outputs":{"artifact_id":"98766","run_id":"1234","attempt":"1"}}});
     let select = |v: &Value| {
         receipt::select(
             &loaded,
@@ -79,7 +79,8 @@ fn native_current_needs_select_original_earlier_attempt_without_accepting_old_fa
         )
     };
     let selected = select(&input).unwrap();
-    assert_eq!(selected["build_a"].attempt, "1");
+    assert_eq!(selected.units["build_a"].attempt, "1");
+    assert_eq!(selected.frontend.as_ref().unwrap().artifact_id, "98766");
     for outcome in ["failure", "cancelled", "skipped", ""] {
         let mut bad = input.clone();
         bad["native_build_a"]["result"] = json!(outcome);
@@ -122,6 +123,9 @@ fn native_receipt_matches_original_job_run_attempt_and_local_digest_is_not_optio
     f.parent.job = "native_collect".into();
     f.report["lineage"] =
         json!({"kind":"github","run_id":"same-run","attempt":"1","job":"native_test_none"});
+    f.report["frontend_selection"] = json!({"job":"native_frontend","artifact_id":"98766","run_id":"same-run","attempt":"1"});
+    f.report["dependency_input"] = original(&f.directory(), "dependency-context.json",
+        &serde_json::to_vec(&json!({"native_frontend":{"result":"success","outputs":{"artifact_id":"98766","run_id":"same-run","attempt":"1"}}})).unwrap());
     let mut selected = f.save();
     selected.job = "native_test_none".into();
     selected.artifact_id = "98765".into();

@@ -39,6 +39,7 @@ impl Fixture {
             "consumer_staging":{"release_plan":"plan.json","host_config":"host.json","bindings":[{"asset":"a","destinations":["consumer/a"]},{"asset":"b","destinations":["consumer/b"]}]},
             "units":units,"collector":{"id":"collect","needs":["build_a","build_b","test_none","test_a"],"package_asset":"a","dependency_metadata":"dependencies.json"},
             "unit_costs":costs,"native_jobs":{"fixture":jobs},"local_workers":2,"limits":{"unit_seconds":30,"platform_seconds":120},
+            "native_frontends":{"fixture":{"job":"native_frontend","directory":"frontend","executable":"chrono-host-release","bootstrap_profile":".chrono-harness/ci/bootstrap-release.json","bootstrap_report":"bootstrap.json","cost":"unmeasured"}},
             "verification_consumers":{"test_none":{"need":"Exercise the independent source check.","release_assets":[]},"test_a":{"need":"Invoke only executable a.","release_assets":["a"]}},
             "failure_evidence":{"test.a":["failures/test-a/"]}
         });

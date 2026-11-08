@@ -413,7 +413,8 @@ impl<'a> Execution<'a> {
             .map_err(error)?;
         self.report["dependency_input"] = json!({"path":"dependency-context.json","size":raw.len(),"sha256":chrono_harness::sha256(&raw),"source":if local {"local-outcomes"} else {"native-needs"}});
         self.report["lineage"] = json!(lineage);
-        self.report["selected"] = json!(selected);
+        self.report["selected"] = json!(selected.units);
+        self.report["frontend_selection"] = json!(selected.frontend);
         Ok(lineage)
     }
 
