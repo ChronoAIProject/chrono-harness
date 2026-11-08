@@ -243,6 +243,7 @@ fn isolated_event_test() -> bool {
         .current_dir("/")
         .env_clear()
         .env("PATH", shadow.path())
+        .env("CHRONO_CI_FIXTURE_GIT", fixture_git())
         .env("CHRONO_EVENT_AMBIENT", "must-not-leak")
         .env("CHRONO_EVENT_TEST_CHILD", &name)
         .args(["--exact", &name, "--nocapture"])
