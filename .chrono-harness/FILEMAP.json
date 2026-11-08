@@ -460,7 +460,6 @@
     {"path":"crates/inputs/src/observation.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"}]},
     {"path":"crates/inputs-tests/tests/observations.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/tests/support/observe.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
-    {"path":".chrono-harness/ci/provision_tests.py","owner":"host-bootstrap-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"runtime-input","to":"project:judge-cargo-tests"}]},
     {"path":"docs/input-source-custody.md","owner":"inputs","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/cache/src/content.rs","owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/judge-registration/src/consumption.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"}]},
@@ -1506,7 +1505,6 @@
     },
     "test:host-bootstrap-tests": {
       "operations": [
-        "host.bootstrap-provision-tests",
         "host.bootstrap-tests",
         "host.bootstrap-real-consumer"
       ],
@@ -2024,10 +2022,6 @@
         "outputs": [
           ".chrono-harness/state/bootstrap-real/"
         ]
-      },
-      "host.bootstrap-provision-tests": {
-        "resources": [],
-        "outputs": []
       },
       "test.judge-projects-tests": {
         "resources": [],
