@@ -606,13 +606,13 @@ registration 专属计划的必需前置，独立预期和 Rust 测试编译同�
 
 ## 固定执行入口
 
-宿主 bootstrap 的 Rust 迁移正在实施。公开 core／shared 仍保留 Python 入口，
-所有者阶段 profile 已选择薄 shell 和 Rust 生产者。
+宿主 bootstrap 的 core、Verus 准备及所有者阶段已采用薄 shell 入口和 Rust 生产者；
+共享安装的编排仍使用 Python，迁移与实际使用验收分别完成。
 `.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
 字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
-以及环境名／值、宿主路径、私有 homes、default profile、SDK 探测分支和进程退出状态。
+以及环境名／值、宿主路径、共享目录排斥、工具探测分支和进程退出状态。
 版本前缀另要求完整空格分隔；Cargo 可接受精确版本字符串，rustc 必须保留版本后的空格。
-私有 SDK 探测失败必须拒绝，只有普通环境选择 minimal 安装或补充 rustfmt；
+Cargo 不可用时选择 minimal 安装，缺少 rustfmt 时只补该组件；
 退出状态保留原退出码，缺退出码时仅把正信号转换为负数，无有效终态时返回缺失。
 同一根还拥有实际源码观察的四种状态与报告投影。任一观察失败优先为 unavailable，
 字段改变为 changed，相同脏树为 dirty；只有相同 clean 观察向报告提供 commit／tree。
@@ -638,7 +638,7 @@ Rust 回归另核真实 Cargo／rustc 的身份、环境选择、安装器退出
 缺执行／安装不发布成功，以及报告 IO 失败时仍保留原安装器退出码。
 临时目录复用本仓已有版本的 tempfile，原目录回收仍归宿主生命周期所有者；
 没有增加独立清理账本或调度协议。JSON、文件与进程 IO、报告字段投影和完整外层组合仍未证明，
-这些模块已接通所有者阶段的登记入口；外层 core／shared 的迁移和实际消费者验收仍分别完成。
+这些模块已接通 core、Verus 准备及所有者阶段的登记入口；共享安装编排的迁移和实际使用验收仍分别完成。
 新增构建、验证、CI 和存储成本未测。
 
 原生 `original.rs` 校验固定 producer 的原始源码、登记、SDK 选择、操作和两条原字节流。
