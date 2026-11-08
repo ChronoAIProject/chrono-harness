@@ -16,6 +16,8 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
+use vstd::std_specs::cmp::OrdSpec;
+#[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
@@ -1018,8 +1020,8 @@ fn git_tree_insert_preserves_other_paths_and_rejects_every_duplicate(a: &str, b:
     expect_tree_slot(&tree, &first, "100644", "first\0", "blob");
     expect_tree_slot(&tree, &second, "", "", "tree");
 
-    // clone 有独立文本存储；重复按完整内容判断，不按地址或条目字段判断。
-    let same_path = first.clone();
+    // 重新构造及 clone 都有独立存储；重复按全文判断，不按地址或条目字段判断。
+    let same_path = policy::TreePath::from_text(a);
     let out = policy::insert_git_tree_entry(&mut tree, same_path, "100755", "第二\0", "commit");
     expect_tree_duplicate(out);
     expect_status_true(tree.len() == 2);
@@ -1045,6 +1047,322 @@ fn git_tree_insert_keeps_full_path_identity_and_exact_duplicate_state() {
     git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("", "a");
     git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("a", "a\0");
     git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("目录/é", "目录/e\u{301}");
+}
+
+// 独立 fixture 明确列出字段及分隔位置；不调用生产解析来生成预期。
+proof fn tree_fixture_row(raw: &str, path: &str)
+    requires
+        vstd::string::is_ascii(raw), vstd::string::is_ascii(path),
+        raw@ == "100644 blob 0000000000000000000000000000000000000001\t"@ + path@,
+    ensures policy::git_tree_row_spec(raw.spec_bytes()) ==
+        if policy::paths::relative_path(path.spec_bytes()) {
+            Ok((path.spec_bytes(), "100644".spec_bytes(),
+                "0000000000000000000000000000000000000001".spec_bytes(), "blob".spec_bytes()))
+        } else { Err(policy::GitTreeErrorView::InvalidPath(path.spec_bytes())) },
+{
+    reveal(policy::git_tree_row_spec);
+    let meta = "100644 blob 0000000000000000000000000000000000000001";
+    let tail = "blob 0000000000000000000000000000000000000001";
+    let oid = "0000000000000000000000000000000000000001";
+    reveal_strlit("100644 blob 0000000000000000000000000000000000000001\t");
+    reveal_strlit("100644 blob 0000000000000000000000000000000000000001");
+    reveal_strlit("blob 0000000000000000000000000000000000000001");
+    reveal_strlit("0000000000000000000000000000000000000001");
+    reveal_strlit("100644"); reveal_strlit("blob");
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    assert(vstd::string::is_ascii(meta) && vstd::string::is_ascii(tail)
+        && vstd::string::is_ascii(oid) && vstd::string::is_ascii("100644")
+        && vstd::string::is_ascii("blob"));
+    scope_text::ascii_separator_end_is(raw.spec_bytes(), 9, 52);
+    assert(raw.spec_bytes().take(52) =~= meta.spec_bytes());
+    assert(raw.spec_bytes().skip(53) =~= path.spec_bytes());
+    scope_text::ascii_separator_end_is(meta.spec_bytes(), 32, 6);
+    scope_text::ascii_separator_end_is(tail.spec_bytes(), 32, 4);
+    scope_text::ascii_separator_end_is(oid.spec_bytes(), 32, 40);
+    assert(meta.spec_bytes().take(6) =~= "100644".spec_bytes());
+    assert(meta.spec_bytes().skip(7) =~= tail.spec_bytes());
+    assert(tail.spec_bytes().take(4) =~= "blob".spec_bytes());
+    assert(tail.spec_bytes().skip(5) =~= oid.spec_bytes());
+    assert(oid.spec_bytes().take(40) =~= oid.spec_bytes());
+    reveal_with_fuel(scope_text::ascii_split_records, 4);
+    assert(scope_text::ascii_split_records(meta.spec_bytes(), 32, true)
+        =~= seq!["100644".spec_bytes(), "blob".spec_bytes(), oid.spec_bytes()]);
+    assert forall|i: int| 0 <= i < oid.spec_bytes().len()
+        implies scope_text::oid_byte(#[trigger] oid.spec_bytes()[i]) by {
+        assert(oid.spec_bytes()[i] == 48 || oid.spec_bytes()[i] == 49);
+    }
+    assert(oid.spec_bytes()[39] == 49);
+    assert(scope_text::oid(oid.spec_bytes()));
+}
+
+fn expect_tree_parse_error(rows: &[&str], first: usize, expected: &str)
+    requires first < rows.len(), policy::git_tree_prefix_valid(rows@, first as int),
+        policy::git_tree_error_at(rows@, first as int, policy::GitTreeErrorView::Message(expected@)),
+{
+    proof { policy::git_tree_error_blocks_prefix(rows@, first as int,
+        policy::GitTreeErrorView::Message(expected@), rows.len() as int); }
+    match policy::parse_git_tree_rows(rows) {
+        Err(error) => {
+            proof {
+                let j = choose|j: int| 0 <= j < rows.len() && policy::git_tree_prefix_valid(rows@, j)
+                    && policy::git_tree_error_at(rows@, j, error.view());
+                policy::git_tree_first_error_unique(rows@, first as int,
+                    policy::GitTreeErrorView::Message(expected@), j, error.view());
+            }
+            match error {
+                policy::GitTreeError::Message(message) => {
+                    let rendered = policy::GitTreeError::Message(message).render(copy_tree_fixture_path);
+                    expect_status_text(rendered.as_str(), expected);
+                },
+                _ => { panic!(); },
+            }
+        },
+        Ok(_) => { panic!(); },
+    }
+}
+
+fn copy_tree_fixture_path(path: &str) -> (out: String)
+    ensures out@ == path@,
+{ path.to_owned() }
+
+fn expect_tree_path_error(rows: &[&str], first: usize, expected: &str)
+    requires first < rows.len(), policy::git_tree_prefix_valid(rows@, first as int),
+        policy::git_tree_error_at(rows@, first as int, policy::GitTreeErrorView::InvalidPath(expected.spec_bytes())),
+{
+    proof { policy::git_tree_error_blocks_prefix(rows@, first as int,
+        policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()), rows.len() as int); }
+    match policy::parse_git_tree_rows(rows) {
+        Err(error) => {
+            proof {
+                let j = choose|j: int| 0 <= j < rows.len() && policy::git_tree_prefix_valid(rows@, j)
+                    && policy::git_tree_error_at(rows@, j, error.view());
+                policy::git_tree_first_error_unique(rows@, first as int,
+                    policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()), j, error.view());
+            }
+            match error {
+                policy::GitTreeError::InvalidPath(path) => {
+                    proof {
+                        vstd::utf8::encode_utf8_decode_utf8(path@);
+                        vstd::utf8::encode_utf8_decode_utf8(expected@);
+                    }
+                    expect_status_text(path, expected);
+                    let rendered = policy::GitTreeError::InvalidPath(path).render(copy_tree_fixture_path);
+                    expect_status_text(rendered.as_str(), expected);
+                },
+                _ => { panic!(); },
+            }
+        },
+        Ok(_) => { panic!(); },
+    }
+}
+
+proof fn empty_metadata_tree_fixture(raw: &str, path: &str)
+    requires vstd::string::is_ascii(raw), vstd::string::is_ascii(path), raw@ == "  \t"@ + path@,
+    ensures policy::git_tree_row_spec(raw.spec_bytes()) ==
+        if policy::paths::relative_path(path.spec_bytes()) {
+            Err::<policy::GitTreeRowBytes, policy::GitTreeErrorView>(
+                policy::GitTreeErrorView::Message("expected full nonzero lowercase commit OID"@))
+        } else { Err(policy::GitTreeErrorView::InvalidPath(path.spec_bytes())) },
+{
+    reveal(policy::git_tree_row_spec);
+    reveal_strlit("  \t"); reveal_strlit("  "); reveal_strlit(" "); reveal_strlit("");
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    assert(vstd::string::is_ascii("  ") && vstd::string::is_ascii(" ") && vstd::string::is_ascii(""));
+    scope_text::ascii_separator_end_is(raw.spec_bytes(), 9, 2);
+    assert(raw.spec_bytes().take(2) =~= "  ".spec_bytes());
+    assert(raw.spec_bytes().skip(3) =~= path.spec_bytes());
+    scope_text::ascii_separator_end_is("  ".spec_bytes(), 32, 0);
+    scope_text::ascii_separator_end_is(" ".spec_bytes(), 32, 0);
+    scope_text::ascii_separator_end_is("".spec_bytes(), 32, 0);
+    assert("  ".spec_bytes().take(0) =~= "".spec_bytes());
+    assert("  ".spec_bytes().skip(1) =~= " ".spec_bytes());
+    assert(" ".spec_bytes().take(0) =~= "".spec_bytes());
+    assert(" ".spec_bytes().skip(1) =~= "".spec_bytes());
+    assert("".spec_bytes().take(0) =~= "".spec_bytes());
+    reveal_with_fuel(scope_text::ascii_split_records, 4);
+    assert(scope_text::ascii_split_records("  ".spec_bytes(), 32, true)
+        =~= seq!["".spec_bytes(), "".spec_bytes(), "".spec_bytes()]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tree_parser_keeps_first_error_and_exact_path() {
+    let good = "100644 blob 0000000000000000000000000000000000000001\ta";
+    let bad_path = "100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail";
+    proof {
+        reveal(policy::git_tree_row_spec);
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\t");
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta");
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail");
+        reveal_strlit("a"); reveal_strlit("a/../b\0tail"); reveal_strlit("missing");
+        reveal_strlit("bad\t"); reveal_strlit("bad"); reveal_strlit("");
+        reveal_strlit("  \t"); reveal_strlit("  \ta"); reveal_strlit("  \t/"); reveal_strlit("/");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(good) && vstd::string::is_ascii(bad_path)
+            && vstd::string::is_ascii("a") && vstd::string::is_ascii("a/../b\0tail")
+            && vstd::string::is_ascii("missing") && vstd::string::is_ascii("bad\t")
+            && vstd::string::is_ascii("bad") && vstd::string::is_ascii(""));
+        assert(vstd::string::is_ascii("  \t") && vstd::string::is_ascii("  \ta")
+            && vstd::string::is_ascii("  \t/") && vstd::string::is_ascii("/"));
+        assert(good@ =~= "100644 blob 0000000000000000000000000000000000000001\t"@ + "a"@);
+        assert(bad_path@ =~= "100644 blob 0000000000000000000000000000000000000001\t"@ + "a/../b\0tail"@);
+        tree_fixture_row(good, "a"); tree_fixture_row(bad_path, "a/../b\0tail");
+        assert("  \t"@ =~= "  \t"@ + ""@);
+        assert("  \ta"@ =~= "  \t"@ + "a"@);
+        assert("  \t/"@ =~= "  \t"@ + "/"@);
+        empty_metadata_tree_fixture("  \t", "");
+        empty_metadata_tree_fixture("  \ta", "a");
+        empty_metadata_tree_fixture("  \t/", "/");
+        scope_text::ascii_separator_end_is("missing".spec_bytes(), 9, 7);
+        scope_text::ascii_separator_end_is("bad\t".spec_bytes(), 9, 3);
+        scope_text::ascii_separator_end_is("bad".spec_bytes(), 32, 3);
+        assert("bad\t".spec_bytes().take(3) =~= "bad".spec_bytes());
+        assert("bad\t".spec_bytes().skip(4) =~= "".spec_bytes());
+        assert("bad".spec_bytes().take(3) =~= "bad".spec_bytes());
+        assert(scope_text::ascii_split_records("bad".spec_bytes(), 32, true).len() == 1);
+        assert(policy::paths::relative_path("a".spec_bytes()));
+        assert("a/../b\0tail".spec_bytes()[6] == 0);
+        assert(policy::paths::parent_component_at("a/../b\0tail".spec_bytes(), 2));
+        assert(!policy::paths::relative_path("a/../b\0tail".spec_bytes()));
+    }
+    expect_tree_parse_error(&[good, "missing", bad_path], 1, "invalid Git tree row");
+    expect_tree_parse_error(&["bad\t", "missing"], 0, "invalid Git tree metadata");
+    expect_tree_path_error(&[good, bad_path, "missing"], 1, "a/../b\0tail");
+    let duplicate = [good, good, "missing"];
+    proof {
+        assert(policy::git_tree_row_at(duplicate@, 0).is_ok());
+        assert(policy::git_tree_row_at(duplicate@, 0) == policy::git_tree_row_at(duplicate@, 1));
+        assert(exists|j: int| #![trigger policy::git_tree_row_at(duplicate@, j)]
+            0 <= j < 1 && (policy::git_tree_row_at(duplicate@, j)->Ok_0).0
+            == (policy::git_tree_row_at(duplicate@, 1)->Ok_0).0) by {
+            assert((policy::git_tree_row_at(duplicate@, 0)->Ok_0).0
+                == (policy::git_tree_row_at(duplicate@, 1)->Ok_0).0);
+        }
+        assert(policy::git_tree_error_at(duplicate@, 1,
+            policy::GitTreeErrorView::Message("duplicate Git tree path"@)));
+    }
+    expect_tree_parse_error(&duplicate, 1, "duplicate Git tree path");
+    expect_tree_parse_error(&[good, "missing", good], 1, "invalid Git tree row");
+    expect_tree_path_error(&["  \t", good], 0, "");
+    expect_tree_path_error(&["  \t/", "missing"], 0, "/");
+    expect_tree_parse_error(&["  \ta", "missing"], 0, "expected full nonzero lowercase commit OID");
+}
+
+fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
+    requires exists|key: policy::TreePath| tree@.contains_key(key) && key@ == path@
+        && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
+            "0000000000000000000000000000000000000001"@, "blob"@),
+{
+    proof { policy::tree_path_obeys_cmp(); }
+    let mut iterator = tree.iter();
+    let ghost all = iterator@.1;
+    let ghost expected = choose|key: policy::TreePath| tree@.contains_key(key)
+        && key@ == path@ && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
+            "0000000000000000000000000000000000000001"@, "blob"@);
+    proof {
+        assert(tree@.contains_key(expected));
+        assert(tree@.kv_pairs().contains((expected, tree@[expected])));
+        assert(all.to_set().contains((expected, tree@[expected])));
+    }
+    let ghost expected_index = choose|j: int| 0 <= j < all.len() && all[j] == (expected, tree@[expected]);
+    let mut found = false;
+    loop
+        invariant
+            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            all.to_set() == tree@.kv_pairs(),
+            0 <= expected_index < all.len(), all[expected_index].0@ == path@,
+            policy::tree_entry_fields(&all[expected_index].1) == ("100644"@,
+                "0000000000000000000000000000000000000001"@, "blob"@),
+            vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0)),
+            found == (exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@),
+        decreases all.len() - iterator@.0,
+    {
+        match iterator.next() {
+            None => {
+                proof {
+                    assert(0 <= expected_index < iterator@.0);
+                    assert(exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@);
+                }
+                expect_status_true(found); return;
+            },
+            Some((key, entry)) => {
+                if scope_text::equal_text(key.as_str(), path) {
+                    // 所有同路径键属于实际唯一键；预期完整字段独立写在此处。
+                    proof {
+                        policy::tree_path_obeys_cmp();
+                        let j = expected_index;
+                        let k = iterator@.0 - 1;
+                        let keys = all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0);
+                        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
+                        if j < k { assert(keys[j].cmp_spec(&keys[k]) is Less); }
+                        if k < j { assert(keys[k].cmp_spec(&keys[j]) is Less); }
+                        assert(j == k);
+                    }
+                    expect_status_text(entry.mode.as_str(), "100644");
+                    expect_status_text(entry.oid.as_str(), "0000000000000000000000000000000000000001");
+                    expect_status_text(entry.kind.as_str(), "blob");
+                    found = true;
+                }
+            },
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
+    let a = "100644 blob 0000000000000000000000000000000000000001\ta";
+    let b = "100644 blob 0000000000000000000000000000000000000001\ta//./b/";
+    proof {
+        policy::tree_path_obeys_cmp();
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\t");
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta");
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta//./b/");
+        reveal_strlit("a"); reveal_strlit("a//./b/");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(a) && vstd::string::is_ascii(b)
+            && vstd::string::is_ascii("a") && vstd::string::is_ascii("a//./b/"));
+        assert(a@ =~= "100644 blob 0000000000000000000000000000000000000001\t"@ + "a"@);
+        assert(b@ =~= "100644 blob 0000000000000000000000000000000000000001\t"@ + "a//./b/"@);
+        tree_fixture_row(a, "a"); tree_fixture_row(b, "a//./b/");
+        assert(policy::paths::relative_path("a".spec_bytes()));
+        assert(policy::paths::relative_path("a//./b/".spec_bytes()));
+    }
+    let rows = [b, a];
+    match policy::parse_git_tree_rows(&rows) {
+        Ok(tree) => {
+            expect_status_true(tree.len() == 2);
+            proof {
+                assert forall|i: int| #![trigger policy::git_tree_row_at(rows@, i)]
+                    0 <= i < rows.len() implies exists|key: policy::TreePath|
+                    tree@.contains_key(key) && key@ == (if i == 0 { "a//./b/"@ } else { "a"@ })
+                        && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
+                            "0000000000000000000000000000000000000001"@, "blob"@) by {
+                    let key = choose|key: policy::TreePath| tree@.contains_key(key)
+                        && policy::git_tree_entry_matches(key, tree@[key],
+                            (policy::git_tree_row_at(rows@, i)->Ok_0));
+                    vstd::utf8::encode_utf8_decode_utf8(key@);
+                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].mode@);
+                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].oid@);
+                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].kind@);
+                    vstd::utf8::encode_utf8_decode_utf8("a//./b/"@);
+                    vstd::utf8::encode_utf8_decode_utf8("a"@);
+                    vstd::utf8::encode_utf8_decode_utf8("100644"@);
+                    vstd::utf8::encode_utf8_decode_utf8("0000000000000000000000000000000000000001"@);
+                    vstd::utf8::encode_utf8_decode_utf8("blob"@);
+                }
+            }
+            proof {
+                assert(policy::git_tree_row_at(rows@, 0).is_ok());
+                assert(policy::git_tree_row_at(rows@, 1).is_ok());
+            }
+            expect_fixture_tree_member(&tree, "a");
+            expect_fixture_tree_member(&tree, "a//./b/");
+        },
+        Err(_) => { panic!(); },
+    }
+    match policy::parse_git_tree_rows(&[]) {
+        Ok(tree) => expect_status_true(tree.len() == 0),
+        Err(_) => { panic!(); },
+    }
 }
 
 fn tree_path_keeps_full_content(text: &str) {
@@ -1293,25 +1611,15 @@ proof fn ordered_delta_head(changes: Seq<policy::DeltaFields>)
     tail.lemma_filter_prepend(changes[0], pred);
 }
 
-// 严格有序序列由全部逐路径投影唯一决定；不把完整输出退化为若干成员检查。
-proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
+proof fn delta_projection_heads(actual: Seq<policy::DeltaFields>,
     expected: Seq<policy::DeltaFields>)
-    requires policy::delta_fields_ordered(actual), policy::delta_fields_ordered(expected),
+    requires actual.len() > 0,
+        policy::delta_fields_ordered(actual), policy::delta_fields_ordered(expected),
         forall|path: Seq<char>| #[trigger] policy::delta_at_path(actual, path)
             == policy::delta_at_path(expected, path),
-    ensures actual == expected,
-    decreases actual.len() + expected.len(),
+    ensures expected.len() > 0, actual[0] == expected[0],
 {
-    if actual.len() == 0 {
-        if expected.len() > 0 {
-            ordered_delta_head(expected);
-            assert(policy::delta_at_path(actual, expected[0].0).len() == 0) by {
-                reveal_with_fuel(Seq::filter, 1);
-            }
-        }
-        assert(actual =~= expected);
-        return;
-    }
+    hide(scope_text::byte_lt);
     let path = actual[0].0;
     ordered_delta_head(actual);
     assert(policy::delta_at_path(expected, path) == seq![actual[0]]);
@@ -1324,6 +1632,11 @@ proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
     actual.lemma_filter_contains_rev(policy::delta_path_predicate(expected[0].0), expected[0]);
     let j = actual.lemma_contains_to_index(expected[0]);
     if i > 0 {
+        if j == 0 {
+            scope_text::byte_lt_strict(vstd::utf8::encode_utf8(expected[0].0),
+                vstd::utf8::encode_utf8(expected[i].0));
+            assert(false);
+        }
         assert(j > 0);
         scope_text::byte_lt_transitive(vstd::utf8::encode_utf8(actual[0].0),
             vstd::utf8::encode_utf8(expected[0].0), vstd::utf8::encode_utf8(actual[0].0));
@@ -1332,6 +1645,29 @@ proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
         assert(false);
     }
     assert(actual[0] == expected[0]);
+}
+
+// 严格有序序列由全部逐路径投影唯一决定；首项与递归尾部各自证明。
+proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
+    expected: Seq<policy::DeltaFields>)
+    requires policy::delta_fields_ordered(actual), policy::delta_fields_ordered(expected),
+        forall|path: Seq<char>| #[trigger] policy::delta_at_path(actual, path)
+            == policy::delta_at_path(expected, path),
+    ensures actual == expected,
+    decreases actual.len() + expected.len(),
+{
+    hide(scope_text::byte_lt);
+    if actual.len() == 0 {
+        if expected.len() > 0 {
+            ordered_delta_head(expected);
+            assert(policy::delta_at_path(actual, expected[0].0).len() == 0) by {
+                reveal_with_fuel(Seq::filter, 1);
+            }
+        }
+        assert(actual =~= expected);
+        return;
+    }
+    delta_projection_heads(actual, expected);
     let a = actual.skip(1);
     let b = expected.skip(1);
     assert forall|path: Seq<char>| #[trigger] policy::delta_at_path(a, path)
@@ -1349,6 +1685,8 @@ proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
     assert(policy::delta_fields_ordered(a));
     assert(policy::delta_fields_ordered(b));
     delta_from_all_path_projections(a, b);
+    assert(actual =~= seq![actual[0]] + a);
+    assert(expected =~= seq![expected[0]] + b);
     assert(actual =~= expected);
 }
 

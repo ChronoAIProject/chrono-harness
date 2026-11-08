@@ -128,11 +128,7 @@ fn id(s: &str) -> Result<(), String> {
     Ok(())
 }
 pub fn full_oid(s: &str) -> Result<(), String> {
-    if !matches!(s.len(), 40 | 64)
-        || s.bytes()
-            .any(|b| !b.is_ascii_digit() && !(b'a'..=b'f').contains(&b))
-        || s.bytes().all(|b| b == b'0')
-    {
+    if !chrono_harness::verified_identifiers::valid_oid(s.as_bytes()) {
         return Err(format!("expected full nonzero lowercase OID: {s}"));
     }
     Ok(())

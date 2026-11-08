@@ -903,7 +903,7 @@
     "verus.download": {
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
-      "pointer": "/scripts/2/actions/verus-download"
+      "pointer": "/scripts/0/actions/verus-download"
     },
     "verus.checksum": {
       "kind": "file",
@@ -6562,13 +6562,13 @@
     "release.linux_build_cache": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/33/id"
+        "pointer": "/units/32/id"
       }
     ],
     "release.linux_verify_cache_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/34/operation"
+        "pointer": "/units/33/operation"
       }
     ],
     "release.macos_build_runner": [
@@ -6748,13 +6748,13 @@
     "release.macos_build_cache": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/33/id"
+        "pointer": "/units/32/id"
       }
     ],
     "release.macos_verify_cache_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/34/operation"
+        "pointer": "/units/33/operation"
       }
     ]
   },
