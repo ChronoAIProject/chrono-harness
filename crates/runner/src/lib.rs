@@ -32,6 +32,8 @@ pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
+#[allow(unexpected_cfgs)]
+pub mod verified_git_binding;
 pub use chrono_identifiers as verified_identifiers;
 #[allow(unexpected_cfgs)]
 pub mod verified_limits;
@@ -1513,8 +1515,14 @@ fn run_process_inner_with_stdout(
         let start = Instant::now();
         let mut failure = None;
         let mut failure_detail = None;
+        #[cfg(unix)]
+        let terminal_deadline_ns = terminal_deadline.unwrap_or(0);
+        #[cfg(not(unix))]
+        let terminal_deadline_ns = 0u64;
         tracing::debug!(
             event_id = "process.monitor_wait",
+            terminal_deadline_ns,
+            monitor_timeout_millis = timeout.as_millis() as u64,
             "entering existing bounded process monitor"
         );
         let mut status = loop {

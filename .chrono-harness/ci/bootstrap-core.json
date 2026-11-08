@@ -11,13 +11,11 @@
     "inputs.fetch.judge-ci",
     "inputs.fetch.ci",
     "inputs.fetch.worktree",
-    "inputs.fetch.inputs",
     "host.bootstrap-verus",
     "build.runner",
     "build.judge-ci",
     "build.ci",
-    "build.worktree",
-    "build.inputs"
+    "build.worktree"
   ],
   "install": [
     {
@@ -31,10 +29,6 @@
     {
       "source": "crates/ci/target/debug/chrono-ci",
       "destination": ".chrono-harness/bin/chrono-ci"
-    },
-    {
-      "source": "crates/inputs/target/debug/chrono-inputs",
-      "destination": ".chrono-harness/bin/chrono-inputs"
     },
     {
       "source": "crates/worktree/target/debug/chrono-worktree",

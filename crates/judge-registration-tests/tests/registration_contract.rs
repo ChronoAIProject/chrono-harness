@@ -323,14 +323,14 @@ fn bind_actual_git(config: &mut Value, root: &Path) {
         .expect("product config must retain its Git tool");
     tool["program"] = program.clone().into();
     tool["expected_version"] = expected_version.into();
-    let input = config["environment"]["inputs"]
+    // This negative full-v3 fixture owns its mandatory binding. The current
+    // scoped product policy no longer supplies a per-host expected digest.
+    config["facts_git"]["input"] = json!("fixture-git-executable");
+    config["environment"]["inputs"]
         .as_array_mut()
         .unwrap()
-        .iter_mut()
-        .find(|input| input["id"] == "git-executable")
-        .expect("product config must retain its Git executable input");
-    input["location"] = program.into();
-    input["sha256"] = digest.into();
+        .push(json!({"id":"fixture-git-executable", "location":program,
+            "presence":"present", "sha256":digest}));
 }
 impl Host {
     fn new() -> Self {

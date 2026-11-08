@@ -391,7 +391,7 @@
     {"path":"crates/worktree/src/automatic.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/artifact_disposal.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/tests/automatic.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
-    {"path":".chrono-harness/cleanup.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:judge-workflow-tests"},{"kind":"runtime-input","to":"project:judge-filemap-tests"},{"kind":"runtime-input","to":"project:inputs-tests"}]},
+    {"path":".chrono-harness/cleanup.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:runner-tests"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:judge-workflow-tests"},{"kind":"runtime-input","to":"project:judge-filemap-tests"},{"kind":"runtime-input","to":"project:inputs-tests"}]},
     {"path":"crates/runner/src/process_fds.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/worktree/src/ownership.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/tests/interrupted_cleanup.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
@@ -572,7 +572,9 @@
     {"path":"crates/cache/src/verified_planner.rs","owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache"},{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
     {"path":"crates/cache-tests/tests/verified_planner.rs","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
     {"path":"crates/worktree/src/verified_lifecycle.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
-    {"path":"crates/worktree-tests/tests/verified_lifecycle.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]}
+    {"path":"crates/worktree-tests/tests/verified_lifecycle.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
+    {"path":"crates/runner/src/verified_git_binding.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}]},
+    {"path":"crates/runner-tests/tests/verified_git_binding.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]}
   ],
   "project_edges": [
     {"from":"project:host-bootstrap-native","kind":"compile","to":"project:host-release-native"},
@@ -1049,6 +1051,7 @@
     {"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:diagnostics-tests"},
     {"from":"project:diagnostics","kind":"compile","to":"project:diagnostics-tests"},
     {"from":"project:diagnostics","kind":"compile","to":"project:runner"},
+    {"from":"project:diagnostics","kind":"compile","to":"project:runner-tests"},
     {"from":"project:diagnostics","kind":"test-execution","to":"test:diagnostics-tests"},
     {"from":"project:diagnostics-tests","kind":"test-execution","to":"test:diagnostics-tests"},
     {"from":"tool:git","kind":"runtime-input","to":"script:host-bootstrap-launcher"},
@@ -1091,10 +1094,7 @@
     {"from":"project:worktree","kind":"compile","to":"project:judge-workflow-tests"},
     {"from":"project:worktree","kind":"compile","to":"project:judge-filemap-tests"},
     {"from":"project:worktree","kind":"compile","to":"project:inputs-tests"},
-    {"from":"project:inputs","kind":"runtime-input","to":"script:host-bootstrap-launcher"},
     {"from":"project:worktree","kind":"runtime-input","to":"script:host-bootstrap-launcher"},
-    {"from":"tool:chrono-inputs","kind":"runtime-input","to":"script:host-bootstrap-launcher"},
-    {"from":"tool:chrono-inputs","kind":"runtime-input","to":"project:inputs"},
     {"from":"project:judge-ci","kind":"compile","to":"project:ci-tests"},
     {"from":"project:diagnostics","kind":"compile","to":"project:judge-ci"},
     {"from":"project:diagnostics","kind":"compile","to":"project:judge-projects-tests"},
@@ -1232,6 +1232,8 @@
     },
     "test:runner-tests": {
       "operations": [
+        "verify.runner-git-binding",
+        "verify.runner-git-binding-tests",
         "verify.retention-release",
         "verify.retention-release-tests",
         "verify.verus-result",
@@ -2053,6 +2055,8 @@
           ".chrono-harness/state/"
         ]
       },
+      "verify.runner-git-binding": {"resources": [], "outputs": [".chrono-harness/state/"]},
+      "verify.runner-git-binding-tests": {"resources": [], "outputs": [".chrono-harness/state/"]},
       "verify.runner-limits": {
         "resources": [],
         "outputs": [
@@ -2152,7 +2156,6 @@
       {
         "config": ".chrono-harness/git/macos-27.json",
         "edges": [
-          {"from":"input:git-executable","kind":"runtime-input","to":"project:runner"},
           {"from":"input:bootstrap-native-toolchains","kind":"runtime-input","to":"project:runner"}
         ]
       }

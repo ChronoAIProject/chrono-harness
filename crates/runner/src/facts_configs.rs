@@ -157,6 +157,7 @@ pub(crate) fn resolve_target(
     }
     if let Some((program, hash)) = identity {
         let (tool, input) = crate::facts_binding::declaration(&selected_config)?;
+        let input = input.ok_or("Git identity selector requires a declared executable input")?;
         if tool["program"] != program || input["location"] != program || input["sha256"] != hash {
             return Err("Git config selector identity differs from selected policy binding".into());
         }

@@ -1,35 +1,7 @@
 {
-  "schema": "chrono-git-configs/v3",
+  "schema": "chrono-git-configs/v1",
   "platforms": {
-    "macos-aarch64": {
-      "program": "/usr/bin/git",
-      "configurations": [
-        {
-          "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9",
-          "path": ".chrono-harness/git/pinned-macos.json",
-          "registry_path": ".chrono-harness/git/pinned-macos.json"
-        },
-        {
-          "sha256": "61e77a2d557f8677a9da3b403c054c8b6e2d2ba5f6389bce100b55b65977df2e",
-          "path": ".chrono-harness/git/macos-26.json",
-          "registry_path": ".chrono-harness/git/pinned-macos.json"
-        },
-        {
-          "sha256": "34129c71a01a74f7f3b2443521519b2e5447553fa187f5fcafaaf8c42cc192e2",
-          "path": ".chrono-harness/git/macos-27.json",
-          "registry_path": ".chrono-harness/git/macos-27.json"
-        }
-      ]
-    },
-    "linux-x86_64": {
-      "program": "/usr/bin/git",
-      "configurations": [
-        {
-          "sha256": "824d5b2fffef332ec7ba053e579659bb12f26a0b4747da6f9c6dc0e71d36f235",
-          "path": ".chrono-harness/git/linux-release.json",
-          "registry_path": ".chrono-harness/git/linux-release.json"
-        }
-      ]
-    }
+    "macos-aarch64": ".chrono-harness/git/macos-27.json",
+    "linux-x86_64": ".chrono-harness/git/linux-release.json"
   }
 }
