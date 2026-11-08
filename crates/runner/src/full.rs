@@ -580,7 +580,7 @@ pub fn execute(
             .collect();
         if !blocked.is_empty() {
             records.push(value!({"id":b.id,"binding":b,"state":"blocked","blocked_by":blocked,"exit_code":null}));
-            status = status.max(Status::Error);
+            status = status.maximum(Status::Error);
             continue;
         }
         let req = match (|| {
@@ -598,7 +598,7 @@ pub fn execute(
         };
         match wire::invoke_prepared(&req, &b, env, timeout, limit) {
             Ok((r, p)) => {
-                status = status.max(r.status.clone());
+                status = status.maximum(r.status.clone());
                 // The process already digested the canonical request bytes it consumed.
                 // Reuse that observation instead of serializing the same request again.
                 records.push(value!({"id":b.id,"binding":b,"state":"executed","request_id":req.request().request_id,"request_digest":p.stdin_sha256,"exit_code":p.exit_code,"response":r,"process":p}));
@@ -783,7 +783,7 @@ pub fn validate_execution(
                     }
                     validate_transport_failure(message.as_str().unwrap(), &process, &request)
                         .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
-                    expected_status = expected_status.max(Status::Error);
+                    expected_status = expected_status.maximum(Status::Error);
                     failed.insert(binding.id.clone());
                 } else {
                     if record["request_digest"] != request_digest {
@@ -796,8 +796,18 @@ pub fn validate_execution(
                             || format!("E_SELF_DIAGNOSTIC: executed record {id} has no response"),
                         )?)
                         .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} response: {e}"))?;
-                    validate_record_response(&response, &request, process.exit_code)
-                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
+                    crate::verified_status::validate_record_response(
+                        &response.protocol,
+                        &response.request_id,
+                        &response.judge_id,
+                        &response.status,
+                        process.exit_code,
+                        wire::PROTOCOL,
+                        &request.request_id,
+                        &request.judge_id,
+                        &response.findings,
+                    )
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
                     if process.failure.is_some()
                         || json(&process.stdout_bytes).map_err(|e| {
                             format!("E_SELF_DIAGNOSTIC: record {id} original response: {e}")
@@ -807,7 +817,7 @@ pub fn validate_execution(
                             "E_SELF_DIAGNOSTIC: record {id} response differs from process"
                         ));
                     }
-                    expected_status = expected_status.max(response.status.clone());
+                    expected_status = expected_status.maximum(response.status.clone());
                     if response.status >= Status::Fail {
                         failed.insert(binding.id.clone());
                     }
@@ -849,7 +859,7 @@ pub fn validate_execution(
                         "E_SELF_DIAGNOSTIC: record {id} has invalid blocked predecessors"
                     ));
                 }
-                expected_status = expected_status.max(Status::Error);
+                expected_status = expected_status.maximum(Status::Error);
                 failed.insert(binding.id.clone());
             }
             "error" => {
@@ -882,7 +892,7 @@ pub fn validate_execution(
                         "E_SELF_DIAGNOSTIC: error record {id} has no transport failure"
                     ));
                 }
-                expected_status = expected_status.max(Status::Error);
+                expected_status = expected_status.maximum(Status::Error);
                 failed.insert(binding.id.clone());
             }
             other => {
@@ -943,29 +953,6 @@ fn validate_transport_failure(
     });
     if protocol_result.is_ok() {
         return Err("transport failure accompanies a valid protocol response".into());
-    }
-    Ok(())
-}
-
-fn validate_record_response(
-    response: &Response,
-    request: &Request,
-    exit_code: i32,
-) -> Result<(), String> {
-    if !crate::verified_status::wire_header_matches(
-        &response.protocol,
-        &response.request_id,
-        &response.judge_id,
-        &response.status,
-        exit_code,
-        wire::PROTOCOL,
-        &request.request_id,
-        &request.judge_id,
-    ) {
-        return Err("response identity/status/exit mismatch".into());
-    }
-    if !crate::verified_status::findings_match_status(&response.status, &response.findings) {
-        return Err("response findings/status disagree".into());
     }
     Ok(())
 }
