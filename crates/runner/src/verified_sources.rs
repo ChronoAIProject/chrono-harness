@@ -1111,7 +1111,7 @@ pub fn proof_roots_have_registered_operations(
         }
         if !found { return false; }
         assert(exists|j: int| 0 <= j < operations.len()
-            && operations[j]@ == (#[trigger] declaration.roots[i]).operation@);
+            && operations[j]@ == (#[trigger] declaration.roots[i as int]).operation@);
         i += 1;
     }
     true
