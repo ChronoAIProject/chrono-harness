@@ -345,7 +345,8 @@
     ],
     "values": {
       "CARGO_TERM_COLOR": "never",
-      "CARGO_INCREMENTAL": "1"
+      "CARGO_INCREMENTAL": "1",
+      "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo"
     },
     "inputs": [
       {

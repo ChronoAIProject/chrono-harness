@@ -126,7 +126,9 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
 
-四项 `detect.*` 缓存的生产者使用 `bootstrap-core.json` 登记的专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。兼容输入用仓库相对路径声明其中 `config` 和 `config.toml` 缺失，存在任一配置时规划失败，避免恢复与实际构建配置不符的产物。默认 runner home 的配置声明仍供使用该环境的检查／发布生产者消费，其绝对路径迁移尚未完成；这两组输入不互相替代，也不证明其余构建输入完整。
+本仓编译缓存的生产者使用专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。bootstrap 配方、四份检查政策和发布源中的缓存生产命令明确选择这个仓库相对目录；发布命令用已有 `/usr/bin/env` 转交变量，不新增调度入口。Cargo 子进程的工作目录是实际检出根，独立检出各自拥有该缓存。
+
+缓存的 Cargo／rustc 探测同样明确选择该目录，不再继承另一份 `CARGO_HOME`。所有相关编译缓存复用 `bootstrap.cargo.home-config`／`bootstrap.cargo.home-config-toml` 两项缺失声明；存在任一配置时规划失败，避免恢复与实际构建配置不符的产物。已删除 `/Users/runner`、`/home/runner` 的四条主机目录声明，不展开 HOME，也不另存主机观察。这些选择不证明祖先 Cargo 配置及其余构建输入完整；实际环境、失败和原件继续归本轮 state／线上 CI。
 
 专属 Rust 宿主采用回归覆盖这些区别，包括 detector 没有业务检查政策，以及 detector 构建参数变化。它们只验证这些声明依赖，不证明构建输入完整或所有登记都有必要。
 
