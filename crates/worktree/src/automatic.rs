@@ -844,7 +844,7 @@ impl Manager {
             }
             absolute(&e.path, true)?;
         }
-        Ok(Some(Self {
+        let manager = Self {
             inputs,
             ledger,
             directory,
@@ -852,7 +852,90 @@ impl Manager {
             record_directory,
             _namespace: namespace,
             _gate: gate,
-        }))
+        };
+        manager.protect_originals()?;
+        Ok(Some(manager))
+    }
+    /// The enrollment is an actual durable consumer, independently of any
+    /// invocation's read scope. These are the fields owned by this schema;
+    /// neither JSON traversal nor a directory scan defines dependencies.
+    fn original_paths(&self, ledger: &Ledger) -> Result<BTreeSet<String>, String> {
+        let mut paths = BTreeSet::new();
+        for e in &ledger.entries {
+            if e.enrollment["receipt"]["source_root"].is_null()
+                || e.enrollment["receipt"]["source_root"]
+                    == value!(self.inputs.policy.coordinator_root)
+            {
+                if let Some(path) = e.enrollment["receipt"]["report_path"].as_str() {
+                    paths.insert(path.into());
+                }
+            }
+            for field in ["sealed_receipt", "recovered_receipt"] {
+                if !e.enrollment[field].is_null() {
+                    let receipt: Receipt = serde_json::from_value(e.enrollment[field].clone())
+                        .map_err(|error| format!("invalid enrollment {field}: {error}"))?;
+                    paths.insert(receipt.path);
+                }
+            }
+            for field in ["interrupted_uses", "terminal_history"] {
+                if !e.enrollment[field].is_null() {
+                    let receipts: Vec<Receipt> =
+                        serde_json::from_value(e.enrollment[field].clone())
+                            .map_err(|error| format!("invalid enrollment {field}: {error}"))?;
+                    paths.extend(receipts.into_iter().map(|receipt| receipt.path));
+                }
+            }
+            if let Some(terminal) = &e.terminal {
+                paths.insert(terminal.receipt.path.clone());
+            }
+            for attempt in &e.attempts {
+                paths.insert(attempt.path.clone());
+            }
+            for attempt in &e.cache_attempts {
+                paths.insert(attempt.intent.path.clone());
+                paths.insert(attempt.path.clone());
+            }
+            paths.extend(e.policy_migrations.iter().map(|r| r.path.clone()));
+            paths.extend(e.main_cache_adoptions.iter().map(|r| r.path.clone()));
+            if let Some(path) = e.cleanup.as_ref().and_then(|p| p.report_path.as_ref()) {
+                paths.insert(path.clone());
+            }
+            for token in &e.uses {
+                relative_path(token)?;
+                for prefix in ["use-intent-", "use-"] {
+                    paths.insert(format!(
+                        "{}{prefix}{token}.json",
+                        self.inputs.policy.state_directory
+                    ));
+                }
+            }
+        }
+        Ok(paths)
+    }
+    fn original_role(&self) -> Result<String, String> {
+        Ok(format!(
+            "worktree-enrollment:{}",
+            sha256(
+                self.scope
+                    .to_str()
+                    .ok_or("enrollment address UTF-8")?
+                    .as_bytes()
+            )
+        ))
+    }
+    fn protect_originals(&self) -> Result<(), String> {
+        if let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(
+            &self.inputs.policy.coordinator_root,
+        )? {
+            inventory.reference_paths(
+                &self.original_role()?,
+                &self
+                    .original_paths(&self.ledger)?
+                    .into_iter()
+                    .collect::<Vec<_>>(),
+            )?;
+        }
+        Ok(())
     }
     fn save(&self) -> Result<(), String> {
         if self.inputs.policy.schema == "chrono-worktree-automatic-cleanup/v2"
@@ -872,11 +955,31 @@ impl Manager {
         if let Some(lease) = &self._gate.lease {
             lease.stable()?;
         }
-        write_json(
-            &no_symlink_parents(&self.record_directory, "ledger.json")?,
-            &self.ledger,
-            false,
+        let path = no_symlink_parents(&self.record_directory, "ledger.json")?;
+        let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(
+            &self.inputs.policy.coordinator_root,
         )?;
+        if let Some(inventory) = &inventory {
+            let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
+            let mut paths = self.original_paths(&previous)?;
+            paths.extend(self.original_paths(&self.ledger)?);
+            // Protect both possible durable records before publication. A
+            // failed ledger write leaves the previous recovery inputs rooted.
+            inventory.reference_paths(
+                &self.original_role()?,
+                &paths.into_iter().collect::<Vec<_>>(),
+            )?;
+        }
+        write_json(&path, &self.ledger, false)?;
+        if let Some(inventory) = inventory {
+            inventory.reference_paths(
+                &self.original_role()?,
+                &self
+                    .original_paths(&self.ledger)?
+                    .into_iter()
+                    .collect::<Vec<_>>(),
+            )?;
+        }
         Ok(())
     }
     fn stable(&self, r: &mut Runner) -> Result<(), String> {
