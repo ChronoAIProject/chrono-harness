@@ -44,19 +44,20 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
     ));
     cfg["environment"]["values"]["HOME"] = json!(std::env::var("HOME").unwrap());
     cfg["environment"]["values"]["CARGO_HOME"] = json!(cargo_home);
-    // Native bootstrap selects Cargo through rustup with this variable. Keep
-    // the same selection in the cleared judge/business environment, including
-    // its absence locally, rather than falling back to a different default.
+    // Native bootstrap selects both the Rustup storage and toolchain. Keep
+    // both selections in the cleared judge/business environment, including
+    // their absence locally, so every child uses the prepared toolchain.
     cfg["environment"]["inherit"]
         .as_array_mut()
         .unwrap()
-        .push(json!("RUSTUP_TOOLCHAIN"));
+        .extend([json!("RUSTUP_HOME"), json!("RUSTUP_TOOLCHAIN")]);
     cfg["input_closure"]["bindings"][1]["inputs"]
         .as_array_mut()
         .unwrap()
         .extend([
             json!("environment:HOME"),
             json!("environment:CARGO_HOME"),
+            json!("environment:RUSTUP_HOME"),
             json!("environment:RUSTUP_TOOLCHAIN"),
         ]);
     for i in cfg["environment"]["inputs"].as_array_mut().unwrap() {
@@ -117,6 +118,11 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
     ));
     fm["project_edges"].as_array_mut().unwrap().push(edge(
         "environment:CARGO_HOME",
+        "runtime-input",
+        "judge:projects",
+    ));
+    fm["project_edges"].as_array_mut().unwrap().push(edge(
+        "environment:RUSTUP_HOME",
         "runtime-input",
         "judge:projects",
     ));
