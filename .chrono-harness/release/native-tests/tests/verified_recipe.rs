@@ -82,7 +82,12 @@ fn tar_entry_requires_the_exact_regular_name_size_and_mode() {
     let path = policy::executable_entry(&traversal, true, 7, 489, 7, 489);
     let empty: [u8; 0] = [];
     let absent = policy::executable_entry(&empty, true, 7, 489, 7, 489);
-    expect_recipe(same && !link && !size && !mode && !path && !absent);
+    expect_recipe(same);
+    expect_recipe(!link);
+    expect_recipe(!size);
+    expect_recipe(!mode);
+    expect_recipe(!path);
+    expect_recipe(!absent);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
