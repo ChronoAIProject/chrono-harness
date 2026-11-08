@@ -58,7 +58,7 @@ Rust 回归使用真实缺失可执行文件、权限拒绝、摘要拒绝、原
 
 这还没完成 SPEC §7.1／§7.2。其他 runner 领域路径和程序保留原诊断。通用原生错误适配器、全产品有类型错误、统一应急发布、登记格式／目的选择、持久记录引用、子进程上下文传递和非 Rust 适配仍待完成。诊断发布失败不能算证据已保存。
 
-macos-26 的已有观察来自生产 `72b1d08` 的运行 `39690377913/1` 和场景 `c515cd05` 的运行 `39695762671/1`。两份标准 runner 原报告在六个二进制中记录 166 项通过、1 项已有忽略，包括三个 `prelaunch_diagnostics_*` 和 `execution_self_diagnostic_rejects_mutated_prelaunch_error_records`。当前启动导入、安装工具身份、单元原进程输出和成功汇总均保留。这只证明有限 Darwin 测试／消费，不证明通用持久诊断发布或 Linux 行为。
+macos-26 的已有观察见[原生产运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[原场景运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)。具体源码、测试数量和进程输出直接查原 runner 报告及汇总；这些观察只覆盖对应的 Darwin 测试和消费，不证明通用持久诊断发布或 Linux 行为。
 
 候选真实 CI 验收须在当前共享启动安装／验证后，由已有 macos-26 `unit_runner` 运行标准 runner 单元。保留实际完整调用回归输出、原进程／输出流／错误记录、当前二进制／源码绑定，以及原单元／汇总产物生产身份。Linux 的进程、描述符、exec 前覆盖仍须登记的 Linux 真实验证，不能从本地 Darwin 外推 errno 或所有权行为。业务检查成功却没这些原件，不足以支撑对应证据结论。源／产物／run／attempt 条件归[共享启动交接](filemap-impact.md#bounded-internal-causal-consumption)，不新增工作流或替代诊断测试入口。
 
@@ -100,7 +100,7 @@ INFO 测试要求操作上下文和结果，并拒绝进程细节事件。DEBUG 
 
 ### 历史失败保留原结论
 
-此次日志补上固定失败运行 `41315147398/1`、候选 `1b762bc47641aca69bc34fe7820b29ca9f06f0a3` 的归因信息缺口。其原参与报告仍记录 2400 秒超时；最后记录的子进程已终止，既不能确定其参数，也不能解释外层为何未结束。历史根因仍未解决。最终单元报告缺失和后续上传确认拒绝都是真实失败。本次不猜测修复那个超时，也不允许在最终发布缺失时释放原件。
+历史失败的上下文和原参与报告直接查[原运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/41315147398)。该次超时的根因仍未解决；最后记录的子进程已终止，仍不能还原其完整参数或解释外层等待。最终单元报告缺失和上传确认拒绝继续按原失败保留。当前日志改动不宣称修复该次超时，也不允许在必要原件缺失时释放它们。
 
 限定范围 Logger 还处理共享调用点先被无日志线程使用的情况。锁定的 tracing-core 0.1.36 单分发器快速路径可能从无关线程缓存 `never`。Logger 保持同一 subscriber 的两个登记存活，让登记阶段查询活跃订阅者；真正投递仍归调用线程的限定范围分发器，不安装全局 dispatcher。
 
