@@ -204,6 +204,10 @@ fn preparation_rejects_invalid_or_overlapping_declarations_before_process_or_dir
     assert!(!fixture.root.join(".chrono-harness").exists());
     let original = fixture.config.clone();
     for update in [
+        json!({"environment":null}),
+        json!({"environment":[]}),
+        json!({"environment":{"":"value"}}),
+        json!({"environment":{"RUSTC":null}}),
         json!({"environment":{"CHRONO_PROCESS_FDS":"7"}}),
         json!({"environment":{"bad=key":"value"}}),
         json!({"environment":{"key":"bad\0value"}}),
@@ -216,6 +220,13 @@ fn preparation_rejects_invalid_or_overlapping_declarations_before_process_or_dir
         json!({"toolchain_provision":{"profile":{"default":null},"rustup_home":".chrono-harness/state/r","cargo_home":".chrono-harness/state/c"}}),
         json!({"toolchain_provision":{"profile":"default","rustup_home":".chrono-harness/state/r","cargo_home":".chrono-harness/state/r/c"}}),
         json!({"toolchain_provision":{"profile":"default","rustup_home":".chrono-harness/state/r","cargo_home":".chrono-harness/state/r"}}),
+        json!({"toolchain_provision":null}),
+        json!({"toolchain_provision":{}}),
+        json!({"toolchain_provision":[]}),
+        json!({"toolchain_provision":{"profile":"default","rustup_home":".chrono-harness/state/r","cargo_home":null}}),
+        json!({"toolchain_provision":{"profile":"default","rustup_home":"/tmp/global-rust","cargo_home":".chrono-harness/state/c"}}),
+        json!({"toolchain_provision":{"profile":"default","rustup_home":".chrono-harness/state/../r","cargo_home":".chrono-harness/state/c"}}),
+        json!({"toolchain_provision":{"profile":"default","rustup_home":".chrono-harness/state/r","cargo_home":".chrono-harness/state/c","extra":true}}),
         json!({"rust_incremental":"false"}),
     ] {
         fixture.config = original.clone();
@@ -235,4 +246,164 @@ fn preparation_rejects_invalid_or_overlapping_declarations_before_process_or_dir
     .unwrap();
     assert!(fixture.select().is_err());
     assert!(!fixture.tools.join("calls.json").exists());
+
+    let mut private = Fixture::new();
+    private.private();
+    fs::create_dir_all(private.root.join(".chrono-harness/state")).unwrap();
+    std::os::unix::fs::symlink(
+        &private.tools,
+        private.root.join(".chrono-harness/state/private"),
+    )
+    .unwrap();
+    assert!(private.select().is_err());
+    assert!(!private.tools.join("calls.json").exists());
+}
+
+#[test]
+fn explicit_source_environment_is_selected_before_private_homes_without_mutating_inherited_values()
+{
+    let mut fixture = Fixture::new();
+    let configured = json!({"CARGO_HOME":"/source/cargo","RUSTUP_HOME":"/source/rustup",
+        "RUSTC":"/source/rustc","RUSTFLAGS":"--sysroot=/source/sysroot"});
+    fixture.config["environment"] = configured.clone();
+    let before = fixture.inherited.clone();
+    let prepared = Prepared::parse(&fixture.root, &fixture.bytes(), &fixture.inherited).unwrap();
+    for (key, value) in configured.as_object().unwrap() {
+        assert_eq!(
+            prepared.environment.get(OsStr::new(key)).unwrap(),
+            OsStr::new(value.as_str().unwrap())
+        );
+    }
+    fixture.private();
+    let private = Prepared::parse(&fixture.root, &fixture.bytes(), &fixture.inherited).unwrap();
+    assert_eq!(
+        private.environment.get(OsStr::new("RUSTUP_HOME")).unwrap(),
+        fixture
+            .root
+            .join(".chrono-harness/state/private/rustup")
+            .as_os_str()
+    );
+    assert_eq!(
+        private.environment.get(OsStr::new("CARGO_HOME")).unwrap(),
+        fixture
+            .root
+            .join(".chrono-harness/state/private/cargo")
+            .as_os_str()
+    );
+    assert_eq!(private.environment.get(OsStr::new("RUSTC")).unwrap(), "");
+    assert_eq!(fixture.inherited, before);
+    assert!(!fixture.tools.join("calls.json").exists());
+    assert!(!fixture.root.join(".chrono-harness").exists());
+}
+
+#[test]
+fn ordinary_registered_cargo_commands_keep_the_selected_home_and_exact_locked_inputs() {
+    use chrono_host_bootstrap::execution::{methods, run_operation};
+    let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let read = |path: &str| -> Value {
+        serde_json::from_slice(&fs::read(repository.join(path)).unwrap()).unwrap()
+    };
+    let selector = read(".chrono-harness/config.json");
+    let selected: Vec<_> = selector["platforms"]["macos-aarch64"]["configurations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["path"] == ".chrono-harness/git/pinned-macos.json")
+        .collect();
+    assert_eq!(selected.len(), 1);
+    let config = read(selected[0]["path"].as_str().unwrap());
+    assert!(
+        !config["environment"]["inherit"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|key| key == "CARGO_NET_OFFLINE")
+    );
+    let registry = methods(&read(".chrono-harness/projects.json")).unwrap();
+    let cache = read(".chrono-harness/ci/bootstrap-cache.json");
+    assert_eq!(cache["operations"], json!(["build.cache"]));
+    let mut fixture = Fixture::new();
+    fixture
+        .inherited
+        .insert("HOME".into(), "/Users/runner".into());
+    fixture
+        .inherited
+        .insert("CARGO_HOME".into(), "/Users/runner/.cargo".into());
+    fixture.inherited.remove(OsStr::new("CARGO_NET_OFFLINE"));
+    fixture
+        .inherited
+        .insert("CHRONO_TEST_CARGO_DOMAIN".into(), "1".into());
+    let declared = json!({"rust_toolchain":cache["rust_toolchain"],"environment":config["environment"]["values"]});
+    let environment = Prepared::parse(
+        &fixture.root,
+        &serde_json::to_vec(&declared).unwrap(),
+        &fixture.inherited,
+    )
+    .unwrap()
+    .environment;
+    let cache_environment = Prepared::parse(
+        &fixture.root,
+        &serde_json::to_vec(&cache).unwrap(),
+        &environment,
+    )
+    .unwrap()
+    .environment;
+    let originals = fixture.root.join(".chrono-harness/state/cargo-originals");
+    fs::create_dir_all(&originals).unwrap();
+    for (index, operation) in [
+        "build.runner",
+        "build.cache",
+        "build.distribution",
+        "build.instructions",
+        "build.judge-routes",
+        "build.cache",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let methods = &registry[*operation];
+        assert_eq!(methods.len(), 1);
+        let method = &methods[0];
+        assert_eq!(method.tool, "cargo");
+        let manifest = &method.argv[method
+            .argv
+            .iter()
+            .position(|arg| arg == "--manifest-path")
+            .unwrap()
+            + 1];
+        let lock = std::path::Path::new(manifest).with_file_name("Cargo.lock");
+        let mut locked = fs::read(repository.join(manifest)).unwrap();
+        locked.push(0);
+        locked.extend(fs::read(repository.join(&lock)).unwrap());
+        for path in [std::path::Path::new(manifest), lock.as_path()] {
+            let target = fixture.root.join(path);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::copy(repository.join(path), target).unwrap();
+        }
+        let selected = if index == 5 {
+            &cache_environment
+        } else {
+            &environment
+        };
+        let result = run_operation(
+            &fixture.root,
+            &originals,
+            index,
+            method,
+            &fixture.tools.join("cargo"),
+            selected,
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(result.exit_code, 0);
+        let stdout = fs::read(fixture.root.join(&result.stdout.path)).unwrap();
+        let observed: Value = serde_json::from_slice(&stdout).unwrap();
+        assert_eq!(observed["cargo_home"], "/Users/runner/.cargo");
+        assert_eq!(observed["offline"], false);
+        assert_eq!(observed["manifest"], manifest.as_str());
+        assert_eq!(observed["locked_input"], chrono_harness::sha256(&locked));
+        assert_eq!(observed["argv"], json!(method.argv));
+        assert_eq!(result.stdout.sha256, chrono_harness::sha256(&stdout));
+    }
 }
