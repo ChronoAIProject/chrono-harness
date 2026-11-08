@@ -3447,10 +3447,16 @@ pub(crate) fn attention_reminder(report: &Value) -> String {
             if required {
                 total += 1;
                 if total <= 64 {
+                    let detail: String = row["cleanup_progress"]["detail"]
+                        .as_str()
+                        .unwrap_or("")
+                        .chars()
+                        .take(512)
+                        .collect();
                     text.push_str(&format!(
                         "W_WORKTREE_ATTENTION: creator={} path={} branch={} work_state={} cleanup_state={} detail={} next_action={}; inspect chrono-worktree status and maintain unfinished work.\n",
                         row["creator_agent"], row["path"], row["branch"], row["work_state"],
-                        row["cleanup_state"], row["cleanup_progress"], row["next_action"]
+                        row["cleanup_state"], value!(detail), row["next_action"]
                     ));
                 }
             }
