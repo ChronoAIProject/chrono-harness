@@ -293,6 +293,9 @@ impl TemporaryHost {
             .find(|o| o.path == object)
             .ok_or("relocation allocation is not enrolled")?;
         store.stable(record)?;
+        if record.rolling.is_some() {
+            return Ok(());
+        }
         let bodies = record.bodies.clone();
         drop(store);
         for (member, body) in bodies {
@@ -421,6 +424,20 @@ impl TemporaryHost {
         )?
         .ok_or("copy allocation is being recovered")?;
         let allocation = directory.join(object);
+        if store.state.objects[i].rolling.is_some() {
+            store.stable(&store.state.objects[i])?;
+            no_symlink_parents(&allocation, member)?;
+            if !fs::symlink_metadata(source)
+                .map_err(|e| e.to_string())?
+                .is_file()
+            {
+                return Err("whole-directory fixture input must be a regular file".into());
+            }
+            lease.stable()?;
+            // Whole-directory custody already covers future copies, including
+            // their evidence window; do not duplicate each input in body-inputs.
+            return Ok(source.to_owned());
+        }
         let git_root = git_root
             .map(|root| -> Result<String, String> {
                 if root == allocation {
