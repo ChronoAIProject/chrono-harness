@@ -4,8 +4,77 @@
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+/// 只接受带末尾斜杠、分量非空且不含单独 . 或 .. 的声明，不归一化输入。
+pub open spec fn artifact_component_ok(path: Seq<u8>, i: int) -> bool {
+    (i == 0 || path[i - 1] == 47) ==> path[i] != 47
+        && !(path[i] == 46 && i + 1 < path.len() && path[i + 1] == 47)
+        && !(path[i] == 46 && i + 2 < path.len()
+            && path[i + 1] == 46 && path[i + 2] == 47)
+}
+
+pub open spec fn artifact_directory(path: Seq<u8>) -> bool {
+    path.len() > 0 && path.last() == 47
+        && forall|i: int| 0 <= i < path.len() ==> artifact_component_ok(path, i)
+}
+
+pub fn valid_artifact_directory(path: &[u8]) -> (valid: bool)
+    ensures valid == artifact_directory(path@),
+{
+    if path.len() == 0 || path[path.len() - 1] != 47 { return false; }
+    let mut i = 0;
+    while i < path.len()
+        invariant path.len() > 0, path@[path.len() - 1] == 47, i <= path.len(),
+            forall|j: int| 0 <= j < i ==> artifact_component_ok(path@, j),
+        decreases path.len() - i,
+    {
+        if i == 0 || path[i - 1] == 47 {
+            if path[i] == 47
+                || (path[i] == 46 && path.len() - i >= 2 && path[i + 1] == 47)
+                || (path[i] == 46 && path.len() - i >= 3
+                    && path[i + 1] == 46 && path[i + 2] == 47)
+            {
+                assert(!artifact_component_ok(path@, i as int));
+                return false;
+            }
+        }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn literal_directory(path: &str) -> Option<&str> {
+    if artifact_directory(path.spec_bytes()) { Some(path) }
+    else { None }
+}
+
+/// 完整过滤保持输入顺序、重复和原文借用；字面前缀由原标准格式接口输出。
+pub fn literal_artifact_directories<'a>(paths: &[&'a str]) -> (out: Vec<&'a str>)
+    ensures out@ == paths@.filter_map(|path: &str| literal_directory(path)),
+{
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < paths.len()
+        invariant i <= paths.len(),
+            out@ == paths@.take(i as int).filter_map(|path: &str| literal_directory(path)),
+        decreases paths.len() - i,
+    {
+        proof {
+            paths@.lemma_filter_map_take_succ(|path: &str| literal_directory(path), i as int);
+        }
+        let path = paths[i];
+        if valid_artifact_directory(path.as_bytes()) {
+            out.push(path);
+        }
+        i += 1;
+    }
+    assert(paths@.take(paths.len() as int) =~= paths@);
+    out
+}
 
 #[verifier::inline]
 pub open spec fn path_byte(byte: u8) -> bool {
