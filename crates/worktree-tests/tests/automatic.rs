@@ -1219,10 +1219,190 @@ fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_r
     assert!(remaining["entries"][0]["terminal"].is_null());
     assert!(active.join("payload").is_file());
     assert!(!target.exists());
+    assert!(
+        !h.root
+            .join(disposed["ownership"]["path"].as_str().unwrap())
+            .exists(),
+        "retired attachment capabilities must not outlive their final responsibility"
+    );
+    assert!(
+        !h.record_directory(&target).exists(),
+        "an empty retired address must release its metadata and directory"
+    );
     assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
     let (code, again, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{again} {error}");
     assert_eq!(h.ledger()["entries"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn retired_address_preserves_directory_consumers_and_unknown_members() {
+    use chrono_harness::ownership::DirectoryLease;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("retirement-boundaries");
+    let (code, created, error) = h.invoke("integration", "retirement-boundaries", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let directory = h.record_directory(&target);
+    let before = fs::read(directory.join("ledger.json")).unwrap();
+    let reader = DirectoryLease::acquire(&directory, false, None)
+        .unwrap()
+        .unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert_eq!(fs::read(directory.join("ledger.json")).unwrap(), before);
+    drop(reader);
+    let foreign = directory.join("unknown-work");
+    fs::write(&foreign, b"retain this independent work").unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 2, "{maintained} {error}");
+    assert_eq!(fs::read(&foreign).unwrap(), b"retain this independent work");
+    assert!(directory.join("owner.json").is_file());
+    fs::remove_file(foreign).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!directory.exists());
+}
+
+#[test]
+fn interrupted_address_retirement_preserves_changed_members_then_resumes_original_identity() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("interrupted-retirement");
+    let (code, created, error) = h.invoke("integration", "interrupted-retirement", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let directory = h.record_directory(&target);
+    fs::write(directory.join("fixture-consumer"), b"owned by this fixture").unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 2, "{maintained} {error}");
+    assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+    fs::remove_file(directory.join("fixture-consumer")).unwrap();
+    let members: Vec<_> = ["ledger.json", "owner.json", "metadata.lease"]
+        .iter()
+        .map(|name| {
+            let path = directory.join(name);
+            let bytes = fs::read(&path).unwrap();
+            value!({"name":name,"identity":chrono_harness::ownership::identity(&path).unwrap(),
+            "sha256":sha256(&bytes),"length":bytes.len()})
+        })
+        .collect();
+    let declaration = value!({"schema":"chrono-worktree-address-retirement/v1",
+        "coordinator_root":h.root,"common":h.root.join(".git"),"path":target,
+        "directory_identity":chrono_harness::artifact_disposal::identity(&directory).unwrap(),
+        "admission_id":members[2]["identity"],"members":members});
+    fs::write(
+        directory.join("retirement.json"),
+        serde_json::to_vec(&declaration).unwrap(),
+    )
+    .unwrap();
+    // A real unlink happened before interruption. Recovery must accept this
+    // partial effect without accepting another member's changed bytes.
+    fs::remove_file(directory.join("ledger.json")).unwrap();
+    let owner = directory.join("owner.json");
+    let original = fs::read(&owner).unwrap();
+    fs::write(&owner, [original.as_slice(), b" "].concat()).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 2, "{maintained} {error}");
+    assert!(directory.join("retirement.json").is_file());
+    assert!(directory.join("metadata.lease").is_file());
+    assert_eq!(
+        fs::read(&owner).unwrap(),
+        [original.as_slice(), b" "].concat()
+    );
+    fs::write(&owner, original).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!directory.exists());
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+}
+
+#[test]
+fn retired_capability_failure_keeps_the_creators_original_responsibility_visible() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    h.policy(|policy| {
+        policy["agent_identity_env"] = value!("CHRONO_TEST_AGENT_ID");
+        policy["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(value!("CHRONO_TEST_AGENT_ID"));
+    });
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let invoke = |operation: &str, extra: &[&str]| {
+        let mut command = h.auto_command(operation, extra);
+        command.env("CHRONO_TEST_AGENT_ID", "retirement-agent-A");
+        h.received(h._dir.capture_bound(&mut command))
+    };
+    let target = h.parent.join("retired-capability");
+    let (code, created, error) = invoke(
+        "start",
+        &[
+            "--kind",
+            "integration",
+            "--name",
+            "retired-capability",
+            "--path",
+            target.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{created} {error}");
+    let lease = h.root.join(
+        h.ledger()["entries"][0]["ownership"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let (code, finished, error) = invoke("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let identity = chrono_harness::ownership::identity(&lease).unwrap();
+    fs::write(&lease, b"unknown capability bytes").unwrap();
+    let (code, maintained, error) = invoke("maintain", &[]);
+    assert_eq!(code, 2, "{maintained} {error}");
+    let (code, status, error) = invoke("status", &["--path", h.root.to_str().unwrap()]);
+    assert_eq!(code, 0, "{status} {error}");
+    let pending = status["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["record_kind"] == "retired-lease")
+        .unwrap();
+    assert_eq!(pending["creator_agent"]["id"], "retirement-agent-A");
+    assert_eq!(pending["branch"], "integration/retired-capability");
+    assert_eq!(pending["agent_attention_required"], true);
+    assert_eq!(pending["next_action"], "maintain-retired-lease");
+    assert!(pending["error"].as_str().unwrap().contains("unknown bytes"));
+    assert!(error.contains(target.to_str().unwrap()), "{error}");
+    assert_eq!(fs::read(&lease).unwrap(), b"unknown capability bytes");
+    assert_eq!(
+        chrono_harness::ownership::identity(&lease).unwrap(),
+        identity
+    );
+    fs::write(&lease, b"").unwrap();
+    let (code, maintained, error) = invoke("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!lease.exists());
+    assert!(!h.record_directory(&target).exists());
 }
 
 #[test]
@@ -1259,6 +1439,237 @@ fn terminal_history_count_and_byte_limits_release_verified_generations_before_th
     assert!(!target.exists());
     assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/history-first"));
     assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/history-second"));
+}
+
+#[test]
+fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rotation() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    adopt_lifecycle_retention(&h);
+    let retention_path = h
+        .root
+        .join(chrono_harness::retained_artifacts::retention::POLICY_PATH);
+    let mut retention = json(&fs::read(&retention_path).unwrap()).unwrap();
+    retention["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
+    ]);
+    retention["max_related_outputs"] = value!(512);
+    fs::write(&retention_path, serde_json::to_vec(&retention).unwrap()).unwrap();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    for artifact in policy["artifacts"].as_array_mut().unwrap() {
+        if artifact["path"] == ".chrono-harness/state/" {
+            artifact["disposition"] = value!("dispose");
+        }
+    }
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("finite-originals");
+    let (code, created, error) = h.invoke("integration", "finite-originals", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let birth = h.ledger()["entries"][0]["enrollment"]["sealed_receipt"]["path"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .enrolled(&birth)
+            .unwrap(),
+        "the automatic producer must enroll its own original, not leave an unbounded file"
+    );
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .maintain()
+        .unwrap();
+    assert!(
+        h.root.join(&birth).is_file(),
+        "active enrollment still consumes birth"
+    );
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists());
+    let terminal = h.ledger()["entries"][0]["terminal"]["receipt"]["path"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let finished_path = finished["report_path"].as_str().unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths("fixture-finish-consumer", &[finished_path.into()])
+        .unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+    inventory.maintain().unwrap();
+    assert!(
+        !h.root.join(&birth).exists(),
+        "unconsumed birth must leave with history"
+    );
+    assert!(
+        h.root.join(&terminal).is_file(),
+        "finish report still consumes terminal input"
+    );
+    inventory
+        .reference_paths("fixture-finish-consumer", &[])
+        .unwrap();
+    maintain_original_until_absent(&inventory, &h.root.join(&terminal));
+    assert!(
+        !h.root.join(&terminal).exists(),
+        "released terminal original must be reclaimed"
+    );
+    assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/finite-originals"));
+}
+
+fn maintain_original_until_absent(
+    inventory: &chrono_harness::retained_artifacts::retention::Inventory,
+    path: &Path,
+) {
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        let round = inventory.maintain().unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        rounds.push(round);
+        if !path.exists() {
+            return;
+        }
+    }
+    panic!(
+        "bounded original disposal did not finish: {} {rounds:?}",
+        path.display()
+    );
+}
+
+#[test]
+fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_reference() {
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    adopt_lifecycle_retention(&h);
+    let policy_path = h.root.join(POLICY_PATH);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
+    ]);
+    policy["max_related_outputs"] = value!(512);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let cleanup_path = h.root.join(AUTO_POLICY);
+    let mut cleanup = json(&fs::read(&cleanup_path).unwrap()).unwrap();
+    cleanup["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(cleanup_path, serde_json::to_vec(&cleanup).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("pending-result-handoff");
+    let (code, created, error) = h.invoke("integration", "pending-result-handoff", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    let receipt = used["managed_use_receipt"].clone();
+    let raw_path = h.root.join(receipt["path"].as_str().unwrap());
+    let raw = fs::read(&raw_path).unwrap();
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt])
+    );
+    let report_path = h.root.join(used["report_path"].as_str().unwrap());
+    let report_bytes = fs::read(&report_path).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory.maintain().unwrap();
+    assert_eq!(
+        fs::read(&report_path).unwrap(),
+        report_bytes,
+        "the pending handoff still consumes its final report before the next worktree command"
+    );
+    inventory
+        .reference_paths(
+            "fixture-use-report",
+            &[used["report_path"].as_str().unwrap().into()],
+        )
+        .unwrap();
+    // Fault injection at the final report boundary: a partial JSON original
+    // cannot discharge the pending handoff or establish a command outcome.
+    fs::write(&report_path, b"{\"status\":").unwrap();
+    let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert_eq!(fs::read(&raw_path).unwrap(), raw);
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt])
+    );
+    let mut changed = json(&report_bytes).unwrap();
+    changed["untrusted_edit"] = value!(true);
+    fs::write(&report_path, serde_json::to_vec(&changed).unwrap()).unwrap();
+    let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt]),
+        "matching JSON fields do not replace the sealed producer bytes"
+    );
+    let (code, finished, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+    );
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists());
+    let (_code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(
+        h.ledger()["entries"].as_array().unwrap().len(),
+        1,
+        "an unresolved report handoff must survive disposed-history rotation: {maintained} {error}"
+    );
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt])
+    );
+    let row = maintained["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target))
+        .unwrap();
+    assert_eq!(row["work_state"], "terminal");
+    assert_eq!(row["report_handoff_pending"], true);
+    assert_eq!(row["attention_required"], true);
+    assert_eq!(row["next_action"], "recover-result-handoff");
+    fs::write(&report_path, &report_bytes).unwrap();
+    let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert!(h.ledger()["entries"][0]["enrollment"]["completed_uses"].is_null());
+    inventory.maintain().unwrap();
+    assert_eq!(
+        fs::read(&raw_path).unwrap(),
+        raw,
+        "report's actual consumer still needs the result"
+    );
+    inventory
+        .reference_paths("fixture-use-report", &[])
+        .unwrap();
+    maintain_original_until_absent(&inventory, &raw_path);
+    assert!(
+        !raw_path.exists(),
+        "successful report handoff must not create permanent roots"
+    );
+    assert!(!target.exists());
 }
 
 #[test]
