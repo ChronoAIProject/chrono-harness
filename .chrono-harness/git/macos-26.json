@@ -103,15 +103,6 @@
       "expected_version": "chrono-worktree 0.1.0"
     },
     {
-      "id": "chrono-inputs",
-      "program": ".chrono-harness/bin/chrono-inputs",
-      "resolution": "PATH-once",
-      "version_argv": [
-        "--version"
-      ],
-      "expected_version": "chrono-inputs 0.1.0"
-    },
-    {
       "id": "verus",
       "program": ".chrono-harness/bin/verus/verus",
       "resolution": "PATH-once",

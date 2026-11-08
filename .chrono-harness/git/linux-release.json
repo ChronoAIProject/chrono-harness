@@ -307,15 +307,6 @@
       "expected_version": null
     },
     {
-      "id": "chrono-inputs",
-      "program": ".chrono-harness/bin/chrono-inputs",
-      "resolution": "PATH-once",
-      "version_argv": [
-        "--version"
-      ],
-      "expected_version": "chrono-inputs 0.1.0"
-    },
-    {
       "id": "bash",
       "program": "/bin/bash",
       "resolution": "PATH-once",
