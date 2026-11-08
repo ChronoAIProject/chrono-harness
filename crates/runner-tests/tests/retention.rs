@@ -1972,6 +1972,48 @@ fn addressed_legacy_original_is_verified_without_silent_enrollment_or_rewriting(
 }
 
 #[test]
+fn policy_migration_does_not_hold_descriptors_for_unrelated_outputs() {
+    if !isolated_capability_test("policy_migration_does_not_hold_descriptors_for_unrelated_outputs")
+    {
+        return;
+    }
+    let h = host(256, 16);
+    let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+    for n in 0..80 {
+        let path = tree(h.path(), &format!("independent-{n}"));
+        inventory(h.path())
+            .begin("fixture", &path, json!({"exit":0}))
+            .unwrap()
+            .complete(json!({"exit":0}))
+            .unwrap();
+    }
+    let original = ledger(h.path());
+    let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+    policy["keep_seconds"] = json!(3600);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    assert_eq!(
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+        0
+    );
+    // Ownership capabilities deliberately use descriptors starting at 200.
+    limit.rlim_cur = limit.rlim_cur.min(256);
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
+    let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+    assert_eq!(receipt["outputs_preserved"], 80);
+    let mut after = ledger(h.path());
+    after["policy_sha256"] = original["policy_sha256"].clone();
+    assert_eq!(after, original);
+}
+
+#[test]
 fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_missing_scopes() {
     if !isolated_capability_test(
         "explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_missing_scopes",

@@ -16,6 +16,23 @@ pub struct Fixture {
 }
 
 impl Fixture {
+    pub fn adopt_retention(&self, diagnostic_seconds: u64) {
+        fs::write(
+            self.root
+                .join(chrono_harness::retained_artifacts::retention::POLICY_PATH),
+            serde_json::to_vec(&json!({
+                "schema":"chrono-output-retention/v2",
+                "producers":{"check-original":[".chrono-harness/state/"]},
+                "keep_seconds":0,"diagnostic_keep_seconds":diagnostic_seconds,
+                "max_related_outputs":32,"max_summaries":16,
+                "max_nodes_per_round":256,"max_bytes_per_round":1048576,
+                "max_millis_per_round":1000
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    }
+
     pub fn new() -> Self {
         let directory = tempfile::tempdir().unwrap();
         let root = fs::canonicalize(directory.path()).unwrap();
