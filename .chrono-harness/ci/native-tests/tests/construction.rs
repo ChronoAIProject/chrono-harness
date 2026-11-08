@@ -23,7 +23,9 @@ fn native_entry_preserves_private_installer_exit_and_failed_original_without_bui
     command
         .current_dir(&fixture.root)
         .env_clear()
-        .envs(&fixture.environment)
+        .envs(fixture.environment.iter().filter(|(key, _)| {
+            key.as_os_str() != std::ffi::OsStr::new(chrono_harness::process_fds::ENV)
+        }))
         .env("CHRONO_WORKTREE_BOOTSTRAP", &fixture.root)
         .args(["bootstrap", ".", ".chrono-harness/ci/build.json"]);
     chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
