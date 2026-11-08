@@ -109,6 +109,8 @@ jobs:
       - name: Bootstrap registered detector tools
         id: chrono_startup
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'produce'
       - name: Publish registered startup artifact
@@ -236,6 +238,8 @@ jobs:
           '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
@@ -399,6 +403,8 @@ jobs:
           '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_ci/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
@@ -749,6 +755,8 @@ jobs:
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_host-bootstrap'
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
@@ -1186,6 +1194,8 @@ jobs:
           '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-ci/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
@@ -1503,6 +1513,8 @@ jobs:
           '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
@@ -1838,6 +1850,8 @@ jobs:
           '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
@@ -1974,6 +1988,8 @@ jobs:
           '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-registration/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
@@ -3036,6 +3052,8 @@ jobs:
           '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_runner/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
@@ -3181,6 +3199,8 @@ jobs:
           '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_worktree/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check

@@ -22,10 +22,8 @@ fn bootstrap_credentials_follow_each_explicit_consumer() {
         source["collection"]["bootstrap_github_token"] = json!(collection);
         let config = serde_json::from_value(source).unwrap();
         let rendered = chrono_ci::units::render(&config, PROVIDER).unwrap();
-        let workflow: Value = serde_yaml_ng::from_str(
-            &rendered[".github/workflows/collection.yml"],
-        )
-        .unwrap();
+        let workflow: Value =
+            serde_yaml_ng::from_str(&rendered[".github/workflows/collection.yml"]).unwrap();
         assert!(workflow.get("env").is_none());
         assert_eq!(workflow["permissions"]["contents"], "read");
         for (job, enabled) in [
