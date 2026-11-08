@@ -163,7 +163,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 只构建并安装五项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-inputs`、`chrono-worktree`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。
 
-runner 和 diagnostics 已使用普通锁定 Cargo 构建，现役项目 action 不再调用 `cargo-guard`。因此 core 不再获取、构建或传递 `chrono-judge-cargo`，scoped 工具表和四份直接配置也移除其闲置声明。Cargo 适配器的专属测试仍由自己的执行计划构建，完整安装与独立发布不由 core 决定，仍须分别核查实际使用方。
+runner 和 diagnostics 使用普通锁定 Cargo 构建，core 按当前消费者安装所需工具。项目 action、单元、缓存和发布集合由各自登记维护。
 
 诊断单元直接验证导入 core，执行原格式、锁定构建和行为测试；不再准备专属保护工具、私有离线领域或目录观察。共享工具的验证／导入合同保持如下。
 

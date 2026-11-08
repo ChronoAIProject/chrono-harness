@@ -53,8 +53,6 @@
       "crates/distribution/target/",
       "crates/distribution-tests/target/",
       ".chrono-harness/cache/",
-      "crates/judge-cargo/target/",
-      "crates/judge-cargo-tests/target/",
       "crates/worktree/target/",
       "crates/worktree-tests/target/",
       "crates/diagnostics/target/",
@@ -169,12 +167,6 @@
         ],
         "report_path": ".chrono-harness/state/units/distribution/check.json"
       },
-      "judge-cargo": {
-        "tests": [
-          "test:judge-cargo-tests"
-        ],
-        "report_path": ".chrono-harness/state/units/judge-cargo/check.json"
-      },
       "worktree": {
         "tests": [
           "test:worktree-tests"
@@ -249,13 +241,11 @@
       ],
       "build.judge-ci": [
         "ci",
-        "judge-cargo",
         "judge-ci",
         "judge-projects"
       ],
       "build.judge-cost": [
         "inputs",
-        "judge-cargo",
         "judge-cost",
         "judge-mixed",
         "judge-workflow",
@@ -264,7 +254,6 @@
       ],
       "build.judge-filemap": [
         "inputs",
-        "judge-cargo",
         "judge-cost",
         "judge-filemap",
         "judge-mixed",
@@ -275,7 +264,6 @@
       ],
       "build.judge-mixed": [
         "inputs",
-        "judge-cargo",
         "judge-mixed",
         "judge-workflow",
         "judge-workflow-short",
@@ -283,7 +271,6 @@
       ],
       "build.judge-projects": [
         "inputs",
-        "judge-cargo",
         "judge-filemap",
         "judge-projects",
         "judge-workflow",
@@ -293,7 +280,6 @@
       "build.judge-registration": [
         "ci",
         "inputs",
-        "judge-cargo",
         "judge-cost",
         "judge-filemap",
         "judge-mixed",
@@ -305,7 +291,6 @@
       ],
       "build.judge-routes": [
         "inputs",
-        "judge-cargo",
         "judge-filemap",
         "judge-projects",
         "judge-routes",
@@ -315,7 +300,6 @@
       ],
       "build.judge-workflow": [
         "inputs",
-        "judge-cargo",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -323,7 +307,6 @@
       "build.runner": [
         "ci",
         "inputs",
-        "judge-cargo",
         "judge-ci",
         "judge-cost",
         "judge-filemap",
