@@ -230,23 +230,6 @@
       "source_roots": [
         "fixture/local-lane/"
       ]
-    },
-    {
-      "id": "projects-migration-host",
-      "directory": ".chrono-harness/state/temporary-hosts/migration/",
-      "temporary": true,
-      "fixture_bodies": true,
-      "generated_outputs": [
-        "fixture/crates/runner/target/",
-        "fixture/crates/judge-registration/target/",
-        "fixture/crates/judge-ci/target/",
-        "fixture/crates/ci/target/",
-        "fixture/crates/worktree/target/",
-        "fixture/crates/ci-tests/target/"
-      ],
-      "source_roots": [
-        "fixture/"
-      ]
     }
   ]
 }

@@ -55,6 +55,22 @@ fn real_registered_startup_chain_requires_original_consumer_evidence() {
     let result = consumption::validate_delta(None, &s, &BTreeSet::new(), &BTreeSet::new()).unwrap();
     assert_eq!(result.checked, paths(&["runner-startup"]));
     assert_eq!(result.required_tests, paths(&["test:host-bootstrap-tests"]));
+    let mut tools_only = host();
+    tools_only.documents.get_mut(CORE).unwrap()["install"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|output| output["destination"] != ".chrono-harness/bin/verus.zip");
+    tools_only.documents.get_mut(PREPARATION).unwrap()["operations"] = json!([]);
+    tools_only.adoption.as_mut().unwrap()["shared_startup"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("data_outputs");
+    assert_eq!(
+        consumption::validate_delta(None, &tools_only, &BTreeSet::new(), &BTreeSet::new())
+            .unwrap()
+            .required_tests,
+        paths(&["test:host-bootstrap-tests"])
+    );
     let mut legacy = host();
     legacy.adoption = None;
     assert!(
@@ -68,6 +84,59 @@ fn real_registered_startup_chain_requires_original_consumer_evidence() {
         .checked
         .is_empty()
     );
+}
+
+#[test]
+fn startup_data_requires_installed_output_and_selected_producer_and_consumer() {
+    for defect in [
+        "uninstalled",
+        "producer",
+        "consumer",
+        "unregistered-consumer",
+        "no-preparation",
+        "undeclared",
+    ] {
+        let old = host();
+        let mut s = host();
+        let chain = &mut s.adoption.as_mut().unwrap()["shared_startup"][0];
+        match defect {
+            "uninstalled" => {
+                let output = chain["data_outputs"][".chrono-harness/bin/verus.zip"].clone();
+                chain["data_outputs"][".chrono-harness/bin/absent.zip"] = output;
+            }
+            "producer" => {
+                chain["data_outputs"][".chrono-harness/bin/verus.zip"]["producer"] =
+                    json!("host.verus-download")
+            }
+            "consumer" => {
+                chain["data_outputs"][".chrono-harness/bin/verus.zip"]["consumer"] =
+                    json!("host.verus-download")
+            }
+            "unregistered-consumer" => {
+                chain["data_outputs"][".chrono-harness/bin/verus.zip"]["consumer"] =
+                    json!("absent.operation")
+            }
+            "no-preparation" => {
+                chain.as_object_mut().unwrap().remove("preparation");
+            }
+            "undeclared" => {
+                chain.as_object_mut().unwrap().remove("data_outputs");
+            }
+            _ => unreachable!(),
+        }
+        let error = consumption::validate_delta(Some(&old), &s, &paths(&[CHECK]), &BTreeSet::new())
+            .unwrap_err();
+        let expected = match defect {
+            "uninstalled" => "not installed",
+            "undeclared" => "declared producer claim",
+            "producer" => "declared producer operation",
+            "consumer" => "preparation operation",
+            "unregistered-consumer" => "operation",
+            "no-preparation" => "preparation consumer",
+            _ => unreachable!(),
+        };
+        assert!(error.contains(expected), "{defect}: {error}");
+    }
 }
 
 #[test]

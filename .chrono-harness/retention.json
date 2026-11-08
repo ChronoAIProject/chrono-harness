@@ -11,9 +11,6 @@
     "ci-fixture": [
       ".chrono-harness/state/ci-test-failures/"
     ],
-    "migration-fixture": [
-      ".chrono-harness/state/migration-tests/"
-    ],
     "check-original": [
       ".chrono-harness/state/"
     ],

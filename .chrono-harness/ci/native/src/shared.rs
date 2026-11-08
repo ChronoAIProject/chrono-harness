@@ -359,7 +359,7 @@ impl Shared {
                     .mode()
                     & 0o777;
                 if !policy::startup_mode(mode) {
-                    return Err("startup tool is not executable".into());
+                    return Err("startup file mode is invalid".into());
                 }
                 let path = format!("tools/{index}");
                 index += 1;
