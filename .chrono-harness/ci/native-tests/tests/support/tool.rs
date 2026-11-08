@@ -270,6 +270,27 @@ fn run() -> Result<u8, String> {
         && env::var("RUSTUP_TOOLCHAIN").as_deref() == Ok("1.95.0")
     {
         println!("{name} 1.95.0 (fixture)");
+    } else if name == "cargo" && env::var("CHRONO_TEST_CARGO_DOMAIN").as_deref() == Ok("1") {
+        if !args.iter().any(|arg| arg == "--locked") {
+            return Err("Cargo fixture requires the registered locked command".into());
+        }
+        let manifest = args
+            .iter()
+            .position(|arg| arg == "--manifest-path")
+            .and_then(|index| args.get(index + 1))
+            .ok_or("missing Cargo manifest")?;
+        let mut locked = fs::read(manifest).map_err(|error| error.to_string())?;
+        locked.push(0);
+        locked.extend(
+            fs::read(Path::new(manifest).with_file_name("Cargo.lock"))
+                .map_err(|error| error.to_string())?,
+        );
+        println!(
+            "{}",
+            json!({"cargo_home":env::var("CARGO_HOME").map_err(|error| error.to_string())?,
+            "offline":env::var("CARGO_NET_OFFLINE").as_deref()==Ok("true"),
+            "manifest":manifest,"locked_input":chrono_harness::sha256(&locked),"argv":args})
+        );
     } else if name == "cargo"
         && args.first().map(String::as_str) == Some("build-fixture")
         && args.len() == 2
