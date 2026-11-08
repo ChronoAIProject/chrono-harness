@@ -2153,7 +2153,6 @@
       {
         "config": ".chrono-harness/git/macos-27.json",
         "edges": [
-          {"from":"input:git-executable","kind":"runtime-input","to":"project:runner"},
           {"from":"input:bootstrap-native-toolchains","kind":"runtime-input","to":"project:runner"}
         ]
       }

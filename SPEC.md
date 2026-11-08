@@ -1159,7 +1159,7 @@ registration 负责严格当前 schema、受影响引用、固定快照、登记
 
 scoped judge-ci 经明确适配器复用 routes 计划及 projects 执行／回执逻辑。当前宿主操作顺序只由 FILEMAP 管理，历史 v1 绑定仅作 decoder 输入。在原生 full CI 替代此消费者前，scoped 旧选测／环境限制继续标明。ci 仍负责 workflow 生成与事件准备，instructions 独立。bootstrap 使用 Rust 1.95.0 和登记 locked build action 安装新增二进制，所有成本仍未知。
 
-scoped `chrono-ci-check/v2` 必须明确 `policy.facts_config` 为 `.chrono-harness/` 下路径，在获取对象前选择候选 full-v3 Git 绑定。同一 Reader 读取两端、原 commit parents、index／dirty 事实、可选 full-registration 解释及执行后事实。
+scoped `chrono-ci-check/v2` 必须明确 `policy.facts_config` 为 `.chrono-harness/` 下路径，在获取对象前选择候选 full-v3 或 schema4 Git 绑定。schema4 可只声明工具并显式采用 null 版本预期；同一运行的实际执行物身份和原结果由读取器产生并逐调用保护。需要预期身份的消费者须另有 §1.1 的必要性终点，不能为了记录环境而维护主机白名单；显式预期仍严格核验。同一 Reader 读取两端、原 commit parents、index／dirty 事实、可选 full-registration 解释及执行后事实。
 
 原始 commit parents 的物理头选择直接使用同源 Verus `commit_parent_records`：只以 LF 分行，
 在首个空行停止，仅选精确 `parent ` 前缀，完整保留原后缀、顺序和重复。
