@@ -2617,7 +2617,10 @@ fn delayed_monitor_helper() {
 
 #[cfg(unix)]
 fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
-    let mut root = tempfile::tempdir().unwrap();
+    // CI's retained fixture roots can exceed sockaddr_un's path limit. The
+    // protocol must keep working from such a directory using relative sockets.
+    let prefix = "delayed-monitor-".repeat(8);
+    let mut root = tempfile::Builder::new().prefix(&prefix).tempdir().unwrap();
     root.disable_cleanup(true);
     eprintln!(
         "delayed monitor originals ({case}): {}",
@@ -2674,11 +2677,17 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         output_limit_bytes: 16384,
     };
     let result = chrono_harness::run_process_observed(root.path(), &spec, &[], &digest);
+    fs::write(
+        root.path().join("launcher.original.json"),
+        serde_json::to_vec(&result).unwrap(),
+    )
+    .unwrap();
     let observed = controller.wait_with_output().unwrap();
     assert!(
         observed.status.success(),
-        "{}",
-        String::from_utf8_lossy(&observed.stderr)
+        "controller: {}; launcher original: {}",
+        String::from_utf8_lossy(&observed.stderr),
+        root.path().join("launcher.original.json").display()
     );
     let result = result.unwrap();
     assert_eq!(result.exit_code, 0, "{result:?}");
