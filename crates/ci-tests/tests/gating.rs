@@ -1925,10 +1925,13 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         config["environment"]["inputs"]
             .as_array_mut()
             .unwrap()
-            .push(json!({"id":input_id,"location":program,"presence":"present",
-                "sha256":sha256(&fs::read(&program).unwrap())}));
+            .push(
+                json!({"id":input_id,"location":program,"presence":"present",
+                "sha256":sha256(&fs::read(&program).unwrap())}),
+            );
         let map_path = ".chrono-harness/FILEMAP.json";
-        let mut map: Value = serde_json::from_slice(&fs::read(root.join(map_path)).unwrap()).unwrap();
+        let mut map: Value =
+            serde_json::from_slice(&fs::read(root.join(map_path)).unwrap()).unwrap();
         map["project_edges"].as_array_mut().unwrap().push(json!({
             "from":"input:fixture-git-executable", "kind":"runtime-input", "to":"project:ci"
         }));
