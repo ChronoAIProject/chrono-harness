@@ -2943,6 +2943,18 @@
             ".chrono-harness/ci/verus-macos-arm64.sha256"
           ]
         },
+        "verus-extract-shared": {
+          "operation": "host.verus-extract-shared",
+          "tool": "tar",
+          "argv": [
+            "-x",
+            "-f",
+            ".chrono-harness/bin/verus.zip",
+            "-s",
+            "|^verus-arm64-macos|.chrono-harness/bin/verus|",
+            "--no-same-owner"
+          ]
+        },
         "verus-extract": {
           "operation": "host.verus-extract",
           "tool": "tar",
