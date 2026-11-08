@@ -35,8 +35,6 @@
     "release-build-tests",
     "diagnostics",
     "diagnostics-tests",
-    "host-bootstrap",
-    "host-bootstrap-tests",
     "host-bootstrap-native",
     "host-bootstrap-native-tests",
     "host-bootstrap-launcher",
@@ -2097,15 +2095,11 @@
             "--skip",
             "interrupted_cleanup::public_participating_check_preserves_zero_and_nonzero_stderr_results",
             "--skip",
-            "interrupted_cleanup::returned_use_without_token_still_protects_detached_python_child",
+            "interrupted_cleanup::returned_use_without_token_still_protects_detached_native_child",
             "--skip",
             "interrupted_cleanup::adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease",
             "--skip",
-            "interrupted_cleanup::registered_consumers_forward_leases_after_both_wrappers_die",
-            "--skip",
-            "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
-            "--skip",
-            "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect"
+            "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers"
           ]
         },
         "execute_adoption": {
@@ -2119,11 +2113,9 @@
             "--",
             "--exact",
             "interrupted_cleanup::public_participating_check_preserves_zero_and_nonzero_stderr_results",
-            "interrupted_cleanup::returned_use_without_token_still_protects_detached_python_child",
+            "interrupted_cleanup::returned_use_without_token_still_protects_detached_native_child",
             "interrupted_cleanup::adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease",
-            "interrupted_cleanup::registered_consumers_forward_leases_after_both_wrappers_die",
-            "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
-            "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect"
+            "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers"
           ]
         },
         "format": {
@@ -3091,30 +3083,7 @@
             ".",
             ".chrono-harness/ci/bootstrap-unit.json"
           ]
-        }
-      }
-    },
-    {
-      "id": "host-bootstrap-launcher-tests",
-      "language": "shell",
-      "path": ".chrono-harness/ci/bootstrap-native-tests.sh",
-      "tests_for": "host-bootstrap-launcher",
-      "actions": {
-        "execute": {
-          "operation": "test.host-bootstrap-launcher-tests",
-          "tool": "bash",
-          "argv": [
-            ".chrono-harness/ci/bootstrap-native-tests.sh"
-          ]
-        }
-      }
-    },
-    {
-      "id": "host-bootstrap",
-      "language": "python",
-      "path": ".chrono-harness/ci/bootstrap.py",
-      "test_script": "host-bootstrap-tests",
-      "actions": {
+        },
         "verus-download": {
           "operation": "host.verus-download",
           "tool": "bootstrap-native",
@@ -3164,34 +3133,16 @@
       }
     },
     {
-      "id": "host-bootstrap-tests",
-      "language": "python",
-      "path": ".chrono-harness/ci/bootstrap-tests.py",
-      "tests_for": "host-bootstrap",
+      "id": "host-bootstrap-launcher-tests",
+      "language": "shell",
+      "path": ".chrono-harness/ci/bootstrap-native-tests.sh",
+      "tests_for": "host-bootstrap-launcher",
       "actions": {
         "execute": {
-          "operation": "host.bootstrap-tests",
-          "tool": "python3",
+          "operation": "test.host-bootstrap-launcher-tests",
+          "tool": "bash",
           "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py"
-          ]
-        },
-        "provision": {
-          "operation": "host.bootstrap-provision-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/provision_tests.py"
-          ]
-        },
-        "command-mocks": {
-          "operation": "host.bootstrap-command-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py",
-            "--command-mocks"
+            ".chrono-harness/ci/bootstrap-native-tests.sh"
           ]
         }
       }

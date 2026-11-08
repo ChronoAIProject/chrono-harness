@@ -22,12 +22,6 @@
       "tracked": false
     },
     {
-      "path": ".chrono-harness/state/bootstrap-real/",
-      "owner": "host-bootstrap-tests",
-      "kind": "execution-evidence",
-      "tracked": false
-    },
-    {
       "path": "crates/runner/target/",
       "owner": "runner",
       "kind": "cargo-output",

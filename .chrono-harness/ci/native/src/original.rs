@@ -91,17 +91,7 @@ impl Producer {
                 rows.pop().ok_or("missing original producer method")?,
             );
         }
-        let mut paths = profile.registration_paths(config);
-        // 这些是当前已安装 owner 的必要固定数据。新 Rust producer 不登记已退役模块。
-        if policy::python_owner_inputs(
-            &profile.entrypoint.script,
-            profile.owner_upgrade.is_some() || profile.owner_stage.is_some(),
-        ) {
-            paths.extend([
-                ".chrono-harness/ci/bootstrap_owner.py",
-                ".chrono-harness/ci/bootstrap_shared.py",
-            ]);
-        }
+        let paths = profile.registration_paths(config);
         let mut registrations = BTreeMap::new();
         for path in paths {
             declared(path, b".chrono-harness/")?;

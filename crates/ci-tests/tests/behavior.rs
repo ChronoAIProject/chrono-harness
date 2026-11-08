@@ -10,7 +10,7 @@ use std::path::Path;
 use std::process::Command;
 mod retained_receipts;
 fn config() -> Config {
-    serde_json::from_value(json!({"schema":"chrono-github-ci/v4","facts_config":".chrono-harness/event-facts.json","workflow_path":".github/workflows/check.yml","name":"Host checks","runs_on":"macos-14","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["python3",".chrono-harness/ci/bootstrap.py","."],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":".chrono-harness/ci/check.json","context_path":".chrono-harness/state/context.json","artifact_directory":".chrono-harness/state/"})).unwrap()
+    serde_json::from_value(json!({"schema":"chrono-github-ci/v4","facts_config":".chrono-harness/event-facts.json","workflow_path":".github/workflows/check.yml","name":"Host checks","runs_on":"macos-14","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["/bin/bash",".chrono-harness/ci/bootstrap-native.sh","."],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":".chrono-harness/ci/check.json","context_path":".chrono-harness/state/context.json","artifact_directory":".chrono-harness/state/"})).unwrap()
 }
 #[test]
 fn retired_scoped_providers_are_rejected_before_publishing_outputs() {
@@ -194,8 +194,8 @@ fn bootstrap_extension_regenerates_owned_projection() {
     let old = fs::read(d.path().join(&c.workflow_path)).unwrap();
     let mut changed = c.clone();
     changed.bootstrap = vec![
-        "python3".into(),
-        ".chrono-harness/ci/new bootstrap.py".into(),
+        "/bin/bash".into(),
+        ".chrono-harness/ci/new bootstrap.sh".into(),
         "literal $HOME `cmd`".into(),
     ];
     write(&d.path().join(".chrono-harness/ci/github.json"), &changed);
