@@ -1,4 +1,4 @@
-//! 当前 planner 身份的独立成功、拒绝与完整文本边界预期。
+//! 当前缓存格式与 planner 身份的独立成功、拒绝与完整文本边界预期。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
 #[path = "../../cache/src/verified_planner.rs"]
@@ -11,6 +11,50 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 
 verus! {
+
+fn expect_registration(schema: &str, expected: bool)
+    requires expected == (schema@ == "chrono-cache/v2"@),
+{
+    let actual = policy::current_registration(schema);
+    assert(actual == expected);
+}
+
+fn expect_plan(schema: Option<&str>, expected: bool)
+    requires expected == policy::current_plan_schema(schema),
+{
+    let actual = policy::current_plan(schema);
+    assert(actual == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_current_registration_and_plan_schemas_are_accepted() {
+    proof {
+        reveal_strlit("chrono-cache/v2"); reveal_strlit("chrono-cache/v1");
+        reveal_strlit("chrono-cache/v20"); reveal_strlit("chrono-cache/v2\n");
+        reveal_strlit("chrono-cache-plan/v2"); reveal_strlit("chrono-cache-plan/v1");
+        reveal_strlit("chrono-cache-plan/v20"); reveal_strlit("chrono-cache-plan/v2\n");
+        reveal_strlit("");
+        assert("chrono-cache/v2"@[14] != "chrono-cache/v1"@[14]);
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v20"@.len());
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v2\n"@.len());
+        assert("chrono-cache/v2"@.len() != ""@.len());
+        assert("chrono-cache-plan/v2"@[19] != "chrono-cache-plan/v1"@[19]);
+        assert("chrono-cache-plan/v2"@.len() != "chrono-cache-plan/v20"@.len());
+        assert("chrono-cache-plan/v2"@.len() != "chrono-cache-plan/v2\n"@.len());
+        assert("chrono-cache-plan/v2"@.len() != ""@.len());
+    }
+    expect_registration("chrono-cache/v2", true);
+    expect_registration("chrono-cache/v1", false);
+    expect_registration("chrono-cache/v20", false);
+    expect_registration("chrono-cache/v2\n", false);
+    expect_registration("", false);
+    expect_plan(Some("chrono-cache-plan/v2"), true);
+    expect_plan(Some("chrono-cache-plan/v1"), false);
+    expect_plan(Some("chrono-cache-plan/v20"), false);
+    expect_plan(Some("chrono-cache-plan/v2\n"), false);
+    expect_plan(Some(""), false);
+    expect_plan(None, false);
+}
 
 fn expect(
     ds: Option<&str>, dv: Option<&str>, os: Option<&str>, ov: Option<&str>,

@@ -26,7 +26,7 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 - namespace 和 `artifact_registry` 路径。宿主缓存产物精确引用该登记的 `artifacts` 路径，所有者须相同、`tracked: false`，且不得为执行证据。明确的外部依赖缓存可用绝对路径，其他产物相对宿主。不发现目录或语言。
 - 具名输入。各种输入的具体规则见下表。
-- 具名产物，声明 `owner`、`path`、`kind`（`dependencies`、`compilation`、`executable-candidate`）和明确 `external` 布尔值。
+- 具名产物，声明 `owner`、`path`、`kind`（`dependencies`、`compilation`）和明确 `external` 布尔值。
 - 具名缓存，声明 `owner`、登记 `producer` 操作 ID、`consumers`、产物 ID、互不相交的 `compatibility_inputs`／`source_inputs`、`restore`（`exact` 或 `compatible`）。每个列表均非空且成员唯一。
 - `consumer_operations`，将每个消费者绑定到已有方法登记。每个引用用字面宿主 `registry` 路径和 JSON `pointer` 选择一个操作 ID，或非空且唯一的 ID 数组。引用缺失、值错误、订阅缓存的 producer 不在消费者所选操作内，都会在输入探测和原生恢复前失败。计划保留来源摘要和所选 ID，不从语言、路径或运行活动猜方法；声明有效也不证明实际执行。
 
@@ -47,11 +47,11 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 输入 ID 排序变化不改摘要；无关缓存声明或文件变化不使所选缓存失效。
 
-早期 v1 草案仍按原合同读取：消费者名参与 `chrono-v1-` 键，没有操作引用检查，不能采用 `consumer_operations`。v2 使用独立兼容范围，不通过宽泛回退恢复 v1 归档。
+只接受 `chrono-cache/v2` 登记和 `chrono-cache-plan/v2` 计划；旧格式在发布计划或报告前拒绝，不生成或恢复 `chrono-v1-` 键。CI 投影也在写入前拒绝旧登记。格式准入复用现有同源 Verus 证明入口；JSON 解码、完整登记与恢复行为仍有各自的验证边界。
 
 `compatible` 只提供一个到兼容摘要为止的恢复前缀，使源码变化可找到同范围旧编译数据。适用的编译器、target、profile、标志、SDK、构建脚本、配置、环境身份都须由宿主明确登记到兼容范围；planner 不推断这些依赖，也不证明列表完整。lockfile、manifest 也须按真实兼容作用归类。
 
-`executable-candidate` 只允许精确恢复。每项计划仍要求登记构建生产者，绝不授权直接执行恢复的历史判官。当前执行物核验也检查缓存 planner／report 执行物身份，但不能证明恢复的项目执行物已重建。所选判断／测试仍由消费流程执行。
+每项计划仍要求登记构建生产者，绝不授权直接执行恢复的历史判官。当前执行物核验也检查缓存 planner／report 执行物身份，但不能证明恢复的项目执行物已重建。所选判断／测试仍由消费流程执行。
 
 字面路径拒绝穿越、glob、符号链接组件。所选输出不能互相重叠、包含 Git metadata／harness 执行状态或任何声明文件输入。这只是有限路径／登记检查，不证明任意缓存内容安全或重建输入齐全。恢复和保存还须持有已采用生命周期保护，直到生产者全部等待结束且保存完成。
 
@@ -142,6 +142,8 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 `report` 与 `seal` 都要求计划中的 planner SHA-256 和版本完整，且与当前执行物全文相等。缺失、null、非文本或不匹配的身份在发布报告原件前拒绝；不再为缺少身份的旧计划发布 `unavailable` 成功。当前 `plan` 始终提供身份。只观察传输步骤的库函数 `transport_report` 仍报告未观察执行物身份，不替代 CLI 的核验。
 
 `evidence_directory` 可把原件放入已有发布上传目录，普通检查则放入上传的宿主状态。detector 可选择同一字段，通过已有 job 的固定上传 action 保留原件，包括失败后。目录须是字面宿主状态路径，并明确上传隐藏文件；文件缺失使上传失败，不能声称已保留。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划、探测原件。未采用时，detector 文件只是 runner 临时状态。
+
+每份上传原件直接写入选定目录，并返回其路径和 SHA-256。探测程序保留实际探测原输出；计划中的探测引用、恢复、内容核验、封存和后端观察继续保留各自返回引用所需的原字节。
 
 报告在已有 job 运行。未登记 backend 就不发 API 请求。只有 action 成功且 key 匹配，才报告 exact／compatible；空输出记 `miss-or-unavailable`。原生保存成功仍为 `unconfirmed`，带 `W_CACHE_SAVE_UNCONFIRMED`，因为固定 action 可能捕获后端异常后成功退出。不能由 action outcome 推断归档已保存、编译器复用或执行物身份验证。
 

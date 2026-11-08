@@ -17,9 +17,6 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-pub const SCHEMA: &str = "chrono-cache/v1";
-pub const CONSUMER_SCHEMA: &str = "chrono-cache/v2";
-
 pub(crate) fn current_executable_identity() -> Result<Value, String> {
     let executable =
         fs::canonicalize(std::env::current_exe().map_err(|e| format!("E_CACHE_EXECUTABLE: {e}"))?)
@@ -103,7 +100,6 @@ pub enum Presence {
 pub enum Kind {
     Dependencies,
     Compilation,
-    ExecutableCandidate,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -185,16 +181,12 @@ fn path(root: &Path, value: &str) -> Result<PathBuf, String> {
 }
 
 pub fn validate(c: &Config) -> Result<(), String> {
-    if ![SCHEMA, CONSUMER_SCHEMA].contains(&c.schema.as_str()) || c.caches.is_empty() {
-        return Err("E_CACHE_CONFIG: expected nonempty chrono-cache/v1 or v2 registration".into());
+    if !verified_planner::current_registration(&c.schema) || c.caches.is_empty() {
+        return Err("E_CACHE_CONFIG: expected nonempty chrono-cache/v2 registration".into());
     }
-    if c.schema == SCHEMA && !c.consumer_operations.is_empty() {
-        return Err("E_CACHE_CONFIG: consumer operation contracts require chrono-cache/v2".into());
-    }
-    if c.recover_failed_restores && (c.schema != CONSUMER_SCHEMA || !c.require_primary_checkout) {
+    if c.recover_failed_restores && !c.require_primary_checkout {
         return Err(
-            "E_CACHE_RECOVERY: failed-restore recovery requires v2 and primary-checkout protection"
-                .into(),
+            "E_CACHE_RECOVERY: failed-restore recovery requires primary-checkout protection".into(),
         );
     }
     if c.recover_unconfirmed_restores && !c.recover_failed_restores {
@@ -204,38 +196,33 @@ pub fn validate(c: &Config) -> Result<(), String> {
         );
     }
     if let Some(backend) = &c.backend {
-        if c.schema != CONSUMER_SCHEMA {
-            return Err("E_CACHE_CONFIG: backend observations require chrono-cache/v2".into());
-        }
         backend::validate(backend)?;
     }
-    if c.schema == CONSUMER_SCHEMA {
-        let consumers: BTreeSet<_> = c.caches.values().flat_map(|c| &c.consumers).collect();
-        for consumer in &consumers {
-            if !c.consumer_operations.contains_key(*consumer) {
-                return Err(format!(
-                    "E_CACHE_CONSUMER: missing operation contract for {consumer}"
-                ));
-            }
+    let consumers: BTreeSet<_> = c.caches.values().flat_map(|c| &c.consumers).collect();
+    for consumer in &consumers {
+        if !c.consumer_operations.contains_key(*consumer) {
+            return Err(format!(
+                "E_CACHE_CONSUMER: missing operation contract for {consumer}"
+            ));
         }
-        for (consumer, sources) in &c.consumer_operations {
-            name(consumer)?;
-            if !consumers.contains(consumer) || sources.is_empty() {
+    }
+    for (consumer, sources) in &c.consumer_operations {
+        name(consumer)?;
+        if !consumers.contains(consumer) || sources.is_empty() {
+            return Err(format!(
+                "E_CACHE_CONSUMER: unused or empty operation contract for {consumer}"
+            ));
+        }
+        let mut seen = BTreeSet::new();
+        for source in sources {
+            chrono_harness::relative_path(&source.registry)?;
+            if !source.registry.starts_with(".chrono-harness/")
+                || !source.pointer.starts_with('/')
+                || !seen.insert((&source.registry, &source.pointer))
+            {
                 return Err(format!(
-                    "E_CACHE_CONSUMER: unused or empty operation contract for {consumer}"
+                    "E_CACHE_CONSUMER: invalid operation source for {consumer}"
                 ));
-            }
-            let mut seen = BTreeSet::new();
-            for source in sources {
-                chrono_harness::relative_path(&source.registry)?;
-                if !source.registry.starts_with(".chrono-harness/")
-                    || !source.pointer.starts_with('/')
-                    || !seen.insert((&source.registry, &source.pointer))
-                {
-                    return Err(format!(
-                        "E_CACHE_CONSUMER: invalid operation source for {consumer}"
-                    ));
-                }
             }
         }
     }
@@ -346,11 +333,6 @@ pub fn validate(c: &Config) -> Result<(), String> {
                 return Err(format!(
                     "E_CACHE_CONFIG: artifact {artifact} owner differs from cache {id}"
                 ));
-            }
-            if a.kind == Kind::ExecutableCandidate && cache.restore != Restore::Exact {
-                return Err(
-                    "E_CACHE_CONFIG: executable candidates require exact restoration".into(),
-                );
             }
         }
     }
@@ -609,11 +591,7 @@ fn prepare_with_inputs(
     if selected.is_empty() {
         return Err(format!("E_CACHE_CONSUMER: no registration for {consumer}"));
     }
-    let operation_contract = if c.schema == CONSUMER_SCHEMA {
-        Some(consumer_operations(&root, c, consumer)?)
-    } else {
-        None
-    };
+    let operation_contract = consumer_operations(&root, c, consumer)?;
     let registry: Value = decode(
         &fs::read(no_symlink_parents(&root, &c.artifact_registry)?).map_err(|e| e.to_string())?,
     )?;
@@ -712,17 +690,9 @@ fn prepare_with_inputs(
         if cache.verify_contents {
             identity["content_verification"] = json!(content::METHOD);
         }
-        if c.schema == SCHEMA {
-            identity["consumers"] = json!(cache.consumers.iter().collect::<BTreeSet<_>>());
-        }
         let compatibility = wire::digest(&identity)?;
         let source = wire::digest(&values(&cache.source_inputs))?;
-        let version = if c.schema == CONSUMER_SCHEMA {
-            "v2"
-        } else {
-            "v1"
-        };
-        let prefix = format!("chrono-{version}-{compatibility}-");
+        let prefix = format!("chrono-v2-{compatibility}-");
         entries.insert(
             id,
             json!({"owner":cache.owner,"producer":cache.producer,
@@ -734,15 +704,13 @@ fn prepare_with_inputs(
             entries.get_mut(id).unwrap()["content_verification"] = json!(content::METHOD);
         }
     }
-    if c.schema == CONSUMER_SCHEMA {
-        for source in &c.consumer_operations[consumer] {
-            let input = no_symlink_parents(&root, &source.registry)?;
-            if paths.iter().any(|artifact| input.starts_with(artifact)) {
-                return Err(format!(
-                    "E_CACHE_PATH: consumer registry {} is inside a selected cache artifact",
-                    source.registry
-                ));
-            }
+    for source in &c.consumer_operations[consumer] {
+        let input = no_symlink_parents(&root, &source.registry)?;
+        if paths.iter().any(|artifact| input.starts_with(artifact)) {
+            return Err(format!(
+                "E_CACHE_PATH: consumer registry {} is inside a selected cache artifact",
+                source.registry
+            ));
         }
     }
     for id in observations.keys() {
@@ -779,13 +747,10 @@ fn prepare_with_inputs(
             }
         }
     }
-    let mut plan = json!({"schema":if c.schema == CONSUMER_SCHEMA {"chrono-cache-plan/v2"} else {"chrono-cache-plan/v1"},
+    let mut plan = json!({"schema":"chrono-cache-plan/v2",
         "consumer":consumer,"caches":entries,"inputs":observations,
         "input_completeness_proven":false,"execution":"not-started",
-        "planner":current_executable_identity()?});
-    if let Some(contract) = operation_contract {
-        plan["consumer_operations"] = contract;
-    }
+        "planner":current_executable_identity()?,"consumer_operations":operation_contract});
     if let Some(backend) = &c.backend {
         plan["backend"] = json!(backend);
     }

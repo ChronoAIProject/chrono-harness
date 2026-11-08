@@ -2,7 +2,6 @@ use super::*;
 
 fn backend_fixture() -> (Host, Value) {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     config["backend"] = backend();
     let mut prepared = plan(root.path(), &config, "check.one").unwrap();
     // The backend fixture calls the installed report binary below, so bind the
@@ -31,7 +30,6 @@ fn backend() -> Value {
 #[test]
 fn backend_policy_is_explicit_and_does_not_invalidate_build_keys_or_query_during_planning() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     let before = plan(root.path(), &config, "check.one").unwrap();
     config["backend"] = backend();
     let after = plan(root.path(), &config, "check.one").unwrap();
