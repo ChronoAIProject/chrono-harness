@@ -21,7 +21,8 @@
       "verus": ".chrono-harness/bin/verus/verus",
       "curl": "/usr/bin/curl",
       "shasum": "/usr/bin/shasum",
-      "tar": "/usr/bin/tar"
+      "tar": "/usr/bin/tar",
+      "bootstrap-native": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -380,6 +381,12 @@
           "consumer": "unit_runner",
           "producer": "host.bootstrap-shared-produce",
           "caller": "host.bootstrap-shared-install-unit_runner",
+          "data_outputs": {
+            ".chrono-harness/bin/verus.zip": {
+              "producer": "host.bootstrap-verus",
+              "consumer": "host.verus-extract-shared"
+            }
+          },
           "evidence": {
             "test": "test:host-bootstrap-tests",
             "operation": "host.bootstrap-real-consumer"

@@ -1075,19 +1075,8 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         fs::create_dir_all(root.path().join(&path).parent().unwrap()).unwrap();
         fs::copy(host.join(&path), root.path().join(&path)).unwrap();
     }
-    register_artifacts(root.path(), &config);
-    let registry = root
-        .path()
-        .join(config["artifact_registry"].as_str().unwrap());
-    fs::create_dir_all(registry.parent().unwrap()).unwrap();
-    let artifacts: Value = serde_json::from_slice(
-        &fs::read(root.path().join(".chrono-harness/artifacts.json")).unwrap(),
-    )
-    .unwrap();
-    let mut policy: Value =
-        serde_json::from_slice(&fs::read(&registry).unwrap_or_else(|_| b"{}".to_vec())).unwrap();
-    policy["artifacts"] = artifacts["artifacts"].clone();
-    fs::write(registry, serde_json::to_vec(&policy).unwrap()).unwrap();
+    // Keep the actual host artifact declarations. Synthesizing rows from the
+    // cache config would hide missing or mismatched production registrations.
     (root, config)
 }
 
@@ -1116,6 +1105,49 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
     assert_ne!(
         first["caches"]["detect.ci"]["restore_keys"],
         build_change["caches"]["detect.ci"]["restore_keys"]
+    );
+}
+
+#[test]
+fn verus_archive_cache_binds_download_and_checksum_without_compiler_inputs() {
+    let (root, mut config) = host_cache_fixture(&["check.detect"]);
+    let host = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let path = ".chrono-harness/ci/verus-macos-arm64.sha256";
+    fs::copy(host.join(path), root.path().join(path)).unwrap();
+    config["inputs"]["verus.checksum"] = json!({"kind":"file","path":path,"presence":"present"});
+    let first =
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"].clone();
+    assert!(first.is_object(), "missing Verus archive cache");
+    assert_eq!(first["restore_keys"], json!([]));
+
+    config["inputs"]["rustc.file"] = json!({"kind":"literal","value":"another compiler"});
+    assert_eq!(
+        first,
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]
+    );
+    let projects = root.path().join(".chrono-harness/projects.json");
+    let mut changed: Value = serde_json::from_slice(&fs::read(&projects).unwrap()).unwrap();
+    changed["status"] = json!("unrelated metadata");
+    fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
+    assert_eq!(
+        first,
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]
+    );
+    changed["scripts"][2]["actions"]["verus-download"]["argv"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("different download identity"));
+    fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
+    assert_ne!(
+        first["key"],
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]["key"]
+    );
+
+    fs::copy(host.join(".chrono-harness/projects.json"), &projects).unwrap();
+    fs::write(root.path().join(path), b"different checksum declaration\n").unwrap();
+    assert_ne!(
+        first["key"],
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]["key"]
     );
 }
 

@@ -694,11 +694,16 @@ Rust 测试另外验证真实消费者，不替代证明。
 
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
-现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
-`host.verus-download` 通过 GitHub 固定发布资产 API 获取归档，唯一地址归 projects.json，
-请求采用 `Accept: application/octet-stream`。该外部接口只提供资产原字节；
-随后执行的 SHA-256 校验仍以 verus-macos-arm64.sha256 为准，校验通过后才解包。
+现有通用 bootstrap 消费明确登记的归档准备、SHA-256 校验和解包操作。
+`host.verus-download` 委托当前 Rust 启动程序，先按 `verus-macos-arm64.sha256`
+核对本地包；匹配时输出 `cache-hit`，不启动 curl。包缺失或内容不符时才通过 GitHub
+固定发布资产 API 下载，唯一地址归 projects.json，请求采用 `Accept: application/octet-stream`。
+下载写入同目录的私有临时文件，校验通过后原子替换归档并输出 `downloaded`；
+下载失败保留原退出和响应头，校验失败不覆盖原包。临时下载字节随本次操作回收。
+后续独立校验仍读取同一份 SHA-256 声明，校验通过后才解包。
 原响应头保留在 `.chrono-harness/state/verus-download.headers`，由现有失败工件上传供下载故障排查。
+CI 由 detector 恢复归档并在启动成功后保存，检查单元复用已有共享原包；
+包身份及成本边界见[缓存说明](ci-cache.md#verus-archive)。
 含证明操作的单元先核共享 core，再安装工具；无证明操作的消费单元只核共享 core。
 启动参数由 units.json 维护，工作流由登记的 ci.generate 产生。
 共享 core 的校验不代表 Verus 已安装。

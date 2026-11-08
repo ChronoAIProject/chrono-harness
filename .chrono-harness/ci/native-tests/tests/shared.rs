@@ -62,6 +62,18 @@ fn configured(build_at_export: bool) -> Fixture {
     );
     fixture.config["tools"]["sh"] = json!("/bin/sh");
     fixture.config["participation"]["git"] = json!("/usr/bin/git");
+    fs::write(fixture.root.join("out/bundle.zip"), b"archive bytes").unwrap();
+    fs::set_permissions(
+        fixture.root.join("out/bundle.zip"),
+        fs::Permissions::from_mode(0o644),
+    )
+    .unwrap();
+    fixture.config["install"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "source":"out/bundle.zip", "destination":".chrono-harness/bin/bundle.zip"
+        }));
     let path = fixture.root.join(".chrono-harness/ci/registry.json");
     let mut registry: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     let native = bindings::native_platform().unwrap();
@@ -69,6 +81,7 @@ fn configured(build_at_export: bool) -> Fixture {
         registry["platforms"]["fixture/native"].clone();
     fs::write(path, serde_json::to_vec(&registry).unwrap()).unwrap();
     let mut extra = fixture.config.clone();
+    extra["install"].as_array_mut().unwrap().truncate(1);
     extra["prerequisites"] = json!([]);
     extra["report_path"] = json!(".chrono-harness/state/bootstrap-extra.json");
     extra["install"][0]["destination"] = json!(".chrono-harness/bin/extra");
@@ -94,9 +107,14 @@ fn configured(build_at_export: bool) -> Fixture {
         build.prerequisites(&mut vec![], &mut vec![]).unwrap();
         build.select().unwrap();
         build.operations(&mut vec![], &mut vec![]).unwrap();
-        build
-            .install_tool(&fixture.root.join("out/cargo"), ".chrono-harness/bin/cargo")
-            .unwrap();
+        for installed in fixture.config["install"].as_array().unwrap() {
+            build
+                .install_tool(
+                    &fixture.root.join(installed["source"].as_str().unwrap()),
+                    installed["destination"].as_str().unwrap(),
+                )
+                .unwrap();
+        }
         build.finish(Ok(())).unwrap().outcome.unwrap();
     }
     let loaded = Loaded::read(
@@ -181,6 +199,20 @@ fn exports_installs_and_verifies_original_bytes_with_relocated_local_sdk() {
     environment.insert("CHRONO_STARTUP_BINDING".into(), binding.clone().into());
     passed(cli(consumer.path(), &environment, &["install", "unit"]));
     passed(cli(consumer.path(), &environment, &["verify", "core"]));
+    let bundle = consumer.path().join(".chrono-harness/bin/bundle.zip");
+    assert_eq!(fs::read(&bundle).unwrap(), b"archive bytes");
+    assert_eq!(
+        fs::metadata(&bundle).unwrap().permissions().mode() & 0o777,
+        0o644
+    );
+    fs::set_permissions(&bundle, fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(
+        !cli(consumer.path(), &environment, &["verify", "core"])
+            .status
+            .success()
+    );
+    fs::set_permissions(&bundle, fs::Permissions::from_mode(0o644)).unwrap();
+    passed(cli(consumer.path(), &environment, &["verify", "core"]));
     assert_eq!(
         fs::read(consumer.path().join(".chrono-harness/bin/cargo")).unwrap(),
         fs::read(fixture.root.join(".chrono-harness/bin/cargo")).unwrap()
@@ -237,10 +269,12 @@ fn rejects_corrupt_artifact_before_any_installation_write() {
         "source",
         "destination",
         "sdk",
+        "zero-mode",
+        "special-mode",
     ] {
         let (consumer, mut environment) = consumer(&fixture);
         environment.insert("CHRONO_STARTUP_BINDING".into(), binding.clone().into());
-        let manifest: Value = serde_json::from_slice(
+        let mut manifest: Value = serde_json::from_slice(
             &fs::read(consumer.path().join(TRANSFER).join("manifest.json")).unwrap(),
         )
         .unwrap();
@@ -290,6 +324,16 @@ fn rejects_corrupt_artifact_before_any_installation_write() {
                 fs::create_dir_all(consumer.path().join(".chrono-harness/bin/cargo")).unwrap()
             }
             "sdk" => fs::write(consumer.path().join("native tools/cargo"), b"corrupt").unwrap(),
+            "zero-mode" | "special-mode" => {
+                manifest["profiles"]["core"]["files"][1]["mode"] =
+                    json!(if fault == "zero-mode" { 0 } else { 512 });
+                let bytes = serde_json::to_vec(&manifest).unwrap();
+                fs::write(consumer.path().join(TRANSFER).join("manifest.json"), &bytes).unwrap();
+                environment.insert(
+                    "CHRONO_STARTUP_BINDING".into(),
+                    chrono_harness::sha256(&bytes).into(),
+                );
+            }
             _ => unreachable!(),
         }
         let output = cli(consumer.path(), &environment, &["install", "unit"]);

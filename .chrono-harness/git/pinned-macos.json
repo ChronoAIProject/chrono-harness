@@ -433,6 +433,12 @@
       "owner": "identifiers-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-verus/",
+      "owner": "repository",
+      "kind": "download-cache",
+      "tracked": false
     }
   ],
   "environment": {

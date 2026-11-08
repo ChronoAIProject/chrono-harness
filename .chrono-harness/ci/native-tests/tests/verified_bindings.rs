@@ -14,6 +14,28 @@ use vstd::prelude::*;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn archive_reuse_requires_the_complete_declared_digest() {
+    broadcast use vstd::array::group_array_axioms;
+    let zeros = [48u8; 64];
+    let mut changed = [48u8; 64];
+    changed[63] = 49;
+    let short = [48u8; 63];
+    let upper = [65u8; 64];
+    proof {
+        assert forall|i: int| 0 <= i < zeros@.len()
+            implies policy::hash_byte(zeros@[i]) by { assert(zeros@[i] == 48); }
+        assert(changed@[63] != zeros@[63]);
+        assert(upper@[0] == 65);
+    }
+    let hit = policy::archive_matches(&zeros, &zeros);
+    let corrupt = policy::archive_matches(&changed, &zeros);
+    let partial = policy::archive_matches(&short, &zeros);
+    let invalid_length = policy::archive_matches(&short, &short);
+    let invalid_hex = policy::archive_matches(&upper, &upper);
+    assert(hit && !corrupt && !partial && !invalid_length && !invalid_hex);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn startup_names_modes_and_headers_use_exact_boundaries() {
     proof {
         reveal_strlit("chrono-host-startup/v1"); reveal_strlit("other");
@@ -31,15 +53,11 @@ fn startup_names_modes_and_headers_use_exact_boundaries() {
     let executable = policy::startup_mode(493);
     let lowest = policy::startup_mode(1);
     let highest = policy::startup_mode(511);
-    let no_execute = policy::startup_mode(420);
+    let data_file = policy::startup_mode(420);
     let zero = policy::startup_mode(0);
     let special = policy::startup_mode(512);
     let maximum = policy::startup_mode(4294967295u32);
-    proof {
-        assert(493u32 & 73u32 != 0 && 1u32 & 73u32 != 0 && 511u32 & 73u32 != 0
-            && 420u32 & 73u32 == 0) by (bit_vector);
-    }
-    assert(executable && lowest && highest && !no_execute && !zero && !special && !maximum);
+    assert(executable && lowest && highest && data_file && !zero && !special && !maximum);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
