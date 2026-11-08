@@ -14,6 +14,28 @@ use vstd::prelude::*;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn archive_reuse_requires_the_complete_declared_digest() {
+    broadcast use vstd::array::group_array_axioms;
+    let zeros = [48u8; 64];
+    let mut changed = [48u8; 64];
+    changed[63] = 49;
+    let short = [48u8; 63];
+    let upper = [65u8; 64];
+    proof {
+        assert forall|i: int| 0 <= i < zeros@.len()
+            implies policy::hash_byte(zeros@[i]) by { assert(zeros@[i] == 48); }
+        assert(changed@[63] != zeros@[63]);
+        assert(upper@[0] == 65);
+    }
+    let hit = policy::archive_matches(&zeros, &zeros);
+    let corrupt = policy::archive_matches(&changed, &zeros);
+    let partial = policy::archive_matches(&short, &zeros);
+    let invalid_length = policy::archive_matches(&short, &short);
+    let invalid_hex = policy::archive_matches(&upper, &upper);
+    assert(hit && !corrupt && !partial && !invalid_length && !invalid_hex);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn startup_names_modes_and_headers_use_exact_boundaries() {
     proof {
         reveal_strlit("chrono-host-startup/v1"); reveal_strlit("other");

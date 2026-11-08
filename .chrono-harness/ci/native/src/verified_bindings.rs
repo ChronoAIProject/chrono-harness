@@ -17,6 +17,14 @@ pub mod owner_publication;
 
 verus! {
 
+pub fn archive_matches(actual: &[u8], expected: &[u8]) -> (valid: bool)
+    ensures valid <==> (expected@.len() == 64
+        && (forall|i: int| 0 <= i < expected@.len() ==> hash_byte(expected@[i]))
+        && actual@ == expected@),
+{
+    valid_sha256(expected) && identifiers::equal_bytes(actual, expected)
+}
+
 pub fn owner_publication_header(schema: &str, adoption: &str, completion: &str) -> (valid: bool)
     ensures valid <==> (schema@ == "chrono-bootstrap-owner-publication/v1"@
         && adoption@ == "not-claimed"@ && completion@ == "not-claimed"@),
