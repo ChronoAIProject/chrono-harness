@@ -468,8 +468,19 @@ pub fn find_proof_invocation(methods: &Vec<ProofInvocation>, operation: &str)
         i += 1;
     }
     match found {
-        Some(index) => Ok(index),
-        None => Err("E_VERUS_RESULT: operation has no registered invocation".to_string()),
+        Some(index) => {
+            assert(unique_proof_invocation(methods@, operation@, index as int));
+            assert(exists|j: int| unique_proof_invocation(methods@, operation@, j));
+            Ok(index)
+        },
+        None => {
+            assert forall|j: int| unique_proof_invocation(methods@, operation@, j)
+                implies false by {
+                assert(0 <= j < methods.len());
+                assert(methods[j].operation@ != operation@);
+            }
+            Err("E_VERUS_RESULT: operation has no registered invocation".to_string())
+        },
     }
 }
 
