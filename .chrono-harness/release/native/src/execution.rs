@@ -417,17 +417,27 @@ impl<'a> Execution<'a> {
         self.report["frontend_selection"] = json!(selected.frontend);
         if let Some(selected) = &selected.frontend {
             self.phase = "frontend-source".into();
-            let declared = frontend::declaration(self.loaded,selected)?;
-            let directory = no_symlink_parents(&self.root,&declared.directory)?;
+            let declared = frontend::declaration(self.loaded, selected)?;
+            let directory = no_symlink_parents(&self.root, &declared.directory)?;
             let source = chrono_host_bootstrap::source::SourceObservation {
-                commit:Some(source),tree:Some(tree),dirty:Some(false),error:None,
+                commit: Some(source),
+                tree: Some(tree),
+                dirty: Some(false),
+                error: None,
             };
-            frontend::validate(&self.root,&directory,declared,&chrono_host_bootstrap::bindings::native_platform()?,
-                &source,selected,Some(&std::env::current_exe().map_err(error)?))?;
-            let files=frontend::retain_metadata(&directory,&self.output.join("frontend"))?;
-            let mut reference=files["frontend.json"].clone();
-            reference["path"]=json!("frontend/frontend.json");
-            self.report["frontend_input"]=reference;
+            frontend::validate(
+                &self.root,
+                &directory,
+                declared,
+                &chrono_host_bootstrap::bindings::native_platform()?,
+                &source,
+                selected,
+                Some(&std::env::current_exe().map_err(error)?),
+            )?;
+            let files = frontend::retain_metadata(&directory, &self.output.join("frontend"))?;
+            let mut reference = files["frontend.json"].clone();
+            reference["path"] = json!("frontend/frontend.json");
+            self.report["frontend_input"] = reference;
         }
         Ok(lineage)
     }
@@ -637,10 +647,12 @@ fn retain_original(output: &Path, id: &str, verified: &Verified) -> Result<Value
         }
     }
     if verified.receipt["frontend_input"].is_object() {
-        for (name, mut declaration) in frontend::metadata_files(&verified.directory.join("frontend"))? {
-            let name=format!("frontend/{name}");
-            declaration["path"]=json!(name);
-            if declarations.insert(name,declaration).is_some() {
+        for (name, mut declaration) in
+            frontend::metadata_files(&verified.directory.join("frontend"))?
+        {
+            let name = format!("frontend/{name}");
+            declaration["path"] = json!(name);
+            if declarations.insert(name, declaration).is_some() {
                 return Err(error("duplicate original frontend evidence path"));
             }
         }
