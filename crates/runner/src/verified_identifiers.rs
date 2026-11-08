@@ -103,7 +103,7 @@ fn ascii_split(text: &str, separator: u8, keep_empty: bool) -> (out: Vec<&str>)
             inventory_record_views(out@)
             + ascii_split_records(remaining.spec_bytes(), separator, keep_empty)
             == ascii_split_records(text.spec_bytes(), separator, keep_empty),
-        decreases remaining.len(),
+        decreases remaining.spec_bytes().len(),
     {
         let ghost previous = inventory_record_views(out@);
         let (head, rest) = ascii_split_head(remaining, separator);
@@ -118,7 +118,7 @@ fn ascii_split(text: &str, separator: u8, keep_empty: bool) -> (out: Vec<&str>)
                         None => seq![],
                     });
         }
-        if keep_empty || head.len() > 0 {
+        if keep_empty || head.as_bytes().len() > 0 {
             out.push(head);
             proof { assert(inventory_record_views(out@) =~= previous + seq![head.spec_bytes()]); }
         }
