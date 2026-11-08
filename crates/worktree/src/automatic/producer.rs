@@ -21,6 +21,9 @@ pub(super) struct ProducerPolicy {
     pub(super) fixture_bodies: bool,
     #[serde(default)]
     rolling_directory: Option<rolling::Policy>,
+    /// These exact registered operations publish one whole run directory.
+    #[serde(default)]
+    pub(super) operations: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -483,6 +486,18 @@ impl Store {
 
     fn load_available(&mut self, object: &str) -> Result<bool, String> {
         self.owner_stable()?;
+        if self
+            .state
+            .objects
+            .first()
+            .is_some_and(|current| current.path == object)
+        {
+            self.object_guard
+                .as_ref()
+                .ok_or("loaded producer metadata has no exclusion")?
+                .stable()?;
+            return Ok(true);
+        }
         self.state.objects.clear();
         drop(self.object_guard.take());
         self.object_guard = DirectoryGate::available(&self.gate_path(object)?)?;
@@ -1364,6 +1379,23 @@ impl ProducerPolicy {
         if self.rolling_directory.is_some() && !self.temporary {
             return Err("rolling directory requires prospective temporary ownership".into());
         }
+        if !self.operations.is_empty() && self.rolling_directory.is_none() {
+            return Err("operation artifact directories require rolling ownership".into());
+        }
+        let mut operations = BTreeSet::new();
+        for operation in &self.operations {
+            if operation.trim().is_empty()
+                || !operations.insert(operation)
+                || policy
+                    .retained_producers
+                    .iter()
+                    .filter(|producer| producer.operations.contains(operation))
+                    .count()
+                    != 1
+            {
+                return Err("artifact operation requires one exact producer".into());
+            }
+        }
         relative_path(self.directory.trim_end_matches('/'))?;
         if self.id.is_empty()
             || !self.directory.ends_with('/')
@@ -1475,11 +1507,9 @@ impl ProducerPolicy {
         }
         let mut opened = Store::open(&directory, &self.id, false)?;
         let (objects, registration_errors) = if let Some(selected) = selected {
-            if !opened.load_available(selected)? {
-                report["producer_objects"].as_array_mut().unwrap().push(
-                    value!({"producer":self.id,"path":selected,"status":"protected","reason":"metadata busy"}));
-                return Ok(());
-            }
+            // finish joins its exact allocation's existing bounded admission.
+            // Broad maintenance still skips unrelated busy addresses below.
+            opened.load(selected)?;
             (opened.state.objects.clone(), vec![])
         } else {
             opened.records()?
