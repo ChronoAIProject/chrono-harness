@@ -32,6 +32,11 @@ fn frontend_header_requires_the_original_source_platform_and_github_role() {
         reveal_strlit("tree"); reveal_strlit("other-tree");
         reveal_strlit("system"); reveal_strlit("other-system");
         reveal_strlit("machine"); reveal_strlit("other-machine");
+        assert("chrono-release-frontend/v1"@.len() != "other"@.len());
+        assert("commit"@.len() != "other-commit"@.len());
+        assert("tree"@.len() != "other-tree"@.len());
+        assert("system"@.len() != "other-system"@.len());
+        assert("machine"@.len() != "other-machine"@.len());
     }
     let same=policy::frontend_header("chrono-release-frontend/v1",true,"commit","tree","system","machine","commit","tree","system","machine");
     let schema=policy::frontend_header("other",true,"commit","tree","system","machine","commit","tree","system","machine");
@@ -48,6 +53,8 @@ fn frontend_installation_requires_exactly_the_declared_tool_and_digest() {
     proof {
         reveal_strlit(".chrono-harness/bin/chrono-host-release"); reveal_strlit("other");
         reveal_strlit("hash"); reveal_strlit("other-hash");
+        assert(".chrono-harness/bin/chrono-host-release"@.len() != "other"@.len());
+        assert("hash"@.len() != "other-hash"@.len());
     }
     let same=policy::frontend_installation(1,1,".chrono-harness/bin/chrono-host-release",".chrono-harness/bin/chrono-host-release","hash","hash");
     let missing=policy::frontend_installation(1,0,".chrono-harness/bin/chrono-host-release",".chrono-harness/bin/chrono-host-release","hash","hash");
