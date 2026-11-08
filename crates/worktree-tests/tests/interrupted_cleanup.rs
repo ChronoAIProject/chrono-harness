@@ -2462,26 +2462,30 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     let ci = h.root.join(".chrono-harness/ci");
     fs::create_dir_all(&ci).unwrap();
     fs::copy(
-        source().join(".chrono-harness/ci/bootstrap.py"),
-        ci.join("bootstrap.py"),
-    )
-    .unwrap();
-    fs::copy(
-        source().join(".chrono-harness/process_fds.py"),
-        h.root.join(".chrono-harness/process_fds.py"),
+        source().join(".chrono-harness/ci/bootstrap-installed.sh"),
+        ci.join("bootstrap-installed.sh"),
     )
     .unwrap();
     let cfg_path = ".chrono-harness/ci/probe.json";
+    let registry_path = ".chrono-harness/ci/probe-toolchains.json";
     let git_program = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
     let consumer = env!("CARGO_BIN_EXE_chrono-worktree-test-consumer");
-    let bootstrap = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0","tools":{"consumer":consumer},"operations":["test.consumer"],"install":[],"entrypoint":{"tool":"python3","script":".chrono-harness/ci/bootstrap.py"},"participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":git_program,"config":POLICY}});
+    let native = chrono_host_bootstrap::bindings::native_platform().unwrap();
+    let platform = format!("{}/{}", native.system, native.machine);
+    let binding = |name: &str| value!({"sha256":sha256(&fs::read(consumer).unwrap()),"version":format!("{name} 1.95.0 (fixture)")});
+    fs::write(
+        h.root.join(registry_path),
+        serde_json::to_vec_pretty(&value!({"schema":"chrono-bootstrap-toolchains/v1",
+            "rust_toolchain":"1.95.0","platforms":{platform:{"tools":{"cargo":binding("cargo"),"rustc":binding("rustc")}}}})).unwrap(),
+    ).unwrap();
+    let bootstrap = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0","tools":{"consumer":consumer},"operations":["test.consumer"],"install":[],"entrypoint":{"tool":"bash","script":".chrono-harness/ci/bootstrap-installed.sh"},"require_tool_bindings":true,"tool_bindings_registry":registry_path,"participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":git_program,"config":POLICY}});
     fs::write(
         h.root.join(cfg_path),
         serde_json::to_vec_pretty(&bootstrap).unwrap(),
     )
     .unwrap();
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
-    config["tools"].as_array_mut().unwrap().push(value!({"id":"python3","program":"/usr/bin/python3","resolution":"PATH-once","version_argv":["--version"],"expected_version":"Python 3.9.6"}));
+    config["tools"].as_array_mut().unwrap().push(value!({"id":"bash","program":"/bin/bash","resolution":"PATH-once","version_argv":["--version"],"expected_version":null}));
     fs::write(
         h.root.join(CONFIG),
         serde_json::to_vec_pretty(&config).unwrap(),
@@ -2490,8 +2494,8 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
     for path in [
         cfg_path,
-        ".chrono-harness/ci/bootstrap.py",
-        ".chrono-harness/process_fds.py",
+        registry_path,
+        ".chrono-harness/ci/bootstrap-installed.sh",
     ] {
         fm["files"]
             .as_array_mut()
@@ -2521,21 +2525,26 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
         !target.join(".chrono-harness/bin/chrono-worktree").exists(),
         "fresh checkout resolves explicit coordinator binary"
     );
+    fs::create_dir_all(target.join(".chrono-harness/bin")).unwrap();
+    fs::copy(
+        env!("CARGO_BIN_EXE_chrono-worktree-test-bootstrap"),
+        target.join(".chrono-harness/bin/chrono-host-bootstrap"),
+    )
+    .unwrap();
     let tools = h.parent.join("bootstrap-tools");
     fs::create_dir(&tools).unwrap();
-    use std::os::unix::fs::symlink;
     for name in ["rustup", "cargo", "rustc"] {
-        symlink(consumer, tools.join(name)).unwrap();
+        fs::copy(consumer, tools.join(name)).unwrap();
     }
     let path = std::env::join_paths(
         std::iter::once(tools).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
     )
     .unwrap();
     let mut child = CapturedChild::spawn(
-        Command::new("/usr/bin/python3")
+        Command::new("/bin/bash")
             .current_dir(&target)
             .env("PATH", &path)
-            .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path]),
+            .args([".chrono-harness/ci/bootstrap-installed.sh", ".", cfg_path]),
         &h.root,
     );
     let marker = target.join(".chrono-harness/state/bootstrap-holder");
@@ -2601,10 +2610,10 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     )
     .unwrap();
     commit(&target);
-    let refused = Command::new("/usr/bin/python3")
+    let refused = Command::new("/bin/bash")
         .current_dir(&target)
         .env("PATH", &path)
-        .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path])
+        .args([".chrono-harness/ci/bootstrap-installed.sh", ".", cfg_path])
         .output()
         .unwrap();
     assert_ne!(
@@ -2617,7 +2626,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     assert!(error.starts_with("original build stderr\n"), "{error}");
     assert!(error.contains("bootstrap lifecycle failed"), "{error}");
     let reference = error
-        .split("original report ")
+        .split("bootstrap ownership original report: ")
         .nth(1)
         .unwrap()
         .lines()
@@ -2629,7 +2638,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     assert_eq!(original["managed_process"]["exit_code"], 7);
     let build_error = original["managed_process"]["stderr"].as_str().unwrap();
     assert!(build_error.starts_with("original build stderr\n"));
-    assert!(build_error.contains("non-zero exit status 7"));
+    assert!(build_error.contains("bootstrap operation test.consumer failed with exit 7"));
     assert_eq!(
         original["managed_process"]["stdout"],
         "original build stdout\n"
@@ -2659,9 +2668,9 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
             .contains("coordinator policy/configuration identity mismatch")
     );
     fs::remove_file(target.join(".chrono-harness/state/bootstrap-holder")).unwrap();
-    let refused_bootstrap = Command::new("/usr/bin/python3")
+    let refused_bootstrap = Command::new("/bin/bash")
         .current_dir(&target)
-        .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path])
+        .args([".chrono-harness/ci/bootstrap-installed.sh", ".", cfg_path])
         .output()
         .unwrap();
     assert_ne!(
