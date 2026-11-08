@@ -15,6 +15,18 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 
+#[cfg(verus_keep_ghost)]
+#[path = "../../runner/src/verified_identifiers.rs"]
+pub mod identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+pub use identifiers::compare_bytes;
+#[cfg(verus_keep_ghost)]
+pub use identifiers::{
+    byte_prefix, byte_lt, byte_lt_strict, byte_lt_transitive,
+    byte_lt_asymmetric, byte_trichotomy,
+};
+
 verus! {
 
 #[derive(Copy)]
@@ -409,98 +421,6 @@ impl PartialOrd for Edge {
     }
 }
 
-pub open spec fn byte_prefix(a: Seq<u8>, b: Seq<u8>, n: int) -> bool {
-    0 <= n <= a.len() && n <= b.len()
-        && forall|i: int| 0 <= i < n ==> a[i] == b[i]
-}
-
-/// Rust string identity and order use the complete UTF-8 byte sequence.
-pub open spec fn byte_lt(a: Seq<u8>, b: Seq<u8>) -> bool {
-    exists|i: int| 0 <= i <= a.len() && i < b.len() && byte_prefix(a, b, i)
-        && (i == a.len() || a[i] < b[i])
-}
-
-proof fn byte_lt_strict(a: Seq<u8>, b: Seq<u8>)
-    requires byte_lt(a, b),
-    ensures a != b,
-{
-    let i = choose|i: int| 0 <= i <= a.len() && i < b.len() && byte_prefix(a, b, i)
-        && (i == a.len() || a[i] < b[i]);
-}
-
-proof fn byte_lt_transitive(a: Seq<u8>, b: Seq<u8>, c: Seq<u8>)
-    requires byte_lt(a, b), byte_lt(b, c),
-    ensures byte_lt(a, c),
-{
-    let i = choose|i: int| 0 <= i <= a.len() && i < b.len() && byte_prefix(a, b, i)
-        && (i == a.len() || a[i] < b[i]);
-    let j = choose|j: int| 0 <= j <= b.len() && j < c.len() && byte_prefix(b, c, j)
-        && (j == b.len() || b[j] < c[j]);
-    let k = if i < j { i } else { j };
-    assert(byte_prefix(a, c, k)) by {
-        assert forall|t: int| 0 <= t < k implies a[t] == c[t] by {}
-    }
-    assert(k == a.len() || a[k] < c[k]);
-    assert(0 <= k <= a.len() && k < c.len());
-}
-
-proof fn byte_lt_asymmetric(a: Seq<u8>, b: Seq<u8>)
-    ensures byte_lt(a, b) ==> !byte_lt(b, a),
-{
-    if byte_lt(a, b) && byte_lt(b, a) {
-        byte_lt_transitive(a, b, a);
-        byte_lt_strict(a, a);
-    }
-}
-
-proof fn byte_trichotomy(a: Seq<u8>, b: Seq<u8>)
-    ensures a == b || byte_lt(a, b) || byte_lt(b, a),
-    decreases a.len() + b.len(),
-{
-    if a.len() == 0 {
-        if b.len() == 0 { assert(a =~= b); }
-        else { assert(byte_prefix(a, b, 0)); assert(byte_lt(a, b)); }
-    } else if b.len() == 0 {
-        assert(byte_prefix(b, a, 0)); assert(byte_lt(b, a));
-    } else if a[0] < b[0] {
-        assert(byte_prefix(a, b, 0)); assert(byte_lt(a, b));
-    } else if b[0] < a[0] {
-        assert(byte_prefix(b, a, 0)); assert(byte_lt(b, a));
-    } else {
-        let x = a.subrange(1, a.len() as int);
-        let y = b.subrange(1, b.len() as int);
-        byte_trichotomy(x, y);
-        if x == y {
-            assert(a.len() == b.len());
-            assert(a =~= b) by {
-                assert forall|j: int| 0 <= j < a.len() implies a[j] == b[j] by {
-                    if j > 0 {
-                        assert(a[j] == x[j - 1]);
-                        assert(b[j] == y[j - 1]);
-                    }
-                }
-            }
-        } else if byte_lt(x, y) {
-            let i = choose|i: int| 0 <= i <= x.len() && i < y.len() && byte_prefix(x, y, i)
-                && (i == x.len() || x[i] < y[i]);
-            assert(byte_prefix(a, b, i + 1)) by {
-                assert forall|j: int| 0 <= j < i + 1 implies a[j] == b[j] by {
-                    if j > 0 { assert(x[j - 1] == y[j - 1]); }
-                }
-            }
-            assert(byte_lt(a, b));
-        } else {
-            let i = choose|i: int| 0 <= i <= y.len() && i < x.len() && byte_prefix(y, x, i)
-                && (i == y.len() || y[i] < x[i]);
-            assert(byte_prefix(b, a, i + 1)) by {
-                assert forall|j: int| 0 <= j < i + 1 implies b[j] == a[j] by {
-                    if j > 0 { assert(y[j - 1] == x[j - 1]); }
-                }
-            }
-            assert(byte_lt(b, a));
-        }
-    }
-}
 
 pub proof fn edge_order_laws(a: &Edge, b: &Edge, c: &Edge)
     ensures
@@ -974,46 +894,6 @@ pub fn union(base: &BTreeSet<Edge>, candidate: &BTreeSet<Edge>) -> (out: Vec<Uni
     out
 }
 
-/// -1, 0 and 1 denote less, byte-identical and greater respectively.
-pub fn compare_bytes(a: &[u8], b: &[u8]) -> (order: i8)
-    ensures
-        -1 <= order <= 1,
-        order == -1 ==> byte_lt(a@, b@),
-        order == 0 <==> a@ == b@,
-        order == 1 ==> byte_lt(b@, a@),
-{
-    let mut i: usize = 0;
-    while i < a.len() && i < b.len()
-        invariant i <= a.len(), i <= b.len(), byte_prefix(a@, b@, i as int),
-        decreases a.len() - i,
-    {
-        if a[i] < b[i] {
-            assert(byte_lt(a@, b@));
-            proof { byte_lt_strict(a@, b@); }
-            return -1;
-        }
-        if a[i] > b[i] {
-            assert(byte_prefix(b@, a@, i as int));
-            assert(byte_lt(b@, a@));
-            proof { byte_lt_strict(b@, a@); }
-            return 1;
-        }
-        i += 1;
-    }
-    if a.len() < b.len() {
-        assert(byte_lt(a@, b@));
-        proof { byte_lt_strict(a@, b@); }
-        -1
-    } else if a.len() > b.len() {
-        assert(byte_prefix(b@, a@, i as int));
-        assert(byte_lt(b@, a@));
-        proof { byte_lt_strict(b@, a@); }
-        1
-    } else {
-        assert(a@ =~= b@);
-        0
-    }
-}
 
 pub open spec fn ordered_names(names: Seq<&str>) -> bool {
     forall|i: int, j: int| 0 <= i < j < names.len()
