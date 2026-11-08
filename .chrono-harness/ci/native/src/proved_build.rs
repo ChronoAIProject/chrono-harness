@@ -369,6 +369,9 @@ fn run_attempt(
         tool: "cargo-verus".into(),
         argv: vec![
             "build".into(),
+            // Verus 报告没有目标标识，须防止并行编译插入其他库的产物记录。
+            "--jobs".into(),
+            "1".into(),
             "-v".into(),
             "--fwd-verus-args-to".into(),
             "all".into(),

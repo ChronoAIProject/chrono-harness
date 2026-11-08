@@ -144,6 +144,8 @@ impl Fixture {
         ]);
         vec![
             "build".into(),
+            "--jobs".into(),
+            "1".into(),
             "-v".into(),
             "--fwd-verus-args-to".into(),
             "all".into(),
