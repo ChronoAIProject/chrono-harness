@@ -51,6 +51,7 @@ impl UpgradeFixture {
             .unwrap();
         assert!(construction.finish(Ok(())).unwrap().outcome.is_ok());
         let mut stage = fixture.config.clone();
+        stage["prerequisites"] = json!([]);
         stage["install"] = json!([]);
         stage["report_path"] = json!(".chrono-harness/state/bootstrap-stage.json");
         stage["owner_stage"] = json!({"source":"out/cargo","selected":".chrono-harness/bin/cargo"});
