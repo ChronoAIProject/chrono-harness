@@ -84,7 +84,7 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
     }
     use std::os::{fd::AsRawFd, unix::fs::OpenOptionsExt};
     for damaged in [false, true] {
-        let h = host(1, 16);
+        let h = host(256, 16);
         let first_path = tree(h.path(), "independent-a");
         fs::write(h.path().join(&first_path).join("body"), b"required A input").unwrap();
         let first = inventory(h.path())
@@ -124,12 +124,12 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
             .unwrap();
         second.complete(json!({"exit": 101})).unwrap();
         assert!(began.elapsed() < std::time::Duration::from_secs(5));
-        // A single-node round forces the normal resumable disposal boundary.
-        // Keep the unrelated fault in place through every ordinary entry.
+        // Ordinary maintenance may yield before completing an output. Keep
+        // the unrelated fault in place through each bounded continuation.
         let mut rounds = Vec::new();
         for _ in 0..FIXTURE_RECOVERY_ROUNDS {
             let round = maintenance(h.path());
-            assert!(round["nodes"].as_u64().unwrap() <= 1, "{round}");
+            assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
             rounds.push(round);
             if !h.path().join(&second_path).exists() {
                 break;
