@@ -1988,7 +1988,10 @@ fn retained_originals_survive_enclosing_timeout_even_without_terminal_publicatio
     for case in ["stall", "pause-launcher"] {
         let mut root = tempfile::tempdir().unwrap();
         root.disable_cleanup(true);
-        eprintln!("retained timeout originals ({case}): {}", root.path().display());
+        eprintln!(
+            "retained timeout originals ({case}): {}",
+            root.path().display()
+        );
         let exe = std::env::current_exe().unwrap();
         let spec = chrono_harness::CommandSpec {
             program: exe.to_string_lossy().into(),
