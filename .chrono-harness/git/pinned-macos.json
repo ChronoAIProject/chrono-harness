@@ -86,12 +86,12 @@
     },
     {
       "id": "git",
-      "program": "/usr/bin/git",
+      "program": "git",
       "resolution": "PATH-once",
       "version_argv": [
         "--version"
       ],
-      "expected_version": "git version 2.50.1 (Apple Git-155)"
+      "expected_version": null
     },
     {
       "id": "chrono-worktree",
@@ -101,15 +101,6 @@
         "--version"
       ],
       "expected_version": "chrono-worktree 0.1.0"
-    },
-    {
-      "id": "chrono-inputs",
-      "program": ".chrono-harness/bin/chrono-inputs",
-      "resolution": "PATH-once",
-      "version_argv": [
-        "--version"
-      ],
-      "expected_version": "chrono-inputs 0.1.0"
     },
     {
       "id": "verus",
@@ -496,12 +487,6 @@
     },
     "inputs": [
       {
-        "id": "git-executable",
-        "location": "/usr/bin/git",
-        "presence": "present",
-        "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
-      },
-      {
         "id": "bootstrap-native-toolchains",
         "location": ".chrono-harness/ci/bootstrap-toolchains.json",
         "presence": "present",
@@ -545,7 +530,6 @@
     ]
   },
   "facts_git": {
-    "tool": "git",
-    "input": "git-executable"
+    "tool": "git"
   }
 }
