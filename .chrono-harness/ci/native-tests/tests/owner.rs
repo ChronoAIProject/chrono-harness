@@ -566,11 +566,12 @@ fn delegated_bootstrap_forwards_capabilities_and_original_binary_streams_without
 #[test]
 fn lifecycle_refusal_preserves_the_child_streams_and_the_original_report_reference() {
     let fixture = participating_fixture();
+    let reminder = b"W_WORKTREE_ATTENTION: owner retained work\n";
     let report = json!({"status":"failed", "managed_command_failed":false,
         "error":"coordinator policy/configuration ownership namespace mismatch",
         "managed_process":original_child(&fixture, 7),
         "report_path":".chrono-harness/state/worktrees/failed.json"});
-    mock_participation(&fixture, &serde_json::to_vec(&report).unwrap(), b"", 2);
+    mock_participation(&fixture, &serde_json::to_vec(&report).unwrap(), reminder, 2);
     let output = Staged::invoke(
         &fixture,
         &[".", ".chrono-harness/ci/build.json"],
@@ -584,7 +585,8 @@ fn lifecycle_refusal_preserves_the_child_streams_and_the_original_report_referen
         "lifecycle refusal was masked"
     );
     assert_eq!(output.stdout, [0, 255, 10]);
-    assert!(output.stderr.starts_with(&[254, 0, 10]));
+    let expected_stderr = [&[254, 0, 10][..], reminder].concat();
+    assert!(output.stderr.starts_with(&expected_stderr));
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains("worktrees/failed.json"), "{error}");
     assert!(error.contains("bootstrap lifecycle failed"), "{error}");

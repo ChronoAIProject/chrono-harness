@@ -391,6 +391,9 @@ pub fn participate(
     })?;
     let process = retained_process(&report["managed_process"])?;
     forward(&process)?;
+    std::io::stderr()
+        .write_all(&output.stderr)
+        .map_err(|error| error.to_string())?;
     eprintln!(
         "bootstrap ownership original report: {}",
         anchor
