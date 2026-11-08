@@ -344,6 +344,10 @@ def provision_environment(root, config):
                 or set(values) - {"HOME", "CARGO_HOME", "TMPDIR"}
                 or set(values) & set(config.get("environment", {}))):
             raise ValueError("invalid bootstrap host environment selection")
+        # HOME isolates build state; it must not implicitly select a new Rustup
+        # installation. Explicit/private Rustup declarations keep precedence.
+        if "HOME" in values and "RUSTUP_HOME" not in env:
+            env["RUSTUP_HOME"] = str(Path(env.get("HOME", str(Path.home()))) / ".rustup")
         env.update({key: str(host_path(root, value, ".chrono-harness/cache/"))
                     for key, value in values.items()})
     return env

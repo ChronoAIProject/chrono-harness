@@ -260,7 +260,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         [
             "host.bootstrap-provision-tests",
             "host.bootstrap-tests",
-            "host.bootstrap-real-consumer"
+            "host.bootstrap-command-tests"
         ]
     );
     assert!(startup.operation_bounds.is_empty());
@@ -316,7 +316,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
             "build.distribution",
             "host.bootstrap-provision-tests",
             "host.bootstrap-tests",
-            "host.bootstrap-real-consumer"
+            "host.bootstrap-command-tests"
         ]
     );
     assert_eq!(plans["test:host-bootstrap-tests"].timeout_seconds, 900);
