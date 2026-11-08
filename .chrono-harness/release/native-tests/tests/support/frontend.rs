@@ -272,4 +272,3 @@ impl Drop for Fixture {
         }
     }
 }
-

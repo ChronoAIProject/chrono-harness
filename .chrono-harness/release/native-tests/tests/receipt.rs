@@ -1,7 +1,7 @@
-#[path = "support/frontend.rs"]
-mod frontend_fixture;
 #[path = "support/receipt.rs"]
 mod fixture;
+#[path = "support/frontend.rs"]
+mod frontend_fixture;
 use chrono_host_release::{
     receipt::{self, Kind, Lineage},
     recipe::{Loaded, Scope},
@@ -144,23 +144,46 @@ fn native_receipt_matches_original_job_run_attempt_and_rejects_unknown_fields() 
     let f = frontend_fixture::Fixture::new();
     let frontend = f.exported();
     let out = f.unit(&frontend.join("chrono-host-release"));
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let loaded = chrono_host_release::recipe::Loaded::load(f.host.root()).unwrap();
     let unit = loaded.unit("test_none").unwrap();
     let report_path = f.host.root().join("handoffs/none/receipt.json");
     let mut report: Value = serde_json::from_slice(&fs::read(&report_path).unwrap()).unwrap();
     let context = report["context"].clone();
-    let parent = Lineage {kind:Kind::Github, run_id:"1234".into(), attempt:"3".into(), job:"native_collect".into()};
-    let selected = Selection {job:"native_test_none".into(), artifact_id:"98765".into(), run_id:"1234".into(), attempt:"2".into()};
-    let read = |selected: &Selection| receipt::read(&loaded,f.host.root(),&context,&parent,unit,selected);
-    assert!(read(&selected).is_ok(), "{:?}", read(&selected).unwrap_err());
-    for (field,value) in [("job","foreign"),("run_id","foreign"),("attempt","1")] {
-        let mut wrong=serde_json::to_value(&selected).unwrap();
-        wrong[field]=json!(value);
-        assert!(read(&serde_json::from_value(wrong).unwrap()).is_err(),"{field}");
+    let parent = Lineage {
+        kind: Kind::Github,
+        run_id: "1234".into(),
+        attempt: "3".into(),
+        job: "native_collect".into(),
+    };
+    let selected = Selection {
+        job: "native_test_none".into(),
+        artifact_id: "98765".into(),
+        run_id: "1234".into(),
+        attempt: "2".into(),
+    };
+    let read = |selected: &Selection| {
+        receipt::read(&loaded, f.host.root(), &context, &parent, unit, selected)
+    };
+    assert!(
+        read(&selected).is_ok(),
+        "{:?}",
+        read(&selected).unwrap_err()
+    );
+    for (field, value) in [("job", "foreign"), ("run_id", "foreign"), ("attempt", "1")] {
+        let mut wrong = serde_json::to_value(&selected).unwrap();
+        wrong[field] = json!(value);
+        assert!(
+            read(&serde_json::from_value(wrong).unwrap()).is_err(),
+            "{field}"
+        );
     }
     report["lineage"]["artifact_id"] = json!("unexpected");
-    fs::write(report_path,serde_json::to_vec(&report).unwrap()).unwrap();
+    fs::write(report_path, serde_json::to_vec(&report).unwrap()).unwrap();
     assert!(read(&selected).is_err());
 }
 
