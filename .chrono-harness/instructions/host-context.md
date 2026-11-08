@@ -52,6 +52,12 @@
 
 退出 0 必须对应有效且通过的 response。判官失败退出 1；用法、配置、传输、协议或报告 IO 失败退出 2。本宿主采用 `retained-reference/v2`：固定 check.json 引用原报告，原报告引用 stdout／stderr 原字节。使用方核对原件和输出流摘要后，从原 stdout 解码；上传时包含完整登记目录。`report_bytes` 同时限制元数据与两条流的总量，固定引用也受同一上限限制。详见[报告消费](../../docs/ci-units.md#offline-collection)。生成或上传成功不等于检查通过。
 
+### 自动合并
+
+用户已授权的开发、修复和规则修改，默认包括提交、推送、创建 PR、修复冲突、等待 CI 和合并。AI 自主完成整条流程；当前 PR head 对应的必需 CI 全部通过且 PR 可合并后，立即合并到目标分支，无需再次询问、等待人工批准或停留在草稿／待评审状态。失败或冲突由 AI 继续修复并重验受影响范围，不能绕过必需检查或使用旧候选的通过结果。
+
+合并入口为 `gh pr merge <PR> --repo ChronoAIProject/chrono-harness --merge --match-head-commit <已验运行绑定的PR_head_SHA>`。该参数匹配事件 head；检查原件仍按上文 CI 合同核对固定合并候选，二者不能混用。沿用现有 GitHub 权限和分支保护，不使用管理员绕过。等待和原报告核对沿用已有 CI 流程；GitHub 原生自动合并开关不可用时，也由 AI 在 CI 通过后执行该入口，不增加权限前置或新的人工确认。合并后核对实际 MERGED 状态、落地 SHA 和落地 CI，再报告交付；合并不等于已部署。
+
 ### 指令生成
 
 ```sh
@@ -70,7 +76,7 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 .chrono-harness/bin/chrono-worktree maintain
 ```
 
-执行登记操作时，必须持有 use 保护。调用方等待全部自有任务和后台任务，核对实际完成及落地后，从仍存活的协调宿主执行 finish；maintain 负责独立重试。创建、重建、导入旧 checkout 和显式政策 migrate，按[工作树说明](../../docs/worktree.md)执行。本文不额外授权 Git／GitHub 生命周期操作。
+执行登记操作时，必须持有 use 保护。调用方等待全部自有任务和后台任务，核对实际完成及落地后，从仍存活的协调宿主执行 finish；maintain 负责独立重试。创建、重建、导入旧 checkout 和显式政策 migrate，按[工作树说明](../../docs/worktree.md)执行。Git／GitHub 生命周期沿用上文自动合并约定和当前任务授权。
 
 本宿主在 worktree.json／cleanup.json 中采用 automatic_cleanup/v2。协调锚是 Git owner inventory 的 main worktree，状态位于 `.chrono-harness/state/automatic-cleanup-v2/`。start／reconstruct 自动登记，只维护目标记录；本宿主采用的 bootstrap／check 委托同一负责方，不扫描无关工作树或输出。跨对象清理走显式 maintain。
 
