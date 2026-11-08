@@ -1,7 +1,8 @@
 #[path = "support/construction.rs"]
 mod support;
 use chrono_host_bootstrap::{
-    bindings::native_platform, owner, verified_bindings::owner_publication as publication,
+    bindings::native_platform, lifecycle, owner,
+    verified_bindings::owner_publication as publication,
 };
 use serde_json::{Value, json};
 use std::{
@@ -11,6 +12,424 @@ use std::{
     process::{Command, Output},
 };
 use support::Fixture;
+
+struct UpgradeFixture {
+    fixture: Fixture,
+}
+impl UpgradeFixture {
+    fn new() -> Self {
+        let mut fixture = Fixture::new();
+        let native = native_platform().unwrap();
+        let registry_path = fixture.root.join(".chrono-harness/ci/registry.json");
+        let mut registry = read_json(&registry_path);
+        registry["platforms"][format!("{}/{}", native.system, native.machine)] =
+            registry["platforms"]["fixture/native"].clone();
+        write_json(&registry_path, &registry);
+        fixture.config["participation"]["git"] = json!("/usr/bin/git");
+        fixture.config["participation"]["program"] = json!(".chrono-harness/bin/cargo");
+        fixture.commit();
+        let loaded = chrono_host_bootstrap::profile::Loaded::read(
+            &fixture.root,
+            ".chrono-harness/ci/build.json",
+            &native,
+            &fixture.environment,
+        )
+        .unwrap();
+        let mut construction = chrono_host_bootstrap::construction::Construction::begin(
+            &fixture.root,
+            loaded,
+            &fixture.environment,
+        )
+        .unwrap();
+        construction
+            .prerequisites(&mut vec![], &mut vec![])
+            .unwrap();
+        construction.select().unwrap();
+        construction.operations(&mut vec![], &mut vec![]).unwrap();
+        construction
+            .install_tool(&fixture.root.join("out/cargo"), ".chrono-harness/bin/cargo")
+            .unwrap();
+        assert!(construction.finish(Ok(())).unwrap().outcome.is_ok());
+        let mut stage = fixture.config.clone();
+        stage["prerequisites"] = json!([]);
+        stage["install"] = json!([]);
+        stage["report_path"] = json!(".chrono-harness/state/bootstrap-stage.json");
+        stage["owner_stage"] = json!({"source":"out/cargo","selected":".chrono-harness/bin/cargo"});
+        write_json(&fixture.root.join(".chrono-harness/ci/stage.json"), &stage);
+        write_json(
+            &fixture.root.join(".chrono-harness/ci/upgrade.json"),
+            &json!({
+                "schema":"chrono-bootstrap-owner-upgrade/v1", "selected_original":".chrono-harness/state/bootstrap.json",
+                "stage_config":".chrono-harness/ci/stage.json",
+            }),
+        );
+        fixture.config["owner_upgrade"] = json!(".chrono-harness/ci/upgrade.json");
+        fixture.commit();
+        fixture.environment.insert(
+            "CHRONO_TEST_OWNER_NATIVE".into(),
+            env!("CARGO_BIN_EXE_chrono-test-bootstrap-native").into(),
+        );
+        fixture.environment.insert(
+            "CHRONO_TEST_OWNER_OPERATION".into(),
+            env!("CARGO_BIN_EXE_chrono-test-bootstrap-operation").into(),
+        );
+        Self { fixture }
+    }
+    fn selected(&self) -> PathBuf {
+        self.fixture.root.join(".chrono-harness/bin/cargo")
+    }
+    fn run(&self) -> Result<(), chrono_host_bootstrap::construction::BuildFailure> {
+        let lease = tempfile::tempfile().unwrap();
+        let _scope = chrono_harness::process_fds::Scope::new(&[lease.as_fd()]).unwrap();
+        lifecycle::upgrade(
+            &self.fixture.root,
+            ".chrono-harness/ci/build.json",
+            &self.fixture.loaded().profile,
+            &native_platform().unwrap(),
+            &self.fixture.environment,
+        )
+    }
+    fn calls(&self) -> Vec<Value> {
+        let path = self
+            .fixture
+            .root
+            .join(".chrono-harness/state/owner-phase-calls.jsonl");
+        fs::read_to_string(path)
+            .map(|raw| {
+                raw.lines()
+                    .map(|line| serde_json::from_str(line).unwrap())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+    fn attempt(&self) -> PathBuf {
+        let paths: Vec<_> = fs::read_dir(
+            self.fixture
+                .root
+                .join(".chrono-harness/state/bootstrap-owner-upgrade"),
+        )
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+        assert_eq!(paths.len(), 1);
+        paths.into_iter().next().unwrap()
+    }
+}
+
+#[test]
+fn public_upgrade_uses_qualified_owner_for_real_construction_and_retains_each_consumer() {
+    let upgrade = UpgradeFixture::new();
+    let before = owner::file_binding(&upgrade.selected()).unwrap();
+    upgrade.run().unwrap();
+    let calls = upgrade.calls();
+    assert_eq!(
+        calls
+            .iter()
+            .map(|call| call["phase"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["migration", "construction", "deployment"]
+    );
+    let attempt = upgrade.attempt();
+    let qualification = read_json(&attempt.join("selected-qualification.json"));
+    assert_eq!(
+        qualification["selected"],
+        serde_json::to_value(&before).unwrap()
+    );
+    assert_eq!(
+        qualification["sha256"],
+        chrono_harness::sha256(&fs::read(attempt.join("selected-producer.json")).unwrap())
+    );
+    for call in &calls {
+        let phase = call["phase"].as_str().unwrap();
+        let original = read_json(&attempt.join(format!("{phase}.stdout")));
+        assert_eq!(
+            read_json(&attempt.join(format!("{phase}-consumer.json"))),
+            original["report_consumer"]
+        );
+        assert_eq!(original["report_consumer"]["consumer"], call["consumer"]);
+        assert_eq!(
+            fs::read(attempt.join(format!("{phase}.exit"))).unwrap(),
+            b"0\n"
+        );
+        assert_eq!(call["program_sha256"], before.sha256);
+    }
+    for call in &calls[..2] {
+        assert_eq!(call["selected"], serde_json::to_value(&before).unwrap());
+        assert_eq!(
+            PathBuf::from(call["program"].as_str().unwrap()),
+            attempt.join("construction-owner")
+        );
+    }
+    assert_ne!(
+        owner::file_binding(&upgrade.selected()).unwrap().identity,
+        before.identity
+    );
+    assert!(upgrade.fixture.root.join(owner::CURRENT).is_file());
+}
+
+#[test]
+fn public_upgrade_rejects_missing_or_misbound_phase_consumers_even_when_wrapper_succeeds() {
+    for phase in ["migration", "construction"] {
+        for defect in ["missing-consumer", "wrong-consumer", "wrong-original"] {
+            let mut upgrade = UpgradeFixture::new();
+            upgrade
+                .fixture
+                .environment
+                .insert("CHRONO_TEST_OWNER_DEFECT_PHASE".into(), phase.into());
+            upgrade
+                .fixture
+                .environment
+                .insert("CHRONO_TEST_OWNER_DEFECT".into(), defect.into());
+            let before = owner::file_binding(&upgrade.selected()).unwrap();
+            let failure = upgrade.run().unwrap_err();
+            assert!(
+                failure.message.contains("report consumer"),
+                "{phase}/{defect}: {failure:?}"
+            );
+            let attempt = upgrade.attempt();
+            let original = read_json(&attempt.join(format!("{phase}.stdout")));
+            assert_eq!(
+                fs::read(attempt.join(format!("{phase}.exit"))).unwrap(),
+                b"0\n"
+            );
+            assert_eq!(
+                original["report_path"],
+                format!(".chrono-harness/state/worktrees/{phase}.json")
+            );
+            assert!(!attempt.join(format!("{phase}-consumer.json")).exists());
+            assert_eq!(
+                upgrade.calls().len(),
+                if phase == "migration" { 1 } else { 2 }
+            );
+            assert!(publication::binding_equal(
+                &owner::file_binding(&upgrade.selected()).unwrap(),
+                &before
+            ));
+            assert!(!upgrade.fixture.root.join(owner::CURRENT).exists());
+        }
+    }
+}
+
+#[test]
+fn public_upgrade_preserves_original_child_exit_binary_streams_and_consumer_without_deployment() {
+    let mut upgrade = UpgradeFixture::new();
+    upgrade.fixture.environment.insert(
+        "CHRONO_TEST_OWNER_DEFECT_PHASE".into(),
+        "construction".into(),
+    );
+    upgrade
+        .fixture
+        .environment
+        .insert("CHRONO_TEST_OWNER_DEFECT".into(), "child-exit".into());
+    let before = owner::file_binding(&upgrade.selected()).unwrap();
+    let failure = upgrade.run().unwrap_err();
+    assert_eq!(failure.exit_code, Some(7), "{failure:?}");
+    let attempt = upgrade.attempt();
+    assert_eq!(fs::read(attempt.join("construction.exit")).unwrap(), b"2\n");
+    let original = read_json(&attempt.join("construction.stdout"));
+    assert_eq!(
+        read_json(&attempt.join("construction-consumer.json")),
+        original["report_consumer"]
+    );
+    let process: chrono_harness::ProcessResult = serde_json::from_value(
+        chrono_harness::full::expand_process(&original["managed_process"]).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(process.exit_code, 7);
+    assert_eq!(process.stdout_bytes, [0, 255, 10]);
+    assert_eq!(process.stderr_bytes, [254, 0, 10]);
+    assert_eq!(upgrade.calls().len(), 2);
+    assert!(publication::binding_equal(
+        &owner::file_binding(&upgrade.selected()).unwrap(),
+        &before
+    ));
+    assert!(!upgrade.fixture.root.join(owner::CURRENT).exists());
+}
+
+#[test]
+fn public_upgrade_refuses_unqualified_producer_before_owner_process_effects() {
+    for defect in ["report", "stream", "selected"] {
+        let upgrade = UpgradeFixture::new();
+        let root = &upgrade.fixture.root;
+        let report_path = root.join(".chrono-harness/state/bootstrap.json");
+        match defect {
+            "report" => fs::remove_file(report_path).unwrap(),
+            "stream" => {
+                let report = read_json(&report_path);
+                fs::write(
+                    root.join(report["operations"][0]["stdout"]["path"].as_str().unwrap()),
+                    b"changed stream",
+                )
+                .unwrap();
+            }
+            "selected" => fs::write(upgrade.selected(), b"unproduced owner").unwrap(),
+            _ => unreachable!(),
+        }
+        let before = owner::file_binding(&upgrade.selected()).unwrap();
+        assert!(upgrade.run().is_err(), "accepted {defect}");
+        assert!(upgrade.calls().is_empty());
+        assert!(
+            !root
+                .join(".chrono-harness/state/bootstrap-owner-upgrade")
+                .exists()
+        );
+        assert!(publication::binding_equal(
+            &owner::file_binding(&upgrade.selected()).unwrap(),
+            &before
+        ));
+    }
+}
+
+#[test]
+fn shared_main_install_requires_identical_coordinator_bytes() {
+    let mut fixture = Fixture::new();
+    fixture.config["participation"]["git"] = json!("/usr/bin/git");
+    fixture.config["participation"]["program"] = json!(".chrono-harness/bin/cargo");
+    let loaded = fixture.commit();
+    fixture.environment.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        fixture.root.as_os_str().to_owned(),
+    );
+    let selected = fixture.root.join(".chrono-harness/bin/cargo");
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"original coordinator").unwrap();
+    let staged = fixture.root.join("out/cargo");
+    fs::write(&staged, b"different owner").unwrap();
+    let before = owner::file_binding(&selected).unwrap();
+    let rejected = owner::check_shared_install(
+        &fixture.root,
+        &fixture.environment,
+        &loaded.profile,
+        &staged,
+        &selected,
+    )
+    .unwrap_err();
+    assert!(
+        rejected.contains("exclusive owner deployment"),
+        "{rejected}"
+    );
+    fs::write(&staged, fs::read(&selected).unwrap()).unwrap();
+    owner::check_shared_install(
+        &fixture.root,
+        &fixture.environment,
+        &loaded.profile,
+        &staged,
+        &selected,
+    )
+    .unwrap();
+    assert!(publication::binding_equal(
+        &owner::file_binding(&selected).unwrap(),
+        &before
+    ));
+}
+
+#[test]
+fn linked_shared_install_keeps_coordinator_inode_and_refuses_hardlink_or_symlink_aliases() {
+    use std::os::unix::fs::symlink;
+    let mut fixture = Fixture::new();
+    fixture.config["participation"]["git"] = json!("/usr/bin/git");
+    fixture.config["participation"]["program"] = json!(".chrono-harness/bin/cargo");
+    let loaded = fixture.commit();
+    let selected = fixture.root.join(".chrono-harness/bin/cargo");
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"original coordinator").unwrap();
+    let staged = fixture.root.join("out/cargo");
+    fs::write(&staged, b"local owner update").unwrap();
+    let before = owner::file_binding(&selected).unwrap();
+    let linked = fixture.root.join("linked");
+    let mut command = Command::new("/usr/bin/git");
+    command
+        .current_dir(&fixture.root)
+        .args(["worktree", "add", "--detach"])
+        .arg(&linked)
+        .arg("HEAD");
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    let result = command.output().unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    fixture.environment.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        linked.as_os_str().to_owned(),
+    );
+    let local = linked.join(".chrono-harness/bin/cargo");
+    fs::create_dir_all(local.parent().unwrap()).unwrap();
+    owner::check_shared_install(
+        &linked,
+        &fixture.environment,
+        &loaded.profile,
+        &staged,
+        &local,
+    )
+    .unwrap();
+    fs::copy(&staged, &local).unwrap();
+    owner::check_shared_install(
+        &linked,
+        &fixture.environment,
+        &loaded.profile,
+        &staged,
+        &local,
+    )
+    .unwrap();
+    assert_eq!(fs::read(&local).unwrap(), b"local owner update");
+    fs::remove_file(&local).unwrap();
+    fs::hard_link(&selected, &local).unwrap();
+    let rejected = owner::check_shared_install(
+        &linked,
+        &fixture.environment,
+        &loaded.profile,
+        &staged,
+        &local,
+    )
+    .unwrap_err();
+    assert!(
+        rejected.contains("exclusive owner deployment"),
+        "{rejected}"
+    );
+    fs::write(&staged, fs::read(&selected).unwrap()).unwrap();
+    owner::check_shared_install(
+        &linked,
+        &fixture.environment,
+        &loaded.profile,
+        &staged,
+        &local,
+    )
+    .unwrap();
+    fs::write(&staged, b"local owner update").unwrap();
+    fs::remove_file(&local).unwrap();
+    symlink(&selected, &local).unwrap();
+    assert!(
+        owner::check_shared_install(
+            &linked,
+            &fixture.environment,
+            &loaded.profile,
+            &staged,
+            &local
+        )
+        .unwrap_err()
+        .contains("symlink")
+    );
+    fs::remove_file(&local).unwrap();
+    fs::remove_dir(local.parent().unwrap()).unwrap();
+    symlink(selected.parent().unwrap(), local.parent().unwrap()).unwrap();
+    assert!(
+        owner::check_shared_install(
+            &linked,
+            &fixture.environment,
+            &loaded.profile,
+            &staged,
+            &local
+        )
+        .unwrap_err()
+        .contains("symlink")
+    );
+    assert!(publication::binding_equal(
+        &owner::file_binding(&selected).unwrap(),
+        &before
+    ));
+}
 
 fn read_json(path: &std::path::Path) -> Value {
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()

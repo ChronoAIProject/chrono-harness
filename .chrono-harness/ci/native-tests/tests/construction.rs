@@ -5,6 +5,89 @@ use std::{fs, process::Command};
 use support::Fixture;
 
 #[test]
+fn native_entry_preserves_private_installer_exit_and_failed_original_without_building_or_installing()
+ {
+    let mut fixture = Fixture::new();
+    let native = chrono_host_bootstrap::bindings::native_platform().unwrap();
+    let registry = fixture.root.join(".chrono-harness/ci/registry.json");
+    let mut bindings: Value = serde_json::from_slice(&fs::read(&registry).unwrap()).unwrap();
+    bindings["platforms"][format!("{}/{}", native.system, native.machine)] =
+        bindings["platforms"]["fixture/native"].clone();
+    fs::write(registry, serde_json::to_vec(&bindings).unwrap()).unwrap();
+    fixture.config["prerequisites"] = json!([]);
+    fixture.config["toolchain_provision"] = json!({"profile":"default",
+        "rustup_home":".chrono-harness/state/private/rustup", "cargo_home":".chrono-harness/state/private/cargo"});
+    fixture.loaded();
+    fs::write(fixture.tools.join("fail-install"), b"").unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
+    command
+        .current_dir(&fixture.root)
+        .env_clear()
+        .envs(fixture.environment.iter().filter(|(key, _)| {
+            key.as_os_str() != std::ffi::OsStr::new(chrono_harness::process_fds::ENV)
+        }))
+        .env("CHRONO_WORKTREE_BOOTSTRAP", &fixture.root)
+        .args(["bootstrap", ".", ".chrono-harness/ci/build.json"]);
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    let result = command.output().unwrap();
+    assert_eq!(
+        result.status.code(),
+        Some(17),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let calls: Value =
+        serde_json::from_slice(&fs::read(fixture.tools.join("calls.json")).unwrap()).unwrap();
+    assert_eq!(
+        calls,
+        json!([[
+            "rustup",
+            "toolchain",
+            "install",
+            "1.95.0",
+            "--profile",
+            "default",
+            "--no-self-update"
+        ]])
+    );
+    let stderr = String::from_utf8(result.stderr).unwrap();
+    let path = stderr
+        .lines()
+        .find_map(|line| line.strip_prefix("bootstrap original report: "))
+        .unwrap();
+    let report: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    assert_eq!(report["status"], "failed");
+    assert_eq!(report["operations"], json!([]));
+    assert_eq!(report["installed"], json!([]));
+    assert_eq!(report["versions"], json!({}));
+    assert!(report["environment"].as_object().unwrap().is_empty());
+    assert!(
+        !fixture
+            .root
+            .join(".chrono-harness/state/bootstrap.json")
+            .exists()
+    );
+    assert!(!fixture.root.join("out/cargo").exists());
+    assert!(!fixture.root.join(".chrono-harness/bin/cargo").exists());
+    let traces = fs::read_to_string(fixture.tools.join("environments.jsonl")).unwrap();
+    let values: Vec<Value> = traces
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(values.len(), 1);
+    for (key, suffix) in [("RUSTUP_HOME", "rustup"), ("CARGO_HOME", "cargo")] {
+        assert_eq!(
+            values[0]["environment"][key],
+            fixture
+                .root
+                .join(format!(".chrono-harness/state/private/{suffix}"))
+                .to_str()
+                .unwrap()
+        );
+    }
+}
+
+#[test]
 fn construction_preserves_order_selected_tools_installation_and_original_report() {
     let fixture = Fixture::new();
     let mut build = fixture.committed();

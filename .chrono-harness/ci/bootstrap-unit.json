@@ -3,7 +3,6 @@
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
   "tools": {
-    "python3": "/usr/bin/python3",
     "bash": "/bin/bash"
   },
   "prerequisites": [
@@ -20,8 +19,8 @@
     "config": ".chrono-harness/worktree.json"
   },
   "entrypoint": {
-    "tool": "python3",
-    "script": ".chrono-harness/ci/bootstrap.py"
+    "tool": "bash",
+    "script": ".chrono-harness/ci/bootstrap-installed.sh"
   },
   "require_tool_bindings": true,
   "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
