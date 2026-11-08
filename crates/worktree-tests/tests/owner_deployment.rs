@@ -222,15 +222,8 @@ fn current_owner_retains_its_adoption_and_stage_after_enrollment_refresh() {
                 .to_owned()
         })
         .collect();
-    for id in &ids {
-        assert!(
-            state["roots"]["bootstrap-owner-current"]
-                .as_array()
-                .unwrap()
-                .contains(&value!(id)),
-            "{state}"
-        );
-    }
+    let role = format!("current-report:{}", sha256(b".chrono-harness/state/bootstrap-owner-current.json"));
+    assert!(state["roots"][&role].as_array().unwrap().contains(&value!(ids[0])), "{state}");
     Inventory::adopted(&h.root)
         .unwrap()
         .unwrap()
