@@ -1133,7 +1133,7 @@ fn verus_archive_cache_binds_download_and_checksum_without_compiler_inputs() {
         first,
         plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]
     );
-    changed["scripts"][2]["actions"]["verus-download"]["argv"]
+    changed["scripts"][0]["actions"]["verus-download"]["argv"]
         .as_array_mut()
         .unwrap()
         .push(json!("different download identity"));

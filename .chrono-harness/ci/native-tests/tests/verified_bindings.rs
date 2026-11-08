@@ -65,10 +65,8 @@ fn original_headers_require_success_identity_and_no_import_or_error() {
     proof {
         reveal_strlit("chrono-bootstrap-result/v1"); reveal_strlit("bad");
         reveal_strlit("config"); reveal_strlit("other");
-        reveal_strlit(".chrono-harness/ci/bootstrap.py"); reveal_strlit("native.sh");
         assert("config"@.len() != "other"@.len());
         assert("chrono-bootstrap-result/v1"@.len() != "bad"@.len());
-        assert(".chrono-harness/ci/bootstrap.py"@.len() != "native.sh"@.len());
     }
     let good = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", true, false, false);
     let schema = policy::original_header("bad", true, "config", "config", true, false, false);
@@ -77,11 +75,7 @@ fn original_headers_require_success_identity_and_no_import_or_error() {
     let host = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", false, false, false);
     let imported = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", true, true, false);
     let error = policy::original_header("chrono-bootstrap-result/v1", true, "config", "config", true, false, true);
-    let old = policy::python_owner_inputs(".chrono-harness/ci/bootstrap.py", true);
-    let native = policy::python_owner_inputs("native.sh", true);
-    let ordinary = policy::python_owner_inputs(".chrono-harness/ci/bootstrap.py", false);
     assert(good && !schema && !failed && !config && !host && !imported && !error);
-    assert(old && !native && !ordinary);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

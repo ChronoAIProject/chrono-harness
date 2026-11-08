@@ -199,37 +199,23 @@ fn rejects_changed_missing_shared_or_escaping_original_streams() {
 }
 
 #[test]
-fn fixed_python_producer_data_survives_current_source_drift_without_old_execution_or_home_effects()
-{
+fn fixed_native_producer_data_survives_current_source_drift_without_execution_or_home_effects() {
     use chrono_host_bootstrap::source::Committed;
     let mut fixture = Fixture::new();
-    fixture.config["entrypoint"] =
-        json!({"tool":"python3", "script":".chrono-harness/ci/bootstrap.py"});
     fixture.config["owner_upgrade"] = json!(".chrono-harness/ci/upgrade.json");
     fixture.config["host_environment"] = json!({"HOME":".chrono-harness/cache/producer-home"});
-    let fixed = [
-        ".chrono-harness/ci/bootstrap.py",
-        ".chrono-harness/ci/bootstrap_owner.py",
-        ".chrono-harness/ci/bootstrap_shared.py",
-    ];
+    let fixed = [".chrono-harness/ci/entry.sh"];
     for path in fixed {
         fs::write(
             fixture.root.join(path),
-            b"this is fixed source data, not executable Python\0\xff",
+            b"fixed native producer source, never executed\0\xff",
         )
         .unwrap();
     }
     fs::write(fixture.root.join(".chrono-harness/ci/upgrade.json"), b"{}").unwrap();
     std::os::unix::fs::symlink("entry.sh", fixture.root.join(".chrono-harness/ci/linked")).unwrap();
     let raw = original(&fixture);
-    let mut report: Value = serde_json::from_slice(&raw).unwrap();
-    // 外部 Python producer 报告形状夹具：操作和流来自本测试的真实 Rust 子进程，
-    // 这里只补入该固定数据格式额外登记的两份模块摘要，不声称执行过历史 Python。
-    for path in &fixed[1..] {
-        report["registrations"][*path] = json!(chrono_harness::sha256(
-            &fs::read(fixture.root.join(path)).unwrap()
-        ));
-    }
+    let report: Value = serde_json::from_slice(&raw).unwrap();
     let source = observed(&raw);
     let reader = Committed::new(
         &fixture.root,
@@ -282,7 +268,7 @@ fn fixed_python_producer_data_survives_current_source_drift_without_old_executio
     );
     assert!(reader.read(".chrono-harness/ci/absent").is_err());
     assert!(reader.read(".chrono-harness/ci/../projects.json").is_err());
-    for path in &fixed[1..] {
+    for path in &fixed {
         let mut changed = report.clone();
         changed["registrations"]
             .as_object_mut()

@@ -88,11 +88,11 @@ Python 发布 integration 组保留真实 distribution pack，并加入真实 ca
 
 发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。版本和摘要以该登记及[工作树政策](../.chrono-harness/worktree.json)为准，不在操作说明复制本轮主机读数。未知 Git 字节继续在执行前拒绝，候选是否可用仍须实际验证。
 
-编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。`host.bootstrap-tests` 的断言输入释放实际调用 `chrono-harness retention`，因此两平台发布验证同步补登记 `build_runner` 与 `chrono-harness` 暂存依赖；没有跳过原测试。
+编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。
 
-Linux 发行政策也保留工作树所有者读取登记所需的完整结构，以及真实 custody fixture 使用的 Python 工具槽；Python 版本保持未知（`null`），fixture 自行绑定实际解释器。该登记不声称完成 Linux canonical/full 采用。
+Linux 发行政策保留工作树所有者读取登记所需的完整结构；发布编排及仍使用 Python 的测试工具槽按当前使用方保留，未知 Python 版本仍为 `null`。该登记不声称完成 Linux canonical/full 采用。
 
-Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时仍由现有入口选择 local。`host.bootstrap-tests` 失败时沿用已有有界采集，保留登记的 `bootstrap-custody-tests/` 原件；目录缺失或容量省略仍如实报告。断言同时显示真实退出码和 stdout／stderr 尾部及原路径，不把空 stderr 当作完整错误。
+Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时仍由现有入口选择 local。旧 Python custody 测试的发布采集声明随生产者退役；已保留失败原件仍按原使用方的诊断和验收期限保护，不因删除源码或声明而删除。
 
 Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，供真实源码 DELTA fixture 解析两端登记；未观察的 Rust 工具版本保持 `null`。这仅补齐引用关系，不代表 Linux canonical/full 输入已经完整绑定。失败诊断格式变化时，同步迁移原有 custody 断言，仍核验主错误、失败状态和原始输出。
 
