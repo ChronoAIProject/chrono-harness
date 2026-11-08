@@ -527,7 +527,7 @@
         "build_runner"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests",
-      "rust_toolchain": false
+      "rust_toolchain": true
     },
     {
       "id": "build_cache",
@@ -915,7 +915,7 @@
       "release_assets": []
     },
     "verify_host_bootstrap_tests": {
-      "need": "The host.bootstrap-tests Python action checks explicit configuration, build/install identity and failure propagation with fixture tools; ManagedAttemptCustody also invokes the released chrono-worktree binary for real custody protection and disposal. Its consumer release invokes chrono-harness retention to settle the real retained assertion inputs.",
+      "need": "原始 host.bootstrap-tests 检查 Python 启动配置、构建／安装身份和失败传播；诊断组合测试复用登记的 build.host-bootstrap-native 构建真实 Rust 启动工具并消费其共享接口，因此需要 Rust 工具链。ManagedAttemptCustody 调用发布的 chrono-worktree 保护和回收样本，并调用 chrono-harness retention 释放实际断言输入。",
       "release_assets": [
         "chrono-worktree",
         "chrono-harness"
