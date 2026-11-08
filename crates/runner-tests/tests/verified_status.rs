@@ -1148,28 +1148,32 @@ spec fn fixture_tree(tree: Map<policy::TreePath, policy::TreeEntry>,
         exists|key: policy::TreePath| tree.contains_key(key) && key@ == path)
 }
 
-fn insert_tree_fixture(tree: &mut policy::Tree, path: &str, mode: &str, oid: &str, kind: &str,
-    Ghost(entries): Ghost<Map<Seq<char>, policy::TreeEntryFields>>)
-    requires fixture_tree(old(tree)@, entries), !entries.contains_key(path@),
-    ensures fixture_tree(tree@, entries.insert(path@, (mode@, oid@, kind@))),
+fn insert_tree_fixture(tree: &mut policy::Tree, path: &str, mode: &str, oid: &str, kind: &str)
+    ensures forall|entries: Map<Seq<char>, policy::TreeEntryFields>|
+        fixture_tree(old(tree)@, entries) && !entries.contains_key(path@)
+            ==> #[trigger] fixture_tree(tree@, entries.insert(path@, (mode@, oid@, kind@))),
 {
     proof { policy::tree_path_obeys_cmp(); }
     let key = policy::TreePath::from_text(path);
     let ghost inserted = key;
     tree.insert(key, tree_entry(mode, oid, kind));
     proof {
-        let expected = entries.insert(path@, (mode@, oid@, kind@));
-        assert forall|key: policy::TreePath| tree@.contains_key(key) implies
-            expected.contains_key(key@) && policy::tree_entry_fields(&tree@[key]) == expected[key@] by {
-            if key != inserted { assert(old(tree)@.contains_key(key)); }
-        }
-        assert forall|text: Seq<char>| expected.contains_key(text) implies
-            exists|key: policy::TreePath| tree@.contains_key(key) && key@ == text by {
-            if text == path@ {
-                assert(tree@.contains_key(inserted));
-            } else {
-                let key = choose|key: policy::TreePath| old(tree)@.contains_key(key) && key@ == text;
-                assert(tree@.contains_key(key));
+        assert forall|entries: Map<Seq<char>, policy::TreeEntryFields>|
+            fixture_tree(old(tree)@, entries) && !entries.contains_key(path@)
+                implies #[trigger] fixture_tree(tree@, entries.insert(path@, (mode@, oid@, kind@))) by {
+            let expected = entries.insert(path@, (mode@, oid@, kind@));
+            assert forall|key: policy::TreePath| tree@.contains_key(key) implies
+                expected.contains_key(key@) && policy::tree_entry_fields(&tree@[key]) == expected[key@] by {
+                if key != inserted { assert(old(tree)@.contains_key(key)); }
+            }
+            assert forall|text: Seq<char>| expected.contains_key(text) implies
+                exists|key: policy::TreePath| tree@.contains_key(key) && key@ == text by {
+                if text == path@ {
+                    assert(tree@.contains_key(inserted));
+                } else {
+                    let key = choose|key: policy::TreePath| old(tree)@.contains_key(key) && key@ == text;
+                    assert(tree@.contains_key(key));
+                }
             }
         }
     }
@@ -1323,17 +1327,17 @@ fn full_tree_delta_joins_both_maps_once_and_keeps_sorted_complete_records() {
     let mut after = policy::Tree::new();
     let ghost mut old_entries = Map::empty();
     let ghost mut new_entries = Map::empty();
-    insert_tree_fixture(&mut before, "a", "old mode", "old blob", "blob", Ghost(old_entries));
+    insert_tree_fixture(&mut before, "a", "old mode", "old blob", "blob");
     proof { old_entries = old_entries.insert("a"@, ("old mode"@, "old blob"@, "blob"@)); }
-    insert_tree_fixture(&mut before, "b", "same mode", "same blob", "blob", Ghost(old_entries));
+    insert_tree_fixture(&mut before, "b", "same mode", "same blob", "blob");
     proof { old_entries = old_entries.insert("b"@, ("same mode"@, "same blob"@, "blob"@)); }
-    insert_tree_fixture(&mut before, "d", "same", "same", "same", Ghost(old_entries));
+    insert_tree_fixture(&mut before, "d", "same", "same", "same");
     proof { old_entries = old_entries.insert("d"@, ("same"@, "same"@, "same"@)); }
-    insert_tree_fixture(&mut after, "b", "same mode", "same blob", "tree", Ghost(new_entries));
+    insert_tree_fixture(&mut after, "b", "same mode", "same blob", "tree");
     proof { new_entries = new_entries.insert("b"@, ("same mode"@, "same blob"@, "tree"@)); }
-    insert_tree_fixture(&mut after, "c", "new mode", "new blob", "blob", Ghost(new_entries));
+    insert_tree_fixture(&mut after, "c", "new mode", "new blob", "blob");
     proof { new_entries = new_entries.insert("c"@, ("new mode"@, "new blob"@, "blob"@)); }
-    insert_tree_fixture(&mut after, "d", "same", "same", "same", Ghost(new_entries));
+    insert_tree_fixture(&mut after, "d", "same", "same", "same");
     proof { new_entries = new_entries.insert("d"@, ("same"@, "same"@, "same"@)); }
     let changes = policy::delta_for_trees(&before, &after);
     proof {
@@ -1398,11 +1402,11 @@ fn full_tree_delta_preserves_empty_unicode_nul_and_reverse_changes() {
     let before = policy::Tree::new();
     let mut after = policy::Tree::new();
     let ghost mut entries = Map::empty();
-    insert_tree_fixture(&mut after, "é", "", "", "", Ghost(entries));
+    insert_tree_fixture(&mut after, "é", "", "", "");
     proof { entries = entries.insert("é"@, (""@, ""@, ""@)); }
-    insert_tree_fixture(&mut after, "", "", "", "", Ghost(entries));
+    insert_tree_fixture(&mut after, "", "", "", "");
     proof { entries = entries.insert(""@, (""@, ""@, ""@)); }
-    insert_tree_fixture(&mut after, "a\0", "mode\0", "对象\0", "blob", Ghost(entries));
+    insert_tree_fixture(&mut after, "a\0", "mode\0", "对象\0", "blob");
     proof { entries = entries.insert("a\0"@, ("mode\0"@, "对象\0"@, "blob"@)); }
     let changes = policy::delta_for_trees(&before, &after);
     proof {
