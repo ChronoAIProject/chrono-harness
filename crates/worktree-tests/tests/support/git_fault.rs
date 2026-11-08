@@ -630,14 +630,6 @@ fn main() {
                 return;
             }
         }
-        "parent-report-interrupt" => {
-            if home.join("interrupt-parent-report").is_file()
-                && arg(1, "worktree") && arg(2, "list")
-            {
-                interrupt_parent();
-                return;
-            }
-        }
         "automatic-remove" => {
             if home.join("fail-remove").is_file() && arg(1, "worktree") && arg(2, "remove") {
                 if config["after_effect"] == true {

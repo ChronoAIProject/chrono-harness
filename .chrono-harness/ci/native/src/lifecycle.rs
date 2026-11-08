@@ -50,7 +50,7 @@ fn process_outcome(process: &ProcessResult) -> Result<(), BuildFailure> {
     Ok(())
 }
 
-fn run_owner(
+pub fn run_owner(
     root: &Path,
     environment: &Environment,
     program: &Path,
