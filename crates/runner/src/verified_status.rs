@@ -16,6 +16,12 @@ pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
 
+#[cfg(verus_keep_ghost)]
+#[path = "verified_paths.rs"]
+pub mod paths;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_paths as paths;
+
 #[path = "verified_scope.rs"]
 pub mod scopes;
 
@@ -505,6 +511,36 @@ pub open spec fn tree_entry_fields(entry: &TreeEntry) -> TreeEntryFields {
     (entry.mode@, entry.oid@, entry.kind@)
 }
 
+/// 标准迭代器的完整、严格有序库存连接实际 map 键与全文身份。
+/// 只创建迭代器，不遍历或复制库存。
+fn tree_keys_have_unique_text(tree: &Tree)
+    ensures forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
+        tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@ ==> a == b,
+{
+    proof { tree_path_obeys_cmp(); }
+    let iterator = tree.iter();
+    proof {
+        let rows = iterator@.1;
+        let keys = rows.map(|i: int, row: (TreePath, TreeEntry)| row.0);
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
+        assert forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
+            tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@
+                implies a == b by {
+            assert(rows.to_set().contains((a, tree@[a])));
+            assert(rows.to_set().contains((b, tree@[b])));
+            let i = choose|i: int| 0 <= i < rows.len() && rows[i] == (a, tree@[a]);
+            let j = choose|j: int| 0 <= j < rows.len() && rows[j] == (b, tree@[b]);
+            if i < j {
+                assert(keys[i].cmp_spec(&keys[j]) is Less);
+                assert(a.order_spec(&b) is Less);
+            } else if j < i {
+                assert(keys[j].cmp_spec(&keys[i]) is Less);
+                assert(b.order_spec(&a) is Less);
+            }
+        }
+    }
+}
+
 /// Git tree 的实际插入状态：完整构造条目，原路径已存在时保留原重复诊断。
 /// 沿用原 insert 的更新顺序；失败时该路径也已替换，调用方丢弃整棵候选树。
 pub fn insert_git_tree_entry(
@@ -515,19 +551,332 @@ pub fn insert_git_tree_entry(
         tree@ == old(tree)@.insert(path, tree@[path]),
         tree_entry_fields(&tree@[path]) == (mode@, oid@, kind@),
         out.is_ok() == !old(tree)@.contains_key(path),
+        out.is_ok() == !(exists|key: TreePath| (#[trigger] old(tree)@.contains_key(key)) && key@ == path@),
         match out {
             Ok(()) => true,
             Err(message) => message@ == "duplicate Git tree path"@,
         },
 {
     proof { tree_path_obeys_cmp(); }
+    let ghost before = tree@;
     let entry = TreeEntry {
         mode: mode.to_owned(), oid: oid.to_owned(), kind: kind.to_owned(),
     };
-    match tree.insert(path, entry) {
+    let previous = tree.insert(path, entry);
+    tree_keys_have_unique_text(tree);
+    proof {
+        if exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@ {
+            let key = choose|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@;
+            assert(tree@.contains_key(key));
+            assert(tree@.contains_key(path));
+            assert(key == path);
+            assert(before.contains_key(path));
+        }
+        if before.contains_key(path) {
+            assert(exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@);
+        }
+        assert(before.contains_key(path) ==
+            (exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@));
+    }
+    match previous {
         Some(_) => Err("duplicate Git tree path".to_owned()),
         None => Ok(()),
     }
+}
+
+#[cfg(verus_keep_ghost)]
+pub enum GitTreeErrorView {
+    Message(Seq<char>),
+    InvalidPath(Seq<u8>),
+}
+
+pub enum GitTreeError<'a> {
+    Message(String),
+    InvalidPath(&'a str),
+}
+
+impl<'a> GitTreeError<'a> {
+    pub open spec fn view(&self) -> GitTreeErrorView {
+        match self {
+            Self::Message(message) => GitTreeErrorView::Message(message@),
+            Self::InvalidPath(path) => GitTreeErrorView::InvalidPath(path.spec_bytes()),
+        }
+    }
+
+    /// 唯一外部边界是标准 Debug 格式化；仓内分支及原路径转交在此证明。
+    pub fn render<F: Fn(&str) -> String>(self, format_path: F) -> (out: String)
+        requires forall|path: &str| format_path.requires((path,)),
+        ensures match self {
+            Self::Message(message) => out == message,
+            Self::InvalidPath(path) => format_path.ensures((path,), out),
+        },
+    {
+        match self {
+            Self::Message(message) => message,
+            Self::InvalidPath(path) => format_path(path),
+        }
+    }
+}
+
+pub struct GitTreeRow<'a> {
+    pub path: &'a str,
+    pub mode: &'a str,
+    pub oid: &'a str,
+    pub kind: &'a str,
+}
+
+#[cfg(verus_keep_ghost)]
+pub type GitTreeRowBytes = (Seq<u8>, Seq<u8>, Seq<u8>, Seq<u8>);
+
+impl<'a> GitTreeRow<'a> {
+    pub open spec fn bytes(&self) -> GitTreeRowBytes {
+        (self.path.spec_bytes(), self.mode.spec_bytes(), self.oid.spec_bytes(), self.kind.spec_bytes())
+    }
+}
+
+/// 输入字节独立定义原准入次序：首 TAB、三字段、路径、完整 OID。
+#[verifier::opaque]
+pub open spec fn git_tree_row_spec(raw: Seq<u8>) -> Result<GitTreeRowBytes, GitTreeErrorView> {
+    let end = identifiers::ascii_separator_end(raw, 9);
+    if end == raw.len() { Err(GitTreeErrorView::Message("invalid Git tree row"@)) }
+    else {
+        let fields = identifiers::ascii_split_records(raw.take(end), 32, true);
+        let path = raw.skip(end + 1);
+        if fields.len() != 3 { Err(GitTreeErrorView::Message("invalid Git tree metadata"@)) }
+        else if !paths::relative_path(path) { Err(GitTreeErrorView::InvalidPath(path)) }
+        else if !identifiers::oid(fields[2]) {
+            Err(GitTreeErrorView::Message("expected full nonzero lowercase commit OID"@))
+        } else { Ok((path, fields[0], fields[2], fields[1])) }
+    }
+}
+
+pub fn parse_git_tree_row(raw: &str) -> (out: Result<GitTreeRow<'_>, GitTreeError<'_>>)
+    ensures match out {
+        Ok(row) => git_tree_row_spec(raw.spec_bytes()) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row.bytes()),
+        Err(error) => git_tree_row_spec(raw.spec_bytes()) == Err::<GitTreeRowBytes, GitTreeErrorView>(error.view()),
+    },
+{
+    proof { reveal(git_tree_row_spec); }
+    let (meta, path) = match identifiers::git_inventory_row(raw, "invalid Git tree row") {
+        Ok(parts) => parts,
+        Err(message) => return Err(GitTreeError::Message(message)),
+    };
+    let fields = identifiers::git_inventory_fields(meta);
+    match identifiers::git_tree_metadata(&fields) {
+        Ok(()) => {},
+        Err(message) => return Err(GitTreeError::Message(message)),
+    }
+    if !paths::valid_relative_path(path.as_bytes()) { return Err(GitTreeError::InvalidPath(path)); }
+    match identifiers::full_oid(fields[2]) {
+        Ok(()) => {},
+        Err(message) => return Err(GitTreeError::Message(message)),
+    }
+    Ok(GitTreeRow { path, mode: fields[0], oid: fields[2], kind: fields[1] })
+}
+
+pub open spec fn git_tree_row_at(rows: Seq<&str>, i: int) -> Result<GitTreeRowBytes, GitTreeErrorView> {
+    git_tree_row_spec(rows[i].spec_bytes())
+}
+
+pub open spec fn git_tree_prefix_valid(rows: Seq<&str>, count: int) -> bool {
+    0 <= count <= rows.len()
+        && (forall|i: int| 0 <= i < count ==> (#[trigger] git_tree_row_at(rows, i)).is_ok())
+        && (forall|i: int, j: int| 0 <= i < j < count ==>
+            ((#[trigger] git_tree_row_at(rows, i))->Ok_0).0
+                != ((#[trigger] git_tree_row_at(rows, j))->Ok_0).0)
+}
+
+pub open spec fn git_tree_entry_matches(key: TreePath, entry: TreeEntry, row: GitTreeRowBytes) -> bool {
+    key.bytes() == row.0 && vstd::utf8::encode_utf8(entry.mode@) == row.1
+        && vstd::utf8::encode_utf8(entry.oid@) == row.2
+        && vstd::utf8::encode_utf8(entry.kind@) == row.3
+}
+
+/// 双向完整对应排除遗漏与额外条目；数量是实际 map 的键数。
+pub open spec fn git_tree_prefix_map(tree: Map<TreePath, TreeEntry>, rows: Seq<&str>, count: int) -> bool {
+    tree.len() == count
+        && (forall|key: TreePath| tree.contains_key(key) ==> exists|i: int| 0 <= i < count
+            && git_tree_entry_matches(key, tree[key], (git_tree_row_at(rows, i)->Ok_0)))
+        && (forall|i: int| #![trigger git_tree_row_at(rows, i)]
+            0 <= i < count ==> exists|key: TreePath| tree.contains_key(key)
+            && git_tree_entry_matches(key, tree[key], (git_tree_row_at(rows, i)->Ok_0)))
+}
+
+pub open spec fn git_tree_error_at(rows: Seq<&str>, i: int, error: GitTreeErrorView) -> bool {
+    match git_tree_row_at(rows, i) {
+        Err(expected) => error == expected,
+        Ok(row) => error == GitTreeErrorView::Message("duplicate Git tree path"@)
+            && exists|j: int| 0 <= j < i && (git_tree_row_at(rows, j)->Ok_0).0 == row.0,
+    }
+}
+
+pub proof fn git_tree_error_blocks_prefix(rows: Seq<&str>, i: int,
+    error: GitTreeErrorView, count: int)
+    requires 0 <= i < count <= rows.len(), git_tree_error_at(rows, i, error),
+    ensures !git_tree_prefix_valid(rows, count),
+{
+    if git_tree_prefix_valid(rows, count) {
+        match git_tree_row_at(rows, i) {
+            Err(_) => {},
+            Ok(row) => {
+                let j = choose|j: int| 0 <= j < i && (git_tree_row_at(rows, j)->Ok_0).0 == row.0;
+                assert((git_tree_row_at(rows, j)->Ok_0).0 != (git_tree_row_at(rows, i)->Ok_0).0);
+            },
+        }
+    }
+}
+
+pub proof fn git_tree_first_error_unique(rows: Seq<&str>, i: int, error: GitTreeErrorView,
+    j: int, other: GitTreeErrorView)
+    requires 0 <= i < rows.len(), git_tree_prefix_valid(rows, i), git_tree_error_at(rows, i, error),
+        0 <= j < rows.len(), git_tree_prefix_valid(rows, j), git_tree_error_at(rows, j, other),
+    ensures i == j, error == other,
+{
+    if i < j { git_tree_error_blocks_prefix(rows, i, error, j); }
+    if j < i { git_tree_error_blocks_prefix(rows, j, other, i); }
+}
+
+/// 已发布前缀的路径见证与下一次插入的全文判重使用同一身份。
+proof fn git_tree_next_path_is_new(tree: Map<TreePath, TreeEntry>, rows: Seq<&str>,
+    count: int, path: TreePath)
+    requires
+        git_tree_prefix_map(tree, rows, count),
+        !(exists|key: TreePath| (#[trigger] tree.contains_key(key)) && key@ == path@),
+    ensures forall|j: int| 0 <= j < count ==>
+        (#[trigger] git_tree_row_at(rows, j)->Ok_0).0 != path.bytes(),
+{
+    assert forall|j: int| 0 <= j < count implies
+        (#[trigger] git_tree_row_at(rows, j)->Ok_0).0 != path.bytes() by {
+        let key = choose|key: TreePath| tree.contains_key(key) && git_tree_entry_matches(
+            key, tree[key], (git_tree_row_at(rows, j)->Ok_0));
+        if key.bytes() == path.bytes() {
+            tree_path_same_text(&key, &path);
+            assert(exists|key: TreePath| (#[trigger] tree.contains_key(key)) && key@ == path@);
+        }
+    }
+}
+
+proof fn git_tree_extend_valid_prefix(rows: Seq<&str>, count: int, row: GitTreeRowBytes)
+    requires
+        0 <= count < rows.len(), git_tree_prefix_valid(rows, count),
+        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row),
+        forall|j: int| 0 <= j < count ==> (#[trigger] git_tree_row_at(rows, j)->Ok_0).0 != row.0,
+    ensures git_tree_prefix_valid(rows, count + 1),
+{
+    assert forall|j: int| 0 <= j < count + 1 implies (#[trigger] git_tree_row_at(rows, j)).is_ok() by {
+        if j < count {} else { assert(j == count); }
+    }
+    assert forall|i: int, j: int| 0 <= i < j < count + 1 implies
+        ((#[trigger] git_tree_row_at(rows, i))->Ok_0).0
+            != ((#[trigger] git_tree_row_at(rows, j))->Ok_0).0 by {
+        if j < count {} else { assert(j == count); }
+    }
+}
+
+/// 精确 map 更新的双向完整性单独证明，不展开行字节解析。
+proof fn git_tree_extend_prefix_map(tree: Map<TreePath, TreeEntry>, rows: Seq<&str>,
+    count: int, inserted: TreePath, entry: TreeEntry, row: GitTreeRowBytes)
+    requires
+        0 <= count < rows.len(), git_tree_prefix_map(tree, rows, count), tree.dom().finite(),
+        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row),
+        git_tree_entry_matches(inserted, entry, row), !tree.contains_key(inserted),
+    ensures git_tree_prefix_map(tree.insert(inserted, entry), rows, count + 1),
+{
+    let next = tree.insert(inserted, entry);
+    assert(next.len() == count + 1);
+    assert forall|key: TreePath| (#[trigger] next.contains_key(key)) implies exists|j: int|
+        0 <= j < count + 1 && git_tree_entry_matches(
+            key, next[key], (git_tree_row_at(rows, j)->Ok_0)) by {
+        if key == inserted {
+            assert(git_tree_entry_matches(key, next[key], (git_tree_row_at(rows, count)->Ok_0)));
+        } else {
+            assert(tree.contains_key(key));
+            let j = choose|j: int| 0 <= j < count && git_tree_entry_matches(
+                key, tree[key], (git_tree_row_at(rows, j)->Ok_0));
+            assert(git_tree_entry_matches(key, next[key], (git_tree_row_at(rows, j)->Ok_0)));
+        }
+    }
+    assert forall|j: int| #![trigger git_tree_row_at(rows, j)]
+        0 <= j < count + 1 implies exists|key: TreePath|
+        next.contains_key(key) && git_tree_entry_matches(
+            key, next[key], (git_tree_row_at(rows, j)->Ok_0)) by {
+        if j == count {
+            assert(next.contains_key(inserted));
+            assert(git_tree_entry_matches(inserted, next[inserted], (git_tree_row_at(rows, j)->Ok_0)));
+        } else {
+            let key = choose|key: TreePath| tree.contains_key(key) && git_tree_entry_matches(
+                key, tree[key], (git_tree_row_at(rows, j)->Ok_0));
+            assert(key != inserted);
+            assert(next.contains_key(key));
+            assert(git_tree_entry_matches(key, next[key], (git_tree_row_at(rows, j)->Ok_0)));
+        }
+    }
+}
+
+proof fn git_tree_duplicate_error(tree: Map<TreePath, TreeEntry>, rows: Seq<&str>,
+    count: int, path: TreePath, row: GitTreeRowBytes)
+    requires
+        0 <= count < rows.len(), git_tree_prefix_map(tree, rows, count),
+        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row),
+        path.bytes() == row.0,
+        exists|key: TreePath| (#[trigger] tree.contains_key(key)) && key@ == path@,
+    ensures git_tree_error_at(rows, count, GitTreeErrorView::Message("duplicate Git tree path"@)),
+{
+    let key = choose|key: TreePath| (#[trigger] tree.contains_key(key)) && key@ == path@;
+    let j = choose|j: int| 0 <= j < count && git_tree_entry_matches(
+        key, tree[key], (git_tree_row_at(rows, j)->Ok_0));
+    assert((git_tree_row_at(rows, j)->Ok_0).0 == row.0);
+    assert(exists|j: int| 0 <= j < count && (git_tree_row_at(rows, j)->Ok_0).0 == row.0);
+}
+
+/// 完整逐行解析：返回全部原字段，或首个失败；失败后的局部树不发布。
+pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitTreeError<'a>>)
+    ensures match out {
+        Ok(tree) => git_tree_prefix_valid(rows@, rows.len() as int)
+            && git_tree_prefix_map(tree@, rows@, rows.len() as int),
+        Err(error) => exists|i: int| 0 <= i < rows.len() && git_tree_prefix_valid(rows@, i)
+            && git_tree_error_at(rows@, i, error.view()),
+    },
+{
+    let mut tree = Tree::new();
+    let mut i = 0;
+    while i < rows.len()
+        invariant
+            0 <= i <= rows.len(),
+            git_tree_prefix_valid(rows@, i as int),
+            git_tree_prefix_map(tree@, rows@, i as int),
+        decreases rows.len() - i,
+    {
+        let row = match parse_git_tree_row(rows[i]) {
+            Ok(row) => row,
+            Err(error) => {
+                proof { assert(git_tree_error_at(rows@, i as int, error.view())); }
+                return Err(error);
+            },
+        };
+        let key = TreePath::from_text(row.path);
+        let ghost inserted = key;
+        let ghost before = tree@;
+        proof { vstd::std_specs::btree::axiom_btree_map_view_finite_dom(tree); }
+        let result = insert_git_tree_entry(&mut tree, key, row.mode, row.oid, row.kind);
+        match result {
+            Err(message) => {
+                proof {
+                    git_tree_duplicate_error(before, rows@, i as int, inserted, row.bytes());
+                }
+                return Err(GitTreeError::Message(message));
+            },
+            Ok(()) => {},
+        }
+        proof {
+            git_tree_next_path_is_new(before, rows@, i as int, inserted);
+            git_tree_extend_valid_prefix(rows@, i as int, row.bytes());
+            assert(git_tree_entry_matches(inserted, tree@[inserted], row.bytes()));
+            git_tree_extend_prefix_map(before, rows@, i as int, inserted, tree@[inserted], row.bytes());
+        }
+        i += 1;
+    }
+    Ok(tree)
 }
 
 pub open spec fn optional_entry_fields(entry: Option<&TreeEntry>) -> Option<TreeEntryFields> {

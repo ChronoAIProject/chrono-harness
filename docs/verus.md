@@ -18,6 +18,10 @@ core bootstrap 先准备同一 Verus，再调用此登记操作；调用前端�
 在原检查前解包共享 Verus ZIP，不另下载，也不因该单元自身没有独立证明而省略编译器。
 没有自研编译器包装器，也不解析终端上的成功文字。
 
+该官方 Cargo 调用显式使用 `--jobs 1`，使未带 crate 身份的证明记录与目标库产物保持相邻，
+避免其他并行编译任务的产物插入其间。Verus 仍使用登记的两条证明线程。
+实际命令由 Rust mock 核对；冷构建耗时的变化尚未测量。
+
 `verified_cargo.rs` 负责完整 Cargo JSON 记录的顺序判断。冷构建必须依次出现
 当前版本的整 crate 成功证明、点名库、点名二进制和唯一成功终态；
 暖构建可以省去新证明，但必须引用保留的原成功证明。
@@ -141,6 +145,11 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 没有新增仓内受信函数、操作、依赖或证明预算。`units::id` 继续消费同一字节判断。
 最多扫描 64 字节，拒绝时构造固定长度的原诊断；完整构建、证明及 CI 成本未测。
 
+CI 生成器及其事件输入、汇总、detector 和 full 上下文，以及 CI 判官，
+通过 runner 的重导出使用同一 `valid_oid`，不再维护各自的格式算法。
+CI 的布尔适配和 action 固定 40 位限制保留；判官保留原 `Result` 接口及包含完整输入的错误文本。
+这只收敛格式判断，未覆盖调用方全部控制流，也不扩大上文 runner 编译产物的局部证明绑定。
+
 同根的 `git_inventory_records`、`git_inventory_fields`、`git_inventory_row`、
 `git_inventory_termination`、`git_inventory_text`、
 `git_tree_metadata` 和 `git_index_metadata` 拥有 Git 库存的局部准入和错误分类。
@@ -162,13 +171,13 @@ ASCII 分隔字节由固定 vstd 的 UTF-8 引理证明是字符边界，跳过�
 外围仅使用标准安全 `str::from_utf8`／`Result::ok` 提供实际解码观察，拆分直接调用同源实现；
 Verus 内使用固定 vstd 的切片、`str::as_bytes`／`str::len`／`str::split_at`、
 Vec 存取、Option／Result 和 `ToString` 合同，没有新增仓内受信函数或 unsafe。
-外围调用组合、重复检查与文件系统比较仍待证明，不把拆分与局部准入当完整状态证明。
+index 调用组合、重复 stage 与文件系统比较仍待证明。
 拆分扫描 N 个字节、保存 K 个借用字段，时间 O(N + K)、额外引用 O(K)；
 NUL 记录由惰性迭代改为借用数组，增加 O(K) 引用存储，meta 字段仍使用借用数组。
 其余新增判断读取末字节、字段数和至多一个 stage 字节；完整构建、证明、CI 与存储成本未测。
 
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
-`verified_status::insert_git_tree_entry` 维护，`checkout::tree` 在原 metadata／路径／OID 检查后直接调用。
+`verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
 证明新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，所有其他键值均保留；
 成功当且仅当原 map 没有该路径，否则完整返回 `duplicate Git tree path`。
 沿用原标准 insert 的顺序：重复时条目也已替换，外围立即返回错误并丢弃整棵候选树。
@@ -180,8 +189,23 @@ tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 复用状态所有者及独立预期的两项整 crate 证明、现有 FILEMAP 消费者边与未过滤测试，
 无新工具、依赖、操作、信任函数或预算。每条记录仍构造一个键和三个字段，map 操作为 O(log K)
 次完整路径比较，字符串复制及比较另计字节成本；完整证明、构建、运行和 CI 成本未测。
-该局部状态证明不覆盖外围解析循环、动态路径诊断、index 重复 stage 或文件系统比较；
-这些组合与全仓覆盖门继续保留未完成义务。
+`parse_git_tree_row` 从完整输入字节定义首 TAB、三字段、路径及 OID 的原检查顺序。
+`parse_git_tree_rows` 证明完整逐行循环：成功前缀的每条路径有效且两两不同，
+真实 map 与这些行双向对应，全部字段、数量、无额外条目及终止均由合同维护；
+错误必须位于首个失败行，前面所有行有效且无重复，不能以后续错误覆盖它。
+标准 map 的完整严格有序迭代合同证明同文本的库存键唯一；插入后只创建迭代器，
+不遍历或复制库存，不新增受信函数或标准接口假设。
+动态路径诊断使用带原借用路径的错误类型；Verus 证明固定错误原样返回，
+非法路径全文交给唯一标准 Debug 格式化 closure。`checkout::tree` 只转发到该实现；
+明确外部接口为 `format!("invalid relative path: {path:?}")`，格式化语义由 Rust 标准库提供，
+不声称仓内证明覆盖标准 Debug 算法。字节终止检查、UTF-8 解码与 NUL 拆分沿用原外围顺序。
+独立 Verus fixture 明确给出分隔位置、完整字段及预期；普通运行核空库存、完整 map、
+未归一化路径、首错、后续坏行和重新分配的同名路径拒绝，以及非法路径中的内部 NUL／后缀保留。
+空 metadata 字段仍先通过三字段检查，路径先于空 OID 拒绝；同一预期也实际调用错误渲染分支。
+**产品与宿主登记同步修改：**路径根被状态证明直接使用，FILEMAP 补齐其真实编译与测试使用方；
+沿用原两项状态整 crate 证明及未过滤测试，无新工具、操作、预算或 Python 迁移。
+新增迭代器只建立借用状态，不收集行；整体仍按 K 次 O(log K) map 操作及原字符串扫描计，
+完整证明、构建、CI 与存储成本未测。index 重复 stage、文件系统比较与全仓覆盖门仍未完成。
 
 原始 commit 物理头的 parent 行选择也由同一根的 `commit_parent_records` 实现。
 以 LF 字节分行，在首个空行停止；仅选择精确 `parent ` 前缀，完整借用原后缀，

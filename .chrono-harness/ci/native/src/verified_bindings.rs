@@ -77,11 +77,6 @@ pub fn immutable_producer(commit: &[u8], tree: &[u8]) -> (valid: bool)
     ensures valid <==> (identifiers::oid(commit@) && identifiers::oid(tree@)),
 { identifiers::valid_oid(commit) && identifiers::valid_oid(tree) }
 
-/// 仅识别仍在使用的固定 Python producer 原件；从不执行这些历史文件。
-pub fn python_owner_inputs(entrypoint: &str, owner: bool) -> (required: bool)
-    ensures required <==> (entrypoint@ == ".chrono-harness/ci/bootstrap.py"@ && owner),
-{ equal_text(entrypoint, ".chrono-harness/ci/bootstrap.py") && owner }
-
 pub fn original_header(schema: &str, passed: bool, config: &str, expected: &str,
     absolute_host: bool, imported: bool, errored: bool) -> (valid: bool)
     ensures valid <==> (schema@ == "chrono-bootstrap-result/v1"@ && passed

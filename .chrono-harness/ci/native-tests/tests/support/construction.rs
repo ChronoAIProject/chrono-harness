@@ -4,7 +4,12 @@ use chrono_host_bootstrap::{
     profile::Loaded,
 };
 use serde_json::{Value, json};
-use std::{ffi::OsStr, fs, path::PathBuf, process::Command};
+use std::{
+    collections::BTreeMap,
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub struct Fixture {
     pub _directory: tempfile::TempDir,
@@ -28,7 +33,7 @@ impl Fixture {
             b"exec registered-native-bootstrap\n",
         )
         .unwrap();
-        for name in ["rustup", "cargo", "rustc"] {
+        for name in ["rustup", "cargo", "rustc", "git"] {
             fs::copy(
                 env!("CARGO_BIN_EXE_chrono-test-bootstrap-tool"),
                 tools.join(name),
@@ -46,7 +51,7 @@ impl Fixture {
         let config = json!({"schema":"chrono-bootstrap/v1","projects":".chrono-harness/projects.json","rust_toolchain":"1.95.0",
             "tools":{"native":env!("CARGO_BIN_EXE_chrono-test-bootstrap-operation")},"prerequisites":["prepare"],"operations":["build"],
             "install":[{"source":"out/cargo","destination":".chrono-harness/bin/cargo"}],
-            "participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":"/fixture/git","config":".chrono-harness/worktree.json"},
+            "participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":tools.join("git"),"config":".chrono-harness/worktree.json"},
             "entrypoint":{"tool":"sh","script":".chrono-harness/ci/entry.sh"},"require_tool_bindings":true,
             "tool_bindings_registry":".chrono-harness/ci/registry.json","rust_incremental":false});
         let projects = json!({"projects":[{"id":"p","actions":{"build":{"operation":"build","tool":"cargo","argv":["build-fixture",root.join("out/cargo")]}}}],
@@ -59,14 +64,76 @@ impl Fixture {
         for key in ["RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"] {
             environment.remove(OsStr::new(key));
         }
-        Self {
+        let fixture = Self {
             _directory: directory,
             root,
             tools,
             environment,
             config,
             projects,
+        };
+        fixture.mock_git(
+            &[
+                "--no-optional-locks",
+                "--no-replace-objects",
+                "rev-parse",
+                "--show-toplevel",
+                "--verify",
+                "HEAD",
+            ],
+            json!({"exit_code":128,"stderr":b"mock source unavailable\n".to_vec()}),
+        );
+        fixture
+    }
+
+    pub fn mock_git(&self, args: &[&str], mut response: Value) {
+        let path = self.tools.join("git.json");
+        let mut specification: Value = if path.exists() {
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap()
+        } else {
+            json!({})
+        };
+        if response.get("cwd").is_none() {
+            response["cwd"] = json!(self.root);
         }
+        specification[serde_json::to_string(args).unwrap()] = response;
+        fs::write(path, serde_json::to_vec(&specification).unwrap()).unwrap();
+    }
+
+    pub fn git_query(&self, args: &[&str], stdout: impl AsRef<[u8]>) {
+        let mut command = vec!["--no-optional-locks", "--no-replace-objects"];
+        command.extend_from_slice(args);
+        self.mock_git(&command, json!({"exit_code":0,"stdout":stdout.as_ref()}));
+    }
+
+    pub fn source(&self, commit: &str, tree: &str, dirty: bool) {
+        fs::create_dir_all(self.root.join(".git")).unwrap();
+        self.git_query(
+            &["rev-parse", "--show-toplevel", "--verify", "HEAD"],
+            format!("{}\n{commit}\n", self.root.display()),
+        );
+        self.git_query(
+            &["rev-parse", "--verify", &format!("{commit}^{{tree}}")],
+            format!("{tree}\n"),
+        );
+        self.git_query(&["rev-parse", "--verify", "HEAD"], format!("{commit}\n"));
+        self.dirty(dirty);
+    }
+
+    pub fn dirty(&self, dirty: bool) {
+        self.git_query(
+            &[
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=normal",
+                "--ignore-submodules=none",
+            ],
+            if dirty {
+                b" M fixture\n".as_slice()
+            } else {
+                b"".as_slice()
+            },
+        );
     }
     pub fn loaded(&self) -> Loaded {
         fs::write(
@@ -98,36 +165,110 @@ impl Fixture {
     }
     pub fn commit(&self) -> Loaded {
         let loaded = self.loaded();
-        fs::write(self.root.join(".gitignore"), b"native tools/\nout/\nprepared\n.chrono-harness/state/\n.chrono-harness/bin/\n.chrono-harness/cache/\n").unwrap();
-        for args in [
-            vec!["init", "--quiet"],
-            vec!["add", "."],
-            vec![
-                "-c",
-                "user.name=Fixture",
-                "-c",
-                "user.email=fixture@example.invalid",
-                "commit",
-                "--quiet",
-                "-m",
-                "fixture",
-            ],
-        ] {
-            let mut command = Command::new("git");
-            command.current_dir(&self.root).args(args);
-            command
-                .env_remove("GIT_DIR")
-                .env_remove("GIT_WORK_TREE")
-                .env_remove("GIT_INDEX_FILE");
-            chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-            let output = command.output().unwrap();
-            assert!(
-                output.status.success(),
-                "{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+        // 仅为本夹具声明固定输入和返回值，不实现或调用 Git。
+        let mut inputs = BTreeMap::new();
+        for entry in fs::read_dir(self.root.join(".chrono-harness/ci")).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                continue;
+            }
+            let name = path
+                .strip_prefix(&self.root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned();
+            let link = fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink();
+            let bytes = if link {
+                fs::read_link(&path)
+                    .unwrap()
+                    .as_os_str()
+                    .as_encoded_bytes()
+                    .to_vec()
+            } else {
+                fs::read(&path).unwrap()
+            };
+            inputs.insert(name, (if link { "120000" } else { "100644" }, bytes));
         }
+        inputs.insert(
+            ".chrono-harness/projects.json".into(),
+            (
+                "100644",
+                fs::read(self.root.join(".chrono-harness/projects.json")).unwrap(),
+            ),
+        );
+        let path = self.tools.join("git.json");
+        let mut specification: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let generation = specification["generation"].as_u64().unwrap_or(0) + 1;
+        specification["generation"] = json!(generation);
+        fs::write(&path, serde_json::to_vec(&specification).unwrap()).unwrap();
+        let tree =
+            chrono_harness::sha256(&serde_json::to_vec(&json!([generation, inputs])).unwrap())
+                [..40]
+                .to_owned();
+        let commit = chrono_harness::sha256(format!("mock commit {generation} {tree}").as_bytes())
+            [..40]
+            .to_owned();
+        self.source(&commit, &tree, false);
+        self.inventory(&self.root);
+        for (name, (mode, bytes)) in inputs {
+            let blob = chrono_harness::sha256(&bytes)[..40].to_owned();
+            self.git_query(
+                &["ls-tree", "-z", &commit, "--", &name],
+                format!("{mode} blob {blob}\t{name}\0"),
+            );
+            self.git_query(&["cat-file", "blob", &blob], bytes);
+        }
+        self.git_query(
+            &["ls-tree", "-z", &commit, "--", ".chrono-harness/ci/absent"],
+            b"",
+        );
         loaded
+    }
+
+    pub fn inventory(&self, anchor: &Path) {
+        self.mock_git(&["--no-optional-locks", "worktree", "list", "--porcelain", "-z"], json!({"exit_code":0,"stdout":format!("worktree {}\0\0", anchor.display()).into_bytes()}));
+    }
+
+    pub fn rebind_git(root: &Path) {
+        let root = fs::canonicalize(root).unwrap();
+        fs::create_dir_all(root.join(".git")).unwrap();
+        let path = root.join("native tools/git.json");
+        let mut specification: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        for response in specification.as_object_mut().unwrap().values_mut() {
+            if response.is_object() {
+                response["cwd"] = json!(root);
+            }
+        }
+        let key = serde_json::to_string(&[
+            "--no-optional-locks",
+            "--no-replace-objects",
+            "rev-parse",
+            "--show-toplevel",
+            "--verify",
+            "HEAD",
+        ])
+        .unwrap();
+        let before: Vec<u8> =
+            serde_json::from_value(specification[&key]["stdout"].clone()).unwrap();
+        let before = String::from_utf8(before).unwrap();
+        let commit = before.lines().last().unwrap();
+        specification[&key]["stdout"] =
+            json!(format!("{}\n{commit}\n", root.display()).into_bytes());
+        let key = serde_json::to_string(&[
+            "--no-optional-locks",
+            "worktree",
+            "list",
+            "--porcelain",
+            "-z",
+        ])
+        .unwrap();
+        specification[&key]["stdout"] =
+            json!(format!("worktree {}\0\0", root.display()).into_bytes());
+        fs::write(path, serde_json::to_vec(&specification).unwrap()).unwrap();
     }
     pub fn report(&self, published: &Published) -> Value {
         serde_json::from_slice(&fs::read(&published.original).unwrap()).unwrap()
