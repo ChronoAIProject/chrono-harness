@@ -1233,7 +1233,8 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     stream.read_exact(&mut [0; 5]).unwrap();
     drop(allocation);
     let maintain = || {
-        let mut command = Command::new(coordinator.join(".chrono-harness/bin/chrono-worktree"));
+        let mut command =
+            Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output =

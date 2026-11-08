@@ -5,13 +5,33 @@ use chrono_harness::verus;
 use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
-#[path = "../../runner/src/verified_identifiers.rs"]
+#[path = "../../identifiers/src/lib.rs"]
 mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
 use identifiers::{equal_bytes, equal_text};
 
 verus! {
+
+/// 共享物理状态只绑定所有权协议和地址，不绑定每个工作树的清理选择。
+pub struct PolicyNamespace {
+    pub schema: String,
+    pub coordinator: Vec<u8>,
+    pub state_directory: String,
+}
+
+pub open spec fn same_policy_namespace(a: &PolicyNamespace, b: &PolicyNamespace) -> bool {
+    a.schema@ == b.schema@ && a.coordinator@ == b.coordinator@
+        && a.state_directory@ == b.state_directory@
+}
+
+pub fn policy_namespace_matches(a: &PolicyNamespace, b: &PolicyNamespace) -> (valid: bool)
+    ensures valid <==> same_policy_namespace(a, b),
+{
+    equal_text(a.schema.as_str(), b.schema.as_str())
+        && equal_bytes(&a.coordinator, &b.coordinator)
+        && equal_text(a.state_directory.as_str(), b.state_directory.as_str())
+}
 
 // The JSON/IO adapter provides separate observed and declared values. All
 // decisions about those values and finite report-name sets live in this root.

@@ -815,6 +815,7 @@
         "linux_build_worktree",
         "linux_verify_distribution_tests",
         "linux_verify_worktree_tests",
+        "linux_verify_identifiers_tests",
         "linux_verify_runner_tests",
         "linux_verify_inputs_tests",
         "linux_verify_ci_tests",
@@ -901,6 +902,10 @@
         {
           "job": "linux_verify_worktree_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_worktree_tests/"
+        },
+        {
+          "job": "linux_verify_identifiers_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_identifiers_tests/"
         },
         {
           "job": "linux_verify_runner_tests",
@@ -1795,6 +1800,7 @@
         "macos_build_worktree",
         "macos_verify_distribution_tests",
         "macos_verify_worktree_tests",
+        "macos_verify_identifiers_tests",
         "macos_verify_runner_tests",
         "macos_verify_inputs_tests",
         "macos_verify_ci_tests",
@@ -1881,6 +1887,10 @@
         {
           "job": "macos_verify_worktree_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_worktree_tests/"
+        },
+        {
+          "job": "macos_verify_identifiers_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_identifiers_tests/"
         },
         {
           "job": "macos_verify_runner_tests",
@@ -2335,6 +2345,40 @@
       ],
       "artifact_name": "chrono-release-macos-verify_pr_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_pr_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_identifiers_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_identifiers_tests",
+        "--unit",
+        "verify_identifiers_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_identifiers_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_identifiers_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_identifiers_tests",
+      "runs_on": "macos-26",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_identifiers_tests",
+        "--unit",
+        "verify_identifiers_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_identifiers_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_identifiers_tests/",
       "needs": [],
       "downloads": []
     }

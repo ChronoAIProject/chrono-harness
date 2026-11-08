@@ -757,6 +757,7 @@ impl Manager {
         }
         let stable = |r: &mut Runner| -> Result<(), String> {
             self.stable(r)?;
+            self.inputs.anchor_stable(r)?;
             for (file, raw) in &originals {
                 if fs::read(file).map_err(|e| e.to_string())? != *raw {
                     return Err("owner deployment enrollment changed; preserve originals".into());

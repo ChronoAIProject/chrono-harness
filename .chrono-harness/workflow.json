@@ -260,6 +260,7 @@
   },
   "integration": {
     "tests": [
+      "identifiers-tests",
       "runner-tests",
       "instructions-tests",
       "judge-registration-tests",

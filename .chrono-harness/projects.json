@@ -44,9 +44,139 @@
     "cache",
     "cache-tests",
     "pr",
-    "pr-tests"
+    "pr-tests",
+    "identifiers",
+    "identifiers-tests"
   ],
   "projects": [
+    {
+      "id": "identifiers",
+      "manifest": "crates/identifiers/Cargo.toml",
+      "lockfile": "crates/identifiers/Cargo.lock",
+      "root": "crates/identifiers",
+      "language": "rust",
+      "kind": "production",
+      "test_project": "identifiers-tests",
+      "actions": {
+        "build": {
+          "operation": "build.identifiers",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/identifiers/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/identifiers/target"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.identifiers",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/identifiers/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.identifiers",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/identifiers/Cargo.toml"
+          ]
+        },
+        "verify": {
+          "operation": "verify.identifiers",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.identifiers.rlib,dep-info=.chrono-harness/state/verify.identifiers.rlib.d",
+            "crates/identifiers/src/lib.rs",
+            "-o",
+            ".chrono-harness/state/verify.identifiers.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        }
+      }
+    },
+    {
+      "id": "identifiers-tests",
+      "manifest": "crates/identifiers-tests/Cargo.toml",
+      "lockfile": "crates/identifiers-tests/Cargo.lock",
+      "root": "crates/identifiers-tests",
+      "language": "rust",
+      "kind": "test",
+      "tests_for": "identifiers",
+      "actions": {
+        "format_check": {
+          "operation": "fmt.identifiers-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/identifiers-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.identifiers-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/identifiers-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.identifiers-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/identifiers-tests/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/identifiers-tests/target"
+          ]
+        },
+        "verify": {
+          "operation": "verify.identifiers-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.identifiers-tests.rlib,dep-info=.chrono-harness/state/verify.identifiers-tests.rlib.d",
+            "crates/identifiers-tests/tests/verified_identifiers.rs",
+            "-o",
+            ".chrono-harness/state/verify.identifiers-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        }
+      }
+    },
     {
       "id": "runner",
       "kind": "production",
@@ -93,28 +223,6 @@
             "--manifest-path",
             "crates/runner/Cargo.toml"
           ]
-        },
-        "verify_identifiers": {
-          "operation": "verify.runner-identifiers",
-          "tool": "verus",
-          "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--emit=link=.chrono-harness/state/verify.runner-identifiers.rlib,dep-info=.chrono-harness/state/verify.runner-identifiers.rlib.d",
-            "crates/runner/src/verified_identifiers.rs",
-            "-o",
-            ".chrono-harness/state/verify.runner-identifiers.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
         },
         "verify_paths": {
           "operation": "verify.runner-paths",
@@ -265,28 +373,6 @@
             "--manifest-path",
             "crates/runner-tests/Cargo.toml"
           ]
-        },
-        "verify_identifiers": {
-          "operation": "verify.runner-identifiers-tests",
-          "tool": "verus",
-          "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--emit=link=.chrono-harness/state/verify.runner-identifiers-tests.rlib,dep-info=.chrono-harness/state/verify.runner-identifiers-tests.rlib.d",
-            "crates/runner-tests/tests/verified_identifiers.rs",
-            "-o",
-            ".chrono-harness/state/verify.runner-identifiers-tests.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
         },
         "verify_paths": {
           "operation": "verify.runner-paths-tests",
