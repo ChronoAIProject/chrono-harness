@@ -157,6 +157,9 @@ fn upgrade_attempt_without_json_retains_raw_failure_then_expires() {
     fixture.adopt_retention(3600);
     fixture.config["participation"]["program"] = json!(".chrono-harness/bin/cargo");
     fixture.commit();
+    // Source reads use the fixed Git mock. Retention must not mistake its
+    // empty marker for a physical repository owned by the real Git binary.
+    fs::remove_dir(fixture.root.join(".git")).unwrap();
     let original = successful_build(&fixture);
     assert!(original.outcome.is_ok());
     fixture.config["owner_upgrade"] = json!(".chrono-harness/ci/upgrade.json");
@@ -171,6 +174,7 @@ fn upgrade_attempt_without_json_retains_raw_failure_then_expires() {
     )
     .unwrap();
     let loaded = fixture.commit();
+    fs::remove_dir(fixture.root.join(".git")).unwrap();
     let failure = chrono_host_bootstrap::lifecycle::upgrade(
         &fixture.root,
         ".chrono-harness/ci/build.json",
@@ -213,9 +217,6 @@ fn upgrade_attempt_without_json_retains_raw_failure_then_expires() {
     assert_eq!(fs::read(directory.join("migration.stderr")).unwrap(), b"");
     assert_eq!(fs::read(directory.join("migration.exit")).unwrap(), b"99\n");
     drop(retained);
-    // Source qualification is joined. The empty marker belongs to the Git mock;
-    // the remaining assertions exercise the real retention owner independently.
-    fs::remove_dir(fixture.root.join(".git")).unwrap();
     maintain(&fixture);
     assert!(directory.exists());
     let expires = std::time::SystemTime::now()
@@ -242,6 +243,7 @@ fn upgrade_phase_hands_success_and_failure_originals_to_the_rolling_directory() 
         let fixture = Fixture::new();
         fixture.adopt_retention(0);
         let directory = fixture.root.join(".chrono-harness/state/attempt-phase");
+        fs::create_dir_all(directory.parent().unwrap()).unwrap();
         let publication = retention::create_adopted(
             &fixture.root,
             "check-original",
