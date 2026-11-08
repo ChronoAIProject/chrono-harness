@@ -34,6 +34,10 @@ path = "tests/recipe.rs"
 name = "receipt"
 path = "tests/receipt.rs"
 
+[[test]]
+name = "staging"
+path = "tests/staging.rs"
+
 [[bin]]
 name = "chrono-test-release-operation"
 path = "../../../crates/judge-projects-tests/tests/support/execution_child.rs"

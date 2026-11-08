@@ -4,6 +4,7 @@ use crate::{
     verified_recipe::{self as policy, DependencyResult},
 };
 use chrono_harness::{file_identity, no_symlink_parents};
+use chrono_identifiers::valid_digest_text as digest;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -36,13 +37,6 @@ fn attempt(value: &str) -> Result<u64, String> {
         .ok()
         .filter(|v| *v > 0)
         .ok_or_else(|| error("invalid producing attempt"))
-}
-
-fn digest(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -392,20 +386,7 @@ pub fn import_build(
         return Err(error("build asset membership/path differs"));
     }
     let identity = &declared[asset];
-    let mode = identity["mode"]
-        .as_u64()
-        .filter(|m| *m <= 0o7777)
-        .ok_or_else(|| error("invalid build executable mode"))? as u32;
-    if !policy::executable_file(true, mode) || !digest(text(identity, "sha256")?) {
-        return Err(error("invalid build executable identity"));
-    }
-    let executable = crate::transport::ExecutableIdentity {
-        sha256: text(identity, "sha256")?.into(),
-        size: identity["size"]
-            .as_u64()
-            .ok_or_else(|| error("missing build executable size"))?,
-        mode,
-    };
+    let executable = crate::transport::ExecutableIdentity::from_receipt(identity)?;
     let transport = &verified.receipt["transport"];
     if transport["path"] != "executable.tar" || !digest(text(transport, "sha256")?) {
         return Err(error("invalid executable transport declaration"));

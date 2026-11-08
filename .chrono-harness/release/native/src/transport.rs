@@ -16,6 +16,14 @@ pub struct ExecutableIdentity {
 }
 
 impl ExecutableIdentity {
+    pub fn from_receipt(value: &Value) -> Result<Self, String> {
+        let sha256 = value["sha256"].as_str().filter(|s| chrono_identifiers::valid_digest_text(s)).ok_or_else(|| error("invalid executable digest"))?.to_owned();
+        let size = value["size"].as_u64().ok_or_else(|| error("invalid executable size"))?;
+        let mode = value["mode"].as_u64().filter(|m| *m <= 0o7777).ok_or_else(|| error("invalid executable mode"))? as u32;
+        if !policy::executable_file(true,mode) { return Err(error("missing executable mode")); }
+        Ok(Self { sha256,size,mode })
+    }
+
     pub fn receipt(&self, path: &str) -> Value {
         json!({"path": path, "sha256": self.sha256, "size": self.size,
             "mode": self.mode, "error": null})

@@ -11,6 +11,8 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/release/native/src/staging.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/staging.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native/src/receipt.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native-tests/tests/receipt.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native-tests/tests/support/receipt.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
