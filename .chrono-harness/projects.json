@@ -264,44 +264,6 @@
             "crates/runner-tests/Cargo.toml"
           ]
         },
-        "diagnostics": {
-          "operation": "test.runner.diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml",
-            "--test",
-            "protocol_v1",
-            "prelaunch_diagnostics_"
-          ]
-        },
-        "retention_delivery": {
-          "operation": "test.runner.retention-delivery",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml",
-            "--test",
-            "retention",
-            "native_"
-          ]
-        },
-        "retention": {
-          "operation": "test.runner.retention",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml",
-            "--test",
-            "retention"
-          ]
-        },
         "verify_identifiers": {
           "operation": "verify.runner-identifiers-tests",
           "tool": "verus",
@@ -629,19 +591,6 @@
             "--locked",
             "--manifest-path",
             "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
-        "execution_diagnostics": {
-          "operation": "test.ci.execution-diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-ci-tests/Cargo.toml",
-            "--test",
-            "behavior",
-            "execution_diagnostics_"
           ]
         },
         "format": {
