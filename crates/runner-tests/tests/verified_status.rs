@@ -1060,6 +1060,7 @@ proof fn tree_fixture_row(raw: &str, path: &str)
                 "0000000000000000000000000000000000000001".spec_bytes(), "blob".spec_bytes()))
         } else { Err(policy::GitTreeErrorView::InvalidPath(path.spec_bytes())) },
 {
+    reveal(policy::git_tree_row_spec);
     let meta = "100644 blob 0000000000000000000000000000000000000001";
     let tail = "blob 0000000000000000000000000000000000000001";
     let oid = "0000000000000000000000000000000000000001";
@@ -1162,6 +1163,7 @@ proof fn empty_metadata_tree_fixture(raw: &str, path: &str)
                 policy::GitTreeErrorView::Message("expected full nonzero lowercase commit OID"@))
         } else { Err(policy::GitTreeErrorView::InvalidPath(path.spec_bytes())) },
 {
+    reveal(policy::git_tree_row_spec);
     reveal_strlit("  \t"); reveal_strlit("  "); reveal_strlit(" "); reveal_strlit("");
     broadcast use vstd::string::is_ascii_spec_bytes;
     assert(vstd::string::is_ascii("  ") && vstd::string::is_ascii(" ") && vstd::string::is_ascii(""));
@@ -1186,6 +1188,7 @@ fn tree_parser_keeps_first_error_and_exact_path() {
     let good = "100644 blob 0000000000000000000000000000000000000001\ta";
     let bad_path = "100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail";
     proof {
+        reveal(policy::git_tree_row_spec);
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta");
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail");
         reveal_strlit("a"); reveal_strlit("a/../b\0tail"); reveal_strlit("missing");
