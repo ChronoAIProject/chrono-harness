@@ -996,7 +996,9 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
             commands[0].1.stdout
         );
         assert!(first_copy.join("original-state/recovery/original").exists());
+        let root = &owner.root;
         let command = &commands[1];
+        let store = &directory;
         let second = scope.spawn(move || {
             let mut reported_busy = false;
             let mut observer = |phase: &str| {
@@ -1018,6 +1020,8 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
             finished_tx.send(()).unwrap();
             receipt
         });
+        // Sender lifetime also reports an early publisher return. Wait for the
+        // actual handshake; the registered operation owns the runtime bound.
         let busy = busy_rx.recv();
         let waiting = matches!(finished_rx.try_recv(), Err(mpsc::TryRecvError::Empty));
         let registry_absent = !directory.join("objects.json").exists();
