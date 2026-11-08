@@ -496,7 +496,7 @@ pub open spec fn next_phase(phase: u8, event: Event) -> Option<u8> {
                 else { None },
             Event::Binary { matches } => if phase == 2 && matches { Some(3u8) } else { None },
             Event::Finished { success } => if phase == 3 && success { Some(4u8) } else { None },
-            Event::OtherArtifact => if phase != 1 { Some(phase) } else { None },
+            Event::OtherArtifact => Some(phase),
             Event::Note => Some(phase),
             Event::Error => None,
         }
@@ -539,7 +539,6 @@ impl State {
                 4u8
             },
             Event::OtherArtifact => {
-                if self.phase == 1 { return Err(self.phase); }
                 self.phase
             },
             Event::Note => self.phase,

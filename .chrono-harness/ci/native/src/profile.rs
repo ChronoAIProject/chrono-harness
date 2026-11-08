@@ -77,6 +77,11 @@ pub fn path(root: &Path, declared: &str, prefix: &[u8]) -> Result<PathBuf, Strin
 }
 
 pub fn read(root: &Path, declared: &str, prefix: &[u8]) -> Result<Vec<u8>, String> {
+    let _original = if prefix == b".chrono-harness/state/" {
+        chrono_harness::retained_artifacts::retention::read_guard(root, declared)?
+    } else {
+        None
+    };
     let file = path(root, declared, prefix)?;
     if !file.is_file() {
         return Err(format!("bootstrap input is not a regular file: {declared}"));

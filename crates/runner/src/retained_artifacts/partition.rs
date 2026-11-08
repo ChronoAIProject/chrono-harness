@@ -213,28 +213,18 @@ impl Inventory {
             maintenance: false,
         })
     }
-    pub(super) fn all_partition_gate(&self) -> Result<Gate, String> {
+    pub(super) fn partition_ids(&self) -> Result<Vec<String>, String> {
         let mut ids = Vec::new();
-        let mut roles = BTreeSet::new();
         for entry in fs::read_dir(self.directory.join("objects")).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
             let id = entry
                 .file_name()
                 .into_string()
                 .map_err(|_| "output registration address UTF8")?;
-            let record = self.read_object(&id)?;
-            roles.extend(record.roles);
+            self.object_directory(&id)?;
             ids.push(id);
         }
-        self.addressed_gate_bounded(
-            &ids,
-            &[],
-            &roles.into_iter().collect::<Vec<_>>(),
-            None,
-            true,
-            true,
-            None,
-        )
+        Ok(ids)
     }
     pub(super) fn partition_round(
         &self,
@@ -621,26 +611,6 @@ impl Inventory {
         maintenance: bool,
         wait: bool,
     ) -> Result<Gate, String> {
-        self.addressed_gate_bounded(
-            ids,
-            paths,
-            roles,
-            birth,
-            maintenance,
-            wait,
-            Some(self.policy.max_related_outputs),
-        )
-    }
-    fn addressed_gate_bounded(
-        &self,
-        ids: &[String],
-        paths: &[String],
-        roles: &[String],
-        birth: Option<(&str, &str)>,
-        maintenance: bool,
-        wait: bool,
-        limit: Option<usize>,
-    ) -> Result<Gate, String> {
         let (mut leases, mut path_dirs) = self.path_gates(paths, wait)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
@@ -706,7 +676,7 @@ impl Inventory {
                 wanted_roles.extend(record.roles.iter().cloned());
             }
             observed.insert(id, record);
-            if limit.is_some_and(|limit| selected.len() > limit) {
+            if selected.len() > self.policy.max_related_outputs {
                 return Err("related retention graph capacity; originals preserved".into());
             }
         }
