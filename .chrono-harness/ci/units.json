@@ -419,8 +419,7 @@
         ".github/workflows/chrono-ci.yml",
         ".gitignore"
       ],
-      "evidence_directory": ".chrono-harness/state/",
-      "bootstrap_github_token": true
+      "evidence_directory": ".chrono-harness/state/"
     },
     "startup": {
       "schema": "chrono-shared-startup/v1",
@@ -715,8 +714,8 @@
     "save_action": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
     "jobs": {
       "detect": {
-        "need": "Build the current candidate detector and shared startup tools once.",
-        "output_use": "Restore the registered core bootstrap targets, build them and publish startup binaries for the explicitly registered consumers.",
+        "need": "Build candidate startup tools and reuse the checksum-verified fixed Verus archive.",
+        "output_use": "Restore registered core targets and the Verus archive before bootstrap; publish candidate startup binaries and save the verified archive for its declared consumers.",
         "prepare": [
           "/usr/bin/python3",
           ".chrono-harness/ci/bootstrap.py",
@@ -728,19 +727,22 @@
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree"
+          "detect.worktree",
+          "verus.archive"
         ],
         "save_after_bootstrap": [
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree"
+          "detect.worktree",
+          "verus.archive"
         ],
         "save_caches": [
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree"
+          "detect.worktree",
+          "verus.archive"
         ]
       },
       "unit_runner": {

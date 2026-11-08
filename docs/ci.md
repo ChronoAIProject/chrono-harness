@@ -36,6 +36,8 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 
 从仓库根运行。core、Verus 准备和所有者阶段构建由 Rust 执行，薄 shell 入口需要 Git、rustup；首次前端编译使用固定 Rust 1.95.0，已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。其他仍使用 Python 的 profile 和测试继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
 
+没有现役 profile 使用的私有工具链安装分支及专属测试已退役。bootstrap 沿当前工具链选择：Cargo 不可用时安装指定版本的 minimal 加 rustfmt，缺格式化组件时只补该组件；可写构建目录仍由 `host_environment` 的缓存路径声明。工具身份、编译器选择及失败原件继续由原入口核验和保留，不为主机盘点另装完整 SDK。
+
 它按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap 操作，再复制声明二进制，不复制 Cargo 配方或发现项目。工具链操作明确点名版本，不改全局默认。专属 CI 测试的复制宿主回归消费已安装候选工具，须先 bootstrap：
 
 ```sh
@@ -49,12 +51,6 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及两流，再交出现有 stage 描述符；
 阶段校验读取同一生产者的固定原件。shell 只转交参数，不复制构建配方或解释报告。
 普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再执行该保留文件；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
-
-Verus 的下载由 `projects.json` 的 `host.verus-download` 操作负责：curl 向 GitHub 官方 Releases 资产 API 请求固定资产 ID，并用 `Accept: application/octet-stream` 获取文件。版本、输出路径及 SHA-256 校验仍由现役登记固定；更新资产时同步核对发行版本、文件名、大小和摘要，再执行原有下载、校验与解压流程。
-
-该下载要求环境中有 `GH_TOKEN`，curl 8.3 及以上通过 `--variable`／`--expand-header` 在进程内展开认证头，登记参数和执行回执不包含凭据值。本地沿用已有 GitHub 认证向 bootstrap 提供环境变量。CI 的 detector 配置用 `bootstrap_github_token: true` 选择向其 bootstrap 步骤传递已有的只读 `github.token`；默认不传，不增加权限或扩大到单元、缓存、业务检查步骤。单元从共享启动包解压 Verus，不再下载。
-
-**实现与宿主政策同时变更：**生成器增加上述显式选择，宿主下载改用现有凭据，避免匿名 API 配额耗尽。验证包括 Rust 的独立选择／步骤边界测试、候选生成器、真实下载及摘要和受影响标准／CI 检查；额外验证总成本未测。
 
 本宿主只维护当前采用的安装 profile。Python 入口省略配置时也选择现有 `bootstrap-core.json`；
 旧的全工具 `bootstrap.json` 与未被执行计划调用的 `host.bootstrap` 操作已退役。

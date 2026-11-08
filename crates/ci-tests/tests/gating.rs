@@ -7,40 +7,6 @@ fn gating() -> Value {
     json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["host-tools-only"],"sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}})
 }
 
-#[test]
-fn bootstrap_credentials_follow_each_explicit_consumer() {
-    for detector in [false, true] {
-        let mut source = config_value();
-        source["job_gating"] = gating();
-        source["job_gating"]["detector"]["bootstrap_github_token"] = json!(detector);
-        let config = serde_json::from_value(source).unwrap();
-        let rendered = chrono_ci::units::render(&config, PROVIDER).unwrap();
-        let workflow: Value =
-            serde_yaml_ng::from_str(&rendered[".github/workflows/collection.yml"]).unwrap();
-        assert!(workflow.get("env").is_none());
-        assert_eq!(workflow["permissions"]["contents"], "read");
-        for (job, enabled) in [
-            ("detect", detector),
-            ("unit_alpha", false),
-            ("unit_beta", false),
-            ("aggregate", false),
-        ] {
-            let job = &workflow["jobs"][job];
-            assert!(job.get("env").is_none());
-            for step in job["steps"].as_array().unwrap() {
-                let name = step["name"].as_str().unwrap_or("");
-                let expected = (name.starts_with("Bootstrap registered") && enabled)
-                    || (name == "Canonical harness check" && job["name"] == "Host checks");
-                assert_eq!(
-                    step["env"].get("GH_TOKEN"),
-                    expected.then_some(&json!("${{ github.token }}")),
-                    "{name}: {step}"
-                );
-            }
-        }
-    }
-}
-
 fn migrate_provider(root: &Path, next: &Value) {
     let previous = ".chrono-harness/state/previous-units.json";
     fs::create_dir_all(root.join(previous).parent().unwrap()).unwrap();

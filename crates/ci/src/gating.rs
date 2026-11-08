@@ -32,8 +32,6 @@ pub struct Detector {
     pub runs_on: String,
     pub timeout_minutes: u32,
     pub bootstrap: Vec<String>,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub bootstrap_github_token: bool,
     /// Literal source/registration paths chosen by the host, not unit inference.
     pub sparse_checkout: Vec<String>,
     /// Explicit retained originals; omitted preserves the previous detector.
@@ -249,7 +247,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
 {sparse}          persist-credentials: true
       - name: Bootstrap registered detector tools
         shell: bash
-{bootstrap_credentials}        run: |
+        run: |
           {bootstrap}
       - name: Detect required units from fixed Git endpoints
         id: detect
@@ -262,11 +260,6 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         detector_depth = 2,
         runner = scalar(&g.detector.runs_on),
         timeout = g.detector.timeout_minutes,
-        bootstrap_credentials = if g.detector.bootstrap_github_token {
-            "        env:\n          GH_TOKEN: ${{ github.token }}\n"
-        } else {
-            ""
-        },
         checkout = c.collection.checkout_action,
         generator = shell(&c.collection.generator),
         config = shell(path)

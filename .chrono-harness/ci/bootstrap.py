@@ -328,7 +328,7 @@ def declared_bindings(root, config, env):
 
 
 def provision_environment(root, config):
-    """Resolve the host's opt-in private selection before any installer effect."""
+    """Resolve the declared build environment before toolchain selection."""
     env = dict(os.environ)
     if "environment" in config:
         values = config["environment"]
@@ -350,23 +350,6 @@ def provision_environment(root, config):
             env["RUSTUP_HOME"] = str(Path(env.get("HOME", str(Path.home()))) / ".rustup")
         env.update({key: str(host_path(root, value, ".chrono-harness/cache/"))
                     for key, value in values.items()})
-    declaration = config.get("toolchain_provision")
-    if "toolchain_provision" in config:
-        if (not isinstance(declaration, dict)
-                or set(declaration) != {"profile", "rustup_home", "cargo_home"}
-                or declaration["profile"] != "default"):
-            raise ValueError("invalid isolated toolchain provision declaration")
-        if any(not isinstance(declaration[key], str) for key in ("rustup_home", "cargo_home")):
-            raise ValueError("isolated toolchain homes must be host-state paths")
-        homes = [host_path(root, declaration[key], ".chrono-harness/state/")
-                 for key in ("rustup_home", "cargo_home")]
-        if homes[0] == homes[1] or any(a in b.parents for a, b in
-                                      [(homes[0], homes[1]), (homes[1], homes[0])]):
-            raise ValueError("isolated Rustup/Cargo homes must be disjoint")
-        env.update(RUSTUP_HOME=str(homes[0]), CARGO_HOME=str(homes[1]))
-        # The opt-in selection replaces the inherited compiler; the existing
-        # declaration still checks and supplies the selected compiler's bytes.
-        env["RUSTC"] = ""
     return env
 
 
@@ -375,23 +358,13 @@ def toolchain_environment(config, root=None):
     binding_declarations(root, config)
     env = provision_environment(root, config)
     toolchain = config["rust_toolchain"]
-    if "toolchain_provision" in config:
-        # Delegate component production and metadata to Rustup. The official
-        # default profile includes the six components required by the local
-        # retained inventory; minimal + rustfmt cannot supply that inventory.
-        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "default",
-                        "--no-self-update"], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
     probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], cwd=root, env=env,
                            pass_fds=PASS_FDS, capture_output=True)
     if probe.returncode:
-        if "toolchain_provision" in config:
-            raise ValueError("isolated default toolchain Cargo probe failed: " + str(probe.returncode))
         subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
     fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], cwd=root, env=env,
                                pass_fds=PASS_FDS, capture_output=True)
     if fmt_probe.returncode:
-        if "toolchain_provision" in config:
-            raise ValueError("isolated default toolchain rustfmt probe failed: " + str(fmt_probe.returncode))
         subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
     env.update(RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
     if "rust_incremental" in config:
@@ -560,9 +533,6 @@ def main():
             result["selection"] = {"toolchain": config["rust_toolchain"],
                                    "cargo": bindings["cargo"]["path"],
                                    "rustc": bindings["rustc"]["path"], "compiler": env["RUSTC"]}
-        if "toolchain_provision" in config:
-            result["toolchain_provision"] = config["toolchain_provision"]
-            result["environment"].update({key: env[key] for key in ("RUSTUP_HOME", "CARGO_HOME")})
         if "host_environment" in config:
             result["host_environment"] = config["host_environment"]
             result["environment"].update({key: env[key] for key in config["host_environment"]})

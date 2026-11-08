@@ -217,10 +217,6 @@ class Bootstrap(unittest.TestCase):
         config["tools"]["inputs"] = built
         config["operations"] = ["make.tool", "acquire.inputs"]
         config["install"] = [{"source": built, "destination": installed}]
-        config["toolchain_provision"] = {
-            "profile": "default", "rustup_home": ".chrono-harness/state/native/fixture/rustup",
-            "cargo_home": ".chrono-harness/state/native/fixture/cargo",
-        }
         config["participation"] = {
             "coordinator_root": "git-main-worktree", "program": installed, "git": "git",
             "config": ".chrono-harness/native/fixture/worktree.json",
@@ -250,8 +246,8 @@ class Bootstrap(unittest.TestCase):
         observed = json.loads(raw)
         self.assertFalse(observed["installed_before"], "acquisition required its future owner")
         self.assertEqual(observed["environment"], {
-            "RUSTUP_HOME": str(self.root / config["toolchain_provision"]["rustup_home"]),
-            "CARGO_HOME": str(self.root / config["toolchain_provision"]["cargo_home"]),
+            "RUSTUP_HOME": self.environment.get("RUSTUP_HOME"),
+            "CARGO_HOME": self.environment.get("CARGO_HOME"),
             "RUSTC": str(self.tools / "rustc"),
         })
         stdout = (self.root / acquisition["stdout"]["path"]).read_bytes()

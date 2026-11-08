@@ -5,6 +5,16 @@ edition = "2024"
 publish = false
 autotests = false
 
+[[test]]
+name = "download"
+path = "tests/download.rs"
+
+[[bin]]
+name = "chrono-test-bootstrap-download"
+path = "tests/support/download.rs"
+test = false
+bench = false
+
 [dependencies]
 chrono-harness = { path = "../../../crates/runner" }
 chrono-host-bootstrap = { path = "../native" }

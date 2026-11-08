@@ -5,7 +5,6 @@ use crate::{
     verified_bindings::{self as policy, Executable},
 };
 use chrono_harness::{json, resolve_program};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
@@ -39,18 +38,9 @@ impl std::fmt::Display for Failure {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Provision {
-    pub profile: String,
-    pub rustup_home: String,
-    pub cargo_home: String,
-}
-
 pub struct Prepared {
     pub environment: Environment,
     pub host_directories: Vec<PathBuf>,
-    pub provision: Option<Provision>,
     toolchain: String,
     incremental: Option<bool>,
 }
@@ -67,7 +57,7 @@ fn typed<T: serde::de::DeserializeOwned>(value: &Value) -> Result<T, String> {
 }
 
 impl Prepared {
-    /// 只解析与观察现有路径；所有拒绝都发生在安装器启动之前。
+    /// 只解析与观察声明的构建环境；不创建目录或启动进程。
     pub fn parse(root: &Path, bytes: &[u8], inherited: &Environment) -> Result<Self, String> {
         let config = json(bytes)?;
         let toolchain: String = typed(&config["rust_toolchain"])?;
@@ -106,36 +96,15 @@ impl Prepared {
                 host_directories.push(selected);
             }
         }
-        let provision = config
-            .get("toolchain_provision")
-            .map(typed::<Provision>)
-            .transpose()?;
-        if let Some(private) = &provision {
-            if !policy::default_profile(&private.profile) {
-                return Err("invalid isolated toolchain provision profile".into());
-            }
-            let rustup = host_path(root, &private.rustup_home, b".chrono-harness/state/")?;
-            let cargo = host_path(root, &private.cargo_home, b".chrono-harness/state/")?;
-            if !policy::disjoint_homes(
-                private.rustup_home.as_bytes(),
-                private.cargo_home.as_bytes(),
-            ) {
-                return Err("isolated Rustup/Cargo homes must be disjoint".into());
-            }
-            environment.insert("RUSTUP_HOME".into(), rustup.into_os_string());
-            environment.insert("CARGO_HOME".into(), cargo.into_os_string());
-            environment.insert("RUSTC".into(), "".into());
-        }
         Ok(Self {
             environment,
             host_directories,
-            provision,
             toolchain,
             incremental,
         })
     }
 
-    /// 调用方先完成显式 prerequisites，再允许此处选择和安装 SDK。
+    /// 调用方先完成显式 prerequisites，再选择工具链及补齐缺少的组件。
     /// 不创建 host_directories；目录建立仍由源码构建调用方负责。
     pub fn activate(
         self,
@@ -158,16 +127,6 @@ impl Prepared {
             }
             Ok(())
         };
-        if self.provision.is_some() {
-            install(&[
-                "toolchain",
-                "install",
-                &self.toolchain,
-                "--profile",
-                "default",
-                "--no-self-update",
-            ])?;
-        }
         let probe = |name: &str| {
             bindings::capture(
                 root,
@@ -177,15 +136,8 @@ impl Prepared {
             )
         };
         for (name, cargo) in [("cargo", true), ("rustfmt", false)] {
-            match policy::probe_action(
-                self.provision.is_some(),
-                probe(name)?.status.success(),
-                cargo,
-            ) {
+            match policy::probe_action(probe(name)?.status.success(), cargo) {
                 policy::ProbeAction::Ready => {}
-                policy::ProbeAction::Refuse => {
-                    return Err(format!("isolated default toolchain {name} probe failed").into());
-                }
                 policy::ProbeAction::InstallMinimal => install(&[
                     "toolchain",
                     "install",
