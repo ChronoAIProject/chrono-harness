@@ -29,8 +29,6 @@
     "inputs-tests",
     "distribution",
     "distribution-tests",
-    "judge-cargo",
-    "judge-cargo-tests",
     "worktree",
     "worktree-tests",
     "release-build",
@@ -1896,89 +1894,6 @@
       "language": "rust"
     },
     {
-      "id": "judge-cargo",
-      "kind": "production",
-      "manifest": "crates/judge-cargo/Cargo.toml",
-      "lockfile": "crates/judge-cargo/Cargo.lock",
-      "root": "crates/judge-cargo",
-      "actions": {
-        "build": {
-          "operation": "build.judge-cargo",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo/Cargo.toml"
-          ]
-        },
-        "format_check": {
-          "operation": "fmt.judge-cargo",
-          "tool": "cargo",
-          "argv": [
-            "fmt",
-            "--check",
-            "--manifest-path",
-            "crates/judge-cargo/Cargo.toml"
-          ]
-        }
-      },
-      "test_project": "judge-cargo-tests",
-      "language": "rust"
-    },
-    {
-      "id": "judge-cargo-tests",
-      "kind": "test",
-      "manifest": "crates/judge-cargo-tests/Cargo.toml",
-      "lockfile": "crates/judge-cargo-tests/Cargo.lock",
-      "root": "crates/judge-cargo-tests",
-      "actions": {
-        "format_check": {
-          "operation": "fmt.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "fmt",
-            "--check",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "execute": {
-          "operation": "test.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "update_lockfile": {
-          "operation": "lock.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "update",
-            "--offline",
-            "--package",
-            "chrono-judge-cargo-tests",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "format": {
-          "operation": "format.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "fmt",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        }
-      },
-      "tests_for": "judge-cargo",
-      "language": "rust"
-    },
-    {
       "id": "worktree",
       "kind": "production",
       "manifest": "crates/worktree/Cargo.toml",
@@ -2816,17 +2731,6 @@
             "unit_distribution"
           ]
         },
-        "shared-install-unit_judge-cargo": {
-          "operation": "host.bootstrap-shared-install-unit_judge-cargo",
-          "tool": "bash",
-          "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_judge-cargo"
-          ]
-        },
         "shared-install-unit_worktree": {
           "operation": "host.bootstrap-shared-install-unit_worktree",
           "tool": "bash",
@@ -2987,13 +2891,25 @@
             "--location",
             "--silent",
             "--show-error",
+            "--verbose",
+            "--retry",
+            "3",
+            "--retry-all-errors",
+            "--retry-max-time",
+            "120",
+            "--connect-timeout",
+            "15",
+            "--max-time",
+            "120",
             "--proto",
             "=https",
             "--tlsv1.2",
+            "--header",
+            "Accept: application/octet-stream",
             "--create-dirs",
             "--output",
             ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
-            "https://github.com/verus-lang/verus/releases/download/release%2F0.2026.04.24.f8e1704/verus-0.2026.04.24.f8e1704-arm64-macos.zip"
+            "https://api.github.com/repos/verus-lang/verus/releases/assets/406260237"
           ]
         },
         "verus-checksum": {
