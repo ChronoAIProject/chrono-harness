@@ -400,15 +400,20 @@ fn directory_cleanup_policy_does_not_reclassify_existing_source_directories() {
 
 #[test]
 fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_intent() {
-    directory_custody_with_metadata(true);
+    directory_custody_with_metadata(true, false);
 }
 
 #[test]
 fn directory_cleanup_custodian_adopts_flat_historical_metadata() {
-    directory_custody_with_metadata(false);
+    directory_custody_with_metadata(false, false);
 }
 
-fn directory_custody_with_metadata(separate_metadata: bool) {
+#[test]
+fn directory_cleanup_custodian_requeues_a_started_historical_retirement() {
+    directory_custody_with_metadata(false, true);
+}
+
+fn directory_custody_with_metadata(separate_metadata: bool, retry: bool) {
     let h = host();
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     let (store, outputs) =
@@ -530,6 +535,19 @@ fn directory_custody_with_metadata(separate_metadata: bool) {
     let adopted = json(&fs::read(&record).unwrap()).unwrap();
     assert!(adopted["object"]["directory_custody"].is_object());
     assert_ne!(adopted["object"]["disposable_directory"], true);
+    if retry {
+        let mut started = adopted;
+        started["object"]["retiring"] = value!(true);
+        let original = serde_json::to_vec(&started).unwrap();
+        fs::write(&record, &original).unwrap();
+        let cursor = store.join("recovery-state/cursor.json");
+        let mut recovery = json(&fs::read(&cursor).unwrap()).unwrap();
+        recovery["pending"] = value!([]);
+        fs::write(cursor, serde_json::to_vec(&recovery).unwrap()).unwrap();
+        let (code, report, error) = adopt(&plan);
+        assert_eq!(code, 0, "{report} {error}");
+        assert_eq!(fs::read(&record).unwrap(), original);
+    }
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
     assert!(

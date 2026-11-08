@@ -729,9 +729,20 @@ impl Manager {
                         || !selected.release_originals
                         || !selected.members.is_empty()
                         || object.disposable_directory
-                        || object.retiring)
+                        || (object.retiring
+                            && (object.directory_custody.is_none()
+                                || object.original_release.is_none())))
                 {
                     return Err("directory custody requires adopted temporary ownership, exact original release and no member transfer or retirement".into());
+                }
+                // An exact current-custodian retry may schedule its existing
+                // continuation again. Preserve the original custody, release
+                // and producer record; ordinary maintenance performs deletion.
+                if selected.adopt_directory && object.retiring {
+                    self.stable(r)?;
+                    lease.stable()?;
+                    retirement::prioritize(&directory, &selected.allocation)?;
+                    return Ok(());
                 }
                 drop(store);
                 let allocation = directory.join(&selected.allocation);
