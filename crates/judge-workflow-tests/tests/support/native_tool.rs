@@ -23,10 +23,6 @@ fn read_json(path: &Path) -> Value {
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }
 
-fn write_json(path: &Path, value: &Value) {
-    fs::write(path, serde_json::to_vec(value).unwrap()).unwrap();
-}
-
 fn emit(value: &Value) {
     serde_json::to_writer(io::stdout().lock(), value).unwrap();
 }
@@ -104,135 +100,6 @@ fn full_units_api(data: &Value, args: &[std::ffi::OsString]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn native_seed_api(parent: &Path, args: &[std::ffi::OsString]) -> ExitCode {
-    let data = read_json(&parent.join("seed-api.json"));
-    if let Some(profile) = data.get("profile") {
-        assert_eq!(profile, "full-units");
-        return full_units_api(&data, args);
-    }
-    let case = data["case"].as_str().unwrap_or("valid");
-    let mut run = json!({"id":data.get("seed_run").unwrap_or(&json!(900)),
-        "run_attempt":data.get("attempt").unwrap_or(&json!(1)),
-        "status":"in_progress", "head_sha":data["candidate"],
-        "event":data.get("event").unwrap_or(&json!("push")),
-        "path":".github/workflows/collection.yml", "repository":{"full_name":"fixture/native"}});
-    let argument = |flag: &str| {
-        let position = args.iter().position(|arg| arg == flag).unwrap();
-        args[position + 1].to_str().unwrap()
-    };
-    if args.first().is_some_and(|arg| arg == "run")
-        && args.get(1).is_some_and(|arg| arg == "download")
-    {
-        let name = argument("--name");
-        let unit = name
-            .strip_prefix("chrono-unit-")
-            .map(|suffix| suffix.rsplitn(3, '-').nth(2).unwrap());
-        let upload = unit.map_or(&data["upload"], |unit| &data["units"][unit]["upload"]);
-        let destination = Path::new(argument("--dir"));
-        copy_tree(Path::new(upload.as_str().unwrap()), destination);
-        if matches!(
-            case,
-            "wrong-base"
-                | "wrong-attempt"
-                | "wrong-workflow"
-                | "wrong-digest"
-                | "wrong-fork"
-                | "stale"
-                | "nested-loss"
-                | "wrong-lineage"
-                | "wrong-branch"
-                | "wrong-repository"
-                | "wrong-candidate"
-        ) {
-            let mut binding = read_json(&destination.join("binding.json"));
-            let mut context = read_json(&destination.join("context.json"));
-            match case {
-                "wrong-base" => binding["base"] = json!("f".repeat(40)),
-                "wrong-attempt" => binding["attempt"] = json!(2),
-                "wrong-workflow" => binding["workflow_revision"] = json!("e".repeat(40)),
-                "wrong-digest" => binding["context_sha256"] = json!("0".repeat(64)),
-                "wrong-repository" => binding["repository"] = json!("other/repository"),
-                "wrong-candidate" => binding["candidate"] = json!("e".repeat(40)),
-                "wrong-lineage" => {
-                    fs::write(destination.join("lineage.json"), b"original byte drift").unwrap()
-                }
-                "wrong-branch" => context["branch_ref"] = json!("feature/wrong"),
-                "wrong-fork" => context["fork_point"] = json!("d".repeat(40)),
-                "stale" => context["observed_at"] = json!("2020-01-01T00:00:00Z"),
-                "nested-loss" => {
-                    let first = binding["originals"]
-                        .as_object()
-                        .unwrap()
-                        .values()
-                        .next()
-                        .unwrap();
-                    fs::remove_file(destination.join(first["file"].as_str().unwrap())).unwrap();
-                }
-                _ => unreachable!(),
-            }
-            if matches!(case, "wrong-fork" | "stale" | "wrong-branch") {
-                let raw = serde_json::to_vec(&context).unwrap();
-                fs::write(destination.join("context.json"), &raw).unwrap();
-                binding["context_sha256"] = json!(chrono_harness::sha256(&raw));
-            }
-            write_json(&destination.join("binding.json"), &binding);
-        }
-        return ExitCode::SUCCESS;
-    }
-    let endpoint = args[1].to_str().unwrap();
-    let workflow = Path::new(data["workflow"].as_str().unwrap());
-    let root = workflow.ancestors().nth(3).unwrap();
-    if let Some((_, address)) = endpoint.split_once("/contents/") {
-        let filename = address.split('?').next().unwrap();
-        io::stdout()
-            .write_all(&fs::read(root.join(filename)).unwrap())
-            .unwrap();
-    } else if endpoint.contains("/artifacts?") {
-        let artifact = json!({"name":format!("chrono-context-{}-1", run["id"]), "expired":false});
-        let mut artifacts = vec![artifact.clone()];
-        if let Some(units) = data["units"].as_object() {
-            for (index, (unit, observation)) in units.iter().enumerate() {
-                let id = 300 + index;
-                let attempt = observation.get("attempt").cloned().unwrap_or(json!(1));
-                artifacts.push(json!({"id":id,
-                    "name":format!("chrono-unit-{unit}-{}-{attempt}", run["id"]),
-                    "expired":false,
-                    "archive_download_url":format!("https://api.github.com/repos/fixture/native/actions/artifacts/{id}/zip"),
-                    "workflow_run":{"id":run["id"],"head_sha":run["head_sha"]}}));
-            }
-        }
-        emit(
-            &json!([{"artifacts":if case == "missing" {vec![]} else {artifacts}},
-            {"artifacts":if case == "ambiguous" {vec![artifact]} else {vec![]}}]),
-        );
-    } else if endpoint.contains("/jobs?") {
-        let mut rows = vec![
-            json!({"id":200,"run_id":run["id"],"run_attempt":run["run_attempt"],
-            "name":"Detect registered DELTA", "status":"completed", "conclusion":"success", "head_sha":run["head_sha"]}),
-        ];
-        let provider = read_json(&root.join(".chrono-harness/ci/units.json"));
-        if let Some(units) = data["units"].as_object() {
-            for (index, (unit, observation)) in units.iter().enumerate() {
-                let attempt = if data["carried"].as_bool().unwrap_or(false) {
-                    run["run_attempt"].clone()
-                } else {
-                    observation.get("attempt").cloned().unwrap_or(json!(1))
-                };
-                rows.push(json!({"id":201+index,"run_id":run["id"],"run_attempt":attempt,
-                    "name":provider["units"][unit]["name"],"status":"completed","conclusion":"success","head_sha":run["head_sha"]}));
-            }
-        }
-        let split = rows.len().min(2);
-        emit(&json!([{"jobs":rows[..split]}, {"jobs":rows[split..]}]));
-    } else {
-        if case == "run-race" && args[0] == "api" && endpoint.ends_with("/runs/900") {
-            run["run_attempt"] = json!(2);
-        }
-        emit(&run);
-    }
-    ExitCode::SUCCESS
-}
-
 fn main() -> ExitCode {
     let invocation = env::args_os().next().unwrap();
     let executable = Path::new(&invocation);
@@ -243,7 +110,9 @@ fn main() -> ExitCode {
         return prepared_producer(&args);
     }
     if name == "mock-gh" {
-        return native_seed_api(parent, &args);
+        let data = read_json(&parent.join("full-units-api.json"));
+        assert_eq!(data["profile"], "full-units");
+        return full_units_api(&data, &args);
     }
     if name == "git" {
         eprintln!("ambient-git-must-not-run");

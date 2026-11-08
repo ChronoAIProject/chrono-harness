@@ -616,6 +616,14 @@ birth 在登记和回执封存期间持关联租约。生产者中断后，普�
 
 清理拒绝只影响自身登记项。普通 start／reconstruct／use／check／bootstrap 不尝试无关项或 fixture 清理，目标准入／所有权／状态发布失败仍阻断。明确 maintain 在 drain、不可变失败回执、cleanup_failures 保留无关失败，继续独立项；只要本轮尝试有失败仍非零，不丢旧回执。
 
+#### 保留后的接续与清理阶段
+
+每项登记可带 `cleanup`，分别保留 `stage`、原因 `detail` 和原 `report_path`。阶段为 `pending`、`in-progress`、`waiting-for-consumers`、`retained`、`failed`、`caches-released`、`disposed`。它与工作状态 `status`／`terminal` 分开：缓存释放不表示工作完成；原进程或清理中断仍保留原尝试，不能仅凭阶段补写成功。旧记录缺少该字段时，表示尚无此阶段观察。
+
+显式 `maintain` 会重试等待整树回收的 `retained`，重新取得原关联的独占租约并核政策、提交、源码和原回执。普通启动不重试无关保留项。`evidence-retain` 仅在实际登记路径存在且未获释放时阻止整树移除；访问错误或链接仍拒绝。证据使用方释放自己的路径后，下次维护可继续删除整树，无需伪造新的工作终态。`artifacts-only` 完成本轮缓存处置后仍保留检出，不由维护重复消费其旧交接；政策迁移后的新责任需重新 `finish`。
+
+**产品行为与验证登记同改：**以前只要政策声明证据目录，即使目录不存在也会保留整树；现在核实际路径。清理选择、证据阻挡及结果阶段由 `verified_lifecycle.rs` 统一判断，工作树计划增加两项整 crate Verus 证明；真实 Git 回归核整树移除、保留后接续和原件不变。额外验证及运行总成本未测。这一批不证明漏登接管、终态历史滚动清理或现有全部工作树已回收。
+
 #### 用引用保留原结果
 
 自动生命周期用 `chrono-worktree-retained-input/v1` 引用旧输入，包含物理协调者 `source_root`、相对 state `path`、sha256、byte_length、format（receipt 或不透明 bytes）。完整不可变回执原位引用；部分／未封存字节在登记 state 发布一次，不把缺失／未知升级为成功，不改旧原件。未变操作重试不内嵌旧报告字节或解析历史。

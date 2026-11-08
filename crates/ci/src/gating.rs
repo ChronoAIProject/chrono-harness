@@ -140,23 +140,6 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         ""
     };
     body = body.replacen("          CHRONO_CHECK_SOURCE: ci\n", &format!("          CHRONO_CHECK_SOURCE: ci\n          CHRONO_CI_DETECTION: ${{{{ needs.detect.outputs.detection }}}}\n{extra}"), 1);
-    if c.native_adoption.is_some() {
-        let command = format!(
-            "{} native-adoption acquire --host-root . --config {}{}",
-            shell(&c.collection.generator),
-            shell(path),
-            unit.map(|u| format!(" --unit {}", shell(u)))
-                .unwrap_or_default()
-        );
-        let hook = format!(
-            "      - name: Acquire detector original context\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n          CHRONO_CI_DETECTION: ${{{{ needs.detect.outputs.detection }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n{extra}        run: |\n          {command}\n"
-        );
-        body = body.replacen(
-            "      - name: Canonical harness check",
-            &format!("{hook}      - name: Canonical harness check"),
-            1,
-        );
-    }
     if unit.is_some() {
         let command = format!(
             "{} production --host-root . --config {} --unit {} --github-output \"$GITHUB_OUTPUT\"",
@@ -276,7 +259,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         run: |
           {generator} detect --host-root . --config {config} --github-output "$GITHUB_OUTPUT"
 "#,
-        detector_depth = if c.native_adoption.is_some() { 0 } else { 2 },
+        detector_depth = 2,
         runner = scalar(&g.detector.runs_on),
         timeout = g.detector.timeout_minutes,
         bootstrap_credentials = if g.detector.bootstrap_github_token {
@@ -301,14 +284,6 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         g.startup.as_ref().map(|_| "chrono_startup"),
         None,
     )?;
-    if let Some(a) = &c.native_adoption {
-        let command = format!(
-            "{} native-adoption publish --host-root . --config {}",
-            shell(&c.collection.generator),
-            shell(path)
-        );
-        text.push_str(&format!("      - name: Publish shared native context\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n          CHRONO_CI_DETECTION: ${{{{ steps.detect.outputs.detection }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {command}\n      - name: Upload detector original context\n        uses: {}\n        with:\n          name: {}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, a.seed_artifact, scalar(&a.seed_directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
-    }
     if let Some(directory) = &g.detector.evidence_directory {
         text.push_str(&format!("      - name: Preserve detector evidence\n        if: ${{{{ always() }}}}\n        uses: {}\n        with:\n          name: chrono-detector-evidence-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, scalar(directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
     }

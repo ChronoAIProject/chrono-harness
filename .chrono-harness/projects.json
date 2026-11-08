@@ -266,44 +266,6 @@
             "crates/runner-tests/Cargo.toml"
           ]
         },
-        "diagnostics": {
-          "operation": "test.runner.diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml",
-            "--test",
-            "protocol_v1",
-            "prelaunch_diagnostics_"
-          ]
-        },
-        "retention_delivery": {
-          "operation": "test.runner.retention-delivery",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml",
-            "--test",
-            "retention",
-            "native_"
-          ]
-        },
-        "retention": {
-          "operation": "test.runner.retention",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml",
-            "--test",
-            "retention"
-          ]
-        },
         "verify_identifiers": {
           "operation": "verify.runner-identifiers-tests",
           "tool": "verus",
@@ -435,6 +397,18 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "runtime_logging": {
+          "operation": "test.runner.runtime-logging",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--test",
+            "runtime_logging"
+          ]
         }
       },
       "language": "rust"
@@ -631,19 +605,6 @@
             "--locked",
             "--manifest-path",
             "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
-        "execution_diagnostics": {
-          "operation": "test.ci.execution-diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-ci-tests/Cargo.toml",
-            "--test",
-            "behavior",
-            "execution_diagnostics_"
           ]
         },
         "format": {
@@ -1962,6 +1923,28 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "verify_lifecycle": {
+          "operation": "verify.worktree-lifecycle",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.worktree-lifecycle.rlib,dep-info=.chrono-harness/state/verify.worktree-lifecycle.rlib.d",
+            "crates/worktree/src/verified_lifecycle.rs",
+            "-o",
+            ".chrono-harness/state/verify.worktree-lifecycle.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "test_project": "worktree-tests",
@@ -2054,21 +2037,6 @@
             "crates/worktree-tests/Cargo.toml"
           ]
         },
-        "owner_deployment": {
-          "operation": "test.worktree.owner-deployment",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml",
-            "--test",
-            "creation",
-            "owner_deployment::",
-            "--",
-            "--test-threads=1"
-          ]
-        },
         "update_lockfile": {
           "operation": "lock.worktree-tests",
           "tool": "cargo",
@@ -2096,6 +2064,28 @@
             "crates/worktree-tests/tests/verified_owner_publication.rs",
             "-o",
             ".chrono-harness/state/verify.owner-publication-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_lifecycle": {
+          "operation": "verify.worktree-lifecycle-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.worktree-lifecycle-tests.rlib,dep-info=.chrono-harness/state/verify.worktree-lifecycle-tests.rlib.d",
+            "crates/worktree-tests/tests/verified_lifecycle.rs",
+            "-o",
+            ".chrono-harness/state/verify.worktree-lifecycle-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -2702,16 +2692,6 @@
             ".chrono-harness/ci/bootstrap-cache.json"
           ]
         },
-        "detector": {
-          "operation": "host.bootstrap-detector",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-detector.json"
-          ]
-        },
         "shared-produce": {
           "operation": "host.bootstrap-shared-produce",
           "tool": "python3",
@@ -3023,16 +3003,6 @@
             "aggregate"
           ]
         },
-        "owner-verify": {
-          "operation": "host.bootstrap-owner-verify",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-owner-verification.json"
-          ]
-        },
         "unit": {
           "operation": "host.bootstrap-unit",
           "tool": "python3",
@@ -3124,16 +3094,6 @@
           "argv": [
             "-B",
             ".chrono-harness/ci/provision_tests.py"
-          ]
-        },
-        "owner": {
-          "operation": "host.bootstrap-owner-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py",
-            "--lifecycle-program",
-            "crates/worktree/target/debug/chrono-worktree"
           ]
         },
         "command-mocks": {

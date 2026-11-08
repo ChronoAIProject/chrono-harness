@@ -9,112 +9,6 @@ use chrono_harness::{
 };
 use std::{collections::BTreeMap, io::Read};
 
-/// Explicit native child inputs share the runner's bounded process owner.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct NativeChild {
-    pub argv: Vec<String>,
-    pub stdin: Vec<u8>,
-    pub directory: String,
-    pub prefix: String,
-    pub timeout_seconds: f64,
-    pub output_limit_bytes: usize,
-}
-pub fn native_process(
-    root: &Path,
-    c: &units::Config,
-    child: &NativeChild,
-    environment: BTreeMap<String, String>,
-) -> Result<(Vec<u8>, Vec<Value>), String> {
-    units::validate(c)?;
-    let a = c.native_adoption.as_ref().ok_or("native adoption absent")?;
-    let allowed = child.argv.first() == Some(&c.collection.generator)
-        || child.argv.first() == Some(&a.inputs_program);
-    if !allowed
-        || !std::iter::once(&c.collection.artifact_directory)
-            .chain(c.units.values().map(|u| &u.artifact_directory))
-            .any(|d| child.directory == format!("{d}preparation/"))
-        || !child.timeout_seconds.is_finite()
-        || child.timeout_seconds <= 0.0
-        || child.timeout_seconds > 900.0
-        || child.output_limit_bytes == 0
-        || child.output_limit_bytes > 64 * 1024 * 1024
-    {
-        return Err("native-process differs from registered acquisition operations/bounds".into());
-    }
-    let executable = chrono_harness::resolve_program(
-        root,
-        &child.argv[0],
-        environment.get("PATH").map(String::as_str),
-    )?;
-    let spec = chrono_harness::CommandSpec {
-        program: executable.to_str().ok_or("native executable UTF8")?.into(),
-        args: child.argv[1..].to_vec(),
-        env: environment,
-        timeout_seconds: child.timeout_seconds.ceil() as u64,
-        output_limit_bytes: child.output_limit_bytes,
-    };
-    let process = chrono_harness::run_process_observed_for(
-        root,
-        &spec,
-        &child.stdin,
-        &file_identity(&executable)?.0,
-        std::time::Duration::from_secs_f64(child.timeout_seconds),
-    )?;
-    let retain = |suffix: &str, bytes: &[u8]| {
-        prepared::retain_original(
-            root,
-            &child.directory,
-            &format!("{}-{suffix}", child.prefix),
-            bytes,
-        )
-    };
-    let stdin = retain("stdin", &child.stdin)?;
-    let stdout = retain("stdout", &process.stdout_bytes)?;
-    let stderr = retain("stderr", &process.stderr_bytes)?;
-    let policy = chrono_harness::load_selected_config(root, &c.collection.check_config)?;
-    let mut credentials: std::collections::BTreeSet<_> =
-        c.gather.credential_environment.iter().cloned().collect();
-    credentials.extend(
-        policy["environment"]["credential_environment"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-            .map(str::to_owned),
-    );
-    let observed: BTreeMap<_, _> = process
-        .environment
-        .iter()
-        .filter(|(k, _)| !credentials.contains(*k))
-        .map(|(k, v)| (k.clone(), sha256(v.as_bytes())))
-        .collect();
-    let receipt = json!({"schema":"chrono-native-forwarding/v1","argv":process.argv,"configured_argv":child.argv,
-    "cwd":process.cwd,"executable":{"path":process.executable,"sha256":process.sha256},
-    "environment":observed,"environment_representation":"sha256","omitted_credentials":credentials,
-    "original_environment_sha256":process.environment_digest,"stdin":stdin,"stdout":stdout,"stderr":stderr,
-    "exit_code":process.exit_code,"timeout_seconds":child.timeout_seconds,"transport_failure":process.failure,
-    "failure":process.failure.as_deref().map(|failure| match failure {
-        "process timed out"=>"timeout", "process output limit exceeded"=>"output bound exceeded", other=>other
-    })});
-    let receipt_ref = retain(
-        "process",
-        &serde_json::to_vec(&receipt).map_err(|e| e.to_string())?,
-    )?;
-    if process.exit_code != 0 || process.failure.is_some() {
-        return Err(format!(
-            "child failed; original receipt retained at {}",
-            receipt_ref.path
-        ));
-    }
-    let originals = [stdin, stdout, stderr, receipt_ref]
-        .into_iter()
-        .map(serde_json::to_value)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok((process.stdout_bytes, originals))
-}
-
 pub(crate) fn publish(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     super::write_file(root, path, bytes)
 }
@@ -570,19 +464,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         }
     }
     let mut p = p;
-    if p.source == "ci" {
-        let provider: Value = decode(&config_bytes)?;
-        if provider.get("native_adoption").is_some() {
-            let context = p
-                .context
-                .as_ref()
-                .ok_or("native adoption full context missing")?;
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| e.to_string())?;
-            p.evidence["current_observation"] = json!({"context_digest":context.semantic_digest,"unix_timestamp_nanos":now.as_nanos().to_string()});
-        }
-    }
     let report = prepared::retain_original(
         root,
         &dir,

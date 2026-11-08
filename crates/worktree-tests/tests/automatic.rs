@@ -702,6 +702,74 @@ fn automatic_birth_enrollment_and_active_retained_checkout_survives_start() {
 }
 
 #[test]
+fn automatic_finish_absent_evidence_does_not_retain_the_whole_checkout() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let target = h.parent.join("no-evidence");
+    assert_eq!(h.invoke("integration", "no-evidence", &target).0, 0);
+    output(&target);
+    assert!(!target.join(".chrono-harness/state").exists());
+    let (code, report, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(
+        !target.exists(),
+        "absent evidence cannot keep an otherwise disposable checkout"
+    );
+    assert_eq!(
+        drain_report(&report["drain"][0])["worktree_removal"],
+        "verified-absent"
+    );
+    assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
+    assert_eq!(h.ledger()["entries"][0]["cleanup"]["stage"], "disposed");
+    assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
+}
+
+#[test]
+fn automatic_maintenance_resumes_retained_checkout_after_evidence_release() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let target = h.parent.join("released-evidence");
+    assert_eq!(h.invoke("integration", "released-evidence", &target).0, 0);
+    let evidence = target.join(".chrono-harness/state");
+    fs::create_dir_all(&evidence).unwrap();
+    fs::write(
+        evidence.join("consumer-original"),
+        "required until consumed",
+    )
+    .unwrap();
+    output(&target);
+    let (code, report, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(target.exists());
+    assert_eq!(h.ledger()["entries"][0]["status"], "retained");
+    let progress = h.ledger()["entries"][0]["cleanup"].clone();
+    assert_eq!(progress["stage"], "retained");
+    assert!(progress["detail"].as_str().unwrap().contains("evidence"));
+    assert_eq!(
+        progress["report_path"],
+        report["drain"][0]["receipt"]["path"]
+    );
+    let original = entry_receipts(&h, &h.ledger()["entries"][0]);
+    // The fixture's sole evidence consumer finishes and releases its exact files.
+    fs::remove_file(evidence.join("consumer-original")).unwrap();
+    fs::remove_dir(&evidence).unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(
+        !target.exists(),
+        "retained checkout must remain discoverable for later cleanup"
+    );
+    assert_eq!(
+        drain_report(&report["drain"][0])["worktree_removal"],
+        "verified-absent"
+    );
+    assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
+    for (path, bytes) in original {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+}
+
+#[test]
 fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
@@ -1463,6 +1531,12 @@ fn automatic_reconstruct_enrolls_only_success_and_unresolved_evidence_can_later_
     let (code, r, e) = h.reconstruct(reconstruction(&head, &head, value!([])), "reborn");
     assert_eq!(code, 0, "{r} {e}");
     let target = h.parent.join("reborn");
+    fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();
+    fs::write(
+        target.join(".chrono-harness/state/needed-original"),
+        "evidence",
+    )
+    .unwrap();
     output(&target);
     assert_eq!(
         h.ledger()["entries"][0]["enrollment"]["receipt"]["operation"],
@@ -1473,7 +1547,10 @@ fn automatic_reconstruct_enrolls_only_success_and_unresolved_evidence_can_later_
     assert_eq!(h.ledger()["entries"][0]["status"], "retained");
     let (code, r, e) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{r} {e}");
-    assert_eq!(r["drain"], value!([]));
+    assert_eq!(
+        drain_report(&r["drain"][0])["worktree_removal"],
+        "preserved"
+    );
     assert_eq!(
         h.auto(
             "finish",
