@@ -193,12 +193,14 @@ impl EvidenceExclusion {
         Ok(guard)
     }
 }
+use crate::verified_owner_publication::{PolicyNamespace, policy_namespace_matches};
 use crate::{
     Start, artifact_disposal,
     maintenance::{self, Cleanup, Retention},
     ownership::Lease,
     start::{self, Runner},
 };
+use chrono_harness::verified_identifiers::{equal_bytes, equal_text};
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
 use chrono_judge_registration::Registrations;
 pub use producer::{RetainedArtifact, TemporaryHost};
@@ -209,6 +211,7 @@ use std::{
     fs,
     io::Write,
     path::{Component, Path, PathBuf},
+    sync::Arc,
 };
 
 #[derive(Clone, Deserialize)]
@@ -340,8 +343,15 @@ struct PolicyInputs {
     policy_bytes: Vec<u8>,
     config_path: String,
     config_bytes: Vec<u8>,
+    source_root: PathBuf,
+    source_head: String,
     anchor_head: String,
-    registrations: Registrations,
+    anchor_config_bytes: Vec<u8>,
+    anchor_policy_path: String,
+    anchor_policy_bytes: Vec<u8>,
+    anchor_policy: Policy,
+    anchor_filemap_digest: String,
+    registrations: Arc<Registrations>,
     registry_digest: String,
     common: PathBuf,
 }
@@ -477,7 +487,8 @@ fn load_policy(
     config_path: &str,
     bytes: &[u8],
 ) -> Result<Option<(Policy, String, Vec<u8>)>, String> {
-    let Some(path) = r.config.automatic_cleanup.clone() else {
+    let config: crate::Config = decode(bytes)?;
+    let Some(path) = config.automatic_cleanup else {
         return Ok(None);
     };
     relative_path(&path)?;
@@ -492,7 +503,11 @@ fn load_policy(
     if r.blob(root, &head, &path)? != policy_bytes {
         return Err("automatic cleanup policy differs from source commit".into());
     }
-    let mut p: Policy = decode(&policy_bytes)?;
+    let p = parse_policy(r, root, &policy_bytes)?;
+    Ok(Some((p, path, policy_bytes)))
+}
+fn parse_policy(r: &mut Runner, root: &Path, policy_bytes: &[u8]) -> Result<Policy, String> {
+    let mut p: Policy = decode(policy_bytes)?;
     if !matches!(
         p.schema.as_str(),
         "chrono-worktree-automatic-cleanup/v1" | "chrono-worktree-automatic-cleanup/v2"
@@ -540,7 +555,18 @@ fn load_policy(
     {
         return Err("automatic retention requires a direct registered local branch".into());
     }
-    Ok(Some((p, path, policy_bytes)))
+    Ok(p)
+}
+fn policy_namespace(policy: &Policy) -> PolicyNamespace {
+    PolicyNamespace {
+        schema: policy.schema.clone(),
+        coordinator: policy
+            .coordinator_root
+            .as_os_str()
+            .as_encoded_bytes()
+            .to_vec(),
+        state_directory: policy.state_directory.clone(),
+    }
 }
 impl PolicyInputs {
     fn load(
@@ -571,17 +597,59 @@ impl PolicyInputs {
             }
         }
         let anchor_head = observed.head;
-        if fs::read(no_symlink_parents(anchor, config_path)?).map_err(|e| e.to_string())? != bytes
-            || r.blob(anchor, &anchor_head, config_path)? != bytes
-            || fs::read(no_symlink_parents(anchor, &policy_path)?).map_err(|e| e.to_string())?
-                != policy_bytes
-            || r.blob(anchor, &anchor_head, &policy_path)? != policy_bytes
-        {
-            return Err("coordinator policy/configuration identity mismatch".into());
+        let config: crate::Config = decode(bytes)?;
+        let (
+            anchor_config_bytes,
+            anchor_policy,
+            anchor_policy_path,
+            anchor_policy_bytes,
+            anchor_host_config,
+        ) = if anchor == root {
+            (
+                bytes.to_vec(),
+                policy.clone(),
+                policy_path.clone(),
+                policy_bytes.clone(),
+                config.host_config.clone(),
+            )
+        } else {
+            let (anchor_config, anchor_bytes) = crate::configuration(anchor, config_path)?;
+            let (anchor_policy, anchor_path, anchor_policy_bytes) =
+                load_policy(r, anchor, config_path, &anchor_bytes)?
+                    .ok_or("coordinator cleanup ownership is not adopted")?;
+            (
+                anchor_bytes,
+                anchor_policy,
+                anchor_path,
+                anchor_policy_bytes,
+                anchor_config.host_config,
+            )
+        };
+        if !policy_namespace_matches(
+            &policy_namespace(&policy),
+            &policy_namespace(&anchor_policy),
+        ) {
+            return Err("coordinator policy/configuration ownership namespace mismatch".into());
         }
-        let host_config = r.config.host_config.clone();
-        let (registrations, registry_digest) =
-            start::registrations(r, anchor, &anchor_head, &host_config)?;
+        let (anchor_registrations, anchor_registry_digest) =
+            start::registrations(r, anchor, &anchor_head, &anchor_host_config)?;
+        let anchor_registrations = Arc::new(anchor_registrations);
+        let anchor_filemap_digest =
+            chrono_harness::wire::digest(&value!(anchor_registrations.filemap()))?;
+        let source_head = if root == anchor {
+            anchor_head.clone()
+        } else {
+            r.oid(root, "HEAD")?
+        };
+        let (registrations, registry_digest) = if root == anchor {
+            (Arc::clone(&anchor_registrations), anchor_registry_digest)
+        } else {
+            let (regs, digest) = start::registrations(r, root, &source_head, &config.host_config)?;
+            (Arc::new(regs), digest)
+        };
+        for path in [config_path, &anchor_policy_path] {
+            start::registered_policy(&anchor_registrations, path, &anchor_policy.state_directory)?;
+        }
         for path in [config_path, &policy_path] {
             start::registered_policy(&registrations, path, &policy.state_directory)?;
         }
@@ -594,10 +662,10 @@ impl PolicyInputs {
             &[registrations.config()],
         )?;
         let mut producers = BTreeSet::new();
-        for producer in &policy.retained_producers {
-            producer.validate(&policy)?;
+        for producer in &anchor_policy.retained_producers {
+            producer.validate(&anchor_policy)?;
             if !producers.insert(&producer.id)
-                || policy.retained_producers.iter().any(|other| {
+                || anchor_policy.retained_producers.iter().any(|other| {
                     other.id != producer.id
                         && (other.directory.starts_with(&producer.directory)
                             || producer.directory.starts_with(&other.directory))
@@ -606,14 +674,21 @@ impl PolicyInputs {
                 return Err("repeated or overlapping retained producer registrations".into());
             }
         }
-        start::registered_policy(&registrations, config_path, &r.config.report_directory)?;
+        start::registered_policy(&registrations, config_path, &config.report_directory)?;
         Ok(Some(Self {
             policy,
             policy_path,
             policy_bytes,
             config_path: config_path.into(),
             config_bytes: bytes.into(),
+            source_root: root.into(),
+            source_head,
             anchor_head,
+            anchor_config_bytes,
+            anchor_policy_path,
+            anchor_policy_bytes,
+            anchor_policy,
+            anchor_filemap_digest,
             registrations,
             registry_digest,
             common,
@@ -621,13 +696,39 @@ impl PolicyInputs {
     }
     fn stable(&self, r: &mut Runner) -> Result<(), String> {
         let anchor = &self.policy.coordinator_root;
+        let head = r.oid(anchor, "HEAD")?;
+        let (config, bytes) = crate::configuration(anchor, &self.config_path)?;
+        if !equal_bytes(&r.blob(anchor, &head, &self.config_path)?, &bytes) {
+            return Err("coordinator configuration differs from committed bytes".into());
+        }
+        let path = config
+            .automatic_cleanup
+            .ok_or("coordinator cleanup ownership disappeared")?;
+        let bytes = fs::read(no_symlink_parents(anchor, &path)?).map_err(|e| e.to_string())?;
+        if !equal_bytes(&r.blob(anchor, &head, &path)?, &bytes) {
+            return Err("coordinator cleanup policy differs from committed bytes".into());
+        }
+        let mut observed: Policy = decode(&bytes)?;
+        if observed.coordinator_root == Path::new("git-main-worktree") {
+            observed.coordinator_root = anchor.clone();
+        }
+        if !policy_namespace_matches(
+            &policy_namespace(&self.anchor_policy),
+            &policy_namespace(&observed),
+        ) {
+            return Err("coordinator ownership namespace changed; preserve pending work".into());
+        }
+        Ok(())
+    }
+    fn anchor_stable(&self, r: &mut Runner) -> Result<(), String> {
+        let anchor = &self.policy.coordinator_root;
         if r.oid(anchor, "HEAD")? != self.anchor_head
             || fs::read(no_symlink_parents(anchor, &self.config_path)?)
                 .map_err(|e| e.to_string())?
-                != self.config_bytes
-            || fs::read(no_symlink_parents(anchor, &self.policy_path)?)
+                != self.anchor_config_bytes
+            || fs::read(no_symlink_parents(anchor, &self.anchor_policy_path)?)
                 .map_err(|e| e.to_string())?
-                != self.policy_bytes
+                != self.anchor_policy_bytes
         {
             return Err(
                 "coordinator HEAD/configuration/policy changed; preserve pending work".into(),
@@ -662,6 +763,7 @@ impl Manager {
         let Some(inputs) = PolicyInputs::load(r, root, config_path, bytes)? else {
             return Ok(None);
         };
+        let scope = absolute(scope, true)?;
         let policy = &inputs.policy;
         let anchor = &policy.coordinator_root;
         let common = inputs.common.clone();
@@ -698,7 +800,6 @@ impl Manager {
                 "enrollment namespace deployment identity changed; preserve records".into(),
             );
         }
-        let scope = absolute(scope, true)?;
         let record_directory = record_directory(&directory, &scope)?;
         fs::create_dir_all(&record_directory).map_err(|e| e.to_string())?;
         let kernel = policy.schema == "chrono-worktree-automatic-cleanup/v2";
@@ -835,7 +936,7 @@ impl Manager {
             }
             absolute(&e.path, true)?;
         }
-        Ok(Some(Self {
+        let mut manager = Self {
             inputs,
             ledger,
             directory,
@@ -843,7 +944,101 @@ impl Manager {
             record_directory,
             _namespace: namespace,
             _gate: gate,
-        }))
+        };
+        manager.restore_absent_policy(r)?;
+        Ok(Some(manager))
+    }
+
+    fn adopt_live_policy(&mut self, r: &mut Runner) -> Result<(), String> {
+        if self.scope == self.inputs.source_root {
+            return Ok(());
+        }
+        // Import binds an explicitly absent input without synthesizing it.
+        let path = no_symlink_parents(&self.scope, &self.inputs.config_path)?;
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.to_string()),
+        };
+        if let Some(inputs) = PolicyInputs::load(r, &self.scope, &self.inputs.config_path, &bytes)?
+        {
+            if !policy_namespace_matches(
+                &policy_namespace(&self.inputs.policy),
+                &policy_namespace(&inputs.policy),
+            ) {
+                return Err(
+                    "selected worktree ownership namespace differs from invoking host".into(),
+                );
+            }
+            self.inputs = inputs;
+        }
+        Ok(())
+    }
+
+    /// Interrupted removal still uses this object's fixed adopted inputs, even
+    /// after its physical checkout has gone. Only candidate code executes.
+    fn restore_absent_policy(&mut self, r: &mut Runner) -> Result<(), String> {
+        if self.scope.exists() {
+            return Ok(());
+        }
+        let Some(i) = self.current_entry(&self.scope) else {
+            return Ok(());
+        };
+        let binding = self.policy_binding(&self.ledger.entries[i])?;
+        if equal_text(&binding.head, &self.inputs.source_head)
+            && equal_text(&binding.policy_sha256, &sha256(&self.inputs.policy_bytes))
+        {
+            return Ok(());
+        }
+        let root = self.inputs.policy.coordinator_root.clone();
+        let config_bytes = r.blob(&root, &binding.head, &self.inputs.config_path)?;
+        let policy_bytes = r.blob(&root, &binding.head, &self.inputs.policy_path)?;
+        let expected = BTreeMap::from([
+            (self.inputs.config_path.clone(), Some(sha256(&config_bytes))),
+            (self.inputs.policy_path.clone(), Some(sha256(&policy_bytes))),
+        ]);
+        if !equal_bytes(
+            &serde_json::to_vec(&expected).map_err(|e| e.to_string())?,
+            &serde_json::to_vec(&binding.inputs).map_err(|e| e.to_string())?,
+        ) || !equal_text(&sha256(&policy_bytes), &binding.policy_sha256)
+        {
+            return Err("absent worktree policy does not match its retained adoption".into());
+        }
+        let config: crate::Config = decode(&config_bytes)?;
+        if !equal_bytes(
+            &serde_json::to_vec(&config.automatic_cleanup).map_err(|e| e.to_string())?,
+            &serde_json::to_vec(&Some(&self.inputs.policy_path)).map_err(|e| e.to_string())?,
+        ) {
+            return Err("absent worktree policy input address changed".into());
+        }
+        let policy = parse_policy(r, &root, &policy_bytes)?;
+        if !policy_namespace_matches(
+            &policy_namespace(&policy),
+            &policy_namespace(&self.inputs.anchor_policy),
+        ) {
+            return Err("absent worktree ownership namespace changed".into());
+        }
+        let (registrations, registry_digest) =
+            start::registrations(r, &root, &binding.head, &config.host_config)?;
+        artifact_disposal::registered(
+            &policy
+                .artifacts
+                .iter()
+                .map(|a| a.path.clone())
+                .collect::<Vec<_>>(),
+            &[registrations.config()],
+        )?;
+        for path in expected.keys() {
+            start::registered_policy(&registrations, path, &policy.state_directory)?;
+        }
+        self.inputs.policy = policy;
+        self.inputs.policy_bytes = policy_bytes;
+        self.inputs.config_bytes = config_bytes;
+        self.inputs.source_root = root;
+        self.inputs.source_head = binding.head;
+        self.inputs.registrations = Arc::new(registrations);
+        self.inputs.registry_digest = registry_digest;
+        Ok(())
     }
     fn save(&self) -> Result<(), String> {
         if self.inputs.policy.schema == "chrono-worktree-automatic-cleanup/v2"
@@ -1118,6 +1313,7 @@ impl Manager {
         kind: &str,
         receipt: Value,
     ) -> Result<(), String> {
+        self.adopt_live_policy(r)?;
         let target = absolute(target, false)?;
         self.enrollment_available(&target)?;
         let cache_only = kind == "main-cache";
@@ -1233,8 +1429,8 @@ impl Manager {
             cache_only,
         };
         self.check_entry(r, &entry, &head, None)?;
-        let host_config = r.config.host_config.clone();
-        let target_snapshot = if head == self.inputs.anchor_head
+        let host_config = decode::<crate::Config>(&self.inputs.config_bytes)?.host_config;
+        let target_snapshot = if head == self.inputs.source_head
             && host_config == self.inputs.registrations.entry_path()
         {
             None
@@ -1243,7 +1439,7 @@ impl Manager {
         };
         let target_registrations = target_snapshot
             .as_ref()
-            .map_or(&self.inputs.registrations, |(registrations, _)| {
+            .map_or(self.inputs.registrations.as_ref(), |(registrations, _)| {
                 registrations
             });
         artifact_disposal::registered(
@@ -1573,11 +1769,11 @@ impl Manager {
             })
             .map(|a| a.path.clone())
             .collect();
-        let host_config = r.config.host_config.clone();
+        let host_config = decode::<crate::Config>(&self.inputs.config_bytes)?.host_config;
         // check_entry just verified the live attachment and common repository.
         // Equal immutable commits use the already observed coordinator registry;
         // different commits acquire their own snapshot. No live check is reused.
-        let target_snapshot = if head == self.inputs.anchor_head
+        let target_snapshot = if head == self.inputs.source_head
             && host_config == self.inputs.registrations.entry_path()
         {
             None
@@ -1585,7 +1781,10 @@ impl Manager {
             Some(start::registrations(r, &e.path, &head, &host_config)?)
         };
         let (target_regs, target_digest) = target_snapshot.as_ref().map_or(
-            (&self.inputs.registrations, &self.inputs.registry_digest),
+            (
+                self.inputs.registrations.as_ref(),
+                &self.inputs.registry_digest,
+            ),
             |(r, d)| (r, d),
         );
         artifact_disposal::registered(
@@ -1595,7 +1794,9 @@ impl Manager {
         let paths = artifact_disposal::paths(r, &e.path, &head, &names)?;
         let binding = value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,
             "head":head,"policy_sha256":self.policy_binding(&e)?.policy_sha256,"config_sha256":sha256(&self.inputs.config_bytes),
-            "anchor_registry_digest":chrono_harness::wire::digest(&value!(self.inputs.registrations.filemap()))?,
+            "anchor_registry_digest":self.inputs.anchor_filemap_digest,
+            "policy_source_root":self.inputs.source_root,"policy_source_commit":self.inputs.source_head,
+            "policy_registry_digest":self.inputs.registry_digest,
             "target_registry_digest":target_digest,"artifacts":names,"generation":owner.generation});
         if let Some(prior) = e
             .cache_attempts
@@ -1888,7 +2089,7 @@ impl Manager {
                     r,
                     &manager.inputs.policy.coordinator_root,
                     &manager.inputs.config_path,
-                    &manager.inputs.config_bytes,
+                    &manager.inputs.anchor_config_bytes,
                     &manager._gate.token,
                     &path,
                     false,
@@ -1921,7 +2122,7 @@ impl Manager {
         failures.extend(independent);
         let producer_failures = self.outside_enrollment(r, |inputs, _| {
         let mut failures = vec![];
-        for producer in inputs.policy.retained_producers.clone() {
+        for producer in inputs.anchor_policy.retained_producers.clone() {
             let (config, bytes) = crate::configuration(
                 &inputs.policy.coordinator_root,
                 &inputs.config_path,
@@ -2035,7 +2236,10 @@ impl Manager {
                 "cleanup",
                 "cleaned",
                 |r, token, attempt| {
+                    self.adopt_live_policy(r)?;
                     attempt["source_commit"] = value!(self.inputs.anchor_head);
+                    attempt["policy_source_root"] = value!(self.inputs.source_root);
+                    attempt["policy_source_commit"] = value!(self.inputs.source_head);
                     attempt["registry_digest"] = value!(chrono_harness::wire::digest(&value!(
                         self.inputs.registrations.filemap()
                     ))?);
@@ -2290,7 +2494,7 @@ impl Manager {
                 ) {
                     preserved = Some(format!("commit retention unresolved: {error}"));
                 }
-                let host_config = r.config.host_config.clone();
+                let host_config = decode::<crate::Config>(&self.inputs.config_bytes)?.host_config;
                 let (target_regs, _) = start::registrations(r, &e.path, &t.head, &host_config)?;
                 let mut disposal = target_regs.config().clone();
                 disposal["artifacts"]
@@ -2323,7 +2527,8 @@ impl Manager {
                 report["branch_removal"] = value!("not-requested");
                 report["artifact_disposals"] = value!([]);
                 manager.check_entry(r, &e, &t.head, None)?;
-                let host_config = r.config.host_config.clone();
+                let host_config =
+                    decode::<crate::Config>(&manager.inputs.config_bytes)?.host_config;
                 let (target_regs, _) = start::registrations(r, &e.path, &t.head, &host_config)?;
                 artifact_disposal::registered(
                     &names,
@@ -2596,7 +2801,12 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             )?
             .ok_or("automatic cleanup is not opted in")?;
             manager.protect_reports(r, &invoking)?;
+            if operation != "maintain" {
+                manager.adopt_live_policy(r)?;
+            }
             report["source_root"] = value!(manager.inputs.policy.coordinator_root);
+            report["policy_source_root"] = value!(manager.inputs.source_root);
+            report["policy_source_commit"] = value!(manager.inputs.source_head);
             report["lifecycle_coordinator_root"] = value!(manager.inputs.policy.coordinator_root);
             report["source_commit"] = value!(manager.inputs.anchor_head);
             match operation.as_str() {
@@ -2730,19 +2940,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.birth_ready(&e)?;
                     let head = r.oid(target, "HEAD")?;
                     manager.check_entry(r, &e, &head, None)?;
-                    let host_config = r.config.host_config.clone();
-                    let target_snapshot = if head == manager.inputs.anchor_head
+                    let host_config =
+                        decode::<crate::Config>(&manager.inputs.config_bytes)?.host_config;
+                    let target_snapshot = if head == manager.inputs.source_head
                         && host_config == manager.inputs.registrations.entry_path()
                     {
                         None
                     } else {
                         Some(start::registrations(r, target, &head, &host_config)?)
                     };
-                    let target_regs = target_snapshot
-                        .as_ref()
-                        .map_or(&manager.inputs.registrations, |(registrations, _)| {
-                            registrations
-                        });
+                    let target_regs = target_snapshot.as_ref().map_or(
+                        manager.inputs.registrations.as_ref(),
+                        |(registrations, _)| registrations,
+                    );
                     let command = if operation == "check" {
                         canonical_command(target, target_regs, &selection)?
                     } else if operation == "bootstrap" {
@@ -2781,6 +2991,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
                     let coordinator = manager.inputs.policy.coordinator_root.clone();
+                    let coordinator_bytes = manager.inputs.anchor_config_bytes.clone();
                     drop(manager);
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
                     let process = chrono_harness::prepared::process_identities(
@@ -2793,7 +3004,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         r,
                         &coordinator,
                         config_path,
-                        &bytes,
+                        &coordinator_bytes,
                         token,
                         target,
                         false,
