@@ -107,6 +107,7 @@ impl Fixture {
     }
 
     pub fn source(&self, commit: &str, tree: &str, dirty: bool) {
+        fs::create_dir_all(self.root.join(".git")).unwrap();
         self.git_query(
             &["rev-parse", "--show-toplevel", "--verify", "HEAD"],
             format!("{}\n{commit}\n", self.root.display()),
@@ -233,6 +234,8 @@ impl Fixture {
     }
 
     pub fn rebind_git(root: &Path) {
+        let root = fs::canonicalize(root).unwrap();
+        fs::create_dir_all(root.join(".git")).unwrap();
         let path = root.join("native tools/git.json");
         let mut specification: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         for response in specification.as_object_mut().unwrap().values_mut() {
