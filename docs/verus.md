@@ -105,7 +105,7 @@ ASCII 分隔字节由固定 vstd 的 UTF-8 引理证明是字符边界，跳过�
 0／2／3／4 字段以及精确 stage／相邻非法字节／尾随 NUL 和 LF；同一预期进入普通 Rust。
 拆分的独立预期明确列空记录、重复记录、CR／LF／TAB、缺分隔符、首尾及重复空格，
 以及多字节 UTF-8 的完整返回数组；普通运行逐项比较长度和全部字节。
-复用现有两项标识符整 crate 证明、FILEMAP 源码边及原未过滤 runner 测试，
+复用现有两项标识符整 crate 证明、FILEMAP 源码边及标识符／runner 的未过滤测试，
 无新增工具、操作、信任函数、依赖或证明预算。
 外围仅使用标准安全 `str::from_utf8`／`Result::ok` 提供实际解码观察，拆分直接调用同源实现；
 Verus 内使用固定 vstd 的切片、`str::as_bytes`／`str::len`／`str::split_at`、
