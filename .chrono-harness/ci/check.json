@@ -54,6 +54,8 @@
       "crates/distribution/target/",
       "crates/distribution-tests/target/",
       ".chrono-harness/cache/",
+      ".chrono-harness/cache/identifiers/target/",
+      ".chrono-harness/cache/identifiers-tests/target/",
       "crates/worktree/target/",
       "crates/worktree-tests/target/",
       "crates/diagnostics/target/",
@@ -92,6 +94,7 @@
     "units": {
       "runner": {
         "tests": [
+          "test:identifiers-tests",
           "test:runner-tests"
         ],
         "report_path": ".chrono-harness/state/units/runner/check.json"

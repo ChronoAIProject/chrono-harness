@@ -5,7 +5,7 @@ use super::*;
 #[serde(deny_unknown_fields)]
 pub(super) struct PolicyBinding {
     pub(super) policy_sha256: String,
-    head: String,
+    pub(super) head: String,
     pub(super) inputs: BTreeMap<String, Option<String>>,
 }
 
@@ -106,8 +106,7 @@ impl Manager {
         ]);
         if next.inputs != adopted {
             return Err(
-                "migration target must adopt the coordinator's committed policy/configuration"
-                    .into(),
+                "migration target must adopt its own committed policy/configuration".into(),
             );
         }
         if previous.inputs.keys().ne(next.inputs.keys()) {
@@ -115,7 +114,7 @@ impl Manager {
                 "policy input address relocation requires a separate explicit migration".into(),
             );
         }
-        let host_config = r.config.host_config.clone();
+        let host_config = decode::<crate::Config>(&self.inputs.config_bytes)?.host_config;
         let (target_regs, _) = start::registrations(r, &target, &head, &host_config)?;
         artifact_disposal::registered(
             &self
@@ -143,7 +142,9 @@ impl Manager {
         inputs.extend(self.migration_inputs(r, &target, &next, "next")?);
         let record = value!({"schema":"chrono-worktree-policy-migration/v1",
             "binding":Self::birth_binding(&e),"previous":previous,"next":next,
-            "coordinator_commit":self.inputs.anchor_head,"migration_inputs":inputs,
+            "coordinator_commit":self.inputs.anchor_head,
+            "policy_source_root":self.inputs.source_root,
+            "policy_source_commit":self.inputs.source_head,"migration_inputs":inputs,
             "terminal_handoff":"not-claimed","disposal":"not-performed"});
         let name = format!(
             "policy-migration-{}.json",
