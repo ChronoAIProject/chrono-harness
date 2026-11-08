@@ -382,6 +382,18 @@ fn proof_invocation_requires_one_exact_registered_operation() {
         reveal_strlit("proof"); reveal_strlit("Proof"); reveal_strlit("proof\0");
         assert("proof"@[0] != "Proof"@[0]);
         assert("proof"@.len() != "proof\0"@.len());
+        assert forall|j: int| 0 <= j < methods.len()
+            && (#[trigger] methods[j]).operation@ == "proof"@ implies j == 0 by {
+            if j != 0 { assert(j == 1); }
+        }
+        assert forall|j: int| 0 <= j < methods.len()
+            && (#[trigger] methods[j]).operation@ == "Proof"@ implies j == 1 by {
+            if j != 1 { assert(j == 0); }
+        }
+        assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
+        assert(exists|j: int| policy::unique_proof_invocation(methods@, "proof"@, j));
+        assert(policy::unique_proof_invocation(methods@, "Proof"@, 1));
+        assert(exists|j: int| policy::unique_proof_invocation(methods@, "Proof"@, j));
     }
     let exact = policy::find_proof_invocation(&methods, "proof");
     expect_verifier_true(exact.is_ok() && exact.unwrap() == 0);
@@ -446,10 +458,16 @@ fn unified_ordinary_success_has_no_proof_and_failed_process_is_rejected() {
     let artifact = None;
     let registry = Err("registry not required".to_string());
     let raw = [255u8, 0u8];
+    let original = Some(policy::ProofProcess { operation: "ordinary", argv: &argv, stdout: &raw,
+        exit: 0, failed: false, dependency: &dependency, artifact: &artifact });
+    proof {
+        assert(policy::same_arguments(argv@.skip(1), args@));
+        assert(policy::unique_proof_invocation(methods@, "ordinary"@, 0));
+        assert(policy::ordinary_process_bound(&methods[0], &original.unwrap()));
+        assert(policy::ordinary_output_accepted("ordinary"@, methods@, &original));
+    }
     let ordinary = policy::bind_operation_output("passed", "ordinary", &methods,
-        Some(policy::ProofProcess { operation: "ordinary", argv: &argv, stdout: &raw,
-            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
-        &registry, &UnavailableSources);
+        original, &registry, &UnavailableSources);
     expect_verifier_true(ordinary.is_ok() && ordinary.unwrap().is_none());
     let failed = policy::bind_operation_output("passed", "ordinary", &methods,
         Some(policy::ProofProcess { operation: "ordinary", argv: &argv, stdout: &raw,

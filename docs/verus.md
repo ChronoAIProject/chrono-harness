@@ -650,6 +650,12 @@ link／dep-info／`-o` 输出同源，源码和输出参数非空。额外参数
 普通操作向解码接口传空字节，不解析其业务输出；其既有退出规则由原所有者保留。
 本地 projects 和离线 collection 都消费 routes 的同一准入结果。
 
+本地 judge-ci 和离线 collection 还共用 `bind_operation_output` 的组合准入。
+对声明为 passed 的普通操作，`Ok(None)` 与 `ordinary_output_accepted` 充要相等：
+必须有唯一登记方法、匹配的完整原操作和参数、退出 0 且无失败的原进程，并且没有编译库或依赖观察。
+这个正向成功合同不依赖报告解码成功；独立预期保留无效 UTF-8／NUL 业务 stdout，核合法普通操作仍成功且不产生证明条目。
+唯一方法的独立正例显式给出两种完整名称的不同位置和存在见证，原大小写、后缀与重复拒绝预期保持。
+
 本宿主为各项证明操作逐项登记固定 Verus 版本及 commit；报告准入的两项整 crate 根归
 runner 所有者计划。同次 DELTA 汇总核受影响证明及 registration、routes、judge-ci 和 CI 生成器的实际消费测试。
 未执行的证明、未声明合同的普通操作及现有原件身份核验，不因此取得全仓覆盖保证。
