@@ -41,7 +41,7 @@ fn adopted_bootstrap_rotates_whole_directories_after_current_report_and_readers_
     }
     let fixture = Fixture::new();
     fixture.adopt_retention(0);
-    fixture.commit();
+    // 独立保留宿主不声明 Git 所有者；模拟源码身份由源码专属用例验证。
     let first = successful_build(&fixture);
     let first_path = first
         .original
@@ -85,7 +85,6 @@ fn adopted_bootstrap_keeps_reused_streams_until_their_last_report_retires() {
     }
     let fixture = Fixture::new();
     fixture.adopt_retention(0);
-    fixture.commit();
     let first = successful_build(&fixture);
     fs::remove_file(fixture.root.join("prepared")).unwrap();
     let mut build = fixture.begin();
@@ -118,7 +117,6 @@ fn adopted_bootstrap_retains_failed_and_interrupted_originals_for_diagnosis() {
     let mut fixture = Fixture::new();
     fixture.adopt_retention(3600);
     fixture.failed_operation("prepare", 29);
-    fixture.commit();
     let mut build = fixture.begin();
     let error = build.prerequisites(&mut vec![], &mut vec![]).unwrap_err();
     let published = build.finish(Err(error)).unwrap();
