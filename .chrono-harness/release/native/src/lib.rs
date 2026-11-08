@@ -2,6 +2,8 @@
 #![allow(unexpected_cfgs)]
 
 pub mod process;
+pub mod evidence;
+pub mod execution;
 pub mod receipt;
 pub mod recipe;
 pub mod staging;

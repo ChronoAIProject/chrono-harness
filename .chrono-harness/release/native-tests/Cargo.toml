@@ -12,6 +12,7 @@ path = "tests/verified_recipe.rs"
 [dependencies]
 chrono-harness = { path = "../../../crates/runner" }
 chrono-host-release = { path = "../native" }
+chrono-distribution = { path = "../../../crates/distribution" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tar = "0.4"
@@ -37,6 +38,28 @@ path = "tests/receipt.rs"
 [[test]]
 name = "staging"
 path = "tests/staging.rs"
+
+[[test]]
+name = "execution"
+path = "tests/execution.rs"
+
+[[bin]]
+name = "chrono-test-release-cli"
+path = "../native/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-release-distribution"
+path = "../../../crates/distribution/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-release-tool"
+path = "tests/support/release_tool.rs"
+test = false
+bench = false
 
 [[bin]]
 name = "chrono-test-release-operation"

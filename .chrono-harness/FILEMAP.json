@@ -11,6 +11,12 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/release/native/src/evidence.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/execution.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/main.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/execution.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/execution.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/release_tool.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native/src/staging.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native-tests/tests/staging.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native/src/receipt.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
@@ -269,7 +275,7 @@
     {"path":"crates/distribution/Cargo.toml","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/Cargo.lock","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/src/lib.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"}]},
-    {"path":"crates/distribution/src/main.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"}]},
+    {"path":"crates/distribution/src/main.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"},{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":"crates/distribution-tests/Cargo.toml","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/Cargo.lock","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/tests/installation.rs","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
@@ -562,6 +568,7 @@
     {"path":"crates/worktree-tests/tests/verified_lifecycle.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]}
   ],
   "project_edges": [
+    {"from":"project:distribution","kind":"compile","to":"project:host-release-native-tests"},
     {"from":"project:judge-registration","kind":"compile","to":"project:host-release-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-release-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-release-native-tests"},
