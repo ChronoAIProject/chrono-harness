@@ -1198,8 +1198,7 @@ tree metadata 恰为三字段；index metadata 还要求 stage 恰为一个 ASCI
 字段数／stage 失败分别完整返回 `invalid Git tree metadata`／`invalid Git index metadata`，
 且仍先于路径和 OID 校验。不额外限制其余字段，不改写空字段。
 这些成功／失败、拆分结果及原错误由同源 Verus 及独立预期拥有；
-标准安全 UTF-8 解码仍是明确外部接口，外围调用组合、重复检查与文件系统状态比较仍待证明，
-不能据此声明完整库存解析和状态维护已证明。
+标准安全 UTF-8 解码仍是明确外部接口；index 调用组合及文件系统状态比较仍待证明。
 
 tree 的实际条目构造、map 更新和重复路径拒绝由同源 Verus `insert_git_tree_entry` 拥有。
 新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，其他全部键值保留；
@@ -1208,7 +1207,14 @@ tree 的实际条目构造、map 更新和重复路径拒绝由同源 Verus `ins
 不在此状态函数增设路径或字段限制；原 metadata、路径及 OID 检查仍在调用前执行。
 独立 Verus 预期与普通运行共同核完整状态、原错误及空／前缀／NUL／Unicode 身份边界。
 固定 vstd 的 map 插入合同只在本仓已证明的 TreePath 比较法则下使用。
-外围解析循环、动态路径诊断、index 重复 stage 和文件系统状态仍待证明，不据此扩大完整覆盖结论。
+tree 的完整逐行循环由同源 Verus `parse_git_tree_rows` 拥有：依次执行首 TAB、
+metadata、路径、OID、重复检查；返回全部且仅有的有效条目及完整字段，或首个失败。
+前缀规格保留原顺序和两两不同的完整路径，map 规格双向对应所有前缀行并核实际数量。
+标准 map 的完整严格有序迭代合同连接实际键与全文身份，不假定新分配 String 的实体相等。
+动态路径错误保留原借用路径，证明后的分支只向明确外部标准 Debug 格式化接口转交全文；
+固定错误原样返回。原字节终止检查、标准 UTF-8 解码与 NUL 拆分仍在外围按原顺序调用。
+独立 Verus 预期同时在普通 Rust 核完整 map、字段、数量、首错、重复及原路径。
+index 重复 stage、文件系统状态及全仓覆盖门仍待证明，不据此扩大完整覆盖结论。
 
 候选 profile／facts-config 字节须匹配固定 blob；构建后绑定失败和后续失败都在 `evidence.git_facts` 保留结构化进程原观察。可选 `registration_config` 独立采用原有登记／canonical 调用语义，单独 Git 绑定不要求完整登记。v1 拒绝新字段（含 null）。选测、initial 规则、操作环境、协议及唯一 check argv 保留 scoped 合同，base enforcement 写明真实端点 schema。
 
