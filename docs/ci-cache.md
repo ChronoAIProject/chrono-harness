@@ -121,6 +121,8 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
 
+四项 `detect.*` 缓存的生产者使用 `bootstrap-core.json` 登记的专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。兼容输入用仓库相对路径声明其中 `config` 和 `config.toml` 缺失，存在任一配置时规划失败，避免恢复与实际构建配置不符的产物。默认 runner home 的配置声明仍供使用该环境的检查／发布生产者消费，其绝对路径迁移尚未完成；这两组输入不互相替代，也不证明其余构建输入完整。
+
 专属 Rust 宿主采用回归覆盖这些区别，包括 detector 没有业务检查政策，以及 detector 构建参数变化。它们只验证这些声明依赖，不证明构建输入完整或所有登记都有必要。
 
 ### 恢复、保存与写入者
