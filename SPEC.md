@@ -178,7 +178,7 @@ projects schema v2 要求每个 project／script 显式登记非空 `language`�
 
 * **可移植合同**：产品源码、锁文件、`rust-toolchain` 或等价工具链选择、CI 配方、镜像／OS-架构的预期身份、命令、输入 schema 和确实被判官或构建消费者读取的最小政策。它描述意图和准入边界，不冒充某次运行的事实。
 * **确定性投影**：由已跟踪源通过登记生成器产生、能够在 CI 重新生成并由实际消费者校验的文件，例如工作流投影。投影必须有源、生成器、校验入口和有界大小；生成成功本身不证明投影被采用。
-* **运行时事实／证据**：CI run/job/attempt 标识、时间、runner 主机名、checkout 或工具的绝对路径、`PATH`／`HOME`／`CARGO_HOME` 内容、已安装包或 SDK 清单、`cargo metadata`／输入 observe 输出、原始日志、报告、二进制、缓存和临时文件。它们必须写入被忽略的 `state` 或 CI artifact，并由生产者按 §10.1 清理，禁止提交 Git。
+* **运行时事实／证据**：CI run/job/attempt 标识、时间、runner 主机名、checkout 或工具的绝对路径、`PATH`／`HOME`／`CARGO_HOME` 内容、已安装包或 SDK 清单、`cargo metadata` 输出、原始日志、报告、二进制、缓存和临时文件。它们必须写入被忽略的 `state` 或 CI artifact，并由生产者按 §10.1 清理，禁止提交 Git。
 
 运行时事实无论文件大小、是否失败、是否“历史”或是否被另一个报告引用，都不能变成 Git policy source。CI 在线观察是本次运行事实的权威；仓库只能记录供 CI 复现的可移植预期，不能把一次在线结果手工复制成永久主机快照。报告需要跨 job 运输时保留为有界 artifact，并记录 owner、消费者、保留期限／容量和释放条件；期限届满后只留仍有消费者需要的摘要或处置回执。
 

@@ -4,13 +4,13 @@
   "rust_toolchain": "1.95.0",
   "tools": {
     "python3": "/usr/bin/python3",
-    "bash": "/bin/bash"
+    "tar": "/usr/bin/tar"
   },
   "prerequisites": [
     "host.bootstrap-shared-verify-core"
   ],
   "operations": [
-    "host.bootstrap-verus"
+    "host.verus-extract-shared"
   ],
   "install": [],
   "participation": {
