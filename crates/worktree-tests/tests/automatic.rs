@@ -1220,7 +1220,9 @@ fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_r
     assert!(active.join("payload").is_file());
     assert!(!target.exists());
     assert!(
-        !h.root.join(disposed["ownership"]["path"].as_str().unwrap()).exists(),
+        !h.root
+            .join(disposed["ownership"]["path"].as_str().unwrap())
+            .exists(),
         "retired attachment capabilities must not outlive their final responsibility"
     );
     assert!(
@@ -1251,7 +1253,9 @@ fn retired_address_preserves_directory_consumers_and_unknown_members() {
     assert_eq!(code, 0, "{finished} {error}");
     let directory = h.record_directory(&target);
     let before = fs::read(directory.join("ledger.json")).unwrap();
-    let reader = DirectoryLease::acquire(&directory, false, None).unwrap().unwrap();
+    let reader = DirectoryLease::acquire(&directory, false, None)
+        .unwrap()
+        .unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
     assert_eq!(fs::read(directory.join("ledger.json")).unwrap(), before);
