@@ -51,6 +51,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-distribution"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "chrono-harness"
 version = "0.1.0"
 dependencies = [
@@ -86,6 +96,7 @@ dependencies = [
 name = "chrono-host-release-tests"
 version = "0.1.0"
 dependencies = [
+ "chrono-distribution",
  "chrono-harness",
  "chrono-host-release",
  "serde",
