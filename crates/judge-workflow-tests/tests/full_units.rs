@@ -2044,10 +2044,6 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
                     CONFIG,
                     "--commit",
                     commit,
-                    "--base",
-                    &h.base,
-                    "--candidate",
-                    &h.candidate,
                     "--unit",
                     unit,
                     "--output",
@@ -2062,10 +2058,11 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
         chrono_harness::json(&p.stdout).unwrap()
     };
     git(&root, &["checkout", "--detach", &h.base]);
-    for unit in ["renamed", "two"] {
+    // Capture each endpoint using the unit name declared at that endpoint.
+    for (unit, historical) in [("renamed", "one"), ("two", "two")] {
         capture(
             &h.base,
-            unit,
+            historical,
             &format!(".chrono-harness/state/base-{unit}.json"),
         );
     }
