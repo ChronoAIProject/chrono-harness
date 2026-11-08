@@ -3524,7 +3524,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             // This main checkout has no cache enrollment, but
                             // its caller still consumes the agent's pending work.
                             let observer = Manager::open(
-                                r, &invoking, config_path, &bytes, token, target, false, true,
+                                r,
+                                &invoking,
+                                config_path,
+                                &bytes,
+                                token,
+                                target,
+                                false,
+                                true,
                             )?
                             .ok_or("cleanup policy disappeared during main check")?;
                             observer.observe_attention(r, report, false)?;
