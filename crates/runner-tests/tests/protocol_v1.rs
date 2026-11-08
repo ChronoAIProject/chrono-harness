@@ -1938,7 +1938,9 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
 
 #[test]
 fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
-    let root = tempfile::tempdir().unwrap();
+    let mut root = tempfile::tempdir().unwrap();
+    root.disable_cleanup(true);
+    eprintln!("launch tamper originals: {}", root.path().display());
     fs::create_dir_all(root.path().join(".chrono-harness/state")).unwrap();
     let spec = chrono_harness::CommandSpec {
         program: PROCESS_FIXTURE.into(),
@@ -1970,8 +1972,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
             .failure
             .as_deref()
             .is_some_and(|error| error.contains("launch evidence")),
-        "{:?}",
-        result.failure
+        "{result:?}"
     );
     let error = chrono_harness::scoped_report::retain_process_evidence(
         root.path(),
@@ -1982,12 +1983,18 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
     )
     .unwrap_err();
     assert!(error.contains("launch evidence"), "{error}");
+    root.disable_cleanup(false);
 }
 
 #[test]
 fn retained_originals_survive_enclosing_timeout_even_without_terminal_publication() {
     for case in ["stall", "pause-launcher"] {
         let mut root = tempfile::tempdir().unwrap();
+        root.disable_cleanup(true);
+        eprintln!(
+            "retained timeout originals ({case}): {}",
+            root.path().display()
+        );
         let exe = std::env::current_exe().unwrap();
         let spec = chrono_harness::CommandSpec {
             program: exe.to_string_lossy().into(),
@@ -2014,6 +2021,7 @@ fn retained_originals_survive_enclosing_timeout_even_without_terminal_publicatio
             &sha256(&fs::read(&exe).unwrap()),
         )
         .unwrap();
+        eprintln!("retained timeout process ({case}): {result:?}");
         assert!(
             result
                 .failure
@@ -2095,6 +2103,7 @@ fn retained_originals_survive_enclosing_timeout_even_without_terminal_publicatio
             "owned child survived enclosing completion ({case})"
         );
         assert_eq!(presence_error.raw_os_error(), Some(libc::ESRCH));
+        root.disable_cleanup(false);
     }
 }
 
@@ -2579,8 +2588,8 @@ fn delayed_monitor_helper() {
         timeout_seconds: 1,
         output_limit_bytes: 4096,
     };
-    // Complete this launcher's first owned process handoff before recording the
-    // short experiment's conservative start. The probe uses the same executable,
+    // Complete this launcher's first owned process handoff before the short
+    // experiment. The probe uses the same executable,
     // ownership engine and bounds, and leaves no child or readiness marker.
     let mut readiness = spec.clone();
     readiness.args = vec!["exit".into(), "0".into()];
@@ -2589,32 +2598,36 @@ fn delayed_monitor_helper() {
     assert!(ready.failure.is_none(), "{ready:?}");
     assert!(ready.stdout_bytes.is_empty(), "{ready:?}");
     assert!(ready.stderr_bytes.is_empty(), "{ready:?}");
-    let mut now: libc::timespec = unsafe { std::mem::zeroed() };
-    #[cfg(target_vendor = "apple")]
-    let clock = libc::CLOCK_UPTIME_RAW;
-    #[cfg(not(target_vendor = "apple"))]
-    let clock = libc::CLOCK_MONOTONIC;
-    assert_eq!(unsafe { libc::clock_gettime(clock, &mut now) }, 0);
-    fs::write(
-        root.join("launcher"),
-        serde_json::to_vec(&value!({
-            "pid": std::process::id(),
-            "started": now.tv_sec as f64 + now.tv_nsec as f64 / 1e9,
-        }))
-        .unwrap(),
-    )
-    .unwrap();
-    let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
-    fs::write(
-        root.join("result.json"),
-        serde_json::to_vec(&result).unwrap(),
-    )
-    .unwrap();
+    // The launcher already runs in root. Its retained absolute path can exceed
+    // sockaddr_un's limit, so use the same relative address as the controller.
+    let stream = std::os::unix::net::UnixStream::connect("monitor.sock").unwrap();
+    let logger = chrono_diagnostics::logging::Logger::new(
+        "delayed-monitor",
+        chrono_diagnostics::logging::Level::DEBUG,
+        stream,
+    );
+    logger.run(|| {
+        let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
+        fs::write(
+            root.join("result.json"),
+            serde_json::to_vec(&result).unwrap(),
+        )
+        .unwrap();
+    });
+    logger.finish().unwrap();
 }
 
 #[cfg(unix)]
 fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
-    let root = tempfile::tempdir().unwrap();
+    // CI's retained fixture roots can exceed sockaddr_un's path limit. The
+    // protocol must keep working from such a directory using relative sockets.
+    let prefix = "delayed-monitor-".repeat(8);
+    let mut root = tempfile::Builder::new().prefix(&prefix).tempdir().unwrap();
+    root.disable_cleanup(true);
+    eprintln!(
+        "delayed monitor originals ({case}): {}",
+        root.path().display()
+    );
     let exe = std::env::current_exe().unwrap();
     let digest = sha256(&fs::read(&exe).unwrap());
     // Only the nested launcher is suspended. The child and independent kernel
@@ -2627,19 +2640,26 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
-    // The independent observer publishes readiness before the timed launch.
-    // The launcher timestamp conservatively precedes the actual timer start.
-    let preparing = std::time::Instant::now();
-    while !root.path().join("controller-ready").exists() {
-        if preparing.elapsed() >= std::time::Duration::from_secs(5)
-            || controller.try_wait().unwrap().is_some()
-        {
-            let _ = controller.kill();
-            let original = controller.wait_with_output().unwrap();
-            panic!("controller did not become ready: {original:?}");
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
+    // The independent observer publishes readiness before the timed launch and
+    // reads that launch's actual monitor deadline from the existing logger.
+    use std::{
+        io::{BufRead, BufReader},
+        os::fd::AsRawFd,
+    };
+    let ready = controller.stdout.take().unwrap();
+    let mut event = libc::pollfd {
+        fd: ready.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    if unsafe { libc::poll(&mut event, 1, 5000) } != 1 {
+        let _ = controller.kill();
+        let original = controller.wait_with_output().unwrap();
+        panic!("controller did not become ready: {original:?}");
     }
+    let mut line = String::new();
+    BufReader::new(ready).read_line(&mut line).unwrap();
+    assert_eq!(line, "ready\n");
     let spec = chrono_harness::CommandSpec {
         program: exe.to_string_lossy().into(),
         args: vec![
@@ -2659,11 +2679,17 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         output_limit_bytes: 16384,
     };
     let result = chrono_harness::run_process_observed(root.path(), &spec, &[], &digest);
+    fs::write(
+        root.path().join("launcher.original.json"),
+        serde_json::to_vec(&result).unwrap(),
+    )
+    .unwrap();
     let observed = controller.wait_with_output().unwrap();
     assert!(
         observed.status.success(),
-        "{}",
-        String::from_utf8_lossy(&observed.stderr)
+        "controller: {}; launcher original: {}",
+        String::from_utf8_lossy(&observed.stderr),
+        root.path().join("launcher.original.json").display()
     );
     let result = result.unwrap();
     assert_eq!(result.exit_code, 0, "{result:?}");
@@ -2682,6 +2708,7 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         assert!(result.stdout_bytes.is_empty());
     }
     assert!(result.stderr_bytes.is_empty());
+    root.disable_cleanup(false);
     result
 }
 

@@ -3,8 +3,9 @@ mod process_child;
 
 use std::{
     fs::{self, File},
-    io::Write,
+    io::{BufRead, BufReader, Read, Write},
     os::fd::{AsRawFd, FromRawFd},
+    os::unix::net::{UnixListener, UnixStream},
     path::Path,
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -38,10 +39,17 @@ fn await_file(path: &str, seconds: f64, interval_ms: u64) {
 }
 
 fn child() {
-    publish("ready", &std::process::id().to_string());
-    await_file("release", 5.0, 5);
-    let release = fs::read_to_string("release").unwrap();
-    let (delay, overflow) = release.split_once(',').unwrap();
+    let mut stream = UnixStream::connect("child.sock").unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    writeln!(stream, "{},{}", std::process::id(), unsafe {
+        libc::getppid()
+    })
+    .unwrap();
+    let mut release = String::new();
+    BufReader::new(stream).read_line(&mut release).unwrap();
+    let (delay, overflow) = release.trim().split_once(',').unwrap();
     thread::sleep(Duration::from_secs_f64(delay.parse().unwrap()));
     if overflow == "yes" {
         std::io::stdout().write_all(&[b'x'; 8192]).unwrap();
@@ -148,15 +156,53 @@ impl Exit {
 
 fn controller(case: &str) {
     assert!(matches!(case, "on-time" | "late" | "overflow"));
-    File::create_new("controller-ready").unwrap();
-    await_file("ready", 5.0, 5);
-    let launcher: serde_json::Value =
-        serde_json::from_slice(&fs::read("launcher").unwrap()).unwrap();
-    let started = launcher["started"].as_f64().unwrap();
-    let launcher_pid: libc::pid_t = launcher["pid"].as_i64().unwrap().try_into().unwrap();
-    let pid = fs::read_to_string("ready").unwrap().parse().unwrap();
+    let children = UnixListener::bind("child.sock").unwrap();
+    let monitors = UnixListener::bind("monitor.sock").unwrap();
+    println!("ready");
+    std::io::stdout().flush().unwrap();
+    let accept = |listener: &UnixListener| {
+        let mut event = libc::pollfd {
+            fd: listener.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        assert_eq!(unsafe { libc::poll(&mut event, 1, 5000) }, 1);
+        let (stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        stream
+    };
+    let mut child = accept(&children);
+    let mut ready = String::new();
+    BufReader::new(&child).read_line(&mut ready).unwrap();
+    let (pid, launcher_pid) = ready.trim().split_once(',').unwrap();
+    let pid: libc::pid_t = pid.parse().unwrap();
+    let launcher_pid: libc::pid_t = launcher_pid.parse().unwrap();
     let exit = Exit::register(pid);
-    thread::sleep(Duration::from_millis(150));
+    // Observe the real monitor after its deadline is established. Startup and
+    // executable hashing cannot be charged to this one-second experiment.
+    let mut trace = BufReader::new(accept(&monitors).take(65537));
+    let mut original = File::create_new("monitor.original").unwrap();
+    let monitor = loop {
+        let mut line = Vec::new();
+        assert!(
+            trace.read_until(b'\n', &mut line).unwrap() > 0,
+            "missing monitor event"
+        );
+        original.write_all(&line).unwrap();
+        assert!(
+            original.metadata().unwrap().len() <= 65536,
+            "monitor log exceeded bound"
+        );
+        let observed: serde_json::Value = serde_json::from_slice(&line).unwrap();
+        if observed["event"] == "process.monitor_wait" && observed["context"]["child_pid"] == pid {
+            break observed;
+        }
+    };
+    assert_eq!(monitor["fields"]["monitor_timeout_millis"], 1000);
+    let deadline = monitor["fields"]["terminal_deadline_ns"].as_u64().unwrap();
+    let started = deadline.checked_sub(1_000_000_000).unwrap() as f64 / 1e9;
     let stopped = now();
     // Setup uses the original one-second deadline. Each case separately checks
     // the child's terminal timing after the launcher is suspended.
@@ -165,15 +211,14 @@ fn controller(case: &str) {
         "fixture missed the original deadline: started={started}, stopped={stopped}"
     );
     assert_eq!(unsafe { libc::kill(launcher_pid, libc::SIGSTOP) }, 0);
-    let _resume = Resume(launcher_pid);
-    publish(
-        "release",
-        &format!(
-            "{},{}",
-            if case == "late" { "1.3" } else { ".05" },
-            if case == "overflow" { "yes" } else { "no" }
-        ),
-    );
+    let resume = Resume(launcher_pid);
+    writeln!(
+        child,
+        "{},{}",
+        if case == "late" { "1.3" } else { ".05" },
+        if case == "overflow" { "yes" } else { "no" }
+    )
+    .unwrap();
     exit.wait(pid, 3);
     let terminal = now();
     if case == "late" {
@@ -197,6 +242,12 @@ fn controller(case: &str) {
         .unwrap(),
     )
     .unwrap();
+    drop(resume);
+    std::io::copy(&mut trace, &mut original).unwrap();
+    assert!(
+        original.metadata().unwrap().len() <= 65536,
+        "monitor log exceeded bound"
+    );
 }
 
 fn marker(path: &str) {
