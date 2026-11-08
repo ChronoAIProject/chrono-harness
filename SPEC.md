@@ -497,7 +497,11 @@ DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID �
 kind 单独变化也产生 M；产生记录时精确保留原路径和旧新 blob／mode，缺失端为 None，存在但为空的字段仍为 Some("")。
 实际 `facts::Tree` 的路径键为同根 `TreePath`，内容身份与 UTF-8 字节顺序由其 Verus
 `same`／`order_spec` 定义；真实比较、构造、克隆和文本借用完成证明，保留原文且不归一化。
-外层路径并集、排序、Git／JSON 获取及完整 DELTA 组合仍有各自未完成的证明义务。
+`facts::delta` 直接调用同根 `delta_for_trees`：借用两棵实际树的全部原键值，按已证明的路径顺序
+线性合并。输出按完整 UTF-8 字节严格排序；对任意完整路径，输出投影恰为实际两端条目的零或一条
+A／D／M 记录，六字段完整保留，无遗漏、额外路径或重复。枚举到实际 map 的绑定、合并及终止均有证明；
+固定 vstd 的 BTreeMap `iter`／`next` 是明确采用的外部容器合同，返回完整键值及其严格顺序。
+Git 命令、原始输出解析、JSON 适配及整个 Git 事实获取仍有各自未完成的证明义务。
 
 第 1 步：读取 B/C 两份登记，解析变更文件及变更的记录 ID、字段和边。第 2 步：建立 `G = G_base ∪ G_candidate`，保留每条边来源 base/candidate/both。第 3 步：变更文件、已登记有效输入的两端变化为种子；登记变化另把变更记录目标加入种子；有类型边的增加、删除或改接必须把两端节点加入种子。例如只删除 `runner → runner-tests` 测试边，也把 runner 与旧测试作为影响种子。
 
