@@ -149,7 +149,7 @@
     },
     {
       "id": "bootstrap-native",
-      "program": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap",
+      "program": ".chrono-harness/bin/chrono-host-bootstrap",
       "resolution": "PATH-once",
       "version_argv": [
         "--version"

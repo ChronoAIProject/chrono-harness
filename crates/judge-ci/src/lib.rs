@@ -118,11 +118,7 @@ fn strings(v: &Value) -> Result<Vec<String>, String> {
         .collect()
 }
 fn id(s: &str) -> Result<(), String> {
-    if s.is_empty()
-        || !s
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
-    {
+    if !chrono_harness::verified_identifiers::valid_id(s.as_bytes()) {
         return Err(format!("invalid ID {s:?}"));
     }
     Ok(())
