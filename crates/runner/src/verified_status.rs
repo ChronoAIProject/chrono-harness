@@ -642,8 +642,8 @@ pub open spec fn git_tree_row_spec(raw: Seq<u8>) -> Result<GitTreeRowBytes, GitT
 
 pub fn parse_git_tree_row(raw: &str) -> (out: Result<GitTreeRow<'_>, GitTreeError<'_>>)
     ensures match out {
-        Ok(row) => git_tree_row_spec(raw.spec_bytes()) == Ok(row.bytes()),
-        Err(error) => git_tree_row_spec(raw.spec_bytes()) == Err(error.view()),
+        Ok(row) => git_tree_row_spec(raw.spec_bytes()) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row.bytes()),
+        Err(error) => git_tree_row_spec(raw.spec_bytes()) == Err::<GitTreeRowBytes, GitTreeErrorView>(error.view()),
     },
 {
     let (meta, path) = match identifiers::git_inventory_row(raw, "invalid Git tree row") {
@@ -671,8 +671,8 @@ pub open spec fn git_tree_prefix_valid(rows: Seq<&str>, count: int) -> bool {
     0 <= count <= rows.len()
         && (forall|i: int| 0 <= i < count ==> (#[trigger] git_tree_row_at(rows, i)).is_ok())
         && (forall|i: int, j: int| 0 <= i < j < count ==>
-            (#[trigger] git_tree_row_at(rows, i)).get_Ok_0().0
-                != (#[trigger] git_tree_row_at(rows, j)).get_Ok_0().0)
+            ((#[trigger] git_tree_row_at(rows, i))->Ok_0).0
+                != ((#[trigger] git_tree_row_at(rows, j))->Ok_0).0)
 }
 
 pub open spec fn git_tree_entry_matches(key: TreePath, entry: TreeEntry, row: GitTreeRowBytes) -> bool {
@@ -685,16 +685,16 @@ pub open spec fn git_tree_entry_matches(key: TreePath, entry: TreeEntry, row: Gi
 pub open spec fn git_tree_prefix_map(tree: Map<TreePath, TreeEntry>, rows: Seq<&str>, count: int) -> bool {
     tree.len() == count
         && (forall|key: TreePath| tree.contains_key(key) ==> exists|i: int| 0 <= i < count
-            && git_tree_entry_matches(key, tree[key], git_tree_row_at(rows, i).get_Ok_0()))
+            && git_tree_entry_matches(key, tree[key], (git_tree_row_at(rows, i)->Ok_0)))
         && (forall|i: int| 0 <= i < count ==> exists|key: TreePath| tree.contains_key(key)
-            && git_tree_entry_matches(key, tree[key], git_tree_row_at(rows, i).get_Ok_0()))
+            && git_tree_entry_matches(key, tree[key], (git_tree_row_at(rows, i)->Ok_0)))
 }
 
 pub open spec fn git_tree_error_at(rows: Seq<&str>, i: int, error: GitTreeErrorView) -> bool {
     match git_tree_row_at(rows, i) {
         Err(expected) => error == expected,
         Ok(row) => error == GitTreeErrorView::Message("duplicate Git tree path"@)
-            && exists|j: int| 0 <= j < i && git_tree_row_at(rows, j).get_Ok_0().0 == row.0,
+            && exists|j: int| 0 <= j < i && (git_tree_row_at(rows, j)->Ok_0).0 == row.0,
     }
 }
 
@@ -707,8 +707,8 @@ pub proof fn git_tree_error_blocks_prefix(rows: Seq<&str>, i: int,
         match git_tree_row_at(rows, i) {
             Err(_) => {},
             Ok(row) => {
-                let j = choose|j: int| 0 <= j < i && git_tree_row_at(rows, j).get_Ok_0().0 == row.0;
-                assert(git_tree_row_at(rows, j).get_Ok_0().0 != git_tree_row_at(rows, i).get_Ok_0().0);
+                let j = choose|j: int| 0 <= j < i && (git_tree_row_at(rows, j)->Ok_0).0 == row.0;
+                assert((git_tree_row_at(rows, j)->Ok_0).0 != (git_tree_row_at(rows, i)->Ok_0).0);
             },
         }
     }
@@ -727,8 +727,8 @@ pub proof fn git_tree_first_error_unique(rows: Seq<&str>, i: int, error: GitTree
 /// 完整逐行解析：返回全部原字段，或首个失败；失败后的局部树不发布。
 pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitTreeError<'a>>)
     ensures match out {
-        Ok(tree) => git_tree_prefix_valid(rows@, rows.len())
-            && git_tree_prefix_map(tree@, rows@, rows.len()),
+        Ok(tree) => git_tree_prefix_valid(rows@, rows.len() as int)
+            && git_tree_prefix_map(tree@, rows@, rows.len() as int),
         Err(error) => exists|i: int| 0 <= i < rows.len() && git_tree_prefix_valid(rows@, i)
             && git_tree_error_at(rows@, i, error.view()),
     },
@@ -758,8 +758,8 @@ pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitTreeEr
                 proof {
                     let key = choose|key: TreePath| before.contains_key(key) && key@ == inserted@;
                     let j = choose|j: int| 0 <= j < i && git_tree_entry_matches(
-                        key, before[key], git_tree_row_at(rows@, j).get_Ok_0());
-                    assert(git_tree_row_at(rows@, j).get_Ok_0().0 == row.path.spec_bytes());
+                        key, before[key], (git_tree_row_at(rows@, j)->Ok_0));
+                    assert((git_tree_row_at(rows@, j)->Ok_0).0 == row.path.spec_bytes());
                     assert(git_tree_error_at(rows@, i as int, GitTreeErrorView::Message(message@)));
                 }
                 return Err(GitTreeError::Message(message));
@@ -768,30 +768,30 @@ pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitTreeEr
         }
         proof {
             assert forall|j: int| 0 <= j < i implies
-                git_tree_row_at(rows@, j).get_Ok_0().0 != row.path.spec_bytes() by {
+                (git_tree_row_at(rows@, j)->Ok_0).0 != row.path.spec_bytes() by {
                 let key = choose|key: TreePath| before.contains_key(key) && git_tree_entry_matches(
-                    key, before[key], git_tree_row_at(rows@, j).get_Ok_0());
+                    key, before[key], (git_tree_row_at(rows@, j)->Ok_0));
                 if key.bytes() == inserted.bytes() { tree_path_same_text(&key, &inserted); }
             }
             assert(git_tree_prefix_valid(rows@, i + 1));
             assert forall|key: TreePath| tree@.contains_key(key) implies exists|j: int|
                 0 <= j < i + 1 && git_tree_entry_matches(
-                    key, tree@[key], git_tree_row_at(rows@, j).get_Ok_0()) by {
+                    key, tree@[key], (git_tree_row_at(rows@, j)->Ok_0)) by {
                 if key == inserted {
-                    assert(git_tree_entry_matches(key, tree@[key], git_tree_row_at(rows@, i as int).get_Ok_0()));
+                    assert(git_tree_entry_matches(key, tree@[key], (git_tree_row_at(rows@, i as int)->Ok_0)));
                 } else {
                     let j = choose|j: int| 0 <= j < i && git_tree_entry_matches(
-                        key, before[key], git_tree_row_at(rows@, j).get_Ok_0());
+                        key, before[key], (git_tree_row_at(rows@, j)->Ok_0));
                 }
             }
             assert forall|j: int| 0 <= j < i + 1 implies exists|key: TreePath|
                 tree@.contains_key(key) && git_tree_entry_matches(
-                    key, tree@[key], git_tree_row_at(rows@, j).get_Ok_0()) by {
+                    key, tree@[key], (git_tree_row_at(rows@, j)->Ok_0)) by {
                 if j == i {
                     assert(tree@.contains_key(inserted));
                 } else {
                     let key = choose|key: TreePath| before.contains_key(key) && git_tree_entry_matches(
-                        key, before[key], git_tree_row_at(rows@, j).get_Ok_0());
+                        key, before[key], (git_tree_row_at(rows@, j)->Ok_0));
                     assert(key != inserted);
                     assert(tree@.contains_key(key));
                 }

@@ -1020,8 +1020,8 @@ fn git_tree_insert_preserves_other_paths_and_rejects_every_duplicate(a: &str, b:
     expect_tree_slot(&tree, &first, "100644", "first\0", "blob");
     expect_tree_slot(&tree, &second, "", "", "tree");
 
-    // clone 有独立文本存储；重复按完整内容判断，不按地址或条目字段判断。
-    let same_path = first.clone();
+    // 重新构造及 clone 都有独立存储；重复按全文判断，不按地址或条目字段判断。
+    let same_path = policy::TreePath::from_text(a);
     let out = policy::insert_git_tree_entry(&mut tree, same_path, "100755", "第二\0", "commit");
     expect_tree_duplicate(out);
     expect_status_true(tree.len() == 2);
@@ -1106,13 +1106,20 @@ fn expect_tree_parse_error(rows: &[&str], expected: &str)
                     policy::GitTreeErrorView::Message(expected@), j, error.view());
             }
             match error {
-                policy::GitTreeError::Message(message) => expect_status_text(message.as_str(), expected),
+                policy::GitTreeError::Message(message) => {
+                    let rendered = policy::GitTreeError::Message(message).render(copy_tree_fixture_path);
+                    expect_status_text(rendered.as_str(), expected);
+                },
                 _ => { panic!(); },
             }
         },
         Ok(_) => { panic!(); },
     }
 }
+
+fn copy_tree_fixture_path(path: &str) -> (out: String)
+    ensures out@ == path@,
+{ path.to_owned() }
 
 fn expect_tree_path_error(rows: &[&str], expected: &str)
     requires exists|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
@@ -1137,12 +1144,41 @@ fn expect_tree_path_error(rows: &[&str], expected: &str)
                         vstd::utf8::encode_utf8_decode_utf8(expected@);
                     }
                     expect_status_text(path, expected);
+                    let rendered = policy::GitTreeError::InvalidPath(path).render(copy_tree_fixture_path);
+                    expect_status_text(rendered.as_str(), expected);
                 },
                 _ => { panic!(); },
             }
         },
         Ok(_) => { panic!(); },
     }
+}
+
+proof fn empty_metadata_tree_fixture(raw: &str, path: &str)
+    requires vstd::string::is_ascii(raw), vstd::string::is_ascii(path), raw@ == "  \t"@ + path@,
+    ensures policy::git_tree_row_spec(raw.spec_bytes()) ==
+        if policy::paths::relative_path(path.spec_bytes()) {
+            Err::<policy::GitTreeRowBytes, policy::GitTreeErrorView>(
+                policy::GitTreeErrorView::Message("expected full nonzero lowercase commit OID"@))
+        } else { Err(policy::GitTreeErrorView::InvalidPath(path.spec_bytes())) },
+{
+    reveal_strlit("  \t"); reveal_strlit("  "); reveal_strlit(" "); reveal_strlit("");
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    assert(vstd::string::is_ascii("  ") && vstd::string::is_ascii(" ") && vstd::string::is_ascii(""));
+    scope_text::ascii_separator_end_is(raw.spec_bytes(), 9, 2);
+    assert(raw.spec_bytes().take(2) =~= "  ".spec_bytes());
+    assert(raw.spec_bytes().skip(3) =~= path.spec_bytes());
+    scope_text::ascii_separator_end_is("  ".spec_bytes(), 32, 0);
+    scope_text::ascii_separator_end_is(" ".spec_bytes(), 32, 0);
+    scope_text::ascii_separator_end_is("".spec_bytes(), 32, 0);
+    assert("  ".spec_bytes().take(0) =~= "".spec_bytes());
+    assert("  ".spec_bytes().skip(1) =~= " ".spec_bytes());
+    assert(" ".spec_bytes().take(0) =~= "".spec_bytes());
+    assert(" ".spec_bytes().skip(1) =~= "".spec_bytes());
+    assert("".spec_bytes().take(0) =~= "".spec_bytes());
+    reveal_with_fuel(scope_text::ascii_split_records, 4);
+    assert(scope_text::ascii_split_records("  ".spec_bytes(), 32, true)
+        =~= seq!["".spec_bytes(), "".spec_bytes(), "".spec_bytes()]);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -1154,12 +1190,18 @@ fn tree_parser_keeps_first_error_and_exact_path() {
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail");
         reveal_strlit("a"); reveal_strlit("a/../b\0tail"); reveal_strlit("missing");
         reveal_strlit("bad\t"); reveal_strlit("bad"); reveal_strlit("");
+        reveal_strlit("  \t"); reveal_strlit("  \ta"); reveal_strlit("  \t/"); reveal_strlit("/");
         broadcast use vstd::string::is_ascii_spec_bytes;
         assert(vstd::string::is_ascii(good) && vstd::string::is_ascii(bad_path)
             && vstd::string::is_ascii("a") && vstd::string::is_ascii("a/../b\0tail")
             && vstd::string::is_ascii("missing") && vstd::string::is_ascii("bad\t")
             && vstd::string::is_ascii("bad") && vstd::string::is_ascii(""));
+        assert(vstd::string::is_ascii("  \t") && vstd::string::is_ascii("  \ta")
+            && vstd::string::is_ascii("  \t/") && vstd::string::is_ascii("/"));
         tree_fixture_row(good, "a"); tree_fixture_row(bad_path, "a/../b\0tail");
+        empty_metadata_tree_fixture("  \t", "");
+        empty_metadata_tree_fixture("  \ta", "a");
+        empty_metadata_tree_fixture("  \t/", "/");
         scope_text::ascii_separator_end_is("missing".spec_bytes(), 9, 7);
         scope_text::ascii_separator_end_is("bad\t".spec_bytes(), 9, 3);
         scope_text::ascii_separator_end_is("bad".spec_bytes(), 32, 3);
@@ -1175,6 +1217,9 @@ fn tree_parser_keeps_first_error_and_exact_path() {
     expect_tree_path_error(&[good, bad_path, "missing"], "a/../b\0tail");
     expect_tree_parse_error(&[good, good, "missing"], "duplicate Git tree path");
     expect_tree_parse_error(&[good, "missing", good], "invalid Git tree row");
+    expect_tree_path_error(&["  \t", good], "");
+    expect_tree_path_error(&["  \t/", "missing"], "/");
+    expect_tree_parse_error(&["  \ta", "missing"], "expected full nonzero lowercase commit OID");
 }
 
 fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
@@ -1246,7 +1291,7 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
                             "0000000000000000000000000000000000000001"@, "blob"@) by {
                     let key = choose|key: policy::TreePath| tree@.contains_key(key)
                         && policy::git_tree_entry_matches(key, tree@[key],
-                            policy::git_tree_row_at(rows@, i).get_Ok_0());
+                            (policy::git_tree_row_at(rows@, i)->Ok_0));
                     vstd::utf8::encode_utf8_decode_utf8(key@);
                     vstd::utf8::encode_utf8_decode_utf8(tree@[key].mode@);
                     vstd::utf8::encode_utf8_decode_utf8(tree@[key].oid@);
