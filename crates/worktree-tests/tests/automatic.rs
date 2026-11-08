@@ -941,11 +941,13 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
     // Retention itself owns metadata under state/. The fixture consumer owns
     // this separate evidence path and can release all of it without deleting
     // another producer's metadata or weakening the original-receipt assertion.
+    // Target-local retention metadata has no retained caller after cleanup; the
+    // ordinary disposal owner must verify its release before removing the tree.
     let policy_path = h.root.join(AUTO_POLICY);
     let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
     for artifact in policy["artifacts"].as_array_mut().unwrap() {
         if artifact["path"] == ".chrono-harness/state/" {
-            artifact["disposition"] = value!("retain");
+            artifact["disposition"] = value!("dispose");
         }
     }
     policy["artifacts"].as_array_mut().unwrap().push(value!({
@@ -994,7 +996,7 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
     fs::remove_dir(&evidence).unwrap();
     let (code, resumed, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{resumed} {error}");
-    assert!(!target.exists());
+    assert!(!target.exists(), "{resumed} {error}");
     assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
     assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
 }
