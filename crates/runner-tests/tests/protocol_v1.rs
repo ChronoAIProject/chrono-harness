@@ -57,35 +57,66 @@ fn live_forwarding_error_keeps_both_original_streams_and_actual_child_status() {
     struct Closed;
     impl std::io::Write for Closed {
         fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
-            Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "closed live consumer"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "closed live consumer",
+            ))
         }
-        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
     }
     for exit in [0, 41] {
         let root = tempfile::tempdir().unwrap();
         let stdout = vec![7u8; 100000];
         let stderr = vec![254u8, 0, 10];
-        fs::write(root.path().join("judge-case.json"), serde_json::to_vec(&value!({
-            "kind":"raw", "stdout":stdout, "stderr":stderr, "exit":exit,
-        })).unwrap()).unwrap();
+        fs::write(
+            root.path().join("judge-case.json"),
+            serde_json::to_vec(&value!({
+                "kind":"raw", "stdout":stdout, "stderr":stderr, "exit":exit,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
         let spec = chrono_harness::CommandSpec {
-            program: PROTOCOL_FIXTURE.into(), args: vec![], env: Default::default(),
-            timeout_seconds: FIXTURE_TIMEOUT_SECONDS, output_limit_bytes: 131072,
+            program: PROTOCOL_FIXTURE.into(),
+            args: vec![],
+            env: Default::default(),
+            timeout_seconds: FIXTURE_TIMEOUT_SECONDS,
+            output_limit_bytes: 131072,
         };
         let mut live_stderr = Vec::new();
         let result = chrono_harness::run_process_observed_forwarded_for(
-            root.path(), &spec, b"", &sha256(&fs::read(PROTOCOL_FIXTURE).unwrap()),
+            root.path(),
+            &spec,
+            b"",
+            &sha256(&fs::read(PROTOCOL_FIXTURE).unwrap()),
             std::time::Duration::from_secs(FIXTURE_TIMEOUT_SECONDS),
-            chrono_harness::ProcessForward { stdout: &mut Closed, stderr: &mut live_stderr },
-        ).unwrap();
+            chrono_harness::ProcessForward {
+                stdout: &mut Closed,
+                stderr: &mut live_stderr,
+            },
+        )
+        .unwrap();
         assert_eq!(result.exit_code, exit);
         assert_eq!(result.exit_signal, None);
         assert_eq!(result.stdout_bytes, stdout);
         assert_eq!(result.stderr_bytes, stderr);
         assert_eq!(live_stderr, stderr);
         assert!(result.stdout_complete && result.stderr_complete);
-        assert!(result.failure.as_deref().unwrap().contains("closed live consumer"));
-        assert!(serde_json::to_value(result.failure_record.unwrap()).unwrap().to_string().contains("E_PROCESS_FORWARD"));
+        assert!(
+            result
+                .failure
+                .as_deref()
+                .unwrap()
+                .contains("closed live consumer")
+        );
+        assert!(
+            serde_json::to_value(result.failure_record.unwrap())
+                .unwrap()
+                .to_string()
+                .contains("E_PROCESS_FORWARD")
+        );
     }
 }
 
