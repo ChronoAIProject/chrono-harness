@@ -280,7 +280,7 @@ pub fn check(
             profile.stdout_limit_bytes,
         ) {
             Ok((response, process)) => {
-                status = status.max(response.status.clone());
+                status = status.maximum(response.status.clone());
                 records.push(value!({"id":binding.id,"binding":binding,"state":"executed","request_id":request.request_id,
                     "request_digest":wire::digest(&request)?,"exit_code":process.exit_code,"response":response,"process":process}));
                 responses.insert(binding.id, response);
