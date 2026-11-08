@@ -452,6 +452,12 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 实际与期望长度为 A、E，最长键为 L 字节时，最坏比较成本为 O(AEL)，
 借用向量占 O(A+E)；完整运行、构建、验证、CI 和存储成本未测，不宣称性能收益。
 
+## 工作树清理选择与结果阶段
+
+`crates/worktree/src/verified_lifecycle.rs` 直接供自动清理所有者调用：终态进入清理，活跃记录仅在有缓存责任时进入，等待整树回收的保留项仅由显式维护重试；指定 artifacts-only 的已完成处置不重试。证据阻挡要求实际存在且未经释放。清理原结果失败时记失败，缓存成功仅记缓存释放，整树成功还须有 `verified-absent` 或 `already-absent` 才记移除。
+
+`verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
+
 ## 所有者可执行文件发布
 
 `crates/worktree/src/verified_owner_publication.rs` 是实际发布身份比较、原件保全、意图读取／准备、
@@ -613,13 +619,13 @@ registration 专属计划的必需前置，独立预期和 Rust 测试编译同�
 
 ## 固定执行入口
 
-宿主 bootstrap 的 Rust 迁移正在实施。公开 core／shared 仍保留 Python 入口，
-所有者阶段 profile 已选择薄 shell 和 Rust 生产者。
+宿主 bootstrap 的 core、Verus 准备及所有者阶段已采用薄 shell 入口和 Rust 生产者；
+共享安装的编排仍使用 Python，迁移与实际使用验收分别完成。
 `.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
 字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
-以及环境名／值、宿主路径、私有 homes、default profile、SDK 探测分支和进程退出状态。
+以及环境名／值、宿主路径、共享目录排斥、工具探测分支和进程退出状态。
 版本前缀另要求完整空格分隔；Cargo 可接受精确版本字符串，rustc 必须保留版本后的空格。
-私有 SDK 探测失败必须拒绝，只有普通环境选择 minimal 安装或补充 rustfmt；
+Cargo 不可用时选择 minimal 安装，缺少 rustfmt 时只补该组件；
 退出状态保留原退出码，缺退出码时仅把正信号转换为负数，无有效终态时返回缺失。
 同一根还拥有实际源码观察的四种状态与报告投影。任一观察失败优先为 unavailable，
 字段改变为 changed，相同脏树为 dirty；只有相同 clean 观察向报告提供 commit／tree。
@@ -645,7 +651,7 @@ Rust 回归另核真实 Cargo／rustc 的身份、环境选择、安装器退出
 缺执行／安装不发布成功，以及报告 IO 失败时仍保留原安装器退出码。
 临时目录复用本仓已有版本的 tempfile，原目录回收仍归宿主生命周期所有者；
 没有增加独立清理账本或调度协议。JSON、文件与进程 IO、报告字段投影和完整外层组合仍未证明，
-这些模块已接通所有者阶段的登记入口；外层 core／shared 的迁移和实际消费者验收仍分别完成。
+这些模块已接通 core、Verus 准备及所有者阶段的登记入口；共享安装编排的迁移和实际使用验收仍分别完成。
 新增构建、验证、CI 和存储成本未测。
 
 原生 `original.rs` 校验固定 producer 的原始源码、登记、SDK 选择、操作和两条原字节流。
@@ -684,11 +690,17 @@ Rust 测试另外验证真实消费者，不替代证明。
 
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
-现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
-`host.verus-download` 通过 GitHub 固定发布资产 API 获取归档，唯一地址归 projects.json，
-请求采用 `Accept: application/octet-stream`。该外部接口只提供资产原字节；
-随后执行的 SHA-256 校验仍以 verus-macos-arm64.sha256 为准，校验通过后才解包。
+现有通用 bootstrap 消费明确登记的归档准备、SHA-256 校验和解包操作。
+`host.verus-download` 委托当前 Rust 启动程序，先按 `verus-macos-arm64.sha256`
+核对本地包；匹配时输出 `cache-hit`，不启动 curl。包缺失或内容不符时才通过 GitHub
+固定发布资产 API 下载，唯一地址归 projects.json，请求采用 `Accept: application/octet-stream`。
+下载写入同目录的私有临时文件，校验通过后原子替换归档并输出 `downloaded`；
+下载失败保留原退出和响应头，校验失败不覆盖原包。临时下载字节随本次操作回收。
+后续独立校验仍读取同一份 SHA-256 声明，校验通过后才解包。
+冷下载使用固定版本的官方 release 下载地址，避免依赖匿名 API 的请求额度。
 原响应头保留在 `.chrono-harness/state/verus-download.headers`，由现有失败工件上传供下载故障排查。
+CI 由 detector 恢复归档并在启动成功后保存，检查单元复用已有共享原包；
+包身份及成本边界见[缓存说明](ci-cache.md#verus-archive)。
 含证明操作的单元先核共享 core，再安装工具；无证明操作的消费单元只核共享 core。
 启动参数由 units.json 维护，工作流由登记的 ci.generate 产生。
 共享 core 的校验不代表 Verus 已安装。

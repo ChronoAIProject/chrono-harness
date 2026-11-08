@@ -99,6 +99,15 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
           fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
         shell: bash
@@ -133,7 +142,7 @@ jobs:
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.detect/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'detect' --bootstrap chrono_startup --save-after-bootstrap '["detect.ci","detect.judge-ci","detect.runner","detect.worktree"]' --save-caches '["detect.ci","detect.judge-ci","detect.runner","detect.worktree"]' --github-output "$GITHUB_OUTPUT"
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.detect/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'detect' --bootstrap chrono_startup --save-after-bootstrap '["detect.ci","detect.judge-ci","detect.runner","detect.worktree","verus.archive"]' --save-caches '["detect.ci","detect.judge-ci","detect.runner","detect.worktree","verus.archive"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache detect.ci
         id: cache_0_save
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
@@ -166,6 +175,14 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+      - name: Save registered cache verus.archive
+        id: cache_4_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key && (steps.chrono_cache_plan.outputs.cache_4_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_4_sealed == 'true') }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
       - name: Preserve detector evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

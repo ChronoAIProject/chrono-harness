@@ -1,7 +1,7 @@
 //! 当前宿主启动配置与构建操作的预检；只读取显式输入，不选择或启动进程。
 use crate::{
     bindings::{Declarations, Environment, NativePlatform},
-    environment::{Prepared, Provision},
+    environment::Prepared,
     execution::{Method, methods},
     verified_bindings as policy,
 };
@@ -60,7 +60,6 @@ pub struct Profile {
     pub tool_bindings_registry: String,
     pub report_path: Option<String>,
     pub rust_incremental: Option<bool>,
-    pub toolchain_provision: Option<Provision>,
     pub host_environment: Option<BTreeMap<String, String>>,
     #[serde(default)]
     pub environment: BTreeMap<String, String>,

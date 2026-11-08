@@ -1921,6 +1921,28 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "verify_lifecycle": {
+          "operation": "verify.worktree-lifecycle",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.worktree-lifecycle.rlib,dep-info=.chrono-harness/state/verify.worktree-lifecycle.rlib.d",
+            "crates/worktree/src/verified_lifecycle.rs",
+            "-o",
+            ".chrono-harness/state/verify.worktree-lifecycle.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "test_project": "worktree-tests",
@@ -2040,6 +2062,28 @@
             "crates/worktree-tests/tests/verified_owner_publication.rs",
             "-o",
             ".chrono-harness/state/verify.owner-publication-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_lifecycle": {
+          "operation": "verify.worktree-lifecycle-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.worktree-lifecycle-tests.rlib,dep-info=.chrono-harness/state/verify.worktree-lifecycle-tests.rlib.d",
+            "crates/worktree-tests/tests/verified_lifecycle.rs",
+            "-o",
+            ".chrono-harness/state/verify.worktree-lifecycle-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -2840,23 +2884,14 @@
         },
         "verus-download": {
           "operation": "host.verus-download",
-          "tool": "curl",
+          "tool": "bootstrap-native",
           "argv": [
-            "--fail",
-            "--location",
-            "--silent",
-            "--show-error",
-            "--proto",
-            "=https",
-            "--tlsv1.2",
-            "--header",
-            "Accept: application/octet-stream",
-            "--dump-header",
+            "download",
+            ".",
+            ".chrono-harness/ci/verus-macos-arm64.sha256",
+            "/usr/bin/curl",
             ".chrono-harness/state/verus-download.headers",
-            "--create-dirs",
-            "--output",
-            ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
-            "https://api.github.com/repos/verus-lang/verus/releases/assets/406260237"
+            "https://github.com/verus-lang/verus/releases/download/release/0.2026.04.24.f8e1704/verus-0.2026.04.24.f8e1704-arm64-macos.zip"
           ]
         },
         "verus-checksum": {

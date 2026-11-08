@@ -145,7 +145,7 @@ v2 位置拒绝符号链接路径段，包括悬空链接，以及 `..`。平台
 
 普通构建继续使用登记的锁定 Cargo 操作；core／所有者 bootstrap 仍实际调用的 fetch 保留。安装工具与原件由当前生产者按自己的实际使用方保管，不为历史盘点重建主机快照。普通输入快照与传输保持各自合同；其余采用仍须核对当前使用方，不能由测试或声明存在证明必要。
 
-根 `chrono-git-configs/v3` 及 worktree v3 的实际身份归各自登记，未知字节仍失败。格式与不可变数据范围见[Git 选择](git-facts.md#exact-host-executable-selection)。
+根 `chrono-git-configs/v3` 的实际身份仍归其登记，未知字节在该路径失败。工作树采用 v2 的运行内实际字节绑定，不维护主机身份白名单；观察归 state 原件。格式与不可变数据范围见[Git 选择](git-facts.md#exact-host-executable-selection)和[工作树政策](worktree.md#git-身份与固定输入)。
 
 旧样本、声明和比较归 Git 历史；仍有用途的缺失原件与独有工作由[输入保管者](input-source-custody.md)负责。退役不补齐历史观察，也不证明完整输入、固定两端原件、full CI 验收或同判。
 

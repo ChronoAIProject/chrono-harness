@@ -11,6 +11,9 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/ci/native/src/download.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/download.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/native-tests/tests/support/download.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":"crates/diagnostics/src/rolling.rs","owner":"diagnostics","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/diagnostics/src/runtime.rs","owner":"diagnostics","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/diagnostics-tests/tests/rolling.rs","owner":"diagnostics-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -491,7 +494,7 @@
     {"path":"crates/ci/src/inventory.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":".chrono-harness/ci/bootstrap-unit.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/bootstrap-verus.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
-    {"path":".chrono-harness/ci/verus-macos-arm64.sha256","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
+    {"path":".chrono-harness/ci/verus-macos-arm64.sha256","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap"},{"kind":"runtime-input","to":"script:host-bootstrap-tests"},{"kind":"test-execution","to":"test:host-bootstrap-tests"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"}]},
     {"path":"docs/verus.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/judge-filemap/src/verified_graph.rs","owner":"judge-filemap","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-filemap"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"}]},
     {"path":"crates/judge-filemap-tests/tests/verified_graph.rs","owner":"judge-filemap-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-filemap-tests"}]},
@@ -520,7 +523,9 @@
     {"path":"crates/worktree/src/verified_owner_publication.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":"crates/worktree-tests/tests/verified_owner_publication.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
     {"path":"crates/cache/src/verified_planner.rs","owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache"},{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
-    {"path":"crates/cache-tests/tests/verified_planner.rs","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]}
+    {"path":"crates/cache-tests/tests/verified_planner.rs","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
+    {"path":"crates/worktree/src/verified_lifecycle.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
+    {"path":"crates/worktree-tests/tests/verified_lifecycle.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]}
   ],
   "project_edges": [
     {"from":"project:host-bootstrap-native","kind":"runtime-input","to":"script:host-bootstrap-launcher"},
@@ -1315,6 +1320,8 @@
     },
     "test:worktree-tests": {
       "operations": [
+        "verify.worktree-lifecycle-tests",
+        "verify.worktree-lifecycle",
         "verify.owner-publication-tests",
         "verify.owner-publication",
         "fmt.worktree",
@@ -2058,6 +2065,8 @@
           ".chrono-harness/state/"
         ]
       },
+      "verify.worktree-lifecycle": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.worktree-lifecycle-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.owner-publication": {
         "resources": [],
         "outputs": [
