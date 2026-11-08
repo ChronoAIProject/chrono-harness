@@ -75,6 +75,69 @@ fn ledger(root: &Path) -> Value {
 }
 
 #[test]
+fn live_publication_accepts_exact_caller_without_leaving_a_durable_root() {
+    if !isolated_capability_test(
+        "live_publication_accepts_exact_caller_without_leaving_a_durable_root",
+    ) {
+        return;
+    }
+    use retained_artifacts::retention::{Consumer, create_adopted};
+    let h = host(256, 16);
+    let source = ".chrono-harness/state/fixtures/caller-original";
+    let destination = ".chrono-harness/state/fixtures/caller-output";
+    let original = create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(source),
+        false,
+        json!({}),
+    )
+    .unwrap()
+    .unwrap();
+    original
+        .replace_file(&h.path().join(source), b"actual original")
+        .unwrap();
+    let identity = original
+        .protect_consumer("live-publication-caller")
+        .unwrap();
+    original.complete(json!({"status":"joined"})).unwrap();
+    let consumer = Consumer {
+        schema: "chrono-retention-consumer/v1".into(),
+        consumer: "live-publication-caller".into(),
+        purpose: "Consume the exact original in a live parent".into(),
+        originals: vec![identity],
+    };
+    let parent = create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(destination),
+        true,
+        json!({}),
+    )
+    .unwrap()
+    .unwrap();
+    // A path alone must not acquire the live producer's authority.
+    assert!(
+        inventory(h.path())
+            .transfer_consumer(&consumer, destination)
+            .is_err()
+    );
+    let mut changed = consumer.clone();
+    changed.originals[0].identity = "different-original".into();
+    assert!(parent.accept_consumer(&changed).is_err());
+    maintenance(h.path());
+    assert_eq!(fs::read(h.path().join(source)).unwrap(), b"actual original");
+    parent.accept_consumer(&consumer).unwrap();
+    assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
+    maintenance(h.path());
+    assert!(h.path().join(source).exists());
+    parent.complete(json!({"status":"joined"})).unwrap();
+    maintain_fixture_to(h.path(), 0);
+    assert!(!h.path().join(source).exists());
+    assert!(!h.path().join(destination).exists());
+}
+
+#[test]
 fn materialized_originals_extend_the_owners_reference_before_content_and_release_by_scope() {
     let h = host(256, 16);
     let role = "fixture-domain:address";
