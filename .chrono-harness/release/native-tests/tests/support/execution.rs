@@ -74,7 +74,8 @@ impl Fixture {
         host.config["units"][0]["asset"] = json!("chrono-distribution");
         host.config["consumer_staging"]["bindings"][0]["asset"] = json!("chrono-distribution");
         host.config["collector"]["package_asset"] = json!("chrono-distribution");
-        host.config["verification_consumers"]["test_a"]["release_assets"] = json!(["chrono-distribution"]);
+        host.config["verification_consumers"]["test_a"]["release_assets"] =
+            json!(["chrono-distribution"]);
         host.plan["assets"].as_object_mut().unwrap().remove("a");
         host.plan["assets"]["chrono-distribution"] = json!("out/a");
         host.save();

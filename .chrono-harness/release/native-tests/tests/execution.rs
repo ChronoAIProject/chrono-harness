@@ -106,7 +106,11 @@ fn actual_build_verify_collect_invokes_real_distribution_pack_and_retains_origin
         2
     );
     for (asset, declaration) in report["package"]["assets"].as_object().unwrap() {
-        let original = fs::read(f.root().join(f.host.plan["assets"][asset].as_str().unwrap())).unwrap();
+        let original = fs::read(
+            f.root()
+                .join(f.host.plan["assets"][asset].as_str().unwrap()),
+        )
+        .unwrap();
         let packaged = fs::read(output.join(declaration["path"].as_str().unwrap())).unwrap();
         assert_eq!(original, packaged);
     }
@@ -298,15 +302,36 @@ fn nested_failure_evidence_rejects_ancestor_symlink_before_directory_enumeration
     }
     let outside = tempfile::tempdir().unwrap();
     fs::create_dir_all(outside.path().join("collection/preparation")).unwrap();
-    fs::write(outside.path().join("collection/preparation/should-not-enumerate"), b"external").unwrap();
+    fs::write(
+        outside
+            .path()
+            .join("collection/preparation/should-not-enumerate"),
+        b"external",
+    )
+    .unwrap();
     std::os::unix::fs::symlink(outside.path(), nested.path().join("state")).unwrap();
-    let marker = format!("original native publication process evidence: {}\n", nested.path().display());
-    let retained = chrono_host_release::evidence::retain(root.path(), output.path(), "verification", &[], &[], marker.as_bytes());
+    let marker = format!(
+        "original native publication process evidence: {}\n",
+        nested.path().display()
+    );
+    let retained = chrono_host_release::evidence::retain(
+        root.path(),
+        output.path(),
+        "verification",
+        &[],
+        &[],
+        marker.as_bytes(),
+    );
     let record = retained.nested.unwrap();
     assert_eq!(record["status"], "partial");
     assert_eq!(record["files"].as_array().unwrap().len(), 4);
     assert_eq!(record["files"][3]["source"], "state/collection/preparation");
     assert_ne!(record["files"][3]["status"], "retained");
     assert!(!record.to_string().contains("should-not-enumerate"));
-    assert!(!output.path().join("failure-evidence/verification/state").exists());
+    assert!(
+        !output
+            .path()
+            .join("failure-evidence/verification/state")
+            .exists()
+    );
 }
