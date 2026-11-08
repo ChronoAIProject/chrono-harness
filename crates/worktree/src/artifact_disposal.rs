@@ -42,7 +42,8 @@ pub(crate) fn paths(
         .map(|name| {
             if tree
                 .keys()
-                .chain(index.iter())
+                .map(chrono_harness::facts::TreePath::as_str)
+                .chain(index.iter().map(String::as_str))
                 .any(|p| p.starts_with(name) || p == name.trim_end_matches('/'))
             {
                 return Err(format!("disposal directory contains tracked paths: {name}"));

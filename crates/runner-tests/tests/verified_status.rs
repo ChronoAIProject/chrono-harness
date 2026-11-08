@@ -962,6 +962,67 @@ fn tree_entry(mode: &str, oid: &str, kind: &str) -> (out: policy::TreeEntry)
     policy::TreeEntry { mode: mode.to_owned(), oid: oid.to_owned(), kind: kind.to_owned() }
 }
 
+fn tree_path_keeps_full_content(text: &str) {
+    let path = policy::TreePath::from_text(text);
+    let copied = path.clone();
+    let from_owned = policy::TreePath::from_owned(text.to_owned());
+    expect_status_true(scope_text::equal_text(path.as_str(), text));
+    expect_status_true(scope_text::equal_text(copied.as_str(), text));
+    expect_status_true(scope_text::equal_text(from_owned.as_str(), text));
+    expect_status_true(path.eq(&copied));
+    expect_status_true(matches!(path.cmp(&from_owned), Ordering::Equal));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tree_path_preserves_empty_unicode_controls_and_distinct_allocations() {
+    tree_path_keeps_full_content("");
+    tree_path_keeps_full_content("a");
+    tree_path_keeps_full_content("目录/é\0\n");
+    tree_path_keeps_full_content("e\u{301}");
+    tree_path_keeps_full_content("../a//b/");
+}
+
+fn tree_path_has_expected_order(a: &str, b: &str)
+    requires scope_text::byte_lt(a.spec_bytes(), b.spec_bytes()),
+{
+    let a = policy::TreePath::from_text(a);
+    let b = policy::TreePath::from_text(b);
+    proof {
+        scope_text::byte_lt_strict(a.bytes(), b.bytes());
+        scope_text::byte_lt_asymmetric(a.bytes(), b.bytes());
+    }
+    expect_status_true(matches!(a.cmp(&b), Ordering::Less));
+    expect_status_true(matches!(b.cmp(&a), Ordering::Greater));
+    expect_status_true(!a.eq(&b));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tree_path_orders_case_nul_and_complete_prefixes() {
+    proof {
+        reveal_strlit(""); reveal_strlit("a"); reveal_strlit("a\0");
+        reveal_strlit("a0"); reveal_strlit("aa"); reveal_strlit("A");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("a")
+            && vstd::string::is_ascii("a\0") && vstd::string::is_ascii("a0")
+            && vstd::string::is_ascii("aa") && vstd::string::is_ascii("A"));
+        assert(scope_text::byte_prefix("".spec_bytes(), "a".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("a".spec_bytes(), "a\0".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("a\0".spec_bytes(), "a0".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("a0".spec_bytes(), "aa".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("A".spec_bytes(), "a".spec_bytes(), 0));
+        assert(scope_text::byte_lt("".spec_bytes(), "a".spec_bytes()));
+        assert(scope_text::byte_lt("a".spec_bytes(), "a\0".spec_bytes()));
+        assert(scope_text::byte_lt("a\0".spec_bytes(), "a0".spec_bytes()));
+        assert(scope_text::byte_lt("a0".spec_bytes(), "aa".spec_bytes()));
+        assert(scope_text::byte_lt("A".spec_bytes(), "a".spec_bytes()));
+    }
+    tree_path_has_expected_order("", "a");
+    tree_path_has_expected_order("a", "a\0");
+    tree_path_has_expected_order("a\0", "a0");
+    tree_path_has_expected_order("a0", "aa");
+    tree_path_has_expected_order("A", "a");
+}
+
 fn unchanged_entries_have_no_delta(path: &str, mode: &str, oid: &str, kind: &str) {
     let absent = policy::delta_for_entry(path, None, None);
     assert(absent.is_none());

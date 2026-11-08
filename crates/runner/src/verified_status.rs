@@ -1,5 +1,6 @@
 //! 实际 CI／协议结果状态及 finding 一致性。Serde 适配仍由外部库生成。
 use core::cmp::Ordering;
+use std::collections::BTreeMap;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -149,6 +150,162 @@ impl PartialOrd for WireStatus {
         ensures order == Some(self.order_spec(other)),
     { Some(self.cmp(other)) }
 }
+
+/// 实际树键按完整 UTF-8 内容比较；不归一化路径。
+#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+pub struct TreePath {
+    pub text: String,
+}
+
+#[cfg(verus_keep_ghost)]
+impl View for TreePath {
+    type V = Seq<char>;
+    open spec fn view(&self) -> Seq<char> { self.text@ }
+}
+
+impl TreePath {
+    pub open spec fn bytes(&self) -> Seq<u8> { vstd::utf8::encode_utf8(self.text@) }
+    pub open spec fn same(&self, other: &Self) -> bool { self.bytes() == other.bytes() }
+    pub open spec fn order_spec(&self, other: &Self) -> Ordering {
+        if self.same(other) { Ordering::Equal }
+        else if identifiers::byte_lt(self.bytes(), other.bytes()) { Ordering::Less }
+        else { Ordering::Greater }
+    }
+    pub fn as_str(&self) -> (out: &str)
+        ensures out@ == self@, out.spec_bytes() == self.bytes(),
+    { self.text.as_str() }
+}
+
+impl Clone for TreePath {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    { Self { text: self.text.clone() } }
+}
+
+impl TreePath {
+    pub fn from_owned(text: String) -> (out: Self)
+        ensures out.text == text,
+    { Self { text } }
+
+    pub fn from_text(text: &str) -> (out: Self)
+        ensures out@ == text@, out.bytes() == text.spec_bytes(),
+    { Self::from_owned(text.to_owned()) }
+}
+
+impl std::ops::Deref for TreePath {
+    type Target = str;
+    fn deref(&self) -> (out: &str)
+        ensures out@ == self@, out.spec_bytes() == self.bytes(),
+    { self.as_str() }
+}
+
+impl std::borrow::Borrow<str> for TreePath {
+    fn borrow(&self) -> (out: &str)
+        ensures ({ let text: &str = out; text@ == self@ && text.spec_bytes() == self.bytes() }),
+    { self.as_str() }
+}
+
+impl std::borrow::Borrow<String> for TreePath {
+    fn borrow(&self) -> (out: &String)
+        ensures ({ let text: &String = out; *text == self.text }),
+    { &self.text }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for TreePath {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { self.same(other) }
+}
+
+impl PartialEq for TreePath {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == self.same(other),
+    { identifiers::equal_bytes(self.as_str().as_bytes(), other.as_str().as_bytes()) }
+}
+
+impl Eq for TreePath {}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::OrdSpecImpl for TreePath {
+    open spec fn obeys_cmp_spec() -> bool { true }
+    open spec fn cmp_spec(&self, other: &Self) -> Ordering { self.order_spec(other) }
+}
+
+impl Ord for TreePath {
+    fn cmp(&self, other: &Self) -> (order: Ordering)
+        ensures order == self.order_spec(other),
+    {
+        let order = identifiers::compare_bytes(self.as_str().as_bytes(), other.as_str().as_bytes());
+        proof {
+            identifiers::byte_lt_asymmetric(self.bytes(), other.bytes());
+            identifiers::byte_lt_asymmetric(other.bytes(), self.bytes());
+        }
+        if order == 0 { Ordering::Equal }
+        else if order < 0 { Ordering::Less }
+        else { Ordering::Greater }
+    }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialOrdSpecImpl for TreePath {
+    open spec fn obeys_partial_cmp_spec() -> bool { true }
+    open spec fn partial_cmp_spec(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order_spec(other))
+    }
+}
+
+impl PartialOrd for TreePath {
+    fn partial_cmp(&self, other: &Self) -> (order: Option<Ordering>)
+        ensures order == Some(self.order_spec(other)),
+    { Some(self.cmp(other)) }
+}
+
+pub proof fn tree_path_order_laws(a: &TreePath, b: &TreePath, c: &TreePath)
+    ensures
+        (a.order_spec(b) == Ordering::Equal) == a.same(b),
+        (a.order_spec(b) == Ordering::Less) == (b.order_spec(a) == Ordering::Greater),
+        a.order_spec(b) == Ordering::Less && b.order_spec(c) == Ordering::Less
+            ==> a.order_spec(c) == Ordering::Less,
+{
+    identifiers::byte_trichotomy(a.bytes(), b.bytes());
+    identifiers::byte_lt_asymmetric(a.bytes(), b.bytes());
+    identifiers::byte_lt_asymmetric(b.bytes(), a.bytes());
+    if identifiers::byte_lt(a.bytes(), b.bytes()) { identifiers::byte_lt_strict(a.bytes(), b.bytes()); }
+    if identifiers::byte_lt(b.bytes(), a.bytes()) { identifiers::byte_lt_strict(b.bytes(), a.bytes()); }
+    if a.order_spec(b) == Ordering::Less && b.order_spec(c) == Ordering::Less {
+        identifiers::byte_lt_transitive(a.bytes(), b.bytes(), c.bytes());
+        identifiers::byte_lt_strict(a.bytes(), c.bytes());
+    }
+}
+
+pub proof fn tree_path_obeys_cmp()
+    ensures vstd::laws_cmp::obeys_cmp::<TreePath>(),
+{
+    use vstd::std_specs::cmp::{PartialEqSpec, PartialOrdSpec, OrdSpec};
+    reveal(vstd::laws_eq::obeys_eq_spec_properties);
+    reveal(vstd::laws_cmp::obeys_partial_cmp_spec_properties);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    assert forall|a: TreePath, b: TreePath|
+        a.partial_cmp_spec(&b) == Some(Ordering::Less)
+            <==> b.partial_cmp_spec(&a) == Some(Ordering::Greater) by {
+        tree_path_order_laws(&a, &b, &b);
+    }
+    assert forall|a: TreePath, b: TreePath, c: TreePath|
+        a.partial_cmp_spec(&b) == Some(Ordering::Less)
+            && b.partial_cmp_spec(&c) == Some(Ordering::Less)
+            implies a.partial_cmp_spec(&c) == Some(Ordering::Less) by {
+        tree_path_order_laws(&a, &b, &c);
+    }
+    assert forall|a: TreePath, b: TreePath, c: TreePath|
+        a.partial_cmp_spec(&b) == Some(Ordering::Greater)
+            && b.partial_cmp_spec(&c) == Some(Ordering::Greater)
+            implies a.partial_cmp_spec(&c) == Some(Ordering::Greater) by {
+        tree_path_order_laws(&c, &b, &a);
+    }
+}
+
+pub type Tree = BTreeMap<TreePath, TreeEntry>;
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 pub struct TreeEntry {
