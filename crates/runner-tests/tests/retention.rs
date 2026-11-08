@@ -7,6 +7,7 @@ use std::{fs, path::Path};
 #[path = "support/isolated_capability.rs"]
 mod isolated_capability;
 use isolated_capability::isolated_capability_test;
+const FIXTURE_RECOVERY_ROUNDS: usize = 8;
 fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
     fs::create_dir_all(d.path().join(".chrono-harness/state/fixtures")).unwrap();
@@ -41,7 +42,7 @@ fn maintain_fixture_to(root: &Path, expected: u64) -> Value {
 fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
     let policy: Value = serde_json::from_slice(&fs::read(root.join(POLICY_PATH)).unwrap()).unwrap();
     let mut rounds = Vec::new();
-    for _ in 0..8 {
+    for _ in 0..FIXTURE_RECOVERY_ROUNDS {
         let round = maintenance(root);
         assert!(
             round["nodes"].as_u64().unwrap() <= policy["max_nodes_per_round"].as_u64().unwrap(),
@@ -83,7 +84,7 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
     }
     use std::os::{fd::AsRawFd, unix::fs::OpenOptionsExt};
     for damaged in [false, true] {
-        let h = host(256, 16);
+        let h = host(1, 16);
         let first_path = tree(h.path(), "independent-a");
         fs::write(h.path().join(&first_path).join("body"), b"required A input").unwrap();
         let first = inventory(h.path())
@@ -123,10 +124,20 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
             .unwrap();
         second.complete(json!({"exit": 101})).unwrap();
         assert!(began.elapsed() < std::time::Duration::from_secs(5));
-        let round = maintenance(h.path());
+        // A single-node round forces the normal resumable disposal boundary.
+        // Keep the unrelated fault in place through every ordinary entry.
+        let mut rounds = Vec::new();
+        for _ in 0..FIXTURE_RECOVERY_ROUNDS {
+            let round = maintenance(h.path());
+            assert!(round["nodes"].as_u64().unwrap() <= 1, "{round}");
+            rounds.push(round);
+            if !h.path().join(&second_path).exists() {
+                break;
+            }
+        }
         assert!(
             !h.path().join(&second_path).exists(),
-            "independent disposal must progress: {round}"
+            "independent disposal must progress: {rounds:?}"
         );
         assert_eq!(
             fs::read(h.path().join(&first_path).join("body")).unwrap(),
