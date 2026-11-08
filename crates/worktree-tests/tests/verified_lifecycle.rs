@@ -40,10 +40,11 @@ fn terminal_and_released_retained_work_remain_discoverable() {
         reveal_strlit("terminal"); reveal_strlit("retained");
         assert("terminal"@[0] != "retained"@[0]);
     }
-    let terminal = policy::select_cleanup("terminal", false, false);
-    let retry = policy::select_cleanup("retained", false, true);
-    let ordinary = policy::select_cleanup("retained", false, false);
-    expect(terminal && retry && !ordinary);
+    let terminal = policy::select_cleanup("terminal", false, false, false);
+    let retry = policy::select_cleanup("retained", false, true, false);
+    let ordinary = policy::select_cleanup("retained", false, false, false);
+    let limited = policy::select_cleanup("retained", false, true, true);
+    expect(terminal && retry && !ordinary && !limited);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -57,10 +58,10 @@ fn active_unknown_and_disposed_work_never_gain_terminal_authority() {
         assert("disposed"@[0] != "terminal"@[0]);
         assert("disposed"@[0] != "retained"@[0]);
     }
-    let active = policy::select_cleanup("active", false, true);
-    let cache = policy::select_cleanup("active", true, false);
-    let unknown = policy::select_cleanup("unknown", true, true);
-    let disposed = policy::select_cleanup("disposed", true, true);
+    let active = policy::select_cleanup("active", false, true, false);
+    let cache = policy::select_cleanup("active", true, false, false);
+    let unknown = policy::select_cleanup("unknown", true, true, false);
+    let disposed = policy::select_cleanup("disposed", true, true, false);
     expect(!active && cache && !unknown && !disposed);
 }
 

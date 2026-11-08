@@ -1995,6 +1995,7 @@ impl Manager {
                 &e.status,
                 e.ownership.as_ref().is_some_and(|o| o.cache_pending),
                 maintenance,
+                e.terminal.as_ref().is_some_and(|t| t.artifacts_only),
             ) {
                 continue;
             }
