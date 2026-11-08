@@ -148,6 +148,8 @@ impl Fixture {
             "--fwd-verus-args-to".into(),
             "all".into(),
             "--locked".into(),
+            "--jobs".into(),
+            "1".into(),
             "--manifest-path".into(),
             "app/Cargo.toml".into(),
             "--target-dir".into(),
