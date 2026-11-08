@@ -1262,6 +1262,59 @@ fn terminal_history_count_and_byte_limits_release_verified_generations_before_th
 }
 
 #[test]
+fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rotation() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    adopt_lifecycle_retention(&h);
+    let retention_path = h.root.join(chrono_harness::retained_artifacts::retention::POLICY_PATH);
+    let mut retention = json(&fs::read(&retention_path).unwrap()).unwrap();
+    retention["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/", ".chrono-harness/state/automatic-cleanup/"
+    ]);
+    retention["max_related_outputs"] = value!(512);
+    fs::write(&retention_path, serde_json::to_vec(&retention).unwrap()).unwrap();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    for artifact in policy["artifacts"].as_array_mut().unwrap() {
+        if artifact["path"] == ".chrono-harness/state/" {
+            artifact["disposition"] = value!("dispose");
+        }
+    }
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("finite-originals");
+    let (code, created, error) = h.invoke("integration", "finite-originals", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let birth = h.ledger()["entries"][0]["enrollment"]["sealed_receipt"]["path"]
+        .as_str().unwrap().to_owned();
+    assert!(Inventory::adopted(&h.root).unwrap().unwrap().enrolled(&birth).unwrap(),
+        "the automatic producer must enroll its own original, not leave an unbounded file");
+    Inventory::adopted(&h.root).unwrap().unwrap().maintain().unwrap();
+    assert!(h.root.join(&birth).is_file(), "active enrollment still consumes birth");
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists());
+    let terminal = h.ledger()["entries"][0]["terminal"]["receipt"]["path"]
+        .as_str().unwrap().to_owned();
+    let finished_path = finished["report_path"].as_str().unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory.reference_paths("fixture-finish-consumer", &[finished_path.into()]).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+    inventory.maintain().unwrap();
+    assert!(!h.root.join(&birth).exists(), "unconsumed birth must leave with history");
+    assert!(h.root.join(&terminal).is_file(), "finish report still consumes terminal input");
+    inventory.reference_paths("fixture-finish-consumer", &[]).unwrap();
+    inventory.maintain().unwrap();
+    assert!(!h.root.join(&terminal).exists(), "released terminal original must be reclaimed");
+    assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/finite-originals"));
+}
+
+#[test]
 fn terminal_history_rotation_preserves_live_consumers_and_changed_originals() {
     let h = Host::new("payload");
     h.kernel_cleanup();
