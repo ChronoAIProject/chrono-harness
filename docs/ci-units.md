@@ -123,11 +123,13 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 <a id="conditional-jobs-and-the-required-aggregate"></a>
 
+默认合并采用[并行验收、按依赖合并](merging.md)。PR 的被验候选是固定 workflow 合并提交 M，基线是其第一父，第二父须为事件 head H。`chrono-ci-detection/v2` 分别记录 `candidate=M` 和 `event_head=H`，汇总对测试报告使用 M，对原生运行、job 和 artifact 的 `head_sha` 使用 H。不能把两种身份互换。
+
 ## 条件 job 与唯一必需汇总
 
 父工作流用原生 concurrency 替换同一 PR 的旧运行。组名绑定工作流路径、事件、PR 号；非 PR 事件用唯一 run ID，所以 push 的各次完整 before／after 不会因取消排队而丢失。父工作流内各单元独立调度。
 
-本宿主通过目标为 dev 或 integration/** 的 PR 检查候选，使用事件 base／head；dev push 用完整 before／after 检查实际落地。integration 分支推送不另行触发主 CI，需要候选检查时创建 PR，草稿 PR 也支持。各宿主自行登记触发分支；本仓的[独立发布](release-ci.md)和[原生获取工作流](../.github/workflows/chrono-native-acquisition.yml)仍按各自登记触发。
+本宿主通过目标为 dev 或 integration/** 的 PR 检查固定合并候选，端点身份按上文分别绑定；dev push 用完整 before／after 检查实际落地。integration 分支推送不另行触发主 CI，需要候选检查时创建 PR，草稿 PR 也支持。各宿主自行登记触发分支；本仓的[独立发布](release-ci.md)按自己的登记触发。
 
 最小生成结果是 `collection.workflow_path` 的单个父工作流。分支保护只要求汇总 job，即 `collection.name`，本仓当前为 **chrono / collection**；生成器不改分支保护。
 
@@ -179,7 +181,7 @@ provider 在检测前上传声明目录，将生产 binding 和真实上传 arti
 
 ### 端点、状态与原生产身份
 
-PR 用固定 workflow merge commit 的第一父提交作 base，事件 head 作 candidate；必须恰有两个父提交且第二父提交等于事件 head。事件载荷中的旧 base 不决定选测。默认 push 用完整 before／after，含多提交。明确 `push_baselines` 和创建规则保持原义；detector 只观察一次配置远端基线，将固定输出交依赖 job。
+PR 用固定 workflow merge commit 的第一父提交作 base，该合并提交作 candidate；必须恰有两个父提交且第二父提交等于事件 head。事件载荷中的旧 base 不决定选测。默认 push 用完整 before／after，含多提交。明确 `push_baselines` 和创建规则保持原义；detector 只观察一次配置远端基线，将固定输出交依赖 job。
 
 足够时获取从不含 blob 的 depth-two checkout／fetch 开始，缺端点 OID 明确用 `--depth=2 --filter=blob:none` fetch。深度二不保证任意历史。full 单元／汇总为分支／分叉判官保留完整历史获取并过滤 blob，detector 仍从浅获取读精确端点树。
 
@@ -214,6 +216,8 @@ full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语�
 采用 `job_gating` 时，准备／源码检查绑定 `collection.workflow_path`，单独声明的单元地址不使普通生成器拥有未启用工作流。gather wait／poll 设置保留独立工作流含义，此父工作流传输不轮询，不用它们。
 
 这样去掉重复迁移逻辑，以及普通生成时额外渲染／读取旧拓扑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。旧 ci-host 和已发布 Go／TS／mix provider 在公开二进制可用、调用方明确迁移前保留历史形式。
+
+本仓通过 projects.json 的 `ci.generate-job-gating-example` 操作维护该示例的生成工作流，委托同一 Rust 生成器；执行时沿用登记的 `chrono-worktree use` 保护。
 
 ## 分配与执行
 
@@ -293,9 +297,9 @@ full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语�
 
 只接受当前证据 schema，现役生产／消费一起迁移。schema 缺失／未知、重复进程视图、编码缺失、流损坏或回执摘要变化均失败，不增加执行／输出上限。
 
-这曾同时改变产品和宿主输入政策：报告生产／汇总及 Rust／Python 消费者迁移，本机 diagnostics 选择当前私有 home 中已核包位置。已有 FILEMAP 边选择适用检查，除下述有限观察外，较广构建／CI／存储成本未测。
+完整构建、CI 与存储成本未测；具体运行读数直接查原 CI／state。
 
-回归在生产和离线汇总中保留 80,005 字节 stdout（含无效 UTF-8、NUL）和 20 字节 stderr。旧内联响应超过原 1 MiB fixture 传输上限；单份编码回执响应为 17,619 字节，本机生产加汇总约 1.12 秒。这不是原生 CI 或完整工作流成本结论。
+回归要求原样保留含无效 UTF-8、NUL 的 stdout 和 stderr，并在既有传输上限内完成生产与离线汇总。
 
 大型原件控制台回归仍要求超过 1 MiB 的原文件，使用确定性原生二进制流，精确断言大小／摘要，保持不加额外工作及原件不可变检查。
 
@@ -368,33 +372,17 @@ v2 的 `report_bytes` 约束每单元原报告 metadata 加 stdout／stderr 总�
 
 本宿主现在上传各单元已有 `.chrono-harness/state/units/<id>/` 报告根。短准备已在该根保留报告、上下文、获取、原 stdout／stderr。成功汇总不消费临时测试宿主或其复制执行物。
 
-原生 run `42004257959` 的 CI fixture 占压缩成员 1,567,248,867 字节中的 1,566,217,208；整个 ZIP 为 1,575,243,167 字节，下载超时。这只描述一份产物，不是全流程节省结论。
-
 可选 `failure_artifact_directory` 在 job 失败时保留更广诊断目录，用同一固定上传 action、`failure()` 和独立 `diagnostics-` 产物前缀。本仓选 `.chrono-harness/state/`，保留失败 fixture 原件，不向成功汇总传其正文。普通报告上传及交付确认保留自己的产物／映射；目录相同时不重复上传。
 
 不加下载器、打包命令、权限或超时预算。原生报告根消费与仅失败上传须分别验证，成功 job 不能证明后者。
 
-### 资源观察
+### 成本排查
 
-采用 `job_gating` 时，`gather.resource_observation` 可明确登记 GitHub 步骤名到宿主类别名的 `step_categories`。拒绝空名、控制字符、保留名 `unclassified`；未知步骤仍属 unclassified，不从命令猜语言、依赖、必要性或类别。省略保留原 gather 输出，宿主可不改 Rust 地更新映射。
+检查时长和缓存传输情况直接查原生 Actions 步骤、日志及线上 API。AI 只为当前排查选定运行、输入、单位与测量窗口；原件按实际调试／验收义务保留，不持续生成分类报告、比较告警或重复摘要。
 
-已有分页 jobs 响应在原 gather 报告提供 `resources`（`chrono-ci-resources/v1`），不加请求、runner 或业务执行。它绑定响应进程索引／摘要、candidate、run、观察 attempt，跨页同 job ID 只计一次；冲突副本、无效身份明确列问题并排除。
+GitHub 当前 attempt 的 API 视图可能含沿用结果，新 job ID 不证明任务重跑。步骤秒数之和不是工作流墙钟、CPU 或计费时间；缺读数和未测成本保持未知，不能跨 attempt 相加后宣称节省。
 
-总计／比较只用当前 attempt API job 视图。`excluded_prior_attempts` 列旧 job ID／attempt，原响应保留其完整行和失败。GitHub 可能给沿用成功 job 分配新 ID，但保留原时间。因此当前视图可能含沿用结果，不是独立执行历史，也不是本次重跑成本。观察器不靠名称／时间猜执行身份，不把历史行加进当前视图。
-
-`known_step_seconds` 只加总已完成、非跳过、时间有效有序的步骤，没有测量则 null。每步骤保留类别、时间及 measured／unknown／skipped。类别和 job 各自汇总，未分类、缺步骤、冲突、未结束保持可见。
-
-`observed` 只表示返回行有可用分类数据，不表示完整工作流资源已知；`partial` 表示不完整。gather 没取得 jobs 则 `unavailable`；gather 前失败没有新报告。
-
-这些秒数不是计费分钟、并行工作流墙钟或 CPU 时间。排队、峰值内存、磁盘字节、快照后操作及标准检查内部编译／测试分摊都未测。汇总观察自身时仍在运行。原生失败、传输准入、最终判断规则不变，资源观察不能将失败变绿，也不能证明成功依赖必要。
-
-可选 `comparisons` 按宿主 ID 登记警告，点名两个不同登记类别 `category`／`reference_category`、正有限 `factor`、非负整数 `minimum_seconds`。已完成且可观察的 job，当前类别秒数达到最小值且严格大于 `factor * reference_seconds` 时告警；相等不告警，实测参考为零仍有效。
-
-本宿主选 `bootstrap-vs-check`，factor 1、最小 60 秒，用来显示启动超过同 job 标准检查的情况。只有点名两类别参与；缺类别、未知时间、未结束记 `unavailable` 并说明，跳过 job 为 `not-applicable`，其他类别不得代替参考。完成但失败的 job 仍保留成本。
-
-每次比较附去重 job 身份及 attempt，Actions 摘要显示 `W_CI_RESOURCE_COMPARISON` 和实测值。警告只是宿主政策，不证明冗余或优化收益，不改准入、不加请求／job／执行。省略保留原格式。
-
-可选 `summary_environment` 点名明确继承的环境变量，值为已有可追加摘要文件。本仓在输入环境采用 `GITHUB_STEP_SUMMARY`，向 Actions 页面展示同一类别总计和未知项。目的缺失／不可写在原报告记 unavailable，不替代准入结论。展示沿用同一次检查，不加工作流步骤。
+汇总检查仍取得并保留实际用于运行归属、job、artifact 和报告核验的原响应。只退役额外的资源投影，不以成本观察替代原生失败、传输准入或最终判词。
 
 ### 配置、凭据与独立工作流
 
@@ -418,11 +406,11 @@ push／pull_request 准备将生成 provider、工作流、profile 绑定候选�
 
 源码行为测试用独立克隆宿主中的真实候选二进制，覆盖并发、离线汇总、合成 GitHub 响应。公开 Go／TS／mix [示例](examples.md)使用独立原生工作流，已核本地／integration／PR／dev、真实取消及选择性重试、业务失败同时其他单元通过、恢复后零业务选择。首次清单仍是独立合同。
 
-本产品宿主当前在 `.chrono-harness/ci/units.json` 登记 24 个条件单元及汇总；早期独立工作流阶段为十六单元。当前 core bootstrap 明确构建 runner、judge-ci、ci、worktree、judge-cargo、inputs。各所选计划保留完整构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。选原配置仍可用默认 full bootstrap。
+本产品宿主的条件单元及汇总归 [.chrono-harness/ci/units.json](../.chrono-harness/ci/units.json) 维护，core 安装范围归 [bootstrap-core.json](../.chrono-harness/ci/bootstrap-core.json) 维护。各所选计划保留明确的构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。
 
 CI 生成器消费者在已提交 push 事件上执行生成单元的真实短 `chrono-harness check`，由登记输入程序准备绑定候选的工作流源码／上下文，再读取原报告。普通 `chrono-ci prepare` CLI 已退役；`prepare-endpoints` 与 `acquire-seed` 仍由原生采用流程调用。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
 
-Go／TS／mix 的真实 push／PR、汇总及全部单元见[原生采用证据](native-ci-adoption.md)，完成的是该有限 profile 的生成单元采用。有效输入完整、各 provider 版本宿主采用、确定同判及完整启用仍分别验收。
+Go／TS／mix 的接入方式与验证限制见[示例索引](examples.md)，原 CI 记录直接查各宿主的 Actions／PR。固定旧发布的有限采用不证明当前候选；有效输入完整、各 provider 版本宿主采用、确定同判及完整启用仍分别验收。
 
 <a id="host-customization-and-updates"></a>
 

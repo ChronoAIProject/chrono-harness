@@ -8,33 +8,13 @@
 
 ## 真实 CI 已验证的范围
 
-本宿主的 `cache` 单元已有真实 GitHub Actions 消费者。[运行 37627480033](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033) 首次为冷运行：`check.cache`、`check.cache-tests` 都未命中，继续执行原 bootstrap 和标准检查，并完成原生保存。后一次重跑观察到平台缓存可见性延迟，再次保存；这只是当次观察，不能推广为通用缓存行为。
+本宿主的 `cache` 单元消费 `check.cache`、`check.cache-tests`。两项 `producer-manifest/v1` 缓存已有有限原生观察，覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
 
-同一固定提交的[第 3 次尝试](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033/attempts/3) 中，两项都以 `exact` 恢复。传输报告记录 `current_executable_verification: matched`、`recovery.status: not-required`、无警告、原业务成功及 `verdict: not-a-judgment`。命中后仍运行标准 bootstrap／检查，精确命中这次没有尝试保存。
-
-这证明了登记消费者有限的冷未命中／保存、精确命中恢复路径，以及当前缓存执行物身份和恢复证据。尚不证明源码变化复用、不兼容输入分域、损坏或不可用归档处理、并发生产／重跑、完整后端生命周期保护或其他消费者缓存完整。
-
-当前 `producer-manifest/v1` 范围在 macos-26、Rust／Cargo 1.95.0、PR #207 的 `refs/pull/207/merge` 下还有以下有限证据，两项缓存均适用：
-
-| 场景 | 固定原生观察 |
-| --- | --- |
-| 生产范围冷启动 | [39688684172/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172/attempts/1)，种子 `98615238`：原 Cargo 操作、封存／保存、汇总通过 |
-| 兼容源码变更 | [39690377913/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/1)，生产 `72b1d08`：兼容前缀相同、源码后缀不同，恢复种子键并匹配生产者清单，保留增量数据，当前登记重建／测试通过 |
-| 健康精确命中 | [39690377913/2](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913/attempts/2)：两个主键匹配，清单验证、原标准操作／汇总通过；detector／startup 保留原 attempt 1 身份 |
-| 不兼容生产环境 | [39695762671/1](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671/attempts/1)，场景 `c515cd05`：两个兼容范围改变，均未恢复匹配键；原优化 Cargo 构建／测试、封存、汇总通过 |
-| 不可用内容、恢复、持久修复及修复后精确命中 | 初次被 Variables GET／list HTTP 403 阻断。后续 C1 部分观察到坏内容恢复／重建和替换缓存，但原兼容范围的健康精确命中仍未达成，见末尾退役说明 |
-
-不兼容场景只改变所选 `check.environment` 观察，其他运行／探测／缺失观察和生产者 argv 均与生产相同。`check.cache` 兼容摘要从 `d24c19748a988bdb5732af429ed07932e5e4ac25774ef4d4613b5be87ce34c6f` 变为 `b9653959eb2bc10a7a166822f4e59c4374d31105acf865a8b980c372c4af7987`；`check.cache-tests` 从 `070f000f3499ba497fc6d1c4eac347720586017d61c114954293f69c21964228` 变为 `17b22e6e2b9ea72b6eb2afdc98a63075b62fe778baba507511337f259b317cbc`。
-
-每次恢复只暴露新范围前缀，因此声明键集合无法回退到生产缓存。两个真实 Cargo 生产者都收到 `CARGO_INCREMENTAL=1` 和两个优化值，报告优化的 dev／test 输出。传输保留 `miss-or-unavailable`、原业务成功和当前 planner 身份匹配。观察到后端条目 `9310328424`／`9310330849`，创建者未确认。这是分域／重建证据，没有测试这些场景归档的精确恢复。
-
-场景原产物为 cache `12391316467`、detector `12391201225`、startup `12391076536`、runner `12390726564`、collection `12391598633`，均来自 attempt 1。汇总核验 26 个单元原件，27 条结果全部通过。按原生开始／完成时间，cache、collection job 分别耗时 113、106 秒；该窗口不代表计费、加速或完整生命周期成本。传输／存储和总增量成本未知。
-
-普通 revert `c72c141` 恢复与生产 `72b1d08` 完全相同的树，移除两项临时优化设置，保留场景提交。不可用内容仍须验收，访问失败不豁免。下文已退役可选远端激活层，其历史部分观察不证明修复后精确命中。其他消费者、并发、linked 所有权及完整编译器／SDK／输入范围仍待完成。
+这些观察只覆盖原候选和登记消费者，不能证明当前候选、其他消费者或完整缓存行为正确。不可用内容恢复、持久修复及修复后在原兼容范围健康精确命中的验收仍未完成；访问失败及部分观察见[退役说明](#retired-remote-acceptance-controls)。实验中的临时优化设置已移除，当前参数以现役登记为准；历史摘要、后端条目、artifact ID 和耗时归原运行。并发、linked 所有权、完整编译器／SDK／输入范围，以及传输、存储和总生命周期成本仍待验收或测量。
 
 planner 准备身份；GitHub provider 在原 bootstrap 和检查／发布命令两侧生成固定版本的原生 restore／save action。本宿主在检查、发布登记中明确采用。计划或工作流生成成功，不代表真实恢复／保存、编译器复用或验收通过。SPEC §4.2 仍要求后端证据、冷／热／源码变化／失败／并发验收和当前执行物验证。
 
-每份计划记录准备它的 `chrono-cache` 精确摘要和版本。报告前与当前执行物比较，不符即拒绝发布传输证据。当前传输要求主 Git 检出；linked worktree 需要贯穿恢复／保存的租约，尚不支持。
+每份计划记录准备它的 `chrono-cache` 精确摘要和版本；恢复与封存在执行前核对当前执行物。当前传输要求主 Git 检出；linked worktree 需要贯穿恢复／保存的租约，尚不支持。
 
 本宿主标准检查 action 明确设 `CARGO_INCREMENTAL=1`。core、full、cache seed bootstrap 和 v5 发布配方设 `rust_incremental: true`，原构建调用收到对应环境值，包含 release 构建和 Rust 验证单元。发布配方通过明确 `rust_toolchain` 把设置限制在 Rust 消费者；非 Rust 单元保留自身环境。
 
@@ -46,7 +26,7 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 - namespace 和 `artifact_registry` 路径。宿主缓存产物精确引用该登记的 `artifacts` 路径，所有者须相同、`tracked: false`，且不得为执行证据。明确的外部依赖缓存可用绝对路径，其他产物相对宿主。不发现目录或语言。
 - 具名输入。各种输入的具体规则见下表。
-- 具名产物，声明 `owner`、`path`、`kind`（`dependencies`、`compilation`、`executable-candidate`）和明确 `external` 布尔值。
+- 具名产物，声明 `owner`、`path`、`kind`（`dependencies`、`compilation`）和明确 `external` 布尔值。
 - 具名缓存，声明 `owner`、登记 `producer` 操作 ID、`consumers`、产物 ID、互不相交的 `compatibility_inputs`／`source_inputs`、`restore`（`exact` 或 `compatible`）。每个列表均非空且成员唯一。
 - `consumer_operations`，将每个消费者绑定到已有方法登记。每个引用用字面宿主 `registry` 路径和 JSON `pointer` 选择一个操作 ID，或非空且唯一的 ID 数组。引用缺失、值错误、订阅缓存的 producer 不在消费者所选操作内，都会在输入探测和原生恢复前失败。计划保留来源摘要和所选 ID，不从语言、路径或运行活动猜方法；声明有效也不证明实际执行。
 
@@ -67,11 +47,11 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 输入 ID 排序变化不改摘要；无关缓存声明或文件变化不使所选缓存失效。
 
-早期 v1 草案仍按原合同读取：消费者名参与 `chrono-v1-` 键，没有操作引用检查，不能采用 `consumer_operations`。v2 使用独立兼容范围，不通过宽泛回退恢复 v1 归档。
+只接受 `chrono-cache/v2` 登记和 `chrono-cache-plan/v2` 计划；旧格式在准备计划前拒绝，不生成或恢复 `chrono-v1-` 键。CI 投影也在写入前拒绝旧登记。格式准入复用现有同源 Verus 证明入口；JSON 解码、完整登记与恢复行为仍有各自的验证边界。
 
 `compatible` 只提供一个到兼容摘要为止的恢复前缀，使源码变化可找到同范围旧编译数据。适用的编译器、target、profile、标志、SDK、构建脚本、配置、环境身份都须由宿主明确登记到兼容范围；planner 不推断这些依赖，也不证明列表完整。lockfile、manifest 也须按真实兼容作用归类。
 
-`executable-candidate` 只允许精确恢复。每项计划仍要求登记构建生产者，绝不授权直接执行恢复的历史判官。当前执行物核验也检查缓存 planner／report 执行物身份，但不能证明恢复的项目执行物已重建。所选判断／测试仍由消费流程执行。
+每项计划仍要求登记构建生产者，绝不授权直接执行恢复的历史判官。当前执行物核验也检查缓存 planner 执行物身份，但不能证明恢复的项目执行物已重建。所选判断／测试仍由消费流程执行。
 
 字面路径拒绝穿越、glob、符号链接组件。所选输出不能互相重叠、包含 Git metadata／harness 执行状态或任何声明文件输入。这只是有限路径／登记检查，不证明任意缓存内容安全或重建输入齐全。恢复和保存还须持有已采用生命周期保护，直到生产者全部等待结束且保存完成。
 
@@ -81,13 +61,11 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 v2 可为隔离主检出明确启用 `recover_failed_restores: true`。外部产物所有权尚未建立，不支持。该选择保留在计划中，不进入构建缓存键。planner 将所选方法交给原生 provider；旧登记和旧 planner 不执行恢复。
 
-最终传输报告把每个计划恢复步骤与恢复程序消费的原观察核对。可增加后续 bootstrap、构建、测试、保存步骤，但已有恢复观察不能消失或改变。不符时在上传目录保留两份快照，返回带缓存 ID 和两个原路径的 `E_CACHE_REPORT`，不发布正常传输报告，也不查后端。这只核保留观察一致，不证明原生 action 声明真实。
-
 provider 在原生恢复后、原 bootstrap／构建前，用已有计划、登记及原步骤观察调用 `chrono-cache recover`。所有者使用原声明观察重核所选产物／消费者合同，不重跑输入探测。登记、宿主、所选路径或计划绑定变化，都在删除前失败。
 
 只有原生恢复 **outcome** 为 `failure` 的缓存，才删除其登记宿主产物。success／skipped 保留输出；缺失、cancelled、未知 outcome 报错。嵌套符号链接只删链接、不跟随目标；产物根或祖先是符号链接则拒绝。
 
-删除前先写 intent。结果保留原恢复观察、每个尝试路径及失败；清理不完整或发布失败均非零，阻止原构建。最终传输报告与原恢复／业务 outcome 一起保留恢复结果及步骤原字节。恢复证据缺失或损坏，报告失败。
+删除前先写 intent。结果保留原恢复观察、每个尝试路径及失败；清理不完整或发布失败均非零，阻止原构建。恢复结果和步骤原字节直接保留在计划所在 state 目录；恢复证据缺失或损坏时，重新消费原结果会失败。
 
 重复已完成尝试返回原结果，不删除后来生产者重建的输出。未完成 intent 保留并拒绝，旧失败不自动重试。本宿主在已有 job 采用，步骤耗时归 `cache-recovery`，不增加 job、构建配方或业务测试重试。此失败政策覆盖报告的原生恢复失败和部分解压；下文可选内容核验还覆盖所选缓存声称有效的命中。后端归档替换、linked worktree 租约及完整原生失败场景仍待验收。
 
@@ -95,9 +73,9 @@ provider 在原生恢复后、原 bootstrap／构建前，用已有计划、登�
 
 本宿主另采用 `recover_unconfirmed_restores: true`。此 v2 选项要求 `recover_failed_restores` 及其主检出边界；省略则保留只处理失败的旧行为。
 
-同一恢复入口还处理以下情况：恢复步骤成功，但 matched key 缺失、为空或不在声明的 exact／compatible 范围内，此时也丢弃登记输出。原生缓存实现可能压下下载／解压错误后返回成功。缺 key 仍记 `miss-or-unavailable`，清理不猜是哪种原因，也不编造恢复失败。恢复与传输共用 key 分类。
+同一恢复入口还处理以下情况：恢复步骤成功，但 matched key 缺失、为空或不在声明的 exact／compatible 范围内，此时也丢弃登记输出。原生缓存实现可能压下下载／解压错误后返回成功。缺 key 仍记 `miss-or-unavailable`，清理不猜是哪种原因，也不编造恢复失败。恢复按原 matched key 分类。
 
-exact／compatible 命中和 skipped 保留输出；缺失／cancelled outcome 或格式错误的输出，都在删除前失败。政策进入保留恢复计划，不进入编译缓存键。原 outcome、原因及逐产物结果继续提供给传输报告；完成后重入保全后续构建。
+exact／compatible 命中和 skipped 保留输出；缺失／cancelled outcome 或格式错误的输出，都在删除前失败。政策进入保留恢复计划，不进入编译缓存键。原 outcome、原因及逐产物结果直接保留在恢复原件；完成后重入保全后续构建。
 
 普通冷未命中且所选产物原本都不存在时，不增加恢复警告；删除残留和明确失败仍可见。原构建和所选测试继续运行，失败仍是失败。此扩展本身不核验有效 matched key 的实际内容，不保护外部所有权，也不证明原生损坏实验已完成。
 
@@ -129,7 +107,7 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 ### 本仓的缓存归属
 
-本仓 detector 构建共享启动 profile，选择四项登记编译缓存。26 个检查单元和汇总安装绑定源码的 startup 产物。单元缓存登记只选择各 FILEMAP 计划仍实际存在的 Cargo 生产者；汇总和没有编译操作的单元不订阅编译缓存。
+本仓 detector 构建共享启动 profile，选择登记的编译缓存。检查单元和汇总安装绑定源码的 startup 产物，当前单元与缓存集合分别归 units.json／cache.json。单元缓存登记只选择各 FILEMAP 计划仍实际存在的 Cargo 生产者；汇总和没有编译操作的单元不订阅编译缓存。
 
 已有原生 Rust 发布构建／验证单元选择自己的项目输出，Python 发布验证和包收集器无登记编译缓存。分组测试中不同生产者使用不同条目。
 
@@ -137,9 +115,11 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 宿主 bootstrap 接受可选的 `.chrono-harness/state/` 下字面报告文件，拒绝越界或符号链接位置，并传递报告发布错误。各配方拥有自己的报告位置；重复用同一位置会替换最新结果。已有产物上传保留两份独立记录。
 
-传输报告保留报告进程的执行路径、实测文件摘要及版本。消费者可与独立 bootstrap 记录中的安装二进制摘要及干净源码身份匹配。文件摘要不证明编译器输入完整或内存加载身份；bootstrap 证据缺失或源码不干净，不能证明绑定到干净源码。
+计划保留 planner 的执行路径、实测文件摘要及版本，恢复和封存核对同一身份。独立 bootstrap 记录安装二进制摘要及源码身份。文件摘要不证明编译器输入完整或内存加载身份；bootstrap 证据缺失或源码不干净，不能证明绑定到干净源码。
 
 detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
+
+四项 `detect.*` 缓存的生产者使用 `bootstrap-core.json` 登记的专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。兼容输入用仓库相对路径声明其中 `config` 和 `config.toml` 缺失，存在任一配置时规划失败，避免恢复与实际构建配置不符的产物。默认 runner home 的配置声明仍供使用该环境的检查／发布生产者消费，其绝对路径迁移尚未完成；这两组输入不互相替代，也不证明其余构建输入完整。
 
 专属 Rust 宿主采用回归覆盖这些区别，包括 detector 没有业务检查政策，以及 detector 构建参数变化。它们只验证这些声明依赖，不证明构建输入完整或所有登记都有必要。
 
@@ -155,33 +135,23 @@ provider 从 `chrono-cache plan --github-output` 取得输出键，保留计划�
 
 planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key`、`cache_0_paths`、`cache_0_restore`，再用 `cache_1_*` 等作为 job 内输出名。这些短引用不改缓存身份或键。两者须实现同一输出合同，登记验证在生成前拒绝集合不符。
 
-### 传输报告与原件
+### 原件直接上传
 
-缓存不跳过标准检查，不用缓存状态替代构建／测试结果。最终 `chrono-cache report` 记录原生 action 输出、请求／匹配键、原业务／bootstrap outcome 及不可变来源报告。
+缓存不跳过标准检查，不用缓存状态替代构建／测试结果。计划、探测、恢复、内容核验和封存由各自生产者在 `.chrono-harness/state/` 保留原件及摘要引用；所选原生 action 日志保留恢复／保存的实际输出。保存 action 成功不能证明归档已保存、编译器复用或当前执行物验证。
 
-`report` 与 `seal` 都要求计划中的 planner SHA-256 和版本完整，且与当前执行物全文相等。缺失、null、非文本或不匹配的身份在发布报告原件前拒绝；不再为缺少身份的旧计划发布 `unavailable` 成功。当前 `plan` 始终提供身份。只观察传输步骤的库函数 `transport_report` 仍报告未观察执行物身份，不替代 CLI 的核验。
+恢复和封存要求计划中的 planner SHA-256 和版本完整，且与当前执行物一致；缺失或不匹配在效果前失败。普通检查复用已有失败诊断上传，detector 的 `job_gating.detector.evidence_directory` 继续通过已有固定上传 action 保留声明原件。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划和探测原件；目录、隐藏文件和缺失原件规则保持。
 
-`evidence_directory` 可把原件放入已有发布上传目录，普通检查则放入上传的宿主状态。detector 可选择同一字段，通过已有 job 的固定上传 action 保留原件，包括失败后。目录须是字面宿主状态路径，并明确上传隐藏文件；文件缺失使上传失败，不能声称已保留。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划、探测原件。未采用时，detector 文件只是 runner 临时状态。
+采用缓存的发布单元在失败时用配方已有的固定上传 action 单独上传 `.chrono-harness/state/`，包含隐藏文件。诊断 artifact 与正式发布 artifact 分开命名；正式上传目录、归档根和 collector 下载合同保持。上传失败仍使对应步骤失败，原业务结果独立保留。原件随线上 artifact 的保留期清理，本地按既有生命周期处理，不入 Git。
 
-报告在已有 job 运行。未登记 backend 就不发 API 请求。只有 action 成功且 key 匹配，才报告 exact／compatible；空输出记 `miss-or-unavailable`。原生保存成功仍为 `unconfirmed`，带 `W_CACHE_SAVE_UNCONFIRMED`，因为固定 action 可能捕获后端异常后成功退出。不能由 action outcome 推断归档已保存、编译器复用或执行物身份验证。
+`chrono-cache report`、`transport_report` 和缓存消费者的 `evidence_directory` 已退役。它们不参与构建、恢复、内容核验、封存或发布判断；失败原件改由上述入口直接上传，无需复制步骤观察、拼装传输报告或把原件搬进发布目录。仍有使用方的原件保留方法归缓存所有者维护。
 
-本 job 未选择保存且未观察到保存的缓存记 `not-requested`；实际发生未登记保存仍可见，带 `W_CACHE_UNREGISTERED_SAVE`。具体保存归因和归档内容诊断仍需后端／action 日志。
+明确坏缓存恢复，以及后续测试失败后保留任意项目编译，仍未完成。保存内容不包括 `.chrono-harness/state`、发布交接、所选测试结果、已安装 `bin`、Git metadata 或生命周期锁。
 
-报告生产或证据保留失败使对应步骤和 job 失败，原业务结果独立保留；报告步骤没有 `continue-on-error` 豁免。后端查询失败若已成功记录，则只是非致命可用性警告。缓存后端失败不阻止后续构建。
+### 后端状态按需查询
 
-后端观察原生验收、明确坏缓存恢复，以及后续测试失败后保留任意项目编译，仍未完成。保存内容不包括 `.chrono-harness/state`、发布交接、所选测试结果、已安装 `bin`、Git metadata 或生命周期锁。
+缓存计划、恢复、内容核验、封存和发布汇总都不消费后端清单。保存后的持续查询只把 GitHub 已提供的状态另存一份，不能证明归档内容、编译器复用或创建来源，因此已删除 `backend` 配置、查询实现、凭据注入和专属测试。缓存本身不再要求 `actions: read`；发布工作流只保留 `contents: read`，单元汇总及共享启动按其实际 API 消费保留已有权限。
 
-### 可选 GitHub 后端查询
-
-`chrono-cache/v2` 可登记 `backend`：`kind: github`、具体 `need`／`output_use`、有限 `command`、明确 `inherit`／`credential_environment` 列表，以及 `repository_environment`／`ref_environment` 名称。恰好一个完整命令参数为 `{endpoint}`。
-
-本宿主使用 `gh api --paginate --slurp {endpoint}`，限 30 秒／4 MiB。命令收到 `repos/{repository}/actions/caches?ref={encoded-ref}&per_page=100`，返回 GitHub 响应页数组。政策保留在计划中，不参与构建缓存身份；计划阶段从不查询后端。
-
-已有报告步骤只在原生保存成功但仍未确认时，每批查询一次；否则记 `not-required`，不启动查询。生成步骤提供 `GH_TOKEN`，缓存工作流允许 `actions: read`。子进程只继承声明变量。保留证据包含执行物摘要、命令、原 stdout／stderr、原退出／失败及环境摘要，但从保留环境中移除声明凭据值。命令不得向原始流打印凭据。
-
-精确 key／ref 匹配唯一后端条目时，保存状态改为 `backend-entry-observed`，可用性 `confirmed: true`、`creator: unestablished`。这只确认查询时观察到条目，不确认哪个 action 创建、归档完整、编译器复用或当前执行物身份。
-
-多归档身份记 `ambiguous`；无匹配记 `not-observed`，分页不是原子清单，因此不证明不存在。查询失败、超时、截断／错误响应或身份冲突保留原失败，发 `W_CACHE_BACKEND_UNAVAILABLE`，保存仍未确认。后端存在不能替换失败／跳过的原生保存或原业务结论。查询成本仍归登记 `cache-report` 步骤。
+`chrono-cache` 不调用 GitHub 缓存 API；原生保存成功不能确认后端可用性。排查特定运行时直接读取其 action 日志及线上 API。失败诊断原件由现役上传入口直接保留，不再另造缓存传输报告。
 
 ### 输入和共享启动边界
 
@@ -191,7 +161,7 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 
 detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `check.*`。detector 兼容输入不含自身 bootstrap 不消费的检查政策。导入 startup 验证不是编译生产者，不能取得 `save_after_bootstrap` 资格。各消费者证据保留原生产报告和明确导入来源；startup 二进制不进入证据上传。传输成本单独测量，绑定源码的产物不证明构建输入来源完整。
 
-发布验证在 Cargo test destination 消费 `chrono-cache` 资产；bootstrap 安装的传输执行物仍归 bootstrap。发布配方不再把资产放到同一 bin 路径。Python 发布集成回归覆盖真实 CLI 的 plan／recover／staging／report，以及 inode、摘要保留；本地证据不证明原生缓存后端或外层工作流成功。详见[发布说明](release-ci.md)。
+发布验证在 Cargo test destination 消费 `chrono-cache` 资产；bootstrap 安装的传输执行物仍归 bootstrap。发布配方不再把资产放到同一 bin 路径。Python 发布集成回归覆盖真实 CLI 的 plan／recover／staging，以及 inode、摘要保留；本地证据不证明原生缓存后端或外层工作流成功。详见[发布说明](release-ci.md)。
 
 <a id="retired-remote-acceptance-controls"></a>
 
@@ -199,7 +169,7 @@ detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `che
 
 **产品与宿主政策曾同步删除：**可选原生 manifest 删除 fixture、对应 CLI／配置和 provider 登记、仓库 Variables 激活及实时 PR 正文读取器。provider 不再为激活增加 `pull-requests: read` 或读 PR metadata。不需要替代激活传输、变量管理、远端缓存删除或额外权限。退役字段按普通严格解码失败，不会静默当作激活成功。
 
-已有 `check.unit_cache` 仍计划、恢复两项登记编译归档，核 `producer-manifest/v1` 内容，通过普通恢复丢弃不可用宿主输出，执行原候选构建／测试，封存成功生产输出并经原生 action 保存。保存仍受必需生产者／封存 outcome 限制。普通后端观察保留原有必要范围及原失败，其他构建／发布缓存行为不变。
+已有 `check.unit_cache` 仍计划、恢复两项登记编译归档，核 `producer-manifest/v1` 内容，通过普通恢复丢弃不可用宿主输出，执行原候选构建／测试，封存成功生产输出并经原生 action 保存。保存仍受必需生产者／封存 outcome 限制。原生 action 日志及恢复原件保留实际结果和原失败，其他构建／发布缓存行为不变。
 
 历史证据仍绑定精确 source／run／attempt。Variables GET／list HTTP 403 是真实历史失败。后续有限 C1 观察记录两项坏内容保存／恢复／拒绝、重建和替换缓存，但原兼容范围健康精确命中未达成：所选 rustup 身份改变，最新 collection 返回 HTTP 502。
 

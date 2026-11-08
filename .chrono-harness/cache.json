@@ -199,6 +199,16 @@
       "path": "/Users/runner/.cargo/config.toml",
       "presence": "absent"
     },
+    "bootstrap.cargo.home-config": {
+      "kind": "file",
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/config",
+      "presence": "absent"
+    },
+    "bootstrap.cargo.home-config-toml": {
+      "kind": "file",
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/config.toml",
+      "presence": "absent"
+    },
     "linux.cargo.home-config": {
       "kind": "file",
       "path": "/home/runner/.cargo/config",
@@ -6460,8 +6470,8 @@
         "macos.sdk",
         "macos.linker",
         "macos.cc",
-        "macos.cargo.home-config",
-        "macos.cargo.home-config-toml",
+        "bootstrap.cargo.home-config",
+        "bootstrap.cargo.home-config-toml",
         "absent.RUSTFLAGS",
         "absent.CARGO_ENCODED_RUSTFLAGS",
         "absent.CARGO_BUILD_TARGET",
@@ -6517,8 +6527,8 @@
         "macos.sdk",
         "macos.linker",
         "macos.cc",
-        "macos.cargo.home-config",
-        "macos.cargo.home-config-toml",
+        "bootstrap.cargo.home-config",
+        "bootstrap.cargo.home-config-toml",
         "absent.RUSTFLAGS",
         "absent.CARGO_ENCODED_RUSTFLAGS",
         "absent.CARGO_BUILD_TARGET",
@@ -6560,8 +6570,8 @@
         "macos.sdk",
         "macos.linker",
         "macos.cc",
-        "macos.cargo.home-config",
-        "macos.cargo.home-config-toml",
+        "bootstrap.cargo.home-config",
+        "bootstrap.cargo.home-config-toml",
         "absent.RUSTFLAGS",
         "absent.CARGO_ENCODED_RUSTFLAGS",
         "absent.CARGO_BUILD_TARGET",
@@ -6615,8 +6625,8 @@
         "macos.sdk",
         "macos.linker",
         "macos.cc",
-        "macos.cargo.home-config",
-        "macos.cargo.home-config-toml",
+        "bootstrap.cargo.home-config",
+        "bootstrap.cargo.home-config-toml",
         "absent.RUSTFLAGS",
         "absent.CARGO_ENCODED_RUSTFLAGS",
         "absent.CARGO_BUILD_TARGET",
@@ -7185,35 +7195,6 @@
         "pointer": "/units/35/operation"
       }
     ]
-  },
-  "backend": {
-    "kind": "github",
-    "need": "Native cache save actions can finish successfully without an available backend archive",
-    "output_use": "Expose exact key/ref availability and retain original query failures in existing cache reports",
-    "command": {
-      "program": "gh",
-      "args": [
-        "api",
-        "--paginate",
-        "--slurp",
-        "{endpoint}"
-      ],
-      "env": {
-        "GH_PROMPT_DISABLED": "1"
-      },
-      "timeout_seconds": 30,
-      "output_limit_bytes": 4194304
-    },
-    "inherit": [
-      "PATH",
-      "HOME",
-      "GH_TOKEN"
-    ],
-    "credential_environment": [
-      "GH_TOKEN"
-    ],
-    "repository_environment": "GITHUB_REPOSITORY",
-    "ref_environment": "GITHUB_REF"
   },
   "recover_failed_restores": true,
   "recover_unconfirmed_restores": true

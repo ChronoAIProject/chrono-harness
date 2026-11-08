@@ -22,6 +22,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 | --- | --- |
 | 生成 AI 工作指南和技能文件 | [指南生成](docs/instructions.md) |
 | 生成 CI、准备事件输入 | [CI 使用说明](docs/ci.md) |
+| 提高合并效率、配置默认合并规则 | [宿主默认合并方案](docs/merging.md) |
 | 按单元检查、汇总原始报告 | [CI 单元与汇总](docs/ci-units.md) |
 | 理解如何按变更选择测试 | [文件影响范围](docs/filemap-impact.md)、[执行检查](docs/execution.md) |
 | 同时修改检查规则和产品 | [混合修改警告](docs/mixed.md)、[成本报告](docs/costs.md) |
@@ -56,7 +57,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 
 目前支持 Unix，行为验证范围是当前 macOS。普通读写失败会尝试回滚，报告未恢复路径和备份；尚不保证崩溃或多个写入者同时操作时的完整恢复。退出码：`0` 成功，`2` 用法错误，`1` 生成或读写失败。
 
-规则的[来源说明](docs/methodology-extraction.md)、[逐条处理表](docs/methodology-clause-map.md)和[许可说明](docs/licenses/methodology-attribution.md)另行保留。生成指南只说明文件已生成，不能证明 AI 已阅读、遵守规则或执行检查。
+规则的[来源与采用说明](docs/methodology-extraction.md)和[许可资料](docs/licenses/methodology-attribution.md)另行保留；历史逐条迁移记录归 Git／PR。生成指南只说明文件已生成，不能证明 AI 已阅读、遵守规则或执行检查。
 
 ## 在本仓运行检查
 

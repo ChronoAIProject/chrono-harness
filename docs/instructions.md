@@ -47,6 +47,8 @@ CLI 接受 `init --host-root H [--methodology M] [--host-context C] [--locale L]
 
 这些要求复用现有规则和生成器，不增加保留平台或自动证据清理实现。本仓 automatic_cleanup/v2 的操作、租约、回执、兼容切换和保留条件，仍由 host_context 和[工作树说明](worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)维护。没有新增判官或性能基准套件；生成与适用检查的成本按实际保留结果报告，完整 CI、存储和生命周期成本未知。生成前的旧副本不代表新规则；生成后也不证明遵守、翻译等价或完整验收。
 
+`candidate.landing` 还为新宿主提供[默认合并方案](merging.md)：独立 PR 并行检查、关闭 GitHub strict、验证固定合并树并在目标 push 检查实际落地变化。原有评审及必需检查保留；实际冲突、输入和依赖决定补验范围。产品默认与本仓 catalog 同步采用，完整治理的精确凭据和严格同树操作另按其明确合同验证。生成指南不修改远端规则，也不能证明原生事件或保护配置已生效。
+
 ## Schema 与可复制组合配方
 
 默认根明确选择 `job.wait`，本仓也在自己的 catalog／manifest 中采用。任务优先使用一个真实完成通知或原生阻塞等待通道，完成后一次核对原 stdout／stderr、退出码或 signal 和任务身份。产生结果的程序须等待自己的子孙及后台任务，调用方也须等待另行启动的任务。禁止用短周期状态、进程、产物查询，或反复空写、sleep 后查询、改名 wait/watch 的循环代替等待；允许授权内对原任务作长周期核实，不另开并行完成通道或新增确认关卡。
@@ -143,7 +145,7 @@ init／generate 只接受 schema 2、producer=`chrono-instructions`、render=`at
 
 新宿主的原始方法 init 把明确选择的方法登记为 `legacy.method` file atom。未声明语言时为 und，明确给出 --locale 时则采用作者声明。und 仅表示未指定语言，框架不冒称中文或英文。方法和上下文保留精确 UTF-8 字节；刷新时保留已有文件普通权限和根块外原文。没有改变绑定时，保留当前 manifest 排版。
 
-本仓把逐条迁移的产品双语 catalog 采用到独立宿主 catalog，再从源构建二进制，生成三个实际使用的输出。先前 001e501 的精选 17 段已细分并补充，稳定入口保留，不再有第二份旧段落权威；旧整块方法已退役，历史由版本库保留。这不是其他宿主的自动更新。已有宿主保留自己的 catalog 或不解析内容的方法文件；采用新默认时，明确比较、保留定制并编辑宿主数据。可选的[逐条处置表](methodology-clause-map.md)和[许可说明](licenses/methodology-attribution.md)不进入生成依赖图。
+本仓将产品双语 catalog 采用到独立宿主 catalog，从源构建二进制并生成 manifest 选择的输出。已有宿主保留自己的 catalog 或不解析内容的方法文件；采用新默认时，比较所选产品版本、保留定制并编辑宿主数据，不自动覆盖。[来源与采用说明](methodology-extraction.md)及[许可资料](licenses/methodology-attribution.md)不进入生成依赖图；历史迁移过程归 Git／PR。
 
 ## IO、边界与验证
 
@@ -153,20 +155,10 @@ init／generate 只接受 schema 2、producer=`chrono-instructions`、render=`at
 
 支持范围限于 Unix 和当前 macOS 普通 IO，不保证崩溃原子性、并发写入、跨平台行为，或恢复 ACL、扩展属性、原 inode、时间戳及所有者。没有针对恶意 AI 的关卡，也不假定全局安装或 provider。
 
-下面是现有实现的直接验证命令。本仓日常检查仍走[登记的统一入口](ci.md#this-repository)，由明确依赖选择适用操作。
+本仓验证走[登记的统一入口](ci.md#this-repository)，由明确依赖选择格式检查、生产构建、专属行为测试及适用的同源 Verus 证明。具体参数归 projects／FILEMAP 登记，本文引用该入口。
 
-```sh
-cargo fmt --check --manifest-path crates/instructions/Cargo.toml
-cargo build --locked --manifest-path crates/instructions/Cargo.toml
-cargo check --locked --manifest-path crates/instructions/Cargo.toml
-cargo fmt --check --manifest-path crates/instructions-tests/Cargo.toml
-cargo build --tests --locked --manifest-path crates/instructions-tests/Cargo.toml
-cargo check --tests --locked --manifest-path crates/instructions-tests/Cargo.toml
-cargo test --locked --manifest-path crates/instructions-tests/Cargo.toml
-```
+产品默认根包含同语言测试规则，以及 sh／bash 可以用 Python 测试的例外。[实际消费者边界](methodology-extraction.md#实际消费者边界)说明本仓根、上下文和 skill 的内容范围与测量口径。编辑内容须复核完整载荷，不截尾，也不靠全局配置扩限。单独选择 `core.behavior` 也包含同语言要求；生成指南不代表语言配对判官已执行。
 
-产品默认根包含同语言测试规则，以及 sh／bash 可以用 Python 测试的例外。[实际消费者边界](methodology-extraction.md#实际消费者边界)记录本仓根、上下文和 skill 的消费读数。编辑内容须复核完整载荷，不截尾，也不靠全局配置扩限。单独选择 `core.behavior` 也包含同语言要求；生成指南不代表语言配对判官已执行。
-
-专属行为测试覆盖依赖图顺序、去重和错误，明确语言选择，精确字节，布局重排、双语复用、深度和完整覆盖，写入前拒绝，所有权和路径预检，不支持格式时保护原件，原文、别名和无改动生成，以及普通与注入失败恢复。test-support 没有生产开关。测试真实复制二进制后验证默认 init，再明确添加多输出配方；消费读数和外部 skill 格式检查的适用范围见[迁移说明](methodology-extraction.md#实际消费者边界)。它们不增加生产依赖，也不证明语义。
+专属行为测试覆盖依赖图顺序、去重和错误，明确语言选择，精确字节，布局重排、双语复用、深度和完整覆盖，写入前拒绝，所有权和路径预检，不支持格式时保护原件，原文、别名和无改动生成，以及普通与注入失败恢复。test-support 没有生产开关。测试真实复制二进制后验证默认 init，再明确添加多输出配方；内容测量和外部 skill 格式检查的适用范围见[迁移说明](methodology-extraction.md#实际消费者边界)。它们不增加生产依赖，也不证明语义。
 
 FILEMAP 的 proposed projection 元数据使用明确的 `sources` 数组，取代单一 `source`，列出 catalog、manifest 和被引用的 file 输入；producer／scope 不变。根框架中的路径引用也由 manifest 决定。产品资产属于 build-input／test-execution；宿主数据和现有生成副本属于 runtime-input。五份完整治理登记仍为 proposed，成本仍有 unmeasured 项。指令专用 schema 校验不能冒称治理判官已执行。独立 CI 范围检查的实际 DELTA、协议和生成范围见 [CI 说明](ci.md)。

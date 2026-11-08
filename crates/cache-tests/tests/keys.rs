@@ -1,5 +1,3 @@
-#[path = "backend.rs"]
-mod backend;
 #[path = "recovery.rs"]
 mod recovery;
 
@@ -42,7 +40,7 @@ fn fixture() -> (Host, Value) {
     fs::create_dir(root.path().join(".chrono-harness")).unwrap();
     fs::write(root.path().join("compiler"), b"compiler-one").unwrap();
     fs::write(root.path().join("source"), b"source-one").unwrap();
-    let config = json!({"schema":"chrono-cache/v1","namespace":"fixture","artifact_registry":".chrono-harness/artifacts.json",
+    let mut config = json!({"schema":"chrono-cache/v2","namespace":"fixture","artifact_registry":".chrono-harness/artifacts.json",
         "inputs":{
             "compiler":{"kind":"file","path":"compiler","presence":"present"},
             "source":{"kind":"file","path":"source","presence":"present"},
@@ -56,6 +54,7 @@ fn fixture() -> (Host, Value) {
                 "artifacts":["target"],"compatibility_inputs":["compiler","profile"],"source_inputs":["source"],"restore":"compatible"},
             "other":{"owner":"other","producer":"build.other","consumers":["check.other"],
                 "artifacts":["other-target"],"compatibility_inputs":["compiler"],"source_inputs":["other"],"restore":"exact"}}});
+    register_consumer_contract(root.path(), &mut config);
     register_artifacts(root.path(), &config);
     (root, config)
 }
@@ -113,18 +112,43 @@ fn failed_test_retains_probe_originals_and_success_removes_its_host() {
     assert!(!removed.exists());
 }
 
-fn adopt_consumer_contract(root: &Path, config: &mut Value) {
+fn register_consumer_contract(root: &Path, config: &mut Value) {
     fs::write(
         root.join(".chrono-harness/operations.json"),
         br#"{"build":["build.project"],"other":"build.other"}"#,
     )
     .unwrap();
-    config["schema"] = json!("chrono-cache/v2");
     config["consumer_operations"] = json!({
         "check.one":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
         "check.two":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
-        "check.other":[{"registry":".chrono-harness/missing-other.json","pointer":"/other"}]
+        "check.other":[{"registry":".chrono-harness/operations.json","pointer":"/other"}]
     });
+}
+
+#[test]
+fn only_current_cache_registration_is_admitted() {
+    let (root, mut config) = fixture();
+    let current = plan(root.path(), &config, "check.one").unwrap();
+    assert_eq!(current["schema"], "chrono-cache-plan/v2");
+    assert_eq!(
+        current["caches"]["project"]["key"],
+        "chrono-v2-9f71474db4351e9476d1494c918fb420df36237fa619af8b33b7e53530413577-2817b202120fe2d9d5434847a76c712e5a06002285d5d0d51d404cfc72ea60e7"
+    );
+    // A retired registration must fail even without the current contract map.
+    config
+        .as_object_mut()
+        .unwrap()
+        .remove("consumer_operations");
+    for schema in ["chrono-cache/v1", "chrono-cache/v3", ""] {
+        config["schema"] = json!(schema);
+        let config: Config = serde_json::from_value(config.clone()).unwrap();
+        assert!(
+            chrono_cache::validate(&config)
+                .unwrap_err()
+                .contains("E_CACHE_CONFIG"),
+            "{schema}"
+        );
+    }
 }
 
 #[test]
@@ -180,6 +204,8 @@ fn consumers_select_only_registered_inputs_and_never_fall_back_to_all() {
             .unwrap_err()
             .contains("unavailable-other-input")
     );
+    config["consumer_operations"]["check.other"][0]["registry"] =
+        json!(".chrono-harness/missing-other.json");
     config["caches"]["other"]["producer"] = json!("build.changed-other");
     assert_eq!(first, plan(root.path(), &config, "check.one").unwrap());
     assert_eq!(first["execution"], "not-started");
@@ -194,7 +220,6 @@ fn consumers_select_only_registered_inputs_and_never_fall_back_to_all() {
 #[test]
 fn adding_a_consumer_does_not_invalidate_an_unchanged_producer_cache() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     let first = plan(root.path(), &config, "check.one").unwrap();
     config["caches"]["project"]["consumers"] = json!(["check.one", "check.two", "check.new"]);
     config["consumer_operations"]["check.new"] = config["consumer_operations"]["check.one"].clone();
@@ -207,7 +232,6 @@ fn adding_a_consumer_does_not_invalidate_an_unchanged_producer_cache() {
 #[test]
 fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     let source = root.path().join(".chrono-harness/operations.json");
     fs::write(
         &source,
@@ -242,7 +266,6 @@ fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
 #[test]
 fn consumer_operation_references_reject_missing_ambiguous_and_nonoperation_values() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     config["consumer_operations"] = json!({
         "check.one":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
         "check.two":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
@@ -328,7 +351,6 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
 #[test]
 fn a_consumer_registry_cannot_be_restored_as_a_cache_artifact() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     config["artifacts"]["target"]["path"] = json!(".chrono-harness/operations.json");
     register_artifacts(root.path(), &config);
     let error = plan(root.path(), &config, "check.one").unwrap_err();
@@ -339,71 +361,7 @@ fn a_consumer_registry_cannot_be_restored_as_a_cache_artifact() {
 }
 
 #[test]
-fn transport_report_distinguishes_restore_evidence_and_unconfirmed_save_outcome() {
-    let (root, config) = fixture();
-    let prepared = plan(root.path(), &config, "check.one").unwrap();
-    let key = prepared["caches"]["project"]["key"].as_str().unwrap();
-    let steps = json!({
-        "cache_0_restore":{"outcome":"success","outputs":{"cache-matched-key":key}},
-        "cache_0_save":{"outcome":"skipped","outputs":{}},
-        "build":{"outcome":"success"},"work":{"outcome":"failure"}
-    });
-    let report = chrono_cache::transport_report(&prepared, &steps, "work", Some("build")).unwrap();
-    assert_eq!(report["caches"]["project"]["restore"]["status"], "exact");
-    assert_eq!(
-        report["caches"]["project"]["save"]["status"],
-        "not-attempted"
-    );
-    assert_eq!(report["work"]["outcome"], "failure");
-    assert_eq!(report["bootstrap"]["outcome"], "success");
-    assert_eq!(report["verdict"], "not-a-judgment");
-    for (matched, outcome, expected) in [
-        ("", "success", "miss-or-unavailable"),
-        ("", "failure", "error"),
-        ("", "skipped", "not-attempted"),
-    ] {
-        let mut steps = steps.clone();
-        steps["cache_0_restore"] =
-            json!({"outcome":outcome,"outputs":{"cache-matched-key":matched}});
-        steps["cache_0_save"]["outcome"] = json!("success");
-        let report =
-            chrono_cache::transport_report(&prepared, &steps, "work", Some("build")).unwrap();
-        assert_eq!(report["caches"]["project"]["restore"]["status"], expected);
-        assert_eq!(report["caches"]["project"]["save"]["status"], "unconfirmed");
-        assert_eq!(report["caches"]["project"]["save"]["confirmed"], false);
-        assert!(
-            report["warnings"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|w| w["code"] == "W_CACHE_SAVE_UNCONFIRMED")
-        );
-    }
-    let prefix = prepared["caches"]["project"]["restore_keys"][0]
-        .as_str()
-        .unwrap();
-    let mut steps = steps;
-    steps["cache_0_restore"]["outputs"]["cache-matched-key"] =
-        json!(format!("{prefix}older-source"));
-    assert_eq!(
-        chrono_cache::transport_report(&prepared, &steps, "work", None).unwrap()["caches"]["project"]
-            ["restore"]["status"],
-        "compatible"
-    );
-    steps["cache_0_restore"]["outputs"]["cache-matched-key"] = json!("different-domain");
-    let report = chrono_cache::transport_report(&prepared, &steps, "work", None).unwrap();
-    assert_eq!(
-        report["caches"]["project"]["restore"]["status"],
-        "incompatible"
-    );
-    assert_eq!(
-        report["warnings"][0]["code"],
-        "W_CACHE_RESTORE_INCOMPATIBLE"
-    );
-}
-
-#[test]
-fn provider_cli_preserves_plan_probe_and_native_failure_observations_in_upload_directory() {
+fn plan_retains_probe_original_without_creating_release_output() {
     let (root, mut config) = fixture();
     config["inputs"]["compiler"] = json!({"kind":"command","command":{
         "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),"args":["echo","actual compiler"],"env":{},
@@ -449,240 +407,16 @@ fn provider_cli_preserves_plan_probe_and_native_failure_observations_in_upload_d
     let probe: Value =
         serde_json::from_slice(&fs::read(root.path().join(original)).unwrap()).unwrap();
     assert_eq!(probe["exit_code"], 0);
-    let steps = json!({"cache_0_restore":{"outcome":"success","outputs":{}},"cache_0_save":{"outcome":"success","outputs":{}},"work":{"outcome":"failure"}});
-    let result = Command::new(&binary)
-        .args([
-            "report",
-            "--host-root",
-            root.path().to_str().unwrap(),
-            "--plan",
-            &plan_path,
-            "--report-directory",
-            directory,
-            "--steps-env",
-            "CACHE_TEST_STEPS",
-            "--work",
-            "work",
-        ])
-        .env("CACHE_TEST_STEPS", serde_json::to_string(&steps).unwrap())
-        .output()
-        .unwrap();
-    assert!(
-        result.status.success(),
-        "{}",
-        String::from_utf8_lossy(&result.stderr)
-    );
-    assert!(String::from_utf8_lossy(&result.stderr).contains("W_CACHE_SAVE_UNCONFIRMED"));
-    let report: Value = serde_json::from_slice(&result.stdout).unwrap();
-    let original = report["report"]["path"].as_str().unwrap();
-    assert!(original.starts_with(directory));
-    assert_eq!(
-        report["observation"],
-        serde_json::from_slice::<Value>(&fs::read(root.path().join(original)).unwrap()).unwrap()
-    );
-    let producer = &report["observation"]["producer"];
-    assert_eq!(
-        producer["executable"],
-        json!(fs::canonicalize(&binary).unwrap())
-    );
-    assert_eq!(producer["version"], env!("CARGO_PKG_VERSION"));
-    assert_eq!(
-        producer["sha256"],
-        format!("{:x}", Sha256::digest(fs::read(&binary).unwrap()))
-    );
-    let steps_path = report["observation"]["native_steps"]["path"]
-        .as_str()
-        .unwrap();
-    assert!(steps_path.starts_with(directory));
-    assert_eq!(
-        steps,
-        serde_json::from_slice::<Value>(&fs::read(root.path().join(steps_path)).unwrap()).unwrap()
-    );
-    assert_eq!(report["observation"]["work"]["outcome"], "failure");
-    let probes = report["observation"]["probe_uploads"].as_array().unwrap();
-    assert_eq!(probes.len(), 1);
-    let copied = probes[0]["upload"]["path"].as_str().unwrap();
-    assert!(copied.starts_with(directory));
-    assert_eq!(
-        probe,
-        serde_json::from_slice::<Value>(&fs::read(root.path().join(copied)).unwrap()).unwrap()
-    );
-    for (steps, expected, warning) in [
-        (json!({"work":{"outcome":"failure"}}), "not-requested", None),
-        (
-            json!({"cache_0_save":{"outcome":"success"},"work":{"outcome":"success"}}),
-            "unconfirmed",
-            Some("W_CACHE_UNREGISTERED_SAVE"),
-        ),
-    ] {
-        let out = Command::new(&binary)
-            .args([
-                "report",
-                "--host-root",
-                root.path().to_str().unwrap(),
-                "--plan",
-                &plan_path,
-                "--report-directory",
-                ".chrono-harness/state/cache/check.one/",
-                "--steps-env",
-                "CACHE_TEST_STEPS",
-                "--work",
-                "work",
-                "--save-caches",
-                "[]",
-            ])
-            .env("CACHE_TEST_STEPS", serde_json::to_string(&steps).unwrap())
-            .output()
-            .unwrap();
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let row: Value = serde_json::from_slice(&out.stdout).unwrap();
-        assert_eq!(
-            row["observation"]["caches"]["project"]["save"]["status"],
-            expected
-        );
-        assert_eq!(
-            row["observation"]["caches"]["project"]["save"]["requested"],
-            false
-        );
-        if let Some(code) = warning {
-            assert!(
-                row["observation"]["warnings"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|w| w["code"] == code)
-            );
-        }
-    }
-    for saves in [r#"["unknown"]"#, r#"["project","project"]"#] {
-        let out = Command::new(&binary)
-            .args([
-                "report",
-                "--host-root",
-                root.path().to_str().unwrap(),
-                "--plan",
-                &plan_path,
-                "--report-directory",
-                directory,
-                "--steps-env",
-                "CACHE_TEST_STEPS",
-                "--work",
-                "work",
-                "--save-caches",
-                saves,
-            ])
-            .env("CACHE_TEST_STEPS", "{}")
-            .output()
-            .unwrap();
-        assert!(!out.status.success());
-    }
-}
-
-#[test]
-fn report_requires_current_planner_identity_before_publication() {
-    let (root, config) = fixture();
-    fs::write(
-        root.path().join(".chrono-harness/cache.json"),
-        serde_json::to_vec(&config).unwrap(),
-    )
-    .unwrap();
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
-    let plan_path = ".chrono-harness/state/cache/check.one/plan.json";
-    let planned = Command::new(&binary)
-        .args([
-            "plan",
-            "--host-root",
-            root.path().to_str().unwrap(),
-            "--config",
-            ".chrono-harness/cache.json",
-            "--consumer",
-            "check.one",
-            "--plan-output",
-            plan_path,
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        planned.status.success(),
-        "{}",
-        String::from_utf8_lossy(&planned.stderr)
-    );
-    let path = root.path().join(plan_path);
-    let plan: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    let expected = &plan["planner"];
-    let steps = json!({
-        "cache_0_restore":{"outcome":"success","outputs":{}},
-        "cache_0_save":{"outcome":"skipped","outputs":{}},
-        "work":{"outcome":"success"}
-    });
-    for (index, planner) in [
-        None,
-        Some(Value::Null),
-        Some(json!({"version":expected["version"]})),
-        Some(json!({"sha256":expected["sha256"]})),
-        Some(json!({"sha256":null,"version":expected["version"]})),
-        Some(json!({"sha256":7,"version":expected["version"]})),
-        Some(json!({"sha256":expected["sha256"],"version":7})),
-        Some(json!({"sha256":"0".repeat(64),"version":expected["version"]})),
-        Some(json!({"sha256":expected["sha256"],"version":"another-version"})),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let mut altered = plan.clone();
-        match planner {
-            Some(planner) => altered["planner"] = planner,
-            None => {
-                altered.as_object_mut().unwrap().remove("planner");
-            }
-        }
-        let retained_plan = serde_json::to_vec(&altered).unwrap();
-        fs::write(&path, &retained_plan).unwrap();
-        let directory = format!(".chrono-harness/state/cache/rejected-{index}/");
-        let output = Command::new(&binary)
-            .args([
-                "report",
-                "--host-root",
-                root.path().to_str().unwrap(),
-                "--plan",
-                plan_path,
-                "--report-directory",
-                &directory,
-                "--steps-env",
-                "CACHE_TEST_STEPS",
-                "--work",
-                "work",
-            ])
-            .env("CACHE_TEST_STEPS", serde_json::to_string(&steps).unwrap())
-            .output()
-            .unwrap();
-        assert!(
-            !output.status.success(),
-            "case {index} unexpectedly admitted planner identity: {}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-        assert!(output.stdout.is_empty());
-        assert!(
-            String::from_utf8_lossy(&output.stderr).contains("differs from the planner executable")
-        );
-        assert_eq!(fs::read(&path).unwrap(), retained_plan);
-        assert!(!root.path().join(&directory).exists());
-        assert!(
-            !root
-                .path()
-                .join(".chrono-harness/state/cache-reports/")
-                .exists()
-        );
-    }
 }
 
 #[test]
 fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
     let (root, config) = fixture();
+    fs::write(
+        root.path().join(".chrono-harness/operations.json"),
+        br#"{"build":["build.project","changed"],"other":"build.other"}"#,
+    )
+    .unwrap();
     let first = plan(root.path(), &config, "check.one").unwrap();
     for pointer in [
         "/namespace",
@@ -733,14 +467,8 @@ fn absent_inputs_are_explicit_and_empty_files_are_present() {
 }
 
 #[test]
-fn executable_candidates_require_exact_keys_and_still_require_builds() {
+fn exact_keys_still_require_builds_and_retired_executable_kind_is_rejected() {
     let (root, mut config) = fixture();
-    config["artifacts"]["target"]["kind"] = json!("executable-candidate");
-    assert!(
-        plan(root.path(), &config, "check.one")
-            .unwrap_err()
-            .contains("exact restoration")
-    );
     config["caches"]["project"]["restore"] = json!("exact");
     let result = plan(root.path(), &config, "check.one").unwrap();
     assert_eq!(result["caches"]["project"]["restore_keys"], json!([]));
@@ -748,6 +476,8 @@ fn executable_candidates_require_exact_keys_and_still_require_builds() {
         result["caches"]["project"]["handling"],
         "registered-build-required"
     );
+    config["artifacts"]["target"]["kind"] = json!("executable-candidate");
+    assert!(plan(root.path(), &config, "check.one").is_err());
 }
 
 #[test]
@@ -768,6 +498,12 @@ fn registration_rejects_missing_ambiguous_and_cross_owner_references() {
     ] {
         let mut changed = config.clone();
         *changed.pointer_mut(pointer).unwrap() = value;
+        if pointer == "/caches/project/consumers" {
+            changed["consumer_operations"]
+                .as_object_mut()
+                .unwrap()
+                .remove("check.two");
+        }
         assert!(
             plan(root.path(), &changed, "check.one")
                 .unwrap_err()
@@ -917,7 +653,7 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
     );
     assert!(!String::from_utf8_lossy(&first.stdout).contains("first-private-value"));
     let first: Value = serde_json::from_slice(&first.stdout).unwrap();
-    assert_eq!(first["schema"], "chrono-cache-plan/v1");
+    assert_eq!(first["schema"], "chrono-cache-plan/v2");
     assert_eq!(first["consumer"], "check.one");
     assert_eq!(first["execution"], "not-started");
     let next = run(Some("second-private-value"));
@@ -930,21 +666,15 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
 }
 
 #[test]
-fn consumer_registration_and_restore_policy_are_bound_without_list_order() {
+fn restore_policy_is_bound_without_consumer_list_order() {
     let (root, mut config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
     config["caches"]["project"]["consumers"] = json!(["check.two", "check.one"]);
     assert_eq!(first, plan(root.path(), &config, "check.one").unwrap());
-    config["caches"]["project"]["consumers"] = json!(["check.one", "check.three"]);
-    let changed = plan(root.path(), &config, "check.one").unwrap();
-    assert_ne!(
-        first["caches"]["project"]["key"],
-        changed["caches"]["project"]["key"]
-    );
     config["caches"]["project"]["restore"] = json!("exact");
     let exact = plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(
-        changed["caches"]["project"]["key"],
+        first["caches"]["project"]["key"],
         exact["caches"]["project"]["key"]
     );
     assert_eq!(exact["caches"]["project"]["restore_keys"], json!([]));
@@ -968,6 +698,15 @@ fn cli_rejects_unknown_actions_and_ambiguous_options() {
 fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
     let (root, mut config) = fixture();
     config["caches"]["other"]["consumers"] = json!(["check.one"]);
+    config["consumer_operations"]
+        .as_object_mut()
+        .unwrap()
+        .remove("check.other");
+    fs::write(
+        root.path().join(".chrono-harness/operations.json"),
+        br#"{"build":["build.project","build.other"]}"#,
+    )
+    .unwrap();
     fs::write(root.path().join("unavailable-other-input"), b"other source").unwrap();
     config["artifacts"]["target"]["path"] = json!("outputs with spaces/target");
     register_artifacts(root.path(), &config);

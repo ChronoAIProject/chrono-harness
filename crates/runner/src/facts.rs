@@ -1,10 +1,14 @@
 //! Immutable Git facts. Admissibility belongs to the consuming judge.
+pub use crate::facts_binding::{
+    OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
+    declaration as git_declaration,
+};
 pub use crate::facts_configs::Identity as ConfigIdentity;
+pub use crate::verified_status::{Tree, TreeEntry as Entry, TreePath};
 use crate::{
     json, no_symlink_parents, relative_path,
     wire::{Checkout, Delta, IndexFlag},
 };
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -12,18 +16,7 @@ use std::{
     path::Path,
     process::Command,
 };
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Entry {
-    pub mode: String,
-    pub oid: String,
-    pub kind: String,
-}
-pub use crate::facts_binding::{
-    OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
-    declaration as git_declaration,
-};
 
-pub type Tree = BTreeMap<String, Entry>;
 pub use crate::checkout::{changes as checkout_changes, tree as parse_tree};
 /// Inventory uses literal, case-sensitive registered directory prefixes.
 pub const LITERAL_PATHSPEC_CONTROLS: [&str; 4] = [
@@ -35,15 +28,8 @@ pub const LITERAL_PATHSPEC_CONTROLS: [&str; 4] = [
 /// Do not normalize a declaration into a broader exclusion. Callers retain
 /// schema validation and classify any paths that the inventory returns.
 pub fn artifact_exclusions(artifacts: &[&str]) -> Vec<String> {
-    artifacts
-        .iter()
-        .filter(|path| {
-            path.strip_suffix('/').is_some_and(|directory| {
-                directory
-                    .split('/')
-                    .all(|part| !matches!(part, "" | "." | ".."))
-            })
-        })
+    crate::verified_paths::literal_artifact_directories(artifacts)
+        .into_iter()
         .map(|path| format!(":(top,exclude,literal){path}"))
         .collect()
 }
@@ -132,31 +118,7 @@ pub fn tree(root: &Path, oid: &str) -> Result<Tree, String> {
     Reader::legacy().tree(root, oid)
 }
 pub fn delta(a: &Tree, b: &Tree) -> Vec<Delta> {
-    a.keys()
-        .chain(b.keys())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .filter(|p| a.get(*p) != b.get(*p))
-        .map(|p| {
-            let old = a.get(p);
-            let new = b.get(p);
-            Delta {
-                kind: if old.is_none() {
-                    "A"
-                } else if new.is_none() {
-                    "D"
-                } else {
-                    "M"
-                }
-                .into(),
-                path: p.clone(),
-                old_blob: old.map(|e| e.oid.clone()),
-                new_blob: new.map(|e| e.oid.clone()),
-                old_mode: old.map(|e| e.mode.clone()),
-                new_mode: new.map(|e| e.mode.clone()),
-            }
-        })
-        .collect()
+    crate::verified_status::delta_for_trees(a, b)
 }
 fn paths(raw: Vec<u8>) -> Result<Vec<String>, String> {
     raw.split(|b| *b == 0)
@@ -436,7 +398,7 @@ impl Reader {
             let paths = t
                 .iter()
                 .filter(|(_, entry)| entry.kind == "blob")
-                .map(|(path, _)| path.clone())
+                .map(|(path, _)| path.text.clone())
                 .collect::<Vec<_>>();
             self.immutable_blobs(root, oid, &paths)?;
         }

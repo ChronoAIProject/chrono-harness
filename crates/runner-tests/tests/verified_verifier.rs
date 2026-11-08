@@ -4,7 +4,11 @@
 #[path = "../../runner/src/verified_verifier.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_verifier as policy;
+#[cfg(verus_keep_ghost)]
+use policy::identifiers;
 use policy::{CompilerReport, CompilerVersion, OutputContract, Verification};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
@@ -12,8 +16,26 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
+
+/// 普通测试执行失败分支；同一证明根要求每个原布尔预期成立。
+fn expect_verifier_true(actual: bool)
+    requires actual,
+{
+    if !actual {
+        panic!();
+    }
+}
+
+fn expect_verifier_bytes(actual: &[u8], expected: &[u8])
+    requires actual@ == expected@,
+{
+    let equal = identifiers::equal_bytes(actual, expected);
+    expect_verifier_true(equal);
+}
 
 fn contract() -> (out: Option<OutputContract>)
     ensures out.is_some(), out.unwrap().version@ == "v"@, out.unwrap().commit@ == "c"@,
@@ -63,57 +85,58 @@ fn arguments() -> (out: Vec<String>)
 fn ordinary_operations_do_not_decode_their_business_output() {
     let raw = [0u8, 255, 17];
     let ignored = policy::proof_stdout(&None, &raw);
-    assert(ignored.len() == 0);
+    expect_verifier_true(ignored.len() == 0);
     let ordinary = policy::admit_output(&None, &None, &Vec::new(), i32::MIN, true);
-    assert(ordinary.is_ok());
+    expect_verifier_true(ordinary.is_ok());
     let selected = policy::proof_stdout(&contract(), &raw);
     assert(selected@ == raw@);
+    expect_verifier_bytes(&selected, &raw);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn full_crate_zero_error_report_and_successful_process_are_accepted() {
     let accepted = policy::admit_output(&contract(), &report(verification()),
         &arguments(), 0, false);
-    assert(accepted.is_ok());
+    expect_verifier_true(accepted.is_ok());
     let mut maximum = verification();
     maximum.verified = u64::MAX;
     let at_maximum = policy::admit_output(&contract(), &report(maximum),
         &arguments(), 0, false);
-    assert(at_maximum.is_ok());
+    expect_verifier_true(at_maximum.is_ok());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn missing_report_or_failed_process_cannot_be_success() {
     let missing = policy::admit_output(&contract(), &None, &arguments(), 0, false);
-    assert(missing.is_err());
+    expect_verifier_true(missing.is_err());
     let nonzero = policy::admit_output(&contract(), &report(verification()), &arguments(), 1, false);
-    assert(nonzero.is_err());
+    expect_verifier_true(nonzero.is_err());
     let negative = policy::admit_output(&contract(), &report(verification()), &arguments(), i32::MIN, false);
-    assert(negative.is_err());
+    expect_verifier_true(negative.is_err());
     let failed = policy::admit_output(&contract(), &report(verification()), &arguments(), 0, true);
-    assert(failed.is_err());
+    expect_verifier_true(failed.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn each_compiler_failure_flag_and_count_independently_rejects_the_report() {
     let mut unsuccessful = verification(); unsuccessful.success = false;
     let a = policy::admit_output(&contract(), &report(unsuccessful), &arguments(), 0, false);
-    assert(a.is_err());
+    expect_verifier_true(a.is_err());
     let mut error = verification(); error.encountered_error = true;
     let b = policy::admit_output(&contract(), &report(error), &arguments(), 0, false);
-    assert(b.is_err());
+    expect_verifier_true(b.is_err());
     let mut vir_error = verification(); vir_error.encountered_vir_error = true;
     let c = policy::admit_output(&contract(), &report(vir_error), &arguments(), 0, false);
-    assert(c.is_err());
+    expect_verifier_true(c.is_err());
     let mut errors = verification(); errors.errors = 1;
     let d = policy::admit_output(&contract(), &report(errors), &arguments(), 0, false);
-    assert(d.is_err());
+    expect_verifier_true(d.is_err());
     let mut empty = verification(); empty.verified = 0;
     let e = policy::admit_output(&contract(), &report(empty), &arguments(), 0, false);
-    assert(e.is_err());
+    expect_verifier_true(e.is_err());
     let mut partial = verification(); partial.is_verifying_entire_crate = false;
     let f = policy::admit_output(&contract(), &report(partial), &arguments(), 0, false);
-    assert(f.is_err());
+    expect_verifier_true(f.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -124,17 +147,17 @@ fn version_and_commit_must_match_one_explicit_nonempty_contract() {
     }
     let wrong_version = Some(OutputContract { version: "c".to_string(), commit: "c".to_string() });
     let a = policy::admit_output(&wrong_version, &report(verification()), &arguments(), 0, false);
-    assert(a.is_err());
+    expect_verifier_true(a.is_err());
     let wrong_commit = Some(OutputContract { version: "v".to_string(), commit: "v".to_string() });
     let b = policy::admit_output(&wrong_commit, &report(verification()), &arguments(), 0, false);
-    assert(b.is_err());
+    expect_verifier_true(b.is_err());
     let empty_version = Some(OutputContract { version: "".to_string(), commit: "c".to_string() });
-    let c = policy::validate_contract(&empty_version); assert(c.is_err());
+    let c = policy::validate_contract(&empty_version); expect_verifier_true(c.is_err());
     let empty_commit = Some(OutputContract { version: "v".to_string(), commit: "".to_string() });
-    let d = policy::validate_contract(&empty_commit); assert(d.is_err());
+    let d = policy::validate_contract(&empty_commit); expect_verifier_true(d.is_err());
     let original = OutputContract { version: "v".to_string(), commit: "c".to_string() };
     let cloned = original.clone();
-    let preserved = cloned.eq(&original); assert(preserved);
+    let preserved = cloned.eq(&original); expect_verifier_true(preserved);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -156,20 +179,116 @@ fn extra_filtered_or_rebound_verifier_arguments_are_rejected() {
     let mut filtered = arguments(); filtered[6] = "--verify-function=one".to_string();
     assert(filtered[6]@ != "--compile"@);
     let a = policy::admit_output(&contract(), &report(verification()), &filtered, 0, false);
-    assert(a.is_err());
+    expect_verifier_true(a.is_err());
     let mut extra = arguments(); extra.push("--verify-function=one".to_string());
-    let b = policy::canonical_verifier_arguments(&extra); assert(!b);
+    let b = policy::canonical_verifier_arguments(&extra); expect_verifier_true(!b);
     let mut unchecked = arguments(); unchecked[1] = "--no-verify".to_string();
     assert(unchecked[1]@ != "--no-cheating"@);
-    let c = policy::canonical_verifier_arguments(&unchecked); assert(!c);
+    let c = policy::canonical_verifier_arguments(&unchecked); expect_verifier_true(!c);
     let mut rebound = arguments(); rebound[10] = "other".to_string();
     assert(rebound[7]@.len() == 30 && rebound[10]@.len() == 5);
-    let d = policy::canonical_verifier_arguments(&rebound); assert(!d);
+    let d = policy::canonical_verifier_arguments(&rebound); expect_verifier_true(!d);
     let missing = Vec::new();
-    let e = policy::canonical_verifier_arguments(&missing); assert(!e);
+    let e = policy::canonical_verifier_arguments(&missing); expect_verifier_true(!e);
 }
 
 struct UnavailableSources;
+
+fn library(length: u64) -> (out: policy::CompiledArtifact)
+    ensures out.length == length,
+        out.path@ == vstd::utf8::encode_utf8("out"@),
+        policy::identifiers::digest_format(out.sha256@),
+{
+    let path = "out".as_bytes();
+    let original = metadata_fixture(policy::sources::copy_range(path, 0, path.len()), length);
+    policy::CompiledArtifact { path: original.path, sha256: original.sha256, length }
+}
+
+/// 任意观察（包括尚未准入的空值、Unicode、NUL 或无效摘要）都原样复制。
+fn any_library_clone_preserves_every_field(artifact: &policy::CompiledArtifact) {
+    let copied = artifact.clone();
+    assert(copied.path@ == artifact.path@);
+    assert(copied.sha256@ == artifact.sha256@);
+    assert(copied.length == artifact.length);
+}
+
+impl policy::ArtifactRead for UnavailableSources {
+    fn identity(&self, path: &[u8]) -> Result<(Vec<u8>, u64), String> {
+        Err("original library read error\0é".to_string())
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn library_admission_requires_original_path_nonempty_length_and_digest() {
+    proof { reveal_strlit("out"); }
+    let args = arguments();
+    let good = policy::admit_artifact_observation(&contract(), &Some(Ok(library(1))), &args);
+    let large = policy::admit_artifact_observation(&contract(), &Some(Ok(library(u64::MAX))), &args);
+    let empty = policy::admit_artifact_observation(&contract(), &Some(Ok(library(0))), &args);
+    let missing = policy::admit_artifact_observation(&contract(), &None, &args);
+    let failed = policy::admit_artifact_observation(
+        &contract(), &Some(Err("original error".to_string())), &args,
+    );
+    expect_verifier_true(good.is_ok() && large.is_ok());
+    expect_verifier_true(empty.is_err() && missing.is_err() && failed.is_err());
+    let mut wrong_path = library(1); wrong_path.path.push(0u8);
+    assert(wrong_path.path@.len() != vstd::utf8::encode_utf8("out"@).len());
+    let rebound = policy::admit_artifact_observation(&contract(), &Some(Ok(wrong_path)), &args);
+    expect_verifier_true(rebound.is_err());
+    let mut bad_digest = library(1); bad_digest.sha256 = vec![48u8];
+    let short = policy::admit_artifact_observation(&contract(), &Some(Ok(bad_digest)), &args);
+    expect_verifier_true(short.is_err());
+    let mut invalid = library(1); invalid.sha256[17] = 65u8;
+    expect_verifier_true(invalid.sha256[17] == 65u8);
+    assert(!policy::identifiers::digest_format(invalid.sha256@));
+    let uppercase = policy::admit_artifact_observation(&contract(), &Some(Ok(invalid)), &args);
+    expect_verifier_true(uppercase.is_err());
+    let no_args = policy::admit_artifact_observation(&contract(), &Some(Ok(library(1))), &Vec::new());
+    let ordinary = policy::admit_artifact_observation(&None, &None, &Vec::new());
+    let extra = policy::admit_artifact_observation(&None, &Some(Ok(library(1))), &args);
+    expect_verifier_true(no_args.is_err() && ordinary.is_ok() && extra.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn failed_process_or_invalid_arguments_cannot_create_successful_library_observation() {
+    let io = UnavailableSources;
+    let ordinary = policy::observe_artifact(&None, &Vec::new(), 0, false, &io);
+    let failed = policy::observe_artifact(&contract(), &arguments(), 7, false, &io);
+    let interrupted = policy::observe_artifact(&contract(), &arguments(), 0, true, &io);
+    let invalid = policy::observe_artifact(&contract(), &Vec::new(), 0, false, &io);
+    expect_verifier_true(ordinary.is_none());
+    expect_verifier_true(failed.is_some() && failed.unwrap().is_err());
+    expect_verifier_true(interrupted.is_some() && interrupted.unwrap().is_err());
+    expect_verifier_true(invalid.is_some() && invalid.unwrap().is_err());
+}
+
+fn any_accepted_compiler_receipt_has_the_same_library(
+    contract: &Option<OutputContract>, report: &Option<CompilerReport>, args: &Vec<String>,
+    exit: i32, failed: bool, dependency: &Option<Result<Vec<u8>, String>>, limit: usize,
+    artifact: &Option<Result<policy::CompiledArtifact, String>>,
+)
+    requires contract.is_some(),
+{
+    let accepted = policy::admit_observed_output(contract, report, args, exit, failed,
+        dependency, limit, artifact);
+    if accepted.is_ok() {
+        assert(exit == 0 && !failed);
+        assert(artifact.is_some() && artifact.unwrap().is_ok());
+        assert(artifact.unwrap().unwrap().path@ == vstd::utf8::encode_utf8(args[10]@));
+        assert(artifact.unwrap().unwrap().length > 0);
+        assert(policy::identifiers::digest_format(artifact.unwrap().unwrap().sha256@));
+    }
+}
+
+/// 成功报告与 dep-info 不能替代实际编译库；当前尚无库观察。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn successful_report_without_compiled_library_is_rejected() {
+    let original = Some(Ok(vec![0u8, 255u8]));
+    let accepted = policy::admit_observed_output(
+        &contract(), &report(verification()), &arguments(), 0, false, &original, 2, &None,
+    );
+    expect_verifier_true(accepted.is_err());
+}
 
 impl policy::sources::DependencyRead for UnavailableSources {
     fn read(&self, path: &[u8], limit: u64) -> Result<Vec<u8>, String> {
@@ -188,20 +307,20 @@ impl policy::sources::CandidateSourceRead for UnavailableSources {
 fn original_success_report_cannot_bypass_missing_failed_or_oversize_sources() {
     let args = arguments();
     let report = report(verification());
-    let missing = policy::admit_observed_output(&contract(), &report, &args, 0, false, &None, 1);
-    assert(missing.is_err());
+    let missing = policy::admit_observed_output(&contract(), &report, &args, 0, false, &None, 1, &Some(Ok(library(1))));
+    expect_verifier_true(missing.is_err());
     let failure = Some(Err("original read error\0é".to_string()));
-    let failed = policy::admit_observed_output(&contract(), &report, &args, 0, false, &failure, 1);
-    assert(failed.is_err());
+    let failed = policy::admit_observed_output(&contract(), &report, &args, 0, false, &failure, 1, &Some(Ok(library(1))));
+    expect_verifier_true(failed.is_err());
     let original = Some(Ok(vec![0u8, 255u8]));
-    let too_large = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 1);
-    let exact = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 2);
-    let zero_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 0);
-    let over_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 67_108_865);
-    assert(too_large.is_err() && exact.is_ok() && zero_bound.is_err() && over_bound.is_err());
-    let ordinary = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &None, 0);
-    let unexpected = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &original, 2);
-    assert(ordinary.is_ok() && unexpected.is_err());
+    let too_large = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 1, &Some(Ok(library(1))));
+    let exact = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 2, &Some(Ok(library(1))));
+    let zero_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 0, &Some(Ok(library(1))));
+    let over_bound = policy::admit_observed_output(&contract(), &report, &args, 0, false, &original, 67_108_865, &Some(Ok(library(1))));
+    expect_verifier_true(too_large.is_err() && exact.is_ok() && zero_bound.is_err() && over_bound.is_err());
+    let ordinary = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &None, 0, &None);
+    let unexpected = policy::admit_observed_output(&None, &None, &Vec::new(), 0, false, &original, 2, &None);
+    expect_verifier_true(ordinary.is_ok() && unexpected.is_err());
 }
 
 /// 与源码绑定组合：声明证明合同的成功回执一定带有同一原观察，不能走 None 快径。
@@ -211,7 +330,7 @@ fn any_admitted_proof_receipt_has_original_dependency(
 )
     requires contract.is_some(),
 {
-    let admitted = policy::admit_observed_output(contract, report, args, exit, failed, original, limit);
+    let admitted = policy::admit_observed_output(contract, report, args, exit, failed, original, limit, &Some(Ok(library(1))));
     if admitted.is_ok() {
         assert(original.is_some());
         assert(original.unwrap().is_ok());
@@ -223,15 +342,15 @@ fn any_admitted_proof_receipt_has_original_dependency(
 fn observation_cannot_turn_failed_process_or_invalid_bound_into_source_evidence() {
     let io = UnavailableSources;
     let ordinary = policy::sources::observe_dependency(&None, &Vec::new(), 0, false, 1, &io);
-    assert(ordinary.is_none());
+    expect_verifier_true(ordinary.is_none());
     let nonzero = policy::sources::observe_dependency(&contract(), &arguments(), 7, false, 1, &io);
     let process_failure = policy::sources::observe_dependency(&contract(), &arguments(), 0, true, 1, &io);
     let no_bound = policy::sources::observe_dependency(&contract(), &arguments(), 0, false, 0, &io);
     let huge_bound = policy::sources::observe_dependency(&contract(), &arguments(), 0, false, usize::MAX, &io);
-    assert(nonzero.is_some() && nonzero.unwrap().is_err());
-    assert(process_failure.is_some() && process_failure.unwrap().is_err());
-    assert(no_bound.is_some() && no_bound.unwrap().is_err());
-    assert(huge_bound.is_some() && huge_bound.unwrap().is_err());
+    expect_verifier_true(nonzero.is_some() && nonzero.unwrap().is_err());
+    expect_verifier_true(process_failure.is_some() && process_failure.unwrap().is_err());
+    expect_verifier_true(no_bound.is_some() && no_bound.unwrap().is_err());
+    expect_verifier_true(huge_bound.is_some() && huge_bound.unwrap().is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -239,19 +358,23 @@ fn original_argv_keeps_every_argument_and_missing_success_receipt_rejects() {
     let original = vec!["verus\0é".to_string(), "root".to_string(), "root".to_string()];
     let args = policy::sources::process_arguments(&original).unwrap();
     assert(args.len() == 2 && args[0]@ == "root"@ && args[1]@ == "root"@);
+    expect_verifier_true(args.len() == 2);
+    let first = identifiers::equal_text(&args[0], "root");
+    let second = identifiers::equal_text(&args[1], "root");
+    expect_verifier_true(first && second);
     let empty = policy::sources::process_arguments(&Vec::new());
-    assert(empty.is_err());
+    expect_verifier_true(empty.is_err());
     let io = UnavailableSources;
     let registry = Err("registry read error".to_string());
     let missing = policy::sources::bind_process_sources("passed", None, &registry, &io);
-    assert(missing.is_err());
+    expect_verifier_true(missing.is_err());
     let blocked = policy::sources::bind_process_sources("blocked", None, &registry, &io);
     let failed = policy::sources::bind_process_sources("failed", None, &registry, &io);
     proof {
         reveal_strlit("blocked"); reveal_strlit("failed"); reveal_strlit("passed");
         assert("blocked"@[0] != "passed"@[0]); assert("failed"@[0] != "passed"@[0]);
     }
-    assert(blocked.is_ok() && failed.is_ok());
+    expect_verifier_true(blocked.is_ok() && failed.is_ok());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -285,9 +408,9 @@ fn explicit_file_membership_uses_full_original_text() {
     }
     assert(!policy::sources::registered_source(files@, seq![65u8]));
     assert(!policy::sources::registered_source(files@, seq![97u8, 0u8]));
-    assert(exact);
-    assert(!wrong_case);
-    assert(!suffix);
+    expect_verifier_true(exact);
+    expect_verifier_true(!wrong_case);
+    expect_verifier_true(!suffix);
 }
 
 
@@ -323,18 +446,18 @@ fn source_metadata_requires_normalized_identity_digest_length_and_root() {
     assert(!policy::sources::listed_source_path(candidate@, candidate[0].path@, 0));
     assert(policy::sources::source_metadata_admitted(sources@, candidate@, root@));
     let accepted = policy::sources::admit_source_metadata(&sources, &candidate, &root);
-    assert(accepted);
+    expect_verifier_true(accepted);
     let changed_candidate = vec![metadata_fixture(vec![97u8], 8)];
     let changed_length = policy::sources::admit_source_metadata(&sources, &changed_candidate, &root);
-    assert(!changed_length);
+    expect_verifier_true(!changed_length);
     let mut changed = metadata_fixture(vec![46u8, 47, 97], 7);
     changed.sha256[0] = 65u8;
     let changed_sources = vec![changed];
-    assert(changed_sources[0].sha256[0] == 65u8);
-    assert(candidate[0].sha256[0] == 48u8);
+    expect_verifier_true(changed_sources[0].sha256[0] == 65u8);
+    expect_verifier_true(candidate[0].sha256[0] == 48u8);
     assert(!policy::sources::source_pair_matches(&changed_sources[0], &candidate[0]));
     let changed_digest = policy::sources::admit_source_metadata(&changed_sources, &candidate, &root);
-    assert(!changed_digest);
+    expect_verifier_true(!changed_digest);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -344,11 +467,11 @@ fn source_metadata_rejects_missing_roots_and_empty_inventories() {
     let sources = vec![metadata_fixture(vec![97u8], 0)];
     let candidate = vec![metadata_fixture(vec![97u8], 0)];
     let missing_root = policy::sources::admit_source_metadata(&sources, &candidate, &[98u8]);
-    assert(!missing_root);
+    expect_verifier_true(!missing_root);
     let empty: Vec<policy::sources::SourceBinding> = Vec::new();
     let no_sources = policy::sources::admit_source_metadata(&empty, &empty, &[97u8]);
     let unequal = policy::sources::admit_source_metadata(&sources, &empty, &[97u8]);
-    assert(!no_sources && !unequal);
+    expect_verifier_true(!no_sources && !unequal);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -369,7 +492,7 @@ fn source_metadata_accepts_consistent_path_aliases() {
     assert(policy::sources::source_aliases_consistent(candidate@, 0));
     assert(policy::sources::source_aliases_consistent(candidate@, 1));
     let accepted = policy::sources::admit_source_metadata(&sources, &candidate, &[97u8]);
-    assert(accepted);
+    expect_verifier_true(accepted);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -388,7 +511,7 @@ fn source_metadata_rejects_alias_length_conflicts_even_when_each_pair_matches() 
     assert(policy::sources::source_pair_matches(&sources[1], &candidate[1]));
     assert(!policy::sources::source_aliases_consistent(candidate@, 1));
     let accepted = policy::sources::admit_source_metadata(&sources, &candidate, &[97u8]);
-    assert(!accepted);
+    expect_verifier_true(!accepted);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -409,10 +532,10 @@ fn source_metadata_rejects_alias_digest_conflicts_even_when_each_pair_matches() 
     assert(sources[1].sha256@ =~= candidate[1].sha256@);
     assert(policy::sources::source_pair_matches(&sources[0], &candidate[0]));
     assert(policy::sources::source_pair_matches(&sources[1], &candidate[1]));
-    assert(candidate[0].sha256[0] == 48u8 && candidate[1].sha256[0] == 49u8);
+    expect_verifier_true(candidate[0].sha256[0] == 48u8 && candidate[1].sha256[0] == 49u8);
     assert(!policy::sources::source_aliases_consistent(candidate@, 1));
     let accepted = policy::sources::admit_source_metadata(&sources, &candidate, &[97u8]);
-    assert(!accepted);
+    expect_verifier_true(!accepted);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -424,6 +547,9 @@ fn relative_source_paths_normalize_components_without_escaping_root() {
     assert(policy::sources::joined_components(seq![seq![99u8]]) == seq![99u8]) by (compute);
     let normalized = policy::sources::normalize_relative_path(&path).unwrap();
     assert(normalized@ == seq![99u8]);
+    let expected = [99u8];
+    assert(expected@ == seq![99u8]);
+    expect_verifier_bytes(&normalized, &expected);
     let dotted = [46u8, 47, 97, 47, 47, 46, 47, 98, 47];
     assert(dotted@ =~= seq![46u8, 47u8, 97u8, 47u8, 47u8, 46u8, 47u8, 98u8, 47u8]);
     assert(policy::sources::relative_components(seq![46u8, 47u8, 97u8, 47u8, 47u8, 46u8, 47u8, 98u8, 47u8])
@@ -431,6 +557,7 @@ fn relative_source_paths_normalize_components_without_escaping_root() {
     assert(policy::sources::joined_components(seq![seq![97u8], seq![98u8]]) == seq![97u8, 47u8, 98u8]) by (compute);
     let normalized = policy::sources::normalize_relative_path(&dotted).unwrap();
     assert(normalized@ == seq![97u8, 47u8, 98u8]);
+    expect_verifier_bytes(&normalized, &[97u8, 47u8, 98u8]);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -457,8 +584,8 @@ fn relative_source_paths_reject_absolute_empty_and_parent_escape() {
     let parent = policy::sources::normalize_relative_path(&parent_input);
     let cancelled = policy::sources::normalize_relative_path(&cancelled_input);
     let escape = policy::sources::normalize_relative_path(&escape_input);
-    assert(absolute.is_none() && empty.is_none() && dot.is_none());
-    assert(parent.is_none() && cancelled.is_none() && escape.is_none());
+    expect_verifier_true(absolute.is_none() && empty.is_none() && dot.is_none());
+    expect_verifier_true(parent.is_none() && cancelled.is_none() && escape.is_none());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -471,6 +598,7 @@ fn relative_source_paths_preserve_spaces_unicode_and_reject_control_bytes() {
         == seq![97u8, 32u8, 47u8, 206u8, 187u8]) by (compute);
     let normalized = policy::sources::normalize_relative_path(&path).unwrap();
     assert(normalized@ == path@);
+    expect_verifier_bytes(&normalized, &path);
     let nul = policy::sources::normalize_relative_path(&[97u8, 0]);
     let lf = policy::sources::normalize_relative_path(&[97u8, 10]);
     let del = policy::sources::normalize_relative_path(&[97u8, 127]);
@@ -479,7 +607,7 @@ fn relative_source_paths_preserve_spaces_unicode_and_reject_control_bytes() {
     assert(policy::sources::relative_components(seq![97u8, 10u8]).is_none()) by (compute);
     assert(policy::sources::relative_components(seq![97u8, 127u8]).is_none()) by (compute);
     assert(policy::sources::relative_components(seq![97u8, 92u8, 98u8]).is_none()) by (compute);
-    assert(nul.is_none() && lf.is_none() && del.is_none() && backslash.is_none());
+    expect_verifier_true(nul.is_none() && lf.is_none() && del.is_none() && backslash.is_none());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -503,7 +631,7 @@ fn dependency_content_requires_every_checksum_and_final_newline() {
     };
     let mut sources = Vec::new();
     sources.push(source);
-    assert(sources.len() == 1);
+    expect_verifier_true(sources.len() == 1);
     assert(sources[0].path@ == seq![97u8]);
     assert(sources[0].sha256@ == seq![102u8]);
     let matched = policy::sources::matches_dependency_content(&input, &output, &sources);
@@ -525,22 +653,22 @@ fn dependency_content_requires_every_checksum_and_final_newline() {
     assert(input@.skip(17).take(32)[2] == 99u8);
     assert(vstd::utf8::encode_utf8("# env-dep:"@)[2] == 101u8);
     assert(!policy::sources::prefix_at(input@.skip(17).take(32), 0, vstd::utf8::encode_utf8("# env-dep:"@)));
-    assert(matched);
+    expect_verifier_true(matched);
 
     let missing = policy::sources::copy_range(&input, 0, 17);
     let missing_checksum = policy::sources::matches_dependency_content(missing.as_slice(), &output, &sources);
     assert(missing@.skip(17) =~= Seq::<u8>::empty());
-    assert(!missing_checksum);
+    expect_verifier_true(!missing_checksum);
 
     let truncated = policy::sources::copy_range(&input, 0, 49);
     let no_final_lf = policy::sources::matches_dependency_content(truncated.as_slice(), &output, &sources);
     assert(truncated@.skip(17) =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 32u8, 97u8]);
     proof { policy::sources::next_byte_at(truncated@.skip(17), 0, 32, 10u8); }
-    assert(!no_final_lf);
+    expect_verifier_true(!no_final_lf);
 
     let empty: Vec<policy::sources::SourceBinding> = Vec::new();
     let no_sources = policy::sources::matches_dependency_content(&input, &output, &empty);
-    assert(!no_sources);
+    expect_verifier_true(!no_sources);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -557,24 +685,31 @@ fn dependency_target_requires_exact_output_and_terminated_nonempty_list() {
     assert(policy::sources::dependency_scan(seq![97u8, 32u8, 98u8], Seq::empty(), Seq::empty())
         == Some(seq![seq![97u8], seq![98u8]]));
     assert(policy::sources::compiler_paths(input@, output@) == Some(seq![seq![97u8], seq![98u8]]));
-    assert(parsed.is_some());
+    expect_verifier_true(parsed.is_some());
     let paths = parsed.unwrap();
     assert(policy::sources::dependency_values(paths@) == seq![seq![97u8], seq![98u8]]);
     assert(paths.len() == 2 && paths[0]@ == seq![97u8] && paths[1]@ == seq![98u8]);
+    expect_verifier_true(paths.len() == 2);
+    let expected = [97u8];
+    assert(expected@ == seq![97u8]);
+    expect_verifier_bytes(&paths[0], &expected);
+    let expected = [98u8];
+    assert(expected@ == seq![98u8]);
+    expect_verifier_bytes(&paths[1], &expected);
     let wrong_output = [112u8];
     let wrong = policy::sources::compiler_dependency_paths(&input, &wrong_output);
     assert(wrong_output@ =~= seq![112u8]);
     assert(input@.subrange(0, 5)[0] != policy::sources::target_prefix(wrong_output@)[0]);
     assert(!policy::sources::prefix_at(input@, 0, policy::sources::target_prefix(wrong_output@)));
-    assert(wrong.is_none());
+    expect_verifier_true(wrong.is_none());
     let unterminated = [111u8, 46u8, 100u8, 58u8, 32u8, 97u8];
     assert(unterminated@ =~= seq![111u8, 46u8, 100u8, 58u8, 32u8, 97u8]);
     let missing_lf = policy::sources::compiler_dependency_paths(&unterminated, &output);
-    assert(missing_lf.is_none());
+    expect_verifier_true(missing_lf.is_none());
     let empty = [111u8, 46u8, 100u8, 58u8, 32u8, 10u8];
     assert(empty@ =~= seq![111u8, 46u8, 100u8, 58u8, 32u8, 10u8]);
     let empty_list = policy::sources::compiler_dependency_paths(&empty, &output);
-    assert(empty_list.is_none());
+    expect_verifier_true(empty_list.is_none());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -584,8 +719,15 @@ fn decimal_serialization_includes_zero_and_digit_boundary() {
     let ten = policy::sources::decimal_bytes(10);
     reveal_with_fuel(policy::sources::decimal_text, 3);
     assert(zero@ =~= seq![48u8]);
+    let expected = [48u8];
+    assert(expected@ == seq![48u8]);
+    expect_verifier_bytes(&zero, &expected);
     assert(nine@ =~= seq![57u8]);
+    let expected = [57u8];
+    assert(expected@ == seq![57u8]);
+    expect_verifier_bytes(&nine, &expected);
     assert(ten@ =~= seq![49u8, 48u8]);
+    expect_verifier_bytes(&ten, &[49u8, 48u8]);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -594,6 +736,8 @@ fn decimal_serialization_includes_u64_maximum() {
     reveal_with_fuel(policy::sources::decimal_text, 21);
     assert(maximum@ =~= seq![49u8, 56u8, 52u8, 52u8, 54u8, 55u8, 52u8, 52u8, 48u8, 55u8,
                             51u8, 55u8, 48u8, 57u8, 53u8, 53u8, 49u8, 54u8, 49u8, 53u8]);
+    expect_verifier_bytes(&maximum, &[49u8, 56u8, 52u8, 52u8, 54u8, 55u8, 52u8, 52u8, 48u8, 55u8,
+                                     51u8, 55u8, 48u8, 57u8, 53u8, 53u8, 49u8, 54u8, 49u8, 53u8]);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -641,8 +785,8 @@ fn checksum_lines_bind_path_hash_and_source_length() {
     assert(vstd::utf8::encode_utf8("# checksum:sha256="@) =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8]);
     assert(vstd::utf8::encode_utf8(" file_len:"@) =~= seq![32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8]);
     assert(policy::sources::checksum_line(&source) =~= seq![35u8, 32u8, 99u8, 104u8, 101u8, 99u8, 107u8, 115u8, 117u8, 109u8, 58u8, 115u8, 104u8, 97u8, 50u8, 53u8, 54u8, 61u8, 102u8, 32u8, 102u8, 105u8, 108u8, 101u8, 95u8, 108u8, 101u8, 110u8, 58u8, 49u8, 48u8, 32u8, 97u8, 92u8, 32u8, 98u8]);
-    assert(exact);
-    assert(!wrong_hash && !wrong_length && !wrong_path && !leading_zero && !extra);
+    expect_verifier_true(exact);
+    expect_verifier_true(!wrong_hash && !wrong_length && !wrong_path && !leading_zero && !extra);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -650,10 +794,11 @@ fn compiler_dependency_paths_decode_only_escaped_spaces() {
     let encoded = [97u8, 92u8, 32u8, 98u8];
     let parsed = policy::sources::parse_dependency_paths(&encoded);
     reveal_with_fuel(policy::sources::dependency_scan, 5);
-    assert(parsed.is_some());
+    expect_verifier_true(parsed.is_some());
     let paths = parsed.unwrap();
-    assert(paths.len() == 1);
+    expect_verifier_true(paths.len() == 1);
     assert(paths[0]@ == seq![97u8, 32u8, 98u8]);
+    expect_verifier_bytes(&paths[0], &[97u8, 32u8, 98u8]);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -661,16 +806,25 @@ fn compiler_dependency_paths_preserve_order_and_duplicates() {
     reveal_with_fuel(policy::sources::dependency_scan, 6);
     let encoded = [97u8, 32u8, 98u8, 32u8, 97u8];
     let parsed = policy::sources::parse_dependency_paths(&encoded);
-    assert(parsed.is_some());
+    expect_verifier_true(parsed.is_some());
     let paths = parsed.unwrap();
     assert(encoded@ =~= seq![97u8, 32u8, 98u8, 32u8, 97u8]);
     assert(policy::sources::dependency_scan(encoded@, Seq::empty(), Seq::empty())
         == Some(seq![seq![97u8], seq![98u8], seq![97u8]]));
     assert(policy::sources::dependency_values(paths@) == seq![seq![97u8], seq![98u8], seq![97u8]]);
-    assert(paths.len() == 3);
+    expect_verifier_true(paths.len() == 3);
     assert(paths[0]@ == seq![97u8]);
+    let expected = [97u8];
+    assert(expected@ == seq![97u8]);
+    expect_verifier_bytes(&paths[0], &expected);
     assert(paths[1]@ == seq![98u8]);
+    let expected = [98u8];
+    assert(expected@ == seq![98u8]);
+    expect_verifier_bytes(&paths[1], &expected);
     assert(paths[2]@ == seq![97u8]);
+    let expected = [97u8];
+    assert(expected@ == seq![97u8]);
+    expect_verifier_bytes(&paths[2], &expected);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -678,14 +832,18 @@ fn compiler_dependency_paths_preserve_relative_components_and_utf8_bytes() {
     reveal_with_fuel(policy::sources::dependency_scan, 5);
     let relative = [46u8, 46u8, 47u8, 99u8];
     let parsed = policy::sources::parse_dependency_paths(&relative);
-    assert(parsed.is_some());
+    expect_verifier_true(parsed.is_some());
     let paths = parsed.unwrap();
     assert(paths.len() == 1 && paths[0]@ == relative@);
+    expect_verifier_true(paths.len() == 1);
+    expect_verifier_bytes(&paths[0], &relative);
     let unicode = [206u8, 187u8];
     let unchanged = policy::sources::parse_dependency_paths(&unicode);
-    assert(unchanged.is_some());
+    expect_verifier_true(unchanged.is_some());
     let unchanged = unchanged.unwrap();
     assert(unchanged.len() == 1 && unchanged[0]@ == unicode@);
+    expect_verifier_true(unchanged.len() == 1);
+    expect_verifier_bytes(&unchanged[0], &unicode);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -703,9 +861,9 @@ fn compiler_dependency_paths_reject_empty_words_controls_and_unknown_escapes() {
     let cr = policy::sources::parse_dependency_paths(&[97u8, 13u8]);
     let lf = policy::sources::parse_dependency_paths(&[97u8, 10u8]);
     let del = policy::sources::parse_dependency_paths(&[97u8, 127u8]);
-    assert(missing.is_none() && leading.is_none() && trailing.is_none());
-    assert(repeated.is_none() && slash.is_none() && escape.is_none());
-    assert(nul.is_none() && tab.is_none() && cr.is_none() && lf.is_none() && del.is_none());
+    expect_verifier_true(missing.is_none() && leading.is_none() && trailing.is_none());
+    expect_verifier_true(repeated.is_none() && slash.is_none() && escape.is_none());
+    expect_verifier_true(nul.is_none() && tab.is_none() && cr.is_none() && lf.is_none() && del.is_none());
 }
 
 

@@ -696,9 +696,6 @@ fn parent_collection_transports_report_references_and_rejects_damaged_originals(
     }
 }
 
-#[path = "resources.rs"]
-mod resources;
-
 #[test]
 fn parent_collection_requires_transported_streams_without_local_fallback_or_business_reruns() {
     let mut h = GatedHost::new();
@@ -1023,10 +1020,32 @@ fn push_spans_multiple_commits_and_pr_uses_fixed_merge_base_despite_stale_event_
     assert_ne!(d["base"], previous);
     let merge = tools::pr_workflow_merge(&h.host.root, &previous, &h.host.candidate);
     h.payload = json!({"pull_request":{"base":{"sha":h.host.base},"head":{"sha":h.host.candidate},"merge_commit_sha":merge}});
+    git(&h.host.root, &["checkout", "--detach", &merge]);
     let d = h.detection();
-    assert_eq!(d["source"], "pr-workflow-merge-head");
+    assert_eq!(d["source"], "pr-workflow-merge-tree");
     assert_eq!(d["base"], previous);
     assert_eq!(d["required_units"], json!(["beta"]));
+    assert_eq!(d["candidate"], merge);
+    assert_eq!(d["event_head"], h.host.candidate);
+    h.units(&d);
+    h.mock(&d, "skipped-jobs-omitted");
+    let out = h
+        .command(&["check", "--collect"], &d, &needs(&h, &d))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let mut wrong_run_head = d.clone();
+    wrong_run_head["event_head"] = json!(merge);
+    let rejected = h
+        .command(&["check", "--collect"], &wrong_run_head, &needs(&h, &d))
+        .output()
+        .unwrap();
+    assert!(!rejected.status.success());
 }
 
 #[test]

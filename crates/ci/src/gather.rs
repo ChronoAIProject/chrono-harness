@@ -42,7 +42,6 @@ struct Transport<'a> {
     executable: String,
     digest: String,
     observations: Vec<Value>,
-    resources: Option<Value>,
     acquisition_path: Option<String>,
     downloads: Option<chrono_harness::retained_artifacts::retention::Publication>,
     acquisition: Option<AcquisitionBudget>,
@@ -72,10 +71,6 @@ impl<'a> Transport<'a> {
             acquisition_path: None,
             downloads: None,
             acquisition: None,
-            resources: c
-                .resource_observation
-                .as_ref()
-                .map(|_| super::resources::unavailable("jobs-response-not-acquired")),
         })
     }
 
@@ -319,7 +314,7 @@ fn parent_run(
 ) -> Result<(), String> {
     if run["id"] != d.run_id
         || run["run_attempt"] != attempt
-        || run["head_sha"] != d.candidate
+        || run["head_sha"] != d.event_head
         || run["event"] != d.event
         || run["path"] != c.collection.workflow_path
         || run["repository"]["full_name"] != repository
@@ -351,7 +346,7 @@ fn validate_detector_jobs(
         || latest < d.run_attempt
         || latest > parent_attempt
         || latest_jobs[0]["run_id"] != d.run_id
-        || latest_jobs[0]["head_sha"] != d.candidate
+        || latest_jobs[0]["head_sha"] != d.event_head
         || latest_jobs[0]["id"].as_u64().is_none_or(|id| id == 0)
         || latest_jobs[0]["status"] != "completed"
         || latest_jobs[0]["conclusion"] != "success"
@@ -411,14 +406,6 @@ fn parent_units(
         ),
         true,
     )?;
-    if let Some(config) = &c.gather.resource_observation {
-        let mut observed =
-            super::resources::observe(config, &pages, d.run_id, native.run_attempt, &d.candidate);
-        let index = transport.observations.len() - 1;
-        observed["source"] = json!({"process_index":index,
-            "stdout_sha256":transport.observations[index]["stdout_sha256"]});
-        transport.resources = Some(observed);
-    }
     let jobs: Vec<_> = pages
         .as_array()
         .ok_or("job pages missing")?
@@ -444,7 +431,7 @@ fn parent_units(
             .collect();
         if relevant.iter().any(|job| {
             job["run_id"] != d.run_id
-                || job["head_sha"] != d.candidate
+                || job["head_sha"] != d.event_head
                 || job["run_attempt"]
                     .as_u64()
                     .is_none_or(|a| a == 0 || a > native.run_attempt)
@@ -517,6 +504,10 @@ fn inner(
         .as_str()
         .filter(|v| full_oid(v))
         .ok_or("fixed collection candidate missing")?;
+    let event_head = context["event_head"]
+        .as_str()
+        .filter(|v| full_oid(v))
+        .ok_or("fixed event head missing")?;
     let event = context["event"]
         .as_str()
         .ok_or("collection event missing")?;
@@ -563,7 +554,7 @@ fn inner(
                     .strip_prefix(".github/workflows/")
                     .ok_or("workflow path")?;
                 let endpoint = format!(
-                    "repos/{repository}/actions/workflows/{}/runs?head_sha={candidate}&event={event}&per_page=100",
+                    "repos/{repository}/actions/workflows/{}/runs?head_sha={event_head}&event={event}&per_page=100",
                     encode(filename)
                 );
                 let pages = transport.api(&endpoint, true)?;
@@ -573,7 +564,7 @@ fn inner(
                         .as_array()
                         .ok_or("workflow run list missing")?
                     {
-                        if run["head_sha"] == candidate
+                        if run["head_sha"] == event_head
                             && run["event"] == event
                             && run["path"] == workflow.workflow_path
                         {
@@ -679,7 +670,7 @@ fn inner(
                 id,
                 repository,
                 &artifact,
-                candidate,
+                event_head,
             )?;
         }
         let destination = transport.download(id, repository, &artifact, &destination)?;
@@ -755,6 +746,7 @@ fn inner(
             "event",
             "base",
             "candidate",
+            "event_head",
             "initial",
             "provider_sha256",
             "check_config_sha256",
@@ -835,7 +827,7 @@ fn inner(
             let fresh = transport.api(&endpoint, false)?;
             if fresh["run_attempt"] != attempt
                 || fresh["status"] != "completed"
-                || fresh["head_sha"] != candidate
+                || fresh["head_sha"] != event_head
                 || fresh["event"] != event
                 || fresh["path"] != w.workflow_path
             {
@@ -927,14 +919,6 @@ pub(super) fn gather(
         json!({"kind":"native-acquisition","result":result.as_ref().ok(),"error":result.as_ref().err(),"completion":"not-established"})
     )).transpose();
     let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"storage_error":storage_result.as_ref().err(),"processes":transport.observations});
-    if let Some(resources) = transport.resources {
-        report["resources"] = resources;
-        if let Some(summary) = c.gather.resource_observation.as_ref().and_then(|config| {
-            super::resources::publish_summary(config, &report["resources"], &c.gather.report_path)
-        }) {
-            report["resources"]["summary"] = summary;
-        }
-    }
     let gather_original = chrono_harness::prepared::retain_original(
         root,
         &format!("{}preparation/", c.collection.artifact_directory),

@@ -998,7 +998,7 @@ fn validate_unit_report(
             return Err("E_COLLECTION_INPUT: original fixed request binding differs".into());
         }
         validate_retained_response(original, response, process.exit_code)?;
-        aggregate = aggregate.max(response.status.clone());
+        aggregate = aggregate.maximum(response.status.clone());
         findings.extend(
             response
                 .findings

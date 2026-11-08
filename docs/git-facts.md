@@ -84,7 +84,7 @@ v3／v4 绑定不能证明完整检查、Git 配置及委托依赖齐全、确�
 
 选择器、政策及实际 FILEMAP 依赖都要登记，选择配置不自动产生边。同一选择器现由完整 runner 根入口、初始配置、输入采集、按范围可选 registration 和完整 CI 配置消费，保持各已登记平台的命令与入口一致。
 
-不同所选政策就是不同输入，不能证明跨平台同判、输入齐全、本仓真实完整工作流采用或全面启用。Go PR #18 已用 beta.18 完成本地 macOS 和真实 Linux push／PR 单元及汇总，保留独立工作流和 SDK 配置；精确候选、事件和限制见[真实 CI 采用](native-ci-adoption.md#native-git-policy-adoption)。
+不同所选政策就是不同输入，不能证明跨平台同判、输入齐全、本仓真实完整工作流采用或全面启用。Go 的有限采用及原 CI 记录见 [PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/18)；当前接入方式与限制归[示例索引](examples.md)。
 
 <a id="exact-host-executable-selection"></a>
 
@@ -100,11 +100,7 @@ v3／v4 绑定不能证明完整检查、Git 配置及委托依赖齐全、确�
 
 路径缺失、绑定不一致或目标歧义时失败，不猜其他政策。快照身份由单个采集目标和原选择器重建，不读取今天的 Git。固定端点 v2 字节只作数据，不作执行路径。打开候选及后续每次获取仍核实际可执行、选择器、配置和输入；政策移动须在各端明确登记。
 
-本仓通过 `.chrono-harness/git/pinned-macos.json` 和 `git/macos-26.json` 绑定两个当前真实 CI 镜像，两者明确以前者作固定数据路径；实测本机 macOS 27.0.1（26A434）、arm64 则用 `git/macos-27.json`。缓存产物登记和发布暂存独立读取固定原生政策的产物元数据，不由可执行选择推导。
-
-macos-26 instructions 作业 `41927937485/1` 在 macOS 26.7.2（25G332）、镜像 `20261102.0473.1` 观察到摘要 `61e77a2d557f8677a9da3b403c054c8b6e2d2ba5f6389bce100b55b65977df2e`；随后同队列的 `41941690768/1` 观察到 `b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9`。两者都是当前环境。
-
-宿主为两者登记独立完整原生及 diagnostics 政策，并在 worktree v3 接受。声明版本仍为 `git version 2.50.1 (Apple Git-155)`；版本与完整原生验收须以候选实际绑定探测为准，不能从 runner 标签推断。未知字节仍失败。
+本仓的实际映射、程序摘要和版本预期归[选择器](../.chrono-harness/config.json)及其直接政策；工作树接受的身份归[工作树政策](../.chrono-harness/worktree.json)。缓存产物登记和发布暂存独立读取固定原生政策的产物元数据，不由可执行选择推导。声明仍须以候选实际绑定探测验证，不能从 runner 标签推断；未知字节仍失败。每次主机、镜像和执行物观察直接查原 CI，不维护历史读数表。
 
 这里产品快照解释和宿主政策一起变化，本机 macOS 27 保留独立精确声明。验证用普通源码 bootstrap、标准变更检查及真实 CI，总新增成本未测。Rust 专属测试覆盖无基线可执行情况下两个当前身份选择、固定／请求绑定、漂移、未知字节、畸形／歧义声明及目标绑定不符。
 
@@ -135,30 +131,17 @@ config v3 可选择带版本的保护，不改旧快照：
 
 <a id="public-binary-consumption"></a>
 
-## 公开二进制的实际使用记录
+## 公开工具的使用边界
 
-公开 beta.16 曾在 macOS arm64 上匿名下载安装到[Go 示例仓库](https://github.com/ChronoAIProject/chrono-harness-examples-go)的本地克隆，基线为 `2d3bfb3d8cea0d9c0add957cca20ad4335d6601c`。消费者明确采用独立 full v3 facts 配置，登记实际本机 Git 摘要／版本、`.git/config` 内容身份及 `.git/config.worktree` 缺失。
+公开工具的安装和身份核验归[分发说明](distribution.md)，真实宿主及其固定发布选择归[示例索引](examples.md)。本地 Git 政策、已安装工具消费和远端 provider 采用须分别验证；本机专属配置不会自动成为远端示例的政策。旧发布的本地运行不能证明当前候选、输入齐全或同判，历史安装与容量实验归 Git／原发布材料。
 
-已有 scoped v3 配置选择这份 facts 政策；所有声明仍在 `.chrono-harness/`，原历史配置字节保留。安装后的公开工具运行原有标准命令：
-
-```sh
-.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json \
-  --base BASE_OID --candidate CANDIDATE_OID --unit rates
-```
-
-`rates` 执行 `build.rates`、`test.rates`；`harness` 执行 `ci.verify`、`test.bootstrap`，包括已安装的指令生成器。修改登记 Git 配置、或创建原声明缺失的 worktree 配置，都会在业务操作前失败；恢复输入后通过。六个工具保持公开清单身份。
-
-这只是使用本地登记 Git 的公开二进制消费，没有把机器专属配置采用到远端示例，也不证明真实 provider v3 采用、输入齐全或同判。
-
-Git 进程观察可能显著增大传输体积。该消费者最初的 8,388,608 字节检查输出限制因 `process output limit exceeded` 失败。用失败报告的精确 `request` 直接调用 `chrono-judge-ci`，退出 0，响应为 9,735,075 字节；其中 25 个 Git 进程观察占 9,685,756 字节，保留 2,056,371 原 stdout 字节及协议中的文本、字节表示。
-
-之后宿主明确登记 16,777,216 字节检查输出上限，标准检查和漂移／恢复用例通过。这是该宿主和调用的实测，不是通用容量建议。上限应依据实际报告大小登记，单次 Git 进程限制和完整输入义务不变。
+Git 原始进程观察会增加报告传输量。上限按实际待消费原件的大小登记，超限时保留原失败；一次容量实验不能成为其他宿主的通用限额。单次 Git 进程限制、原件摘要核对和完整输入义务继续适用。
 
 <a id="registered-artifact-inventory"></a>
 
 ## 在清单中排除明确登记的产物目录
 
-快照获取时，Git 不输出明确登记产物目录里的未跟踪内容。此前 beta.18 Go 消费者的两次未跟踪清单各输出 1,007,609 字节，接近单进程 1,048,576 上限，主要是允许存在的 SDK／状态输出。到调用方再过滤，会让这些路径先占满输入采集预算。
+快照获取时，Git 不输出明确登记产物目录里的未跟踪内容。到调用方再过滤，会让允许存在的 SDK／状态输出先占用输入采集预算。
 
 完整、初始、按范围采集、registration 复核、项目执行保护和迁移解码，现在共用字面排除参数生成逻辑，工作树清单也复用它。每个排除项只来自调用方明确声明的根层、区分大小写目录前缀，不发现产物归属、宿主布局或依赖。
 

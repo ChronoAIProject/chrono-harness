@@ -1,4 +1,4 @@
-//! 当前 planner 身份的独立成功、拒绝与完整文本边界预期。
+//! 当前缓存格式与 planner 身份的独立成功、拒绝与完整文本边界预期。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
 #[path = "../../cache/src/verified_planner.rs"]
@@ -9,8 +9,65 @@ use chrono_cache::verified_planner as policy;
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
+
+// 同一预期也在普通 Cargo 中实际执行。
+fn expect_cache_true(actual: bool)
+    requires actual,
+{
+    if !actual {
+        panic!();
+    }
+}
+
+fn expect_registration(schema: &str, expected: bool)
+    requires expected == (schema@ == "chrono-cache/v2"@),
+{
+    let actual = policy::current_registration(schema);
+    assert(actual == expected);
+    expect_cache_true(actual == expected);
+}
+
+fn expect_plan(schema: Option<&str>, expected: bool)
+    requires expected == policy::current_plan_schema(schema),
+{
+    let actual = policy::current_plan(schema);
+    assert(actual == expected);
+    expect_cache_true(actual == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_current_registration_and_plan_schemas_are_accepted() {
+    proof {
+        reveal_strlit("chrono-cache/v2"); reveal_strlit("chrono-cache/v1");
+        reveal_strlit("chrono-cache/v20"); reveal_strlit("chrono-cache/v2\n");
+        reveal_strlit("chrono-cache-plan/v2"); reveal_strlit("chrono-cache-plan/v1");
+        reveal_strlit("chrono-cache-plan/v20"); reveal_strlit("chrono-cache-plan/v2\n");
+        reveal_strlit("");
+        assert("chrono-cache/v2"@[14] != "chrono-cache/v1"@[14]);
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v20"@.len());
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v2\n"@.len());
+        assert("chrono-cache/v2"@.len() != ""@.len());
+        assert("chrono-cache-plan/v2"@[19] != "chrono-cache-plan/v1"@[19]);
+        assert("chrono-cache-plan/v2"@.len() != "chrono-cache-plan/v20"@.len());
+        assert("chrono-cache-plan/v2"@.len() != "chrono-cache-plan/v2\n"@.len());
+        assert("chrono-cache-plan/v2"@.len() != ""@.len());
+    }
+    expect_registration("chrono-cache/v2", true);
+    expect_registration("chrono-cache/v1", false);
+    expect_registration("chrono-cache/v20", false);
+    expect_registration("chrono-cache/v2\n", false);
+    expect_registration("", false);
+    expect_plan(Some("chrono-cache-plan/v2"), true);
+    expect_plan(Some("chrono-cache-plan/v1"), false);
+    expect_plan(Some("chrono-cache-plan/v20"), false);
+    expect_plan(Some("chrono-cache-plan/v2\n"), false);
+    expect_plan(Some(""), false);
+    expect_plan(None, false);
+}
 
 fn expect(
     ds: Option<&str>, dv: Option<&str>, os: Option<&str>, ov: Option<&str>,
@@ -20,6 +77,7 @@ fn expect(
 {
     let actual = policy::matches_planner_identity(ds, dv, os, ov);
     assert(actual == expected);
+    expect_cache_true(actual == expected);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

@@ -6,6 +6,14 @@
 
 本地／CI 须用同一登记命令。普遍同判还要求完整有效输入相同、求值确定。当前输入生产者仍报 completeness_proven:false，报告保留 parity 未建立，不另阻断普通完整检查。独立比较器和固定 spec-status 已退役，因为没有当前成功生产者或实际宿主状态观察；报告匹配不证明输入完整或普遍确定性。
 
+CI 的额外资源分类、比较告警和摘要投影已退役：没有当前准入、构建、恢复或发布结果依赖它，成本排查直接查原生 CI。删除专属测试及宿主环境／映射登记；真实运行归属、job、artifact、原报告和失败核验继续沿原汇总流程。此范围不证明完整成本已测或其余对象均有必要。
+
+## 宿主默认合并方案
+
+产品默认 `candidate.landing` 与本仓采用数据提供[并行验收、按依赖合并](merging.md)。CI 生成器和输入生产者改用固定 PR 合并树 M 及第一父 B，单独绑定事件 head H；`chrono-ci-detection/v2` 和汇总按 H 核对 GitHub 运行／job／artifact，按 M 核对测试原件。原生部署使用本仓登记的 admission 文件，生成器不修改远端保护。Rust 回归覆盖并发目标变化、head 检出拒绝、固定父身份、合并树汇总及 full 工作流的原生凭据交接。完整检查、原生事件、远端 strict 实际切换与落地核验须分别取得真实结果；不据源码或本地结果宣称部署、完整治理或严格同树保证。
+
+admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复用已有 PR 工作流与必需汇总，不新增检查或程序。线上是否生效须查原生有效规则；部署权限不足时该缺口仍未解决，不以仓内声明代替保护。
+
 ## 测试来源
 
 下文保留代码里的名称，方便查找实现。`full` 是完整治理检查，`scoped` 是限定范围的检查，`initial` 用于没有基线的首次检查；三者的证据不能互相替代。fixture 是测试用的临时宿主或输入材料，guard 是执行前后核验输入的保护程序。所谓“输入闭合”，指所有适用输入及其依赖都已明确登记、绑定并验证。
@@ -34,14 +42,14 @@
 | 2.2 routes 回归 helper 迁移 | 已实现，范围有限 | 八项 judge-routes-tests 回归改用 Rust 测试自有子进程 helper。`tests/support/tool.rs` 是明确 Cargo binary 和 FILEMAP compile 输入，原 test:judge-routes-tests 计划沿用 Cargo test。保留字面／空／换行 argv、cwd／环境、回执篡改、错版本／执行物替换、PATH、版本观察复用、循环／预检拒绝、标准调用、汇总身份。真实标准 DELTA 消费沿原报告验证，运行事实不在表内复制 | 仅限此测试所有者。其余跨语言逻辑／helper、外部接口 fixture 登记、完整输入、启用、同判仍缺 |
 | 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入；有限配对、routes、迁移、快照、v5 工具链清单已实现 |
 | 4 固定快照／上下文／CI | 部分 | runner facts.rs、registration lib.rs；G `context_and_config_identity_mismatch`、`ignored_untracked_staged_and_wrong_checkout_fail` | config v3 已为完整／初始消费者、明确 scoped v2、当前 provider v4 事件读取／fetch 绑定 Git，见 git-facts.md。完整原生 CI／同判及 Git／委托／Cargo／SDK 输入仍缺 |
-| 4.2 CI 缓存及增量构建 | 部分：两项采用编译缓存已有键、生产／内容绑定及有限原生冷／保存、兼容源码重建、健康精确命中、不兼容环境分域／重建 | 独立 Rust chrono-cache plan 消费明确消费者／输入／产物，分开源码／兼容键；JSON pointer 只绑定所选值，整文件来源在键外，回归区分单元 metadata／构建参数。v2 探测前解析消费操作引用，只改消费者不改生产键。引用原输出登记，拒绝重叠或缓存证据／源码。Rust 失效、选择、缺失、路径、真实 CLI 环境、planner 不符回归；check.unit_cache 两项绑定真实 action／Cargo，消费命中前核 producer manifest。真实 Cargo 重建／恢复仍属本地证据，见[缓存合同](ci-cache.md)。bootstrap／check／release 明确增量，发布汇总核值。provider 为 main 消费者生成固定 restore／save，保存先保持未确认；可选 GitHub 查询保留原有限进程，区分 key／ref 可用性与创建来源，失败／歧义不确认，无待确认保存不查。声明启动缓存可在后续失败后保存，每键至多一保存 job，冲突在生成前拒绝。[有限原生验收](ci-cache.md#bounded-native-acceptance)保留两项原标准操作／汇总 | 不可用内容恢复及修复后健康精确命中的完整原生验收仍缺。Variables／PR 正文控制和专用 fixture 已退役。并发、完整后端生命周期、依赖／当前判官／bootstrap／逐项目输入仍缺，须扩大真实消费者验收 |
-| 5 DELTA 图 | 部分 | filemap 类型化合并／记录／传递及 CI 适配；F 全部，P actual_runner_registration_filemap_*。SPEC §5.1 固定两态局部性及定理 6 有条件节点集结论（trureturing PR #10868 已合），复用冻结 ConsequenceClosure，保留先前精确应用编译和旧 execution-edge 反例 | 同源 Verus 图内核覆盖类型并集、名称／槽位索引、FIFO 最短前驱、有限原因链、行投影、原因集合、逐 seed 迭代状态／根对应及真实遍历记录选测；两处诊断按完整 seed ID 查找首个原记录也由同源根证明。返回集合沿用明确列出的外部标准库转换。外层原因关联与合并、seed-ID 生产及关联完整性、JSON 适配、额外选测和完整 SPEC 对应仍待证明；完整宿主输入及原生启用未完成 |
+| 4.2 CI 缓存及增量构建 | 部分：两项采用编译缓存已有键、生产／内容绑定及有限原生冷／保存、兼容源码重建、健康精确命中、不兼容环境分域／重建 | 独立 Rust chrono-cache plan 消费明确消费者／输入／产物，分开源码／兼容键；JSON pointer 只绑定所选值，整文件来源在键外，回归区分单元 metadata／构建参数。v2 探测前解析消费操作引用，只改消费者不改生产键。引用原输出登记，拒绝重叠或缓存证据／源码。Rust 失效、选择、缺失、路径、真实 CLI 环境、planner 不符回归；check.unit_cache 两项绑定真实 action／Cargo，消费命中前核 producer manifest。真实 Cargo 重建／恢复仍属本地证据，见[缓存合同](ci-cache.md)。bootstrap／check／release 明确增量，发布汇总核值。provider 为 main 消费者生成固定 restore／save，保存成功不确认后端；持续后端查询及额外传输报告、CLI、上传目录政策已退役，排障直接查原生日志与线上 API。普通 CI 复用失败原件上传，发布以独立失败 artifact 保留 state，正式发布根和 collector 合同保持。声明启动缓存可在后续失败后保存，每键至多一保存 job，冲突在生成前拒绝。[有限原生验收](ci-cache.md#bounded-native-acceptance)保留两项原标准操作／汇总 | 不可用内容恢复及修复后健康精确命中的完整原生验收仍缺。Variables／PR 正文控制和专用 fixture 已退役。并发、完整后端生命周期、依赖／当前判官／bootstrap／逐项目输入仍缺，须扩大真实消费者验收 |
+| 5 DELTA 图 | 部分 | 实际 Tree DELTA 已由同源 Verus 完整枚举并线性合并两棵原树，逐路径结果与完整 UTF-8 严格顺序均有证明；独立预期核完整长度、六字段、顺序、空／Unicode／NUL 及反向变化。Git 原始事实获取／解析仍待证明。filemap 类型化合并／记录／传递及 CI 适配；F 全部，P actual_runner_registration_filemap_*。SPEC §5.1 固定两态局部性及定理 6 有条件节点集结论（trureturing PR #10868 已合），复用冻结 ConsequenceClosure，保留先前精确应用编译和旧 execution-edge 反例 | 同源 Verus 图内核覆盖类型并集、名称／槽位索引、FIFO 最短前驱、有限原因链、行投影、原因集合、逐 seed 迭代状态／根对应及真实遍历记录选测；两处诊断按完整 seed ID 查找首个原记录也由同源根证明。返回集合沿用明确列出的外部标准库转换。外层原因关联与合并、seed-ID 生产及关联完整性、JSON 适配、额外选测和完整 SPEC 对应仍待证明；完整宿主输入及原生启用未完成 |
 | 5.2 从消费者需要出发重构依赖 | 部分 | 已有 DELTA 合并／传递／所有者检查。无独立结构报告或自检，未用 SCC／深度／排名／claim 摘要已退役，循环、类型边、有限见证保留 | 真实消费者重构、适用本地／原生验证及核实落地 |
 | 6 演进与移除 | 部分 | W 实际替换、共同退役、别名修复、候选迁移认证；已退役未接入正式 runner 检查的额外 guard、独占主机输入和观察入口；registration workflow v3 明确选端点版本。自含 fixture 用当前 decoder 确认真实登记数据转换 | 当前 schema 演进消费者验收，只在真实需要处转换数据，完整启用 |
-| 7 协议 | 已实现，有限普通双提交 v1 及明确初始 profile；部分同源 Verus 证明 | runner wire.rs／full.rs／initial.rs、共享进程引擎；verified_identifiers.rs 证明实际摘要文本的完整 64 位小写十六进制格式，包含全零及非法字节边界；协议四态身份／顺序／克隆／退出码、实际 finding 克隆及 finding／状态一致性、响应头、finding 字段形状／引用允许条件、DELTA 克隆／完整字段比较与 evidence 身份由 verified_status.rs 证明，独立根核实际边界。独立完整 DAG 执行自检，含启动前错误、进程环境、输出回执、伪传输失败、身份／证据变异。R 传输／故障注入，G 真实根消费者 | 登记记录指针语法／目标归属、JSON／证据 IO 与完整响应组合仍待证明；bootstrap 来源及启用。初始清单不声称 DELTA 绿；平台仅已测 Unix。自检核一致性，不证明判官语义完整或全部运行错误可发现 |
+| 7 协议 | 已实现，有限普通双提交 v1 及明确初始 profile；部分同源 Verus 证明 | runner wire.rs／full.rs／initial.rs、共享进程引擎；verified_identifiers.rs 证明实际摘要文本的完整 64 位小写十六进制格式，包含全零及非法字节边界；协议四态身份／顺序／克隆／退出码、实际 finding 克隆及 finding／状态一致性、响应头、finding 字段形状／引用允许条件、DELTA 克隆／完整字段比较与 evidence 身份由 verified_status.rs 证明；普通／初始响应前置及留存头部／状态组合保留完整错误文字与优先级，实际二元状态汇总共用 maximum，独立根核实际边界。负责合同见 [Verus](verus.md#协议状态与-finding)。独立完整 DAG 执行自检，含启动前错误、进程环境、输出回执、伪传输失败、身份／证据变异。R 传输／故障注入，G 真实根消费者 | 登记记录指针语法／目标归属、外层遍历／状态分类、JSON／证据 IO 与完整响应组合仍待证明；bootstrap 来源及启用。初始清单不声称 DELTA 绿；平台仅已测 Unix。自检核一致性，不证明判官语义完整或全部运行错误可发现 |
 | 7.1 标准日志 | 部分：独立 Rust 库、无效参数入口、runner 分发后发布 | diagnostics JSONL／tracing，专属目的／上下文测试。所有 CliOutput 消费者独立尝试写／flush 两通道，含用法错误；失败尝试一条正确分行 stderr 事件并保留 logging／finish 失败。直接用例和真实二进制回归含只读 stdout 的成功 help，健康字节／状态和原协议／进程通道保留 | 全生产者、非 Rust 适配、登记格式／目的、子进程上下文、统一应急／持久证据发布；目的失败不宣称持久保留。候选标准／原生验收另验 |
 | 7.2 异常链与通用处理 | 部分：原生 IO、真实 judge 启动前／报告有类型传播 | diagnostics::error 包装／导入 chrono-error/v1；NativeIoError 保留原种类／消息／OS 码，LogFailure 共用 IO 模块。Unix 原生 writer 保留只读描述符 EBADF；发布错误保留通道／阶段／原业务、独立次要输出／诊断失败。专属原生／无原生／部分／flush 测试。完整 judge 以 chrono-runner-transport-failure/v1 保留准备原因／码、封存请求／judge／operation，区分未启动，保留子原件，晚期报告发布失败关联原原因。真实 IO、协议／schema／上下文变异、次要发布回归，见[诊断边界](diagnostics.md) | 已有有限 Darwin 原生观察；Linux、其他产品原生适配／类型传播、非 Unix 输出、任意自定义原因序列化、协议采用、持久引用、其他次要失败发布仍缺；完整输入／启用／SPEC 未完成 |
-| 7.3 自我检测 | 部分 | 原接收器描述符耗尽回归保留 spawn 原错／共享观察；后端缺失／歧义／格式／失败回归不造可用性。资源比较消费登记实测，恢复保留失败／未确认 outcome、逐项清理和原报告。真实文件系统／CLI 回归；最终传输拒绝恢复观察缺失／变化，保留两快照 | 全生产者、原生后端及历史超时根因；有限故障测试不证明普遍检测 |
+| 7.3 自我检测 | 部分 | 原接收器描述符耗尽回归保留 spawn 原错／共享观察；资源比较消费登记实测，恢复保留失败／未确认 outcome、逐项清理和原报告。真实文件系统／CLI 回归；最终传输拒绝恢复观察缺失／变化，保留两快照 | 全生产者及历史超时根因；有限故障测试不证明普遍检测 |
 | 7.4 完成归属与等待 | 部分：原生引擎及生命周期等待 | runner 用一个已有内核退出观察器／私有通知。静默期间阻塞到真实事件或原期限，取消／释放／关闭提示沿原 socket；mapping v5 拒绝不兼容嵌套观察器。独立原生计数及原退出／期限／输出／launcher 中断／描述符预算回归 | 外部宿主／调用方通道选择、句柄、丢通道后不重复启动的恢复尚未实现；不控制其他任务，原生 Linux 待验 |
 | 8 七判官／混合修改 | 部分 | 七个有限生产者及 W 完整链消费者 | 完整宿主输入及启用 |
 | 9 报告／成本 | 部分 | runner full.rs；G full_report_* 核必需字段、配置／实测执行物区别、发现／具名输出来源、null／未解原因、pass／warn／fail／error 退出、旧明确存储／stdout 一致。声明成本报告已实现，有限 routes 工具／projects 证据已有 | 完整工具链／输入和可选测量；未知／冲突不能证明完整治理 |
@@ -54,7 +62,7 @@
 | 13 验收 | 部分，见下表 | 逐项映射 | 全部未完成项仍必需 |
 | 14 边界 | 文档已实现 | README／SPEC／本表 | 后续落地时更新 |
 | 15 通用参考经验 | 部分 | 已有固定来源引用，不改参考仓 | 应用其余通用工作经验 |
-| 16 指令 | 已实现，限当前 manifest、可移植默认、宿主采用 | 中英文原子／工作流布局提供产品默认、本仓根、完整中文 Markdown、中文聚焦技能；instructions.md 定义保留定制的采用。生成测试覆盖不支持 manifest 拒绝且不发布、当前原方法字节／mode、别名身份、无变化／回滚。历史自动格式转换及专属测试已退役；先前中英／定制消费、上下文测量、有限固定文本审读见 methodology-extraction.md | 运行／公开／原生消费、平台／崩溃／并发限制、干净候选／原生／PR／落地；不新增完整启用／输入／发布保证 |
+| 16 指令 | 已实现，限当前 manifest、可移植默认、宿主采用 | 中英文原子／工作流布局提供产品默认、本仓根、完整中文 Markdown、中文聚焦技能；instructions.md 定义保留定制的采用。生成测试覆盖不支持 manifest 拒绝且不发布、当前原方法字节／mode、别名身份、无变化／回滚。历史自动格式转换及专属测试已退役；当前内容所有者、宿主采用和实际载荷边界见 methodology-extraction.md | 运行／公开／原生消费、平台／崩溃／并发限制、干净候选／原生／PR／落地；不新增完整启用／输入／发布保证 |
 
 ## 按 §13 验收场景查看
 
@@ -83,7 +91,7 @@
 | 19 集成绑定变化 | 有限实现：W 拒绝 base／tree／回执／完整报告变化，接受同树提交 | 完整原生启用及有效输入完整 |
 | 20 分支过时 | 部分：W 按 dev／fork／时间拒绝任一超限；reconstruct 将完整 carry／retire 选择重放到获取目标，保留冲突 | AI 语义协调、自主交付编排 |
 | 21 阈值相等 | 已实现：W 数量／年龄相等、纳秒超限、配置上限 | — |
-| 22 本地／CI 同命令 | 有限实现：当前 scoped v4 生成短命令并明确 push 基线；CI 覆盖重复 push、远端前进、ref 缺失、真实 CLI 保留。C units::short::generated_native_check_step_executes_same_short_command_and_event_rules 执行当前生成的短命令，核真实事件和本地调用；并发单元汇总保留完整输入原件。旧长命令生成及专属测试已退役。[原生证据](native-ci-adoption.md)含固定旧发布的公开 Go／TS／mix push／PR 汇总及每单元，不证明当前候选采用 | 完整有效输入、当前候选原生宿主采用、确定同判、完整启用 |
+| 22 本地／CI 同命令 | 有限实现：当前 scoped v4 生成短命令并明确 push 基线；CI 覆盖重复 push、远端前进、ref 缺失、真实 CLI 保留。C units::short::generated_native_check_step_executes_same_short_command_and_event_rules 执行当前生成的短命令，核真实事件和本地调用；并发单元汇总保留完整输入原件。旧长命令生成及专属测试已退役。公开 Go／TS／mix 的固定旧发布有有限采用，当前接入及限制见[示例索引](examples.md)，原运行直接查宿主线上 CI，不证明当前候选采用 | 完整有效输入、当前候选原生宿主采用、确定同判、完整启用 |
 | 23 完整确定输入相同 | 保留合同；独立比较器退役，无生产者建立更强前提 | 编译器／SDK／外部输入完整证据、确定求值、原生本地／CI 采用未建立 |
 | 24 同判未建立 | 字段已实现：普通 full runner 报告、G 外部宿主 | 更强前提未建立，不另卡普通 full；已知缺必需输入仍失败 |
 | 25 暂存／未暂存／未跟踪 | 已实现：G 脏文件、共享 raw tree／index／物理身份，clean filter／CRLF／mode／链接反例，full／initial／scoped／worktree 消费 | 配置／OS 输入完整及并发隔离另验 |
@@ -151,15 +159,17 @@
 | 日志、错误和协议 | runner、diagnostics；[诊断](diagnostics.md)、[执行](execution.md) | 真实进程、原退出／输出和有限故障边界有测试；跨产品诊断、完整响应组合、JSON／IO 和通用错误覆盖尚未完成 |
 | 工作树和任务等待 | worktree、runner；[工作树](worktree.md) | 已采用路径保护实际源码、消费者及可重建缓存，保留原失败／unknown；外部任务通道恢复、完整协作复用、PR／合并编排尚未实现 |
 | 原件及输出保留 | runner、worktree；[原件生命周期](artifact-retention.md) | 已采用原件引用、消费者保护和有限恢复／回收；所有历史输出、全部生产者接入、通用中断及原生交接尚未验收 |
-| 源码构建、安装与发布 | bootstrap、distribution、release；[CI](ci.md)、[发布](release-ci.md)、[分发](distribution.md) | core、共享启动和当前发布各有独立消费者；旧全工具安装已退役，原生获取、完整绑定和外部公开采用分别验收，不能由源码存在推导通过 |
+| 源码构建、安装与发布 | bootstrap、distribution、release；[CI](ci.md)、[发布](release-ci.md)、[分发](distribution.md) | core、共享启动和当前发布各有独立消费者；旧全工具安装和原生初始盘点已退役，完整绑定和外部公开采用分别验收，不能由源码存在推导通过 |
 | 指令默认与宿主采用 | instructions；[指令](instructions.md)、[方法来源](methodology-extraction.md) | 默认与宿主选择独立维护，生成根指南和完整输出；生成不证明 AI 阅读、遵守或翻译等价 |
 | 形式证明 | 实际生产根及专属独立预期；[Verus](verus.md) | 同源证明、固定结果合同和部分生产调用已接入；未覆盖部分、外部合同及外围组合明确保留，不把局部成功当作完整 SPEC 证明 |
 
 ## 当前必要性与数据边界
 
+示例、CI、缓存、发布和指令文档保留当前接入方式、协议、使用方及验证限制；历史 CI 运行、环境摘要、测试数量、报告大小和指令载荷读数归原 PR、发布及线上原件，不另维护运行表。原件缺失仍是未验证，删除文档副本不改变历史失败或尚缺的验收。
+
 全对象“为什么”链是 AI 对真实使用方、替代方案、失败影响和验收终点负责的方法。产品默认和本宿主指南已呈现该规则；现有判官继续检查明确登记、引用、输入及实际回执。没有独立价值台账或机器价值门，规则文字也不证明全仓审计已经完成。
 
-已退役的 runner／diagnostics 额外 guard、专属主机观察及运行时来源模式，不再列为待激活的宿主义务。普通锁定 Cargo 构建和行为测试继续执行；通用输入／Cargo 产品与原生获取必须分别核对自己的当前消费者。现役完整宿主登记仍为 proposed／not-implemented／incomplete。
+已退役的 runner／diagnostics 额外 guard、专属主机观察、运行时来源模式和旧分支原生初始盘点，不再列为待激活的宿主义务。旧盘点的工作流、安装／观察声明、探测 helper、专属动作和测试同步退役；core／所有者 bootstrap 实际使用的 fetch 保留。普通锁定 Cargo 构建和行为测试继续执行，通用输入／Cargo 产品仍须分别核对当前消费者。现役完整宿主登记仍为 proposed／not-implemented／incomplete。
 
 旧安装身份、无人调用的本机观察声明和旧仓库审计快照已移除。四份宿主政策已去除无直接操作的编译器／rustup 重复项；本机 Cargo 通过调用环境解析，bootstrap 继续核官方组件字节，选择合同归[输入所有者](inputs.md#工具链入口与本机路径)。其余 host policy、完整安装及全部对象必要性仍须逐项验收。线上 CI 运行事实不在本表复制；当前仍需的来源／未完成工作由[输入保管者](input-source-custody.md)负责，历史失败和独有工作不能因本表收敛而被删除。
 

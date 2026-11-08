@@ -126,18 +126,6 @@ pub struct Gather {
         deserialize_with = "download_retry_present"
     )]
     pub download_retry: Option<DownloadRetry>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "resource_observation_present"
-    )]
-    pub resource_observation: Option<super::resources::Config>,
-}
-
-fn resource_observation_present<'de, D: serde::Deserializer<'de>>(
-    d: D,
-) -> Result<Option<super::resources::Config>, D::Error> {
-    super::resources::Config::deserialize(d).map(Some)
 }
 
 impl Config {
@@ -297,12 +285,6 @@ pub fn validate(c: &Config) -> Result<(), String> {
     }
     if let Some(gating) = &c.job_gating {
         super::gating::validate(c, gating)?;
-    }
-    if let Some(resources) = &c.gather.resource_observation {
-        if c.job_gating.is_none() {
-            return Err("resource observation requires the registered parent job topology".into());
-        }
-        resources.validate()?;
     }
     super::validate_policy(&c.collection, c.schema == FULL_SCHEMA)?;
     let mut paths = BTreeSet::from([c.collection.workflow_path.clone()]);
@@ -486,7 +468,7 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
             config_path,
             Some(&scope),
             &artifact,
-            unit.is_none() || c.native_adoption.is_some() || c.persistent_cache.is_some(),
+            unit.is_none() || c.native_adoption.is_some(),
             c.schema == FULL_SCHEMA,
         )?
         .replacen(super::MARKER, MARKER, 1);

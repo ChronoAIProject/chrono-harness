@@ -67,16 +67,6 @@
             "crates/runner/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.runner",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/runner/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.runner",
           "tool": "cargo",
@@ -96,42 +86,12 @@
             "crates/runner/Cargo.toml"
           ]
         },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.runner",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/runner/Cargo.toml"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.runner",
           "tool": "cargo",
           "argv": [
             "fetch",
             "--locked",
-            "--manifest-path",
-            "crates/runner/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.runner",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/runner/Cargo.toml"
           ]
@@ -279,28 +239,6 @@
       "root": "crates/runner-tests",
       "tests_for": "runner",
       "actions": {
-        "build": {
-          "operation": "build.runner-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.runner-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.runner-tests",
           "tool": "cargo",
@@ -326,46 +264,6 @@
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.runner-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.runner-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.runner-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/runner-tests/Cargo.toml"
           ]
@@ -561,16 +459,6 @@
             "crates/instructions/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.instructions",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/instructions/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.instructions",
           "tool": "cargo",
@@ -612,46 +500,6 @@
             "--host-root",
             "."
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.instructions",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/instructions/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.instructions",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/instructions/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.instructions",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/instructions/Cargo.toml"
-          ]
         }
       },
       "language": "rust"
@@ -664,28 +512,6 @@
       "root": "crates/instructions-tests",
       "tests_for": "instructions",
       "actions": {
-        "build": {
-          "operation": "build.instructions-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/instructions-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.instructions-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/instructions-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.instructions-tests",
           "tool": "cargo",
@@ -702,46 +528,6 @@
           "argv": [
             "test",
             "--locked",
-            "--manifest-path",
-            "crates/instructions-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.instructions-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/instructions-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.instructions-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/instructions-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.instructions-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/instructions-tests/Cargo.toml"
           ]
@@ -767,16 +553,6 @@
             "crates/judge-ci/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.judge-ci",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-ci/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-ci",
           "tool": "cargo",
@@ -796,42 +572,12 @@
             "crates/judge-ci/Cargo.toml"
           ]
         },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-ci",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-ci/Cargo.toml"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-ci",
           "tool": "cargo",
           "argv": [
             "fetch",
             "--locked",
-            "--manifest-path",
-            "crates/judge-ci/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-ci",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-ci/Cargo.toml"
           ]
@@ -869,28 +615,6 @@
       "root": "crates/judge-ci-tests",
       "tests_for": "judge-ci",
       "actions": {
-        "build": {
-          "operation": "build.judge-ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-ci-tests",
           "tool": "cargo",
@@ -907,46 +631,6 @@
           "argv": [
             "test",
             "--locked",
-            "--manifest-path",
-            "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-ci-tests/Cargo.toml"
           ]
@@ -971,19 +655,6 @@
             "fmt",
             "--manifest-path",
             "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
-        "execute_retirement": {
-          "operation": "test.ci.retirement",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-ci-tests/Cargo.toml",
-            "--test",
-            "behavior",
-            "retirement"
           ]
         },
         "verify_collection": {
@@ -1024,16 +695,6 @@
           "tool": "cargo",
           "argv": [
             "build",
-            "--locked",
-            "--manifest-path",
-            "crates/ci/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.ci",
-          "tool": "cargo",
-          "argv": [
-            "check",
             "--locked",
             "--manifest-path",
             "crates/ci/Cargo.toml"
@@ -1082,26 +743,22 @@
             ".chrono-harness/ci/units.json"
           ]
         },
+        "generate_job_gating_example": {
+          "operation": "ci.generate-job-gating-example",
+          "tool": "chrono-ci",
+          "argv": [
+            "generate",
+            "--host-root",
+            "examples/ci-host-job-gating",
+            "--config",
+            ".chrono-harness/ci/units.json"
+          ]
+        },
         "format": {
           "operation": "format.ci",
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/ci/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.ci",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/ci/Cargo.toml"
           ]
@@ -1112,21 +769,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--manifest-path",
-            "crates/ci/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.ci",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/ci/Cargo.toml"
           ]
@@ -1197,28 +839,6 @@
       "root": "crates/ci-tests",
       "tests_for": "ci",
       "actions": {
-        "build": {
-          "operation": "build.ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/ci-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/ci-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.ci-tests",
           "tool": "cargo",
@@ -1244,46 +864,6 @@
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/ci-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/ci-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/ci-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.ci-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
           ]
@@ -1331,62 +911,12 @@
             "crates/judge-registration/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.judge-registration",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-registration/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-registration",
           "tool": "cargo",
           "argv": [
             "fmt",
             "--check",
-            "--manifest-path",
-            "crates/judge-registration/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-registration",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-registration/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-registration",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-registration/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-registration",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-registration/Cargo.toml"
           ]
@@ -1477,28 +1007,6 @@
       "root": "crates/judge-registration-tests",
       "tests_for": "judge-registration",
       "actions": {
-        "build": {
-          "operation": "build.judge-registration-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-registration-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-registration-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-registration-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-registration-tests",
           "tool": "cargo",
@@ -1515,46 +1023,6 @@
           "argv": [
             "test",
             "--locked",
-            "--manifest-path",
-            "crates/judge-registration-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-registration-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-registration-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-registration-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-registration-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-registration-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-registration-tests/Cargo.toml"
           ]
@@ -1655,16 +1123,6 @@
             "crates/judge-filemap/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.judge-filemap",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-filemap/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-filemap",
           "tool": "cargo",
@@ -1680,46 +1138,6 @@
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/judge-filemap/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-filemap",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-filemap/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-filemap",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-filemap/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-filemap",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-filemap/Cargo.toml"
           ]
@@ -1757,28 +1175,6 @@
       "root": "crates/judge-filemap-tests",
       "tests_for": "judge-filemap",
       "actions": {
-        "build": {
-          "operation": "build.judge-filemap-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-filemap-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-filemap-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-filemap-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-filemap-tests",
           "tool": "cargo",
@@ -1816,46 +1212,6 @@
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/judge-filemap-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-filemap-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-filemap-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-filemap-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-filemap-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-filemap-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-filemap-tests/Cargo.toml"
           ]
@@ -1903,16 +1259,6 @@
             "crates/judge-routes/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.judge-routes",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-routes/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-routes",
           "tool": "cargo",
@@ -1931,46 +1277,6 @@
             "--manifest-path",
             "crates/judge-routes/Cargo.toml"
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-routes",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-routes/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-routes",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-routes/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-routes",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/judge-routes/Cargo.toml"
-          ]
         }
       },
       "language": "rust"
@@ -1983,28 +1289,6 @@
       "root": "crates/judge-routes-tests",
       "tests_for": "judge-routes",
       "actions": {
-        "build": {
-          "operation": "build.judge-routes-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-routes-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-routes-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-routes-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-routes-tests",
           "tool": "cargo",
@@ -2025,42 +1309,11 @@
             "crates/judge-routes-tests/Cargo.toml"
           ]
         },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-routes-tests",
+        "format": {
+          "operation": "format.judge-routes-tests",
           "tool": "cargo",
           "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-routes-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-routes-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-routes-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-routes-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
+            "fmt",
             "--manifest-path",
             "crates/judge-routes-tests/Cargo.toml"
           ]
@@ -2108,16 +1361,6 @@
             "crates/judge-projects/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.judge-projects",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-projects/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-projects",
           "tool": "cargo",
@@ -2133,46 +1376,6 @@
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/judge-projects/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-projects",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-projects/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-projects",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-projects/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-projects",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-projects/Cargo.toml"
           ]
@@ -2209,28 +1412,6 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
-        },
-        "build": {
-          "operation": "build.judge-projects-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-projects-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-projects-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-projects-tests/Cargo.toml"
-          ]
         },
         "format_check": {
           "operation": "fmt.judge-projects-tests",
@@ -2272,46 +1453,6 @@
             "--manifest-path",
             "crates/judge-projects-tests/Cargo.toml"
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-projects-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-projects-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-projects-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-projects-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-projects-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/judge-projects-tests/Cargo.toml"
-          ]
         }
       },
       "language": "rust"
@@ -2328,16 +1469,6 @@
           "tool": "cargo",
           "argv": [
             "build",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cost/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-cost",
-          "tool": "cargo",
-          "argv": [
-            "check",
             "--locked",
             "--manifest-path",
             "crates/judge-cost/Cargo.toml"
@@ -2361,46 +1492,6 @@
             "--manifest-path",
             "crates/judge-cost/Cargo.toml"
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-cost",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-cost/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-cost",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cost/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-cost",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/judge-cost/Cargo.toml"
-          ]
         }
       },
       "test_project": "judge-cost-tests",
@@ -2413,28 +1504,6 @@
       "lockfile": "crates/judge-cost-tests/Cargo.lock",
       "root": "crates/judge-cost-tests",
       "actions": {
-        "build": {
-          "operation": "build.judge-cost-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cost-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-cost-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cost-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-cost-tests",
           "tool": "cargo",
@@ -2451,46 +1520,6 @@
           "argv": [
             "test",
             "--locked",
-            "--manifest-path",
-            "crates/judge-cost-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-cost-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-cost-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-cost-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cost-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-cost-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-cost-tests/Cargo.toml"
           ]
@@ -2516,16 +1545,6 @@
             "crates/judge-mixed/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.judge-mixed",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-mixed/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-mixed",
           "tool": "cargo",
@@ -2544,46 +1563,6 @@
             "--manifest-path",
             "crates/judge-mixed/Cargo.toml"
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-mixed",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-mixed/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-mixed",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-mixed/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-mixed",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/judge-mixed/Cargo.toml"
-          ]
         }
       },
       "test_project": "judge-mixed-tests",
@@ -2596,28 +1575,6 @@
       "lockfile": "crates/judge-mixed-tests/Cargo.lock",
       "root": "crates/judge-mixed-tests",
       "actions": {
-        "build": {
-          "operation": "build.judge-mixed-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-mixed-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-mixed-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-mixed-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-mixed-tests",
           "tool": "cargo",
@@ -2634,46 +1591,6 @@
           "argv": [
             "test",
             "--locked",
-            "--manifest-path",
-            "crates/judge-mixed-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-mixed-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-mixed-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-mixed-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-mixed-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-mixed-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-mixed-tests/Cargo.toml"
           ]
@@ -2699,16 +1616,6 @@
             "crates/judge-workflow/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.judge-workflow",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-workflow",
           "tool": "cargo",
@@ -2727,46 +1634,6 @@
             "--manifest-path",
             "crates/judge-workflow/Cargo.toml"
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-workflow",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-workflow/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-workflow",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-workflow",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/judge-workflow/Cargo.toml"
-          ]
         }
       },
       "test_project": "judge-workflow-tests",
@@ -2779,28 +1646,6 @@
       "lockfile": "crates/judge-workflow-tests/Cargo.lock",
       "root": "crates/judge-workflow-tests",
       "actions": {
-        "build": {
-          "operation": "build.judge-workflow-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-workflow-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-workflow-tests",
           "tool": "cargo",
@@ -2819,54 +1664,6 @@
             "--locked",
             "--manifest-path",
             "crates/judge-workflow-tests/Cargo.toml"
-          ]
-        },
-        "streamed-originals": {
-          "operation": "test.workflow-streamed-originals",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml",
-            "--test",
-            "consumer",
-            "full_units::streamed_large_originals_survive_relocated_collection_finalization_and_delivery",
-            "--",
-            "--exact",
-            "--nocapture"
-          ]
-        },
-        "native-provision": {
-          "operation": "test.workflow-native-provision",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml",
-            "--test",
-            "consumer",
-            "full_units::full_short::genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts",
-            "--",
-            "--exact",
-            "--nocapture"
-          ]
-        },
-        "ordinary-certificate": {
-          "operation": "test.workflow-ordinary-certificate",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml",
-            "--test",
-            "consumer",
-            "full_units::full_short::ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_it",
-            "--",
-            "--exact",
-            "--nocapture"
           ]
         },
         "execute_core": {
@@ -2935,46 +1732,6 @@
             "--manifest-path",
             "crates/judge-workflow-tests/Cargo.toml"
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-workflow-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-workflow-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-workflow-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml"
-          ]
         }
       },
       "tests_for": "judge-workflow",
@@ -3002,37 +1759,12 @@
             "crates/inputs/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.inputs",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/inputs/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.inputs",
           "tool": "cargo",
           "argv": [
             "fmt",
             "--check",
-            "--manifest-path",
-            "crates/inputs/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.inputs",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/inputs/Cargo.toml"
           ]
@@ -3046,86 +1778,6 @@
             "--manifest-path",
             "crates/inputs/Cargo.toml"
           ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.inputs",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/inputs/Cargo.toml"
-          ]
-        },
-        "provision_native": {
-          "operation": "inputs.provision-native",
-          "tool": "chrono-inputs",
-          "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/native-provisioning.json",
-            "--output",
-            ".chrono-harness/state/inputs/provision-native.json"
-          ]
-        },
-        "observe_macos": {
-          "operation": "inputs.observe-macos",
-          "tool": "chrono-inputs",
-          "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/native-observation.json",
-            "--output",
-            ".chrono-harness/state/inputs/observe-macos.json"
-          ]
-        },
-        "observe_linux": {
-          "operation": "inputs.observe-linux",
-          "tool": "chrono-inputs",
-          "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/linux-observation.json",
-            "--output",
-            ".chrono-harness/state/inputs/observe-linux.json"
-          ]
-        },
-        "acquire_macos": {
-          "operation": "inputs.acquire-macos",
-          "tool": "chrono-inputs",
-          "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/acquire-macos.json",
-            "--output",
-            ".chrono-harness/state/native/macos/acquisition.json"
-          ]
-        },
-        "acquire_linux": {
-          "operation": "inputs.acquire-linux",
-          "tool": "chrono-inputs",
-          "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/acquire-linux.json",
-            "--output",
-            ".chrono-harness/state/native/linux/acquisition.json"
-          ]
         }
       },
       "test_project": "inputs-tests",
@@ -3138,28 +1790,6 @@
       "lockfile": "crates/inputs-tests/Cargo.lock",
       "root": "crates/inputs-tests",
       "actions": {
-        "build": {
-          "operation": "build.inputs-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/inputs-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.inputs-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/inputs-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.inputs-tests",
           "tool": "cargo",
@@ -3200,46 +1830,6 @@
             "--manifest-path",
             "crates/inputs-tests/Cargo.toml"
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.inputs-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/inputs-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.inputs-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/inputs-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.inputs-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/inputs-tests/Cargo.toml"
-          ]
         }
       },
       "tests_for": "inputs",
@@ -3262,62 +1852,12 @@
             "crates/distribution/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.distribution",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/distribution/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.distribution",
           "tool": "cargo",
           "argv": [
             "fmt",
             "--check",
-            "--manifest-path",
-            "crates/distribution/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.distribution",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/distribution/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.distribution",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/distribution/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.distribution",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/distribution/Cargo.toml"
           ]
@@ -3333,28 +1873,6 @@
       "lockfile": "crates/distribution-tests/Cargo.lock",
       "root": "crates/distribution-tests",
       "actions": {
-        "build": {
-          "operation": "build.distribution-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/distribution-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.distribution-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/distribution-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.distribution-tests",
           "tool": "cargo",
@@ -3371,46 +1889,6 @@
           "argv": [
             "test",
             "--locked",
-            "--manifest-path",
-            "crates/distribution-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.distribution-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/distribution-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.distribution-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/distribution-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.distribution-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/distribution-tests/Cargo.toml"
           ]
@@ -3436,62 +1914,12 @@
             "crates/judge-cargo/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.judge-cargo",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-cargo",
           "tool": "cargo",
           "argv": [
             "fmt",
             "--check",
-            "--manifest-path",
-            "crates/judge-cargo/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-cargo",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-cargo/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-cargo",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-cargo",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-cargo/Cargo.toml"
           ]
@@ -3507,28 +1935,6 @@
       "lockfile": "crates/judge-cargo-tests/Cargo.lock",
       "root": "crates/judge-cargo-tests",
       "actions": {
-        "build": {
-          "operation": "build.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-cargo-tests",
           "tool": "cargo",
@@ -3569,46 +1975,6 @@
             "--manifest-path",
             "crates/judge-cargo-tests/Cargo.toml"
           ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
         }
       },
       "tests_for": "judge-cargo",
@@ -3626,16 +1992,6 @@
           "tool": "cargo",
           "argv": [
             "build",
-            "--locked",
-            "--manifest-path",
-            "crates/worktree/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.worktree",
-          "tool": "cargo",
-          "argv": [
-            "check",
             "--locked",
             "--manifest-path",
             "crates/worktree/Cargo.toml"
@@ -3660,42 +2016,12 @@
             "crates/worktree/Cargo.toml"
           ]
         },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.worktree",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/worktree/Cargo.toml"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.worktree",
           "tool": "cargo",
           "argv": [
             "fetch",
             "--locked",
-            "--manifest-path",
-            "crates/worktree/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.worktree",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/worktree/Cargo.toml"
           ]
@@ -3733,28 +2059,6 @@
       "lockfile": "crates/worktree-tests/Cargo.lock",
       "root": "crates/worktree-tests",
       "actions": {
-        "build": {
-          "operation": "build.worktree-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.worktree-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.worktree-tests",
           "tool": "cargo",
@@ -3825,42 +2129,12 @@
             "crates/worktree-tests/Cargo.toml"
           ]
         },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.worktree-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.worktree-tests",
           "tool": "cargo",
           "argv": [
             "fetch",
             "--locked",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.worktree-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/worktree-tests/Cargo.toml"
           ]
@@ -3997,62 +2271,12 @@
             "crates/diagnostics/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/diagnostics/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.diagnostics",
           "tool": "cargo",
           "argv": [
             "fmt",
             "--check",
-            "--manifest-path",
-            "crates/diagnostics/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/diagnostics/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/diagnostics/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/diagnostics/Cargo.toml"
           ]
@@ -4068,28 +2292,6 @@
       "lockfile": "crates/diagnostics-tests/Cargo.lock",
       "root": "crates/diagnostics-tests",
       "actions": {
-        "build": {
-          "operation": "build.diagnostics-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/diagnostics-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.diagnostics-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/diagnostics-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.diagnostics-tests",
           "tool": "cargo",
@@ -4106,46 +2308,6 @@
           "argv": [
             "test",
             "--locked",
-            "--manifest-path",
-            "crates/diagnostics-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.diagnostics-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/diagnostics-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.diagnostics-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/diagnostics-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.diagnostics-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/diagnostics-tests/Cargo.toml"
           ]
@@ -4171,62 +2333,12 @@
             "crates/cache/Cargo.toml"
           ]
         },
-        "check": {
-          "operation": "check.cache",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--locked",
-            "--manifest-path",
-            "crates/cache/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.cache",
           "tool": "cargo",
           "argv": [
             "fmt",
             "--check",
-            "--manifest-path",
-            "crates/cache/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.cache",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/cache/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.cache",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/cache/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.cache",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/cache/Cargo.toml"
           ]
@@ -4264,28 +2376,6 @@
       "lockfile": "crates/cache-tests/Cargo.lock",
       "root": "crates/cache-tests",
       "actions": {
-        "build": {
-          "operation": "build.cache-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/cache-tests/Cargo.toml"
-          ]
-        },
-        "check": {
-          "operation": "check.cache-tests",
-          "tool": "cargo",
-          "argv": [
-            "check",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/cache-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.cache-tests",
           "tool": "cargo",
@@ -4302,46 +2392,6 @@
           "argv": [
             "test",
             "--locked",
-            "--manifest-path",
-            "crates/cache-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata": {
-          "operation": "inputs.metadata.cache-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "aarch64-apple-darwin",
-            "--manifest-path",
-            "crates/cache-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.cache-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/cache-tests/Cargo.toml"
-          ]
-        },
-        "inputs_metadata_linux": {
-          "operation": "inputs.metadata.linux.cache-tests",
-          "tool": "cargo",
-          "argv": [
-            "metadata",
-            "--locked",
-            "--offline",
-            "--format-version",
-            "1",
-            "--filter-platform",
-            "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/cache-tests/Cargo.toml"
           ]
@@ -5068,26 +3118,6 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "aggregate"
-          ]
-        },
-        "acquire-macos": {
-          "operation": "host.acquire-native-macos",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-acquire-macos.json"
-          ]
-        },
-        "acquire-linux": {
-          "operation": "host.acquire-native-linux",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-acquire-linux.json"
           ]
         },
         "owner-verify": {

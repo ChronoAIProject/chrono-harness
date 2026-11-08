@@ -13,10 +13,10 @@
 
 | 范围 | 负责人、当前用途及仍缺内容 |
 | --- | --- |
-| 普通输入观察与传输 | inputs 维护现役 observe／capture／pair／compose，合同见[输入](inputs.md)。已声明文件、环境和端点绑定不证明完整编译器／SDK／配置输入；当前原生获取和安装后消费须各自验收 |
+| 普通输入观察与传输 | inputs 维护 observe／capture／pair／compose 产品合同，见[输入](inputs.md)。本仓旧主机盘点链已退役；声明文件、环境和端点绑定仍不证明完整编译器／SDK／配置输入 |
 | 可选 Cargo 保护 | judge-cargo 维护通用显式输入与目录合同，见[Cargo](cargo-projects.md)。本仓 runner／diagnostics 的额外采用已退役，不恢复旧并列政策或保护别名；普通锁定 Cargo 操作保留 |
 | 完整宿主及检查程序绑定 | 宿主输入／bootstrap 负责人维护当前 proposed 登记。完整有效输入、实际安装字节和两端原件仍未齐全；每项后续采用先核真实消费者与必要性，不能由旧政策存在产生待激活义务 |
-| 安装、原生获取和分发 | bootstrap／distribution 分别核当前 profile 的安装后使用及现役发布接口，见[CI](ci.md)、[分发](distribution.md)、[发布](release-ci.md)。旧全工具安装已退役；core／detector 的有限供应结果不证明原生获取或公开采用通过；不另造安装器或恢复历史发布选择 |
+| 安装和分发 | bootstrap／distribution 分别核当前 profile 的安装后使用及现役发布接口，见[CI](ci.md)、[分发](distribution.md)、[发布](release-ci.md)。旧全工具安装和原生初始盘点已退役；core／detector 的有限供应结果不证明公开采用通过；不另造安装器或恢复历史发布选择 |
 | 历史输入原件 | 原采集／归档保管者负责 e21／3083 两端快照及引用 blob。先前允许范围内未取得合格原件，别处是否存在仍 unknown；重新采集当前主机不能补作历史原件 |
 | 独有源码与失败材料 | 调用方／原保管者维持上述 Git 引用及已有归档，供尚未结束的源码协调、调试与原件交接消费。部分旧报告／工具原件仍不可得，当前成功不补回旧字节 |
 
