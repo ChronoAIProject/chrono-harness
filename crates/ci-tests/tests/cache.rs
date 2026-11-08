@@ -400,9 +400,10 @@ fn release_init_and_generation_resolve_cache_consumers_before_writing() {
     let adopted = root.path().join(".chrono-harness/ci/release.json");
     let workflow = root.path().join(value["workflow_path"].as_str().unwrap());
     let invalid = [
-        json!({"schema":"chrono-cache/v1","require_primary_checkout":true,"caches":{"other":{"consumers":["host.build"]}}}),
-        json!({"schema":"chrono-cache/v1","require_primary_checkout":true,"caches":{"core.target":{"consumers":["wrong.consumer"]}}}),
-        json!({"schema":"chrono-cache/v1","caches":{"core.target":{"consumers":["host.build"]}}}),
+        json!({"schema":"chrono-cache/v1","require_primary_checkout":true,"caches":{"core.target":{"consumers":["host.build"]}}}),
+        json!({"schema":"chrono-cache/v2","require_primary_checkout":true,"caches":{"other":{"consumers":["host.build"]}}}),
+        json!({"schema":"chrono-cache/v2","require_primary_checkout":true,"caches":{"core.target":{"consumers":["wrong.consumer"]}}}),
+        json!({"schema":"chrono-cache/v2","caches":{"core.target":{"consumers":["host.build"]}}}),
     ];
     // Missing registry is also rejected, before either adoption or projection.
     assert!(chrono_ci::init(root.path(), input.path()).is_err());
@@ -415,7 +416,7 @@ fn release_init_and_generation_resolve_cache_consumers_before_writing() {
         assert!(!adopted.exists());
         assert!(!workflow.exists());
     }
-    let valid = json!({"schema":"chrono-cache/v1","require_primary_checkout":true,"caches":{"core.target":{"consumers":["host.build"]}}});
+    let valid = json!({"schema":"chrono-cache/v2","require_primary_checkout":true,"caches":{"core.target":{"consumers":["host.build"]}}});
     fs::write(&registry, serde_json::to_vec(&valid).unwrap()).unwrap();
     assert!(chrono_ci::init(root.path(), input.path()).unwrap());
     assert!(!chrono_ci::generate(root.path(), ".chrono-harness/ci/release.json", true).unwrap());
