@@ -1,6 +1,5 @@
 //! Expectations at the real shared fixture publisher boundary, in consumer.
 use super::*;
-use chrono_worktree::RetainedArtifact;
 use std::path::Path;
 
 fn captures(allocation: &Path) -> Vec<std::path::PathBuf> {
@@ -71,18 +70,15 @@ fn failed_assertion_retains_diagnostic_before_allocation_custody_releases() {
         panic!("controlled fixture assertion failure");
     }));
     assert!(outcome.is_err());
-    let producer = RetainedArtifact::resume(
-        allocation.parent().unwrap(),
-        "projects-test-host",
-        &allocation,
-    )
-    .unwrap();
-    // Release must find an actual unreleased reference produced during unwind.
-    producer
-        .release(
-            "fixture-diagnostic",
-            "controlled diagnostic assertions consumed",
-        )
-        .unwrap();
+    let name = allocation.file_name().unwrap().to_str().unwrap();
+    let record = allocation
+        .parent()
+        .unwrap()
+        .join("producer-records")
+        .join(format!("{}.json", chrono_harness::sha256(name.as_bytes())));
+    let record: serde_json::Value = serde_json::from_slice(&fs::read(record).unwrap()).unwrap();
+    assert_eq!(record["object"]["rolling"]["diagnostics"], true);
+    assert_eq!(record["object"]["rolling"]["terminal"]["failed"], true);
+    assert_eq!(record["object"]["consumers"], serde_json::json!({}));
     assert!(allocation.is_dir());
 }
