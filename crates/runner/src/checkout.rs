@@ -22,7 +22,9 @@ use std::{
 
 fn rows(raw: &[u8]) -> Result<Vec<&str>, String> {
     git_inventory_termination(raw)?;
-    Ok(git_inventory_records(git_inventory_text(std::str::from_utf8(raw).ok())?))
+    Ok(git_inventory_records(git_inventory_text(
+        std::str::from_utf8(raw).ok(),
+    )?))
 }
 
 pub fn tree(raw: &[u8]) -> Result<Tree, String> {
