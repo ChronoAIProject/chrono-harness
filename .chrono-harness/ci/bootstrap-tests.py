@@ -2,6 +2,7 @@
 """Exercise the real Python bootstrap entry with registered operations and SDK fixtures."""
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -65,6 +66,30 @@ class RetainedProcess(unittest.TestCase):
             process[stream + "_length"] = len(raw)
             process[stream + "_sha256"] = hashlib.sha256(raw).hexdigest()
         return process
+
+    def test_participation_forwards_child_and_owner_diagnostics_with_original_exit(self):
+        for code in (0, 7):
+            process = self.encoded()
+            process.update(exit_code=code, failure=None)
+            report = {"managed_process": process, "status": "used",
+                      "report_path": ".chrono-harness/state/worktrees/original.json"}
+            reminder = b"W_WORKTREE_ATTENTION: maintain current agent worktrees\n"
+            result = subprocess.CompletedProcess([], code, json.dumps(report).encode(), reminder)
+            stdout = mock.Mock(buffer=io.BytesIO())
+            stderr = mock.Mock(buffer=io.BytesIO())
+            root = Path("/fixture-bootstrap-reminders")
+            config = {"participation": {"program": ".chrono-harness/bin/chrono-worktree",
+                                        "config": ".chrono-harness/worktree.json"}}
+            with mock.patch.dict(os.environ, {}, clear=True), \
+                    mock.patch.object(self.bootstrap, "coordinator_root", return_value=root), \
+                    mock.patch.object(self.bootstrap.subprocess, "run", return_value=result), \
+                    mock.patch.object(self.bootstrap.sys, "stdout", stdout), \
+                    mock.patch.object(self.bootstrap.sys, "stderr", stderr):
+                with self.assertRaises(SystemExit) as stopped:
+                    self.bootstrap.participate(root, Path("bootstrap.json"), config)
+            self.assertEqual(stopped.exception.code, code)
+            self.assertEqual(stdout.buffer.getvalue(), bytes(range(256)))
+            self.assertEqual(stderr.buffer.getvalue(), b"error\x00\xff\n" + reminder)
 
     def test_exact_binary_failure_and_empty_streams_keep_identity(self):
         encoded = self.encoded()
@@ -745,6 +770,26 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    if "CHRONO_ARTIFACT_DIRECTORY" not in os.environ:
+        # The current lifecycle owner allocates one whole run directory and
+        # forwards its lease. The same registered action reenters below with
+        # that directory; no per-fixture catalogue or separate cleanup recipe.
+        import bootstrap
+        operation = "host.bootstrap-command-tests" if sys.argv[1:] == ["--command-mocks"] else "host.bootstrap-tests"
+        result = subprocess.run([
+            str(SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree"),
+            "use", "--host-root", str(SOURCE.parents[1]), "--operation", operation,
+        ], capture_output=True, pass_fds=PASS_FDS)
+        sys.stderr.buffer.write(result.stderr)
+        report = json.loads(result.stdout)
+        if "managed_process" not in report:
+            raise RuntimeError(report.get("error", "artifact operation did not launch"))
+        process = bootstrap.retained_process(report["managed_process"])
+        sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
+        sys.stderr.buffer.write(bytes(process["stderr_bytes"]))
+        if result.returncode:
+            print(report.get("error", "artifact operation failed"), file=sys.stderr)
+        sys.exit(process["exit_code"] or result.returncode)
     if sys.argv[1:] == ["--command-mocks"]:
         from bootstrap_shared_tests import BootstrapCommandMocks
         unittest.main(argv=[sys.argv[0]], defaultTest="BootstrapCommandMocks")

@@ -27,6 +27,10 @@ CONFIG = ".chrono-harness/ci/bootstrap-shared.json"
 LIFECYCLE_PROGRAM = SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree"
 
 
+def artifact_directory(name):
+    return Path(os.environ["CHRONO_ARTIFACT_DIRECTORY"]) / name
+
+
 def fixture_host_config(root):
     """Read this host's current native policy without maintaining Git identities."""
     value = json.loads((root / ".chrono-harness/config.json").read_bytes())
@@ -98,7 +102,7 @@ class ParentSourceAcquisition(unittest.TestCase):
     """Required endpoint bytes and physical parents, independent of old blobs."""
 
     def setUp(self):
-        owner = SOURCE.parents[1] / ".chrono-harness/state/bootstrap-custody-tests"
+        owner = artifact_directory("bootstrap-custody-tests")
         owner.mkdir(parents=True, exist_ok=True)
         self.directory = Path(tempfile.mkdtemp(prefix="acquisition-", dir=owner)).resolve()
         print("acquisition originals: " + str(self.directory), flush=True)
@@ -1416,7 +1420,7 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertIn(expected, message)
 
     def host(self, mode, manage=True):
-        base = SOURCE.parents[1] / ".chrono-harness/state/bootstrap-custody-tests"
+        base = artifact_directory("bootstrap-custody-tests")
         base.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix=mode + "-", dir=base)).resolve()
         root = directory / "fixture"

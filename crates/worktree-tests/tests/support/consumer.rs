@@ -65,6 +65,25 @@ fn main() -> ExitCode {
         "noop" => (),
         "ordinary" => print!("ordinary-work"),
         "finished" => print!("finished"),
+        "artifact-success" | "artifact-failure" => {
+            let directory = std::env::var_os("CHRONO_ARTIFACT_DIRECTORY")
+                .expect("registered operation artifact directory");
+            let directory = Path::new(&directory);
+            assert!(directory.is_dir());
+            assert_eq!(
+                std::env::var_os("TMPDIR").as_deref(),
+                Some(directory.as_os_str())
+            );
+            fs::create_dir(directory.join("arbitrary products")).unwrap();
+            fs::write(
+                directory.join("arbitrary products/original.bin"),
+                b"original artifact\0\xff",
+            )
+            .unwrap();
+            print!("{}", directory.display());
+            eprint!("original artifact diagnostic");
+            return ExitCode::from(if mode == "artifact-failure" { 23 } else { 0 });
+        }
         "check" => {
             let response: serde_json::Value = serde_json::from_slice(
                 &fs::read(Path::new(STATE).join("inner-check-response.json")).unwrap(),

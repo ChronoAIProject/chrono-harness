@@ -186,13 +186,7 @@
         "source with spaces/",
         "cargo-linked/",
         "native-cargo/"
-      ],
-      "rolling_directory": {
-        "success_keep_seconds": 0,
-        "failure_keep_seconds": 86400,
-        "interrupted_keep_seconds": 86400,
-        "metadata_keep_seconds": 3600
-      }
+      ]
     },
     {
       "id": "ci-test-host",
@@ -208,13 +202,7 @@
       "source_roots": [
         "arbitrary non Cargo layout/",
         "unavailable original checkout/"
-      ],
-      "rolling_directory": {
-        "success_keep_seconds": 0,
-        "failure_keep_seconds": 86400,
-        "interrupted_keep_seconds": 86400,
-        "metadata_keep_seconds": 3600
-      }
+      ]
     },
     {
       "id": "projects-test-host",
@@ -234,13 +222,7 @@
       "source_roots": [
         "fixture/",
         "retained-offline-checkout/"
-      ],
-      "rolling_directory": {
-        "success_keep_seconds": 0,
-        "failure_keep_seconds": 86400,
-        "interrupted_keep_seconds": 86400,
-        "metadata_keep_seconds": 3600
-      }
+      ]
     },
     {
       "id": "workflow-test-tools",
@@ -255,13 +237,7 @@
       ],
       "source_roots": [
         "fixture/local-lane/"
-      ],
-      "rolling_directory": {
-        "success_keep_seconds": 0,
-        "failure_keep_seconds": 86400,
-        "interrupted_keep_seconds": 86400,
-        "metadata_keep_seconds": 3600
-      }
+      ]
     }
   ]
 }

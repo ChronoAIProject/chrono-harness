@@ -1158,8 +1158,11 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
                     .as_object()
                     .unwrap()
                     .contains_key(&format!("consumer:report-recheck:{id}")),
-                exit != 0
+                false
             );
+            if exit != 0 {
+                assert!(output["expires"].as_u64().unwrap() > 0);
+            }
         }
         let judge = &report["judges"][0];
         if case == "healthy" {
