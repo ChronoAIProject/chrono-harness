@@ -300,6 +300,17 @@ pub open spec fn report_accepted(report: &CompilerReport, contract: &OutputContr
         && report.verification.is_verifying_entire_crate
 }
 
+/// 完整证明结果的准入；原进程和调用参数仍由入口核对。
+pub fn accepts_report(report: &CompilerReport, contract: &OutputContract) -> (accepted: bool)
+    ensures accepted == report_accepted(report, contract),
+{
+    equal_text(report.verus.version.as_str(), contract.version.as_str())
+        && equal_text(report.verus.commit.as_str(), contract.commit.as_str())
+        && report.verification.success && !report.verification.encountered_error
+        && !report.verification.encountered_vir_error && report.verification.errors == 0
+        && report.verification.verified > 0 && report.verification.is_verifying_entire_crate
+}
+
 pub open spec fn output_accepted(
     contract: &Option<OutputContract>, decoded: &Option<CompilerReport>,
     args: Seq<String>, exit: i32, process_failed: bool,
@@ -357,11 +368,7 @@ pub fn admit_output(
         None => { return Err("E_VERUS_RESULT: missing or malformed typed report".to_string()); },
         Some(report) => report,
     };
-    if !equal_text(report.verus.version.as_str(), value.version.as_str())
-        || !equal_text(report.verus.commit.as_str(), value.commit.as_str())
-        || !report.verification.success || report.verification.encountered_error
-        || report.verification.encountered_vir_error || report.verification.errors != 0
-        || report.verification.verified == 0 || !report.verification.is_verifying_entire_crate {
+    if !accepts_report(report, value) {
         return Err("E_VERUS_RESULT: incomplete, failed or mismatched verification".to_string());
     }
     Ok(())
