@@ -84,20 +84,31 @@ fn git_inventory_decoding_boundaries() {
     }
 }
 
-// 首个 TAB 拆分结果是接口输入；该层不能截取、改写或交换任一字段。
-fn git_inventory_row_preserves_both_complete_fields(meta: &str, path: &str) {
-    match policy::git_inventory_row(Some((meta, path)), "invalid Git tree row") {
+// 独立预期直接列完整原字节；普通运行也比较每个字节。
+fn expect_inventory_row(row: &str, meta: &str, path: &str)
+    requires ({
+        let end = policy::ascii_separator_end(row.spec_bytes(), 9);
+        policy::first_ascii_separator(row.spec_bytes(), 9, end)
+            && end < row.spec_bytes().len()
+            && meta.spec_bytes() == row.spec_bytes().take(end)
+            && path.spec_bytes() == row.spec_bytes().skip(end + 1)
+    }),
+{
+    match policy::git_inventory_row(row, "invalid Git tree row") {
         Ok((actual_meta, actual_path)) => {
-            let same_meta = policy::equal_text(actual_meta, meta);
-            let same_path = policy::equal_text(actual_path, path);
+            let same_meta = policy::equal_bytes(actual_meta.as_bytes(), meta.as_bytes());
+            let same_path = policy::equal_bytes(actual_path.as_bytes(), path.as_bytes());
             expect_identifier_true(same_meta && same_path);
         },
         Err(_) => { panic!(); },
     }
 }
 
-fn expect_missing_inventory_row(expected: &str) {
-    match policy::git_inventory_row(None, expected) {
+fn expect_missing_inventory_row(row: &str, expected: &str)
+    requires forall|i: int| 0 <= i < row.spec_bytes().len() ==> row.spec_bytes()[i] != 9,
+{
+    proof { policy::ascii_separator_end_is(row.spec_bytes(), 9, row.spec_bytes().len() as int); }
+    match policy::git_inventory_row(row, expected) {
         Ok(_) => { panic!(); },
         Err(message) => {
             let same = policy::equal_text(message.as_str(), expected);
@@ -108,10 +119,225 @@ fn expect_missing_inventory_row(expected: &str) {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn git_inventory_row_boundaries() {
-    git_inventory_row_preserves_both_complete_fields("", "");
-    git_inventory_row_preserves_both_complete_fields("100644 blob oid", "路径\t剩余\r\n");
-    expect_missing_inventory_row("invalid Git tree row");
-    expect_missing_inventory_row("invalid Git index row");
+    proof {
+        reveal_strlit(""); reveal_strlit("\t"); reveal_strlit("m\tp\tq\r\n");
+        reveal_strlit("m"); reveal_strlit("p\tq\r\n"); reveal_strlit("missing");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("\t")
+            && vstd::string::is_ascii("m\tp\tq\r\n") && vstd::string::is_ascii("m")
+            && vstd::string::is_ascii("p\tq\r\n") && vstd::string::is_ascii("missing"));
+        policy::ascii_separator_end_is("\t".spec_bytes(), 9, 0);
+        policy::ascii_separator_end_is("m\tp\tq\r\n".spec_bytes(), 9, 1);
+        assert(policy::first_ascii_separator("\t".spec_bytes(), 9, 0));
+        assert("\t".spec_bytes().take(0) =~= "".spec_bytes());
+        assert("\t".spec_bytes().skip(1) =~= "".spec_bytes());
+        assert(policy::first_ascii_separator("m\tp\tq\r\n".spec_bytes(), 9, 1));
+        assert("m\tp\tq\r\n".spec_bytes().take(1) =~= "m".spec_bytes());
+        assert("m\tp\tq\r\n".spec_bytes().skip(2) =~= "p\tq\r\n".spec_bytes());
+    }
+    expect_inventory_row("\t", "", "");
+    expect_inventory_row("m\tp\tq\r\n", "m", "p\tq\r\n");
+    expect_missing_inventory_row("", "invalid Git tree row");
+    expect_missing_inventory_row("missing", "invalid Git index row");
+}
+
+fn expect_inventory_records(actual: &Vec<&str>, expected: &[&str])
+    requires actual.len() == expected.len(),
+        forall|i: int| 0 <= i < actual.len() ==> (#[trigger] actual@[i]).spec_bytes()
+            == expected@[i].spec_bytes(),
+{
+    expect_identifier_true(actual.len() == expected.len());
+    let mut i = 0usize;
+    while i < actual.len()
+        invariant i <= actual.len(), actual.len() == expected.len(),
+            forall|k: int| 0 <= k < actual.len() ==> (#[trigger] actual@[k]).spec_bytes()
+                == expected@[k].spec_bytes(),
+        decreases actual.len() - i,
+    {
+        let same = policy::equal_bytes(actual[i].as_bytes(), expected[i].as_bytes());
+        expect_identifier_true(same);
+        i += 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_inventory_records_skip_empty_keep_order_repeats_and_control_bytes() {
+    let raw = "\0a\0\0b\tc\r\n\0a\0";
+    let expected = ["a", "b\tc\r\n", "a"];
+    proof {
+        reveal_strlit("\0a\0\0b\tc\r\n\0a\0");
+        reveal_strlit("a"); reveal_strlit("b\tc\r\n");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(raw) && vstd::string::is_ascii("a")
+            && vstd::string::is_ascii("b\tc\r\n"));
+        let bytes = raw.spec_bytes();
+        policy::ascii_separator_end_is(bytes, 0, 0);
+        policy::ascii_separator_end_is(bytes.skip(1), 0, 1);
+        policy::ascii_separator_end_is(bytes.skip(3), 0, 0);
+        policy::ascii_separator_end_is(bytes.skip(4), 0, 5);
+        policy::ascii_separator_end_is(bytes.skip(10), 0, 1);
+        policy::ascii_separator_end_is(bytes.skip(12), 0, 0);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 10, 2);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 4, 6);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 3, 1);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 1, 2);
+        reveal_with_fuel(policy::ascii_split_records, 1);
+        assert(policy::ascii_split_records(bytes.skip(12), 0, false) == Seq::<Seq<u8>>::empty());
+        assert(bytes.skip(10).take(1) =~= "a".spec_bytes());
+        assert(policy::ascii_split_records(bytes.skip(10), 0, false) == seq!["a".spec_bytes()]);
+        assert(bytes.skip(4).take(5) =~= "b\tc\r\n".spec_bytes());
+        assert(policy::ascii_split_records(bytes.skip(4), 0, false)
+            == seq!["b\tc\r\n".spec_bytes(), "a".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes.skip(3), 0, false)
+            == seq!["b\tc\r\n".spec_bytes(), "a".spec_bytes()]);
+        assert(bytes.skip(1).take(1) =~= "a".spec_bytes());
+        assert(policy::ascii_split_records(bytes.skip(1), 0, false)
+            == seq!["a".spec_bytes(), "b\tc\r\n".spec_bytes(), "a".spec_bytes()]);
+        assert(policy::inventory_record_views(expected@)
+            =~= seq!["a".spec_bytes(), "b\tc\r\n".spec_bytes(), "a".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes, 0, false)
+            =~= policy::inventory_record_views(expected@));
+    }
+    let out = policy::git_inventory_records(raw);
+    expect_inventory_records(&out, &expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_inventory_records_empty_and_no_delimiter_boundaries() {
+    let empty: [&str; 0] = [];
+    proof {
+        reveal_strlit(""); reveal_strlit("\0\0"); reveal_strlit("last");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("\0\0")
+            && vstd::string::is_ascii("last"));
+        policy::ascii_separator_end_is("".spec_bytes(), 0, 0);
+        policy::ascii_separator_end_is("\0\0".spec_bytes(), 0, 0);
+        policy::ascii_separator_end_is("\0\0".spec_bytes().skip(1), 0, 0);
+        policy::ascii_separator_end_is("\0\0".spec_bytes().skip(2), 0, 0);
+        policy::ascii_separator_end_is("last".spec_bytes(), 0, 4);
+        vstd::seq_lib::lemma_seq_skip_of_skip("\0\0".spec_bytes(), 1, 1);
+        reveal_with_fuel(policy::ascii_split_records, 1);
+        assert(policy::ascii_split_records("".spec_bytes(), 0, false) == Seq::<Seq<u8>>::empty());
+        assert(policy::ascii_split_records("\0\0".spec_bytes().skip(2), 0, false)
+            == Seq::<Seq<u8>>::empty());
+        assert(policy::ascii_split_records("\0\0".spec_bytes().skip(1), 0, false)
+            == Seq::<Seq<u8>>::empty());
+        assert(policy::ascii_split_records("\0\0".spec_bytes(), 0, false)
+            == Seq::<Seq<u8>>::empty());
+        assert(policy::inventory_record_views(empty@) =~= Seq::<Seq<u8>>::empty());
+        assert("last".spec_bytes().take(4) =~= "last".spec_bytes());
+        assert(policy::ascii_split_records("last".spec_bytes(), 0, false)
+            == seq!["last".spec_bytes()]);
+    }
+    expect_inventory_records(&policy::git_inventory_records(""), &empty);
+    expect_inventory_records(&policy::git_inventory_records("\0\0"), &empty);
+    expect_inventory_records(&policy::git_inventory_records("last"), &["last"]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_inventory_fields_keep_all_empty_fields_and_only_split_ascii_space() {
+    let raw = " a  b ";
+    let expected = ["", "a", "", "b", ""];
+    proof {
+        reveal_strlit(" a  b "); reveal_strlit(""); reveal_strlit("a"); reveal_strlit("b");
+        reveal_strlit("a\tb\r\n");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(raw) && vstd::string::is_ascii("")
+            && vstd::string::is_ascii("a") && vstd::string::is_ascii("b")
+            && vstd::string::is_ascii("a\tb\r\n"));
+        let bytes = raw.spec_bytes();
+        policy::ascii_separator_end_is(bytes, 32, 0);
+        policy::ascii_separator_end_is(bytes.skip(1), 32, 1);
+        policy::ascii_separator_end_is(bytes.skip(3), 32, 0);
+        policy::ascii_separator_end_is(bytes.skip(4), 32, 1);
+        policy::ascii_separator_end_is(bytes.skip(6), 32, 0);
+        policy::ascii_separator_end_is("".spec_bytes(), 32, 0);
+        policy::ascii_separator_end_is("a\tb\r\n".spec_bytes(), 32, 5);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 4, 2);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 3, 1);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 1, 2);
+        reveal_with_fuel(policy::ascii_split_records, 1);
+        assert(bytes.take(0) =~= "".spec_bytes());
+        assert(bytes.skip(3).take(0) =~= "".spec_bytes());
+        assert(bytes.skip(6).take(0) =~= "".spec_bytes());
+        assert(bytes.skip(4).take(1) =~= "b".spec_bytes());
+        assert(bytes.skip(1).take(1) =~= "a".spec_bytes());
+        assert(policy::ascii_split_records(bytes.skip(6), 32, true) == seq!["".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes.skip(4), 32, true)
+            == seq!["b".spec_bytes(), "".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes.skip(3), 32, true)
+            == seq!["".spec_bytes(), "b".spec_bytes(), "".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes.skip(1), 32, true)
+            == seq!["a".spec_bytes(), "".spec_bytes(), "b".spec_bytes(), "".spec_bytes()]);
+        assert(policy::inventory_record_views(expected@)
+            =~= seq!["".spec_bytes(), "a".spec_bytes(), "".spec_bytes(), "b".spec_bytes(), "".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes, 32, true)
+            =~= policy::inventory_record_views(expected@));
+        assert("".spec_bytes().take(0) =~= "".spec_bytes());
+        assert(policy::ascii_split_records("".spec_bytes(), 32, true) == seq!["".spec_bytes()]);
+        assert("a\tb\r\n".spec_bytes().take(5) =~= "a\tb\r\n".spec_bytes());
+        assert(policy::ascii_split_records("a\tb\r\n".spec_bytes(), 32, true)
+            == seq!["a\tb\r\n".spec_bytes()]);
+    }
+    expect_inventory_records(&policy::git_inventory_fields(raw), &expected);
+    expect_inventory_records(&policy::git_inventory_fields(""), &[""]);
+    expect_inventory_records(&policy::git_inventory_fields("a\tb\r\n"), &["a\tb\r\n"]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_inventory_splitting_keeps_complete_multibyte_utf8() {
+    let raw = "é\0é\0";
+    proof {
+        reveal_strlit("é"); reveal_strlit("é\0é\0");
+        reveal_strlit("é\té\t"); reveal_strlit("é\t"); reveal_strlit("é é");
+        assert("é"@ =~= seq!['é']);
+        assert("é\0é\0"@ =~= seq!['é', '\0', 'é', '\0']);
+        assert("é\té\t"@ =~= seq!['é', '\t', 'é', '\t']);
+        assert("é\t"@ =~= seq!['é', '\t']);
+        assert("é é"@ =~= seq!['é', ' ', 'é']);
+        assert('é' as u32 == 233 && '\0' as u32 == 0 && '\t' as u32 == 9 && ' ' as u32 == 32);
+        assert(vstd::utf8::encode_scalar(233) == seq![195u8, 169]) by (compute);
+        assert(vstd::utf8::encode_scalar(0) == seq![0u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(9) == seq![9u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(32) == seq![32u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 5);
+        assert("é".spec_bytes() =~= seq![195u8, 169]);
+        assert(raw.spec_bytes() =~= seq![195u8, 169, 0, 195, 169, 0]);
+        assert("é\té\t".spec_bytes() =~= seq![195u8, 169, 9, 195, 169, 9]);
+        assert("é\t".spec_bytes() =~= seq![195u8, 169, 9]);
+        assert("é é".spec_bytes() =~= seq![195u8, 169, 32, 195, 169]);
+        policy::ascii_separator_end_is(raw.spec_bytes(), 0, 2);
+        policy::ascii_separator_end_is(raw.spec_bytes().skip(3), 0, 2);
+        policy::ascii_separator_end_is(raw.spec_bytes().skip(6), 0, 0);
+        policy::ascii_separator_end_is("é".spec_bytes(), 32, 2);
+        policy::ascii_separator_end_is("é\té\t".spec_bytes(), 9, 2);
+        policy::ascii_separator_end_is("é é".spec_bytes(), 32, 2);
+        policy::ascii_separator_end_is("é é".spec_bytes().skip(3), 32, 2);
+        vstd::seq_lib::lemma_seq_skip_of_skip(raw.spec_bytes(), 3, 3);
+        reveal_with_fuel(policy::ascii_split_records, 1);
+        assert(policy::ascii_split_records(raw.spec_bytes().skip(6), 0, false)
+            == Seq::<Seq<u8>>::empty());
+        assert(raw.spec_bytes().skip(3).take(2) =~= "é".spec_bytes());
+        assert(policy::ascii_split_records(raw.spec_bytes().skip(3), 0, false)
+            == seq!["é".spec_bytes()]);
+        assert(raw.spec_bytes().take(2) =~= "é".spec_bytes());
+        assert(policy::ascii_split_records(raw.spec_bytes(), 0, false)
+            == seq!["é".spec_bytes(), "é".spec_bytes()]);
+        assert("é".spec_bytes().take(2) =~= "é".spec_bytes());
+        assert(policy::ascii_split_records("é".spec_bytes(), 32, true) == seq!["é".spec_bytes()]);
+        assert("é é".spec_bytes().skip(3) =~= "é".spec_bytes());
+        assert("é é".spec_bytes().take(2) =~= "é".spec_bytes());
+        assert(policy::ascii_split_records("é é".spec_bytes(), 32, true)
+            == seq!["é".spec_bytes(), "é".spec_bytes()]);
+        assert(policy::first_ascii_separator("é\té\t".spec_bytes(), 9, 2));
+        assert("é\té\t".spec_bytes().take(2) =~= "é".spec_bytes());
+        assert("é\té\t".spec_bytes().skip(3) =~= "é\t".spec_bytes());
+    }
+    expect_inventory_records(&policy::git_inventory_records(raw), &["é", "é"]);
+    expect_inventory_records(&policy::git_inventory_fields("é"), &["é"]);
+    expect_inventory_records(&policy::git_inventory_fields("é é"), &["é", "é"]);
+    expect_inventory_row("é\té\t", "é", "é\t");
+    expect_missing_inventory_row("é", "invalid Git tree row");
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

@@ -58,6 +58,22 @@ pub fn retain_evidence(disposal_authorized: bool, evidence_present: bool) -> (re
     !disposal_authorized && evidence_present
 }
 
+pub fn rolling_disposal(owned: bool, expired: bool, released: bool, exclusive: bool) -> (allowed: bool)
+    ensures allowed <==> (owned && expired && released && exclusive),
+{
+    owned && expired && released && exclusive
+}
+
+pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
+    success: u64, failure: u64, interrupted: u64) -> (seconds: u64)
+    ensures
+        !finished ==> seconds == interrupted,
+        finished && (failed || diagnostics) ==> seconds == failure,
+        finished && !failed && !diagnostics ==> seconds == success,
+{
+    if !finished { interrupted } else if failed || diagnostics { failure } else { success }
+}
+
 pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: bool)
     ensures accepted <==> (kind@ == "import"@
         || (kind@ == "birth"@ && registered)),

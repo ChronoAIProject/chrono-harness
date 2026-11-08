@@ -2342,9 +2342,9 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
             Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-        let output =
-            chrono_worktree::TemporaryHost::capture_bound_output(&allocation, &mut command)
-                .unwrap();
+        // Maintenance already publishes its original at the surviving owner.
+        // Capturing here must not recreate the allocation after its handoff.
+        let output = command.output().unwrap();
         let report = json(&output.stdout).unwrap();
         let failures = report["cleanup_failures"].as_array().unwrap();
         assert_eq!(
@@ -2484,13 +2484,20 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let library = target.join(".chrono-harness/state/cargo-case/src/lib.rs");
     let original_manifest = fs::read(&manifest).unwrap();
     let original_library = fs::read(&library).unwrap();
-    drop(h);
-    let reclaimed = maintain_allocation();
-    assert!(!cargo_output.exists(), "{reclaimed}");
+    // The target lifecycle must preserve source while this fixture's actual
+    // assertions still consume it. The outer allocation owns these synthetic
+    // sources and can roll as one directory only after their final assertion.
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
     assert_eq!(fs::read(target.join("payload")).unwrap(), original_payload);
     assert_eq!(fs::read(manifest).unwrap(), original_manifest);
     assert_eq!(fs::read(library).unwrap(), original_library);
+    drop(h);
+    let reclaimed = maintain_allocation();
+    assert!(!cargo_output.exists(), "{reclaimed}");
+    assert!(
+        !allocation.exists(),
+        "released fixture rolls as a whole: {reclaimed}"
+    );
 }
 
 #[test]
