@@ -657,9 +657,6 @@ impl Inventory {
         if previous.schema != self.policy.schema {
             return Err("unsupported retention policy migration".into());
         }
-        let gate = self.all_partition_gate()?;
-        let mut l = self.load_bound(&gate, &sha256(previous_policy))?;
-        let mut owners = Vec::new();
         for key in self.transaction_keys()? {
             let record = self
                 .transaction(&key)?
@@ -667,37 +664,60 @@ impl Inventory {
             if record.phase != "active" {
                 return Err("recover unattached retention transaction before migration".into());
             }
-            owners.push(
-                Lease::acquire(
-                    &self.directory.join(&key),
-                    Some(&record.lease_id),
-                    false,
-                    true,
-                    None,
-                )?
-                .ok_or("live addressed publisher prevents retention migration")?,
-            );
+            let _owner = Lease::acquire(
+                &self.directory.join(&key),
+                Some(&record.lease_id),
+                false,
+                true,
+                None,
+            )?
+            .ok_or("live addressed publisher prevents retention migration")?;
         }
-        for output in &l.outputs {
-            if matches!(output.phase.as_str(), "reserving" | "creating") {
-                return Err("recover reserved output before policy migration".into());
+        let ids = self.partition_ids()?;
+        let previous_digest = sha256(previous_policy);
+        let current_digest = sha256(&self.policy_bytes);
+        let mut preserved = BTreeSet::new();
+        let mut roots = BTreeSet::new();
+        // Preflight before changing bindings. Reacquire and revalidate each actual
+        // relationship component for the write; never hold unrelated descriptors.
+        // A later interruption may leave old/current components, which the same
+        // exact migration request already accepts on reentry.
+        for publish in [false, true] {
+            let mut seen = BTreeSet::new();
+            for id in &ids {
+                if seen.contains(id) {
+                    continue;
+                }
+                let gate = self.addressed_gate(&[id.clone()], &[], &[], None, true, true)?;
+                let mut l = self.load_bound(&gate, &previous_digest)?;
+                seen.insert(id.clone());
+                seen.extend(l.outputs.iter().map(|output| output.id.clone()));
+                let mut owners = Vec::new();
+                for output in &l.outputs {
+                    if matches!(output.phase.as_str(), "reserving" | "creating") {
+                        return Err("recover reserved output before policy migration".into());
+                    }
+                    owners.push(
+                        Lease::acquire(
+                            &self.directory.join(&output.lease),
+                            Some(&output.lease_id),
+                            false,
+                            true,
+                            None,
+                        )?
+                        .ok_or("live output producer/consumer prevents retention migration")?,
+                    );
+                }
+                if publish {
+                    l.policy_sha256 = current_digest.clone();
+                    self.save(&l, &gate)?;
+                    preserved.extend(l.outputs.iter().map(|output| output.id.clone()));
+                    roots.extend(l.roots.keys().cloned());
+                }
             }
-            owners.push(
-                Lease::acquire(
-                    &self.directory.join(&output.lease),
-                    Some(&output.lease_id),
-                    false,
-                    true,
-                    None,
-                )?
-                .ok_or("live output producer/consumer prevents retention migration")?,
-            );
         }
-        let before = l.policy_sha256.clone();
-        l.policy_sha256 = sha256(&self.policy_bytes);
-        self.save(&l, &gate)?;
         Ok(
-            json!({"schema":"chrono-output-policy-migration/v1","previous_policy_sha256":before,"policy_sha256":l.policy_sha256,"outputs_preserved":l.outputs.len(),"roots_preserved":l.roots.len(),"effects":"metadata-binding-only","completion":"not-established"}),
+            json!({"schema":"chrono-output-policy-migration/v1","previous_policy_sha256":previous_digest,"policy_sha256":current_digest,"outputs_preserved":preserved.len(),"roots_preserved":roots.len(),"effects":"metadata-binding-only","completion":"not-established"}),
         )
     }
     /// Enroll exactly the producer-owned path before writing. Caller must exclude old producers
@@ -944,7 +964,8 @@ impl Inventory {
             .get(producer)
             .is_some_and(|scopes| scopes.iter().any(|scope| path.starts_with(scope)))
     }
-    /// A completed producer selects a finite diagnostic window. Actual caller
+    /// A producer selects a finite diagnostic window, including interruption
+    /// before completion. Actual caller
     /// and recovery roots remain authoritative and are never released here.
     pub fn retain_diagnostic_path(&self, path: &str) -> Result<(), String> {
         let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
@@ -954,7 +975,7 @@ impl Inventory {
             .iter_mut()
             .find(|output| output.path == path)
             .ok_or("diagnostic original is not enrolled")?;
-        if !matches!(output.phase.as_str(), "released" | "sealing")
+        if !matches!(output.phase.as_str(), "publishing" | "released" | "sealing")
             || identity(&no_symlink_parents(&self.root, path)?)? != output.identity
         {
             return Err("diagnostic original is unfinished, disposing or replaced".into());

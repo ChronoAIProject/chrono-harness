@@ -88,6 +88,18 @@ fn terminal_history_keeps_unknown_future_live_and_unexpired_records() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn cache_history_preserves_current_generations_and_unknown_completion() {
+    let expired = policy::retire_cache_history(true, 1, 2, true, Some(100), 110, 10, false);
+    let capacity = policy::retire_cache_history(true, 1, 2, true, Some(100), 100, 10, true);
+    let current = policy::retire_cache_history(true, 2, 2, true, Some(100), 110, 0, true);
+    let future = policy::retire_cache_history(true, 3, 2, true, Some(100), 110, 0, true);
+    let unknown = policy::retire_cache_history(true, 1, 2, true, None, 110, 0, true);
+    let incomplete = policy::retire_cache_history(false, 1, 2, true, Some(100), 110, 0, true);
+    let busy = policy::retire_cache_history(true, 1, 2, false, Some(100), 110, 0, true);
+    expect(expired && capacity && !current && !future && !unknown && !incomplete && !busy);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn whole_directory_requires_owned_lifetime_and_consumer_exclusion() {
     expect(policy::rolling_disposal(true, true, true, true));
     expect(!policy::rolling_disposal(false, true, true, true));

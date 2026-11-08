@@ -1,8 +1,152 @@
 #[path = "support/construction.rs"]
 mod support;
+use chrono_harness::retained_artifacts::retention::{self, Inventory};
 use serde_json::{Value, json};
 use std::{fs, process::Command};
 use support::Fixture;
+#[path = "../../../../crates/runner-tests/tests/support/isolated_capability.rs"]
+mod isolated_capability;
+use isolated_capability::isolated_capability_test;
+
+fn successful_build(fixture: &Fixture) -> chrono_host_bootstrap::construction::Published {
+    if fixture.root.join("prepared").exists() {
+        fs::remove_file(fixture.root.join("prepared")).unwrap();
+    }
+    let mut build = fixture.begin();
+    build.prerequisites(&mut vec![], &mut vec![]).unwrap();
+    build.select().unwrap();
+    build.operations(&mut vec![], &mut vec![]).unwrap();
+    build
+        .install_tool(&fixture.root.join("out/cargo"), ".chrono-harness/bin/cargo")
+        .unwrap();
+    let published = build.finish(Ok(())).unwrap();
+    assert!(published.outcome.is_ok());
+    published
+}
+
+fn maintain(fixture: &Fixture) {
+    let inventory = Inventory::adopted(&fixture.root).unwrap().unwrap();
+    for _ in 0..4 {
+        let result = inventory.maintain().unwrap();
+        assert_eq!(result["accounting_errors"], json!([]), "{result}");
+    }
+}
+
+#[test]
+fn adopted_bootstrap_rotates_whole_directories_after_current_report_and_readers_release() {
+    if !isolated_capability_test(
+        "adopted_bootstrap_rotates_whole_directories_after_current_report_and_readers_release",
+    ) {
+        return;
+    }
+    let fixture = Fixture::new();
+    fixture.adopt_retention(0);
+    // 独立保留宿主不声明 Git 所有者；模拟源码身份由源码专属用例验证。
+    let first = successful_build(&fixture);
+    let first_path = first
+        .original
+        .strip_prefix(&fixture.root)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let reader = retention::read_guard(&fixture.root, first_path).unwrap();
+    assert!(
+        reader.is_some(),
+        "bootstrap original directory was not adopted"
+    );
+    let second = successful_build(&fixture);
+    let original = fs::read(&second.original).unwrap();
+    maintain(&fixture);
+    assert!(first.original.exists());
+    drop(reader);
+    maintain(&fixture);
+    assert!(!first.original.parent().unwrap().exists());
+    assert_eq!(fs::read(&second.original).unwrap(), original);
+    assert_eq!(
+        fs::read(fixture.root.join(".chrono-harness/state/bootstrap.json")).unwrap(),
+        original
+    );
+    for row in &second.report.operations {
+        for stream in [&row.stdout, &row.stderr] {
+            assert_eq!(
+                chrono_harness::file_identity(&fixture.root.join(&stream.path)).unwrap(),
+                (stream.sha256.clone(), stream.size)
+            );
+        }
+    }
+}
+
+#[test]
+fn adopted_bootstrap_keeps_reused_streams_until_their_last_report_retires() {
+    if !isolated_capability_test(
+        "adopted_bootstrap_keeps_reused_streams_until_their_last_report_retires",
+    ) {
+        return;
+    }
+    let fixture = Fixture::new();
+    fixture.adopt_retention(0);
+    let first = successful_build(&fixture);
+    fs::remove_file(fixture.root.join("prepared")).unwrap();
+    let mut build = fixture.begin();
+    build.prerequisites(&mut vec![], &mut vec![]).unwrap();
+    build.select().unwrap();
+    build.operations(&mut vec![], &mut vec![]).unwrap();
+    build
+        .install_tool(&fixture.root.join("out/cargo"), ".chrono-harness/bin/cargo")
+        .unwrap();
+    // The actual reusable operation carries the first producer's exact streams.
+    build.report.operations[0] = first.report.operations[0].clone();
+    let second = build.finish(Ok(())).unwrap();
+    assert!(second.outcome.is_ok());
+    maintain(&fixture);
+    assert!(first.original.exists());
+    let third = successful_build(&fixture);
+    maintain(&fixture);
+    assert!(!first.original.parent().unwrap().exists());
+    assert!(!second.original.parent().unwrap().exists());
+    assert!(third.original.exists());
+}
+
+#[test]
+fn adopted_bootstrap_retains_failed_and_interrupted_originals_for_diagnosis() {
+    if !isolated_capability_test(
+        "adopted_bootstrap_retains_failed_and_interrupted_originals_for_diagnosis",
+    ) {
+        return;
+    }
+    let mut fixture = Fixture::new();
+    fixture.adopt_retention(3600);
+    fixture.failed_operation("prepare", 29);
+    let mut build = fixture.begin();
+    let error = build.prerequisites(&mut vec![], &mut vec![]).unwrap_err();
+    let published = build.finish(Err(error)).unwrap();
+    assert_eq!(published.outcome.unwrap_err().exit_code, Some(29));
+    let path = published
+        .original
+        .strip_prefix(&fixture.root)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(
+        retention::read_guard(&fixture.root, path)
+            .unwrap()
+            .is_some()
+    );
+    let build = fixture.begin();
+    let interrupted = build.directory.clone();
+    maintain(&fixture);
+    assert!(interrupted.exists());
+    drop(build);
+    maintain(&fixture);
+    assert!(interrupted.exists());
+    assert!(published.original.exists());
+    assert!(
+        !fixture
+            .root
+            .join(".chrono-harness/state/bootstrap.json")
+            .exists()
+    );
+}
 
 #[test]
 fn construction_preserves_order_selected_tools_installation_and_original_report() {

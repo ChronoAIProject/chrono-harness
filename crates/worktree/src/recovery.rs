@@ -71,6 +71,7 @@ fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(),
             "/original_report/result/input",
             "/unreferenced_original_receipt/input",
             "/original_result/input",
+            "/declaration_input",
         ] {
             if let Some(input) = report.pointer(pointer) {
                 inputs.push(
@@ -497,6 +498,7 @@ pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>,
         {
             return Err("invalid retained lifecycle input binding".into());
         }
+        state_path(root, &input.path)?;
         originals.push(input.path);
     }
     for binding in [
@@ -506,8 +508,24 @@ pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>,
         "main_cache_release",
         "managed_use_receipt",
         "intent",
+        "terminal_receipt",
     ] {
         if let Some(path) = report[binding]["path"].as_str() {
+            originals.push(path.into());
+        }
+    }
+    if report["schema"] == "chrono-worktree-owner-adoption/v1" {
+        let path = report["stage_result"]
+            .as_str()
+            .ok_or("owner adoption stage path")?;
+        state_path(root, path)?;
+        originals.push(path.into());
+    }
+    for pointer in [
+        "/owner_deployment/receipt/path",
+        "/owner_deployment/stage_result",
+    ] {
+        if let Some(path) = report.pointer(pointer).and_then(Value::as_str) {
             originals.push(path.into());
         }
     }
