@@ -40,6 +40,12 @@ fn build_and_explicit_verification_require_rust() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn executable_modes_require_a_regular_file_and_an_execute_bit() {
+    proof {
+        assert(493u32 & 73u32 == 73u32) by (bit_vector);
+        assert(420u32 & 73u32 == 0u32) by (bit_vector);
+        assert(1u32 & 73u32 == 1u32) by (bit_vector);
+        assert(4095u32 & 73u32 == 73u32) by (bit_vector);
+    }
     let normal = policy::executable_file(true, 493);
     let data = policy::executable_file(true, 420);
     let directory = policy::executable_file(false, 493);
@@ -67,6 +73,7 @@ fn executable_identity_requires_the_full_digest_size_and_mode() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn tar_entry_requires_the_exact_regular_name_size_and_mode() {
     let name = [101u8,120,101,99,117,116,97,98,108,101];
+    proof { assert(name@ =~= seq![101u8,120,101,99,117,116,97,98,108,101]); }
     let same = policy::executable_entry(&name, true, 7, 489, 7, 489);
     let link = policy::executable_entry(&name, false, 7, 489, 7, 489);
     let size = policy::executable_entry(&name, true, 8, 489, 7, 489);
