@@ -916,7 +916,8 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
             .unwrap();
         assert_eq!(out.status.code(), Some(exit), "{out:?}");
         assert_eq!(out.stdout, b"original collection stdout\n");
-        assert_eq!(out.stderr, b"original warning\n");
+        assert!(out.stderr.starts_with(b"original warning\n"), "{out:?}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("W_WORKTREE_AGENT_SCOPE"));
         assert!(target.join("output λ/cache").exists());
         assert_eq!(git(&target, &["rev-parse", "HEAD"]), target_head);
         assert_eq!(fs::read(target.join(CONFIG)).unwrap(), bytes);
@@ -1001,7 +1002,8 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
         .unwrap();
     assert_eq!(checked.status.code(), Some(0), "{checked:?}");
     assert_eq!(checked.stdout, b"checked");
-    assert_eq!(checked.stderr, b"check warning\n");
+    assert!(checked.stderr.starts_with(b"check warning\n"), "{checked:?}");
+    assert!(String::from_utf8_lossy(&checked.stderr).contains("W_WORKTREE_AGENT_SCOPE"));
     let head = git(&h.root, &["rev-parse", "HEAD"]);
     let (code, rebuilt, error) = h.reconstruct(
         reconstruction(&head, &head, value!([])),
