@@ -258,18 +258,18 @@ pub(super) fn drain(
     let Some(retention) = policy.rolling_directory.as_ref() else {
         return Ok(protected("whole-directory policy is no longer adopted"));
     };
-    let (since, keep) = if let Some(terminal) = &rolling.terminal {
-        (
-            terminal.observed_at,
-            if terminal.failed || rolling.diagnostics {
-                retention.failure_keep_seconds
-            } else {
-                retention.success_keep_seconds
-            },
-        )
-    } else {
-        (rolling.born_at, retention.interrupted_keep_seconds)
-    };
+    let since = rolling
+        .terminal
+        .as_ref()
+        .map_or(rolling.born_at, |t| t.observed_at);
+    let keep = crate::verified_lifecycle::rolling_keep(
+        rolling.terminal.is_some(),
+        rolling.terminal.as_ref().is_some_and(|t| t.failed),
+        rolling.diagnostics,
+        retention.success_keep_seconds,
+        retention.failure_keep_seconds,
+        retention.interrupted_keep_seconds,
+    );
     let expires = since.checked_add(keep).ok_or("rolling expiry overflow")?;
     let released = object.consumers.values().all(|c| c.released);
     if !crate::verified_lifecycle::rolling_disposal(

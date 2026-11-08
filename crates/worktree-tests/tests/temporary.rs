@@ -84,6 +84,108 @@ fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
         "all owned fixture bytes must roll together: {result}"
     );
     assert_eq!(fs::read(survivor).unwrap(), b"keep external bytes");
+    let store = path.parent().unwrap();
+    assert!(
+        producer_state(store)["objects"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        !store
+            .join("rolling-metadata")
+            .join(sha256(path.file_name().unwrap().as_encoded_bytes()))
+            .exists()
+    );
+}
+
+#[test]
+fn rolling_directory_diagnostics_have_a_finite_window_without_permanent_reference_or_duplicate_input()
+ {
+    let h = rolling_host(86400);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "diagnostic rolling ",
+    )
+    .unwrap();
+    let path = fixture.path().to_owned();
+    let store = path.parent().unwrap();
+    let source = h.parent.join("actual-copy-input");
+    fs::write(&source, b"reconstructible fixture input").unwrap();
+    let destination = path.join("copy.bin");
+    chrono_worktree::TemporaryHost::register_copy(
+        store,
+        "test-allocation",
+        &source,
+        &destination,
+        None,
+        "actual whole-directory copy",
+    )
+    .unwrap();
+    assert!(!destination.exists());
+    fs::copy(source, &destination).unwrap();
+    fixture.retain_diagnostic().unwrap();
+    let result = fixture.finish(false).unwrap();
+    assert_eq!(result["status"], "finished", "{result}");
+    assert_eq!(
+        fs::read(destination).unwrap(),
+        b"reconstructible fixture input"
+    );
+    assert!(!store.join("body-inputs").exists());
+    let object = &producer_state(store)["objects"][0];
+    assert_eq!(object["rolling"]["terminal"]["failed"], false);
+    assert_eq!(object["rolling"]["diagnostics"], true);
+    assert_eq!(object["consumers"], value!({}));
+}
+
+#[test]
+fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal() {
+    let h = rolling_host(0);
+    let policy_path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(86400);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "metadata rolling ",
+    )
+    .unwrap();
+    let path = fixture.path().to_owned();
+    let store = path.parent().unwrap();
+    let result = fixture.finish(false).unwrap();
+    assert_eq!(result["status"], "finished", "{result}");
+    assert!(!path.exists());
+    let record_path = producer_record_path(store, &path);
+    let original = fs::read(&record_path).unwrap();
+    let record = json(&original).unwrap();
+    let metadata = store.join(record["object"]["rolling"]["metadata"].as_str().unwrap());
+    // The real producer established disposal; only its atomic record move is
+    // replayed to model interruption before the following directory handoff.
+    fs::rename(&record_path, metadata.join("retired-record.json")).unwrap();
+    policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(0);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert!(!metadata.exists());
+    assert!(!record_path.exists());
+    let trash = store.join("rolling-disposals");
+    let partial = trash.join("partially-removed");
+    fs::create_dir(&partial).unwrap();
+    fs::write(partial.join("remaining receipt"), original).unwrap();
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert!(!partial.exists());
+    assert_eq!(
+        fs::read_dir(trash).unwrap().count(),
+        1,
+        "only the constant namespace owner remains"
+    );
 }
 
 #[test]

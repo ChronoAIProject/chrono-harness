@@ -64,4 +64,14 @@ pub fn rolling_disposal(owned: bool, expired: bool, released: bool, exclusive: b
     owned && expired && released && exclusive
 }
 
+pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
+    success: u64, failure: u64, interrupted: u64) -> (seconds: u64)
+    ensures
+        !finished ==> seconds == interrupted,
+        finished && (failed || diagnostics) ==> seconds == failure,
+        finished && !failed && !diagnostics ==> seconds == success,
+{
+    if !finished { interrupted } else if failed || diagnostics { failure } else { success }
+}
+
 }
