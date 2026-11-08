@@ -1935,7 +1935,9 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
 
 #[test]
 fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
-    let root = tempfile::tempdir().unwrap();
+    let mut root = tempfile::tempdir().unwrap();
+    root.disable_cleanup(true);
+    eprintln!("launch tamper originals: {}", root.path().display());
     fs::create_dir_all(root.path().join(".chrono-harness/state")).unwrap();
     let spec = chrono_harness::CommandSpec {
         program: PROCESS_FIXTURE.into(),
@@ -1967,8 +1969,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
             .failure
             .as_deref()
             .is_some_and(|error| error.contains("launch evidence")),
-        "{:?}",
-        result.failure
+        "{result:?}"
     );
     let error = chrono_harness::scoped_report::retain_process_evidence(
         root.path(),
@@ -1979,12 +1980,15 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
     )
     .unwrap_err();
     assert!(error.contains("launch evidence"), "{error}");
+    root.disable_cleanup(false);
 }
 
 #[test]
 fn retained_originals_survive_enclosing_timeout_even_without_terminal_publication() {
     for case in ["stall", "pause-launcher"] {
         let mut root = tempfile::tempdir().unwrap();
+        root.disable_cleanup(true);
+        eprintln!("retained timeout originals ({case}): {}", root.path().display());
         let exe = std::env::current_exe().unwrap();
         let spec = chrono_harness::CommandSpec {
             program: exe.to_string_lossy().into(),
@@ -2011,6 +2015,7 @@ fn retained_originals_survive_enclosing_timeout_even_without_terminal_publicatio
             &sha256(&fs::read(&exe).unwrap()),
         )
         .unwrap();
+        eprintln!("retained timeout process ({case}): {result:?}");
         assert!(
             result
                 .failure
@@ -2092,6 +2097,7 @@ fn retained_originals_survive_enclosing_timeout_even_without_terminal_publicatio
             "owned child survived enclosing completion ({case})"
         );
         assert_eq!(presence_error.raw_os_error(), Some(libc::ESRCH));
+        root.disable_cleanup(false);
     }
 }
 

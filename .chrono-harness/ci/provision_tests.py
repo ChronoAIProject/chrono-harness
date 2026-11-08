@@ -125,14 +125,12 @@ class NativeCargoDomains(unittest.TestCase):
                                  "FIXTURE_DOMAIN_ROOT": str(self.root / "domains")}
 
     def native_config(self, entry):
-        # This test supplies the already registered native identity as input;
-        # production selection/drift validation remains the Rust owner's check.
+        # Supply the declared platform policy; executable observation and drift
+        # validation remain the Rust owner's check.
         selector = json.loads((SOURCE.parents[1] / entry).read_text())
-        rows = selector["platforms"]["macos-aarch64"]["configurations"]
-        expected_path = ".chrono-harness/git/pinned-macos.json"
-        selected = [row for row in rows if row["path"] == expected_path]
-        self.assertEqual(len(selected), 1)
-        return json.loads((SOURCE.parents[1] / selected[0]["path"]).read_text())
+        selected = selector["platforms"]["macos-aarch64"]
+        self.assertEqual(selected, ".chrono-harness/git/macos-27.json")
+        return json.loads((SOURCE.parents[1] / selected).read_text())
 
     def selected_environment(self, values, inherited=None, bootstrap_profile=False):
         inherited = inherited or self.base_environment
@@ -161,10 +159,11 @@ class NativeCargoDomains(unittest.TestCase):
 
     def test_ordinary_native_consumers_keep_the_ordinary_locked_domain(self):
         config = self.native_config(".chrono-harness/config.json")
-        self.assertNotIn("CARGO_NET_OFFLINE", config["environment"]["inherit"])
-        environment = self.selected_environment(config["environment"]["values"])
-        self.assertEqual(environment["CARGO_HOME"], "/Users/runner/.cargo")
-        self.assertNotEqual(environment.get("CARGO_NET_OFFLINE"), "true")
+        inherited = dict(self.base_environment, CARGO_NET_OFFLINE="true")
+        environment = self.selected_environment(config["environment"]["values"], inherited)
+        cargo_home = ".chrono-harness/cache/bootstrap-owner-tooling/cargo"
+        self.assertEqual(environment["CARGO_HOME"], cargo_home)
+        self.assertEqual(environment.get("CARGO_NET_OFFLINE"), "false")
         # Exercise distinct current consumers with their original locked manifests.
         for operation in ("build.runner", "build.cache", "build.distribution",
                           "build.instructions", "build.judge-routes"):
@@ -172,7 +171,7 @@ class NativeCargoDomains(unittest.TestCase):
                 result = self.cargo(operation, environment)
                 self.assertEqual(result["exit_code"], 0)
                 observed = json.loads((self.root / result["stdout"]["path"]).read_bytes())
-                self.assertEqual(observed["cargo_home"], "/Users/runner/.cargo")
+                self.assertEqual(observed["cargo_home"], cargo_home)
                 self.assertFalse(observed["offline"])
         # The detector prepares this cache tooling profile before core bootstrap.
         cache = json.loads((SOURCE / "bootstrap-cache.json").read_text())
@@ -180,7 +179,7 @@ class NativeCargoDomains(unittest.TestCase):
         child_environment = self.selected_environment(cache.get("environment", {}), environment,
                                                       bootstrap_profile=True)
         self.assertEqual(self.cargo(cache["operations"][0], child_environment)["exit_code"], 0)
-        self.assertEqual(child_environment["CARGO_HOME"], "/Users/runner/.cargo")
+        self.assertEqual(child_environment["CARGO_HOME"], cargo_home)
         self.assertNotEqual(child_environment.get("CARGO_NET_OFFLINE"), "true")
 
 
