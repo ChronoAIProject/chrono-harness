@@ -1,3 +1,5 @@
+#[path = "support/frontend.rs"]
+mod frontend_fixture;
 #[path = "support/receipt.rs"]
 mod fixture;
 use chrono_host_release::{
@@ -122,7 +124,7 @@ fn native_current_needs_select_original_earlier_attempt_without_accepting_old_fa
 }
 
 #[test]
-fn native_receipt_matches_original_job_run_attempt_and_local_digest_is_not_optional() {
+fn local_receipt_requires_the_original_receipt_digest() {
     let mut f = Fixture::new(false);
     let selection = f.save();
     let loaded = f.loaded();
@@ -134,53 +136,32 @@ fn native_receipt_matches_original_job_run_attempt_and_local_digest_is_not_optio
             .unwrap_err()
             .contains("digest")
     );
-    f.parent.kind = Kind::Github;
-    f.parent.job = "native_collect".into();
-    f.report["lineage"] =
-        json!({"kind":"github","run_id":"same-run","attempt":"1","job":"native_test_none"});
-    f.report["frontend_selection"] =
-        json!({"job":"native_frontend","artifact_id":"98766","run_id":"same-run","attempt":"1"});
-    f.report["dependency_input"] = original(&f.directory(), "dependency-context.json",
-        &serde_json::to_vec(&json!({"native_frontend":{"result":"success","outputs":{"artifact_id":"98766","run_id":"same-run","attempt":"1"}}})).unwrap());
-    let mut selected = f.save();
-    selected.job = "native_test_none".into();
-    selected.artifact_id = "98765".into();
-    assert!(
-        receipt::read(
-            &loaded,
-            f.host.root(),
-            &f.context,
-            &f.parent,
-            unit,
-            &selected
-        )
-        .is_ok()
-    );
-    for (field, value) in [("job", "foreign"), ("run_id", "foreign"), ("attempt", "2")] {
-        let mut wrong = selected.clone();
-        match field {
-            "job" => wrong.job = value.into(),
-            "run_id" => wrong.run_id = value.into(),
-            _ => wrong.attempt = value.into(),
-        }
-        assert!(
-            receipt::read(&loaded, f.host.root(), &f.context, &f.parent, unit, &wrong).is_err(),
-            "{field}"
-        );
+}
+
+#[test]
+fn native_receipt_matches_original_job_run_attempt_and_rejects_unknown_fields() {
+    use chrono_host_release::receipt::Selection;
+    let f = frontend_fixture::Fixture::new();
+    let frontend = f.exported();
+    let out = f.unit(&frontend.join("chrono-host-release"));
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    let loaded = chrono_host_release::recipe::Loaded::load(f.host.root()).unwrap();
+    let unit = loaded.unit("test_none").unwrap();
+    let report_path = f.host.root().join("handoffs/none/receipt.json");
+    let mut report: Value = serde_json::from_slice(&fs::read(&report_path).unwrap()).unwrap();
+    let context = report["context"].clone();
+    let parent = Lineage {kind:Kind::Github, run_id:"1234".into(), attempt:"3".into(), job:"native_collect".into()};
+    let selected = Selection {job:"native_test_none".into(), artifact_id:"98765".into(), run_id:"1234".into(), attempt:"2".into()};
+    let read = |selected: &Selection| receipt::read(&loaded,f.host.root(),&context,&parent,unit,selected);
+    assert!(read(&selected).is_ok(), "{:?}", read(&selected).unwrap_err());
+    for (field,value) in [("job","foreign"),("run_id","foreign"),("attempt","1")] {
+        let mut wrong=serde_json::to_value(&selected).unwrap();
+        wrong[field]=json!(value);
+        assert!(read(&serde_json::from_value(wrong).unwrap()).is_err(),"{field}");
     }
-    f.report["lineage"]["artifact_id"] = json!("unexpected");
-    f.save();
-    assert!(
-        receipt::read(
-            &loaded,
-            f.host.root(),
-            &f.context,
-            &f.parent,
-            unit,
-            &selected
-        )
-        .is_err()
-    );
+    report["lineage"]["artifact_id"] = json!("unexpected");
+    fs::write(report_path,serde_json::to_vec(&report).unwrap()).unwrap();
+    assert!(read(&selected).is_err());
 }
 
 #[test]
