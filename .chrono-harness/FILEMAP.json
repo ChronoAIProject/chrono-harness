@@ -591,6 +591,7 @@
     {"from":"project:host-bootstrap-native","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
     {"from":"project:host-bootstrap-native-tests","kind":"test-execution","to":"test:host-bootstrap-native-tests"},
     {"from":"tool:verus","kind":"test-execution","to":"test:runner-tests"},
+    {"from":"tool:verus","kind":"runtime-input","to":"project:runner"},
     {"from":"tool:verus","kind":"test-execution","to":"test:judge-ci-tests"},
     {"from":"tool:verus","kind":"test-execution","to":"test:ci-tests"},
     {"from":"tool:verus","kind":"test-execution","to":"test:judge-registration-tests"},

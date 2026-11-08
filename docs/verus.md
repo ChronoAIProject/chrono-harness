@@ -14,6 +14,8 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 本宿主的 `build.runner` 由 Rust 启动程序读取
 `.chrono-harness/ci/runner-build.json`，调用固定版本的官方 Cargo-Verus。
 core bootstrap 先准备同一 Verus，再调用此登记操作；调用前端本身仍由普通 Cargo 构建。
+执行计划含 `build.runner` 的检查单元也采用现有 `bootstrap-unit.json`，
+在原检查前解包共享 Verus ZIP，不另下载，也不因该单元自身没有独立证明而省略编译器。
 没有自研编译器包装器，也不解析终端上的成功文字。
 
 `verified_cargo.rs` 负责完整 Cargo JSON 记录的顺序判断。冷构建必须依次出现
@@ -32,7 +34,8 @@ checksum 由 `verified_sources.rs` 核对，最终二进制的原 dep-info 还�
 缓存键只绑定实际选中的恢复方法，不因登记表里无关操作的变化而失效。
 只有本次完整原输出有效且点名库标为 `fresh` 时，原证明或依赖原件损坏才可执行
 登记的 `recover.identifiers-proof`，随后沿同一入口构建一次。失败或无效恢复非零返回，
-原构建错误不会因缓存清理而重试。恢复只调用登记的 Cargo 清理，实际编译使用 `--locked --offline`。
+原构建错误不会因缓存清理而重试。恢复只调用登记的 Cargo 清理，实际编译使用 `--locked`，
+沿用调用方选定的 Cargo 依赖缓存；元数据所需的缺包由 Cargo 补齐，不额外强制离线。
 清理前保留已有证明、依赖原件和两份库的原字节；原件无法读取或超过读取上限时，
 本次恢复失败并保全原路径，不先删除再尝试重建。
 
@@ -50,7 +53,7 @@ Rust mock／独立 Verus 根同步登记。生产判断复用 `verify.verus-resu
 `verify.bootstrap-cargo-tests`；不增加版本、安装器、全局缓存索引或共享准入锁。
 macOS 的正式工具表也登记 `bootstrap-native`，由同一原生前端的 `--version` 提供版本观察；
 仅在 bootstrap 配方中给出路径不足以让普通检查消费该构建入口。
-runner 已离开普通 Cargo 配方，其锁定、离线参数和 Cargo／Rustup 目录保留改由
+runner 已离开普通 Cargo 配方，其锁定参数和 Cargo／Rustup 目录保留改由
 同语言的原生 Rust mock 验证；Python 的普通 Cargo 环境测试只覆盖仍采用该路径的使用方。
 每个原件的读取上限为 8 MiB；最终二进制只枚举登记 target 的 `debug/deps`，至多 4096 项，
 按明确前缀、合法指纹和实际二进制字节选择原件。这不是测试发现或选测规则。

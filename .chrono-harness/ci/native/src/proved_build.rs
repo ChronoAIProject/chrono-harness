@@ -373,7 +373,6 @@ fn run_attempt(
             "--fwd-verus-args-to".into(),
             "all".into(),
             "--locked".into(),
-            "--offline".into(),
             "--manifest-path".into(),
             config.manifest.clone(),
             "--target-dir".into(),
