@@ -817,6 +817,46 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
 }
 
 #[test]
+fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_records() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":2,"max_bytes":1048576});
+    fs::write(&policy_path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let active = h.parent.join("still-active");
+    let target = h.parent.join("rotating-history");
+    let (code, created, error) = h.invoke("integration", "still-active", &active);
+    assert_eq!(code, 0, "{created} {error}");
+    let active_entry = h.ledger()["entries"][0].clone();
+    let (code, created, error) = h.invoke("integration", "rotating-history", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists());
+    let disposed = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(target))
+        .unwrap()
+        .clone();
+    assert_eq!(disposed["status"], "disposed");
+    assert!(disposed["disposed_at"].as_u64().is_some());
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert_eq!(h.ledger()["entries"], value!([active_entry]));
+    assert!(active.join("payload").is_file());
+    assert!(!target.exists());
+    assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
+    let (code, again, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{again} {error}");
+    assert_eq!(h.ledger()["entries"].as_array().unwrap().len(), 1);
+}
+
+#[test]
 fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
