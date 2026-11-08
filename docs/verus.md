@@ -445,6 +445,12 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 实际与期望长度为 A、E，最长键为 L 字节时，最坏比较成本为 O(AEL)，
 借用向量占 O(A+E)；完整运行、构建、验证、CI 和存储成本未测，不宣称性能收益。
 
+## 工作树清理选择与结果阶段
+
+`crates/worktree/src/verified_lifecycle.rs` 直接供自动清理所有者调用：终态进入清理，活跃记录仅在有缓存责任时进入，保留项仅由显式维护重试。证据阻挡要求实际存在且未经释放。清理原结果失败时记失败，缓存成功仅记缓存释放，整树成功还须有 `verified-absent` 或 `already-absent` 才记移除。
+
+`verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
+
 ## 所有者可执行文件发布
 
 `crates/worktree/src/verified_owner_publication.rs` 是实际发布身份比较、原件保全、意图读取／准备、
