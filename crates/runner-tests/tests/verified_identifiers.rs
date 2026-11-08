@@ -10,6 +10,8 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
 verus! {
@@ -144,6 +146,81 @@ fn oid_boundaries() {
     let long = policy::valid_oid(&long_bytes);
     assert(long_bytes@[0] == 102);
     expect_identifier_true(long);
+}
+
+fn expect_full_oid_success(text: &str)
+    requires policy::oid(text.spec_bytes()),
+{
+    match policy::full_oid(text) {
+        Ok(()) => {},
+        Err(_) => { panic!(); },
+    }
+}
+
+fn expect_full_oid_rejection(text: &str)
+    requires !policy::oid(text.spec_bytes()),
+{
+    match policy::full_oid(text) {
+        Ok(()) => { panic!(); },
+        Err(message) => {
+            let same = policy::equal_text(
+                message.as_str(), "expected full nonzero lowercase commit OID",
+            );
+            expect_identifier_true(same);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn full_oid_accepts_both_lengths_and_one_nonzero_digit() {
+    proof {
+        reveal_strlit("0123456789abcdef0123456789abcdef01234567");
+        reveal_strlit("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        reveal_strlit("0000000000000000000000000000000000000001");
+        vstd::string::is_ascii_spec_bytes("0123456789abcdef0123456789abcdef01234567");
+        vstd::string::is_ascii_spec_bytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000001");
+    }
+    expect_full_oid_success("0123456789abcdef0123456789abcdef01234567");
+    expect_full_oid_success("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    expect_full_oid_success("0000000000000000000000000000000000000001");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn full_oid_rejects_zero_lengths_case_and_control_bytes_with_the_original_error() {
+    proof {
+        reveal_strlit("");
+        reveal_strlit("0000000000000000000000000000000000000000");
+        reveal_strlit("0000000000000000000000000000000000000000000000000000000000000000");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("");
+        vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000");
+        vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000000000000000000000000000");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa");
+    }
+    expect_full_oid_rejection("");
+    expect_full_oid_rejection("0000000000000000000000000000000000000000");
+    expect_full_oid_rejection("0000000000000000000000000000000000000000000000000000000000000000");
+    expect_full_oid_rejection("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect_full_oid_rejection("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect_full_oid_rejection("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa");
+    expect_full_oid_rejection("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa");
+    expect_full_oid_rejection("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa");
+}
+
+// 任意位置的非法字节都必须拒绝，不能只检查首尾或截取一段文本。
+fn full_oid_rejects_an_invalid_byte_anywhere(text: &str, at: usize)
+    requires at < text.spec_bytes().len(), !policy::oid_byte(text.spec_bytes()[at as int]),
+{
+    expect_full_oid_rejection(text);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

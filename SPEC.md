@@ -1150,6 +1150,12 @@ scoped `chrono-ci-check/v2` 必须明确 `policy.facts_config` 为 `.chrono-harn
 原 UTF-8 解码、完整 OID 检查与错误分类，这些外围组合及 Git 获取仍有独立证明义务。
 切片和 Vec 存取使用固定 vstd 的明确外部合同，独立预期和原运行测试沿同源入口验证。
 
+完整 OID 的文本准入由同一标识符根的 `full_oid` 实现，`facts::full_oid` 只重导出。
+成功当且仅当完整 UTF-8 字节恰为 40 或 64 位小写十六进制且不全为零；
+失败完整保留 `expected full nonzero lowercase commit OID`，不归一化或截取输入。
+独立 Verus 预期及普通运行测试共用实际实现，核边界、非法字节及原错误全文。
+文本借用／诊断构造沿用固定 vstd 的外部合同；不据此宣称 parent 解码／收集组合或 Git 获取已证明。
+
 候选 profile／facts-config 字节须匹配固定 blob；构建后绑定失败和后续失败都在 `evidence.git_facts` 保留结构化进程原观察。可选 `registration_config` 独立采用原有登记／canonical 调用语义，单独 Git 绑定不要求完整登记。v1 拒绝新字段（含 null）。选测、initial 规则、操作环境、协议及唯一 check argv 保留 scoped 合同，base enforcement 写明真实端点 schema。
 
 这批历史实现时产品宿主尚未采用 v2；此能力不证明 Git／委托输入完整、full 治理或同判。
