@@ -3042,14 +3042,6 @@
             "--real-fixture"
           ]
         },
-        "provision": {
-          "operation": "host.bootstrap-provision-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/provision_tests.py"
-          ]
-        },
         "owner": {
           "operation": "host.bootstrap-owner-tests",
           "tool": "python3",

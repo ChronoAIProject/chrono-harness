@@ -7,14 +7,10 @@ fn fixture() -> (Host, PathBuf, String, String) {
     fixture_with_publication_probe(None)
 }
 fn fixture_with_publication_probe(drift: Option<bool>) -> (Host, PathBuf, String, String) {
-    fixture_with_bindings(drift, false)
-}
-fn fixture_with_bindings(drift: Option<bool>, registry: bool) -> (Host, PathBuf, String, String) {
-    fixture_with_entrypoint(drift, registry, ".chrono-harness/ci/bootstrap.py")
+    fixture_with_entrypoint(drift, ".chrono-harness/ci/bootstrap-installed.sh")
 }
 fn fixture_with_entrypoint(
     drift: Option<bool>,
-    registry: bool,
     entrypoint: &str,
 ) -> (Host, PathBuf, String, String) {
     let h = Host::new("payload");
@@ -25,22 +21,17 @@ fn fixture_with_entrypoint(
     fs::write(cleanup, serde_json::to_vec_pretty(&p).unwrap()).unwrap();
     let ci = h.root.join(".chrono-harness/ci");
     fs::create_dir_all(&ci).unwrap();
-    let mut files = vec![PROFILE.to_owned(), ".chrono-harness/process_fds.py".into()];
-    for name in ["bootstrap.py", "bootstrap_owner.py", "bootstrap_shared.py"] {
-        fs::copy(
-            source().join(".chrono-harness/ci").join(name),
-            ci.join(name),
-        )
-        .unwrap();
-        files.push(format!(".chrono-harness/ci/{name}"));
-    }
-    if entrypoint != ".chrono-harness/ci/bootstrap.py" {
-        fs::copy(ci.join("bootstrap.py"), h.root.join(entrypoint)).unwrap();
-        files.push(entrypoint.into());
-    }
+    let registry = ".chrono-harness/ci/owner-toolchains.json";
+    let test_source = ".chrono-harness/ci/owner-stage-tests.rs";
+    let files = [PROFILE, entrypoint, registry, test_source];
     fs::copy(
-        source().join(".chrono-harness/process_fds.py"),
-        h.root.join(".chrono-harness/process_fds.py"),
+        source().join(".chrono-harness/ci/bootstrap-installed.sh"),
+        h.root.join(entrypoint),
+    )
+    .unwrap();
+    fs::write(
+        h.root.join(test_source),
+        include_bytes!("support/owner_publication_probe.rs"),
     )
     .unwrap();
     let bin = h.root.join(".chrono-harness/bin");
@@ -49,6 +40,11 @@ fn fixture_with_entrypoint(
     fs::copy(
         source().join("crates/worktree/target/debug/chrono-worktree"),
         bin.join("built-owner"),
+    )
+    .unwrap();
+    fs::copy(
+        env!("CARGO_BIN_EXE_chrono-worktree-test-bootstrap"),
+        bin.join("chrono-host-bootstrap"),
     )
     .unwrap();
     let tools = h.parent.join("owner-tools");
@@ -74,47 +70,28 @@ fn fixture_with_entrypoint(
     projects["scripts"] = value!([
         {"id":"construction","path":entrypoint,"test_script":"construction-tests",
          "actions":{"execute":{"operation":"owner.fixture-version","tool":"cargo","argv":["--version"]}}},
-        {"id":"construction-tests","path":".chrono-harness/ci/bootstrap_shared.py","tests_for":"construction",
+        {"id":"construction-tests","path":test_source,"tests_for":"construction",
          "actions":{"execute":{"operation":"owner.fixture-test","tool":"cargo","argv":["--version"]}}}
     ]);
     fs::write(projects_path, serde_json::to_vec_pretty(&projects).unwrap()).unwrap();
-    let mut profile = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0",
-        "tools":{"cargo":tools.join("cargo"),"rustc":tools.join("rustc")},"operations":["owner.fixture-version"],"install":[],
+    let native = chrono_host_bootstrap::bindings::native_platform().unwrap();
+    let platform = format!("{}/{}", native.system, native.machine);
+    let bound = |name: &str| value!({"sha256":sha256(&fs::read(tools.join(name)).unwrap()),"version":format!("{name} 1.95.0 (fixture)")});
+    let registration = value!({"schema":"chrono-bootstrap-toolchains/v1",
+        "rust_toolchain":"1.95.0","platforms":{platform:{"tools":{"cargo":bound("cargo"),"rustc":bound("rustc")}}}});
+    fs::write(
+        h.root.join(registry),
+        serde_json::to_vec_pretty(&registration).unwrap(),
+    )
+    .unwrap();
+    let profile = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0",
+        "tools":{},"operations":["owner.fixture-version"],"install":[],
         "require_tool_bindings":true,"rust_incremental":false,
-        "native_platform":{"system":if cfg!(target_os="macos") {"Darwin"} else {"Linux"},
-            "machine":if cfg!(all(target_os="macos",target_arch="aarch64")) {"arm64"} else {std::env::consts::ARCH}},
-        "tool_bindings":{"cargo":{"path":tools.join("cargo"),"sha256":sha256(&fs::read(tools.join("cargo")).unwrap()),"version":"cargo 1.95.0 (fixture)"},
-            "rustc":{"path":tools.join("rustc"),"sha256":sha256(&fs::read(tools.join("rustc")).unwrap()),"version":"rustc 1.95.0 (fixture)"}},
+        "tool_bindings_registry":registry,
         "environment":{"PATH":std::env::join_paths(std::iter::once(tools).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap()))).unwrap().to_str().unwrap()},
         "entrypoint":{"tool":"owner-probe","script":entrypoint},
         "participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":fixture_git(),"config":POLICY},
         "owner_stage":{"source":".chrono-harness/bin/built-owner","selected":".chrono-harness/bin/chrono-worktree"}});
-    if registry {
-        let path = ".chrono-harness/ci/owner-toolchains.json";
-        let native = &profile["native_platform"];
-        let platform = format!(
-            "{}/{}",
-            native["system"].as_str().unwrap(),
-            native["machine"].as_str().unwrap()
-        );
-        let mut tools = profile["tool_bindings"].clone();
-        for item in tools.as_object_mut().unwrap().values_mut() {
-            item.as_object_mut().unwrap().remove("path");
-        }
-        let registration = value!({"schema":"chrono-bootstrap-toolchains/v1",
-            "rust_toolchain":"1.95.0","platforms":{platform:{"tools":tools}}});
-        fs::write(
-            h.root.join(path),
-            serde_json::to_vec_pretty(&registration).unwrap(),
-        )
-        .unwrap();
-        files.push(path.into());
-        let declaration = profile.as_object_mut().unwrap();
-        declaration.remove("tool_bindings");
-        declaration.remove("native_platform");
-        declaration.insert("tool_bindings_registry".into(), value!(path));
-        declaration.insert("tools".into(), value!({}));
-    }
     fs::write(
         h.root.join(PROFILE),
         serde_json::to_vec_pretty(&profile).unwrap(),
@@ -190,7 +167,7 @@ fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, St
 #[test]
 fn owner_deployment_uses_the_declared_producer_entrypoint_for_stage_inputs() {
     let (h, exe, path, sha) =
-        fixture_with_entrypoint(None, true, ".chrono-harness/ci/owner-stage-producer.py");
+        fixture_with_entrypoint(None, ".chrono-harness/ci/owner-stage-producer.sh");
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_eq!(code, 0, "{report} {error}");
     assert!(report.get("managed_process").is_none(), "{report}");
@@ -605,7 +582,7 @@ fn owner_deployment_publishes_without_the_construction_interpreter() {
 
 #[test]
 fn owner_deployment_qualifies_the_selected_native_toolchain_registry() {
-    let (h, exe, path, sha) = fixture_with_bindings(None, true);
+    let (h, exe, path, sha) = fixture();
     let stage = json(&fs::read(h.root.join(&path)).unwrap()).unwrap();
     assert!(stage["registrations"][".chrono-harness/ci/owner-toolchains.json"].is_string());
     fs::write(
