@@ -811,7 +811,8 @@ fn any_listed_path_is_accepted(path: &str, kind: &str, metadata: &str) {
     let slice = entries.as_slice();
     proof {
         assert(slice@.len() == 1 && slice@[0].path@ == path@);
-        assert(exists|i: int| 0 <= i < slice@.len() && slice@[i].path@ == path@);
+        assert(exists|i: int| 0 <= i < slice.len() && #[trigger] slice[i].path@ == path@);
+        assert(policy::reference_allowed(path@, Some(slice)));
     }
     let accepted = policy::valid_finding_reference(path, Some(slice));
     assert(accepted);
@@ -1138,6 +1139,319 @@ fn tree_delta_preserves_absence_empty_fields_and_arbitrary_text() {
     each_tree_field_changes_identity("目录/é\0", "é", "e\u{301}");
 }
 
+// 独立预期按完整文本登记 fixture，不依赖生产合并递归决定预期。
+spec fn fixture_tree(tree: Map<policy::TreePath, policy::TreeEntry>,
+    entries: Map<Seq<char>, policy::TreeEntryFields>) -> bool {
+    (forall|key: policy::TreePath| tree.contains_key(key) ==>
+        entries.contains_key(key@) && policy::tree_entry_fields(&tree[key]) == entries[key@])
+    && (forall|path: Seq<char>| entries.contains_key(path) ==>
+        exists|key: policy::TreePath| tree.contains_key(key) && key@ == path)
+}
+
+fn insert_tree_fixture(tree: &mut policy::Tree, path: &str, mode: &str, oid: &str, kind: &str,
+    Ghost(entries): Ghost<Map<Seq<char>, policy::TreeEntryFields>>)
+    requires fixture_tree(old(tree)@, entries), !entries.contains_key(path@),
+    ensures fixture_tree(tree@, entries.insert(path@, (mode@, oid@, kind@))),
+{
+    proof { policy::tree_path_obeys_cmp(); }
+    let key = policy::TreePath::from_text(path);
+    let ghost inserted = key;
+    tree.insert(key, tree_entry(mode, oid, kind));
+    proof {
+        let expected = entries.insert(path@, (mode@, oid@, kind@));
+        assert forall|key: policy::TreePath| tree@.contains_key(key) implies
+            expected.contains_key(key@) && policy::tree_entry_fields(&tree@[key]) == expected[key@] by {
+            if key != inserted { assert(old(tree)@.contains_key(key)); }
+        }
+        assert forall|text: Seq<char>| expected.contains_key(text) implies
+            exists|key: policy::TreePath| tree@.contains_key(key) && key@ == text by {
+            if text == path@ {
+                assert(tree@.contains_key(inserted));
+            } else {
+                let key = choose|key: policy::TreePath| old(tree)@.contains_key(key) && key@ == text;
+                assert(tree@.contains_key(key));
+            }
+        }
+    }
+}
+
+proof fn fixture_tree_projection(tree: Map<policy::TreePath, policy::TreeEntry>,
+    entries: Map<Seq<char>, policy::TreeEntryFields>, path: Seq<char>)
+    requires fixture_tree(tree, entries),
+    ensures policy::map_entry_fields(tree, path)
+        == if entries.contains_key(path) { Some(entries[path]) } else { None },
+{
+    if policy::map_has_path(tree, path) {
+        let key = policy::map_path_key(tree, path);
+        assert(tree.contains_key(key) && key@ == path);
+    } else if entries.contains_key(path) {
+        let key = choose|key: policy::TreePath| tree.contains_key(key) && key@ == path;
+        assert(policy::map_has_path(tree, path));
+    }
+}
+
+proof fn ordered_delta_head(changes: Seq<policy::DeltaFields>)
+    requires changes.len() > 0, policy::delta_fields_ordered(changes),
+    ensures policy::delta_at_path(changes, changes[0].0) == seq![changes[0]],
+{
+    let tail = changes.skip(1);
+    let pred = policy::delta_path_predicate(changes[0].0);
+    assert forall|i: int| 0 <= i < tail.len() implies !pred(#[trigger] tail[i]) by {
+        scope_text::byte_lt_strict(vstd::utf8::encode_utf8(changes[0].0),
+            vstd::utf8::encode_utf8(changes[i + 1].0));
+    }
+    tail.lemma_all_neg_filter_empty(pred);
+    assert(changes == seq![changes[0]] + tail);
+    tail.lemma_filter_prepend(changes[0], pred);
+}
+
+// 严格有序序列由全部逐路径投影唯一决定；不把完整输出退化为若干成员检查。
+proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
+    expected: Seq<policy::DeltaFields>)
+    requires policy::delta_fields_ordered(actual), policy::delta_fields_ordered(expected),
+        forall|path: Seq<char>| #[trigger] policy::delta_at_path(actual, path)
+            == policy::delta_at_path(expected, path),
+    ensures actual == expected,
+    decreases actual.len() + expected.len(),
+{
+    if actual.len() == 0 {
+        if expected.len() > 0 {
+            ordered_delta_head(expected);
+            assert(policy::delta_at_path(actual, expected[0].0).len() == 0) by {
+                reveal_with_fuel(Seq::filter, 1);
+            }
+        }
+        assert(actual =~= expected);
+        return;
+    }
+    let path = actual[0].0;
+    ordered_delta_head(actual);
+    assert(policy::delta_at_path(expected, path) == seq![actual[0]]);
+    assert(policy::delta_at_path(expected, path).contains(actual[0]));
+    expected.lemma_filter_contains_rev(policy::delta_path_predicate(path), actual[0]);
+    let i = expected.lemma_contains_to_index(actual[0]);
+    ordered_delta_head(expected);
+    assert(policy::delta_at_path(actual, expected[0].0) == seq![expected[0]]);
+    assert(policy::delta_at_path(actual, expected[0].0).contains(expected[0]));
+    actual.lemma_filter_contains_rev(policy::delta_path_predicate(expected[0].0), expected[0]);
+    let j = actual.lemma_contains_to_index(expected[0]);
+    if i > 0 {
+        assert(j > 0);
+        scope_text::byte_lt_transitive(vstd::utf8::encode_utf8(actual[0].0),
+            vstd::utf8::encode_utf8(expected[0].0), vstd::utf8::encode_utf8(actual[0].0));
+        scope_text::byte_lt_strict(vstd::utf8::encode_utf8(actual[0].0),
+            vstd::utf8::encode_utf8(actual[0].0));
+        assert(false);
+    }
+    assert(actual[0] == expected[0]);
+    let a = actual.skip(1);
+    let b = expected.skip(1);
+    assert forall|path: Seq<char>| #[trigger] policy::delta_at_path(a, path)
+        == policy::delta_at_path(b, path) by {
+        let pred = policy::delta_path_predicate(path);
+        a.lemma_filter_prepend(actual[0], pred);
+        b.lemma_filter_prepend(expected[0], pred);
+        let prefix = if pred(actual[0]) { seq![actual[0]] } else { seq![] };
+        assert(actual == seq![actual[0]] + a);
+        assert(expected == seq![expected[0]] + b);
+        assert(policy::delta_at_path(actual, path) == policy::delta_at_path(expected, path));
+        assert(prefix + a.filter(pred) == prefix + b.filter(pred));
+        prefix.lemma_concat_injective(a.filter(pred), b.filter(pred));
+    }
+    assert(policy::delta_fields_ordered(a));
+    assert(policy::delta_fields_ordered(b));
+    delta_from_all_path_projections(a, b);
+    assert(actual =~= expected);
+}
+
+proof fn full_delta_matches_fixture(changes: Seq<policy::Delta>,
+    before: Map<policy::TreePath, policy::TreeEntry>, after: Map<policy::TreePath, policy::TreeEntry>,
+    old_entries: Map<Seq<char>, policy::TreeEntryFields>, new_entries: Map<Seq<char>, policy::TreeEntryFields>,
+    expected: Seq<policy::DeltaFields>)
+    requires fixture_tree(before, old_entries), fixture_tree(after, new_entries),
+        policy::delta_fields_ordered(policy::delta_records_view(changes)),
+        policy::delta_fields_ordered(expected),
+        forall|path: Seq<char>| #[trigger] policy::delta_at_path(policy::delta_records_view(changes), path)
+            == policy::entry_delta_values(path, policy::map_entry_fields(before, path), policy::map_entry_fields(after, path)),
+        forall|path: Seq<char>| #[trigger] policy::delta_at_path(expected, path)
+            == policy::entry_delta_values(path,
+                if old_entries.contains_key(path) { Some(old_entries[path]) } else { None },
+                if new_entries.contains_key(path) { Some(new_entries[path]) } else { None }),
+    ensures policy::delta_records_view(changes) == expected, changes.len() == expected.len(),
+{
+    assert forall|path: Seq<char>| #[trigger] policy::delta_at_path(policy::delta_records_view(changes), path)
+        == policy::delta_at_path(expected, path) by {
+        fixture_tree_projection(before, old_entries, path);
+        fixture_tree_projection(after, new_entries, path);
+    }
+    delta_from_all_path_projections(policy::delta_records_view(changes), expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn full_tree_delta_of_empty_maps_is_empty() {
+    let before = policy::Tree::new();
+    let after = policy::Tree::new();
+    let changes = policy::delta_for_trees(&before, &after);
+    proof {
+        reveal_with_fuel(Seq::filter, 1);
+        full_delta_matches_fixture(changes@, before@, after@, Map::empty(), Map::empty(), seq![]);
+    }
+    expect_status_true(changes.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn full_tree_delta_joins_both_maps_once_and_keeps_sorted_complete_records() {
+    proof {
+        policy::tree_path_obeys_cmp();
+        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("c"); reveal_strlit("d");
+        reveal_strlit("blob"); reveal_strlit("tree");
+        assert("a"@[0] != "b"@[0] && "a"@[0] != "d"@[0] && "b"@[0] != "d"@[0]);
+        assert("b"@[0] != "c"@[0] && "c"@[0] != "d"@[0]);
+        assert("blob"@[0] != "tree"@[0]);
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("b") && vstd::string::is_ascii("c"));
+        assert("a".spec_bytes()[0] == 97 && "b".spec_bytes()[0] == 98 && "c".spec_bytes()[0] == 99);
+        assert("a".spec_bytes().len() == 1 && "b".spec_bytes().len() == 1 && "c".spec_bytes().len() == 1);
+        assert(scope_text::byte_prefix("a".spec_bytes(), "b".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("a".spec_bytes(), "c".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("b".spec_bytes(), "c".spec_bytes(), 0));
+        assert(scope_text::byte_lt("a".spec_bytes(), "b".spec_bytes()));
+        assert(scope_text::byte_lt("a".spec_bytes(), "c".spec_bytes()));
+        assert(scope_text::byte_lt("b".spec_bytes(), "c".spec_bytes()));
+    }
+    let mut before = policy::Tree::new();
+    let mut after = policy::Tree::new();
+    let ghost mut old_entries = Map::empty();
+    let ghost mut new_entries = Map::empty();
+    insert_tree_fixture(&mut before, "a", "old mode", "old blob", "blob", Ghost(old_entries));
+    proof { old_entries = old_entries.insert("a"@, ("old mode"@, "old blob"@, "blob"@)); }
+    insert_tree_fixture(&mut before, "b", "same mode", "same blob", "blob", Ghost(old_entries));
+    proof { old_entries = old_entries.insert("b"@, ("same mode"@, "same blob"@, "blob"@)); }
+    insert_tree_fixture(&mut before, "d", "same", "same", "same", Ghost(old_entries));
+    proof { old_entries = old_entries.insert("d"@, ("same"@, "same"@, "same"@)); }
+    insert_tree_fixture(&mut after, "b", "same mode", "same blob", "tree", Ghost(new_entries));
+    proof { new_entries = new_entries.insert("b"@, ("same mode"@, "same blob"@, "tree"@)); }
+    insert_tree_fixture(&mut after, "c", "new mode", "new blob", "blob", Ghost(new_entries));
+    proof { new_entries = new_entries.insert("c"@, ("new mode"@, "new blob"@, "blob"@)); }
+    insert_tree_fixture(&mut after, "d", "same", "same", "same", Ghost(new_entries));
+    proof { new_entries = new_entries.insert("d"@, ("same"@, "same"@, "same"@)); }
+    let changes = policy::delta_for_trees(&before, &after);
+    proof {
+        let expected = seq![
+            ("a"@, "D"@, Some("old blob"@), None, Some("old mode"@), None),
+            ("b"@, "M"@, Some("same blob"@), Some("same blob"@), Some("same mode"@), Some("same mode"@)),
+            ("c"@, "A"@, None, Some("new blob"@), None, Some("new mode"@))];
+        assert forall|path: Seq<char>| #[trigger] policy::delta_at_path(expected, path)
+            == policy::entry_delta_values(path,
+                if old_entries.contains_key(path) { Some(old_entries[path]) } else { None },
+                if new_entries.contains_key(path) { Some(new_entries[path]) } else { None }) by {
+            reveal_with_fuel(Seq::filter, 4);
+            if path == "a"@ {} else if path == "b"@ {} else if path == "c"@ {}
+            else if path == "d"@ {} else {}
+        }
+        full_delta_matches_fixture(changes@, before@, after@, old_entries, new_entries, expected);
+    }
+    expect_status_true(changes.len() == 3);
+    let deleted = &changes[0];
+    expect_status_text(deleted.path.as_str(), "a");
+    expect_status_text(deleted.kind.as_str(), "D");
+    expect_some_text(&deleted.old_blob, "old blob");
+    expect_some_text(&deleted.old_mode, "old mode");
+    expect_status_true(deleted.new_blob.is_none() && deleted.new_mode.is_none());
+    let modified = &changes[1];
+    expect_status_text(modified.path.as_str(), "b");
+    expect_status_text(modified.kind.as_str(), "M");
+    expect_some_text(&modified.old_blob, "same blob");
+    expect_some_text(&modified.new_blob, "same blob");
+    expect_some_text(&modified.old_mode, "same mode");
+    expect_some_text(&modified.new_mode, "same mode");
+    let added = &changes[2];
+    expect_status_text(added.path.as_str(), "c");
+    expect_status_text(added.kind.as_str(), "A");
+    expect_status_true(added.old_blob.is_none() && added.old_mode.is_none());
+    expect_some_text(&added.new_blob, "new blob");
+    expect_some_text(&added.new_mode, "new mode");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn full_tree_delta_preserves_empty_unicode_nul_and_reverse_changes() {
+    proof {
+        policy::tree_path_obeys_cmp();
+        reveal_strlit(""); reveal_strlit("é"); reveal_strlit("a\0");
+        assert(""@.len() == 0 && "é"@.len() == 1 && "a\0"@.len() == 2);
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("a\0"));
+        assert("é"@ =~= seq!['é']);
+        assert('é' as u32 == 233u32);
+        assert(vstd::utf8::encode_scalar(233u32) == seq![195u8, 169u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 2);
+        assert(vstd::utf8::encode_utf8("é"@) == seq![195u8, 169u8]);
+        assert("".spec_bytes().len() == 0 && "é".spec_bytes().len() == 2 && "a\0".spec_bytes().len() == 2);
+        assert("a\0".spec_bytes()[0] == 97 && "é".spec_bytes()[0] == 195);
+        assert(scope_text::byte_prefix("".spec_bytes(), "a\0".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("".spec_bytes(), "é".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("a\0".spec_bytes(), "é".spec_bytes(), 0));
+        assert(scope_text::byte_lt("".spec_bytes(), "a\0".spec_bytes()));
+        assert(scope_text::byte_lt("".spec_bytes(), "é".spec_bytes()));
+        assert(scope_text::byte_lt("a\0".spec_bytes(), "é".spec_bytes()));
+    }
+    let before = policy::Tree::new();
+    let mut after = policy::Tree::new();
+    let ghost mut entries = Map::empty();
+    insert_tree_fixture(&mut after, "é", "", "", "", Ghost(entries));
+    proof { entries = entries.insert("é"@, (""@, ""@, ""@)); }
+    insert_tree_fixture(&mut after, "", "", "", "", Ghost(entries));
+    proof { entries = entries.insert(""@, (""@, ""@, ""@)); }
+    insert_tree_fixture(&mut after, "a\0", "mode\0", "对象\0", "blob", Ghost(entries));
+    proof { entries = entries.insert("a\0"@, ("mode\0"@, "对象\0"@, "blob"@)); }
+    let changes = policy::delta_for_trees(&before, &after);
+    proof {
+        let expected = seq![
+            (""@, "A"@, None, Some(""@), None, Some(""@)),
+            ("a\0"@, "A"@, None, Some("对象\0"@), None, Some("mode\0"@)),
+            ("é"@, "A"@, None, Some(""@), None, Some(""@))];
+        assert forall|path: Seq<char>| #[trigger] policy::delta_at_path(expected, path)
+            == policy::entry_delta_values(path, None,
+                if entries.contains_key(path) { Some(entries[path]) } else { None }) by {
+            reveal_with_fuel(Seq::filter, 4);
+            if path == ""@ {} else if path == "a\0"@ {} else if path == "é"@ {} else {}
+        }
+        full_delta_matches_fixture(changes@, before@, after@, Map::empty(), entries, expected);
+    }
+    expect_status_true(changes.len() == 3);
+    expect_status_text(changes[0].path.as_str(), "");
+    expect_status_text(changes[1].path.as_str(), "a\0");
+    expect_status_text(changes[2].path.as_str(), "é");
+    expect_status_text(changes[0].kind.as_str(), "A");
+    expect_status_text(changes[1].kind.as_str(), "A");
+    expect_status_text(changes[2].kind.as_str(), "A");
+    expect_some_text(&changes[0].new_blob, "");
+    expect_some_text(&changes[1].new_blob, "对象\0");
+    let reverse = policy::delta_for_trees(&after, &before);
+    proof {
+        let expected = seq![
+            (""@, "D"@, Some(""@), None, Some(""@), None),
+            ("a\0"@, "D"@, Some("对象\0"@), None, Some("mode\0"@), None),
+            ("é"@, "D"@, Some(""@), None, Some(""@), None)];
+        assert forall|path: Seq<char>| #[trigger] policy::delta_at_path(expected, path)
+            == policy::entry_delta_values(path,
+                if entries.contains_key(path) { Some(entries[path]) } else { None }, None) by {
+            reveal_with_fuel(Seq::filter, 4);
+            if path == ""@ {} else if path == "a\0"@ {} else if path == "é"@ {} else {}
+        }
+        full_delta_matches_fixture(reverse@, after@, before@, entries, Map::empty(), expected);
+    }
+    expect_status_true(reverse.len() == 3);
+    expect_status_text(reverse[0].path.as_str(), "");
+    expect_status_text(reverse[1].path.as_str(), "a\0");
+    expect_status_text(reverse[2].path.as_str(), "é");
+    expect_status_text(reverse[0].kind.as_str(), "D");
+    expect_status_text(reverse[1].kind.as_str(), "D");
+    expect_status_text(reverse[2].kind.as_str(), "D");
+    expect_some_text(&reverse[1].old_blob, "对象\0");
+    expect_status_true(reverse[1].new_blob.is_none() && reverse[1].new_mode.is_none());
+}
+
 fn complete_finding(level: &str, reference: &str) -> (out: policy::Finding)
     ensures out.level@ == level@, out.code@ == "fixture"@,
         out.message@ == "independent expectation"@,
@@ -1266,7 +1580,7 @@ fn response_preflight_preserves_ordinary_and_initial_reference_scope() {
     let slice = delta.as_slice();
     proof {
         assert(slice.len() == 1 && slice[0].path@ == "x"@);
-        assert(exists|i: int| 0 <= i < slice.len() && slice[i].path@ == "x"@);
+        assert(exists|i: int| 0 <= i < slice.len() && #[trigger] slice[i].path@ == "x"@);
         assert(policy::reference_allowed("x"@, Some(slice)));
         assert forall|i: int| 0 <= i < first.len()
             implies policy::finding_fields(&(#[trigger] first@[i]))

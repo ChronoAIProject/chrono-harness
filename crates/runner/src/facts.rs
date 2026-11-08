@@ -118,12 +118,7 @@ pub fn tree(root: &Path, oid: &str) -> Result<Tree, String> {
     Reader::legacy().tree(root, oid)
 }
 pub fn delta(a: &Tree, b: &Tree) -> Vec<Delta> {
-    a.keys()
-        .chain(b.keys())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .filter_map(|p| crate::verified_status::delta_for_entry(p.as_str(), a.get(p), b.get(p)))
-        .collect()
+    crate::verified_status::delta_for_trees(a, b)
 }
 fn paths(raw: Vec<u8>) -> Result<Vec<String>, String> {
     raw.split(|b| *b == 0)
