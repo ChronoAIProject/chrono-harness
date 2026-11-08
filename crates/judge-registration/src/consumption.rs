@@ -525,7 +525,8 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
             .is_none()
     {
         return Err(
-            "missing/misbound required consumption evidence operation/plan/output declaration".into(),
+            "missing/misbound required consumption evidence operation/plan/output declaration"
+                .into(),
         );
     }
     Ok(())
