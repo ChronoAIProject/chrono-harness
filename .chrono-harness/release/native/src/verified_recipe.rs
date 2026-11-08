@@ -42,7 +42,7 @@ pub fn result_exit(child: Option<i32>, auxiliary_failed: bool) -> (exit: i32)
         child is None ==> exit == 2,
         child is Some && child.unwrap() > 0 ==> exit == child.unwrap(),
         child is Some && child.unwrap() < 0 ==> exit == 128 - child.unwrap(),
-        child == Some(0) ==> exit == if auxiliary_failed { 2 } else { 0 },
+        child == Some(0i32) ==> exit == if auxiliary_failed { 2 } else { 0 },
 {
     match child {
         None => 2,
@@ -101,7 +101,7 @@ pub fn producer_lineage(
 
 /// 原始操作已结束后，观察或证据失败只能补充失败，不能抹去真实子进程失败。
 pub fn passed(child: Option<i32>, auxiliary_failed: bool) -> (success: bool)
-    ensures success <==> (child == Some(0) && !auxiliary_failed),
+    ensures success <==> (child == Some(0i32) && !auxiliary_failed),
 {
     matches!(child, Some(0)) && !auxiliary_failed
 }
