@@ -31,6 +31,7 @@
   "verification_operations": [
     "test.distribution-tests",
     "test.worktree-tests",
+    "test.identifiers-tests",
     "test.runner-tests",
     "test.inputs-tests",
     "test.ci-tests",
@@ -316,6 +317,14 @@
       "rust_toolchain": true
     },
     {
+      "id": "verify_identifiers_tests",
+      "kind": "verify",
+      "operation": "test.identifiers-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_identifiers_tests",
+      "rust_toolchain": true
+    },
+    {
       "id": "verify_runner_tests",
       "kind": "verify",
       "operation": "test.runner-tests",
@@ -584,6 +593,7 @@
       "build_worktree",
       "verify_distribution_tests",
       "verify_worktree_tests",
+      "verify_identifiers_tests",
       "verify_runner_tests",
       "verify_inputs_tests",
       "verify_ci_tests",
@@ -650,7 +660,8 @@
       "build_cache": "linux_build_cache",
       "verify_cache_tests": "linux_verify_cache_tests",
       "verify_host_bootstrap_native_tests": "linux_verify_host_bootstrap_native_tests",
-      "verify_host_bootstrap_launcher_tests": "linux_verify_host_bootstrap_launcher_tests"
+      "verify_host_bootstrap_launcher_tests": "linux_verify_host_bootstrap_launcher_tests",
+      "verify_identifiers_tests": "linux_verify_identifiers_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -691,7 +702,8 @@
       "build_cache": "macos_build_cache",
       "verify_cache_tests": "macos_verify_cache_tests",
       "verify_host_bootstrap_native_tests": "macos_verify_host_bootstrap_native_tests",
-      "verify_host_bootstrap_launcher_tests": "macos_verify_host_bootstrap_launcher_tests"
+      "verify_host_bootstrap_launcher_tests": "macos_verify_host_bootstrap_launcher_tests",
+      "verify_identifiers_tests": "macos_verify_identifiers_tests"
     }
   },
   "unit_costs": {
@@ -733,7 +745,8 @@
     "build_cache": "unmeasured",
     "verify_cache_tests": "unmeasured",
     "verify_host_bootstrap_native_tests": "unmeasured",
-    "verify_host_bootstrap_launcher_tests": "unmeasured"
+    "verify_host_bootstrap_launcher_tests": "unmeasured",
+    "verify_identifiers_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
@@ -933,6 +946,10 @@
     },
     "verify_host_bootstrap_launcher_tests": {
       "need": "原始未过滤的 shell 启动入口测试使用独立登记的 shell 命令替身，验证保护准入、协调者委托、参数与原退出传递；不编译 Rust 工具，也不调用发布二进制。",
+      "release_assets": []
+    },
+    "verify_identifiers_tests": {
+      "need": "身份库专属项目执行从 runner 迁移的全部八项原边界测试，直接消费 runner 依赖的同一身份判断库；不消费发布二进制。",
       "release_assets": []
     }
   },

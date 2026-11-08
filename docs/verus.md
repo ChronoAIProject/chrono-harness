@@ -95,6 +95,8 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 已采用清理的 `.chrono-harness/cache/identifiers/` 和 `identifiers-tests/` 下。
 原判断、全部预期、两项证明及原预算保留；没有新增证明进程或共享状态。
 独立构建增加两个 target 的管理范围，完整构建、验证、CI 和存储成本未测。
+发布计划也显式保留迁移的八项原测试：现有 Linux 和 macOS 平台各增加一个独立库测试单元，
+使用既有发布执行器、原未过滤操作及汇总，不增加发布二进制依赖或缓存。
 
 摘要格式也由同一根的 `digest_format`／`valid_digest`／`valid_digest_text` 规定和实现：
 必须恰为 64 个 ASCII 小写十六进制字节，允许全零。`wire::is_digest` 直接重导出文本判断，
