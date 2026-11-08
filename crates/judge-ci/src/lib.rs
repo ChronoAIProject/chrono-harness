@@ -155,6 +155,7 @@ fn tree(
         .tree(root, oid)?
         .into_iter()
         .map(|(path, entry)| {
+            let path = path.text;
             if entry.kind != "blob"
                 || !matches!(entry.mode.as_str(), "100644" | "100755" | "120000")
             {
