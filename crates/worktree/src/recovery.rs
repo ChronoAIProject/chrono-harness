@@ -525,10 +525,7 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
     }
     inventory.dependencies_paths(path, &originals)?;
     if report["status"] == "failed" {
-        inventory.protect_path_consumer(
-            &format!("lifecycle-recheck:{}", sha256(path.as_bytes())),
-            path,
-        )?;
+        inventory.retain_diagnostic_path(path)?;
     }
     // The joined terminal producer accounts its unfinished-operation role.
     // Failed rebind still has a distinct actual resume consumer.

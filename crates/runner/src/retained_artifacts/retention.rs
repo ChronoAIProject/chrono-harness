@@ -30,6 +30,8 @@ pub struct Policy {
     pub schema: String,
     pub producers: BTreeMap<String, Vec<String>>,
     pub keep_seconds: u64,
+    #[serde(default = "default_diagnostic_seconds")]
+    pub diagnostic_keep_seconds: u64,
     pub max_related_outputs: usize,
     pub max_summaries: usize,
     pub max_nodes_per_round: usize,
@@ -53,6 +55,9 @@ fn default_output_bytes() -> u64 {
     1024 * 1024 * 1024
 }
 fn default_metadata_seconds() -> u64 {
+    86400
+}
+fn default_diagnostic_seconds() -> u64 {
     86400
 }
 fn default_manifest_nodes() -> usize {
@@ -916,6 +921,26 @@ impl Inventory {
             .producers
             .get(producer)
             .is_some_and(|scopes| scopes.iter().any(|scope| path.starts_with(scope)))
+    }
+    /// A completed producer selects a finite diagnostic window. Actual caller
+    /// and recovery roots remain authoritative and are never released here.
+    pub fn retain_diagnostic_path(&self, path: &str) -> Result<(), String> {
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|output| output.path == path)
+            .ok_or("diagnostic original is not enrolled")?;
+        if !matches!(output.phase.as_str(), "released" | "sealing")
+            || identity(&no_symlink_parents(&self.root, path)?)? != output.identity
+        {
+            return Err("diagnostic original is unfinished, disposing or replaced".into());
+        }
+        output.expires = output
+            .expires
+            .max(now()?.saturating_add(self.policy.diagnostic_keep_seconds));
+        self.save(&ledger, &gate)
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
@@ -2941,9 +2966,9 @@ fn publish_owned_with(
     Ok(true)
 }
 
-/// The final report's actual producer keeps a repair reference on failed/unknown
-/// outcomes. A successful original keeps its publication role until the actual
-/// fixed-slot settlement transfers its closure to the current report.
+/// The final report keeps its publication role until the actual fixed-slot
+/// settlement transfers its closure to the current report. A settled failure
+/// then has a finite diagnostic window rather than an invented permanent reader.
 pub fn publish_final_original(
     root: &Path,
     producer: &str,
@@ -3057,9 +3082,18 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
         inventory.reference_paths(&role, &[original.into()])?;
         let gate = inventory.addressed_gate(&[], &[original.into()], &[], None, false, true)?;
         let ledger = inventory.load(&gate)?;
-        let ids: Vec<_> = ledger.outputs.iter().map(|o| o.id.clone()).collect();
+        let outputs = ledger.outputs;
         drop(gate);
-        for id in ids {
+        for output in outputs {
+            let id = &output.id;
+            let diagnostic = format!("consumer:report-recheck:{id}");
+            if output.path == original
+                && matches!(output.phase.as_str(), "released" | "sealing")
+                && ledger.roots.contains_key(&diagnostic)
+            {
+                inventory.retain_diagnostic_path(&output.path)?;
+                inventory.reference(&diagnostic, &[])?;
+            }
             inventory.reference(&format!("consumer:publication-recheck:{id}"), &[])?;
         }
     }
