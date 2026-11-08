@@ -2605,7 +2605,10 @@ impl Manager {
                                     .find(|e| e.status != "disposed")
                                     .or_else(|| ledger.entries.last());
                                 if let Some(entry) = entry {
-                                    if entry.creator_agent.is_none() {
+                                    if path != self.inputs.policy.coordinator_root
+                                        && entry.status != "disposed"
+                                        && entry.creator_agent.is_none()
+                                    {
                                         unknown_creators += 1;
                                     }
                                     if all
