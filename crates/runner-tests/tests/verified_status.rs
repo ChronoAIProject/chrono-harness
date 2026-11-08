@@ -23,7 +23,7 @@ use vstd::vpanic as panic;
 verus! {
 
 // 这些分支在普通 Rust 测试中也执行；证明不能替代真实调用的断言。
-fn expect_scope_true(actual: bool)
+fn expect_status_true(actual: bool)
     requires actual,
 {
     if !actual {
@@ -31,29 +31,69 @@ fn expect_scope_true(actual: bool)
     }
 }
 
+fn expect_status_text(actual: &str, expected: &str)
+    requires actual@ == expected@,
+{
+    let equal = scope_text::equal_text(actual, expected);
+    expect_status_true(equal);
+}
+
+fn expect_optional_text(actual: &Option<String>, expected: &Option<String>)
+    requires policy::optional_text(actual) == policy::optional_text(expected),
+{
+    match (actual, expected) {
+        (Some(actual), Some(expected)) => {
+            expect_status_text(actual.as_str(), expected.as_str());
+        },
+        (None, None) => {},
+        _ => { panic!(); },
+    }
+}
+
+fn expect_some_text(actual: &Option<String>, expected: &str)
+    requires policy::optional_text(actual) == Some(expected@),
+{
+    match actual {
+        Some(actual) => { expect_status_text(actual.as_str(), expected); },
+        None => { panic!(); },
+    }
+}
+
+fn expect_order(actual: Ordering, expected: Ordering)
+    requires actual == expected,
+{
+    let equal = match (actual, expected) {
+        (Ordering::Less, Ordering::Less) => true,
+        (Ordering::Equal, Ordering::Equal) => true,
+        (Ordering::Greater, Ordering::Greater) => true,
+        _ => false,
+    };
+    expect_status_true(equal);
+}
+
 fn scope_preserves_full_text(text: &str) {
     let unit = policy::scopes::Scope::Unit { unit: text.to_owned() };
     let collect = policy::scopes::Scope::Collect { manifest: text.to_owned() };
     let cloned_unit = unit.clone();
     let cloned_collect = collect.clone();
-    expect_scope_true(cloned_unit.eq(&unit));
-    expect_scope_true(cloned_collect.eq(&collect));
-    expect_scope_true(!unit.eq(&collect));
-    expect_scope_true(!collect.eq(&unit));
+    expect_status_true(cloned_unit.eq(&unit));
+    expect_status_true(cloned_collect.eq(&collect));
+    expect_status_true(!unit.eq(&collect));
+    expect_status_true(!collect.eq(&unit));
 
     let short_unit = unit.short_argv();
     let full_unit = unit.argv();
     let short_collect = collect.short_argv();
     let full_collect = collect.argv();
-    expect_scope_true(short_unit.len() == 2);
-    expect_scope_true(scope_text::equal_text(short_unit[0].as_str(), "--unit"));
-    expect_scope_true(scope_text::equal_text(short_unit[1].as_str(), text));
-    expect_scope_true(scope_text::equal_text(full_unit[0].as_str(), "--unit"));
-    expect_scope_true(scope_text::equal_text(full_unit[1].as_str(), text));
-    expect_scope_true(short_collect.len() == 1);
-    expect_scope_true(scope_text::equal_text(short_collect[0].as_str(), "--collect"));
-    expect_scope_true(scope_text::equal_text(full_collect[0].as_str(), "--collect"));
-    expect_scope_true(scope_text::equal_text(full_collect[1].as_str(), text));
+    expect_status_true(short_unit.len() == 2);
+    expect_status_true(scope_text::equal_text(short_unit[0].as_str(), "--unit"));
+    expect_status_true(scope_text::equal_text(short_unit[1].as_str(), text));
+    expect_status_true(scope_text::equal_text(full_unit[0].as_str(), "--unit"));
+    expect_status_true(scope_text::equal_text(full_unit[1].as_str(), text));
+    expect_status_true(short_collect.len() == 1);
+    expect_status_true(scope_text::equal_text(short_collect[0].as_str(), "--collect"));
+    expect_status_true(scope_text::equal_text(full_collect[0].as_str(), "--collect"));
+    expect_status_true(scope_text::equal_text(full_collect[1].as_str(), text));
 }
 
 fn distinct_scope_texts(first: &str, second: &str)
@@ -63,10 +103,10 @@ fn distinct_scope_texts(first: &str, second: &str)
     let b = policy::scopes::Scope::Unit { unit: second.to_owned() };
     let c = policy::scopes::Scope::Collect { manifest: first.to_owned() };
     let d = policy::scopes::Scope::Collect { manifest: second.to_owned() };
-    expect_scope_true(!a.eq(&b));
-    expect_scope_true(!b.eq(&a));
-    expect_scope_true(!c.eq(&d));
-    expect_scope_true(!d.eq(&c));
+    expect_status_true(!a.eq(&b));
+    expect_status_true(!b.eq(&a));
+    expect_status_true(!c.eq(&d));
+    expect_status_true(!d.eq(&c));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -98,8 +138,10 @@ fn expect(a: &Status, b: &Status, expected: bool)
 {
     let observed = a.eq(b);
     assert(observed == expected);
+    expect_status_true(observed == expected);
     let cloned = a.clone();
     assert(cloned == *a);
+    expect_status_true(cloned.eq(a));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -130,24 +172,32 @@ fn severity_maximum_keeps_all_sixteen_expected_results() {
     let pe = WireStatus::Pass.maximum(WireStatus::Error);
     assert(pp == WireStatus::Pass && pw == WireStatus::Warn
         && pf == WireStatus::Fail && pe == WireStatus::Error);
+    expect_status_true(pp.eq(&WireStatus::Pass) && pw.eq(&WireStatus::Warn)
+        && pf.eq(&WireStatus::Fail) && pe.eq(&WireStatus::Error));
     let wp = WireStatus::Warn.maximum(WireStatus::Pass);
     let ww = WireStatus::Warn.maximum(WireStatus::Warn);
     let wf = WireStatus::Warn.maximum(WireStatus::Fail);
     let we = WireStatus::Warn.maximum(WireStatus::Error);
     assert(wp == WireStatus::Warn && ww == WireStatus::Warn
         && wf == WireStatus::Fail && we == WireStatus::Error);
+    expect_status_true(wp.eq(&WireStatus::Warn) && ww.eq(&WireStatus::Warn)
+        && wf.eq(&WireStatus::Fail) && we.eq(&WireStatus::Error));
     let fp = WireStatus::Fail.maximum(WireStatus::Pass);
     let fw = WireStatus::Fail.maximum(WireStatus::Warn);
     let ff = WireStatus::Fail.maximum(WireStatus::Fail);
     let fe = WireStatus::Fail.maximum(WireStatus::Error);
     assert(fp == WireStatus::Fail && fw == WireStatus::Fail
         && ff == WireStatus::Fail && fe == WireStatus::Error);
+    expect_status_true(fp.eq(&WireStatus::Fail) && fw.eq(&WireStatus::Fail)
+        && ff.eq(&WireStatus::Fail) && fe.eq(&WireStatus::Error));
     let ep = WireStatus::Error.maximum(WireStatus::Pass);
     let ew = WireStatus::Error.maximum(WireStatus::Warn);
     let ef = WireStatus::Error.maximum(WireStatus::Fail);
     let ee = WireStatus::Error.maximum(WireStatus::Error);
     assert(ep == WireStatus::Error && ew == WireStatus::Error
         && ef == WireStatus::Error && ee == WireStatus::Error);
+    expect_status_true(ep.eq(&WireStatus::Error) && ew.eq(&WireStatus::Error)
+        && ef.eq(&WireStatus::Error) && ee.eq(&WireStatus::Error));
 }
 
 fn severity_maximum_keeps_idempotence_commutativity_and_associativity(
@@ -155,13 +205,16 @@ fn severity_maximum_keeps_idempotence_commutativity_and_associativity(
 ) {
     let aa = a.clone().maximum(a.clone());
     assert(aa == a);
+    expect_status_true(aa.eq(&a));
     let ab = a.clone().maximum(b.clone());
     let ba = b.clone().maximum(a.clone());
     assert(ab == ba);
+    expect_status_true(ab.eq(&ba));
     let left = ab.maximum(c.clone());
     let bc = b.maximum(c);
     let right = a.maximum(bc);
     assert(left == right);
+    expect_status_true(left.eq(&right));
 }
 
 fn protocol_pair(a: &WireStatus, b: &WireStatus, expected: Ordering)
@@ -173,9 +226,17 @@ fn protocol_pair(a: &WireStatus, b: &WireStatus, expected: Ordering)
     let equal = a.eq(b);
     let cloned = a.clone();
     assert(cmp == expected);
+    expect_order(cmp, expected);
     assert(partial == Some(expected));
+    match partial {
+        Some(value) => { expect_order(value, expected); },
+        None => { panic!(); },
+    }
     assert(equal == (expected == Ordering::Equal));
+    let expected_equal = match expected { Ordering::Equal => true, _ => false };
+    expect_status_true(equal == expected_equal);
     assert(cloned == *a);
+    expect_status_true(cloned.eq(a));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -201,6 +262,7 @@ fn protocol_state_order_keeps_all_sixteen_pairs_and_exact_exits() {
     let fail = WireStatus::Fail.exit_code();
     let error = WireStatus::Error.exit_code();
     assert(pass == 0 && warn == 0 && fail == 1 && error == 2);
+    expect_status_true(pass == 0 && warn == 0 && fail == 1 && error == 2);
 }
 
 // 任意完整文本和任意 i32 退出码；预期直接列出协议四态的数字合同。
@@ -215,6 +277,8 @@ fn header_exits(protocol: &str, id: &str, judge: &str, exit: i32) {
         protocol, id, judge, &WireStatus::Error, exit, protocol, id, judge);
     assert(pass == (exit == 0) && warn == (exit == 0)
         && fail == (exit == 1) && error == (exit == 2));
+    expect_status_true(pass == (exit == 0) && warn == (exit == 0)
+        && fail == (exit == 1) && error == (exit == 2));
 }
 
 fn mismatched_headers(a: &str, b: &str)
@@ -227,6 +291,7 @@ fn mismatched_headers(a: &str, b: &str)
     let judge = policy::wire_header_matches(
         a, a, b, &WireStatus::Pass, 0, a, a, a);
     assert(!protocol && !request && !judge);
+    expect_status_true(!protocol && !request && !judge);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -263,7 +328,10 @@ fn append_case(mut status: WireStatus, severity: WireStatus, expected: WireStatu
     let mut rows: Vec<policy::Finding> = Vec::new();
     policy::append_finding(&mut status, &mut rows, severity, finding("error"));
     assert(status == expected);
+    expect_status_true(status.eq(&expected));
     assert(rows.len() == 1 && rows@[0].level@ == "error"@);
+    expect_status_true(rows.len() == 1);
+    expect_status_text(rows[0].level.as_str(), "error");
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -298,16 +366,37 @@ fn recording_findings_keeps_history_duplicates_and_complete_fields() {
     let mut status = WireStatus::Error;
     policy::append_finding(&mut status, &mut rows, WireStatus::Warn, next);
     assert(status == WireStatus::Error && rows.len() == 3);
+    expect_status_true(status.eq(&WireStatus::Error) && rows.len() == 3);
     assert(rows@[0].level@ == "info"@);
+    expect_status_text(rows[0].level.as_str(), "info");
     assert(rows@[1].code@ == rows@[2].code@ && rows@[2].code@ == "根\0"@);
+    expect_status_text(rows[1].code.as_str(), "根\0");
+    expect_status_text(rows[2].code.as_str(), "根\0");
     assert(rows@[1].level@ == rows@[2].level@ && rows@[2].level@ == "warning"@);
+    expect_status_text(rows[1].level.as_str(), "warning");
+    expect_status_text(rows[2].level.as_str(), "warning");
     assert(rows@[1].message@ == rows@[2].message@ && rows@[2].message@ == "é\0"@);
+    expect_status_text(rows[1].message.as_str(), "é\0");
+    expect_status_text(rows[2].message.as_str(), "é\0");
     assert(rows@[1].delta_refs@ == rows@[2].delta_refs@);
     assert(rows@[2].delta_refs.len() == 3);
+    expect_status_true(rows[1].delta_refs.len() == 3 && rows[2].delta_refs.len() == 3);
     assert(rows@[2].delta_refs@[0]@ == "/根\0"@ && rows@[2].delta_refs@[1]@ == ""@
         && rows@[2].delta_refs@[2]@ == "/根\0"@);
+    expect_status_true(rows[1].delta_refs.len() == 3 && rows[2].delta_refs.len() == 3);
+    expect_status_text(rows[1].delta_refs[0].as_str(), "/根\0");
+    expect_status_text(rows[1].delta_refs[1].as_str(), "");
+    expect_status_text(rows[1].delta_refs[2].as_str(), "/根\0");
+    expect_status_text(rows[2].delta_refs[0].as_str(), "/根\0");
+    expect_status_text(rows[2].delta_refs[1].as_str(), "");
+    expect_status_text(rows[2].delta_refs[2].as_str(), "/根\0");
     assert(rows@[1].causes@ == rows@[2].causes@ && rows@[2].causes.len() == 2);
     assert(rows@[2].causes@[0]@ == "z"@ && rows@[2].causes@[1]@ == "原因\0"@);
+    expect_status_true(rows[1].causes.len() == 2 && rows[2].causes.len() == 2);
+    expect_status_text(rows[1].causes[0].as_str(), "z");
+    expect_status_text(rows[1].causes[1].as_str(), "原因\0");
+    expect_status_text(rows[2].causes[0].as_str(), "z");
+    expect_status_text(rows[2].causes[1].as_str(), "原因\0");
 }
 
 fn expected_statuses(findings: &[policy::Finding], pass: bool, warn: bool, fail: bool, error: bool)
@@ -322,6 +411,8 @@ fn expected_statuses(findings: &[policy::Finding], pass: bool, warn: bool, fail:
     let observed_fail = policy::findings_match_status(&WireStatus::Fail, findings);
     let observed_error = policy::findings_match_status(&WireStatus::Error, findings);
     assert(observed_pass == pass && observed_warn == warn
+        && observed_fail == fail && observed_error == error);
+    expect_status_true(observed_pass == pass && observed_warn == warn
         && observed_fail == fail && observed_error == error);
 }
 
@@ -414,10 +505,19 @@ fn actual_finding_clone_keeps_complete_fields_and_reference_order() {
     };
     let copied = original.clone();
     assert(copied.code@ == "根\0"@ && copied.level@ == "warning"@ && copied.message@ == "é\0"@);
+    expect_status_text(copied.code.as_str(), "根\0");
+    expect_status_text(copied.level.as_str(), "warning");
+    expect_status_text(copied.message.as_str(), "é\0");
     assert(copied.delta_refs.len() == 3 && copied.causes.len() == 2);
+    expect_status_true(copied.delta_refs.len() == 3 && copied.causes.len() == 2);
     assert(copied.delta_refs@[0]@ == "/根\0"@ && copied.delta_refs@[1]@ == ""@
         && copied.delta_refs@[2]@ == "/根\0"@);
     assert(copied.causes@[0]@ == "z"@ && copied.causes@[1]@ == "原因\0"@);
+    expect_status_text(copied.delta_refs[0].as_str(), "/根\0");
+    expect_status_text(copied.delta_refs[1].as_str(), "");
+    expect_status_text(copied.delta_refs[2].as_str(), "/根\0");
+    expect_status_text(copied.causes[0].as_str(), "z");
+    expect_status_text(copied.causes[1].as_str(), "原因\0");
 }
 
 fn finding_fields_preserve_nonempty_full_text(code: &str, message: &str, reference: &str)
@@ -428,14 +528,20 @@ fn finding_fields_preserve_nonempty_full_text(code: &str, message: &str, referen
         level: "info".to_owned(), delta_refs: refs, causes: vec!["".to_owned()] };
     let accepted = policy::valid_finding_fields(&info);
     assert(accepted);
+    expect_status_true(accepted);
     let warning = policy::Finding { level: "warning".to_owned(), ..info.clone() };
     let accepted = policy::valid_finding_fields(&warning);
     assert(accepted);
+    expect_status_true(accepted);
     let error = policy::Finding { level: "error".to_owned(), ..info.clone() };
     let accepted = policy::valid_finding_fields(&error);
     assert(accepted);
+    expect_status_true(accepted);
     assert(info.delta_refs.len() == 2 && info.delta_refs@[0]@ == reference@
         && info.delta_refs@[1]@ == reference@);
+    expect_status_true(info.delta_refs.len() == 2);
+    expect_status_text(info.delta_refs[0].as_str(), reference);
+    expect_status_text(info.delta_refs[1].as_str(), reference);
 }
 
 fn empty_finding_fields_are_rejected(code: &str, message: &str, level: &str) {
@@ -445,14 +551,17 @@ fn empty_finding_fields_are_rejected(code: &str, message: &str, level: &str) {
         level: level.to_owned(), delta_refs: refs.clone(), causes: Vec::new() };
     let accepted = policy::valid_finding_fields(&no_code);
     assert(!accepted);
+    expect_status_true(!accepted);
     let no_message = policy::Finding { code: code.to_owned(), message: "".to_owned(),
         level: level.to_owned(), delta_refs: refs, causes: Vec::new() };
     let accepted = policy::valid_finding_fields(&no_message);
     assert(!accepted);
+    expect_status_true(!accepted);
     let no_refs = policy::Finding { code: code.to_owned(), message: message.to_owned(),
         level: level.to_owned(), delta_refs: Vec::new(), causes: Vec::new() };
     let accepted = policy::valid_finding_fields(&no_refs);
     assert(!accepted);
+    expect_status_true(!accepted);
 }
 
 fn noncanonical_finding_level_is_rejected(level: &str)
@@ -462,6 +571,7 @@ fn noncanonical_finding_level_is_rejected(level: &str)
         level: level.to_owned(), delta_refs: vec!["/x".to_owned()], causes: Vec::new() };
     let accepted = policy::valid_finding_fields(&finding);
     assert(!accepted);
+    expect_status_true(!accepted);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -514,6 +624,7 @@ fn evidence_kind_keeps_arbitrary_nonempty_text(kind: &str)
     let accepted = policy::valid_evidence_identity(".chrono-harness/state/", kind,
         "0000000000000000000000000000000000000000000000000000000000000000");
     assert(accepted);
+    expect_status_true(accepted);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -558,14 +669,21 @@ fn evidence_identity_keeps_exact_prefix_and_nonempty_kind() {
     evidence_kind_keeps_arbitrary_nonempty_text("原件\0");
     let accepted = policy::valid_evidence_identity(".chrono-harness/state/../x", "report", zero);
     assert(accepted);
+    expect_status_true(accepted);
     let empty = policy::valid_evidence_identity("", "report", zero);
     let short = policy::valid_evidence_identity(".chrono-harness/state", "report", zero);
     let similar = policy::valid_evidence_identity(".chrono-harness/states/x", "report", zero);
     let absolute = policy::valid_evidence_identity("/.chrono-harness/state/x", "report", zero);
     let case = policy::valid_evidence_identity(".chrono-harness/State/x", "report", zero);
-    assert(!empty); assert(!short); assert(!similar); assert(!absolute); assert(!case);
+    assert(!empty);
+    expect_status_true(!empty); assert(!short);
+    expect_status_true(!short); assert(!similar);
+    expect_status_true(!similar); assert(!absolute);
+    expect_status_true(!absolute); assert(!case);
+    expect_status_true(!case);
     let no_kind = policy::valid_evidence_identity(".chrono-harness/state/x", "", zero);
     assert(!no_kind);
+    expect_status_true(!no_kind);
 }
 
 proof fn unicode_evidence_prefix_encoding()
@@ -588,6 +706,7 @@ fn evidence_identity_keeps_unicode_and_nul_suffix() {
     let accepted = policy::valid_evidence_identity(".chrono-harness/state/中文\0", "report",
         "0000000000000000000000000000000000000000000000000000000000000000");
     assert(accepted);
+    expect_status_true(accepted);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -621,16 +740,27 @@ fn evidence_identity_rejects_missing_short_long_and_uppercase_digest() {
         "00000000000000000000000000000000000000000000000000000000000000000");
     let upper_digest = policy::valid_evidence_identity(".chrono-harness/state/x", "report",
         "A000000000000000000000000000000000000000000000000000000000000000");
-    assert(!no_digest); assert(!short_digest); assert(!long_digest); assert(!upper_digest);
+    assert(!no_digest);
+    expect_status_true(!no_digest); assert(!short_digest);
+    expect_status_true(!short_digest); assert(!long_digest);
+    expect_status_true(!long_digest); assert(!upper_digest);
+    expect_status_true(!upper_digest);
 }
 
 fn delta_clone_keeps_every_field(value: &policy::Delta) {
     let copied = value.clone();
     assert(copied.kind == value.kind && copied.path == value.path);
+    expect_status_text(copied.kind.as_str(), value.kind.as_str());
+    expect_status_text(copied.path.as_str(), value.path.as_str());
     assert(copied.old_blob == value.old_blob && copied.new_blob == value.new_blob);
+    expect_optional_text(&copied.old_blob, &value.old_blob);
+    expect_optional_text(&copied.new_blob, &value.new_blob);
     assert(copied.old_mode == value.old_mode && copied.new_mode == value.new_mode);
+    expect_optional_text(&copied.old_mode, &value.old_mode);
+    expect_optional_text(&copied.new_mode, &value.new_mode);
     let equal = copied.eq(value);
     assert(equal);
+    expect_status_true(equal);
 }
 
 fn delta_equality_distinguishes_each_complete_field(left: &str, right: &str)
@@ -647,19 +777,29 @@ fn delta_equality_distinguishes_each_complete_field(left: &str, right: &str)
     let old_mode = policy::Delta { old_mode: Some(right.to_owned()), ..original.clone() };
     let new_mode = policy::Delta { new_mode: Some(right.to_owned()), ..original.clone() };
     let equal = original.eq(&kind); assert(!equal);
+    expect_status_true(!equal);
     let equal = original.eq(&path); assert(!equal);
+    expect_status_true(!equal);
     let equal = original.eq(&old_blob); assert(!equal);
+    expect_status_true(!equal);
     let equal = original.eq(&new_blob); assert(!equal);
+    expect_status_true(!equal);
     let equal = original.eq(&old_mode); assert(!equal);
+    expect_status_true(!equal);
     let equal = original.eq(&new_mode); assert(!equal);
+    expect_status_true(!equal);
     let missing = policy::Delta { old_blob: None, ..original.clone() };
     let equal = original.eq(&missing); assert(!equal);
+    expect_status_true(!equal);
     let missing = policy::Delta { new_blob: None, ..original.clone() };
     let equal = original.eq(&missing); assert(!equal);
+    expect_status_true(!equal);
     let missing = policy::Delta { old_mode: None, ..original.clone() };
     let equal = original.eq(&missing); assert(!equal);
+    expect_status_true(!equal);
     let missing = policy::Delta { new_mode: None, ..original.clone() };
     let equal = original.eq(&missing); assert(!equal);
+    expect_status_true(!equal);
 }
 
 fn any_listed_path_is_accepted(path: &str, kind: &str, metadata: &str) {
@@ -675,6 +815,7 @@ fn any_listed_path_is_accepted(path: &str, kind: &str, metadata: &str) {
     }
     let accepted = policy::valid_finding_reference(path, Some(slice));
     assert(accepted);
+    expect_status_true(accepted);
 }
 
 fn unlisted_relative_reference_is_rejected(reference: &str, path: &str)
@@ -686,11 +827,14 @@ fn unlisted_relative_reference_is_rejected(reference: &str, path: &str)
         old_blob: None, new_blob: None, old_mode: None, new_mode: None }];
     let accepted = policy::valid_finding_reference(reference, Some(entries.as_slice()));
     assert(!accepted);
+    expect_status_true(!accepted);
     let initial = policy::valid_finding_reference(reference, None);
     assert(!initial);
+    expect_status_true(!initial);
     let empty: Vec<policy::Delta> = Vec::new();
     let accepted = policy::valid_finding_reference(reference, Some(empty.as_slice()));
     assert(!accepted);
+    expect_status_true(!accepted);
 }
 
 fn record_pointer_is_accepted_in_both_modes(reference: &str)
@@ -700,6 +844,7 @@ fn record_pointer_is_accepted_in_both_modes(reference: &str)
     let empty: Vec<policy::Delta> = Vec::new();
     let ordinary = policy::valid_finding_reference(reference, Some(empty.as_slice()));
     assert(initial && ordinary);
+    expect_status_true(initial && ordinary);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -780,8 +925,10 @@ fn finding_reference_list_checks_every_position_and_preserves_duplicates() {
     }
     let accepted = policy::valid_finding_references(&finding, Some(slice));
     assert(accepted);
+    expect_status_true(accepted);
     let initial = policy::valid_finding_references(&finding, None);
     assert(!initial);
+    expect_status_true(!initial);
     let first = policy::Finding { delta_refs: vec!["y".to_owned(), "x".to_owned()], ..finding.clone() };
     let middle = policy::Finding { delta_refs: vec!["x".to_owned(), "y".to_owned(), "x".to_owned()], ..finding.clone() };
     let last = policy::Finding { delta_refs: vec!["x".to_owned(), "y".to_owned()], ..finding.clone() };
@@ -794,13 +941,19 @@ fn finding_reference_list_checks_every_position_and_preserves_duplicates() {
         assert(!policy::reference_allowed(last.delta_refs@[1]@, Some(slice)));
     }
     let accepted = policy::valid_finding_references(&first, Some(slice)); assert(!accepted);
+    expect_status_true(!accepted);
     let accepted = policy::valid_finding_references(&middle, Some(slice)); assert(!accepted);
+    expect_status_true(!accepted);
     let accepted = policy::valid_finding_references(&last, Some(slice)); assert(!accepted);
+    expect_status_true(!accepted);
     let records = policy::Finding { delta_refs: vec!["/a".to_owned(), "/a".to_owned()], ..finding.clone() };
     let accepted = policy::valid_finding_references(&records, None); assert(accepted);
+    expect_status_true(accepted);
     let empty = policy::Finding { delta_refs: Vec::new(), ..finding };
     let accepted = policy::valid_finding_references(&empty, None); assert(accepted);
+    expect_status_true(accepted);
     let fields = policy::valid_finding_fields(&empty); assert(!fields);
+    expect_status_true(!fields);
 }
 
 fn tree_entry(mode: &str, oid: &str, kind: &str) -> (out: policy::TreeEntry)
@@ -812,36 +965,52 @@ fn tree_entry(mode: &str, oid: &str, kind: &str) -> (out: policy::TreeEntry)
 fn unchanged_entries_have_no_delta(path: &str, mode: &str, oid: &str, kind: &str) {
     let absent = policy::delta_for_entry(path, None, None);
     assert(absent.is_none());
+    expect_status_true(absent.is_none());
     let old = tree_entry(mode, oid, kind);
     let new = tree_entry(mode, oid, kind);
     let equal = old.eq(&new);
     assert(equal);
+    expect_status_true(equal);
     let copied = old.clone();
     assert(copied.mode@ == mode@ && copied.oid@ == oid@ && copied.kind@ == kind@);
+    expect_status_text(copied.mode.as_str(), mode);
+    expect_status_text(copied.oid.as_str(), oid);
+    expect_status_text(copied.kind.as_str(), kind);
     let unchanged = policy::delta_for_entry(path, Some(&old), Some(&new));
     assert(unchanged.is_none());
+    expect_status_true(unchanged.is_none());
 }
 
 fn additions_and_deletions_preserve_fields(path: &str, mode: &str, oid: &str, kind: &str) {
     let entry = tree_entry(mode, oid, kind);
     let added = policy::delta_for_entry(path, None, Some(&entry));
     match added {
-        None => { assert(false); },
+        None => { assert(false); panic!(); },
         Some(change) => {
             assert(change.kind@ == "A"@ && change.path@ == path@);
+            expect_status_text(change.kind.as_str(), "A");
+            expect_status_text(change.path.as_str(), path);
             assert(change.old_blob.is_none() && change.old_mode.is_none());
+            expect_status_true(change.old_blob.is_none() && change.old_mode.is_none());
             assert(policy::optional_text(&change.new_blob) == Some(oid@));
+            expect_some_text(&change.new_blob, oid);
             assert(policy::optional_text(&change.new_mode) == Some(mode@));
+            expect_some_text(&change.new_mode, mode);
         },
     }
     let deleted = policy::delta_for_entry(path, Some(&entry), None);
     match deleted {
-        None => { assert(false); },
+        None => { assert(false); panic!(); },
         Some(change) => {
             assert(change.kind@ == "D"@ && change.path@ == path@);
+            expect_status_text(change.kind.as_str(), "D");
+            expect_status_text(change.path.as_str(), path);
             assert(policy::optional_text(&change.old_blob) == Some(oid@));
+            expect_some_text(&change.old_blob, oid);
             assert(policy::optional_text(&change.old_mode) == Some(mode@));
+            expect_some_text(&change.old_mode, mode);
             assert(change.new_blob.is_none() && change.new_mode.is_none());
+            expect_status_true(change.new_blob.is_none() && change.new_mode.is_none());
         },
     }
 }
@@ -851,13 +1020,19 @@ fn modified_entries_preserve_both_sides(path: &str, old: &policy::TreeEntry, new
 {
     let changed = policy::delta_for_entry(path, Some(old), Some(new));
     match changed {
-        None => { assert(false); },
+        None => { assert(false); panic!(); },
         Some(change) => {
             assert(change.kind@ == "M"@ && change.path@ == path@);
+            expect_status_text(change.kind.as_str(), "M");
+            expect_status_text(change.path.as_str(), path);
             assert(policy::optional_text(&change.old_blob) == Some(old.oid@));
+            expect_some_text(&change.old_blob, old.oid.as_str());
             assert(policy::optional_text(&change.new_blob) == Some(new.oid@));
+            expect_some_text(&change.new_blob, new.oid.as_str());
             assert(policy::optional_text(&change.old_mode) == Some(old.mode@));
+            expect_some_text(&change.old_mode, old.mode.as_str());
             assert(policy::optional_text(&change.new_mode) == Some(new.mode@));
+            expect_some_text(&change.new_mode, new.mode.as_str());
         },
     }
 }
@@ -870,8 +1045,11 @@ fn each_tree_field_changes_identity(path: &str, left: &str, right: &str)
     let oid = tree_entry(left, right, left);
     let kind = tree_entry(left, left, right);
     let equal = old.eq(&mode); assert(!equal);
+    expect_status_true(!equal);
     let equal = old.eq(&oid); assert(!equal);
+    expect_status_true(!equal);
     let equal = old.eq(&kind); assert(!equal);
+    expect_status_true(!equal);
     modified_entries_preserve_both_sides(path, &old, &mode);
     modified_entries_preserve_both_sides(path, &old, &oid);
     modified_entries_preserve_both_sides(path, &old, &kind);
@@ -929,7 +1107,14 @@ fn expect_response_error(result: Result<(), String>, expected: &str)
     requires result.is_err(), result.unwrap_err()@ == expected@,
 {
     assert(result.is_err());
-    match result { Err(message) => { assert(message@ == expected@); }, Ok(()) => {} }
+    expect_status_true(result.is_err());
+    match result {
+        Err(message) => {
+            assert(message@ == expected@);
+            expect_status_text(message.as_str(), expected);
+        },
+        Ok(()) => { panic!(); },
+    }
 }
 
 fn exact_header_accepts_empty_pass(protocol: &str, request: &str, judge: &str) {
@@ -937,6 +1122,7 @@ fn exact_header_accepts_empty_pass(protocol: &str, request: &str, judge: &str) {
     let accepted = policy::validate_response_fields(protocol, request, judge, &WireStatus::Pass, 0,
         protocol, request, judge, findings.as_slice(), None);
     assert(accepted.is_ok());
+    expect_status_true(accepted.is_ok());
 }
 
 fn mismatched_header_precedes_bad_finding_and_status(a: &str, b: &str)
@@ -979,6 +1165,7 @@ fn response_preflight_checks_actual_findings_before_status() {
     let a = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
         "p", "r", "j", first.as_slice(), None);
     assert(a.is_err());
+    expect_status_true(a.is_err());
     expect_response_error(a, "E_PROTOCOL: invalid finding");
     let b = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
         "p", "r", "j", middle.as_slice(), None);
@@ -1031,6 +1218,7 @@ fn response_preflight_preserves_ordinary_and_initial_reference_scope() {
     let allowed = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
         "p", "r", "j", first.as_slice(), Some(slice));
     assert(allowed.is_ok());
+    expect_status_true(allowed.is_ok());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -1048,6 +1236,7 @@ fn response_preflight_keeps_status_agreement_after_valid_fields() {
     let failure = policy::validate_response_fields("p", "r", "j", &WireStatus::Error, 2,
         "p", "r", "j", error.as_slice(), None);
     assert(pass.is_ok() && warn.is_ok() && fail.is_ok() && failure.is_ok());
+    expect_status_true(pass.is_ok() && warn.is_ok() && fail.is_ok() && failure.is_ok());
     let bad_pass = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
         "p", "r", "j", warning.as_slice(), None);
     expect_response_error(bad_pass, "E_PROTOCOL: finding/status disagreement");
@@ -1067,6 +1256,7 @@ fn exact_record_header_accepts_empty_pass(protocol: &str, request: &str, judge: 
     let accepted = policy::validate_record_response(protocol, request, judge, &WireStatus::Pass, 0,
         protocol, request, judge, findings.as_slice());
     assert(accepted.is_ok());
+    expect_status_true(accepted.is_ok());
 }
 
 fn record_header_errors_precede_status(a: &str, b: &str)
@@ -1113,6 +1303,7 @@ fn retained_response_keeps_four_success_states() {
     let failure = policy::validate_record_response("p", "r", "j", &WireStatus::Error, 2,
         "p", "r", "j", error.as_slice());
     assert(pass.is_ok() && warn.is_ok() && fail.is_ok() && failure.is_ok());
+    expect_status_true(pass.is_ok() && warn.is_ok() && fail.is_ok() && failure.is_ok());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
