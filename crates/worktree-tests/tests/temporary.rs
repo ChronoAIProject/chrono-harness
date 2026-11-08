@@ -426,9 +426,6 @@ fn directory_custody_with_metadata(separate_metadata: bool) {
     fs::write(root.join("unregistered-scratch"), b"temporary").unwrap();
     let artifact =
         chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
-    artifact
-        .acquire("diagnostic", "inspect old fixture")
-        .unwrap();
     drop(allocation);
     let record = producer_record_path(&store, &root);
     if !separate_metadata {
@@ -465,6 +462,9 @@ fn directory_custody_with_metadata(separate_metadata: bool) {
         object["intent"] = value!({"path":name,"sha256":sha256(&bytes)});
         fs::write(&record, serde_json::to_vec(&registration).unwrap()).unwrap();
     }
+    artifact
+        .acquire("diagnostic", "inspect old fixture")
+        .unwrap();
     let object = json(&fs::read(&record).unwrap()).unwrap()["object"].clone();
     let intent = store.join(object["intent"]["path"].as_str().unwrap());
     let original = fs::read(&intent).unwrap();

@@ -605,7 +605,14 @@ fn dispose_owned_directory(
         || !object.retiring
         || object.original_release.is_none()
         || object.consumers.values().any(|c| !c.released)
-        || object.metadata_directory.as_deref() != Some(metadata_name(&object.path).as_str())
+        || match (&object.metadata_directory, &object.metadata_identity) {
+            (Some(name), Some(_)) => name != &metadata_name(&object.path),
+            // A historical allocation has flat original receipts. Its exact
+            // directory custody authorizes only the allocation, never a newly
+            // inferred metadata directory.
+            (None, None) => object.directory_custody.is_none(),
+            _ => true,
+        }
     {
         return Err("owned directory retirement binding or consumer release differs".into());
     }
@@ -626,7 +633,12 @@ fn dispose_owned_directory(
     } else {
         vec![]
     };
-    let metadata = no_symlink_parents(directory, &metadata_name(&object.path))?;
+    let metadata = object
+        .metadata_directory
+        .as_deref()
+        .map(|name| no_symlink_parents(directory, name))
+        .transpose()?;
+    let metadata_exists = metadata.as_ref().is_some_and(|path| path.exists());
     let binding = object
         .cache_lease
         .as_ref()
@@ -641,7 +653,7 @@ fn dispose_owned_directory(
             return Ok(value!({"status":"protected","reason":"live owned directory consumer"}));
         };
         Some(lease)
-    } else if !allocation.exists() && !metadata.exists() {
+    } else if !allocation.exists() && !metadata_exists {
         // An interrupted final unlink may leave only its continuation record.
         None
     } else {
@@ -652,7 +664,7 @@ fn dispose_owned_directory(
     } else {
         None
     };
-    if metadata.exists() {
+    if allocation.exists() || metadata_exists {
         directory_custody_stable(directory, &context.producer, object)?;
         let bytes = fs::read(no_symlink_parents(directory, &object.intent.path)?)
             .map_err(|e| e.to_string())?;
@@ -664,13 +676,13 @@ fn dispose_owned_directory(
             || intent["path"] != object.path
             || intent["producer"] != context.producer
             || intent["cache_lease"] != value!(object.cache_lease)
+            || intent["metadata_directory"].as_str() != object.metadata_directory.as_deref()
         {
             return Err("owned directory original intent differs; preserve allocation".into());
         }
-    } else if allocation.exists() {
-        return Err("owned directory original intent is missing; preserve allocation".into());
     }
-    let paths = [allocation.clone(), metadata.clone()];
+    let mut paths = vec![allocation.clone()];
+    paths.extend(metadata.iter().cloned());
     let names = paths
         .iter()
         .map(|p| {
@@ -712,19 +724,20 @@ fn dispose_owned_directory(
                     return Err("owned directory identity changed before disposal".into());
                 }
             }
-            if metadata.exists()
-                && Some(directory_id(&metadata)?.as_str()) != object.metadata_identity.as_deref()
-            {
-                return Err("owned directory metadata identity changed before disposal".into());
+            if let Some(metadata) = &metadata {
+                if metadata.exists()
+                    && Some(directory_id(metadata)?.as_str()) != object.metadata_identity.as_deref()
+                {
+                    return Err("owned directory metadata identity changed before disposal".into());
+                }
             }
-            chrono_harness::artifact_disposal::source_safe(
-                &inputs.policy.coordinator_root,
-                &names[0],
-            )?;
-            chrono_harness::artifact_disposal::source_safe(
-                &inputs.policy.coordinator_root,
-                &names[1],
-            )
+            for name in &names {
+                chrono_harness::artifact_disposal::source_safe(
+                    &inputs.policy.coordinator_root,
+                    name,
+                )?;
+            }
+            Ok(())
         },
     )?;
     let completion = (|| -> Result<(), String> {
