@@ -917,7 +917,9 @@ impl Manager {
         let _slot = protect_adoption(root, &adoption)?;
         write_json(&index, &adoption, false)?;
         chrono_harness::retained_artifacts::retention::settle_report(
-            root, CURRENT_OWNER_SLOT, &receipt.path,
+            root,
+            CURRENT_OWNER_SLOT,
+            &receipt.path,
         )?;
         stable(r)?;
         report["owner_deployment"] = adoption;
