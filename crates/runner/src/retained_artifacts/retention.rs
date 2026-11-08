@@ -371,8 +371,8 @@ impl Inventory {
             }
             for scope in scopes {
                 crate::relative_path(scope.trim_end_matches('/'))?;
-                let managed_bin = scope.starts_with(".chrono-harness/bin/")
-                    && scope != ".chrono-harness/bin/";
+                let managed_bin =
+                    scope.starts_with(".chrono-harness/bin/") && scope != ".chrono-harness/bin/";
                 if (!scope.starts_with(".chrono-harness/state/") && !managed_bin)
                     || !scope.ends_with('/')
                     || scope.starts_with(STATE)
@@ -965,6 +965,96 @@ impl Inventory {
             .producers
             .get(producer)
             .is_some_and(|scopes| scopes.iter().any(|scope| path.starts_with(scope)))
+    }
+    /// Continue the same explicitly staged directory under its original EX
+    /// capability. Completed originals are immutable; recovery accounting alone
+    /// does not complete an interrupted publication. Domain qualification and
+    /// its durable report reference remain the caller's responsibility.
+    pub fn resume_unfinished_directory(
+        self,
+        producer: &str,
+        path: &str,
+    ) -> Result<Option<Publication>, String> {
+        crate::relative_path(path)?;
+        if !self.accepts(producer, path) {
+            return Ok(None);
+        }
+        crate::artifact_disposal::source_safe(&self.root, path)?;
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|o| o.path == path)
+            .ok_or("staged directory has no original publication")?;
+        if output.producer != producer
+            || !output.tree
+            || output.creation.is_some()
+            || !(output.phase == "publishing"
+                || (output.phase == "sealing"
+                    && output.outcome["publication"] == "interrupted"
+                    && output.outcome["completion"] == "not-established"))
+        {
+            return Err(
+                "directory publication is completed, disposing or not qualified for resumption"
+                    .into(),
+            );
+        }
+        let lease = Lease::acquire(
+            &self.directory.join(&output.lease),
+            Some(&output.lease_id),
+            false,
+            true,
+            None,
+        )?
+        .ok_or("unfinished directory has live producer/readers")?;
+        let physical = no_symlink_parents(&self.root, path)?;
+        if !fs::symlink_metadata(&physical)
+            .map_err(|e| e.to_string())?
+            .is_dir()
+            || identity(&physical)? != output.identity
+        {
+            return Err("unfinished directory identity changed; preserve originals".into());
+        }
+        let byte_limit = output.byte_limit.unwrap_or(self.policy.max_output_bytes);
+        let mut observed = Manifest::default();
+        let began = Instant::now();
+        for _ in 0..self.policy.max_nodes_per_round {
+            if observed.sealed
+                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
+            {
+                break;
+            }
+            observed.step(&self.root, path, self.policy.max_manifest_nodes, byte_limit)?;
+        }
+        if !observed.sealed || observed.bytes > byte_limit {
+            return Err(
+                "unfinished directory exceeds bounded resumption accounting; preserve originals"
+                    .into(),
+            );
+        }
+        let written = observed.bytes;
+        let written_nodes = observed.entries.len();
+        // Resumption can add domain publication records. Do not reuse a
+        // snapshot taken before those writes, or erase the original outcome.
+        output.manifest = Manifest::default();
+        output.reserved_bytes = byte_limit;
+        output.phase = "publishing".into();
+        let initial = Arc::clone(&output.value);
+        self.save(&ledger, &gate)?;
+        drop((gate, ledger));
+        Ok(Some(Publication {
+            id: initial.id.clone(),
+            path: path.into(),
+            identity: RefCell::new(initial.identity.clone()),
+            tree: true,
+            initial,
+            lease,
+            byte_limit,
+            written: Cell::new(written),
+            written_nodes: Cell::new(written_nodes),
+            inventory: self,
+        }))
     }
     /// A producer selects a finite diagnostic window, including interruption
     /// before completion. Actual caller
@@ -2525,6 +2615,16 @@ impl Publication {
         file.set_permissions(metadata.permissions())
             .map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())
+    }
+    /// Preserve an exact executable inode while charging its directory entry
+    /// and logical length to this live output before the link is created.
+    pub fn hard_link_file(&self, input: &Path, destination: &Path) -> Result<(), String> {
+        let metadata = fs::symlink_metadata(input).map_err(|e| e.to_string())?;
+        if !metadata.is_file() {
+            return Err("hard-link input must be a physical regular file".into());
+        }
+        let path = self.write_destination(destination, metadata.len())?;
+        fs::hard_link(input, path).map_err(|e| e.to_string())
     }
     /// An adopted producer checks this reservation before writing new output bytes.
     pub fn byte_limit(&self) -> u64 {
