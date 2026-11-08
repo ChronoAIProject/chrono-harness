@@ -1169,95 +1169,6 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
-  linux_build_judge_cargo:
-    if: ${{ github.event.deleted != true }}
-    runs-on: "ubuntu-24.04"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Prepare registered caches
-        id: chrono_cache_plan
-        shell: bash
-        run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
-          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_cargo' --plan-output '.chrono-harness/state/cache/release.linux_build_judge_cargo/plan.json' --github-output "$GITHUB_OUTPUT"
-      - name: Restore registered cache release.linux.release.judge-cargo
-        id: cache_0_restore
-        continue-on-error: true
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
-          fail-on-cache-miss: false
-      - name: Recover failed cache restores
-        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_cargo/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
-      - name: Run registered release command
-        id: chrono_cache_work
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "linux_build_judge_cargo"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cargo' '--unit' 'build_judge_cargo'
-      - name: Seal producer cache contents
-        id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_cargo/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache release.linux.release.judge-cargo
-        id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-linux-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/build_judge_cargo/"
-          if-no-files-found: error
-          include-hidden-files: true
-      - name: Preserve failed cache diagnostics
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "diagnostics-chrono-release-linux-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: .chrono-harness/state/
-          if-no-files-found: error
-          include-hidden-files: true
   linux_build_worktree:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -1469,7 +1380,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - &chrono_release_download_13
+      - &chrono_release_download_12
         name: Download selected original artifact from linux_build_runner
         if: ${{ always() && needs.linux_build_runner.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1485,7 +1396,7 @@ jobs:
           artifact-ids: ${{ needs.linux_build_ci.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_ci/"
-      - &chrono_release_download_14
+      - &chrono_release_download_13
         name: Download selected original artifact from linux_build_worktree
         if: ${{ always() && needs.linux_build_worktree.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1583,7 +1494,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
+      - *chrono_release_download_12
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -1674,8 +1585,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - &chrono_release_download_10
+      - *chrono_release_download_12
+      - &chrono_release_download_9
         name: Download selected original artifact from linux_build_judge_registration
         if: ${{ always() && needs.linux_build_judge_registration.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1683,7 +1594,7 @@ jobs:
           artifact-ids: ${{ needs.linux_build_judge_registration.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-      - &chrono_release_download_7
+      - &chrono_release_download_6
         name: Download selected original artifact from linux_build_judge_filemap
         if: ${{ always() && needs.linux_build_judge_filemap.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1691,7 +1602,7 @@ jobs:
           artifact-ids: ${{ needs.linux_build_judge_filemap.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
-      - &chrono_release_download_11
+      - &chrono_release_download_10
         name: Download selected original artifact from linux_build_judge_routes
         if: ${{ always() && needs.linux_build_judge_routes.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1699,7 +1610,7 @@ jobs:
           artifact-ids: ${{ needs.linux_build_judge_routes.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_routes/"
-      - &chrono_release_download_9
+      - &chrono_release_download_8
         name: Download selected original artifact from linux_build_judge_projects
         if: ${{ always() && needs.linux_build_judge_projects.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1707,7 +1618,7 @@ jobs:
           artifact-ids: ${{ needs.linux_build_judge_projects.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_projects/"
-      - &chrono_release_download_6
+      - &chrono_release_download_5
         name: Download selected original artifact from linux_build_judge_cost
         if: ${{ always() && needs.linux_build_judge_cost.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1715,7 +1626,7 @@ jobs:
           artifact-ids: ${{ needs.linux_build_judge_cost.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_cost/"
-      - &chrono_release_download_8
+      - &chrono_release_download_7
         name: Download selected original artifact from linux_build_judge_mixed
         if: ${{ always() && needs.linux_build_judge_mixed.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1723,7 +1634,7 @@ jobs:
           artifact-ids: ${{ needs.linux_build_judge_mixed.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-      - &chrono_release_download_12
+      - &chrono_release_download_11
         name: Download selected original artifact from linux_build_judge_workflow
         if: ${{ always() && needs.linux_build_judge_workflow.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1829,8 +1740,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - &chrono_release_download_5
+      - *chrono_release_download_12
+      - &chrono_release_download_4
         name: Download selected original artifact from linux_build_judge_ci
         if: ${{ always() && needs.linux_build_judge_ci.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1839,8 +1750,8 @@ jobs:
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
       - *chrono_release_download_1
-      - *chrono_release_download_10
-      - *chrono_release_download_14
+      - *chrono_release_download_9
+      - *chrono_release_download_13
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -1931,8 +1842,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - *chrono_release_download_5
+      - *chrono_release_download_12
+      - *chrono_release_download_4
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2023,8 +1934,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - *chrono_release_download_10
+      - *chrono_release_download_12
+      - *chrono_release_download_9
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2115,13 +2026,13 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - *chrono_release_download_5
+      - *chrono_release_download_12
+      - *chrono_release_download_4
       - *chrono_release_download_1
-      - *chrono_release_download_10
-      - *chrono_release_download_7
-      - *chrono_release_download_11
       - *chrono_release_download_9
+      - *chrono_release_download_6
+      - *chrono_release_download_10
+      - *chrono_release_download_8
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2212,17 +2123,17 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
+      - *chrono_release_download_12
       - *chrono_release_download_1
-      - *chrono_release_download_10
-      - *chrono_release_download_7
-      - *chrono_release_download_11
       - *chrono_release_download_9
       - *chrono_release_download_6
+      - *chrono_release_download_10
       - *chrono_release_download_8
-      - *chrono_release_download_12
+      - *chrono_release_download_5
+      - *chrono_release_download_7
+      - *chrono_release_download_11
       - *chrono_release_download_3
-      - *chrono_release_download_14
+      - *chrono_release_download_13
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2286,113 +2197,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: "diagnostics-chrono-release-linux-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: .chrono-harness/state/
-          if-no-files-found: error
-          include-hidden-files: true
-  linux_verify_judge_cargo_tests:
-    if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_judge_cargo"]
-    runs-on: "ubuntu-24.04"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - *chrono_release_download_5
-      - *chrono_release_download_10
-      - *chrono_release_download_7
-      - *chrono_release_download_11
-      - *chrono_release_download_9
-      - *chrono_release_download_6
-      - *chrono_release_download_8
-      - *chrono_release_download_12
-      - &chrono_release_download_4
-        name: Download selected original artifact from linux_build_judge_cargo
-        if: ${{ always() && needs.linux_build_judge_cargo.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_cargo.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
-      - name: Prepare registered caches
-        id: chrono_cache_plan
-        shell: bash
-        run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
-          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_cargo_tests' --plan-output '.chrono-harness/state/cache/release.linux_verify_judge_cargo_tests/plan.json' --github-output "$GITHUB_OUTPUT"
-      - name: Restore registered cache release.linux.verify.judge-cargo-tests
-        id: cache_0_restore
-        continue-on-error: true
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
-          fail-on-cache-miss: false
-      - name: Recover failed cache restores
-        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_cargo_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
-      - name: Run registered release command
-        id: chrono_cache_work
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "linux_verify_judge_cargo_tests"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cargo_tests' '--unit' 'verify_judge_cargo_tests'
-      - name: Seal producer cache contents
-        id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_cargo_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache release.linux.verify.judge-cargo-tests
-        id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-linux-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_judge_cargo_tests/"
-          if-no-files-found: error
-          include-hidden-files: true
-      - name: Preserve failed cache diagnostics
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "diagnostics-chrono-release-linux-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
@@ -2509,11 +2313,11 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - *chrono_release_download_10
-      - *chrono_release_download_7
-      - *chrono_release_download_11
+      - *chrono_release_download_12
       - *chrono_release_download_9
+      - *chrono_release_download_6
+      - *chrono_release_download_10
+      - *chrono_release_download_8
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2693,10 +2497,10 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - *chrono_release_download_10
-      - *chrono_release_download_7
+      - *chrono_release_download_12
+      - *chrono_release_download_9
       - *chrono_release_download_6
+      - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2787,11 +2591,11 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
-      - *chrono_release_download_10
-      - *chrono_release_download_7
+      - *chrono_release_download_12
+      - *chrono_release_download_9
       - *chrono_release_download_6
-      - *chrono_release_download_8
+      - *chrono_release_download_5
+      - *chrono_release_download_7
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2860,7 +2664,7 @@ jobs:
           include-hidden-files: true
   linux_package:
     if: ${{ always() && github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_identifiers_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_judge_cargo_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_release_build_tests","linux_verify_release_build_integration","linux_verify_diagnostics_tests","linux_verify_host_bootstrap_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests"]
+    needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_release_build_tests","linux_verify_release_build_integration","linux_verify_diagnostics_tests","linux_verify_host_bootstrap_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2882,7 +2686,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_13
+      - *chrono_release_download_12
       - name: Download selected original artifact from linux_build_instructions
         if: ${{ always() && needs.linux_build_instructions.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2890,19 +2694,18 @@ jobs:
           artifact-ids: ${{ needs.linux_build_instructions.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_instructions/"
-      - *chrono_release_download_5
+      - *chrono_release_download_4
       - *chrono_release_download_1
-      - *chrono_release_download_10
-      - *chrono_release_download_7
-      - *chrono_release_download_11
       - *chrono_release_download_9
       - *chrono_release_download_6
+      - *chrono_release_download_10
       - *chrono_release_download_8
-      - *chrono_release_download_12
+      - *chrono_release_download_5
+      - *chrono_release_download_7
+      - *chrono_release_download_11
       - *chrono_release_download_3
       - *chrono_release_download_2
-      - *chrono_release_download_4
-      - *chrono_release_download_14
+      - *chrono_release_download_13
       - name: Download selected original artifact from linux_verify_distribution_tests
         if: ${{ always() && needs.linux_verify_distribution_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2917,13 +2720,6 @@ jobs:
           artifact-ids: ${{ needs.linux_verify_worktree_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_worktree_tests/"
-      - name: Download selected original artifact from linux_verify_identifiers_tests
-        if: ${{ always() && needs.linux_verify_identifiers_tests.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_verify_identifiers_tests.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/verify_identifiers_tests/"
       - name: Download selected original artifact from linux_verify_runner_tests
         if: ${{ always() && needs.linux_verify_runner_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2973,13 +2769,6 @@ jobs:
           artifact-ids: ${{ needs.linux_verify_judge_workflow_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests/"
-      - name: Download selected original artifact from linux_verify_judge_cargo_tests
-        if: ${{ always() && needs.linux_verify_judge_cargo_tests.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_verify_judge_cargo_tests.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests/"
       - name: Download selected original artifact from linux_verify_instructions_tests
         if: ${{ always() && needs.linux_verify_instructions_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4250,95 +4039,6 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
-  macos_build_judge_cargo:
-    if: ${{ github.event.deleted != true }}
-    runs-on: "macos-26"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Prepare registered caches
-        id: chrono_cache_plan
-        shell: bash
-        run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
-          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_cargo' --plan-output '.chrono-harness/state/cache/release.macos_build_judge_cargo/plan.json' --github-output "$GITHUB_OUTPUT"
-      - name: Restore registered cache release.macos.release.judge-cargo
-        id: cache_0_restore
-        continue-on-error: true
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
-          fail-on-cache-miss: false
-      - name: Recover failed cache restores
-        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_cargo/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
-      - name: Run registered release command
-        id: chrono_cache_work
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "macos_build_judge_cargo"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cargo' '--unit' 'build_judge_cargo'
-      - name: Seal producer cache contents
-        id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_cargo/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache release.macos.release.judge-cargo
-        id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-macos-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/build_judge_cargo/"
-          if-no-files-found: error
-          include-hidden-files: true
-      - name: Preserve failed cache diagnostics
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "diagnostics-chrono-release-macos-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: .chrono-harness/state/
-          if-no-files-found: error
-          include-hidden-files: true
   macos_build_worktree:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-26"
@@ -4452,7 +4152,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - &chrono_release_download_17
+      - &chrono_release_download_16
         name: Download selected original artifact from macos_build_distribution
         if: ${{ always() && needs.macos_build_distribution.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4550,7 +4250,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - &chrono_release_download_28
+      - &chrono_release_download_26
         name: Download selected original artifact from macos_build_runner
         if: ${{ always() && needs.macos_build_runner.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4558,7 +4258,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_runner.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_runner/"
-      - &chrono_release_download_16
+      - &chrono_release_download_15
         name: Download selected original artifact from macos_build_ci
         if: ${{ always() && needs.macos_build_ci.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4566,7 +4266,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_ci.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_ci/"
-      - &chrono_release_download_29
+      - &chrono_release_download_27
         name: Download selected original artifact from macos_build_worktree
         if: ${{ always() && needs.macos_build_worktree.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4664,7 +4364,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
+      - *chrono_release_download_26
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4755,8 +4455,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - &chrono_release_download_25
+      - *chrono_release_download_26
+      - &chrono_release_download_23
         name: Download selected original artifact from macos_build_judge_registration
         if: ${{ always() && needs.macos_build_judge_registration.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4764,7 +4464,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_registration.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-      - &chrono_release_download_22
+      - &chrono_release_download_20
         name: Download selected original artifact from macos_build_judge_filemap
         if: ${{ always() && needs.macos_build_judge_filemap.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4772,7 +4472,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_filemap.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
-      - &chrono_release_download_26
+      - &chrono_release_download_24
         name: Download selected original artifact from macos_build_judge_routes
         if: ${{ always() && needs.macos_build_judge_routes.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4780,7 +4480,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_routes.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_routes/"
-      - &chrono_release_download_24
+      - &chrono_release_download_22
         name: Download selected original artifact from macos_build_judge_projects
         if: ${{ always() && needs.macos_build_judge_projects.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4788,7 +4488,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_projects.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_projects/"
-      - &chrono_release_download_21
+      - &chrono_release_download_19
         name: Download selected original artifact from macos_build_judge_cost
         if: ${{ always() && needs.macos_build_judge_cost.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4796,7 +4496,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_cost.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_cost/"
-      - &chrono_release_download_23
+      - &chrono_release_download_21
         name: Download selected original artifact from macos_build_judge_mixed
         if: ${{ always() && needs.macos_build_judge_mixed.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4804,7 +4504,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_mixed.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-      - &chrono_release_download_27
+      - &chrono_release_download_25
         name: Download selected original artifact from macos_build_judge_workflow
         if: ${{ always() && needs.macos_build_judge_workflow.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4812,7 +4512,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_workflow.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
-      - &chrono_release_download_18
+      - &chrono_release_download_17
         name: Download selected original artifact from macos_build_inputs
         if: ${{ always() && needs.macos_build_inputs.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4910,8 +4610,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - &chrono_release_download_20
+      - *chrono_release_download_26
+      - &chrono_release_download_18
         name: Download selected original artifact from macos_build_judge_ci
         if: ${{ always() && needs.macos_build_judge_ci.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4919,9 +4619,9 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_ci.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
-      - *chrono_release_download_16
-      - *chrono_release_download_25
-      - *chrono_release_download_29
+      - *chrono_release_download_15
+      - *chrono_release_download_23
+      - *chrono_release_download_27
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5012,8 +4712,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - *chrono_release_download_20
+      - *chrono_release_download_26
+      - *chrono_release_download_18
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5104,8 +4804,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - *chrono_release_download_25
+      - *chrono_release_download_26
+      - *chrono_release_download_23
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5196,13 +4896,13 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - *chrono_release_download_20
-      - *chrono_release_download_16
-      - *chrono_release_download_25
-      - *chrono_release_download_22
       - *chrono_release_download_26
+      - *chrono_release_download_18
+      - *chrono_release_download_15
+      - *chrono_release_download_23
+      - *chrono_release_download_20
       - *chrono_release_download_24
+      - *chrono_release_download_22
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5293,17 +4993,17 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - *chrono_release_download_16
-      - *chrono_release_download_25
-      - *chrono_release_download_22
       - *chrono_release_download_26
-      - *chrono_release_download_24
-      - *chrono_release_download_21
+      - *chrono_release_download_15
       - *chrono_release_download_23
+      - *chrono_release_download_20
+      - *chrono_release_download_24
+      - *chrono_release_download_22
+      - *chrono_release_download_19
+      - *chrono_release_download_21
+      - *chrono_release_download_25
+      - *chrono_release_download_17
       - *chrono_release_download_27
-      - *chrono_release_download_18
-      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5367,113 +5067,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: "diagnostics-chrono-release-macos-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: .chrono-harness/state/
-          if-no-files-found: error
-          include-hidden-files: true
-  macos_verify_judge_cargo_tests:
-    if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_judge_cargo"]
-    runs-on: "macos-26"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - *chrono_release_download_20
-      - *chrono_release_download_25
-      - *chrono_release_download_22
-      - *chrono_release_download_26
-      - *chrono_release_download_24
-      - *chrono_release_download_21
-      - *chrono_release_download_23
-      - *chrono_release_download_27
-      - &chrono_release_download_19
-        name: Download selected original artifact from macos_build_judge_cargo
-        if: ${{ always() && needs.macos_build_judge_cargo.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_cargo.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
-      - name: Prepare registered caches
-        id: chrono_cache_plan
-        shell: bash
-        run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
-          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_cargo_tests' --plan-output '.chrono-harness/state/cache/release.macos_verify_judge_cargo_tests/plan.json' --github-output "$GITHUB_OUTPUT"
-      - name: Restore registered cache release.macos.verify.judge-cargo-tests
-        id: cache_0_restore
-        continue-on-error: true
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
-          fail-on-cache-miss: false
-      - name: Recover failed cache restores
-        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_cargo_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
-      - name: Run registered release command
-        id: chrono_cache_work
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "macos_verify_judge_cargo_tests"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cargo_tests' '--unit' 'verify_judge_cargo_tests'
-      - name: Seal producer cache contents
-        id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_cargo_tests/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache release.macos.verify.judge-cargo-tests
-        id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-macos-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_judge_cargo_tests/"
-          if-no-files-found: error
-          include-hidden-files: true
-      - name: Preserve failed cache diagnostics
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "diagnostics-chrono-release-macos-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
@@ -5590,11 +5183,11 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - *chrono_release_download_25
-      - *chrono_release_download_22
       - *chrono_release_download_26
+      - *chrono_release_download_23
+      - *chrono_release_download_20
       - *chrono_release_download_24
+      - *chrono_release_download_22
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5774,10 +5367,10 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - *chrono_release_download_25
-      - *chrono_release_download_22
-      - *chrono_release_download_21
+      - *chrono_release_download_26
+      - *chrono_release_download_23
+      - *chrono_release_download_20
+      - *chrono_release_download_19
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5868,11 +5461,11 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
-      - *chrono_release_download_25
-      - *chrono_release_download_22
-      - *chrono_release_download_21
+      - *chrono_release_download_26
       - *chrono_release_download_23
+      - *chrono_release_download_20
+      - *chrono_release_download_19
+      - *chrono_release_download_21
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5941,7 +5534,7 @@ jobs:
           include-hidden-files: true
   macos_package:
     if: ${{ always() && github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_identifiers_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_judge_cargo_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_release_build_tests","macos_verify_release_build_integration","macos_verify_diagnostics_tests","macos_verify_host_bootstrap_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests"]
+    needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_release_build_tests","macos_verify_release_build_integration","macos_verify_diagnostics_tests","macos_verify_host_bootstrap_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5963,7 +5556,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_28
+      - *chrono_release_download_26
       - name: Download selected original artifact from macos_build_instructions
         if: ${{ always() && needs.macos_build_instructions.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -5971,19 +5564,18 @@ jobs:
           artifact-ids: ${{ needs.macos_build_instructions.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_instructions/"
-      - *chrono_release_download_20
-      - *chrono_release_download_16
-      - *chrono_release_download_25
-      - *chrono_release_download_22
-      - *chrono_release_download_26
-      - *chrono_release_download_24
-      - *chrono_release_download_21
-      - *chrono_release_download_23
-      - *chrono_release_download_27
       - *chrono_release_download_18
-      - *chrono_release_download_17
+      - *chrono_release_download_15
+      - *chrono_release_download_23
+      - *chrono_release_download_20
+      - *chrono_release_download_24
+      - *chrono_release_download_22
       - *chrono_release_download_19
-      - *chrono_release_download_29
+      - *chrono_release_download_21
+      - *chrono_release_download_25
+      - *chrono_release_download_17
+      - *chrono_release_download_16
+      - *chrono_release_download_27
       - name: Download selected original artifact from macos_verify_distribution_tests
         if: ${{ always() && needs.macos_verify_distribution_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -5998,13 +5590,6 @@ jobs:
           artifact-ids: ${{ needs.macos_verify_worktree_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_worktree_tests/"
-      - name: Download selected original artifact from macos_verify_identifiers_tests
-        if: ${{ always() && needs.macos_verify_identifiers_tests.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_verify_identifiers_tests.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/verify_identifiers_tests/"
       - name: Download selected original artifact from macos_verify_runner_tests
         if: ${{ always() && needs.macos_verify_runner_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -6054,13 +5639,6 @@ jobs:
           artifact-ids: ${{ needs.macos_verify_judge_workflow_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests/"
-      - name: Download selected original artifact from macos_verify_judge_cargo_tests
-        if: ${{ always() && needs.macos_verify_judge_cargo_tests.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_verify_judge_cargo_tests.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests/"
       - name: Download selected original artifact from macos_verify_instructions_tests
         if: ${{ always() && needs.macos_verify_instructions_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -6124,7 +5702,7 @@ jobs:
           artifact-ids: ${{ needs.macos_verify_host_bootstrap_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
-      - &chrono_release_download_15
+      - &chrono_release_download_14
         name: Download selected original artifact from macos_build_cache
         if: ${{ always() && needs.macos_build_cache.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -6327,8 +5905,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_17
-      - *chrono_release_download_15
+      - *chrono_release_download_16
+      - *chrono_release_download_14
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6550,8 +6128,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_14
       - *chrono_release_download_13
+      - *chrono_release_download_12
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6595,8 +6173,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_29
-      - *chrono_release_download_28
+      - *chrono_release_download_27
+      - *chrono_release_download_26
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6909,7 +6487,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_15
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -7142,89 +6720,5 @@ jobs:
         with:
           name: "chrono-release-macos-verify_host_bootstrap_launcher_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests/"
-          if-no-files-found: error
-          include-hidden-files: true
-  linux_verify_identifiers_tests:
-    if: ${{ github.event.deleted != true }}
-    runs-on: "ubuntu-24.04"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Run registered release command
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "linux_verify_identifiers_tests"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-linux-verify_identifiers_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_identifiers_tests/"
-          if-no-files-found: error
-          include-hidden-files: true
-  macos_verify_identifiers_tests:
-    if: ${{ github.event.deleted != true }}
-    runs-on: "macos-26"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Run registered release command
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "macos_verify_identifiers_tests"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-macos-verify_identifiers_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_identifiers_tests/"
           if-no-files-found: error
           include-hidden-files: true

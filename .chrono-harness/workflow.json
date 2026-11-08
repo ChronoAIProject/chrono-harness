@@ -184,21 +184,6 @@
       "reason": "Release identity, pinned installation, bootstrap and update rollback"
     },
     {
-      "id": "cargo-projects",
-      "paths": [
-        "crates/judge-cargo/Cargo.toml",
-        "crates/judge-cargo/Cargo.lock",
-        "crates/judge-cargo/src/lib.rs",
-        "crates/judge-cargo/src/main.rs",
-        "crates/judge-cargo/src/inputs.rs",
-        "crates/judge-cargo/src/guard.rs"
-      ],
-      "tests": [
-        "judge-cargo-tests"
-      ],
-      "reason": "Optional Cargo consistency; generic core has no language or directory semantics"
-    },
-    {
       "id": "worktree-creation",
       "paths": [
         "crates/worktree/Cargo.toml",
@@ -287,7 +272,6 @@
       "judge-workflow-tests",
       "inputs-tests",
       "distribution-tests",
-      "judge-cargo-tests",
       "worktree-tests",
       "workflow-units",
       "workflow-short",
@@ -360,6 +344,18 @@
       "id": "ci-native-adapter-tests",
       "replacement": "ci-tests",
       "reason": "原专属测试的纳秒时间边界、原始字节、工具解析、凭据省略、非零退出、超时和输出上限由 ci-tests 的 native Rust 测试覆盖；full-short 保留真实发布、获取、转交及汇总集成验证。"
+    },
+    {
+      "kind": "project",
+      "id": "judge-cargo",
+      "replacement": null,
+      "reason": "没有当前终端使用方；删除仅由自有合成测试调用的 Cargo 保护适配器。普通 Cargo 构建和通用输入完整性合同继续保留。"
+    },
+    {
+      "kind": "test",
+      "id": "judge-cargo-tests",
+      "replacement": null,
+      "reason": "与 judge-cargo 同时退役，其 guard／metadata 专属行为不再作为当前支持接口。保留其他项目的真实构建和未过滤行为测试；不宣称它们替代被删除的断言。"
     }
   ],
   "migrations": [],

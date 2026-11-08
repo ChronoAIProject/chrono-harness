@@ -117,20 +117,11 @@ pub enum Presence {
     Absent,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum Kind {
-    Dependencies,
-    Compilation,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Artifact {
     pub owner: String,
     pub path: String,
-    pub kind: Kind,
-    pub external: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -299,14 +290,9 @@ pub fn validate(c: &Config) -> Result<(), String> {
     for (id, artifact) in &c.artifacts {
         name(id)?;
         name(&artifact.owner)?;
-        if Path::new(&artifact.path).is_absolute() != artifact.external {
-            return Err(format!(
-                "E_CACHE_CONFIG: artifact {id} external/path disagreement"
-            ));
-        }
-        if artifact.external && artifact.kind != Kind::Dependencies {
-            return Err("E_CACHE_CONFIG: only explicitly external dependency caches may be outside the host".into());
-        }
+        chrono_harness::relative_path(&artifact.path).map_err(|e| {
+            format!("E_CACHE_PATH: artifact {id} must be relative to the host: {e}")
+        })?;
     }
     for (id, cache) in &c.caches {
         if cache.verify_contents && !c.recover_unconfirmed_restores {
@@ -625,30 +611,22 @@ fn prepare_with_inputs(
         let mut bindings = BTreeMap::new();
         for artifact_id in &cache.artifacts {
             let artifact = &c.artifacts[artifact_id];
-            if c.recover_failed_restores && artifact.external {
-                return Err(
-                    "E_CACHE_RECOVERY: external artifacts require their own lifecycle protection"
-                        .into(),
-                );
+            let found: Vec<_> = registered
+                .iter()
+                .filter(|row| row["path"] == artifact.path)
+                .collect();
+            if found.len() != 1
+                || found[0]["owner"] != artifact.owner
+                || found[0]["tracked"] != false
+                || found[0]["kind"] == "execution-evidence"
+            {
+                return Err(format!(
+                    "E_CACHE_ARTIFACT: {artifact_id} requires one matching untracked, nonevidence artifact registration"
+                ));
             }
-            if !artifact.external {
-                let found: Vec<_> = registered
-                    .iter()
-                    .filter(|row| row["path"] == artifact.path)
-                    .collect();
-                if found.len() != 1
-                    || found[0]["owner"] != artifact.owner
-                    || found[0]["tracked"] != false
-                    || found[0]["kind"] == "execution-evidence"
-                {
-                    return Err(format!(
-                        "E_CACHE_ARTIFACT: {artifact_id} requires one matching untracked, nonevidence artifact registration"
-                    ));
-                }
-                bindings.insert(artifact_id, found[0]);
-            }
+            bindings.insert(artifact_id, found[0]);
             let absolute = path(&root, &artifact.path)?;
-            if !absolute.starts_with(&root) && !artifact.external {
+            if !absolute.starts_with(&root) {
                 return Err("E_CACHE_PATH: host artifact escaped its root".into());
             }
             for protected in [root.join(".git"), root.join(".chrono-harness/state")] {

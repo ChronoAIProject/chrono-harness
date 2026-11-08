@@ -408,7 +408,7 @@ class ReleaseUnits(unittest.TestCase):
             covered.update(selected)
             owners.update({operation:owner for operation in selected})
         self.assertEqual(actual,covered)
-        original_operations={'test.'+name+'-tests' for name in ['distribution','worktree','runner','inputs','ci','judge-ci','judge-registration','judge-projects','judge-workflow','judge-cargo','instructions','judge-filemap','judge-routes','judge-cost','judge-mixed']}
+        original_operations={'test.'+name+'-tests' for name in ['distribution','worktree','runner','inputs','ci','judge-ci','judge-registration','judge-projects','judge-workflow','instructions','judge-filemap','judge-routes','judge-cost','judge-mixed']}
         self.assertTrue(original_operations <= actual)
         builds={u['id'] for u in cfg['units'] if u['kind']=='build'}
         self.assertEqual(set(cfg['verification_consumers']),{u['id'] for u in cfg['units'] if u['kind']=='verify'})
@@ -780,7 +780,7 @@ class CacheTransport(unittest.TestCase):
         put(root/config,{'schema':'chrono-cache/v2','namespace':'release-regression',
             'artifact_registry':cfg['consumer_staging']['host_config'],
             'inputs':{'profile':{'kind':'literal','value':'fixture'},'source':{'kind':'literal','value':'fixed-source'}},
-            'artifacts':{'target':{'owner':'cache-tests','path':'crates/cache-tests/target/','kind':'compilation','external':False}},
+            'artifacts':{'target':{'owner':'cache-tests','path':'crates/cache-tests/target/'}},
             'caches':{'tests':{'owner':'cache-tests','producer':'test.cache-tests','consumers':['release.verify'],
                 'artifacts':['target'],'compatibility_inputs':['profile'],'source_inputs':['source'],'restore':'compatible'}},
             'consumer_operations':{'release.verify':[{'registry':BUILD,'pointer':'/verification_operations'}]},
