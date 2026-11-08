@@ -177,9 +177,15 @@ fn full_oid_accepts_both_lengths_and_one_nonzero_digit() {
         reveal_strlit("0123456789abcdef0123456789abcdef01234567");
         reveal_strlit("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
         reveal_strlit("0000000000000000000000000000000000000001");
+        assert(vstd::string::is_ascii("0123456789abcdef0123456789abcdef01234567"));
+        assert(vstd::string::is_ascii("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+        assert(vstd::string::is_ascii("0000000000000000000000000000000000000001"));
         vstd::string::is_ascii_spec_bytes("0123456789abcdef0123456789abcdef01234567");
         vstd::string::is_ascii_spec_bytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
         vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000001");
+        assert("0123456789abcdef0123456789abcdef01234567".spec_bytes()[1] == 49);
+        assert("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".spec_bytes()[1] == 49);
+        assert("0000000000000000000000000000000000000001".spec_bytes()[39] == 49);
     }
     expect_full_oid_success("0123456789abcdef0123456789abcdef01234567");
     expect_full_oid_success("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
@@ -197,6 +203,14 @@ fn full_oid_rejects_zero_lengths_case_and_control_bytes_with_the_original_error(
         reveal_strlit("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa");
         reveal_strlit("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa");
         reveal_strlit("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa");
+        assert(vstd::string::is_ascii(""));
+        assert(vstd::string::is_ascii("0000000000000000000000000000000000000000"));
+        assert(vstd::string::is_ascii("0000000000000000000000000000000000000000000000000000000000000000"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa"));
         vstd::string::is_ascii_spec_bytes("");
         vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000");
         vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000000000000000000000000000");
@@ -205,6 +219,9 @@ fn full_oid_rejects_zero_lengths_case_and_control_bytes_with_the_original_error(
         vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa");
         vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa");
         vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa");
+        assert("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa".spec_bytes()[19] == 65);
+        assert("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa".spec_bytes()[19] == 0);
+        assert("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa".spec_bytes()[19] == 10);
     }
     expect_full_oid_rejection("");
     expect_full_oid_rejection("0000000000000000000000000000000000000000");
