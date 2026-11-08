@@ -18,6 +18,79 @@ use support::Fixture;
 const CONFIG: &str = ".chrono-harness/ci/shared.json";
 const TRANSFER: &str = ".chrono-harness/cache/startup";
 
+#[test]
+fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
+    let outside = tempfile::tempdir().unwrap();
+    let path = outside.path().join("bootstrap");
+    fs::create_dir(&path).unwrap();
+    let root = fs::canonicalize(path).unwrap();
+    fs::create_dir(root.join(".chrono-harness")).unwrap();
+    fs::write(
+        root.join(".chrono-harness/logging.json"),
+        serde_json::to_vec(&json!({
+            "schema":"chrono-runtime-logging/v1", "level":"info",
+            "directory":".chrono-harness/state/logs/", "max_bytes":16384,
+            "max_files":2, "stderr":false
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let host = root.to_str().unwrap();
+    for (args, operation) in [
+        (vec!["bootstrap", host, "missing.json"], "bootstrap"),
+        (vec![host, "missing.json"], "bootstrap"),
+        (vec!["bootstrap", "missing.json"], "bootstrap"),
+        (vec![host, "missing.json", "produce"], "produce"),
+        (vec!["bootstrap", "missing.json", "produce"], "produce"),
+        (
+            vec!["bootstrap", "missing.json", "verify", "core"],
+            "verify",
+        ),
+        (
+            vec!["validate-original-execution", host, "missing.json"],
+            "validate-original-execution",
+        ),
+    ] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
+        command
+            .args(args)
+            .current_dir(outside.path())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+        let child = command.spawn().unwrap();
+        let pid = child.id();
+        let output = child.wait_with_output().unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        assert!(
+            String::from_utf8(output.stderr)
+                .unwrap()
+                .starts_with("E_BOOTSTRAP:")
+        );
+        let rows: Vec<Value> =
+            fs::read_to_string(root.join(".chrono-harness/state/logs/runtime.jsonl"))
+                .expect("the positional host must receive native bootstrap logs")
+                .lines()
+                .map(|line| serde_json::from_str::<Value>(line).unwrap())
+                .filter(|row| row["context"]["pid"] == pid)
+                .collect();
+        assert_eq!(rows.len(), 3);
+        assert!(
+            rows.iter().all(|row| row["context"]["host_root"] == host
+                && row["context"]["operation"] == operation)
+        );
+        assert!(rows.iter().any(|row| row["event"] == "cli.started"));
+        assert!(rows.iter().any(|row| row["event"] == "cli.diagnostic"
+            && row["message"].as_str().unwrap().starts_with("E_BOOTSTRAP:")));
+        assert!(
+            rows.iter()
+                .any(|row| row["event"] == "cli.finished" && row["fields"]["exit_code"] == 1)
+        );
+    }
+    assert!(!outside.path().join(".chrono-harness").exists());
+}
+
 fn cli(root: &Path, environment: &Environment, args: &[&str]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
     command.current_dir(root).env_clear().envs(

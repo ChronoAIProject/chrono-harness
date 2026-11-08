@@ -201,76 +201,6 @@ fn capture_declared(
     Ok(snapshot)
 }
 
-/// Import genuine original base governance data and independently observe the
-/// current candidate. No historical judges or business probes are executed.
-pub fn capture_governance(
-    root: &Path,
-    config: &str,
-    base: &str,
-    candidate: &str,
-    manifest: &str,
-    output: &str,
-) -> Result<Value, String> {
-    state(root, output)?;
-    let reader = facts::Reader::for_config(root, config)?;
-    reader.verify_config(root, candidate)?;
-    for commit in [base, candidate] {
-        reader.verify_oid(root, commit)?;
-    }
-    if facts::utf8(reader.git(root, &["rev-parse", "HEAD"])?)?.trim() != candidate
-        || fs::read(no_symlink_parents(root, config)?).map_err(|e| e.to_string())?
-            != reader.blob(root, candidate, config)?
-    {
-        return Err(
-            "E_SNAPSHOT_IDENTITY: governance capture requires fixed current candidate/config"
-                .into(),
-        );
-    }
-    let old = Registrations::load(&reader.registry_values(root, base, config)?, config)?;
-    let new = Registrations::load(&reader.registry_values(root, candidate, config)?, config)?;
-    let parent = output.rsplit_once('/').ok_or("governance output parent")?.0;
-    let directory = format!("{parent}/blobs");
-    let (original, mut provenance) = composition::governance_base(
-        root, config, base, candidate, &old, &new, manifest, &directory,
-    )?;
-    let required =
-        chrono_judge_registration::inputs::required_plan_files(&new, Some(&Default::default()))?;
-    let current = capture_declared(
-        root,
-        config,
-        candidate,
-        &format!("{parent}/candidate-inputs.json"),
-        &new,
-        &required,
-        &directory,
-    )?;
-    for input in new.config()["environment"]["inputs"].as_array().unwrap() {
-        let id = input["id"].as_str().unwrap();
-        if !required.contains(id) {
-            continue;
-        }
-        let f = &current["files"][id];
-        if (f["absent"] == true && input["presence"] != "absent")
-            || (f["absent"] != true
-                && (input["presence"] == "absent" || f["sha256"] != input["sha256"]))
-        {
-            return Err(format!(
-                "E_GOVERNANCE_INPUT: candidate missing/drifted input {id}"
-            ));
-        }
-    }
-    publish(root, &format!("{parent}/base-inputs.json"), &original)?;
-    let pair = value!({"base":original,"candidate":current});
-    publish(root, output, &pair)?;
-    provenance["schema"] = value!("chrono-governance-capture-result/v1");
-    provenance["base"] = value!(base);
-    provenance["candidate"] = value!(candidate);
-    provenance["candidate_observation"] = value!({"path":format!("{parent}/candidate-inputs.json"),"sha256":wire::digest(&pair["candidate"])?});
-    provenance["output"] = value!({"path":output,"sha256":wire::digest(&pair)?});
-    publish(root, &format!("{output}.receipt.json"), &provenance)?;
-    Ok(pair)
-}
-
 fn transport(from: &Path, snapshot: &str, to: &Path) -> Result<Value, String> {
     let bytes = fs::read(state(from, snapshot)?).map_err(|e| e.to_string())?;
     let mut v = json(&bytes)?;
@@ -315,7 +245,7 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
         return Ok(format!("chrono-inputs {}\n", env!("CARGO_PKG_VERSION")));
     }
     if args == ["--help"] {
-        return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID] [--base OID --candidate OID]\nchrono-inputs capture-governance --host-root H --config P --base OID --candidate OID --manifest P --output P\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
+        return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID] [--base OID --candidate OID]\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
     }
     let command = args.first().ok_or("E_USAGE: capture or pair required")?;
     let allowed = match command.as_str() {
@@ -327,14 +257,6 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
             "--unit",
             "--base",
             "--candidate",
-        ],
-        "capture-governance" => vec![
-            "--manifest",
-            "--host-root",
-            "--config",
-            "--base",
-            "--candidate",
-            "--output",
         ],
         "compose" => vec![
             "--host-root",
@@ -394,15 +316,6 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
                 (Some(a), Some(b)) => Some((*a, *b)),
                 _ => return Err("E_USAGE: both endpoint OIDs required".into()),
             },
-        )?
-    } else if command == "capture-governance" {
-        capture_governance(
-            &root,
-            required("--config")?,
-            required("--base")?,
-            required("--candidate")?,
-            required("--manifest")?,
-            required("--output")?,
         )?
     } else if command == "compose" {
         compose(
