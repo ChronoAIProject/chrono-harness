@@ -96,7 +96,7 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 
 ## 当前未完成边界
 
-完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`。Cargo 专用判官及 guard 已因缺少当前使用方退役。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
+完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
 
 宿主 Git facts 采用 `chrono-git-configs/v3` 精确摘要选择；实际映射和固定数据路径归[选择器](../config.json)，工作树接受的主身份及补充身份归[工作树政策](../worktree.json)。版本预期和完整验收仍须实际 bound probe 验证，未知摘要仍在执行前拒绝。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不在本上下文复制运行号或摘要。
 

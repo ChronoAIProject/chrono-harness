@@ -1477,6 +1477,7 @@
       "test.host-bootstrap-launcher-tests": {"resources":[],"outputs":[]},
       "build.host-bootstrap-native": {
         "resources": [
+
         ],
         "outputs": [
           ".chrono-harness/cache/"
@@ -1484,12 +1485,15 @@
       },
       "fmt.host-bootstrap-native": {
         "resources": [
+
         ],
         "outputs": [
+
         ]
       },
       "verify.bootstrap-bindings": {
         "resources": [
+
         ],
         "outputs": [
           ".chrono-harness/state/"
@@ -1497,12 +1501,15 @@
       },
       "fmt.host-bootstrap-native-tests": {
         "resources": [
+
         ],
         "outputs": [
+
         ]
       },
       "verify.bootstrap-bindings-tests": {
         "resources": [
+
         ],
         "outputs": [
           ".chrono-harness/state/"
@@ -1510,6 +1517,7 @@
       },
       "test.host-bootstrap-native-tests": {
         "resources": [
+
         ],
         "outputs": [
           ".chrono-harness/cache/"

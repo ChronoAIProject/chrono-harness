@@ -780,7 +780,7 @@ class CacheTransport(unittest.TestCase):
         put(root/config,{'schema':'chrono-cache/v2','namespace':'release-regression',
             'artifact_registry':cfg['consumer_staging']['host_config'],
             'inputs':{'profile':{'kind':'literal','value':'fixture'},'source':{'kind':'literal','value':'fixed-source'}},
-            'artifacts':{'target':{'owner':'cache-tests','path':'crates/cache-tests/target/','kind':'compilation','external':False}},
+            'artifacts':{'target':{'owner':'cache-tests','path':'crates/cache-tests/target/'}},
             'caches':{'tests':{'owner':'cache-tests','producer':'test.cache-tests','consumers':['release.verify'],
                 'artifacts':['target'],'compatibility_inputs':['profile'],'source_inputs':['source'],'restore':'compatible'}},
             'consumer_operations':{'release.verify':[{'registry':BUILD,'pointer':'/verification_operations'}]},

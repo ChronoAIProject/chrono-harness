@@ -348,13 +348,13 @@
       "kind": "project",
       "id": "judge-cargo",
       "replacement": null,
-      "reason": "本仓 guard 采用已经退役，现役操作、七判官与已登记外部宿主均无调用；打包和专属测试不能成为独立用途。普通锁定 Cargo 操作继续由现有项目所有者负责。"
+      "reason": "没有当前终端使用方；删除仅由自有合成测试调用的 Cargo 保护适配器。普通 Cargo 构建和通用输入完整性合同继续保留。"
     },
     {
       "kind": "test",
       "id": "judge-cargo-tests",
       "replacement": null,
-      "reason": "与没有当前使用方的 Cargo 专用适配器共同退役；删除其专属构建、测试、缓存与发布前置，不减少其他项目的行为验收。"
+      "reason": "与 judge-cargo 同时退役，其 guard／metadata 专属行为不再作为当前支持接口。保留其他项目的真实构建和未过滤行为测试；不宣称它们替代被删除的断言。"
     }
   ],
   "migrations": [],

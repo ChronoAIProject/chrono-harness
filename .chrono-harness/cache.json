@@ -904,195 +904,131 @@
   "artifacts": {
     "ci.target": {
       "owner": "ci",
-      "path": "crates/ci/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/ci/target/"
     },
     "judge-ci.target": {
       "owner": "judge-ci",
-      "path": "crates/judge-ci/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-ci/target/"
     },
     "runner.target": {
       "owner": "runner",
-      "path": "crates/runner/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/runner/target/"
     },
     "worktree.target": {
       "owner": "worktree",
-      "path": "crates/worktree/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/worktree/target/"
     },
     "runner-tests.target": {
       "owner": "runner-tests",
-      "path": "crates/runner-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/runner-tests/target/"
     },
     "instructions.target": {
       "owner": "instructions",
-      "path": "crates/instructions/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/instructions/target/"
     },
     "instructions-tests.target": {
       "owner": "instructions-tests",
-      "path": "crates/instructions-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/instructions-tests/target/"
     },
     "judge-ci-tests.target": {
       "owner": "judge-ci-tests",
-      "path": "crates/judge-ci-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-ci-tests/target/"
     },
     "ci-tests.target": {
       "owner": "ci-tests",
-      "path": "crates/ci-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/ci-tests/target/"
     },
     "judge-registration.target": {
       "owner": "judge-registration",
-      "path": "crates/judge-registration/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-registration/target/"
     },
     "judge-registration-tests.target": {
       "owner": "judge-registration-tests",
-      "path": "crates/judge-registration-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-registration-tests/target/"
     },
     "judge-filemap.target": {
       "owner": "judge-filemap",
-      "path": "crates/judge-filemap/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-filemap/target/"
     },
     "judge-filemap-tests.target": {
       "owner": "judge-filemap-tests",
-      "path": "crates/judge-filemap-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-filemap-tests/target/"
     },
     "judge-projects.target": {
       "owner": "judge-projects",
-      "path": "crates/judge-projects/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-projects/target/"
     },
     "judge-routes.target": {
       "owner": "judge-routes",
-      "path": "crates/judge-routes/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-routes/target/"
     },
     "judge-routes-tests.target": {
       "owner": "judge-routes-tests",
-      "path": "crates/judge-routes-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-routes-tests/target/"
     },
     "judge-projects-tests.target": {
       "owner": "judge-projects-tests",
-      "path": "crates/judge-projects-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-projects-tests/target/"
     },
     "judge-cost.target": {
       "owner": "judge-cost",
-      "path": "crates/judge-cost/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-cost/target/"
     },
     "judge-cost-tests.target": {
       "owner": "judge-cost-tests",
-      "path": "crates/judge-cost-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-cost-tests/target/"
     },
     "judge-mixed.target": {
       "owner": "judge-mixed",
-      "path": "crates/judge-mixed/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-mixed/target/"
     },
     "judge-mixed-tests.target": {
       "owner": "judge-mixed-tests",
-      "path": "crates/judge-mixed-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-mixed-tests/target/"
     },
     "inputs.target": {
       "owner": "inputs",
-      "path": "crates/inputs/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/inputs/target/"
     },
     "judge-workflow.target": {
       "owner": "judge-workflow",
-      "path": "crates/judge-workflow/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-workflow/target/"
     },
     "judge-workflow-tests.target": {
       "owner": "judge-workflow-tests",
-      "path": "crates/judge-workflow-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/judge-workflow-tests/target/"
     },
     "inputs-tests.target": {
       "owner": "inputs-tests",
-      "path": "crates/inputs-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/inputs-tests/target/"
     },
     "distribution.target": {
       "owner": "distribution",
-      "path": "crates/distribution/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/distribution/target/"
     },
     "distribution-tests.target": {
       "owner": "distribution-tests",
-      "path": "crates/distribution-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/distribution-tests/target/"
     },
     "worktree-tests.target": {
       "owner": "worktree-tests",
-      "path": "crates/worktree-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/worktree-tests/target/"
     },
     "diagnostics.target": {
       "owner": "diagnostics",
-      "path": "crates/diagnostics/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/diagnostics/target/"
     },
     "diagnostics-tests.target": {
       "owner": "diagnostics-tests",
-      "path": "crates/diagnostics-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/diagnostics-tests/target/"
     },
     "cache.target": {
       "owner": "cache",
-      "path": "crates/cache/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/cache/target/"
     },
     "cache-tests.target": {
       "owner": "cache-tests",
-      "path": "crates/cache-tests/target/",
-      "kind": "compilation",
-      "external": false
+      "path": "crates/cache-tests/target/"
     }
   },
   "caches": {
