@@ -178,7 +178,6 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
         .iter()
         .find(|s| s["name"] == "Record original cache transport observations")
         .unwrap();
-    assert_eq!(report["env"]["GH_TOKEN"], "${{ github.token }}");
     assert!(
         report.get("continue-on-error").is_none(),
         "report production failure must fail the job"
@@ -186,7 +185,6 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
     assert!(
         steps
             .iter()
-            .filter(|s| s["name"] != "Record original cache transport observations")
             .all(|s| s["env"].get("GH_TOKEN").is_none())
     );
     assert_eq!(yaml.matches("Prepare registered caches").count(), 1);
