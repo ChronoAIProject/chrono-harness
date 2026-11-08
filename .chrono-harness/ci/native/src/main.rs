@@ -2,7 +2,7 @@
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
-    download, lifecycle, original, owner, profile, shared,
+    download, lifecycle, original, owner, profile, proved_build, shared,
 };
 use serde_json::json;
 use std::{path::Path, process::ExitCode};
@@ -89,6 +89,20 @@ fn run() -> Result<(), BuildFailure> {
     let environment = std::env::vars_os().collect();
     let native = bindings::native_platform()?;
     match arguments.as_slice() {
+        [command] if command == "--version" => {
+            println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
+        [command, host, config] if command == "compile" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            proved_build::build(
+                &root,
+                config,
+                &environment,
+                &mut std::io::stdout(),
+                &mut std::io::stderr(),
+            )
+        }
         [command, host, checksum, curl, headers, url] if command == "download" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             let archive =
@@ -158,7 +172,12 @@ fn main() -> ExitCode {
         [operation, host, _]
             if matches!(
                 operation.to_str(),
-                Some("bootstrap" | "construct-owner-stage" | "validate-original-execution")
+                Some(
+                    "bootstrap"
+                        | "construct-owner-stage"
+                        | "validate-original-execution"
+                        | "compile"
+                )
             ) =>
         {
             (Some(host), operation.to_str().unwrap())
