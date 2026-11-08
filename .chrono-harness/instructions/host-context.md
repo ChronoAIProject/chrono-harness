@@ -106,7 +106,7 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 
 完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
 
-宿主 Git facts 采用 `chrono-git-configs/v3` 精确摘要选择；实际映射和固定数据路径归[选择器](../config.json)，工作树接受的主身份及补充身份归[工作树政策](../worktree.json)。版本预期和完整验收仍须实际 bound probe 验证，未知摘要仍在执行前拒绝。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不在本上下文复制运行号或摘要。
+宿主 Git facts 仍采用 `chrono-git-configs/v3` 精确摘要选择，实际映射和固定数据路径归[选择器](../config.json)；未知摘要仍在该路径执行前拒绝，版本预期和完整验收仍须实际 bound probe 验证。[工作树政策](../worktree.json)采用 v2，不维护主机 Git 摘要／版本白名单：每次运行观察实际程序，后续命令绑定同一字节，观察归本轮 state 原件。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不在本上下文复制运行号或摘要。
 
 政策与产品同时变更时，候选决定实际执行程序。固定端点先按候选程序身份读取明确登记；端点未登记该身份时，只读取候选声明的 registry_path 和端点原字节，不启动历史 Git，也不猜其他路径。额外读取和完整验证成本未测。
 

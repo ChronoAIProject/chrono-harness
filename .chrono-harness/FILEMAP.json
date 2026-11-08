@@ -527,7 +527,9 @@
     {"path":"crates/worktree/src/verified_owner_publication.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"compile","to":"project:host-bootstrap-native"}]},
     {"path":"crates/worktree-tests/tests/verified_owner_publication.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
     {"path":"crates/cache/src/verified_planner.rs","owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache"},{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
-    {"path":"crates/cache-tests/tests/verified_planner.rs","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]}
+    {"path":"crates/cache-tests/tests/verified_planner.rs","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
+    {"path":"crates/worktree/src/verified_lifecycle.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]},
+    {"path":"crates/worktree-tests/tests/verified_lifecycle.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]}
   ],
   "project_edges": [
     {"from":"project:identifiers","kind":"compile","to":"project:runner"},
@@ -1358,6 +1360,8 @@
     },
     "test:worktree-tests": {
       "operations": [
+        "verify.worktree-lifecycle-tests",
+        "verify.worktree-lifecycle",
         "verify.owner-publication-tests",
         "verify.owner-publication",
         "fmt.worktree",
@@ -2105,6 +2109,8 @@
           ".chrono-harness/state/"
         ]
       },
+      "verify.worktree-lifecycle": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.worktree-lifecycle-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.owner-publication": {
         "resources": [],
         "outputs": [
