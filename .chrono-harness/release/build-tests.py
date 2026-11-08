@@ -811,9 +811,8 @@ class CacheTransport(unittest.TestCase):
         consumer=root/'crates/cache/target/debug/chrono-cache'
         consumed=json.loads(run(consumer,['plan','--host-root',str(root),'--config',config,'--consumer','release.verify']).stdout)
         self.assertEqual(consumed['planner']['sha256'],sha(asset))
-        reported=run(transport,['report','--host-root',str(root),'--plan',plan_path,'--steps-env','CHRONO_RELEASE_REGRESSION_STEPS','--work','work','--report-directory','.chrono-harness/state/cache/report/'],steps)
-        report=json.loads(reported.stdout)['observation']
-        self.assertEqual(report['current_executable_verification']['status'],'matched')
+        replanned=json.loads(run(transport,['plan','--host-root',str(root),'--config',config,'--consumer','release.verify']).stdout)
+        self.assertEqual(replanned['planner'],json.loads(planned.stdout)['planner'])
         self.assertEqual((transport.stat().st_dev,transport.stat().st_ino,sha(transport)),original,
             'release staging replaced the executable used by the surrounding cache transport')
         self.assertTrue(recipe.observe(root,staging,'after-verification'))

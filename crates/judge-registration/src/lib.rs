@@ -699,11 +699,11 @@ fn references(
     }
     if initial {
         for path in ct.keys() {
-            if !b.contains_key(path) {
+            if !b.contains_key(path.as_str()) {
                 issue(
                     r,
                     "E_UNREGISTERED",
-                    format!("initial file lacks registration: {path}"),
+                    format!("initial file lacks registration: {}", path.as_str()),
                     "/candidate/tree",
                     false,
                 );

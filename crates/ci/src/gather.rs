@@ -42,7 +42,6 @@ struct Transport<'a> {
     executable: String,
     digest: String,
     observations: Vec<Value>,
-    resources: Option<Value>,
     acquisition_path: Option<String>,
     downloads: Option<chrono_harness::retained_artifacts::retention::Publication>,
     acquisition: Option<AcquisitionBudget>,
@@ -72,10 +71,6 @@ impl<'a> Transport<'a> {
             acquisition_path: None,
             downloads: None,
             acquisition: None,
-            resources: c
-                .resource_observation
-                .as_ref()
-                .map(|_| super::resources::unavailable("jobs-response-not-acquired")),
         })
     }
 
@@ -411,14 +406,6 @@ fn parent_units(
         ),
         true,
     )?;
-    if let Some(config) = &c.gather.resource_observation {
-        let mut observed =
-            super::resources::observe(config, &pages, d.run_id, native.run_attempt, &d.event_head);
-        let index = transport.observations.len() - 1;
-        observed["source"] = json!({"process_index":index,
-            "stdout_sha256":transport.observations[index]["stdout_sha256"]});
-        transport.resources = Some(observed);
-    }
     let jobs: Vec<_> = pages
         .as_array()
         .ok_or("job pages missing")?
@@ -932,14 +919,6 @@ pub(super) fn gather(
         json!({"kind":"native-acquisition","result":result.as_ref().ok(),"error":result.as_ref().err(),"completion":"not-established"})
     )).transpose();
     let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"storage_error":storage_result.as_ref().err(),"processes":transport.observations});
-    if let Some(resources) = transport.resources {
-        report["resources"] = resources;
-        if let Some(summary) = c.gather.resource_observation.as_ref().and_then(|config| {
-            super::resources::publish_summary(config, &report["resources"], &c.gather.report_path)
-        }) {
-            report["resources"]["summary"] = summary;
-        }
-    }
     let gather_original = chrono_harness::prepared::retain_original(
         root,
         &format!("{}preparation/", c.collection.artifact_directory),

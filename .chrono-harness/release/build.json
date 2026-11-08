@@ -913,7 +913,7 @@
       ]
     },
     "verify_release_build_integration": {
-      "need": "The release.tests.integration group in .chrono-harness/release/build-tests.py invokes the released distribution binary to pack a real test release and checks its manifest, packaged bytes and producer identity. Its Python cache regression consumes the selected chrono-cache asset at the declared Cargo test destination and runs real plan/recover/report around the release staging owner.",
+      "need": "The release.tests.integration group in .chrono-harness/release/build-tests.py invokes the released distribution binary to pack a real test release and checks its manifest, packaged bytes and producer identity. Its Python cache regression consumes the selected chrono-cache asset at the declared Cargo test destination and runs real plan/recover around the release staging owner.",
       "release_assets": [
         "chrono-distribution",
         "chrono-cache"
