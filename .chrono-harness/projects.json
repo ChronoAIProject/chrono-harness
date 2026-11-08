@@ -2001,21 +2001,6 @@
             "crates/worktree-tests/Cargo.toml"
           ]
         },
-        "owner_deployment": {
-          "operation": "test.worktree.owner-deployment",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml",
-            "--test",
-            "creation",
-            "owner_deployment::",
-            "--",
-            "--test-threads=1"
-          ]
-        },
         "update_lockfile": {
           "operation": "lock.worktree-tests",
           "tool": "cargo",
@@ -2520,16 +2505,6 @@
             ".chrono-harness/ci/bootstrap-cache.json"
           ]
         },
-        "detector": {
-          "operation": "host.bootstrap-detector",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-detector.json"
-          ]
-        },
         "shared-produce": {
           "operation": "host.bootstrap-shared-produce",
           "tool": "python3",
@@ -2841,16 +2816,6 @@
             "aggregate"
           ]
         },
-        "owner-verify": {
-          "operation": "host.bootstrap-owner-verify",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-owner-verification.json"
-          ]
-        },
         "unit": {
           "operation": "host.bootstrap-unit",
           "tool": "python3",
@@ -2956,16 +2921,6 @@
           "argv": [
             "-B",
             ".chrono-harness/ci/provision_tests.py"
-          ]
-        },
-        "owner": {
-          "operation": "host.bootstrap-owner-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py",
-            "--lifecycle-program",
-            "crates/worktree/target/debug/chrono-worktree"
           ]
         }
       }

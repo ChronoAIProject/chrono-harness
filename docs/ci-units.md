@@ -135,19 +135,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 `detect` 为每个登记单元输出布尔值。单元 `needs: detect`，在 job 层 `if` 判断该值；无关 job 不分配 runner，也不 bootstrap 或准备 SDK。`aggregate` 使用 `if: always()`，依赖 detector 和全部单元。不生成工作流级 `paths`／`paths-ignore`，也不用 matrix fail-fast 联动单元失败。
 
-宿主增加以下可选 provider 块，自行登记工具获取：
-
-```json
-"job_gating": {
-  "schema": "chrono-job-gating/v1",
-  "detector": {
-    "runs_on": "macos-26",
-    "timeout_minutes": 45,
-    "bootstrap": ["/usr/bin/python3", ".chrono-harness/ci/bootstrap.py", ".", ".chrono-harness/ci/bootstrap-detector.json"],
-    "sparse_checkout": [".chrono-harness/", "crates/", "assets/", ".github/workflows/chrono-ci.yml", ".gitignore"]
-  }
-}
-```
+provider 的可选 `job_gating` 字段登记 detector 的平台、时限、bootstrap 和源码获取范围。本仓的当前声明见 [.chrono-harness/ci/units.json](../.chrono-harness/ci/units.json)，沿已登记的 Rust bootstrap 启动，不在本文维护第二份配方。
 
 此形式要求 collection provider v4。内部生成命令 `chrono-ci detect --host-root . --config SOURCE --github-output "$GITHUB_OUTPUT"` 自读事件及原生绑定，不加日常标志或手动准备。实际检查仍为 `chrono-harness check`、`check --unit ID`、`check --collect`。
 
