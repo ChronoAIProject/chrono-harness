@@ -48,6 +48,8 @@ checksum 由 `verified_sources.rs` 核对，最终二进制的原 dep-info 还�
 **源码与宿主政策同时修改：**runner 构建入口、启动顺序、当前构建配置、FILEMAP 和
 Rust mock／独立 Verus 根同步登记。生产判断复用 `verify.verus-result`，独立边界根为
 `verify.bootstrap-cargo-tests`；不增加版本、安装器、全局缓存索引或共享准入锁。
+macOS 的正式工具表也登记 `bootstrap-native`，由同一原生前端的 `--version` 提供版本观察；
+仅在 bootstrap 配方中给出路径不足以让普通检查消费该构建入口。
 每个原件的读取上限为 8 MiB；最终二进制只枚举登记 target 的 `debug/deps`，至多 4096 项，
 按明确前缀、合法指纹和实际二进制字节选择原件。这不是测试发现或选测规则。
 构建、存储、原生 CI 和完整生命周期成本以实际验收为准，未测部分保持未知。

@@ -578,6 +578,7 @@
     {"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:identifiers"},
     {"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:identifiers-tests"},
     {"from":"project:host-bootstrap-native","kind":"runtime-input","to":"script:host-bootstrap-launcher"},
+    {"from":"tool:bootstrap-native","kind":"runtime-input","to":"project:runner"},
     {"from":"script:host-bootstrap-launcher","kind":"runtime-input","to":"script:host-bootstrap"},
     {"from":"script:host-bootstrap-launcher","kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},
     {"from":"script:host-bootstrap-launcher","kind":"test-execution","to":"test:host-bootstrap-native-tests"},

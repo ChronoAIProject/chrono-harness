@@ -89,6 +89,10 @@ fn run() -> Result<(), BuildFailure> {
     let environment = std::env::vars_os().collect();
     let native = bindings::native_platform()?;
     match arguments.as_slice() {
+        [command] if command == "--version" => {
+            println!("chrono-host-bootstrap {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
         [command, host, config] if command == "compile" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             proved_build::build(
