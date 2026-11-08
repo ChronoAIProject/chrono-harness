@@ -1,8 +1,7 @@
 //! Rustup／Cargo／rustc 的真实进程接口夹具；不触及已安装 SDK。
 use serde_json::{Value, json};
 use std::{
-    env,
-    fs::{self, OpenOptions},
+    env, fs,
     io::Write,
     os::unix::fs::PermissionsExt,
     path::Path,
@@ -33,26 +32,6 @@ fn run() -> Result<u8, String> {
         serde_json::to_vec(&values).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
-    let mut selected = serde_json::Map::new();
-    for key in [
-        "RUSTUP_HOME",
-        "CARGO_HOME",
-        "HOME",
-        "TMPDIR",
-        "RUSTC",
-        "RUSTC_WRAPPER",
-        "RUSTC_WORKSPACE_WRAPPER",
-        "RUSTUP_TOOLCHAIN",
-    ] {
-        selected.insert(key.into(), env::var(key).map_or(Value::Null, Value::String));
-    }
-    let mut stream = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(root.join("environments.jsonl"))
-        .map_err(|e| e.to_string())?;
-    writeln!(stream, "{}", json!({"tool":name,"environment":selected}))
-        .map_err(|e| e.to_string())?;
     if name == "producer" {
         if let Ok(code) = env::var("CHRONO_TEST_PRODUCER_EXIT") {
             std::io::stdout()
@@ -99,28 +78,13 @@ fn run() -> Result<u8, String> {
                 "install",
                 "1.95.0",
                 "--profile",
-                "default",
-                "--no-self-update",
-            ] => {
-                if root.join("fail-install").exists() {
-                    return Ok(17);
-                }
-                if !root.join("no-default-cargo").exists() {
-                    fs::write(root.join("cargo-ready"), b"").map_err(|e| e.to_string())?;
-                }
-                if !root.join("no-default-fmt").exists() {
-                    fs::write(root.join("fmt-ready"), b"").map_err(|e| e.to_string())?;
-                }
-            }
-            [
-                "toolchain",
-                "install",
-                "1.95.0",
-                "--profile",
                 "minimal",
                 "--component",
                 "rustfmt",
             ] => {
+                if root.join("fail-install").exists() {
+                    return Ok(17);
+                }
                 fs::write(root.join("cargo-ready"), b"").map_err(|e| e.to_string())?;
                 fs::write(root.join("fmt-ready"), b"").map_err(|e| e.to_string())?;
             }

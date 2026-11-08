@@ -174,7 +174,6 @@ pub fn reuse_construction(
         "tool_bindings_registry",
         "host_environment",
         "environment",
-        "toolchain_provision",
     ] {
         if previous.get(field) != candidate.get(field) {
             return Err(format!("owner construction selection differs: {field}"));
