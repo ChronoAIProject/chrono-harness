@@ -128,6 +128,12 @@ fn git_inventory_row_boundaries() {
             && vstd::string::is_ascii("p\tq\r\n") && vstd::string::is_ascii("missing"));
         policy::ascii_separator_end_is("\t".spec_bytes(), 9, 0);
         policy::ascii_separator_end_is("m\tp\tq\r\n".spec_bytes(), 9, 1);
+        assert(policy::first_ascii_separator("\t".spec_bytes(), 9, 0));
+        assert("\t".spec_bytes().take(0) =~= "".spec_bytes());
+        assert("\t".spec_bytes().skip(1) =~= "".spec_bytes());
+        assert(policy::first_ascii_separator("m\tp\tq\r\n".spec_bytes(), 9, 1));
+        assert("m\tp\tq\r\n".spec_bytes().take(1) =~= "m".spec_bytes());
+        assert("m\tp\tq\r\n".spec_bytes().skip(2) =~= "p\tq\r\n".spec_bytes());
     }
     expect_inventory_row("\t", "", "");
     expect_inventory_row("m\tp\tq\r\n", "m", "p\tq\r\n");
@@ -138,6 +144,10 @@ fn git_inventory_row_boundaries() {
 fn expect_inventory_records(actual: &Vec<&str>, expected: &[&str])
     requires policy::inventory_record_views(actual@) == policy::inventory_record_views(expected@),
 {
+    proof {
+        assert(policy::inventory_record_views(actual@).len() == actual@.len());
+        assert(policy::inventory_record_views(expected@).len() == expected@.len());
+    }
     expect_identifier_true(actual.len() == expected.len());
     let mut i = 0usize;
     while i < actual.len()
@@ -145,6 +155,12 @@ fn expect_inventory_records(actual: &Vec<&str>, expected: &[&str])
             policy::inventory_record_views(actual@) == policy::inventory_record_views(expected@),
         decreases actual.len() - i,
     {
+        proof {
+            assert(policy::inventory_record_views(actual@)[i as int]
+                == actual@[i as int].spec_bytes());
+            assert(policy::inventory_record_views(expected@)[i as int]
+                == expected@[i as int].spec_bytes());
+        }
         let same = policy::equal_bytes(actual[i].as_bytes(), expected[i].as_bytes());
         expect_identifier_true(same);
         i += 1;
@@ -168,7 +184,24 @@ fn git_inventory_records_skip_empty_keep_order_repeats_and_control_bytes() {
         policy::ascii_separator_end_is(bytes.skip(4), 0, 5);
         policy::ascii_separator_end_is(bytes.skip(10), 0, 1);
         policy::ascii_separator_end_is(bytes.skip(12), 0, 0);
-        reveal_with_fuel(policy::ascii_split_records, 7);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 10, 2);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 4, 6);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 3, 1);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 1, 2);
+        reveal_with_fuel(policy::ascii_split_records, 1);
+        assert(policy::ascii_split_records(bytes.skip(12), 0, false) == Seq::<Seq<u8>>::empty());
+        assert(bytes.skip(10).take(1) =~= "a".spec_bytes());
+        assert(policy::ascii_split_records(bytes.skip(10), 0, false) == seq!["a".spec_bytes()]);
+        assert(bytes.skip(4).take(5) =~= "b\tc\r\n".spec_bytes());
+        assert(policy::ascii_split_records(bytes.skip(4), 0, false)
+            == seq!["b\tc\r\n".spec_bytes(), "a".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes.skip(3), 0, false)
+            == seq!["b\tc\r\n".spec_bytes(), "a".spec_bytes()]);
+        assert(bytes.skip(1).take(1) =~= "a".spec_bytes());
+        assert(policy::ascii_split_records(bytes.skip(1), 0, false)
+            == seq!["a".spec_bytes(), "b\tc\r\n".spec_bytes(), "a".spec_bytes()]);
+        assert(policy::inventory_record_views(expected@)
+            =~= seq!["a".spec_bytes(), "b\tc\r\n".spec_bytes(), "a".spec_bytes()]);
         assert(policy::ascii_split_records(bytes, 0, false)
             =~= policy::inventory_record_views(expected@));
     }
@@ -178,6 +211,7 @@ fn git_inventory_records_skip_empty_keep_order_repeats_and_control_bytes() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn git_inventory_records_empty_and_no_delimiter_boundaries() {
+    let empty: [&str; 0] = [];
     proof {
         reveal_strlit(""); reveal_strlit("\0\0"); reveal_strlit("last");
         broadcast use vstd::string::is_ascii_spec_bytes;
@@ -186,10 +220,22 @@ fn git_inventory_records_empty_and_no_delimiter_boundaries() {
         policy::ascii_separator_end_is("".spec_bytes(), 0, 0);
         policy::ascii_separator_end_is("\0\0".spec_bytes(), 0, 0);
         policy::ascii_separator_end_is("\0\0".spec_bytes().skip(1), 0, 0);
+        policy::ascii_separator_end_is("\0\0".spec_bytes().skip(2), 0, 0);
         policy::ascii_separator_end_is("last".spec_bytes(), 0, 4);
-        reveal_with_fuel(policy::ascii_split_records, 4);
+        vstd::seq_lib::lemma_seq_skip_of_skip("\0\0".spec_bytes(), 1, 1);
+        reveal_with_fuel(policy::ascii_split_records, 1);
+        assert(policy::ascii_split_records("".spec_bytes(), 0, false) == Seq::<Seq<u8>>::empty());
+        assert(policy::ascii_split_records("\0\0".spec_bytes().skip(2), 0, false)
+            == Seq::<Seq<u8>>::empty());
+        assert(policy::ascii_split_records("\0\0".spec_bytes().skip(1), 0, false)
+            == Seq::<Seq<u8>>::empty());
+        assert(policy::ascii_split_records("\0\0".spec_bytes(), 0, false)
+            == Seq::<Seq<u8>>::empty());
+        assert(policy::inventory_record_views(empty@) =~= Seq::<Seq<u8>>::empty());
+        assert("last".spec_bytes().take(4) =~= "last".spec_bytes());
+        assert(policy::ascii_split_records("last".spec_bytes(), 0, false)
+            == seq!["last".spec_bytes()]);
     }
-    let empty: [&str; 0] = [];
     expect_inventory_records(&policy::git_inventory_records(""), &empty);
     expect_inventory_records(&policy::git_inventory_records("\0\0"), &empty);
     expect_inventory_records(&policy::git_inventory_records("last"), &["last"]);
@@ -214,9 +260,31 @@ fn git_inventory_fields_keep_all_empty_fields_and_only_split_ascii_space() {
         policy::ascii_separator_end_is(bytes.skip(6), 32, 0);
         policy::ascii_separator_end_is("".spec_bytes(), 32, 0);
         policy::ascii_separator_end_is("a\tb\r\n".spec_bytes(), 32, 5);
-        reveal_with_fuel(policy::ascii_split_records, 6);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 4, 2);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 3, 1);
+        vstd::seq_lib::lemma_seq_skip_of_skip(bytes, 1, 2);
+        reveal_with_fuel(policy::ascii_split_records, 1);
+        assert(bytes.take(0) =~= "".spec_bytes());
+        assert(bytes.skip(3).take(0) =~= "".spec_bytes());
+        assert(bytes.skip(6).take(0) =~= "".spec_bytes());
+        assert(bytes.skip(4).take(1) =~= "b".spec_bytes());
+        assert(bytes.skip(1).take(1) =~= "a".spec_bytes());
+        assert(policy::ascii_split_records(bytes.skip(6), 32, true) == seq!["".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes.skip(4), 32, true)
+            == seq!["b".spec_bytes(), "".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes.skip(3), 32, true)
+            == seq!["".spec_bytes(), "b".spec_bytes(), "".spec_bytes()]);
+        assert(policy::ascii_split_records(bytes.skip(1), 32, true)
+            == seq!["a".spec_bytes(), "".spec_bytes(), "b".spec_bytes(), "".spec_bytes()]);
+        assert(policy::inventory_record_views(expected@)
+            =~= seq!["".spec_bytes(), "a".spec_bytes(), "".spec_bytes(), "b".spec_bytes(), "".spec_bytes()]);
         assert(policy::ascii_split_records(bytes, 32, true)
             =~= policy::inventory_record_views(expected@));
+        assert("".spec_bytes().take(0) =~= "".spec_bytes());
+        assert(policy::ascii_split_records("".spec_bytes(), 32, true) == seq!["".spec_bytes()]);
+        assert("a\tb\r\n".spec_bytes().take(5) =~= "a\tb\r\n".spec_bytes());
+        assert(policy::ascii_split_records("a\tb\r\n".spec_bytes(), 32, true)
+            == seq!["a\tb\r\n".spec_bytes()]);
     }
     expect_inventory_records(&policy::git_inventory_fields(raw), &expected);
     expect_inventory_records(&policy::git_inventory_fields(""), &[""]);
@@ -252,7 +320,25 @@ fn git_inventory_splitting_keeps_complete_multibyte_utf8() {
         policy::ascii_separator_end_is("é\té\t".spec_bytes(), 9, 2);
         policy::ascii_separator_end_is("é é".spec_bytes(), 32, 2);
         policy::ascii_separator_end_is("é é".spec_bytes().skip(3), 32, 2);
-        reveal_with_fuel(policy::ascii_split_records, 4);
+        vstd::seq_lib::lemma_seq_skip_of_skip(raw.spec_bytes(), 3, 3);
+        reveal_with_fuel(policy::ascii_split_records, 1);
+        assert(policy::ascii_split_records(raw.spec_bytes().skip(6), 0, false)
+            == Seq::<Seq<u8>>::empty());
+        assert(raw.spec_bytes().skip(3).take(2) =~= "é".spec_bytes());
+        assert(policy::ascii_split_records(raw.spec_bytes().skip(3), 0, false)
+            == seq!["é".spec_bytes()]);
+        assert(raw.spec_bytes().take(2) =~= "é".spec_bytes());
+        assert(policy::ascii_split_records(raw.spec_bytes(), 0, false)
+            == seq!["é".spec_bytes(), "é".spec_bytes()]);
+        assert("é".spec_bytes().take(2) =~= "é".spec_bytes());
+        assert(policy::ascii_split_records("é".spec_bytes(), 32, true) == seq!["é".spec_bytes()]);
+        assert("é é".spec_bytes().skip(3) =~= "é".spec_bytes());
+        assert("é é".spec_bytes().take(2) =~= "é".spec_bytes());
+        assert(policy::ascii_split_records("é é".spec_bytes(), 32, true)
+            == seq!["é".spec_bytes(), "é".spec_bytes()]);
+        assert(policy::first_ascii_separator("é\té\t".spec_bytes(), 9, 2));
+        assert("é\té\t".spec_bytes().take(2) =~= "é".spec_bytes());
+        assert("é\té\t".spec_bytes().skip(3) =~= "é\t".spec_bytes());
     }
     expect_inventory_records(&policy::git_inventory_records(raw), &["é", "é"]);
     expect_inventory_records(&policy::git_inventory_fields("é"), &["é"]);
