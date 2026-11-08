@@ -60,7 +60,9 @@
       "crates/diagnostics-tests/target/",
       "crates/cache/target/",
       "crates/cache-tests/target/",
-      ".chrono-harness/startup/"
+      ".chrono-harness/startup/",
+      "crates/pr/target/",
+      "crates/pr-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -170,7 +172,8 @@
       },
       "worktree": {
         "tests": [
-          "test:worktree-tests"
+          "test:worktree-tests",
+          "test:pr-tests"
         ],
         "report_path": ".chrono-harness/state/units/worktree/check.json"
       },
@@ -386,7 +389,7 @@
           },
           "evidence": {
             "test": "test:host-bootstrap-tests",
-            "operation": "host.bootstrap-real-consumer"
+            "operation": "host.bootstrap-command-tests"
           },
           "preparation": {
             "operation": "host.bootstrap-unit",

@@ -43,6 +43,23 @@ class EnvironmentSelection(unittest.TestCase):
                     bootstrap.toolchain_environment(dict(self.config, environment=values), self.root)
                 run.assert_not_called()
 
+    def test_host_home_rebinding_preserves_the_selected_rustup_installation(self):
+        config = {"host_environment": {"HOME": ".chrono-harness/cache/private-home",
+                                      "CARGO_HOME": ".chrono-harness/cache/private-cargo"}}
+        for inherited, expected in [({"HOME": "/worker"}, "/worker/.rustup"),
+                                    ({"HOME": "/worker", "RUSTUP_HOME": "/sdk/rustup"}, "/sdk/rustup")]:
+            with self.subTest(inherited=inherited), mock.patch.dict(os.environ, inherited, clear=True):
+                original = dict(os.environ)
+                env = bootstrap.provision_environment(self.root, config)
+                self.assertEqual(env["RUSTUP_HOME"], expected)
+                self.assertEqual(env["HOME"], str(self.root / config["host_environment"]["HOME"]))
+                self.assertEqual(env["CARGO_HOME"], str(self.root / config["host_environment"]["CARGO_HOME"]))
+                self.assertEqual(dict(os.environ), original)
+                self.assertFalse((self.root / ".chrono-harness").exists())
+        with mock.patch.dict(os.environ, {"HOME": "/worker"}, clear=True):
+            explicit = dict(config, environment={"RUSTUP_HOME": "/selected/rustup"})
+            self.assertEqual(bootstrap.provision_environment(self.root, explicit)["RUSTUP_HOME"], "/selected/rustup")
+
     def test_entry_preserves_the_minimal_installers_nonzero_exit(self):
         ci = self.root / ".chrono-harness/ci"
         ci.mkdir(parents=True)
@@ -157,8 +174,7 @@ class NativeCargoDomains(unittest.TestCase):
                 observed = json.loads((self.root / result["stdout"]["path"]).read_bytes())
                 self.assertEqual(observed["cargo_home"], "/Users/runner/.cargo")
                 self.assertFalse(observed["offline"])
-        # The terminal managed originals identify this same ordinary cache
-        # prerequisite inside RealFixtureStartup; retain its registered profile.
+        # The detector prepares this cache tooling profile before core bootstrap.
         cache = json.loads((SOURCE / "bootstrap-cache.json").read_text())
         self.assertEqual(cache["operations"], ["build.cache"])
         child_environment = self.selected_environment(cache.get("environment", {}), environment,

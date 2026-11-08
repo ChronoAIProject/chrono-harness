@@ -76,9 +76,12 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 .chrono-harness/bin/chrono-worktree use --operation <已登记操作> --path <工作树>
 .chrono-harness/bin/chrono-worktree finish --path <工作树>
 .chrono-harness/bin/chrono-worktree maintain
+.chrono-harness/bin/chrono-worktree status
 ```
 
 执行登记操作时，必须持有 use 保护。调用方等待全部自有任务和后台任务，核对实际完成及落地后，从仍存活的协调宿主执行 finish；maintain 负责独立重试。创建、重建、导入旧 checkout 和显式政策 migrate，按[工作树说明](../../docs/worktree.md)执行；Git／GitHub 交付沿用上文的自动交付授权。
+
+AI 开始和交接本仓工作时运行 status，关注本地未终结、未知及清理保留事项；按原件解决待办并保全提交。普通生命周期命令的 `W_WORKTREE_ATTENTION` 是同一账本的提醒，非零状态和原始失败仍须单独核对；提醒不证明完成，也不授予删除权。详见[本地状态与 AI 提醒](../../docs/worktree.md#本地状态与-ai-提醒)。
 
 本宿主在 worktree.json／cleanup.json 中采用 automatic_cleanup/v2。协调锚是 Git owner inventory 的 main worktree，状态位于 `.chrono-harness/state/automatic-cleanup-v2/`。start／reconstruct 自动登记，只维护目标记录；本宿主采用的 bootstrap／check 委托同一负责方，不扫描无关工作树或输出。跨对象清理走显式 maintain。
 

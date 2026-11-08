@@ -821,7 +821,12 @@ impl Inventory {
             ..Ledger::default()
         };
         for record in objects.values() {
-            if record.policy_sha256 != policy_digest {
+            // Ordinary reads pass the current digest. Explicit migration may
+            // also encounter current records from an independent publication
+            // or an interrupted migration; an unknown third binding still fails.
+            if record.policy_sha256 != policy_digest
+                && record.policy_sha256 != sha256(&self.policy_bytes)
+            {
                 return Err(
                     "retention policy migration required; original record preserved".into(),
                 );
