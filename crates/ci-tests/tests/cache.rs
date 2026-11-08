@@ -182,11 +182,7 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
         report.get("continue-on-error").is_none(),
         "report production failure must fail the job"
     );
-    assert!(
-        steps
-            .iter()
-            .all(|s| s["env"].get("GH_TOKEN").is_none())
-    );
+    assert!(steps.iter().all(|s| s["env"].get("GH_TOKEN").is_none()));
     assert_eq!(yaml.matches("Prepare registered caches").count(), 1);
     assert_eq!(yaml.matches("Save registered cache").count(), 2);
 }
