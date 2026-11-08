@@ -39,9 +39,7 @@ fn publish(root: &Path, path: &str, v: &Value) -> Result<(), String> {
     Ok(())
 }
 fn store(root: &Path, input: &Path) -> Result<Value, String> {
-    store_at(root, input, ".chrono-harness/state/inputs/blobs")
-}
-fn store_at(root: &Path, input: &Path, directory: &str) -> Result<Value, String> {
+    let directory = ".chrono-harness/state/inputs/blobs";
     let dir = state(root, directory)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if !fs::metadata(input)
@@ -88,16 +86,6 @@ pub fn capture_selected(
     output: &str,
     selection: &chrono_harness::prepared::Selection,
 ) -> Result<Value, String> {
-    capture_projected(root, config, commit, output, selection, None)
-}
-pub fn capture_projected(
-    root: &Path,
-    config: &str,
-    commit: &str,
-    output: &str,
-    selection: &chrono_harness::prepared::Selection,
-    endpoints: Option<(&str, &str)>,
-) -> Result<Value, String> {
     use chrono_harness::{prepared::Selection, units::Scope};
     let scope = match selection {
         Selection::All => None,
@@ -117,40 +105,7 @@ pub fn capture_projected(
     }
     let values = reader.registry_values(root, commit, config)?;
     let r = Registrations::load(&values, config)?;
-    let required = if let Some((base, candidate)) = endpoints {
-        if commit != base && commit != candidate {
-            return Err("E_INPUT_ENDPOINT: capture commit outside declared pair".into());
-        }
-        let old = Registrations::load(&reader.registry_values(root, base, config)?, config)?;
-        let new = Registrations::load(&reader.registry_values(root, candidate, config)?, config)?;
-        chrono_judge_registration::inputs::endpoint_required_files(
-            if commit == base { "base" } else { "candidate" },
-            &old,
-            &new,
-            scope.as_ref(),
-        )?
-    } else {
-        chrono_judge_registration::inputs::required_files(&r, scope.as_ref())?
-    };
-    capture_declared(
-        root,
-        config,
-        commit,
-        output,
-        &r,
-        &required,
-        ".chrono-harness/state/inputs/blobs",
-    )
-}
-fn capture_declared(
-    root: &Path,
-    config: &str,
-    commit: &str,
-    output: &str,
-    r: &Registrations,
-    required: &std::collections::BTreeSet<String>,
-    directory: &str,
-) -> Result<Value, String> {
+    let required = chrono_judge_registration::inputs::required_files(&r, scope.as_ref())?;
     let credentials = if r.config()["schema_version"] == 4 {
         chrono_harness::prepared::credential_environment(r.config())?
     } else {
@@ -180,7 +135,7 @@ fn capture_declared(
             match observe_file(&path)? {
                 None => value!({"absent":true}),
                 Some(identity) => {
-                    let observed = store_at(root, &path, directory)?;
+                    let observed = store(root, &path)?;
                     if observed["sha256"] != identity.0 || observed["length"] != identity.1 {
                         return Err("E_INPUT_READ: input changed during capture".into());
                     }
@@ -188,7 +143,7 @@ fn capture_declared(
                 }
             }
         } else {
-            store_at(root, &path, directory)?
+            store(root, &path)?
         };
         files.insert(input["id"].as_str().unwrap().into(), retained);
     }
@@ -245,7 +200,7 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
         return Ok(format!("chrono-inputs {}\n", env!("CARGO_PKG_VERSION")));
     }
     if args == ["--help"] {
-        return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID] [--base OID --candidate OID]\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
+        return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID]\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
     }
     let command = args.first().ok_or("E_USAGE: capture or pair required")?;
     let allowed = match command.as_str() {
@@ -255,8 +210,6 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
             "--commit",
             "--output",
             "--unit",
-            "--base",
-            "--candidate",
         ],
         "compose" => vec![
             "--host-root",
@@ -299,7 +252,7 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
     };
     let root = fs::canonicalize(cwd.join(required("--host-root")?)).map_err(|e| e.to_string())?;
     let result = if command == "capture" {
-        capture_projected(
+        capture_selected(
             &root,
             required("--config")?,
             required("--commit")?,
@@ -311,11 +264,6 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
                         unit: (*unit).into(),
                     }
                 }),
-            match (options.get("--base"), options.get("--candidate")) {
-                (None, None) => None,
-                (Some(a), Some(b)) => Some((*a, *b)),
-                _ => return Err("E_USAGE: both endpoint OIDs required".into()),
-            },
         )?
     } else if command == "compose" {
         compose(
