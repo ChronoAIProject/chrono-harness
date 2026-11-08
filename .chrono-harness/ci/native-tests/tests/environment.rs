@@ -55,9 +55,6 @@ impl Fixture {
     fn bytes(&self) -> Vec<u8> {
         serde_json::to_vec(&self.config).unwrap()
     }
-    fn private(&mut self) {
-        self.config["toolchain_provision"] = json!({"profile":"default", "rustup_home":".chrono-harness/state/private/rustup", "cargo_home":".chrono-harness/state/private/cargo"});
-    }
     fn select(&self) -> Result<environment::Selected, Failure> {
         environment::select(
             &self.root,
@@ -73,55 +70,6 @@ impl Fixture {
     }
     fn call(words: &[&str]) -> Vec<String> {
         words.iter().map(|word| (*word).into()).collect()
-    }
-}
-
-#[test]
-fn private_default_profile_uses_selected_homes_for_every_child_and_binds_the_compiler() {
-    let mut fixture = Fixture::new();
-    fixture.private();
-    fixture
-        .inherited
-        .insert("RUSTC".into(), "/retired/compiler".into());
-    let before = fixture.inherited.clone();
-    let selected = fixture.select().unwrap();
-    assert_eq!(fixture.inherited, before);
-    assert_eq!(
-        fixture.calls()[0],
-        Fixture::call(&[
-            "rustup",
-            "toolchain",
-            "install",
-            "1.95.0",
-            "--profile",
-            "default",
-            "--no-self-update"
-        ])
-    );
-    assert_eq!(
-        selected.environment.get(OsStr::new("RUSTC")).unwrap(),
-        fixture.tools.join("rustc").as_os_str()
-    );
-    assert_eq!(selected.versions.rustc, "rustc 1.95.0 (fixture)");
-    let traces = fs::read_to_string(fixture.tools.join("environments.jsonl")).unwrap();
-    for line in traces.lines() {
-        let trace: Value = serde_json::from_str(line).unwrap();
-        assert_eq!(
-            trace["environment"]["RUSTUP_HOME"],
-            fixture
-                .root
-                .join(".chrono-harness/state/private/rustup")
-                .to_str()
-                .unwrap()
-        );
-        assert_eq!(
-            trace["environment"]["CARGO_HOME"],
-            fixture
-                .root
-                .join(".chrono-harness/state/private/cargo")
-                .to_str()
-                .unwrap()
-        );
     }
 }
 
@@ -158,43 +106,18 @@ fn ordinary_selection_installs_minimal_with_rustfmt_and_preserves_installer_exit
             .unwrap(),
         "never"
     );
-    let mut failure = Fixture::new();
-    failure.private();
+    let failure = Fixture::new();
     fs::write(failure.tools.join("fail-install"), b"").unwrap();
     match failure.select().unwrap_err() {
         Failure::Installer(status) => assert_eq!(status.code(), Some(17)),
         other => panic!("unexpected failure: {other:?}"),
     }
-    assert_eq!(failure.calls().len(), 1);
+    assert_eq!(failure.calls().len(), 2);
 }
 
 #[test]
-fn private_probe_failure_never_falls_back_to_another_profile_or_selects_tools() {
-    for (marker, count) in [("no-default-cargo", 2), ("no-default-fmt", 3)] {
-        let mut fixture = Fixture::new();
-        fixture.private();
-        fs::write(fixture.tools.join(marker), b"").unwrap();
-        assert!(
-            fixture
-                .select()
-                .unwrap_err()
-                .to_string()
-                .contains("probe failed")
-        );
-        assert_eq!(fixture.calls().len(), count);
-        assert!(
-            !fixture
-                .calls()
-                .iter()
-                .any(|call| call.get(1).map(String::as_str) == Some("which"))
-        );
-    }
-}
-
-#[test]
-fn preparation_rejects_invalid_or_overlapping_declarations_before_process_or_directory_effects() {
+fn preparation_rejects_invalid_or_conflicting_environment_before_process_or_directory_effects() {
     let mut fixture = Fixture::new();
-    fixture.private();
     fixture.config["host_environment"] = json!({"HOME":".chrono-harness/cache/home"});
     let prepared = Prepared::parse(&fixture.root, &fixture.bytes(), &fixture.inherited).unwrap();
     assert_eq!(
@@ -212,10 +135,6 @@ fn preparation_rejects_invalid_or_overlapping_declarations_before_process_or_dir
         json!({"host_environment":{"PATH":".chrono-harness/cache/path"}}),
         json!({"host_environment":{"HOME":".chrono-harness/cache/../elsewhere"}}),
         json!({"host_environment":{"HOME":".chrono-harness/cache//home"}}),
-        json!({"toolchain_provision":{"profile":"minimal","rustup_home":".chrono-harness/state/r","cargo_home":".chrono-harness/state/c"}}),
-        json!({"toolchain_provision":{"profile":{"default":null},"rustup_home":".chrono-harness/state/r","cargo_home":".chrono-harness/state/c"}}),
-        json!({"toolchain_provision":{"profile":"default","rustup_home":".chrono-harness/state/r","cargo_home":".chrono-harness/state/r/c"}}),
-        json!({"toolchain_provision":{"profile":"default","rustup_home":".chrono-harness/state/r","cargo_home":".chrono-harness/state/r"}}),
         json!({"rust_incremental":"false"}),
     ] {
         fixture.config = original.clone();
