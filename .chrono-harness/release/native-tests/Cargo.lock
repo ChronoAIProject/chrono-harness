@@ -74,6 +74,8 @@ version = "0.1.0"
 dependencies = [
  "chrono-harness",
  "chrono-identifiers",
+ "chrono-judge-registration",
+ "serde",
  "serde_json",
  "tar",
  "tempfile",
@@ -98,6 +100,16 @@ name = "chrono-identifiers"
 version = "0.1.0"
 dependencies = [
  "verus_builtin_macros",
+]
+
+[[package]]
+name = "chrono-judge-registration"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "serde",
+ "serde_json",
+ "time",
 ]
 
 [[package]]
