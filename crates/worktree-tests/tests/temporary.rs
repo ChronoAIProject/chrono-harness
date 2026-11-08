@@ -1339,7 +1339,11 @@ fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams
         json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap(),
         report
     );
-    assert!(fs::read(capture.join("stderr.bytes")).unwrap().is_empty());
+    assert!(error.contains("W_WORKTREE_AGENT_SCOPE"), "{error}");
+    assert_eq!(
+        fs::read(capture.join("stderr.bytes")).unwrap(),
+        error.as_bytes()
+    );
     let joined = json(&fs::read(capture.join("result.json")).unwrap()).unwrap();
     assert_eq!(joined["exit_code"], 2);
     assert_eq!(joined["joined"], true);

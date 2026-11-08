@@ -454,6 +454,7 @@
     "inherit": [
       "PATH",
       "HOME",
+      "HECA_AGENT_ID",
       "CARGO_HOME",
       "RUSTUP_HOME",
       "RUSTUP_TOOLCHAIN",
@@ -522,6 +523,14 @@
           "environment:RUSTC_WRAPPER",
           "environment:RUSTC_WORKSPACE_WRAPPER",
           "input:bootstrap-native-toolchains"
+        ]
+      },
+      {
+        "id": "worktree-agent-identity",
+        "consumer": "project:worktree",
+        "kind": "declared-worktree-agent-identity",
+        "inputs": [
+          "environment:HECA_AGENT_ID"
         ]
       }
     ]

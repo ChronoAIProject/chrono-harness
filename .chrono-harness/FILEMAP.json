@@ -1052,6 +1052,7 @@
     {"from":"project:diagnostics","kind":"compile","to":"project:judge-projects-tests"},
     {"from":"project:diagnostics","kind":"compile","to":"project:judge-ci-tests"},
     {"from":"environment:CHRONO_CHECK_SOURCE","kind":"runtime-input","to":"project:runner"},
+    {"from":"environment:HECA_AGENT_ID","kind":"runtime-input","to":"project:worktree"},
     {"from":"environment:CHRONO_CI_DETECTION","kind":"runtime-input","to":"project:ci"},
     {"from":"environment:CHRONO_CI_NEEDS","kind":"runtime-input","to":"project:ci"},
     {"from":"environment:CHRONO_WORKFLOW_REVISION","kind":"runtime-input","to":"project:ci"},

@@ -150,6 +150,8 @@ fn original_bytes(root: &Path, path: &str) -> Result<Option<Vec<u8>>, String> {
 #[serde(deny_unknown_fields)]
 struct Intent {
     schema: String,
+    #[serde(default)]
+    creator_agent: Option<crate::AgentIdentity>,
     operation: String,
     source_root: String,
     source_commit: String,
@@ -200,6 +202,11 @@ pub(crate) fn publish_fields(
             .filter(|s| !s.is_empty())
             .ok_or_else(|| format!("recovery intent lacks {field}"))?;
         intent[field] = value!(text);
+    }
+    if schema == "chrono-worktree-recovery-intent/v1"
+        && matches!(report["operation"].as_str(), Some("start" | "reconstruct"))
+    {
+        intent["creator_agent"] = value!(crate::AgentIdentity::from_report(report)?);
     }
     let path = format!("{}{suffix}", intent["report_path"].as_str().unwrap());
     let target = state_path(root, &path)?;
@@ -280,6 +287,10 @@ pub(crate) fn inspect(
     let intent: Intent = decode(&bytes)?;
     let config: crate::Config = decode(config_bytes)?;
     if intent.schema != "chrono-worktree-recovery-intent/v1"
+        || intent
+            .creator_agent
+            .as_ref()
+            .is_some_and(|agent| !agent.valid())
         || !matches!(
             intent.operation.as_str(),
             "start" | "reconstruct" | "cleanup"
