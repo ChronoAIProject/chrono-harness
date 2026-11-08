@@ -651,7 +651,8 @@ fn owner_stage_refuses_marker_without_descriptors() {
 }
 
 #[test]
-fn selected_owner_qualifies_its_real_ordinary_producer_and_rejects_changed_installation() {
+fn selected_owner_qualifies_its_fixed_ordinary_producer_after_source_changes_and_rejects_substitution()
+ {
     let fixture = Fixture::new();
     let mut construction = fixture.committed();
     construction
@@ -664,6 +665,13 @@ fn selected_owner_qualifies_its_real_ordinary_producer_and_rejects_changed_insta
         .unwrap();
     let result = construction.finish(Ok(())).unwrap();
     assert!(result.outcome.is_ok());
+    let original: Value = serde_json::from_slice(&fs::read(&result.original).unwrap()).unwrap();
+    fs::write(fixture.root.join("later-source"), b"later candidate\n").unwrap();
+    fixture.commit();
+    assert_ne!(
+        chrono_host_bootstrap::source::observe(&fixture.root, &fixture.environment).commit,
+        original["source"]["commit"].as_str().map(str::to_owned)
+    );
     let native = chrono_host_bootstrap::bindings::NativePlatform {
         system: "fixture".into(),
         machine: "native".into(),
@@ -678,13 +686,43 @@ fn selected_owner_qualifies_its_real_ordinary_producer_and_rejects_changed_insta
     .unwrap();
     assert_eq!(
         qualification.sha256,
-        chrono_harness::sha256(&fs::read(result.original).unwrap())
+        chrono_harness::sha256(&fs::read(&result.original).unwrap())
     );
+    assert_eq!(qualification.source.commit, original["source"]["commit"]);
     assert_eq!(
         qualification.selected.sha256,
         owner::file_binding(&fixture.root.join(".chrono-harness/bin/cargo"))
             .unwrap()
             .sha256
+    );
+    let report_path = fixture.root.join(".chrono-harness/state/bootstrap.json");
+    let original_bytes = fs::read(&report_path).unwrap();
+    let mut wrong_source = original.clone();
+    wrong_source["source"]["commit"] = json!("0".repeat(40));
+    write_json(&report_path, &wrong_source);
+    assert!(
+        owner::qualified_selected_original(
+            &fixture.root,
+            &fixture.environment,
+            &native,
+            ".chrono-harness/state/bootstrap.json",
+            ".chrono-harness/bin/cargo"
+        )
+        .is_err()
+    );
+    fs::write(&report_path, &original_bytes).unwrap();
+    let unproduced = fixture.root.join(".chrono-harness/bin/unproduced");
+    fs::copy(fixture.root.join(".chrono-harness/bin/cargo"), &unproduced).unwrap();
+    assert!(
+        owner::qualified_selected_original(
+            &fixture.root,
+            &fixture.environment,
+            &native,
+            ".chrono-harness/state/bootstrap.json",
+            ".chrono-harness/bin/unproduced"
+        )
+        .unwrap_err()
+        .contains("producer destination differs")
     );
     fs::write(
         fixture.root.join(".chrono-harness/bin/cargo"),
@@ -798,6 +836,42 @@ fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
         ".chrono-harness/bin/cargo",
     )
     .unwrap();
+}
+
+#[test]
+fn published_owner_rejects_failed_production_even_when_all_outer_digests_are_recomputed() {
+    let staged = Staged::new();
+    let mut adoption = staged.publish_external_inputs();
+    let root = &staged.fixture.root;
+    let mut report = staged.report.clone();
+    report["status"] = json!("failed");
+    write_json(&root.join(&staged.reference), &report);
+    adoption["stage_sha256"] = json!(chrono_harness::sha256(
+        &fs::read(root.join(&staged.reference)).unwrap()
+    ));
+    let receipt = root.join(adoption["receipt"]["path"].as_str().unwrap());
+    let mut original = adoption.clone();
+    original.as_object_mut().unwrap().remove("receipt");
+    write_json(&receipt, &original);
+    adoption["receipt"]["sha256"] = json!(chrono_harness::sha256(&fs::read(&receipt).unwrap()));
+    write_json(&root.join(owner::CURRENT), &adoption);
+    let before = owner::file_binding(&root.join(".chrono-harness/bin/cargo")).unwrap();
+    let failure = owner::qualified_selected_original(
+        root,
+        &staged.fixture.environment,
+        &native_platform().unwrap(),
+        ".chrono-harness/state/bootstrap.json",
+        ".chrono-harness/bin/cargo",
+    )
+    .unwrap_err();
+    assert!(
+        failure.contains("original producer header differs"),
+        "{failure}"
+    );
+    assert!(publication::binding_equal(
+        &owner::file_binding(&root.join(".chrono-harness/bin/cargo")).unwrap(),
+        &before
+    ));
 }
 
 #[test]
@@ -915,6 +989,56 @@ fn owner_reuse_preserves_actual_original_operations_and_rejects_changed_selectio
     assert_eq!(row.reused_from.as_ref().unwrap().path, staged.reference);
     assert_eq!(row.reused_from.as_ref().unwrap().sha256, staged.digest);
     assert_eq!(reused.source.unwrap(), staged.stage_path());
+    let mut unrelated = config.clone();
+    unrelated["tools"]["unrelated"] = json!("an-unselected-tool");
+    let unrelated =
+        chrono_host_bootstrap::profile::Profile::parse(&serde_json::to_vec(&unrelated).unwrap())
+            .unwrap();
+    assert!(
+        owner::reuse_construction(
+            root,
+            &fixture.environment,
+            &native,
+            &unrelated,
+            &report,
+            &observed
+        )
+        .is_ok()
+    );
+    for defect in ["tool", "environment", "operation", "candidate"] {
+        let mut changed = config.clone();
+        let mut source = chrono_host_bootstrap::source::SourceObservation {
+            commit: observed.commit.clone(),
+            tree: observed.tree.clone(),
+            dirty: observed.dirty,
+            error: observed.error.clone(),
+        };
+        match defect {
+            "tool" => changed["tools"][&row.tool] = json!("another-reused-tool"),
+            "environment" => changed["environment"] = json!({"CARGO_NET_OFFLINE":"true"}),
+            "operation" => {
+                changed["operations"] = json!(["unproduced"]);
+                changed["reuse_owner_operations"] = json!(["unproduced"]);
+            }
+            "candidate" => source.commit = Some("0".repeat(40)),
+            _ => unreachable!(),
+        }
+        let changed =
+            chrono_host_bootstrap::profile::Profile::parse(&serde_json::to_vec(&changed).unwrap())
+                .unwrap();
+        assert!(
+            owner::reuse_construction(
+                root,
+                &fixture.environment,
+                &native,
+                &changed,
+                &report,
+                &source
+            )
+            .is_err(),
+            "accepted {defect}"
+        );
+    }
     for changed in [
         "environment",
         "host_environment",
