@@ -42,13 +42,18 @@ fn output(target: &Path) {
     fs::write(target.join("output λ/cache"), vec![11; 4096]).unwrap();
 }
 
+fn start(h: &Host, name: &str, target: &Path) {
+    let (code, report, error) = h.invoke("feature", name, target);
+    assert_eq!(code, 0, "{report} {error}");
+}
+
 #[test]
 fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     let h = Host::new("payload");
     policy(&h, 2, 60, "dispose");
     native_consumer(&h, "ordinary");
     let target = h.parent.join("real-aged-checkout");
-    assert_eq!(h.invoke("feature", "real-aged-checkout", &target).0, 0);
+    start(&h, "real-aged-checkout", &target);
     let original = git(&target, &["rev-parse", "HEAD"]);
     fs::write(target.join("payload"), "reflog-only-source").unwrap();
     let reflog_only = commit(&target);
@@ -140,8 +145,8 @@ fn aged_busy_consumer_defers_and_independent_expired_checkout_advances() {
     policy(&h, 2, 5, "dispose");
     let busy = h.parent.join("aged-busy");
     let free = h.parent.join("aged-free");
-    assert_eq!(h.invoke("feature", "aged-busy", &busy).0, 0);
-    assert_eq!(h.invoke("feature", "aged-free", &free).0, 0);
+    start(&h, "aged-busy", &busy);
+    start(&h, "aged-free", &free);
     output(&busy);
     output(&free);
     fs::write(busy.join("payload"), "live-source").unwrap();
@@ -182,7 +187,7 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     policy(&h, 30, 40, "evidence-retain");
     native_consumer(&h, "ordinary");
     let target = h.parent.join("age-protected");
-    assert_eq!(h.invoke("feature", "age-protected", &target).0, 0);
+    start(&h, "age-protected", &target);
     fs::write(target.join("payload"), "fresh work").unwrap();
     let old = git(&target, &["rev-parse", "HEAD"]);
     let (code, used, error) = h.auto(
@@ -235,7 +240,7 @@ fn interrupted_age_disposal_reentry_preserves_original_unknown_result() {
     policy(&h, 1, 3, "dispose");
     native_git(&h, "age-interrupt", value!({}));
     let target = h.parent.join("interrupted-age");
-    assert_eq!(h.invoke("feature", "interrupted-age", &target).0, 0);
+    start(&h, "interrupted-age", &target);
     fs::write(target.join("payload"), "source survives interruption").unwrap();
     output(&target);
     older_than(&target, 3);
