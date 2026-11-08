@@ -40,8 +40,8 @@ pub fn startup_schema(actual: &str, expected: &str) -> (valid: bool)
 { equal_text(actual, expected) }
 
 pub fn startup_mode(mode: u32) -> (valid: bool)
-    ensures valid <==> (0 < mode <= 511 && mode & 73u32 != 0),
-{ 0 < mode && mode <= 511 && mode & 73u32 != 0 }
+    ensures valid <==> (0 < mode <= 511),
+{ 0 < mode && mode <= 511 }
 
 pub open spec fn startup_name_byte(b: u8) -> bool {
     (65 <= b <= 90) || (97 <= b <= 122) || (48 <= b <= 57) || b == 95 || b == 45

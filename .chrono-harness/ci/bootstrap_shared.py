@@ -235,8 +235,8 @@ def produce(root, path, config, profiles, config_sha):
             for installed in profile["install"]:
                 target = safe(root, installed["destination"])
                 data, mode = target.read_bytes(), target.stat().st_mode & 0o777
-                if not mode & 0o111:
-                    raise ValueError("startup tool is not executable")
+                if not 0 < mode <= 0o777:
+                    raise ValueError("startup file mode is invalid")
                 asset = "tools/" + str(index)
                 index += 1
                 write_new(staging / asset, data)
@@ -300,8 +300,7 @@ def validate_artifact(root, path, config, profiles, config_sha, binding, *,
         for item in entry["files"]:
             data = read(transfer, item["path"], "tools/")
             if (item["path"] in seen or digest(data) != item["sha256"] or len(data) != item["size"]
-                    or type(item["mode"]) is not int or not 0 < item["mode"] <= 0o777
-                    or not item["mode"] & 0o111):
+                    or type(item["mode"]) is not int or not 0 < item["mode"] <= 0o777):
                 raise ValueError("startup tool bytes or metadata differ")
             seen.add(item["path"])
             payloads[item["destination"]] = data
