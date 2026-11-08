@@ -40,7 +40,11 @@ fn command_carrier_count(command: &Command) -> usize {
 }
 
 fn rolling_host(keep_seconds: u64) -> Host {
-    let h = host();
+    rolling_host_mode(keep_seconds, "noop")
+}
+
+fn rolling_host_mode(keep_seconds: u64, mode: &str) -> Host {
+    let h = host_mode(mode);
     let path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
     policy["retained_producers"][0]["rolling_directory"] = value!({"success_keep_seconds":0,"failure_keep_seconds":keep_seconds,
@@ -48,6 +52,63 @@ fn rolling_host(keep_seconds: u64) -> Host {
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
     commit(&h.root);
     h
+}
+
+#[test]
+fn rolling_directory_managed_operation_owns_all_products_and_keeps_original_failure() {
+    for failed in [false, true] {
+        let h = rolling_host_mode(
+            86400,
+            if failed {
+                "artifact-failure"
+            } else {
+                "artifact-success"
+            },
+        );
+        let path = h.root.join(".chrono-harness/cleanup.json");
+        let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+        policy["retained_producers"][0]["operations"] = value!(["use.consumer"]);
+        fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        commit(&h.root);
+        let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
+        assert_eq!(code, if failed { 2 } else { 0 }, "{report} {error}");
+        let process = &report["managed_process"];
+        assert_eq!(process["exit_code"], if failed { 23 } else { 0 });
+        assert_eq!(process["stderr"], "original artifact diagnostic");
+        let allocation = PathBuf::from(process["stdout"].as_str().unwrap());
+        assert_eq!(report["artifact_directory"]["path"], value!(allocation));
+        if failed {
+            assert_eq!(
+                fs::read(allocation.join("arbitrary products/original.bin")).unwrap(),
+                b"original artifact\0\xff"
+            );
+        } else {
+            assert!(!allocation.exists(), "all unlisted products roll together");
+        }
+        assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
+    }
+}
+
+#[test]
+fn rolling_directory_ambiguous_operation_owner_refuses_before_launch() {
+    let h = rolling_host(0);
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["retained_producers"][0]["operations"] = value!(["use.consumer"]);
+    let mut duplicate = policy["retained_producers"][0].clone();
+    duplicate["id"] = value!("another-owner");
+    duplicate["directory"] = value!(".chrono-harness/state/another-run/");
+    policy["retained_producers"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
+    assert_eq!(code, 2, "{report} {error}");
+    assert!(format!("{report} {error}").contains("artifact operation requires one exact producer"));
+    assert!(report["managed_process"].is_null());
+    assert!(!h.root.join(".chrono-harness/state/another-run").exists());
 }
 
 #[test]

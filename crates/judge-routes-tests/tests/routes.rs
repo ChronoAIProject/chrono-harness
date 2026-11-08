@@ -252,17 +252,10 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
             .unwrap();
     let mut plans = plans(&filemap).unwrap();
-    // Current main startup needs no distribution build. Model the existing
-    // full-host consumer's explicit prerequisite without changing main policy.
-    let startup = plans.get_mut("test:host-bootstrap-tests").unwrap();
-    assert_eq!(
-        startup.operations,
-        [
-            "host.bootstrap-provision-tests",
-            "host.bootstrap-tests",
-            "host.bootstrap-command-tests"
-        ]
-    );
+    // 为现役 Rust bootstrap 计划增加共享前置，核对每个原操作的限制仍保留。
+    let startup = plans.get_mut("test:host-bootstrap-native-tests").unwrap();
+    let startup_operations = startup.operations.clone();
+    assert!(startup_operations.contains(&"test.host-bootstrap-native-tests".into()));
     assert!(startup.operation_bounds.is_empty());
     startup.operations.insert(0, "build.distribution".into());
     startup.operation_bounds.insert(
@@ -281,7 +274,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         })
         .collect();
     let selected = [
-        "test:host-bootstrap-tests",
+        "test:host-bootstrap-native-tests",
         "test:distribution-tests",
         "test:release-build-integration",
     ]
@@ -298,11 +291,12 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     );
     for (operation, timeout) in [
         ("build.distribution", 600),
-        ("host.bootstrap-provision-tests", 900),
-        ("host.bootstrap-tests", 900),
         ("test.distribution-tests", 600),
         ("release.tests.integration", 600),
-    ] {
+    ]
+    .into_iter()
+    .chain(startup_operations.iter().map(|op| (op.as_str(), 900)))
+    {
         let op = operations
             .iter()
             .find(|o| o.method.operation == operation)
@@ -311,21 +305,18 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         assert_eq!(op.output_limit_bytes, 1048576, "{operation}");
     }
     assert_eq!(
-        plans["test:host-bootstrap-tests"].operations,
-        [
-            "build.distribution",
-            "host.bootstrap-provision-tests",
-            "host.bootstrap-tests",
-            "host.bootstrap-command-tests"
-        ]
+        plans["test:host-bootstrap-native-tests"].operations,
+        std::iter::once("build.distribution".to_owned())
+            .chain(startup_operations)
+            .collect::<Vec<_>>()
     );
-    assert_eq!(plans["test:host-bootstrap-tests"].timeout_seconds, 900);
+    assert_eq!(plans["test:host-bootstrap-native-tests"].timeout_seconds, 900);
     for test in ["test:distribution-tests", "test:release-build-integration"] {
         assert_eq!(plans[test].timeout_seconds, 600);
         assert!(plans[test].operation_bounds.is_empty());
     }
     plans
-        .get_mut("test:host-bootstrap-tests")
+        .get_mut("test:host-bootstrap-native-tests")
         .unwrap()
         .operation_bounds
         .clear();

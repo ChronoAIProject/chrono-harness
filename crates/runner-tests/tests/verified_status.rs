@@ -963,6 +963,90 @@ fn tree_entry(mode: &str, oid: &str, kind: &str) -> (out: policy::TreeEntry)
     policy::TreeEntry { mode: mode.to_owned(), oid: oid.to_owned(), kind: kind.to_owned() }
 }
 
+fn expect_tree_slot(
+    tree: &policy::Tree, path: &policy::TreePath, mode: &str, oid: &str, kind: &str,
+)
+    requires tree@.contains_key(*path),
+        policy::tree_entry_fields(&tree@[*path]) == (mode@, oid@, kind@),
+{
+    proof { policy::tree_path_obeys_cmp(); }
+    match tree.get(path) {
+        Some(entry) => {
+            expect_status_text(entry.mode.as_str(), mode);
+            expect_status_text(entry.oid.as_str(), oid);
+            expect_status_text(entry.kind.as_str(), kind);
+        },
+        None => { panic!(); },
+    }
+}
+
+fn expect_tree_insert_ok(out: Result<(), String>)
+    requires out.is_ok(),
+{
+    match out { Ok(()) => {}, Err(_) => { panic!(); } }
+}
+
+fn expect_tree_duplicate(out: Result<(), String>)
+    requires match out {
+        Err(message) => message@ == "duplicate Git tree path"@,
+        Ok(()) => false,
+    },
+{
+    match out {
+        Err(message) => { expect_status_text(message.as_str(), "duplicate Git tree path"); },
+        Ok(()) => { panic!(); },
+    }
+}
+
+// 预期独立列出完整字段、数量、失败文本及失败后的状态，不由生产函数生成。
+fn git_tree_insert_preserves_other_paths_and_rejects_every_duplicate(a: &str, b: &str)
+    requires a@ != b@,
+{
+    proof { policy::tree_path_obeys_cmp(); }
+    let mut tree = policy::Tree::new();
+    let first = policy::TreePath::from_text(a);
+    let second = policy::TreePath::from_text(b);
+    let inserted = first.clone();
+    let out = policy::insert_git_tree_entry(&mut tree, inserted, "100644", "first\0", "blob");
+    expect_tree_insert_ok(out);
+    expect_status_true(tree.len() == 1);
+    expect_tree_slot(&tree, &first, "100644", "first\0", "blob");
+    let inserted = second.clone();
+    let out = policy::insert_git_tree_entry(&mut tree, inserted, "", "", "tree");
+    expect_tree_insert_ok(out);
+    expect_status_true(tree.len() == 2);
+    expect_tree_slot(&tree, &first, "100644", "first\0", "blob");
+    expect_tree_slot(&tree, &second, "", "", "tree");
+
+    // clone 有独立文本存储；重复按完整内容判断，不按地址或条目字段判断。
+    let same_path = first.clone();
+    let out = policy::insert_git_tree_entry(&mut tree, same_path, "100755", "第二\0", "commit");
+    expect_tree_duplicate(out);
+    expect_status_true(tree.len() == 2);
+    expect_tree_slot(&tree, &first, "100755", "第二\0", "commit");
+    expect_tree_slot(&tree, &second, "", "", "tree");
+    let same_path = first.clone();
+    let out = policy::insert_git_tree_entry(&mut tree, same_path, "100755", "第二\0", "commit");
+    expect_tree_duplicate(out);
+    expect_status_true(tree.len() == 2);
+    expect_tree_slot(&tree, &first, "100755", "第二\0", "commit");
+    expect_tree_slot(&tree, &second, "", "", "tree");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_tree_insert_keeps_full_path_identity_and_exact_duplicate_state() {
+    proof {
+        reveal_strlit(""); reveal_strlit("a"); reveal_strlit("a\0");
+        reveal_strlit("目录/é"); reveal_strlit("目录/e\u{301}");
+        assert(""@.len() != "a"@.len());
+        assert("a"@.len() != "a\0"@.len());
+        assert("目录/é"@.len() != "目录/e\u{301}"@.len());
+    }
+    git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("", "a");
+    git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("a", "a\0");
+    git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("目录/é", "目录/e\u{301}");
+}
+
 fn tree_path_keeps_full_content(text: &str) {
     let path = policy::TreePath::from_text(text);
     let copied = path.clone();
