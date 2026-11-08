@@ -614,6 +614,16 @@ birth 在登记和回执封存期间持关联租约。生产者中断后，普�
 
 清理拒绝只影响自身登记项。普通 start／reconstruct／use／check／bootstrap 不尝试无关项或 fixture 清理，目标准入／所有权／状态发布失败仍阻断。明确 maintain 在 drain、不可变失败回执、cleanup_failures 保留无关失败，继续独立项；只要本轮尝试有失败仍非零，不丢旧回执。
 
+#### 创建 agent 与待维护提醒
+
+工作树配置的可选 `agent_identity_env` 点名当前调用方身份的环境变量；本宿主采用 `HECA_AGENT_ID`，并在 `environment.inherit` 转交该值。普通 agent 不需要另加 CLI 参数。没有配置、缺值、空值、控制字符或超过 256 字节时，原报告的 `agent.status` 为 `unknown`，不猜用户名、PID 或分支所有者。它是调用方声明，用于归属和提醒，不授予清理权限。
+
+start／reconstruct 的原报告和创建前 intent 保存 agent；同一地址的 birth 登记保存 `creator_agent`。后续 use、finish、maintain 和其他 agent 的操作保持该创建者。显式 import 仅保存 `custodian_agent`；历史创建者未知时仍为 null。旧记录也保持 unknown，不根据当前调用方补写历史。
+
+相关自动生命周期入口在操作前从现役 enrollment 记录产生 `agent_reminders`，并把本 agent 创建、尚未完成清理的对象写到调用方 stderr。每项包含路径、分支、工作／清理状态、保留原因及后续动作；active 提醒继续维护并在真实完成后 finish，terminal／retained 提醒沿原责任维护。最多显示 64 项，另报实际已知项数和截短标志。未知创建者、漏登和读取失败单列观察范围；当前 agent 未知时 pending 为 null，不能解释为空清单。提醒不设置终态，不删除对象，不增加后台扫描器或人审门。
+
+**产品与宿主配置同改：**这批新增身份输入和即时提醒，宿主显式选择身份来源，使用现有 ledger 和原报告，不另建 agent 状态索引。相关读数和提示的总成本待实测；旧协调宿主仍须按原配套部署／迁移边界切换。它不补齐历史创建者，也不证明终态历史、租约及空地址目录已全部有限回收。
+
 #### 保留后的接续与清理阶段
 
 每项登记可带 `cleanup`，分别保留 `stage`、原因 `detail` 和原 `report_path`。阶段为 `pending`、`in-progress`、`waiting-for-consumers`、`retained`、`failed`、`caches-released`、`disposed`。它与工作状态 `status`／`terminal` 分开：缓存释放不表示工作完成；原进程或清理中断仍保留原尝试，不能仅凭阶段补写成功。旧记录缺少该字段时，表示尚无此阶段观察。

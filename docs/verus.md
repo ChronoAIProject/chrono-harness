@@ -476,6 +476,8 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 
 `verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。现有分支的显式 import 与新建 birth 的分支规则由同一源码区分：import 不要求创建前缀，birth 仍要求已登记前缀，未知活动拒绝。已登记 import 的自动清理消费原 enrollment kind 和身份 guard；直接 cleanup 的前缀边界另有同源独立预期。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
 
+创建 agent 的提醒选择也由 `verified_lifecycle.rs` 同源执行：只有相同、非空的创建者身份且尚未处置的对象才进入该 agent 的清单。独立预期覆盖同一 agent、其他 agent、空身份及已处置对象；配置读取、身份来源、原回执绑定和提醒传递仍由 Rust 适配器与真实 Git 回归负责。
+
 ## 所有者可执行文件发布
 
 `crates/worktree/src/verified_owner_publication.rs` 是实际发布身份比较、原件保全、意图读取／准备、

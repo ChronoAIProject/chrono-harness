@@ -71,4 +71,10 @@ pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)
     equal_text(kind, "import") || registered
 }
 
+pub fn pending_for_agent(creator: &str, current: &str, disposed: bool) -> (pending: bool)
+    ensures pending <==> (creator@ == current@ && creator@.len() > 0 && !disposed),
+{
+    equal_text(creator, current) && !equal_text(creator, "") && !disposed
+}
+
 }

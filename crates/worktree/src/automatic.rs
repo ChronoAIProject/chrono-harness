@@ -290,6 +290,10 @@ struct CacheAttempt {
 #[serde(deny_unknown_fields)]
 struct Entry {
     path: PathBuf,
+    #[serde(default)]
+    creator_agent: Option<crate::AgentIdentity>,
+    #[serde(default)]
+    custodian_agent: Option<crate::AgentIdentity>,
     branch: String,
     attachment: Attachment,
     policy_sha256: String,
@@ -825,6 +829,15 @@ impl Manager {
             if e.path != scope {
                 return Err("enrollment record contains another worktree".into());
             }
+            if e.enrollment["kind"] == "birth"
+                && e.creator_agent
+                    != serde_json::from_value::<Option<crate::AgentIdentity>>(
+                        e.enrollment["receipt"]["creator_agent"].clone(),
+                    )
+                    .map_err(|error| format!("invalid recorded creator identity: {error}"))?
+            {
+                return Err("enrollment creator differs from its original creation input".into());
+            }
             if e.cache_only && (e.path != *anchor || e.status != "active" || e.terminal.is_some()) {
                 return Err(
                     "main cache enrollment cannot authorize terminal worktree disposal".into(),
@@ -1333,6 +1346,18 @@ impl Manager {
         }
         let entry = Entry {
             path: target,
+            creator_agent: if kind == "birth" {
+                serde_json::from_value(receipt["creator_agent"].clone())
+                    .map_err(|error| format!("invalid birth creator identity: {error}"))?
+            } else {
+                None
+            },
+            custodian_agent: if kind == "import" {
+                serde_json::from_value(receipt["custodian_agent"].clone())
+                    .map_err(|error| format!("invalid import custodian identity: {error}"))?
+            } else {
+                None
+            },
             branch,
             attachment: attached,
             policy_sha256: sha256(&self.inputs.policy_bytes),
@@ -1387,10 +1412,14 @@ impl Manager {
         Ok(())
     }
     fn birth_binding(e: &Entry) -> Value {
-        value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,
+        let mut binding = value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,
             "policy_sha256":e.policy_sha256,"observed_head":e.enrollment["observed_head"],
             "policy_inputs":e.enrollment["policy_inputs"],"original_receipt":e.enrollment["receipt"],
-            "ownership":e.ownership.as_ref().map(|o| value!({"path":o.path,"id":o.id}))})
+            "ownership":e.ownership.as_ref().map(|o| value!({"path":o.path,"id":o.id}))});
+        if let Some(agent) = &e.creator_agent {
+            binding["creator_agent"] = value!(agent);
+        }
+        binding
     }
     fn birth_ready(&self, e: &Entry) -> Result<(), String> {
         if e.enrollment["kind"] == "birth" {
@@ -2353,6 +2382,122 @@ impl Manager {
         }
         Ok(Some(ledger))
     }
+    fn remind_agent(&self, r: &mut Runner, report: &mut Value) {
+        let current = match crate::AgentIdentity::from_report(report) {
+            Ok(Some(agent)) => agent,
+            result => {
+                report["agent_reminders"] = value!({"observation":"unknown-current-agent",
+                    "agent":report["agent"],"pending":null,"pending_count":null,
+                    "reason":result.err().unwrap_or_else(|| "current agent identity is unavailable".into())});
+                return;
+            }
+        };
+        let mut pending = Vec::new();
+        let mut pending_count = 0usize;
+        let mut unknown = 0usize;
+        let mut errors = Vec::new();
+        let mut current_paths = BTreeSet::new();
+        match self.enrollment_paths() {
+            Ok(paths) => {
+                for path in paths {
+                    match self.enrollment_snapshot(&path) {
+                        Ok(Some(ledger)) => {
+                            for entry in ledger.entries {
+                                if entry.status == "disposed" {
+                                    continue;
+                                }
+                                current_paths.insert(entry.path.clone());
+                                let Some(creator) = &entry.creator_agent else {
+                                    unknown += 1;
+                                    continue;
+                                };
+                                if !creator.valid() {
+                                    errors.push(value!({"path":entry.path,"error":"recorded creator identity is invalid"}));
+                                    continue;
+                                }
+                                if !crate::verified_lifecycle::pending_for_agent(
+                                    &creator.id,
+                                    &current.id,
+                                    entry.status == "disposed",
+                                ) {
+                                    continue;
+                                }
+                                pending_count += 1;
+                                if pending.len() >= 64 {
+                                    continue;
+                                }
+                                let action = match entry.status.as_str() {
+                                    "active" => {
+                                        "继续维护工作；确认完成、保全工作并加入自有任务后执行 finish"
+                                    }
+                                    "terminal" => {
+                                        "执行 maintain，沿原清理尝试接续；先解决已登记阻碍"
+                                    }
+                                    "retained" => {
+                                        "核对保留原因；必要使用方释放后执行 maintain，或明确继续保留"
+                                    }
+                                    _ => "状态未知；核对原记录与结果，保全工作后恢复维护",
+                                };
+                                let cleanup = entry.cleanup.as_ref().map(|progress| {
+                                    let preview: String =
+                                        progress.detail.chars().take(512).collect();
+                                    value!({"stage":progress.stage,"detail_preview":preview,
+                                        "preview_truncated":preview.len() < progress.detail.len(),
+                                        "report_path":progress.report_path})
+                                });
+                                let row = value!({"path":entry.path,"branch":entry.branch,
+                            "creator_agent":creator,"work_status":entry.status,
+                            "cleanup":cleanup,"next_action":action});
+                                eprintln!(
+                                    "W_WORKTREE_PENDING agent={} path={} status={}：{}",
+                                    current.id,
+                                    entry.path.display(),
+                                    entry.status,
+                                    action
+                                );
+                                pending.push(row);
+                            }
+                        }
+                        Ok(None) => errors
+                            .push(value!({"path":path,"error":"enrollment record unavailable"})),
+                        Err(error) => errors.push(value!({"path":path,"error":error})),
+                    }
+                }
+            }
+            Err(error) => errors.push(value!({"error":error})),
+        }
+        let mut unregistered = Vec::new();
+        match r.inventory(&self.inputs.policy.coordinator_root) {
+            Ok(rows) => {
+                for row in rows {
+                    if let Some(path) = row.get("worktree").map(PathBuf::from) {
+                        if path != self.inputs.policy.coordinator_root
+                            && !current_paths.contains(&path)
+                        {
+                            unknown += 1;
+                            if unregistered.len() < 64 {
+                                unregistered.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+            Err(error) => errors.push(value!({"error":error})),
+        }
+        if unknown > 0 || !errors.is_empty() {
+            eprintln!(
+                "W_WORKTREE_AGENT_SCOPE agent={}：有 {} 个创建者未知的对象，{} 项观察错误；不能据此确认没有待维护工作树",
+                current.id,
+                unknown,
+                errors.len()
+            );
+        }
+        report["agent_reminders"] = value!({"phase":"before-operation","agent":current,
+            "observation":if errors.is_empty() && unregistered.is_empty() {"registered-records-observed"} else {"partial"},
+            "pending":pending,"pending_count":pending_count,"truncated":pending_count > 64,
+            "unknown_creator_records":unknown,"unregistered_worktrees":unregistered,"errors":errors,
+            "effects":"reminder-only; no task completion or cleanup authorization"});
+    }
     /// Entry-local refusals remain in the drain report and immutable receipts.
     /// Coordinator/state publication failures still prevent admission.
     fn drain_for_admission(
@@ -2622,13 +2767,14 @@ pub(crate) fn create(
         return create(r, report);
     };
     manager.protect_reports(r, &o.root)?;
+    manager.remind_agent(r, report);
     manager.preflight_birth(r, &destination)?;
     manager.drain_for_admission(r, &[o.root.clone(), destination.clone()], report)?;
     manager.stable(r)?;
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
     manager.stable(r)?;
-    manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"]}))?;
+    manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"],"creator_agent":crate::AgentIdentity::from_report(report)?}))?;
     report["cleanup_enrollment"] = value!({"coordinator_root":manager.inputs.policy.coordinator_root,"state_directory":manager.inputs.policy.state_directory,"kind":"birth"});
     Ok(())
 }
@@ -2788,6 +2934,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             )?
             .ok_or("automatic cleanup is not opted in")?;
             manager.protect_reports(r, &invoking)?;
+            manager.remind_agent(r, report);
             report["source_root"] = value!(manager.inputs.policy.coordinator_root);
             report["lifecycle_coordinator_root"] = value!(manager.inputs.policy.coordinator_root);
             report["source_commit"] = value!(manager.inputs.anchor_head);
@@ -2811,7 +2958,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     } else {
                         "import"
                     },
-                    value!({"report_path":report["report_path"],"historical_birth":"not-claimed"}),
+                    value!({"report_path":report["report_path"],"historical_birth":"not-claimed","custodian_agent":crate::AgentIdentity::from_report(report)?}),
                 ),
                 "migrate" => {
                     let target = target.as_ref().unwrap();

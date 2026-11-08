@@ -852,7 +852,7 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
         if let Some(agent) = agent {
             command.env("CHRONO_TEST_AGENT_ID", agent);
         }
-        let output = h.native_output(&mut command);
+        let output = h._dir.capture_bound(&mut command);
         h.received(output)
     };
     let a = h.parent.join("agent-a-work");
@@ -877,7 +877,7 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
         );
         assert_eq!(code, 0, "{created} {error}");
         if let Some(agent) = agent {
-            assert_eq!(created["agent"]["id"], agent);
+            assert_eq!(created["agent"]["identity"]["id"], agent);
             let intent = json(
                 &fs::read(
                     h.root
@@ -899,6 +899,33 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
         .unwrap()
         .clone();
     assert_eq!(a_entry["creator_agent"]["id"], "agent-A");
+    let imported = h.parent.join("imported-agent-work");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "-qb",
+            "external-agent-work",
+            imported.to_str().unwrap(),
+            "dev",
+        ],
+    );
+    let (code, imported_report, error) = invoke(
+        "import",
+        &["--path", imported.to_str().unwrap()],
+        Some("agent-B"),
+    );
+    assert_eq!(code, 0, "{imported_report} {error}");
+    let imported_entry = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(imported))
+        .unwrap()
+        .clone();
+    assert!(imported_entry["creator_agent"].is_null());
+    assert_eq!(imported_entry["custodian_agent"]["id"], "agent-B");
     let (code, maintained, error) = invoke("maintain", &[], Some("agent-A"));
     assert_eq!(code, 0, "{maintained} {error}");
     let reminders = maintained["agent_reminders"]["pending"].as_array().unwrap();
