@@ -678,6 +678,9 @@ Rust 测试另外验证真实消费者，不替代证明。
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
 现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
+`host.verus-download` 通过 GitHub 固定发布资产 API 获取归档，唯一地址归 projects.json，
+请求采用 `Accept: application/octet-stream`。该外部接口只提供资产原字节；
+随后执行的 SHA-256 校验仍以 verus-macos-arm64.sha256 为准，校验通过后才解包。
 含证明操作的单元先核共享 core，再安装工具；无证明操作的消费单元只核共享 core。
 启动参数由 units.json 维护，工作流由登记的 ci.generate 产生。
 共享 core 的校验不代表 Verus 已安装。
