@@ -794,7 +794,7 @@ pub(crate) fn with_report_for_consumer(
     drop(runner.birth_lease.take());
     if matches!(
         operation,
-        "finish" | "maintain" | "import" | "use" | "check" | "bootstrap"
+        "finish" | "maintain" | "import" | "use" | "check" | "bootstrap" | "status"
     ) {
         if let Some(coordinator) = report["lifecycle_coordinator_root"].as_str() {
             if Path::new(coordinator) != root {

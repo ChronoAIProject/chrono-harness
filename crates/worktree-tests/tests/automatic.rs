@@ -752,6 +752,33 @@ fn automatic_attention_persists_across_commands_and_stops_after_verified_removal
 }
 
 #[test]
+fn automatic_attention_linked_query_publishes_its_original_at_the_coordinator() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let target = h.parent.join("linked status");
+    assert_eq!(h.invoke("feature", "linked-status", &target).0, 0);
+    let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+    command
+        .current_dir(&target)
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .args([
+            "status",
+            "--host-root",
+            target.to_str().unwrap(),
+            "--config",
+            POLICY,
+        ]);
+    // received checks exact stdout against the original at source_root/report_path.
+    let output = h.native_output(&mut command);
+    let (code, report, stderr) = h.received(output);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(report["source_root"], value!(h.root));
+    assert_eq!(attention_row(&report, &target)["attention_required"], true);
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+}
+
+#[test]
 fn automatic_attention_preserves_unregistered_dirty_and_corrupt_worktrees() {
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
