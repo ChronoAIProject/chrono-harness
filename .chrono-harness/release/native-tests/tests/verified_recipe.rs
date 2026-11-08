@@ -81,6 +81,7 @@ fn tar_entry_requires_the_exact_regular_name_size_and_mode() {
     let traversal = [46u8,46,47,101,120,101,99,117,116,97,98,108,101];
     let path = policy::executable_entry(&traversal, true, 7, 489, 7, 489);
     let empty: [u8; 0] = [];
+    proof { vstd::array::array_len_matches_n(&empty); }
     let absent = policy::executable_entry(&empty, true, 7, 489, 7, 489);
     expect_recipe(same);
     expect_recipe(!link);
