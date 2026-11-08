@@ -13,7 +13,7 @@ pub struct Fixture {
 pub fn write(root: &Path, name: &str, value: &Value) {
     let path = root.join(name);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
-    fs::write(path,serde_json::to_vec_pretty(value).unwrap()).unwrap();
+    fs::write(path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
 
 impl Fixture {
@@ -24,9 +24,13 @@ impl Fixture {
             {"id":"test_none","kind":"verify","operation":"test.none","needs":[],"handoff":"handoffs/none","rust_toolchain":false},
             {"id":"test_a","kind":"verify","operation":"test.a","needs":["build_a"],"handoff":"handoffs/test_a","rust_toolchain":false}
         ]);
-        let names = ["build_a","build_b","test_none","test_a","collect"];
-        let mut costs = serde_json::Map::new(); let mut jobs = serde_json::Map::new();
-        for name in names { costs.insert(name.into(),json!("unmeasured")); jobs.insert(name.into(),json!(format!("native_{name}"))); }
+        let names = ["build_a", "build_b", "test_none", "test_a", "collect"];
+        let mut costs = serde_json::Map::new();
+        let mut jobs = serde_json::Map::new();
+        for name in names {
+            costs.insert(name.into(), json!("unmeasured"));
+            jobs.insert(name.into(), json!(format!("native_{name}")));
+        }
         let config = json!({
             "schema":"chrono-release-build/v5","projects":"projects.json",
             "tools":{"git":"/usr/bin/git","probe":"/bin/sh","rustup":"unavailable-release-rustup","cargo":"unavailable-release-cargo","rustc":"unavailable-release-rustc"},
@@ -39,7 +43,11 @@ impl Fixture {
             "failure_evidence":{"test.a":["failures/test-a/"]}
         });
         let result = Self {
-            temp: tempfile::Builder::new().prefix("release recipe λ ").tempdir().unwrap(), config,
+            temp: tempfile::Builder::new()
+                .prefix("release recipe λ ")
+                .tempdir()
+                .unwrap(),
+            config,
             plan: json!({"schema":"chrono-release-plan/v1","version":"fixture-v1","assets":{"a":"out/a","b":"out/b"}}),
             projects: json!({"projects":[],"scripts":[{"id":"checks","actions":{"none":{"operation":"test.none","tool":"probe","argv":["verify none","space value","$literal","λ"]},"a":{"operation":"test.a","tool":"probe","argv":["verify a"]}}}]}),
             host: json!({"artifacts":[{"path":"consumer/","tracked":false},{"path":"failures/","tracked":false}]}),
@@ -48,11 +56,17 @@ impl Fixture {
         result
     }
 
-    pub fn root(&self) -> &Path { self.temp.path() }
+    pub fn root(&self) -> &Path {
+        self.temp.path()
+    }
     pub fn save(&self) {
-        write(self.root(),".chrono-harness/release/build.json",&self.config);
-        write(self.root(),"plan.json",&self.plan);
-        write(self.root(),"projects.json",&self.projects);
-        write(self.root(),"host.json",&self.host);
+        write(
+            self.root(),
+            ".chrono-harness/release/build.json",
+            &self.config,
+        );
+        write(self.root(), "plan.json", &self.plan);
+        write(self.root(), "projects.json", &self.projects);
+        write(self.root(), "host.json", &self.host);
     }
 }
