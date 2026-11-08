@@ -1,0 +1,28 @@
+{
+  "schema": "chrono-proved-build/v1",
+  "owner": "runner",
+  "operation": "build.runner",
+  "projects": ".chrono-harness/projects.json",
+  "recovery_operation": "recover.identifiers-proof",
+  "manifest": "crates/runner/Cargo.toml",
+  "target": "crates/runner/target",
+  "cargo_verus": ".chrono-harness/bin/verus/cargo-verus",
+  "verus_directory": ".chrono-harness/bin/verus",
+  "rust_toolchain": "1.95.0",
+  "output_contract": {
+    "version": "0.2026.04.24.f8e1704",
+    "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+  },
+  "library": {
+    "manifest": "crates/identifiers/Cargo.toml",
+    "source": "crates/identifiers/src/lib.rs",
+    "target": "chrono_identifiers",
+    "sources": ["crates/identifiers/src/lib.rs"]
+  },
+  "binary": {
+    "source": "crates/runner/src/main.rs",
+    "target": "chrono-harness",
+    "published": "crates/runner/target/debug/chrono-harness",
+    "dependency_prefix": "chrono_harness-"
+  }
+}

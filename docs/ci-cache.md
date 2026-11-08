@@ -4,6 +4,11 @@
 
 `chrono-cache plan --host-root H --config .chrono-harness/cache.json --consumer ID` 为一个明确登记的消费者准备键。它是 provider 内部入口；日常检查仍使用 `chrono-harness check`。
 
+本机固定 Verus 归档按现役 checksum 复用，命中时不再次下载；失配时重新下载并核验后替换。
+runner 的编译缓存和原证明也沿同一个登记构建入口复用，损坏时只恢复一次，
+成功调用不累积临时报告目录，具体合同见 [runner 的证明库与缓存](verus.md#runner-构建中的证明库与缓存)。
+这两项本机复用不代表下文全部 CI 缓存或其他使用方已经验收。
+
 <a id="bounded-native-acceptance"></a>
 
 ## 真实 CI 已验证的范围
