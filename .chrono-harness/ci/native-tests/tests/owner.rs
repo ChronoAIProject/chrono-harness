@@ -1072,6 +1072,7 @@ fn owner_reuse_preserves_actual_original_operations_and_rejects_changed_selectio
 fn public_core_reuses_the_published_stage_without_rebuilding_or_replacing_the_selected_owner() {
     let fixture = Staged::setup();
     let mut core = fixture.config.clone();
+    core["prerequisites"] = json!([]);
     core["owner_stage"] = Value::Null;
     core["owner_upgrade"] = json!(".chrono-harness/ci/upgrade.json");
     core["reuse_owner_operations"] = json!(["build"]);
@@ -1120,8 +1121,8 @@ fn public_core_reuses_the_published_stage_without_rebuilding_or_replacing_the_se
     ));
     let result = read_json(&root.join(".chrono-harness/state/bootstrap.json"));
     assert_eq!(result["status"], "passed");
-    assert_eq!(result["operations"].as_array().unwrap().len(), 2);
-    let mut reused = result["operations"][1].clone();
+    assert_eq!(result["operations"].as_array().unwrap().len(), 1);
+    let mut reused = result["operations"][0].clone();
     assert_eq!(
         reused.as_object_mut().unwrap().remove("reused_from"),
         Some(json!({"path":staged.reference,"sha256":staged.digest}))
