@@ -7,7 +7,7 @@ use crate::{
     source::{self, SourceIdentity, SourceObservation},
     verified_bindings::{self as policy, BuildStatus},
 };
-use chrono_harness::{file_identity, resolve_program};
+use chrono_harness::{file_identity, resolve_program, retained_artifacts::retention};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -95,6 +95,8 @@ pub struct Construction<'a> {
     before: SourceObservation,
     inherited: Environment,
     owner_source: Option<PathBuf>,
+    publication: Option<retention::Publication>,
+    _inputs: retention::ReadScope,
 }
 
 pub struct Published {
@@ -183,12 +185,27 @@ impl<'a> Construction<'a> {
             .parent()
             .ok_or("missing bootstrap report parent")?;
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-        // 保留原目录供原始报告和两流消费者使用；回收仍归宿主生命周期所有者。
-        let directory = tempfile::Builder::new()
-            .prefix("bootstrap-")
-            .tempdir_in(parent)
-            .map_err(|error| error.to_string())?
-            .keep();
+        let inputs = retention::read_scope(root)?;
+        let directory = retention::unique_path(parent, "bootstrap-", "")?;
+        // 整个真实生产目录共用一次发布和子孙租约，不逐文件登记。
+        let publication = retention::create_adopted(
+            root,
+            "check-original",
+            &directory,
+            true,
+            json!({"publication":"started","completion":"not-established"}),
+        )?;
+        if publication.is_some() {
+            retention::Inventory::adopted(root)?
+                .ok_or("bootstrap retention policy disappeared")?
+                .retain_diagnostic_path(
+                    directory
+                        .strip_prefix(root)
+                        .map_err(|e| e.to_string())?
+                        .to_str()
+                        .ok_or("non UTF-8 bootstrap directory")?,
+                )?;
+        }
         let report = Report {
             schema: "chrono-bootstrap-result/v1".into(),
             config: loaded.config,
@@ -218,6 +235,8 @@ impl<'a> Construction<'a> {
             before,
             inherited: inherited.clone(),
             owner_source: None,
+            publication,
+            _inputs: inputs,
         })
     }
 
@@ -510,11 +529,78 @@ impl<'a> Construction<'a> {
                 .map_err(|error| error.to_string())?;
             file.write_all(&raw)
                 .and_then(|_| file.write_all(b"\n"))
+                .and_then(|_| file.sync_all())
                 .map_err(|error| error.to_string())?;
+            let directory = self
+                .directory
+                .strip_prefix(self.root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("non UTF-8 bootstrap directory")?;
+            let destination = self.profile.report_destination(self.root)?;
+            let slot = destination
+                .strip_prefix(self.root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("non UTF-8 bootstrap report slot")?;
+            let adopted = self.publication.is_some();
+            let dependencies: Vec<String> = self
+                .report
+                .operations
+                .iter()
+                .flat_map(|operation| {
+                    [&operation.stdout.path, &operation.stderr.path]
+                        .into_iter()
+                        .chain(operation.reused_from.iter().map(|original| &original.path))
+                })
+                .filter(|path| !path.starts_with(&format!("{directory}/")))
+                .cloned()
+                .collect();
+            // Protect both generations and all explicitly reused originals before
+            // releasing the producer or replacing the selected report bytes.
+            let _slot = if adopted && outcome.is_ok() {
+                retention::reference_report(self.root, slot, directory, &dependencies, None)?
+            } else {
+                None
+            };
+            if adopted && outcome.is_err() {
+                retention::Inventory::adopted(self.root)?
+                    .ok_or("bootstrap retention policy disappeared")?
+                    .dependencies_paths(directory, &dependencies)?;
+            }
+            if let Some(publication) = self.publication.take() {
+                let completion = publication
+                    .complete(json!({"status":self.report.status,"error":self.report.error}));
+                let diagnostic = if outcome.is_err() || completion.is_err() {
+                    retention::Inventory::adopted(self.root)?
+                        .ok_or("bootstrap retention policy disappeared")?
+                        .retain_diagnostic_path(directory)
+                } else {
+                    Ok(())
+                };
+                match (completion, diagnostic) {
+                    (Err(primary), Err(secondary)) => {
+                        return Err(format!("{primary}; diagnostic retention: {secondary}"));
+                    }
+                    (Err(error), _) | (_, Err(error)) => return Err(error),
+                    _ => (),
+                }
+            }
             if outcome.is_ok() {
-                let destination = self.profile.report_destination(self.root)?;
-                fs::write(destination, [raw.as_slice(), b"\n"].concat())
+                let mut selected = OpenOptions::new()
+                    .create(true)
+                    .truncate(true)
+                    .write(true)
+                    .open(&destination)
                     .map_err(|error| error.to_string())?;
+                selected
+                    .write_all(&raw)
+                    .and_then(|_| selected.write_all(b"\n"))
+                    .and_then(|_| selected.sync_all())
+                    .map_err(|error| error.to_string())?;
+                if adopted {
+                    retention::settle_report(self.root, slot, directory)?;
+                }
             }
             Ok(())
         })();

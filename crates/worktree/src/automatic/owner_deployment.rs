@@ -2,6 +2,32 @@
 use super::*;
 use crate::verified_owner_publication as publication_policy;
 
+const CURRENT_OWNER_SLOT: &str = ".chrono-harness/state/bootstrap-owner-current.json";
+
+fn protect_adoption(root: &Path, adoption: &Value) -> Result<Option<Lease>, String> {
+    if adoption["schema"] != "chrono-worktree-owner-adoption/v1" {
+        return Err("current owner adoption schema".into());
+    }
+    let receipt: Receipt = serde_json::from_value(adoption["receipt"].clone())
+        .map_err(|e| format!("current owner adoption receipt: {e}"))?;
+    let raw = crate::recovery::state_bytes(root, &receipt.path)?;
+    let mut original = adoption.clone();
+    original
+        .as_object_mut()
+        .ok_or("owner adoption object")?
+        .remove("receipt");
+    if sha256(&raw) != receipt.sha256 || json(&raw)? != original {
+        return Err("current owner adoption original changed".into());
+    }
+    chrono_harness::retained_artifacts::retention::reference_report(
+        root,
+        CURRENT_OWNER_SLOT,
+        &receipt.path,
+        &crate::recovery::original_paths(root, &original)?,
+        None,
+    )
+}
+
 fn executable_binding(path: &Path) -> Result<Value, String> {
     use std::os::unix::fs::MetadataExt;
     let id = crate::ownership::identity(path)?;
@@ -836,6 +862,12 @@ impl Manager {
         // Stage qualification and publication use the same original Rust owner.
         // No child process or synthetic managed-process receipt is produced.
         stable(r)?;
+        let index = no_symlink_parents(root, CURRENT_OWNER_SLOT)?;
+        match fs::read(&index) {
+            Ok(raw) => drop(protect_adoption(root, &json(&raw)?)?),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e.to_string()),
+        }
         let publication = publish_owner(root, record)?;
         stable(r)?;
         if publication["schema"] != "chrono-bootstrap-owner-publication/v1"
@@ -871,8 +903,15 @@ impl Manager {
             return Err("installed owner changed before adoption".into());
         }
         adoption["receipt"] = value!(receipt);
-        let index = no_symlink_parents(root, ".chrono-harness/state/bootstrap-owner-current.json")?;
+        // The existing fixed-slot owner extends its root across retries, so a
+        // failed pointer publication cannot shed a previous pending original.
+        let _slot = protect_adoption(root, &adoption)?;
         write_json(&index, &adoption, false)?;
+        chrono_harness::retained_artifacts::retention::settle_report(
+            root,
+            CURRENT_OWNER_SLOT,
+            &receipt.path,
+        )?;
         stable(r)?;
         report["owner_deployment"] = adoption;
         Ok(())

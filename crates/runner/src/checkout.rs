@@ -1,12 +1,12 @@
 //! Compare an explicit Git tree/index inventory with literal filesystem objects.
 use crate::{
-    facts::{Entry, Tree, TreePath, full_oid},
+    facts::{Entry, Tree, full_oid},
     relative_path,
     verified_identifiers::{
         git_index_metadata, git_inventory_fields, git_inventory_records, git_inventory_row,
-        git_inventory_termination, git_inventory_text, git_tree_metadata,
+        git_inventory_termination, git_inventory_text,
     },
-    verified_status::insert_git_tree_entry,
+    verified_status::parse_git_tree_rows,
 };
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
@@ -29,22 +29,8 @@ fn rows(raw: &[u8]) -> Result<Vec<&str>, String> {
 }
 
 pub fn tree(raw: &[u8]) -> Result<Tree, String> {
-    let mut result = Tree::new();
-    for row in rows(raw)? {
-        let (meta, path) = git_inventory_row(row, "invalid Git tree row")?;
-        let fields = git_inventory_fields(meta);
-        git_tree_metadata(&fields)?;
-        relative_path(path)?;
-        full_oid(fields[2])?;
-        insert_git_tree_entry(
-            &mut result,
-            TreePath::from_text(path),
-            fields[0],
-            fields[2],
-            fields[1],
-        )?;
-    }
-    Ok(result)
+    parse_git_tree_rows(&rows(raw)?)
+        .map_err(|error| error.render(|path| format!("invalid relative path: {path:?}")))
 }
 
 /// Index stages are compared as data; Git filters/configuration never decide equality.
