@@ -145,7 +145,7 @@ init／generate 只接受 schema 2、producer=`chrono-instructions`、render=`at
 
 新宿主的原始方法 init 把明确选择的方法登记为 `legacy.method` file atom。未声明语言时为 und，明确给出 --locale 时则采用作者声明。und 仅表示未指定语言，框架不冒称中文或英文。方法和上下文保留精确 UTF-8 字节；刷新时保留已有文件普通权限和根块外原文。没有改变绑定时，保留当前 manifest 排版。
 
-本仓把逐条迁移的产品双语 catalog 采用到独立宿主 catalog，再从源构建二进制，生成三个实际使用的输出。先前 001e501 的精选 17 段已细分并补充，稳定入口保留，不再有第二份旧段落权威；旧整块方法已退役，历史由版本库保留。这不是其他宿主的自动更新。已有宿主保留自己的 catalog 或不解析内容的方法文件；采用新默认时，明确比较、保留定制并编辑宿主数据。可选的[逐条处置表](methodology-clause-map.md)和[许可说明](licenses/methodology-attribution.md)不进入生成依赖图。
+本仓将产品双语 catalog 采用到独立宿主 catalog，从源构建二进制并生成 manifest 选择的输出。已有宿主保留自己的 catalog 或不解析内容的方法文件；采用新默认时，比较所选产品版本、保留定制并编辑宿主数据，不自动覆盖。[来源与采用说明](methodology-extraction.md)及[许可资料](licenses/methodology-attribution.md)不进入生成依赖图；历史迁移过程归 Git／PR。
 
 ## IO、边界与验证
 
