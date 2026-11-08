@@ -31,7 +31,7 @@ v3 将输入范围标为 `declared-complete` 时，必须提供 `bindings`，每
 
 macOS 27 不再把某次源码 bootstrap 的 `chrono-ci`、`chrono-worktree`、`chrono-inputs` 安装摘要作为后续构建的固定预期。三个文件输入、对应绑定引用和配置专属 FILEMAP 边一同删除；工具名、版本及其实际消费者继续由现有工具登记和依赖边负责。本次安装的文件身份由实际 bootstrap／检查报告产生，按其消费者与保留期使用，不复制回跟踪政策。
 
-macOS 27 不固定 curl、shasum、tar 的系统版本输出；它们使用与 macOS 26 政策相同的 `expected_version: null`，命令和真实下载／校验／解压用途继续登记。Verus 的所选版本、下载地址、摘要和证明结果合同归现役 bootstrap／项目操作。无实际使用方的 `CHRONO_XCODE_CONTENTS` 不进入环境；其余 SDK／开发目录选择的必要性与可移植性仍待核查。这些取舍不补齐 full 输入或执行物绑定。
+macOS 27 不固定 curl、shasum、tar 的系统版本输出；它们使用与 macOS 26 政策相同的 `expected_version: null`，命令和真实下载／校验／解压用途继续登记。Verus 的所选版本、下载地址、摘要和证明结果合同归现役 bootstrap／项目操作。无实际使用方的 `CHRONO_XCODE_CONTENTS` 不进入环境。SDK、开发目录和链接器不覆盖为某一 Xcode 安装的绝对路径；沿已登记变量继承当前选择，未设置时由既有 Rust／Cargo 和 Xcode 工具选择。这些取舍不补齐 full 输入或执行物绑定。
 
 `cargo-guard` 已无现役项目操作使用，其工具声明和公共依赖边已退役；runner 和 diagnostics 的专属保护输入也已退役。普通构建与行为测试沿各自登记计划执行。
 
@@ -39,7 +39,7 @@ macOS 27 与其他直接配置一样使用共享判官登记，`runner.sha256` �
 
 其他消费者、原快照、完整编译器／SDK 输入和真实 CI 采用仍不齐，政策保持 `status: proposed`、`enforcement: not-implemented`、`input_closure.status: incomplete`。验证沿用候选 bootstrap、标准变更检查和真实 PR／落地检查，总验证及存储成本未测。
 
-可写 `CARGO_HOME` 为当前工作树的 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与登记源码 bootstrap 一致；每个工作树使用自己的 Cargo home 缓存／配置。HOME、TMPDIR 继承现有环境，不写其他工作树目录。bootstrap 绑定所选 Rust 工具的版本和组件摘要；SDKROOT／DEVELOPER_DIR 等环境值只选择路径，没有建立 SDK 内容绑定，祖先 Cargo 配置及其余输入是否完整仍待验证。
+可写 `CARGO_HOME` 为当前工作树的 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与登记源码 bootstrap 一致；每个工作树使用自己的 Cargo home 缓存／配置。HOME、TMPDIR 继承现有环境，不写其他工作树目录。bootstrap 绑定所选 Rust 工具的版本和组件摘要；SDKROOT／DEVELOPER_DIR 等沿现有环境继承；路径选择没有建立 SDK 内容绑定，祖先 Cargo 配置及其余输入是否完整仍待验证。
 
 bootstrap 与标准检查继续使用该 Cargo home，所选必需输入缺失仍失败。本地和 CI 必须使用同一登记命令；环境间必然同判还要求完整相同有效输入和确定性求值。当前生产者仍为 `completeness_proven: false`，报告保持 `parity: unestablished`，没有独立比较或改写报告命令，也不增加普通完整检查门。
 
