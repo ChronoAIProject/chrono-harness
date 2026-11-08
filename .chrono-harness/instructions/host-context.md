@@ -89,14 +89,14 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 | 当前任务 | 负责文档与适用条件 |
 | --- | --- |
 | 改登记、执行计划或测试 | [影响范围](../../docs/filemap-impact.md)、[执行、分组和语言](../../docs/execution.md)、[单元库存](../../docs/ci-units.md)：本宿主 cap=2，不越过依赖、共享 claim 或登记时限。跨调用隔离由调用方负责。分组、真实未过滤库存，以及原断言、线程和发布操作的保留要求，见单元说明。语言声明不能证明其余跨语言逻辑已迁移。 |
-| 改输入、Cargo 或 full 采用 | [输入与同判条件](../../docs/inputs.md)、[Cargo guarded](../../docs/cargo-projects.md)、[Git facts](../../docs/git-facts.md)、[full CI](../../docs/full-ci.md)：快照不补依赖、不改预期摘要、不启用治理。候选解码器读取固定历史数据，不执行旧判官。full unscoped 需要原 origin receipt 和历史证据，缺失则失败。当前 projects 测试使用原未过滤 action；通用转换接口用自含合成测试数据验证，不获取旧仓库，也不提供已退役宿主的兼容入口。 |
+| 改输入或 full 采用 | [输入与同判条件](../../docs/inputs.md)、[Git facts](../../docs/git-facts.md)、[full CI](../../docs/full-ci.md)：快照不补依赖、不改预期摘要、不启用治理。候选解码器读取固定历史数据，不执行旧判官。full unscoped 需要原 origin receipt 和历史证据，缺失则失败。当前 projects 测试使用原未过滤 action；通用转换接口用自含合成测试数据验证，不获取旧仓库，也不提供已退役宿主的兼容入口。 |
 | 改 CI 缓存 | [缓存说明](../../docs/ci-cache.md)：普通 plan／restore、producer-manifest 内容验证、失败恢复、原构建与测试、seal／save 和原始 outcome 报告均有当前使用方。专属远端激活层已退役，不增加替代入口。目前只支持 primary checkout，完整验收仍有缺口；具体观察和原件入口由缓存说明维护。缓存测试仅在失败时保留原测试数据、探测配置和报告。 |
 | 改发布或消费关系 | [发布说明](../../docs/release-ci.md)：v5 明确登记 needs／rust_toolchain／verification_consumers，保留原未过滤操作、producer／run／attempt 和失败证据。declared 不证明必要性；本地、原生和公开采用分别验收。 |
 | 读成本或排查失败 | [汇总观察](../../docs/ci-units.md#github-projection-and-transport)、[诊断范围](../../docs/diagnostics.md)：先读原件。当前 attempt 的 API 视图可能包含沿用结果，新 job ID 不证明任务重跑。canonical-check 包含构建、测试和汇总；读数不代表完整历史、重跑成本、计费或全流程总量，告警不能证明冗余或节省。 |
 
 ## 当前未完成边界
 
-完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`，尚未采用 Cargo guarded policy。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
+完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
 
 宿主 Git facts 采用 `chrono-git-configs/v3` 精确摘要选择；实际映射和固定数据路径归[选择器](../config.json)，工作树接受的主身份及补充身份归[工作树政策](../worktree.json)。版本预期和完整验收仍须实际 bound probe 验证，未知摘要仍在执行前拒绝。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不在本上下文复制运行号或摘要。
 
