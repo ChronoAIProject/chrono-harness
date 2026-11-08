@@ -96,9 +96,9 @@ fn capture(
 ) -> CapturedStream {
     let mut failures = Vec::new();
     let path = output.join(&relative);
-    let mut file = match fs::create_dir_all(output.join("processes")).and_then(|()| {
-        OpenOptions::new().create_new(true).write(true).open(&path)
-    }) {
+    let mut file = match fs::create_dir_all(output.join("processes"))
+        .and_then(|()| OpenOptions::new().create_new(true).write(true).open(&path))
+    {
         Ok(file) => Some(file),
         Err(error) => {
             failures.push(format!("retention: {error}"));
@@ -141,19 +141,24 @@ fn capture(
     }
     CapturedStream {
         bytes,
-        path: if file.is_some() && complete { Some(relative) } else { None },
+        path: if file.is_some() && complete {
+            Some(relative)
+        } else {
+            None
+        },
         failures,
         complete,
     }
 }
 
-fn joined_stream(
-    result: thread::Result<CapturedStream>,
-    name: &str,
-) -> CapturedStream {
+fn joined_stream(result: thread::Result<CapturedStream>, name: &str) -> CapturedStream {
     result.unwrap_or_else(|_| CapturedStream {
-        bytes: Vec::new(), path: None, complete: false,
-        failures: vec![format!("{name} worker panicked; original stream is incomplete")],
+        bytes: Vec::new(),
+        path: None,
+        complete: false,
+        failures: vec![format!(
+            "{name} worker panicked; original stream is incomplete"
+        )],
     })
 }
 
@@ -170,7 +175,12 @@ pub fn execute(
 ) -> Result<CapturedProcess, String> {
     let mut argv = Vec::new();
     for argument in std::iter::once(command.get_program()).chain(command.get_args()) {
-        argv.push(argument.to_str().ok_or("non UTF-8 release argument")?.to_owned());
+        argv.push(
+            argument
+                .to_str()
+                .ok_or("non UTF-8 release argument")?
+                .to_owned(),
+        );
     }
     let cwd = match command.get_current_dir() {
         Some(path) => path.to_owned(),
@@ -188,8 +198,22 @@ pub fn execute(
     let original_stdout = child.stdout.take().expect("piped child stdout");
     let original_stderr = child.stderr.take().expect("piped child stderr");
     let (status, captured_stdout, captured_stderr) = thread::scope(|scope| {
-        let stdout = scope.spawn(|| capture(output, format!("processes/{index}.stdout"), original_stdout, stdout));
-        let stderr = scope.spawn(|| capture(output, format!("processes/{index}.stderr"), original_stderr, stderr));
+        let stdout = scope.spawn(|| {
+            capture(
+                output,
+                format!("processes/{index}.stdout"),
+                original_stdout,
+                stdout,
+            )
+        });
+        let stderr = scope.spawn(|| {
+            capture(
+                output,
+                format!("processes/{index}.stderr"),
+                original_stderr,
+                stderr,
+            )
+        });
         let status = loop {
             match child.wait() {
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
@@ -202,22 +226,39 @@ pub fn execute(
     let mut failures = Vec::new();
     let child_exit = match status {
         Ok(status) => {
-            let code = status.code().or_else(|| status.signal().map(|signal| -signal));
+            let code = status
+                .code()
+                .or_else(|| status.signal().map(|signal| -signal));
             match code {
                 Some(code) if (-127..=255).contains(&code) => Some(code),
-                _ => { failures.push("unavailable terminal child status".into()); None }
+                _ => {
+                    failures.push("unavailable terminal child status".into());
+                    None
+                }
             }
         }
-        Err(error) => { failures.push(format!("wait original child: {error}")); None }
+        Err(error) => {
+            failures.push(format!("wait original child: {error}"));
+            None
+        }
     };
     let finished_ns = match timestamp() {
         Ok(time) => Some(time),
-        Err(error) => { failures.push(format!("finish timestamp: {error}")); None }
+        Err(error) => {
+            failures.push(format!("finish timestamp: {error}"));
+            None
+        }
     };
     Ok(CapturedProcess {
-        pid, argv, cwd, started_ns, finished_ns,
-        duration_seconds: started.elapsed().as_secs_f64(), child_exit,
+        pid,
+        argv,
+        cwd,
+        started_ns,
+        finished_ns,
+        duration_seconds: started.elapsed().as_secs_f64(),
+        child_exit,
         stdout: joined_stream(captured_stdout, "stdout"),
-        stderr: joined_stream(captured_stderr, "stderr"), failures,
+        stderr: joined_stream(captured_stderr, "stderr"),
+        failures,
     })
 }
