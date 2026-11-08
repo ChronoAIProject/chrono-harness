@@ -1,11 +1,9 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
-mod backend;
 mod content;
 mod probe;
 mod recovery;
 mod report;
 pub mod verified_planner;
-pub use backend::Config as Backend;
 use chrono_harness::{decode, file_identity, no_symlink_parents, sha256, wire};
 pub use report::transport_report;
 use serde::{Deserialize, Serialize};
@@ -43,8 +41,6 @@ pub struct Config {
     pub consumer_operations: BTreeMap<String, Vec<OperationSource>>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub require_primary_checkout: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub backend: Option<Backend>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub recover_failed_restores: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -185,9 +181,6 @@ pub fn validate(c: &Config) -> Result<(), String> {
             "E_CACHE_RECOVERY: unconfirmed-restore recovery requires adopted failed-restore recovery"
                 .into(),
         );
-    }
-    if let Some(backend) = &c.backend {
-        backend::validate(backend)?;
     }
     let consumers: BTreeSet<_> = c.caches.values().flat_map(|c| &c.consumers).collect();
     for consumer in &consumers {
@@ -729,9 +722,6 @@ fn prepare_with_inputs(
         "consumer":consumer,"caches":entries,"inputs":observations,
         "input_completeness_proven":false,"execution":"not-started",
         "planner":current_executable_identity()?,"consumer_operations":operation_contract});
-    if let Some(backend) = &c.backend {
-        plan["backend"] = json!(backend);
-    }
     if c.recover_failed_restores {
         plan["recovery"] = json!({"method":"discard-failed-host-restores","host_root":root,
             "registration_sha256":wire::digest(c)?});

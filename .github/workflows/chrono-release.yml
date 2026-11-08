@@ -11,7 +11,6 @@ on:
         type: string
 permissions:
   contents: read
-  actions: read
 jobs:
   linux_build_runner:
     if: ${{ github.event.deleted != true }}
@@ -90,7 +89,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_runner/plan.json' --report-directory '.chrono-harness/cache/release-results/build_runner/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -179,7 +177,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_instructions/plan.json' --report-directory '.chrono-harness/cache/release-results/build_instructions/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -268,7 +265,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_ci/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_ci/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -357,7 +353,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_ci/plan.json' --report-directory '.chrono-harness/cache/release-results/build_ci/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -446,7 +441,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_registration/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_registration/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -535,7 +529,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_filemap/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_filemap/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -624,7 +617,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_routes/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_routes/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -713,7 +705,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_projects/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_projects/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -802,7 +793,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_cost/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_cost/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -891,7 +881,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_mixed/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_mixed/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -980,7 +969,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_workflow/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_workflow/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1069,7 +1057,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_inputs/plan.json' --report-directory '.chrono-harness/cache/release-results/build_inputs/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1158,7 +1145,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_distribution/plan.json' --report-directory '.chrono-harness/cache/release-results/build_distribution/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1247,7 +1233,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_worktree/plan.json' --report-directory '.chrono-harness/cache/release-results/build_worktree/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1345,7 +1330,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_distribution_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1459,7 +1443,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_worktree_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1550,7 +1533,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_runner_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_runner_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1705,7 +1687,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_inputs_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1807,7 +1788,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_ci_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_ci_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1899,7 +1879,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_ci_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -1991,7 +1970,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_registration_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -2088,7 +2066,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_projects_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -2189,7 +2166,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_workflow_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -2278,7 +2254,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_instructions_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -2373,7 +2348,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_filemap_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -2462,7 +2436,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_routes_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -2556,7 +2529,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_cost_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -2651,7 +2623,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_mixed_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -2960,7 +2931,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_runner/plan.json' --report-directory '.chrono-harness/cache/release-results/build_runner/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3049,7 +3019,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_instructions/plan.json' --report-directory '.chrono-harness/cache/release-results/build_instructions/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3138,7 +3107,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_ci/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_ci/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3227,7 +3195,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_ci/plan.json' --report-directory '.chrono-harness/cache/release-results/build_ci/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3316,7 +3283,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_registration/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_registration/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3405,7 +3371,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_filemap/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_filemap/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3494,7 +3459,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_routes/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_routes/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3583,7 +3547,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_projects/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_projects/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3672,7 +3635,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_cost/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_cost/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3761,7 +3723,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_mixed/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_mixed/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3850,7 +3811,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_workflow/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_workflow/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -3939,7 +3899,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_inputs/plan.json' --report-directory '.chrono-harness/cache/release-results/build_inputs/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4028,7 +3987,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_distribution/plan.json' --report-directory '.chrono-harness/cache/release-results/build_distribution/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4117,7 +4075,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_worktree/plan.json' --report-directory '.chrono-harness/cache/release-results/build_worktree/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4215,7 +4172,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_distribution_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4329,7 +4285,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_worktree_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4420,7 +4375,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_runner_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_runner_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4575,7 +4529,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_inputs_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4677,7 +4630,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_ci_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_ci_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4769,7 +4721,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_ci_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4861,7 +4812,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_registration_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -4958,7 +4908,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_projects_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -5059,7 +5008,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_workflow_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -5148,7 +5096,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_instructions_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -5243,7 +5190,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_filemap_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -5332,7 +5278,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_routes_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -5426,7 +5371,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_cost_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -5521,7 +5465,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_mixed_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -6004,7 +5947,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_diagnostics_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -6093,7 +6035,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_diagnostics_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -6272,7 +6213,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_cache/plan.json' --report-directory '.chrono-harness/cache/release-results/build_cache/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -6363,7 +6303,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_cache_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_cache_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -6452,7 +6391,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_cache/plan.json' --report-directory '.chrono-harness/cache/release-results/build_cache/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
@@ -6543,7 +6481,6 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_cache_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_cache_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts

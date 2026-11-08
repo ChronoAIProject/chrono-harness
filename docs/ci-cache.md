@@ -63,7 +63,7 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 v2 可为隔离主检出明确启用 `recover_failed_restores: true`。该选择保留在计划中，不进入构建缓存键。planner 将所选方法交给原生 provider；旧登记和旧 planner 不执行恢复。
 
-最终传输报告把每个计划恢复步骤与恢复程序消费的原观察核对。可增加后续 bootstrap、构建、测试、保存步骤，但已有恢复观察不能消失或改变。不符时在上传目录保留两份快照，返回带缓存 ID 和两个原路径的 `E_CACHE_REPORT`，不发布正常传输报告，也不查后端。这只核保留观察一致，不证明原生 action 声明真实。
+最终传输报告把每个计划恢复步骤与恢复程序消费的原观察核对。可增加后续 bootstrap、构建、测试、保存步骤，但已有恢复观察不能消失或改变。不符时在上传目录保留两份快照，返回带缓存 ID 和两个原路径的 `E_CACHE_REPORT`，不发布正常传输报告。这只核保留观察一致，不证明原生 action 声明真实。
 
 provider 在原生恢复后、原 bootstrap／构建前，用已有计划、登记及原步骤观察调用 `chrono-cache recover`。所有者使用原声明观察重核所选产物／消费者合同，不重跑输入探测。登记、宿主、所选路径或计划绑定变化，都在删除前失败。
 
@@ -147,27 +147,21 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 
 `evidence_directory` 可把原件放入已有发布上传目录，普通检查则放入上传的宿主状态。detector 可选择同一字段，通过已有 job 的固定上传 action 保留原件，包括失败后。目录须是字面宿主状态路径，并明确上传隐藏文件；文件缺失使上传失败，不能声称已保留。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划、探测原件。未采用时，detector 文件只是 runner 临时状态。
 
-每份上传原件直接写入选定目录，并返回其路径和 SHA-256。探测程序保留实际探测原输出；计划中的探测引用、恢复、内容核验、封存和后端观察继续保留各自返回引用所需的原字节。
+每份上传原件直接写入选定目录，并返回其路径和 SHA-256。探测程序保留实际探测原输出；计划中的探测引用、恢复、内容核验和封存继续保留各自返回引用所需的原字节。
 
-报告在已有 job 运行。未登记 backend 就不发 API 请求。只有 action 成功且 key 匹配，才报告 exact／compatible；空输出记 `miss-or-unavailable`。原生保存成功仍为 `unconfirmed`，带 `W_CACHE_SAVE_UNCONFIRMED`，因为固定 action 可能捕获后端异常后成功退出。不能由 action outcome 推断归档已保存、编译器复用或执行物身份验证。
+报告在已有 job 运行。只有 action 成功且 key 匹配，才报告 exact／compatible；空输出记 `miss-or-unavailable`。原生保存成功仍为 `unconfirmed`，带 `W_CACHE_SAVE_UNCONFIRMED`，因为固定 action 可能捕获后端异常后成功退出。不能由 action outcome 推断归档已保存、编译器复用或执行物身份验证。
 
-本 job 未选择保存且未观察到保存的缓存记 `not-requested`；实际发生未登记保存仍可见，带 `W_CACHE_UNREGISTERED_SAVE`。具体保存归因和归档内容诊断仍需后端／action 日志。
+本 job 未选择保存且未观察到保存的缓存记 `not-requested`；实际发生未登记保存仍可见，带 `W_CACHE_UNREGISTERED_SAVE`。需要排障时直接查原生 action 日志和线上缓存 API；这些事实不复制成 Git 中的运行清单。
 
-报告生产或证据保留失败使对应步骤和 job 失败，原业务结果独立保留；报告步骤没有 `continue-on-error` 豁免。后端查询失败若已成功记录，则只是非致命可用性警告。缓存后端失败不阻止后续构建。
+报告生产或证据保留失败使对应步骤和 job 失败，原业务结果独立保留；报告步骤没有 `continue-on-error` 豁免。缓存后端失败不阻止后续构建。
 
-后端观察原生验收、明确坏缓存恢复，以及后续测试失败后保留任意项目编译，仍未完成。保存内容不包括 `.chrono-harness/state`、发布交接、所选测试结果、已安装 `bin`、Git metadata 或生命周期锁。
+明确坏缓存恢复，以及后续测试失败后保留任意项目编译，仍未完成。保存内容不包括 `.chrono-harness/state`、发布交接、所选测试结果、已安装 `bin`、Git metadata 或生命周期锁。
 
-### 可选 GitHub 后端查询
+### 后端状态按需查询
 
-`chrono-cache/v2` 可登记 `backend`：`kind: github`、具体 `need`／`output_use`、有限 `command`、明确 `inherit`／`credential_environment` 列表，以及 `repository_environment`／`ref_environment` 名称。恰好一个完整命令参数为 `{endpoint}`。
+缓存计划、恢复、内容核验、封存和发布汇总都不消费后端清单。保存后的持续查询只把 GitHub 已提供的状态另存一份，不能证明归档内容、编译器复用或创建来源，因此已删除 `backend` 配置、查询实现、凭据注入和专属测试。缓存本身不再要求 `actions: read`；发布工作流只保留 `contents: read`，单元汇总及共享启动按其实际 API 消费保留已有权限。
 
-本宿主使用 `gh api --paginate --slurp {endpoint}`，限 30 秒／4 MiB。命令收到 `repos/{repository}/actions/caches?ref={encoded-ref}&per_page=100`，返回 GitHub 响应页数组。政策保留在计划中，不参与构建缓存身份；计划阶段从不查询后端。
-
-已有报告步骤只在原生保存成功但仍未确认时，每批查询一次；否则记 `not-required`，不启动查询。生成步骤提供 `GH_TOKEN`，缓存工作流允许 `actions: read`。子进程只继承声明变量。保留证据包含执行物摘要、命令、原 stdout／stderr、原退出／失败及环境摘要，但从保留环境中移除声明凭据值。命令不得向原始流打印凭据。
-
-精确 key／ref 匹配唯一后端条目时，保存状态改为 `backend-entry-observed`，可用性 `confirmed: true`、`creator: unestablished`。这只确认查询时观察到条目，不确认哪个 action 创建、归档完整、编译器复用或当前执行物身份。
-
-多归档身份记 `ambiguous`；无匹配记 `not-observed`，分页不是原子清单，因此不证明不存在。查询失败、超时、截断／错误响应或身份冲突保留原失败，发 `W_CACHE_BACKEND_UNAVAILABLE`，保存仍未确认。后端存在不能替换失败／跳过的原生保存或原业务结论。查询成本仍归登记 `cache-report` 步骤。
+`chrono-cache` 不调用 GitHub 缓存 API；原生保存成功继续表示未确认，不伪造可用性。排查特定运行时直接读取其 action 日志及线上 API。报告目前仍承担发布失败原件的上传搬运；原件上传迁移前保留这项实际消费，不把退役后端查询等同于全部报告已退役。
 
 ### 输入和共享启动边界
 
