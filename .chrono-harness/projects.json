@@ -3007,7 +3007,7 @@
             ".chrono-harness/ci/verus-macos-arm64.sha256",
             "/usr/bin/curl",
             ".chrono-harness/state/verus-download.headers",
-            "https://api.github.com/repos/verus-lang/verus/releases/assets/406260237"
+            "https://github.com/verus-lang/verus/releases/download/release/0.2026.04.24.f8e1704/verus-0.2026.04.24.f8e1704-arm64-macos.zip"
           ]
         },
         "verus-checksum": {
