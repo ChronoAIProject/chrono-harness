@@ -299,8 +299,8 @@ fn actual_host_projections_fit_native_workflow_size() {
 fn release_cache_wraps_only_the_named_original_unit() {
     let mut value = source(".chrono-harness/ci/release.json");
     value.as_object_mut().unwrap().remove("persistent_cache");
-    let original = chrono_ci::release::render(&serde_json::from_value(value.clone()).unwrap())
-        .unwrap();
+    let original =
+        chrono_ci::release::render(&serde_json::from_value(value.clone()).unwrap()).unwrap();
     let original: Value = serde_yaml_ng::from_str(&original).unwrap();
     value["persistent_cache"] = adoption("linux_build_runner");
     let config = serde_json::from_value(value).unwrap();

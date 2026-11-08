@@ -40,10 +40,7 @@ fn publish_once(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
         .map_err(|e| format!("E_CACHE_RECOVERY: {path}: {e}"))
 }
 
-fn retained(
-    root: &Path,
-    plan_path: &str,
-) -> Result<(prepared::Original, Value), String> {
+fn retained(root: &Path, plan_path: &str) -> Result<(prepared::Original, Value), String> {
     let directory = plan_path
         .rsplit_once('/')
         .ok_or("E_CACHE_RECOVERY: plan directory")?

@@ -846,8 +846,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             if let Some(original) = input["original"].as_str() {
                 let raw =
                     fs::read(no_symlink_parents(root, original)?).map_err(|e| e.to_string())?;
-                input["original"] =
-                    json!(retain_original(root, &directory, "probe", &raw)?.path);
+                input["original"] = json!(retain_original(root, &directory, "probe", &raw)?.path);
             }
         }
         let raw = serde_json::to_vec(&plan).map_err(|e| e.to_string())?;

@@ -270,8 +270,7 @@ pub fn render(c: &Config) -> Result<String, String> {
                 None,
                 Some("Preserve original release artifacts"),
             )?);
-            if c
-                .persistent_cache
+            if c.persistent_cache
                 .as_ref()
                 .is_some_and(|cache| cache.jobs.contains_key(&job.id))
             {
