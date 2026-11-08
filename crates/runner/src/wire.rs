@@ -257,7 +257,7 @@ pub(crate) fn validate_response_at(
     exit: i32,
     delta: Option<&[Delta]>,
 ) -> Result<(), String> {
-    if !crate::verified_status::wire_header_matches(
+    crate::verified_status::validate_response_fields(
         &r.protocol,
         &r.request_id,
         &r.judge_id,
@@ -266,19 +266,9 @@ pub(crate) fn validate_response_at(
         protocol,
         request_id,
         judge_id,
-    ) {
-        return Err("E_PROTOCOL: response identity/status/exit mismatch".into());
-    }
-    for f in &r.findings {
-        if !crate::verified_status::valid_finding_fields(f)
-            || !crate::verified_status::valid_finding_references(f, delta)
-        {
-            return Err("E_PROTOCOL: invalid finding".into());
-        }
-    }
-    if !crate::verified_status::findings_match_status(&r.status, &r.findings) {
-        return Err("E_PROTOCOL: finding/status disagreement".into());
-    }
+        &r.findings,
+        delta,
+    )?;
     for e in &r.evidence {
         if !crate::verified_status::valid_evidence_identity(&e.path, &e.kind, &e.sha256) {
             return Err("E_PROTOCOL: invalid evidence identity".into());

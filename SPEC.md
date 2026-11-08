@@ -666,6 +666,8 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 | 3 | 早期 spec-only CLI 的未实现退出码；现役 CI slice 不使用，完整配置拒绝返回 2 |
 
 当前协议四态的实际类型、身份比较、`pass < warn < fail < error` 顺序、克隆和退出码由同源 Verus 实现。
+两个实际协议状态的合并直接调用同源 `maximum`，结果精确保留严重程度较高的变体。
+full 执行与审计、初始库存、留存报告汇总及 finding 记录共用这一实现；外层遍历与状态转换仍分别承担证明义务。
 实际响应校验与留存报告审计复用同一证明根判断真实 finding 列表的状态一致性：fail／error 当且仅当存在精确 `error` 级别，
 pass 不允许 `warning`，warn 必须存在 `warning`；finding 克隆保留完整字段及两个引用数组的顺序和重复。
 响应头直接核完整协议／请求 ID／判官 ID 及原退出。finding 字段形状由同源 Verus 核代码和消息非空、
@@ -674,6 +676,11 @@ pass 不允许 `warning`，warn 必须存在 `warning`；finding 克隆保留完
 当前实现的引用允许条件也由同源 Verus 逐项判断：普通请求接受以 `/` 字节开头的引用，
 或与本请求任一实际 `Delta.path` 完整相等的文本；初始库存只接受前一类。
 实际 DELTA 的克隆和比较保留六个字段，区分可选文本的缺失、空值和完整内容。
+普通与初始库存的响应前置校验直接调用同源 `validate_response_fields`：先核响应头和退出码，
+再逐项核完整 finding 数组的字段与引用，最后核 finding／状态一致性。
+失败分别保留原 `E_PROTOCOL` 完整消息及上述优先级；成功后仍须完成后续 evidence 检查。
+留存执行报告的头部／状态审计直接调用同源 `validate_record_response`：先核完整头部与原退出，
+再核实际 finding 列表的状态一致性，证明原两项错误的完整消息及优先级。
 这些局部判断不证明登记记录指针的语法／目标归属、完整响应组合、JSON 或证据 IO，
 范围见 [Verus 实施说明](docs/verus.md)。
 
