@@ -33,6 +33,8 @@ pub mod scoped_report;
 mod short_console;
 pub mod units;
 #[allow(unexpected_cfgs)]
+pub mod verified_git_binding;
+#[allow(unexpected_cfgs)]
 pub mod verified_identifiers;
 #[allow(unexpected_cfgs)]
 pub mod verified_limits;

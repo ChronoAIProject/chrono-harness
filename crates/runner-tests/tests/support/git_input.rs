@@ -29,6 +29,13 @@ fn main() {
     )
     .unwrap();
     let mode = case["mode"].as_str().unwrap();
+    if mode == "fixed-response" {
+        emit(
+            case["stdout"].as_str().unwrap().as_bytes(),
+            case["stderr"].as_str().unwrap().as_bytes(),
+            case["exit_code"].as_i64().unwrap() as i32,
+        );
+    }
     if mode == "data-response" {
         emit(
             &fs::read(root.join("data-stdout")).unwrap(),
