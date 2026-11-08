@@ -110,6 +110,14 @@ impl Fixture {
             "CHRONO_PROOF_FIXTURE".into(),
             root.join("mock.json").into_os_string(),
         );
+        environment.insert(
+            "CARGO_HOME".into(),
+            root.join("cargo-home").into_os_string(),
+        );
+        environment.insert(
+            "RUSTUP_HOME".into(),
+            root.join("rustup-home").into_os_string(),
+        );
         let cargo = root.join("mock-tools/cargo");
         fs::create_dir_all(cargo.parent().unwrap()).unwrap();
         fs::copy(env!("CARGO_BIN_EXE_chrono-test-proved-cargo"), &cargo).unwrap();

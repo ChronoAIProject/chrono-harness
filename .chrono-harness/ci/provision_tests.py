@@ -165,8 +165,9 @@ class NativeCargoDomains(unittest.TestCase):
         environment = self.selected_environment(config["environment"]["values"])
         self.assertEqual(environment["CARGO_HOME"], "/Users/runner/.cargo")
         self.assertNotEqual(environment.get("CARGO_NET_OFFLINE"), "true")
-        # Exercise distinct current consumers with their original locked manifests.
-        for operation in ("build.runner", "build.cache", "build.distribution",
+        # Runner's Cargo-Verus domain is exercised by the native Rust mock tests.
+        # These remaining consumers still use ordinary locked Cargo manifests.
+        for operation in ("build.cache", "build.distribution",
                           "build.instructions", "build.judge-routes"):
             with self.subTest(operation=operation):
                 result = self.cargo(operation, environment)

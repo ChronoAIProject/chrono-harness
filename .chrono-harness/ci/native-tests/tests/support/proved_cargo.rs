@@ -29,6 +29,17 @@ fn main() -> ExitCode {
     assert_eq!(actual, invocation.argv, "exact official Cargo argv");
     assert_eq!(std::env::var("RUSTUP_TOOLCHAIN").unwrap(), "1.95.0");
     assert_eq!(std::env::var("RUSTC_BOOTSTRAP").unwrap(), "1");
+    let root = plan.parent().unwrap();
+    assert_eq!(
+        std::env::var_os("CARGO_HOME").unwrap(),
+        root.join("cargo-home").into_os_string(),
+        "compiler must consume the caller's Cargo domain"
+    );
+    assert_eq!(
+        std::env::var_os("RUSTUP_HOME").unwrap(),
+        root.join("rustup-home").into_os_string(),
+        "compiler must consume the caller's Rustup domain"
+    );
     fs::write(calls, (index + 1).to_string()).unwrap();
     for (path, bytes) in &invocation.writes {
         if let Some(parent) = path.parent() {

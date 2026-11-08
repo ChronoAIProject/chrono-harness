@@ -50,6 +50,8 @@ Rust mock／独立 Verus 根同步登记。生产判断复用 `verify.verus-resu
 `verify.bootstrap-cargo-tests`；不增加版本、安装器、全局缓存索引或共享准入锁。
 macOS 的正式工具表也登记 `bootstrap-native`，由同一原生前端的 `--version` 提供版本观察；
 仅在 bootstrap 配方中给出路径不足以让普通检查消费该构建入口。
+runner 已离开普通 Cargo 配方，其锁定、离线参数和 Cargo／Rustup 目录保留改由
+同语言的原生 Rust mock 验证；Python 的普通 Cargo 环境测试只覆盖仍采用该路径的使用方。
 每个原件的读取上限为 8 MiB；最终二进制只枚举登记 target 的 `debug/deps`，至多 4096 项，
 按明确前缀、合法指纹和实际二进制字节选择原件。这不是测试发现或选测规则。
 构建、存储、原生 CI 和完整生命周期成本以实际验收为准，未测部分保持未知。
