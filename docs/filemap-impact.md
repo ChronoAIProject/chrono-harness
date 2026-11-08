@@ -24,7 +24,7 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 
 本仓采用的 `runner-startup` 链是：detector 生产操作 → `host.bootstrap-shared-install-unit_runner` → 安装后的 runner／核心工具 → 当前 runner 单元检查。需求和产物用途写在所选单元配置里；配置、构建操作及安装源／目的归 bootstrap 登记；调用参数与负责人归 projects；构建产物声明和证据计划归 FILEMAP。不再建第二份清单，也不自动发现关系。
 
-已有 `host.bootstrap-real-consumer` 保存实际启动清单和当前检查原始报告，并实际运行后续 runner 测试。registration 核对声明的操作、测试负责人、计划和输出声明；实际成功仍须由 projects 执行和报告汇总证明。
+`host.bootstrap-command-tests` 在进程边界 mock 外部命令，核对 bootstrap 调用及成功／失败／超时／源码变化时的发布行为。旧真实消费者测试入口已退役；mock 不证明真实工具或后续 runner 测试通过。实际启动清单、安装及 runner 检查仍由正式 CI 生产链提供原始结果，registration 核对声明，projects 与汇总核对实际执行。
 
 标准检查在选单元前调用 registration。固定任一端的规则、点名源路径或影响到的操作负责人变化，都会选中这条链。删除或重新绑定后，仅旧端存在的引用仍会选中。选中链必须在候选中可解析；直接关闭这项检查属于未经证明的移除，会失败。
 

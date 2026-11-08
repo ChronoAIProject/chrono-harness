@@ -1419,7 +1419,7 @@
       "operations": [
         "host.bootstrap-provision-tests",
         "host.bootstrap-tests",
-        "host.bootstrap-real-consumer"
+        "host.bootstrap-command-tests"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
@@ -1910,11 +1910,9 @@
           "crates/cache-tests/target/"
         ]
       },
-      "host.bootstrap-real-consumer": {
+      "host.bootstrap-command-tests": {
         "resources": [],
-        "outputs": [
-          ".chrono-harness/state/bootstrap-real/"
-        ]
+        "outputs": []
       },
       "host.bootstrap-provision-tests": {
         "resources": [],

@@ -123,19 +123,13 @@ bootstrap 只改自身子进程环境，不改调用方之后的标准检查环�
 
 共享 produce／install／verify 核源码登记、原操作选择、编译器环境及每份流字节。传入的生产路径只作来源；本地绑定按 profile 单独核。
 
-### 真实消费者与证据保管测试
+### bootstrap 命令 mock 与证据保管
 
-登记 action `host.bootstrap-real-consumer` 用 `--real-consumer` 调用已有 Python 测试入口。它从精确干净候选克隆主 fixture，执行 cache／core 构建、共享 produce／install 和 runner 单元登记 verify，再消费真实 runner 单元检查。
+登记 action `host.bootstrap-command-tests` 通过 `--command-mocks` 调用现有 Python 测试入口，在 `subprocess.run` 边界使用 mock。测试核对明确选择的 bootstrap 程序、参数及描述符转交，并覆盖成功导出、非零失败、超时和源码变化时拒绝发布。它不真正运行 Git、Cargo、curl、编译器或安装器，也不把 mock 产物当作真实工具行为证据。
 
-检查若选中 `test:runner-tests`，其成功独立 `test.runner-tests` Cargo 结果满足消费断言。单元无操作时（含候选已落地、与 dev 相同），fixture 在已有租约和剩余时间／输出上限内，用 scoped 政策工具链环境明确执行同一登记 Cargo action。
+原 `host.bootstrap-real-consumer`／`host.bootstrap-real-fixture` 测试入口及其真实外部构建链已退役，没有历史兼容分支。失败原件仍由原所有者保管，不因测试迁移删除。真实工具安装、共享产物生产／安装和后续 canonical 检查仍由 CI 的正式生产步骤执行，结果须分别核对。
 
-这是 fixture 验收操作，不改变原 DELTA 选择、报告或无工作成功。缺失／失败的已选执行不能替代。fixture 结果明确引用原检查或另行登记命令作为消费证据，因此只完成 startup 不足验收，成功所选操作也不重复执行。
-
-原件保留在 `.chrono-harness/state/bootstrap-real/pending-attempt/`。生产者维护 `result.json`，记录源码、argv／cwd、原 stdout／stderr 路径、摘要、大小、继承所有权描述符，以及成功、非零失败或超时。超时保留原件，不编造退出码。执行前写结果，普通退出时更新；中断尝试继续受保护。该位置独占创建，旧尝试未解决时拒绝再克隆／构建。历史 `attempt-*` 目录保留，不迁移，也不声称已知其所有权。
-
-唯一命令为登记形状的 `clone`，且原件证明它已等待后以正的非零退出码失败时，准入可结束这次尚未进入所有者管理的准备尝试。原失败、输出流和部分源码仍保留原位，不删除、不改写成功，也不声称后代静止或缓存处置完成。超时、信号退出、未知结果、原件变化、额外命令或已开始管理，仍阻断重入。下一次尝试使用新的独占位置，不能替代旧失败的诊断和验收义务。
-
-构建任何输出前，生产者用调用方绑定源码的 `chrono-worktree` 管理新主 fixture。已有 `use` 为不存在的登记主缓存输出建立登记，运行内部 action `host.bootstrap-real-fixture`。同一租约覆盖 cache／core 生产、共享 install／verify、runner 检查和报告断言，嵌套采用命令继承保护。所有者从调用方保留的 bin 运行，fixture 安装 core 不会覆盖正在执行的所有者。
+本次修改产品默认和宿主规则，并迁移这条 bootstrap 命令测试。历史保管测试尚未全部迁移为 mock，不能宣称全仓测试已符合新规则。以下保管协议仍解释已有原件及现役保管测试；它不授予新测试调用真实外部依赖的例外。
 
 受管子进程全部等待结束后，生产者请求已有 `finish --artifacts-only`。它消费真实释放、cache intent、处置回执，核原摘要、精确声明输出及确实缺失，再记 `outputs-disposed-evidence-retained`。不创建 Python 清理账本，也不接管历史记录。
 

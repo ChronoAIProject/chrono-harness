@@ -3106,24 +3106,6 @@
             ".chrono-harness/ci/bootstrap-tests.py"
           ]
         },
-        "real-consumer": {
-          "operation": "host.bootstrap-real-consumer",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py",
-            "--real-consumer"
-          ]
-        },
-        "real-fixture": {
-          "operation": "host.bootstrap-real-fixture",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py",
-            "--real-fixture"
-          ]
-        },
         "provision": {
           "operation": "host.bootstrap-provision-tests",
           "tool": "python3",
@@ -3140,6 +3122,15 @@
             ".chrono-harness/ci/bootstrap-tests.py",
             "--lifecycle-program",
             "crates/worktree/target/debug/chrono-worktree"
+          ]
+        },
+        "command-mocks": {
+          "operation": "host.bootstrap-command-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap-tests.py",
+            "--command-mocks"
           ]
         }
       }
