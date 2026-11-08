@@ -273,6 +273,32 @@ fn actual_native_unit_retains_original_frontend_metadata_for_the_collector() {
 }
 
 #[test]
+fn native_launcher_restores_executable_mode_and_runs_the_selected_frontend_without_rust() {
+    let f = Fixture::new();
+    let directory = f.host.root().join("frontend");
+    assert!(f.export(&directory).status.success());
+    assert!(!directory.join("chrono-host-release").exists());
+    let out = f.unit_through_launcher(&directory);
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert_eq!(fs::metadata(directory.join("chrono-host-release")).unwrap().permissions().mode() & 0o777, 0o755);
+    let report: Value = serde_json::from_slice(&fs::read(f.host.root().join("handoffs/none/receipt.json")).unwrap()).unwrap();
+    assert_eq!(report["status"], "passed");
+    assert_eq!(report["frontend_selection"]["attempt"], "1");
+    assert_eq!(report["frontend_input"]["path"], "frontend/frontend.json");
+}
+
+#[test]
+fn native_launcher_rejects_a_missing_archive_before_the_business_action() {
+    let f = Fixture::new();
+    let directory = f.host.root().join("frontend");
+    assert!(f.export(&directory).status.success());
+    fs::remove_file(directory.join("executable.tar")).unwrap();
+    let out = f.unit_through_launcher(&directory);
+    assert!(!out.status.success());
+    assert!(!f.host.root().join("handoffs/none").exists());
+}
+
+#[test]
 fn native_unit_rejects_an_identical_frontend_executed_outside_the_selected_artifact() {
     let f = Fixture::new();
     f.exported();

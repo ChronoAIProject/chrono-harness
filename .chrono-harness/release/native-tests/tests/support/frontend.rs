@@ -225,8 +225,20 @@ impl Fixture {
 
     pub fn unit(&self, executable: &Path) -> std::process::Output {
         let mut command = Command::new(executable);
-        command.arg(self.host.root()).arg(self.host.root().join("handoffs/none")).args(["--unit","test_none"])
-            .env_remove("CHRONO_RELEASE_LOCAL")
+        command.arg(self.host.root()).arg(self.host.root().join("handoffs/none")).args(["--unit","test_none"]);
+        self.native_unit(command)
+    }
+
+    pub fn unit_through_launcher(&self, directory: &Path) -> std::process::Output {
+        let mut command = Command::new("/bin/sh");
+        command.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
+            .arg(self.host.root()).arg(directory).arg(self.host.root().join("handoffs/none"))
+            .args(["--unit", "test_none"]);
+        self.native_unit(command)
+    }
+
+    fn native_unit(&self, mut command: Command) -> std::process::Output {
+        command.env_remove("CHRONO_RELEASE_LOCAL")
             .env("CHRONO_RELEASE_RUN","1234").env("CHRONO_RELEASE_ATTEMPT","2").env("CHRONO_RELEASE_JOB","native_test_none")
             .env("CHRONO_RELEASE_DEPENDENCIES",serde_json::to_string(&json!({"native_frontend":{"result":"success","outputs":{"artifact_id":"98765","run_id":"1234","attempt":"1"}}})).unwrap());
         self.capture(command)
