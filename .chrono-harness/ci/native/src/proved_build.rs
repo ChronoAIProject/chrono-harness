@@ -383,6 +383,8 @@ fn run_attempt(
                 serde_json::to_string(&rustflags).map_err(|e| e.to_string())?
             ),
             "--message-format=json".into(),
+            // Verus 报告没有目标标识，须防止并行编译插入其他库的产物记录。
+            // Cargo 专用参数须在 Verus 相关 Cargo 参数之后。
             "--jobs".into(),
             "1".into(),
             "--".into(),

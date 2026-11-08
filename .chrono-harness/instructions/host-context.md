@@ -109,9 +109,9 @@ AI 开始和交接本仓工作时运行 status，关注本地未终结、未知�
 
 完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
 
-宿主 Git facts 仍采用 `chrono-git-configs/v3` 精确摘要选择，实际映射和固定数据路径归[选择器](../config.json)；未知摘要仍在该路径执行前拒绝，版本预期和完整验收仍须实际 bound probe 验证。[工作树政策](../worktree.json)采用 v2，不维护主机 Git 摘要／版本白名单：每次运行观察实际程序，后续命令绑定同一字节，观察归本轮 state 原件。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不在本上下文复制运行号或摘要。
+宿主 Git facts 采用既有 `chrono-git-configs/v1` 平台映射，macOS／Linux 分别选择 macos-27／linux-release。四份 schema4 政策的 Git 使用已登记 PATH 一次解析，版本预期为 null，不维护主机执行物 SHA／版本清单。读取器保留实际路径、摘要、原版本进程及逐调用字节漂移检查；显式预期与 full v3 合同继续严格核验。[工作树政策](../worktree.json)同样使用运行内实际绑定。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不复制为跟踪白名单。
 
-政策与产品同时变更时，候选决定实际执行程序。固定端点先按候选程序身份读取明确登记；端点未登记该身份时，只读取候选声明的 registry_path 和端点原字节，不启动历史 Git，也不猜其他路径。额外读取和完整验证成本未测。
+本批产品与宿主政策同步修改：scoped 接受实际观察，full v3 的显式预期合同不变。固定基线的身份／政策只由候选解码器作为数据解释，不执行历史 Git。缓存与发布另有消费者的明确原生政策元数据继续保留。候选标准／原生验收、真实协调者部署及随后 canonical 消费须分别核实，不由声明证明采用；完整成本仍未测。
 
 日常本机检查的 CARGO_HOME 使用当前检出的 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与 bootstrap 的可重建工具缓存登记一致；HOME／TMPDIR 沿用继承环境。bootstrap 绑定所选 Rust 工具的版本和组件摘要；SDKROOT／DEVELOPER_DIR 等路径选择不等于 SDK 内容绑定，也不证明祖先 Cargo 配置及其余输入完整。当前声明与采用缺口归[输入说明](../../docs/inputs.md)，运行观察归原件。
 

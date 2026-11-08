@@ -1,7 +1,7 @@
 //! Candidate-owned Git binding. Does not infer Git's delegated input closure.
 use crate::{
     CommandSpec, ProcessResult, facts, no_symlink_parents, resolve_program, run_process_observed,
-    sha256, wire,
+    sha256, verified_git_binding, wire,
 };
 use serde_json::{Value, json as value};
 use std::{
@@ -298,20 +298,24 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
         .ok_or_else(|| format!("missing {key}"))
 }
 /// Validate the new link without interpreting any historical config as v3.
-pub fn declaration(config: &Value) -> Result<(&Value, &Value), String> {
+pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
     if !matches!(config["schema_version"].as_u64(), Some(3 | 4)) {
         return Err("facts_git requires config schema_version 3 or 4".into());
     }
     let link = config["facts_git"]
         .as_object()
         .ok_or("missing facts_git object")?;
-    if !link.contains_key("tool")
-        || !link.contains_key("input")
-        || link
-            .keys()
-            .any(|key| !matches!(key.as_str(), "tool" | "input" | "guard"))
-    {
-        return Err("facts_git requires tool and input, with optional guard".into());
+    if !verified_git_binding::valid_link(
+        config["schema_version"].as_u64().unwrap(),
+        link.contains_key("tool"),
+        link.contains_key("input"),
+        link.keys()
+            .any(|key| !matches!(key.as_str(), "tool" | "input" | "guard")),
+    ) {
+        return Err(
+            "facts_git requires tool and, for v3, input; only input and guard are optional in v4"
+                .into(),
+        );
     }
     let unique = |collection: &Value, id: &str| -> Result<usize, String> {
         let items = collection
@@ -328,18 +332,34 @@ pub fn declaration(config: &Value) -> Result<(&Value, &Value), String> {
         Ok(hits[0].0)
     };
     let tool = &config["tools"][unique(&config["tools"], text(&config["facts_git"], "tool")?)?];
-    let input = &config["environment"]["inputs"][unique(
-        &config["environment"]["inputs"],
-        text(&config["facts_git"], "input")?,
-    )?];
+    let input = link
+        .get("input")
+        .map(|_| {
+            unique(
+                &config["environment"]["inputs"],
+                text(&config["facts_git"], "input")?,
+            )
+            .map(|index| &config["environment"]["inputs"][index])
+        })
+        .transpose()?;
     text(tool, "program")?;
-    text(tool, "expected_version")?;
-    text(input, "location")?;
-    if tool["resolution"] != "PATH-once"
-        || input["presence"] != "present"
-        || !input["sha256"].as_str().is_some_and(wire::is_digest)
-    {
-        return Err("facts_git requires a present digest-bound input and PATH-once tool".into());
+    if !verified_git_binding::valid_version(
+        config["schema_version"].as_u64().unwrap(),
+        tool.get("expected_version").is_some(),
+        tool["expected_version"].is_null(),
+        tool["expected_version"].as_str(),
+    ) {
+        return Err("facts_git requires an expected version, or null in v4".into());
+    }
+    if tool["resolution"] != "PATH-once" {
+        return Err("facts_git requires a PATH-once tool".into());
+    }
+    if let Some(input) = input {
+        text(input, "location")?;
+        if input["presence"] != "present" || !input["sha256"].as_str().is_some_and(wire::is_digest)
+        {
+            return Err("facts_git requires a present digest-bound input when declared".into());
+        }
     }
     let args: Vec<String> =
         serde_json::from_value(tool["version_argv"].clone()).map_err(|e| e.to_string())?;
@@ -477,11 +497,16 @@ impl Reader {
                 program,
                 Some(effective.get("PATH").map(String::as_str).unwrap_or("")),
             )?;
-            let location = Path::new(text(input, "location")?);
-            let location = if location.is_absolute() {
-                location.to_path_buf()
-            } else {
-                no_symlink_parents(root, location.to_str().ok_or("input UTF-8")?)?
+            let location = match input {
+                Some(input) => {
+                    let location = Path::new(text(input, "location")?);
+                    if location.is_absolute() {
+                        location.to_path_buf()
+                    } else {
+                        no_symlink_parents(root, location.to_str().ok_or("input UTF-8")?)?
+                    }
+                }
+                None => path.clone(),
             };
             if fs::canonicalize(&location).map_err(|e| e.to_string())?
                 != fs::canonicalize(&path).map_err(|e| e.to_string())?
@@ -491,7 +516,10 @@ impl Reader {
                 );
             }
             let hash = sha256(&fs::read(&path).map_err(|e| e.to_string())?);
-            if input["sha256"] != hash {
+            if !verified_git_binding::matches_expected(
+                &hash,
+                input.and_then(|v| v["sha256"].as_str()),
+            ) {
                 return Err("facts_git declared digest mismatch".into());
             }
             let timeout = cfg["protocol"]["timeout_seconds"]
@@ -502,7 +530,7 @@ impl Reader {
                 .as_u64()
                 .filter(|n| *n > 0 && *n <= 64 * 1024 * 1024)
                 .ok_or("invalid facts output bound")? as usize;
-            let binding = value!({"tool":tool["id"],"input":input["id"],"location":location,
+            let binding = value!({"tool":tool["id"],"input":input.map(|v| &v["id"]),"location":location,
                 "program":program,"path":path,"sha256":hash,"expected_version":tool["expected_version"],"version_argv":tool["version_argv"]});
             let spec = CommandSpec {
                 program: path.to_str().ok_or("tool UTF-8")?.into(),
@@ -559,11 +587,10 @@ impl Reader {
                 *observation = reader.observation();
             }
             let bytes = result?;
-            if std::str::from_utf8(&bytes)
+            let version = std::str::from_utf8(&bytes)
                 .map_err(|_| reader.error("non UTF-8 version"))?
-                .trim_end()
-                != text(tool, "expected_version")?
-            {
+                .trim_end();
+            if !verified_git_binding::matches_expected(version, tool["expected_version"].as_str()) {
                 return Err(reader.error("Git facts version mismatch"));
             }
             Ok(reader)
