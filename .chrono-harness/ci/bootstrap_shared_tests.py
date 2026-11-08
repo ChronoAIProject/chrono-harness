@@ -28,47 +28,36 @@ LIFECYCLE_PROGRAM = SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree"
 
 
 def fixture_host_config(root):
-    """Use an already admitted policy when preparing a current fixture host.
-
-    Keep its exact expected Git identity: observing different bytes never edits
-    a binding or falls back to another platform's historical policy.
-    """
+    """Read this host's current native policy without maintaining Git identities."""
     value = json.loads((root / ".chrono-harness/config.json").read_bytes())
-    if value.get("schema") == "chrono-git-configs/v3":
+    if value.get("schema") == "chrono-git-configs/v1":
         operating_system = {"Darwin": "macos", "Linux": "linux"}.get(platform.system())
         architecture = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64"}.get(platform.machine())
         host = value["platforms"].get(str(operating_system) + "-" + str(architecture))
         if host is None:
             raise ValueError("fixture has no registered native Git platform")
-        observed = hashlib.sha256(Path(host["program"]).read_bytes()).hexdigest()
-        matches = [row for row in host["configurations"] if row["sha256"] == observed]
-        if len(matches) != 1:
-            raise ValueError("fixture has no unique registered Git executable identity")
-        value = json.loads((root / matches[0]["path"]).read_bytes())
+        value = json.loads((root / host).read_bytes())
     return value
 
 
 class FixtureHostPolicy(unittest.TestCase):
-    def test_exact_registered_identity_selects_current_policy_and_preserves_expected_bytes(self):
+    def test_native_selection_reads_current_policy_and_preserves_source_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / ".chrono-harness").mkdir()
-            program = root / "fixture-git"
-            program.write_bytes(b"current admitted Git")
-            policy = {"expected": hashlib.sha256(program.read_bytes()).hexdigest()}
-            (root / "current.json").write_text(json.dumps(policy))
-            (root / "historical.json").write_text(json.dumps({"expected": "old admitted Git"}))
-            selector = {"schema": "chrono-git-configs/v3", "platforms": {"macos-aarch64": {
-                "program": str(program), "configurations": [
-                    {"sha256": "0" * 64, "path": "historical.json", "registry_path": "historical.json"},
-                    {"sha256": policy["expected"], "path": "current.json", "registry_path": "current.json"}]}}}
+            policy = {"schema_version": 4, "facts_git": {"tool": "git"},
+                      "tools": [{"id": "git", "expected_version": None}]}
+            current = root / ".chrono-harness/current.json"
+            current.write_text(json.dumps(policy))
+            selector = {"schema": "chrono-git-configs/v1", "platforms": {
+                "macos-aarch64": ".chrono-harness/current.json"}}
             path = root / ".chrono-harness/config.json"
             path.write_text(json.dumps(selector))
             original = path.read_bytes()
             with fixture.mock.patch.object(platform, "system", return_value="Darwin"), fixture.mock.patch.object(platform, "machine", return_value="arm64"):
                 self.assertEqual(fixture_host_config(root), policy)
-                program.write_bytes(b"unadmitted replacement")
-                with self.assertRaisesRegex(ValueError, "no unique registered Git"):
+                current.unlink()
+                with self.assertRaises(FileNotFoundError):
                     fixture_host_config(root)
             self.assertEqual(path.read_bytes(), original)
 
@@ -77,7 +66,7 @@ class FixtureHostPolicy(unittest.TestCase):
             root = Path(directory)
             (root / ".chrono-harness").mkdir()
             (root / ".chrono-harness/config.json").write_text(json.dumps({
-                "schema": "chrono-git-configs/v3", "platforms": {}}))
+                "schema": "chrono-git-configs/v1", "platforms": {}}))
             with self.assertRaisesRegex(ValueError, "no registered native Git platform"):
                 fixture_host_config(root)
 
