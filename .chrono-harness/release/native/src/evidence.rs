@@ -98,6 +98,19 @@ impl Collector<'_> {
         let mut pending = vec![start.to_owned()];
         let mut records = Vec::new();
         while let Some(current) = pending.pop() {
+            let relative = match current.strip_prefix(root).ok().and_then(Path::to_str) {
+                Some(relative) => relative,
+                None => {
+                    self.failures.push("non UTF-8 failure evidence path".into());
+                    records.push(json!({"source":current.strip_prefix(root).unwrap_or(&current).to_string_lossy(),"status":"unavailable","reason":"non UTF-8 failure evidence path"}));
+                    continue;
+                }
+            };
+            if let Err(failure) = no_symlink_parents(root, relative) {
+                self.failures.push(failure.clone());
+                records.push(json!({"source":relative,"status":"unavailable","reason":failure}));
+                continue;
+            }
             match fs::symlink_metadata(&current) {
                 Ok(metadata) if metadata.is_dir() => {
                     match fs::read_dir(&current).and_then(|entries| {
@@ -111,19 +124,11 @@ impl Collector<'_> {
                         }
                         Err(failure) => {
                             self.failures.push(failure.to_string());
-                            records.push(json!({"source":current.strip_prefix(root).unwrap_or(&current),"status":"unavailable","reason":failure.to_string()}));
+                            records.push(json!({"source":relative,"status":"unavailable","reason":failure.to_string()}));
                         }
                     }
                 }
-                Ok(_) => match current.strip_prefix(root).ok().and_then(Path::to_str) {
-                    Some(relative) => {
-                        records.push(self.file(root, &current, &format!("{prefix}/{relative}")))
-                    }
-                    None => {
-                        self.failures.push("non UTF-8 failure evidence path".into());
-                        records.push(json!({"status":"unavailable","reason":"non UTF-8 failure evidence path"}));
-                    }
-                },
+                Ok(_) => records.push(self.file(root, &current, &format!("{prefix}/{relative}"))),
                 Err(failure) => {
                     self.failures.push(failure.to_string());
                     records.push(json!({"status":"unavailable","reason":failure.to_string()}));
