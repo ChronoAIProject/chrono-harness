@@ -90,9 +90,7 @@ pub fn select(
     lineage.validate()?;
     let (id, needs) = match scope {
         Scope::Unit(id) => {
-            let unit = loaded
-                .unit(id)
-                .ok_or_else(|| error("unknown selected unit"))?;
+            let unit = loaded.unit(id)?;
             (unit.id(), unit.needs())
         }
         Scope::Collect => (
