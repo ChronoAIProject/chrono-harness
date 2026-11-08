@@ -681,6 +681,7 @@ Rust 测试另外验证真实消费者，不替代证明。
 `host.verus-download` 通过 GitHub 固定发布资产 API 获取归档，唯一地址归 projects.json，
 请求采用 `Accept: application/octet-stream`。该外部接口只提供资产原字节；
 随后执行的 SHA-256 校验仍以 verus-macos-arm64.sha256 为准，校验通过后才解包。
+原响应头保留在 `.chrono-harness/state/verus-download.headers`，由现有失败工件上传供下载故障排查。
 含证明操作的单元先核共享 core，再安装工具；无证明操作的消费单元只核共享 core。
 启动参数由 units.json 维护，工作流由登记的 ci.generate 产生。
 共享 core 的校验不代表 Verus 已安装。
