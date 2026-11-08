@@ -354,7 +354,7 @@ fn observation_cannot_turn_failed_process_or_invalid_bound_into_source_evidence(
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn original_argv_keeps_every_argument_and_missing_success_receipt_rejects() {
+fn original_argv_keeps_every_argument_and_empty_original_rejects() {
     let original = vec!["verus\0é".to_string(), "root".to_string(), "root".to_string()];
     let args = policy::sources::process_arguments(&original).unwrap();
     assert(args.len() == 2 && args[0]@ == "root"@ && args[1]@ == "root"@);
@@ -364,17 +364,164 @@ fn original_argv_keeps_every_argument_and_missing_success_receipt_rejects() {
     expect_verifier_true(first && second);
     let empty = policy::sources::process_arguments(&Vec::new());
     expect_verifier_true(empty.is_err());
-    let io = UnavailableSources;
-    let registry = Err("registry read error".to_string());
-    let missing = policy::sources::bind_process_sources("passed", None, &registry, &io);
-    expect_verifier_true(missing.is_err());
-    let blocked = policy::sources::bind_process_sources("blocked", None, &registry, &io);
-    let failed = policy::sources::bind_process_sources("failed", None, &registry, &io);
+}
+
+/// 缺方法、歧义和首个完整文本命中分别定义，不接受前缀或大小写折叠。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn proof_invocation_requires_one_exact_registered_operation() {
+    let args = arguments();
+    let ordinary = None;
+    let proof_contract = contract();
+    let methods = vec![
+        policy::ProofInvocation { operation: "proof", argv: &args,
+            output_contract: &proof_contract, output_limit_bytes: 1024 },
+        policy::ProofInvocation { operation: "Proof", argv: &args,
+            output_contract: &ordinary, output_limit_bytes: 1024 },
+    ];
+    proof {
+        reveal_strlit("proof"); reveal_strlit("Proof"); reveal_strlit("proof\0");
+        assert("proof"@[0] != "Proof"@[0]);
+        assert("proof"@.len() != "proof\0"@.len());
+    }
+    let exact = policy::find_proof_invocation(&methods, "proof");
+    expect_verifier_true(exact.is_ok() && exact.unwrap() == 0);
+    let other_case = policy::find_proof_invocation(&methods, "Proof");
+    expect_verifier_true(other_case.is_ok() && other_case.unwrap() == 1);
+    let suffix = policy::find_proof_invocation(&methods, "proof\0");
+    expect_verifier_true(suffix.is_err());
+    let duplicates = vec![
+        policy::ProofInvocation { operation: "proof", argv: &args,
+            output_contract: &proof_contract, output_limit_bytes: 1024 },
+        policy::ProofInvocation { operation: "proof", argv: &args,
+            output_contract: &ordinary, output_limit_bytes: 1024 },
+    ];
+    let ambiguous = policy::find_proof_invocation(&duplicates, "proof");
+    expect_verifier_true(ambiguous.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_arguments_preserve_order_duplicates_and_full_text() {
+    let first = vec!["a\0é".to_string(), "a".to_string(), "a".to_string()];
+    let same = vec!["a\0é".to_string(), "a".to_string(), "a".to_string()];
+    let reordered = vec!["a".to_string(), "a\0é".to_string(), "a".to_string()];
+    let shortened = vec!["a\0é".to_string(), "a".to_string()];
+    proof {
+        reveal_strlit("a\0é"); reveal_strlit("a");
+        assert("a\0é"@.len() != "a"@.len());
+    }
+    let exact = policy::equal_arguments(&first, &same);
+    let order = policy::equal_arguments(&first, &reordered);
+    let count = policy::equal_arguments(&first, &shortened);
+    expect_verifier_true(exact && !order && !count);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unified_admission_does_not_invent_a_proof_for_blocked_or_missing_receipts() {
+    let registry = Err("original registry error".to_string());
+    let methods = Vec::new();
+    let blocked = policy::bind_operation_output("blocked", "proof", &methods,
+        None, &registry, &UnavailableSources);
+    let failed = policy::bind_operation_output("failed", "proof", &methods,
+        None, &registry, &UnavailableSources);
     proof {
         reveal_strlit("blocked"); reveal_strlit("failed"); reveal_strlit("passed");
         assert("blocked"@[0] != "passed"@[0]); assert("failed"@[0] != "passed"@[0]);
     }
-    expect_verifier_true(blocked.is_ok() && failed.is_ok());
+    expect_verifier_true(blocked.is_ok() && blocked.unwrap().is_none());
+    expect_verifier_true(failed.is_ok() && failed.unwrap().is_none());
+    let missing = policy::bind_operation_output("passed", "proof", &methods,
+        None, &registry, &UnavailableSources);
+    expect_verifier_true(missing.is_err());
+}
+
+/// 普通操作的成功不能产生证明条目；其 stdout 保持业务字节，不要求解析。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unified_ordinary_success_has_no_proof_and_failed_process_is_rejected() {
+    let args = Vec::new();
+    let contract = None;
+    let methods = vec![policy::ProofInvocation { operation: "ordinary", argv: &args,
+        output_contract: &contract, output_limit_bytes: 1 }];
+    let argv = vec!["tool".to_string()];
+    let dependency = None;
+    let artifact = None;
+    let registry = Err("registry not required".to_string());
+    let raw = [255u8, 0u8];
+    let ordinary = policy::bind_operation_output("passed", "ordinary", &methods,
+        Some(policy::ProofProcess { operation: "ordinary", argv: &argv, stdout: &raw,
+            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(ordinary.is_ok() && ordinary.unwrap().is_none());
+    let failed = policy::bind_operation_output("passed", "ordinary", &methods,
+        Some(policy::ProofProcess { operation: "ordinary", argv: &argv, stdout: &raw,
+            exit: 0, failed: true, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(failed.is_err());
+}
+
+impl policy::CompilerReportRead for UnavailableSources {
+    open spec fn decoded(&self, bytes: Seq<u8>) -> Option<CompilerReport> { None }
+    fn decode(&self, bytes: &[u8]) -> Option<CompilerReport> { None }
+}
+
+/// 对任意原件，任何实际返回的证明都包含同一份报告、源码和库的准入关系。
+fn any_unified_proof_has_a_unique_method_and_complete_original_evidence<I>(
+    operation: &str, methods: &Vec<policy::ProofInvocation>,
+    original: Option<policy::ProofProcess>,
+    registry: &Result<policy::sources::SourceRegistry, String>, io: &I,
+)
+    where I: policy::sources::CandidateSourceRead + policy::CompilerReportRead,
+{
+    let admitted = policy::bind_operation_output("passed", operation, methods, original, registry, io);
+    if let Ok(Some(proof)) = admitted {
+        let ghost index = choose|i: int|
+            policy::unique_proof_invocation(methods@, operation@, i)
+                && policy::proof_bound(&proof, &methods[i], &original.unwrap(), &registry.unwrap());
+        assert(policy::proof_bound(&proof, &methods[index], &original.unwrap(), &registry.unwrap()));
+        assert(registry.is_ok());
+        assert(original.is_some());
+        assert(original.unwrap().exit == 0 && !original.unwrap().failed);
+        assert(original.unwrap().dependency.is_some());
+        assert(original.unwrap().artifact.is_some());
+        assert(proof.report.verification.success);
+        assert(proof.report.verification.errors == 0);
+        assert(proof.report.verification.verified > 0);
+        assert(proof.report.verification.is_verifying_entire_crate);
+        assert(proof.sources.candidate.len() > 0);
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unified_proof_rejects_missing_report_and_different_original_identity() {
+    let args = arguments();
+    let proof_contract = contract();
+    let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
+        output_contract: &proof_contract, output_limit_bytes: 1024 }];
+    let mut argv = vec!["verus".to_string()];
+    let mut i = 0;
+    while i < args.len()
+        invariant 0 <= i <= args.len(), argv.len() == i + 1,
+            forall|j: int| 0 <= j < i ==> (#[trigger] argv[j + 1])@ == args[j]@,
+        decreases args.len() - i,
+    { argv.push(args[i].clone()); i += 1; }
+    let dependency = Some(Ok(vec![0u8]));
+    let artifact = Some(Ok(library(1)));
+    let registry = Err("original registry error".to_string());
+    let missing_report = policy::bind_operation_output("passed", "proof", &methods,
+        Some(policy::ProofProcess { operation: "proof", argv: &argv, stdout: &[],
+            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(missing_report.is_err());
+    let wrong_operation = policy::bind_operation_output("passed", "proof", &methods,
+        Some(policy::ProofProcess { operation: "Proof", argv: &argv, stdout: &[],
+            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(wrong_operation.is_err());
+    let wrong_argv = vec!["verus".to_string()];
+    let wrong_arguments = policy::bind_operation_output("passed", "proof", &methods,
+        Some(policy::ProofProcess { operation: "proof", argv: &wrong_argv, stdout: &[],
+            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(wrong_arguments.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

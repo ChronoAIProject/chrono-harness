@@ -683,7 +683,22 @@ routes 复用现役 `no_symlink_parents`／`file_identity`，
 **产品与宿主政策同时变更：**routes 专属测试补登记并实际使用写入式 Cargo fmt；
 原格式检查和未过滤测试入口保留。实际证明继续使用原有登记，不增加证明根或工具依赖。
 
-本地 judge-ci 与离线 collection 共用 `bind_process_sources`／`bind_compiler_sources`。
+本地 judge-ci 与离线 collection 共用 `bind_operation_output`，由它调用 `bind_compiler_sources`。
+入口读取现役计划的借用投影和同一原回执，按完整操作文本查找唯一方法；缺失或重复均拒绝。
+实际 argv 去掉执行物后，必须逐项、按序等于该方法的参数，原回执操作名也必须相同，
+原进程必须退出 0 且没有失败。报告、库和依赖先共同准入，再绑定固定候选源码。
+只有明确声明证明合同、且全部准入成功，才返回含原类型化报告和源码绑定的 `ProofAdmission`。
+普通成功、原失败或阻断只返回空条目，不能充当证明。构造器不接收自由的“已通过”布尔值或 token。
+CI 的结果生产者直接接收此类型化结果；准入错误仍使原 passed 变为 Failed，
+保留原进程的实际退出码与失败文本。离线汇总在原 routes 比较后消费同一入口。
+
+`CompilerReportRead::decode` 是标准 serde_json 解码的明确外部接口；其观察模型 `decoded`
+只关联同一输入字节及实际解码结果，不保证报告成功，成功与否仍由 Verus 判断。
+适配器仅把计划及原回执字段交给入口，不负责方法选择、字段准入或错误分类。
+routes 原比较继续保留原结果合同；统一入口另从相同原 stdout 解码，不沿用自由的成功标志。
+两次解码的完整成本未测。每个单元只建立一份 O(M) 方法借用表；每个操作最多比较 M 个方法名，
+另按实际参数与依赖字节计成本。没有新增证明操作、工具、进程、过滤或预算。
+
 实际 argv 去掉执行物后须满足同源规范参数；依赖头须精确绑定实际输出路径。
 每个编译器路径按 POSIX 分量规范化，拒绝绝对、控制字节、反斜杠和越过根的父分量；
 保留空格及 UTF-8 字节，解码后的文本必须重新编码为原规范化字节。
@@ -704,10 +719,13 @@ routes 复用现役 `no_symlink_parents`／`file_identity`，
 | `CandidateSourceRead::mode` | 同一固定请求树的完整路径查询和原模式字段投影；文件模式准入仍由 Verus 比较 |
 | `CandidateSourceRead::blob` | 现役 request-bound `Reader::blob(host_root, candidate, path)` 的固定 Git 字节观察；其现有运输和外层实现仍有未证明义务 |
 | `CandidateSourceRead::digest` | 现役 SHA-256 接口返回实际 blob 的十六进制摘要；Verus 核格式和完整 checksum，不证明密码学算法 |
+| `CompilerReportRead::decode`／`decoded` | judge-ci 的固定 serde_json 类型化解码；只关联点名原字节与完整字段，不作成功判断或从其他报告补齐字段 |
 | FILEMAP／回执编解码 | 固定 serde／serde_json 的字段解码及原字节编码；不授予外层仓内判断 `external_body` 例外 |
 
 独立 Verus 预期覆盖解析、规范化、根缺失、一致／冲突别名、摘要／长度、完整 checksum、原报告与观察的组合、
 上限两端、原失败、真实 argv、缺成功回执，以及源码失败后的终态／原因／退出码保全。
+统一入口的独立 Verus 预期另核方法的缺失、重复、大小写与 NUL 完整身份，
+普通成功不产生证明、失败进程不能取得通过，以及任意实际证明条目的原报告、库、根与候选关联。
 **产品与宿主政策同时变更：**FILEMAP 连接实际新适配器，并把原结果两项整 crate 根加到 projects 测试的必需前置；
 projects 原生单元同步选择现有 Verus bootstrap，先核共享 core 再安装固定证明工具；
 其余实际消费者复用原登记证明。候选正式检查与原生 CI 尚须各自验收。

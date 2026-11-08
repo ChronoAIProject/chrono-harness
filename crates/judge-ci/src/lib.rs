@@ -1727,18 +1727,18 @@ fn evaluate(
             request: req,
             tree: &new.tree,
         };
+        let proof_invocations = source_binding::invocations(&plan.operations);
         for result in outcome.executed.iter().chain(&outcome.blocked) {
             results.push(verified_collection::operation_result_with_sources(
                 result.operation.as_str(),
                 result.status.as_str(),
                 &result.error,
                 result.receipt.as_ref().map(|r| r.process.exit_code),
-                chrono_harness::verified_verifier::sources::bind_process_sources(
+                source_binding::bind_output(
                     result.status.as_str(),
-                    result
-                        .receipt
-                        .as_ref()
-                        .map(|r| (&r.process.argv, &r.compiler_dependency)),
+                    result.operation.as_str(),
+                    &proof_invocations,
+                    result.receipt.as_ref(),
                     &new.source_registry,
                     &source_io,
                 ),

@@ -629,7 +629,7 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         Err(_) => true,
     },
 {
-    // 路由准入已证明合同与观察的有无一致；此层不再复制合同或按名称推断操作。
+    // 组合入口先核合同与观察的有无；此层不复制合同或按名称推断操作。
     if observed.is_none() { return Ok(None); }
     if !super::canonical_verifier_arguments(args) {
         return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string());
@@ -721,45 +721,6 @@ pub fn process_arguments(argv: &Vec<String>) -> (args: Result<Vec<String>, Strin
         i += 1;
     }
     Ok(args)
-}
-
-pub fn admission_result(admission: Result<Option<SourceAdmission>, String>) -> (out: Result<(), String>)
-    ensures out.is_ok() == admission.is_ok(),
-        match (out, admission) {
-            (Err(first), Err(second)) => first@ == second@,
-            _ => true,
-        },
-{
-    match admission { Ok(_) => Ok(()), Err(error) => Err(error) }
-}
-
-/// 只对同一原回执的成功操作绑定源码；原失败、阻断及其原件交回既有结果生产者。
-pub fn bind_process_sources<I: CandidateSourceRead>(
-    state: &str, receipt: Option<(&Vec<String>, &Option<Result<Vec<u8>, String>>)>,
-    registry: &Result<SourceRegistry, String>, io: &I,
-) -> (out: Result<(), String>)
-    ensures state@ != "passed"@ ==> out.is_ok(),
-        state@ == "passed"@ && receipt.is_none() ==> out.is_err(),
-        state@ == "passed"@ && out.is_ok() ==> match receipt {
-            Some((argv, observed)) => argv.len() > 0 && match observed {
-                None => true,
-                Some(Ok(bytes)) => registry.is_ok() && exists|admission: SourceAdmission|
-                    admission_matches(&admission, argv@.skip(1), bytes@, registry.unwrap().files@),
-                Some(Err(_)) => false,
-            },
-            None => false,
-        },
-{
-    if !super::identifiers::equal_text(state, "passed") { return Ok(()); }
-    let (argv, observed) = match receipt {
-        Some(value) => value,
-        None => { return Err("E_VERUS_SOURCES: successful operation has no original receipt".to_string()); },
-    };
-    let args = match process_arguments(argv) {
-        Ok(args) => args,
-        Err(error) => { return Err(error); },
-    };
-    admission_result(bind_compiler_sources(&args, observed, registry, io))
 }
 
 pub open spec fn source_pair_matches(source: &SourceBinding, candidate: &SourceBinding) -> bool {

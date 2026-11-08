@@ -397,4 +397,179 @@ pub fn admit_observed_output(
     }
 }
 
+/// 现役计划的借用投影；没有独立的准入标志或第二份方法权威。
+pub struct ProofInvocation<'a> {
+    pub operation: &'a str,
+    pub argv: &'a Vec<String>,
+    pub output_contract: &'a Option<OutputContract>,
+    pub output_limit_bytes: usize,
+}
+
+/// 同一原回执的输入投影，库和源码观察不能来自另一次进程。
+pub struct ProofProcess<'a> {
+    pub operation: &'a str,
+    pub argv: &'a Vec<String>,
+    pub stdout: &'a [u8],
+    pub exit: i32,
+    pub failed: bool,
+    pub dependency: &'a Option<Result<Vec<u8>, String>>,
+    pub artifact: &'a Option<Result<CompiledArtifact, String>>,
+}
+
+/// 只负责原字节的标准 JSON 类型化解码；报告准入仍由本证明根负责。
+pub trait CompilerReportRead {
+    spec fn decoded(&self, bytes: Seq<u8>) -> Option<CompilerReport>;
+    fn decode(&self, bytes: &[u8]) -> (out: Option<CompilerReport>)
+        ensures out == self.decoded(bytes@);
+}
+
+pub struct ProofAdmission {
+    pub report: CompilerReport,
+    pub sources: sources::SourceAdmission,
+}
+
+pub open spec fn unique_proof_invocation(
+    methods: Seq<ProofInvocation>, operation: Seq<char>, index: int,
+) -> bool {
+    0 <= index < methods.len() && methods[index].operation@ == operation
+        && forall|i: int| 0 <= i < methods.len() && (#[trigger] methods[i]).operation@ == operation
+            ==> i == index
+}
+
+pub fn find_proof_invocation(methods: &Vec<ProofInvocation>, operation: &str)
+    -> (out: Result<usize, String>)
+    ensures out.is_ok() == (exists|i: int| unique_proof_invocation(methods@, operation@, i)),
+        out.is_ok() ==> unique_proof_invocation(methods@, operation@, out.unwrap() as int),
+{
+    let mut found: Option<usize> = None;
+    let mut i = 0;
+    while i < methods.len()
+        invariant 0 <= i <= methods.len(),
+            match found {
+                None => forall|j: int| 0 <= j < i ==> (#[trigger] methods[j]).operation@ != operation@,
+                Some(index) => 0 <= index < i && methods[index as int].operation@ == operation@
+                    && forall|j: int| 0 <= j < i && (#[trigger] methods[j]).operation@ == operation@
+                        ==> j == index,
+            },
+        decreases methods.len() - i,
+    {
+        if equal_text(methods[i].operation, operation) {
+            if let Some(index) = found {
+                assert(index != i);
+                assert forall|j: int| unique_proof_invocation(methods@, operation@, j)
+                    implies false by {
+                    assert(j == index as int);
+                    assert(j == i as int);
+                }
+                return Err("E_VERUS_RESULT: ambiguous registered operation".to_string());
+            }
+            found = Some(i);
+        }
+        i += 1;
+    }
+    match found {
+        Some(index) => Ok(index),
+        None => Err("E_VERUS_RESULT: operation has no registered invocation".to_string()),
+    }
+}
+
+pub open spec fn same_arguments(first: Seq<String>, second: Seq<String>) -> bool {
+    first.len() == second.len()
+        && forall|i: int| 0 <= i < first.len() ==> (#[trigger] first[i])@ == second[i]@
+}
+
+pub fn equal_arguments(first: &Vec<String>, second: &Vec<String>) -> (same: bool)
+    ensures same == same_arguments(first@, second@),
+{
+    if first.len() != second.len() { return false; }
+    let mut i = 0;
+    while i < first.len()
+        invariant 0 <= i <= first.len(), first.len() == second.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] first[j])@ == second[j]@,
+        decreases first.len() - i,
+    {
+        if !equal_text(first[i].as_str(), second[i].as_str()) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn proof_bound(
+    proof: &ProofAdmission, method: &ProofInvocation, process: &ProofProcess,
+    registry: &sources::SourceRegistry,
+) -> bool {
+    method.output_contract.is_some() && process.argv.len() > 0
+        && process.operation@ == method.operation@
+        && same_arguments(process.argv@.skip(1), method.argv@)
+        && process.exit == 0 && !process.failed
+        && output_accepted(method.output_contract, &Some(proof.report), process.argv@.skip(1),
+            process.exit, process.failed)
+        && sources::dependency_observed(method.output_contract, process.dependency, method.output_limit_bytes)
+        && artifact_observed(method.output_contract, process.artifact, process.argv@.skip(1))
+        && match process.dependency {
+            Some(Ok(bytes)) => sources::admission_matches(&proof.sources,
+                process.argv@.skip(1), bytes@, registry.files@),
+            _ => false,
+        }
+}
+
+/// 成功报告、原 argv、库、完整依赖和固定候选源码在此共同准入。
+/// 普通成功与非 passed 操作只返回 None，不能用作全仓覆盖的证明条目。
+pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRead>(
+    state: &str, operation: &str, methods: &Vec<ProofInvocation>,
+    original: Option<ProofProcess>, registry: &Result<sources::SourceRegistry, String>, io: &I,
+) -> (out: Result<Option<ProofAdmission>, String>)
+    ensures state@ != "passed"@ ==> out.is_ok() && out.unwrap().is_none(),
+        match out {
+            Ok(Some(proof)) => state@ == "passed"@ && original.is_some() && registry.is_ok()
+                && exists|i: int| unique_proof_invocation(methods@, operation@, i)
+                    && proof_bound(&proof, &methods[i], &original.unwrap(), &registry.unwrap())
+                    && io.decoded(original.unwrap().stdout@) == Some(proof.report),
+            Ok(None) => state@ != "passed"@ || exists|i: int|
+                unique_proof_invocation(methods@, operation@, i) && methods[i].output_contract.is_none(),
+            Err(_) => true,
+        },
+        state@ == "passed"@ && out.is_ok() ==> original.is_some()
+            && original.unwrap().exit == 0 && !original.unwrap().failed,
+{
+    if !equal_text(state, "passed") { return Ok(None); }
+    let process = match original {
+        Some(process) => process,
+        None => { return Err("E_VERUS_RESULT: successful operation has no original receipt".to_string()); },
+    };
+    let index = match find_proof_invocation(methods, operation) {
+        Ok(index) => index,
+        Err(error) => { return Err(error); },
+    };
+    let method = &methods[index];
+    let args = match sources::process_arguments(process.argv) {
+        Ok(args) => args,
+        Err(error) => { return Err(error); },
+    };
+    if !equal_text(process.operation, operation) || !equal_arguments(&args, method.argv)
+        || process.exit != 0 || process.failed {
+        return Err("E_VERUS_RESULT: original operation, arguments or process rejected".to_string());
+    }
+    let decoded = io.decode(proof_stdout(method.output_contract, process.stdout));
+    match admit_observed_output(method.output_contract, &decoded, &args,
+        process.exit, process.failed, process.dependency, method.output_limit_bytes, process.artifact) {
+        Err(error) => { return Err(error); },
+        Ok(()) => {},
+    }
+    if method.output_contract.is_none() { return Ok(None); }
+    let source_admission = match sources::bind_compiler_sources(&args, process.dependency, registry, io) {
+        Ok(Some(admission)) => admission,
+        Err(error) => { return Err(error); },
+        Ok(None) => { return Err("E_VERUS_RESULT: proof has no bound compiler sources".to_string()); },
+    };
+    let report = match decoded {
+        Some(report) => report,
+        None => { return Err("E_VERUS_RESULT: proof has no original typed report".to_string()); },
+    };
+    let proof = ProofAdmission { report, sources: source_admission };
+    assert(unique_proof_invocation(methods@, operation@, index as int));
+    assert(proof_bound(&proof, method, &process, &registry.unwrap()));
+    Ok(Some(proof))
+}
+
 }
