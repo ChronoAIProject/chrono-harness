@@ -373,8 +373,6 @@ fn run_attempt(
             "--fwd-verus-args-to".into(),
             "all".into(),
             "--locked".into(),
-            "--jobs".into(),
-            "1".into(),
             "--manifest-path".into(),
             config.manifest.clone(),
             "--target-dir".into(),
@@ -385,6 +383,8 @@ fn run_attempt(
                 serde_json::to_string(&rustflags).map_err(|e| e.to_string())?
             ),
             "--message-format=json".into(),
+            "--jobs".into(),
+            "1".into(),
             "--".into(),
             "--import".into(),
             format!("vstd={}", verus.join("vstd.vir").display()),
