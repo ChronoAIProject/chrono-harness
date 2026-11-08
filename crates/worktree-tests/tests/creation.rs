@@ -2,6 +2,7 @@
 mod isolated_capability;
 #[path = "../../runner-tests/tests/support/retention_state.rs"]
 mod retention_state;
+mod parent_report;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_harness::sha256;

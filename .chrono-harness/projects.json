@@ -2205,6 +2205,19 @@
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
         },
+        "probe_parent": {
+          "operation": "test.worktree.parent-report",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "parent_report::",
+            "--",
+            "--test-threads=1"
+          ]
+        },
         "probe_rolling": {
           "operation": "test.worktree.rolling",
           "tool": "cargo",
