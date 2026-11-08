@@ -799,11 +799,16 @@ pub fn judge_with_diagnostic_sink<W: std::io::Write + Send + 'static>(
         if profile.policy.execution_diagnostics.is_none() {
             return evaluate(req, &mut reader, &mut opening, &mut scope, profile);
         }
-        let logger = chrono_diagnostics::logging::Logger::new(
+        let logger = chrono_diagnostics::runtime::logger(
+            &req.host_root,
             "chrono-judge-ci",
             chrono_diagnostics::logging::Level::INFO,
             sink,
-        );
+        )
+        .map_err(|error| {
+            diagnostic_errors.push(error.record());
+            error.to_string()
+        })?;
         let result = logger.run(|| {
             let span = tracing::info_span!(
                 "ci.check",
