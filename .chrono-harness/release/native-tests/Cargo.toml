@@ -43,6 +43,10 @@ path = "tests/staging.rs"
 name = "execution"
 path = "tests/execution.rs"
 
+[[test]]
+name = "frontend"
+path = "tests/frontend.rs"
+
 [[bin]]
 name = "chrono-test-release-cli"
 path = "../native/src/main.rs"

@@ -11,6 +11,7 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/release/native-tests/tests/frontend.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native/src/local.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native/src/evidence.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native/src/execution.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
