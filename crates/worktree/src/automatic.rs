@@ -1005,6 +1005,7 @@ impl Manager {
         };
         manager.restore_absent_policy(r)?;
         manager.protect_originals()?;
+        manager.reconcile_published_results()?;
         Ok(Some(manager))
     }
     /// The enrollment is an actual durable consumer, independently of any
@@ -1028,7 +1029,12 @@ impl Manager {
                     paths.insert(receipt.path);
                 }
             }
-            for field in ["interrupted_uses", "terminal_history"] {
+            for field in [
+                "interrupted_uses",
+                "completed_uses",
+                "main_cache_releases",
+                "terminal_history",
+            ] {
                 if !e.enrollment[field].is_null() {
                     let receipts: Vec<Receipt> =
                         serde_json::from_value(e.enrollment[field].clone())
@@ -1085,6 +1091,87 @@ impl Manager {
                     .into_iter()
                     .collect::<Vec<_>>(),
             )?;
+        }
+        Ok(())
+    }
+    /// These are pending report handoffs, not an additional command history.
+    /// A full original accepting this receipt ends only its interim ledger
+    /// reference. The report's own consumers and dependency edges remain.
+    fn reconcile_published_results(&mut self) -> Result<(), String> {
+        let mut changed = false;
+        for i in 0..self.ledger.entries.len() {
+            for (field, binding) in [
+                ("completed_uses", "managed_use_receipt"),
+                ("main_cache_releases", "main_cache_release"),
+            ] {
+                if self.ledger.entries[i].enrollment[field].is_null() {
+                    continue;
+                }
+                let receipts: Vec<Receipt> =
+                    serde_json::from_value(self.ledger.entries[i].enrollment[field].clone())
+                        .map_err(|e| format!("invalid pending result handoff: {e}"))?;
+                let mut pending = Vec::new();
+                for receipt in receipts {
+                    let original = json(&self.receipt(&receipt)?)?;
+                    let accepted = if let Some(path) = original["report_path"].as_str() {
+                        let physical =
+                            no_symlink_parents(&self.inputs.policy.coordinator_root, path)?;
+                        let _input = chrono_harness::retained_artifacts::retention::read_guard(
+                            &self.inputs.policy.coordinator_root,
+                            path,
+                        )?;
+                        match fs::read(physical) {
+                            Ok(bytes) => {
+                                if let Ok(report) = json(&bytes) {
+                                    let mut matches = report["schema"]
+                                        == "chrono-worktree-report/v1"
+                                        && report["report_path"] == path
+                                        && matches!(
+                                            report["status"].as_str(),
+                                            Some("used" | "finished" | "failed")
+                                        )
+                                        && report[binding] == value!(receipt);
+                                    if matches {
+                                        if let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(&self.inputs.policy.coordinator_root)? {
+                                        matches = inventory.published_original(path, &sha256(&bytes), bytes.len() as u64)?;
+                                    }
+                                    }
+                                    if matches {
+                                        crate::recovery::bind_report_inputs(
+                                            &self.inputs.policy.coordinator_root,
+                                            &report,
+                                        )?;
+                                    }
+                                    matches
+                                } else {
+                                    false
+                                }
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    } else {
+                        false
+                    };
+                    if accepted {
+                        changed = true;
+                    } else {
+                        pending.push(receipt);
+                    }
+                }
+                if pending.is_empty() {
+                    self.ledger.entries[i]
+                        .enrollment
+                        .as_object_mut()
+                        .ok_or("enrollment object")?
+                        .remove(field);
+                } else {
+                    self.ledger.entries[i].enrollment[field] = value!(pending);
+                }
+            }
+        }
+        if changed {
+            self.save()?;
         }
         Ok(())
     }
@@ -1782,20 +1869,80 @@ impl Manager {
     fn immutable(&self, name: &str, v: &Value) -> Result<Receipt, String> {
         relative_path(name)?;
         let path = format!("{}{name}", self.inputs.policy.state_directory);
-        let target = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
-        let b = write_json(&target, v, true)?;
+        let mut b = serde_json::to_vec_pretty(v).map_err(|error| error.to_string())?;
+        b.push(b'\n');
+        self.publish_original(&path, &b, Some(v), false)?;
         Ok(Receipt {
             path,
             sha256: sha256(&b),
         })
     }
+    fn publish_original(
+        &self,
+        path: &str,
+        bytes: &[u8],
+        receipt: Option<&Value>,
+        reuse: bool,
+    ) -> Result<(), String> {
+        self._namespace.stable()?;
+        if let Some(lease) = &self._gate.lease {
+            lease.stable()?;
+        }
+        let root = &self.inputs.policy.coordinator_root;
+        let target = no_symlink_parents(root, path)?;
+        if reuse && target.exists() {
+            if crate::recovery::state_bytes(root, path)? != bytes {
+                return Err("retained lifecycle input changed".into());
+            }
+            return Ok(());
+        }
+        let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?;
+        if let Some(inventory) = inventory.filter(|i| i.accepts("lifecycle-original", path)) {
+            let dependencies = receipt
+                .map(|v| crate::recovery::original_paths(root, v))
+                .transpose()?
+                .unwrap_or_default();
+            let publication = inventory.plan(
+                "lifecycle-original",
+                path,
+                false,
+                value!({"kind":"automatic-original","completion":"not-established"}),
+            )?;
+            publication.materialize_for_reference(&self.original_role()?)?;
+            publication.replace_file(&target, bytes)?;
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+                .ok_or("automatic original retention disappeared")?
+                .dependencies_paths(path, &dependencies)?;
+            publication.complete(value!({"kind":"automatic-original","publication":"complete"}))?;
+        } else {
+            write_bytes(&target, bytes, true)?;
+        }
+        Ok(())
+    }
     fn immutable_reconciled(&self, name: &str, value: &Value) -> Result<Receipt, String> {
         let path = format!("{}{name}", self.inputs.policy.state_directory);
         let physical = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
+        let _input = chrono_harness::retained_artifacts::retention::read_guard(
+            &self.inputs.policy.coordinator_root,
+            &path,
+        )?;
         match fs::read(&physical) {
             Ok(bytes) => {
                 if json(&bytes)? != *value {
                     return Err("interrupted use reconciliation receipt changed".into());
+                }
+                if let Some(inventory) =
+                    chrono_harness::retained_artifacts::retention::Inventory::adopted(
+                        &self.inputs.policy.coordinator_root,
+                    )?
+                {
+                    inventory.dependencies_paths(
+                        &path,
+                        &crate::recovery::original_paths(
+                            &self.inputs.policy.coordinator_root,
+                            value,
+                        )?,
+                    )?;
                 }
                 Ok(Receipt {
                     path,
@@ -1824,20 +1971,7 @@ impl Manager {
             self.inputs.policy.state_directory,
             sha256(bytes)
         );
-        let physical = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
-        match fs::symlink_metadata(&physical) {
-            Ok(_) => {
-                if crate::recovery::state_bytes(&self.inputs.policy.coordinator_root, &path)?
-                    != bytes
-                {
-                    return Err("retained lifecycle input changed".into());
-                }
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                write_bytes(&physical, bytes, true)?;
-            }
-            Err(e) => return Err(e.to_string()),
-        }
+        self.publish_original(&path, bytes, None, true)?;
         Ok(self.retained_input(&path, bytes, "bytes"))
     }
     fn verify_inputs(&self, report: &Value) -> Result<(), String> {
@@ -2062,12 +2196,23 @@ impl Manager {
             let receipt = self.immutable(
                 &format!("main-release-{token}.json"),
                 &value!({
-                    "schema":"chrono-main-cache-release/v1","path":target,"head":head,
+                    "schema":"chrono-main-cache-release/v1","path":target,"head":head,"report_path":report["report_path"],
                     "attachment":e.attachment,"ownership":e.ownership,
                     "worktree_removal":"not-authorized","task_completion":"not-claimed"
                 }),
             )?;
             report["main_cache_release"] = value!(receipt);
+            self.ledger.entries[i]
+                .enrollment
+                .as_object_mut()
+                .ok_or("enrollment object")?
+                .entry("main_cache_releases")
+                .or_insert(value!([]))
+                .as_array_mut()
+                .ok_or("main cache release history")?
+                .push(value!(receipt));
+            self.save()?;
+            crate::recovery::bind_report_inputs(&self.inputs.policy.coordinator_root, report)?;
             report["worktree_removal"] = value!("preserved");
             return Ok(());
         }
@@ -3687,8 +3832,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         true,
                     )?
                     .ok_or("cleanup policy disappeared during managed use")?;
-                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"process":report["managed_process"]}))?;
+                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"report_path":report["report_path"],"process":report["managed_process"]}))?;
                     report["managed_use_receipt"] = value!(receipt);
+                    crate::recovery::bind_report_inputs(&coordinator, report)?;
                     let i = manager
                         .current_entry(target)
                         .ok_or("managed enrollment disappeared")?;
@@ -3699,6 +3845,15 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     {
                         return Err("managed use identity disappeared".into());
                     }
+                    manager.ledger.entries[i]
+                        .enrollment
+                        .as_object_mut()
+                        .ok_or("enrollment object")?
+                        .entry("completed_uses")
+                        .or_insert(value!([]))
+                        .as_array_mut()
+                        .ok_or("completed use history")?
+                        .push(value!(receipt));
                     manager.ledger.entries[i].uses.retain(|s| s != token);
                     manager.save()?;
                     if process.failure.is_some() || process.exit_code != 0 {

@@ -911,6 +911,28 @@ impl Inventory {
         self.stable(&gate)?;
         Ok(l.outputs.iter().any(|o| o.path == path))
     }
+    /// A domain may discharge an interim handoff only from the producer's
+    /// sealed original, with matching bytes and the original physical inode.
+    /// The caller keeps its read capability through the ensuing handoff.
+    pub fn published_original(
+        &self,
+        path: &str,
+        digest: &str,
+        length: u64,
+    ) -> Result<bool, String> {
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let ledger = self.load(&gate)?;
+        let published = match ledger.outputs.iter().find(|o| o.path == path) {
+            Some(output) if !output.tree && output.phase == "released" => {
+                output.sha256.as_deref() == Some(digest)
+                    && output.length == Some(length)
+                    && identity(&no_symlink_parents(&self.root, path)?)? == output.identity
+            }
+            _ => false,
+        };
+        self.stable(&gate)?;
+        Ok(published)
+    }
     pub fn accepts(&self, producer: &str, path: &str) -> bool {
         self.policy
             .producers
@@ -2253,23 +2275,41 @@ impl Publication {
         self.materialize_for_consumer(None)
     }
     fn materialize_for_consumer(&self, consumer: Option<&str>) -> Result<(), String> {
+        self.materialize_with_reference(consumer, None)
+    }
+    /// The owning domain holds its own metadata exclusion and supplies one
+    /// durable reference shared by its originals. Attach before exposing bytes;
+    /// that owner later narrows the reference from its published domain state.
+    pub fn materialize_for_reference(&self, reference: &str) -> Result<(), String> {
+        if reference.is_empty() || reference.len() > 256 {
+            return Err("invalid original owner reference".into());
+        }
+        self.materialize_with_reference(None, Some(reference))
+    }
+    fn materialize_with_reference(
+        &self,
+        consumer: Option<&str>,
+        reference: Option<&str>,
+    ) -> Result<(), String> {
         self.lease.stable()?;
-        let roles = consumer
+        let mut roles = consumer
             .map(|c| self.inventory.consumer_role(c))
             .transpose()?
             .into_iter()
             .collect::<Vec<_>>();
+        roles.extend(reference.map(str::to_owned));
         let gate =
             self.inventory
                 .addressed_gate(&[self.id.clone()], &[], &roles, None, false, true)?;
         let mut l = self.inventory.load(&gate)?;
-        self.materialize_excluded(&mut l, &gate, consumer)
+        self.materialize_excluded(&mut l, &gate, consumer, reference)
     }
     fn materialize_excluded(
         &self,
         l: &mut Ledger,
         gate: &Gate,
         consumer: Option<&str>,
+        reference: Option<&str>,
     ) -> Result<(), String> {
         self.lease.stable()?;
         let o = l
@@ -2296,6 +2336,13 @@ impl Publication {
                 .map_err(|e| e.to_string())?;
         }
         o.identity = identity(&staged)?;
+        if let Some(reference) = reference {
+            let mut ids = l.roots.get(reference).cloned().unwrap_or_default();
+            if !ids.contains(&self.id) {
+                ids.push(self.id.clone());
+            }
+            self.inventory.reference_locked(l, reference, &ids)?;
+        }
         self.inventory.save(l, gate)?;
         crate::artifact_disposal::publish_entry(&staged, &target)?;
         let o = l

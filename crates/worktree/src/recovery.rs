@@ -484,22 +484,18 @@ pub(crate) fn protect_report_consumer(
     Ok(())
 }
 
-/// A producer terminal result ends its interrupted-operation recovery need.
-/// A failed rebind has an explicit resume consumer and keeps that root.
-pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
-    let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
-    else {
-        return Ok(());
-    };
-    let path = report["report_path"]
-        .as_str()
-        .ok_or("lifecycle result path")?;
+/// The schema's declared input paths, shared by automatic originals and final
+/// reports. Neither directory scans nor recursive JSON guesses define edges.
+pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>, String> {
     let mut originals = Vec::new();
-    if let Some(input) = report.pointer("/prior_report/input") {
-        let input: RetainedInput = serde_json::from_value(input.clone())
-            .map_err(|e| format!("invalid retained prior report: {e}"))?;
-        if input.source_root != root || input.format != "receipt" {
-            return Err("invalid retained prior report binding".into());
+    let mut inputs = Vec::new();
+    collect_inputs(report, &mut inputs)?;
+    for input in inputs {
+        if input.source_root != root
+            || input.schema != "chrono-worktree-retained-input/v1"
+            || !matches!(input.format.as_str(), "bytes" | "receipt")
+        {
+            return Err("invalid retained lifecycle input binding".into());
         }
         originals.push(input.path);
     }
@@ -509,6 +505,7 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
         "cache_intent",
         "main_cache_release",
         "managed_use_receipt",
+        "intent",
     ] {
         if let Some(path) = report[binding]["path"].as_str() {
             originals.push(path.into());
@@ -523,6 +520,36 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
             }
         }
     }
+    originals.sort();
+    originals.dedup();
+    Ok(originals)
+}
+
+/// Attach recovery inputs before the domain releases a use token or returns
+/// an original which its still-unpublished report must consume.
+pub(crate) fn bind_report_inputs(root: &Path, report: &Value) -> Result<(), String> {
+    if let Some(inventory) =
+        chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+    {
+        let path = report["report_path"]
+            .as_str()
+            .ok_or("lifecycle result path")?;
+        inventory.dependencies_paths(path, &original_paths(root, report)?)?;
+    }
+    Ok(())
+}
+
+/// A producer terminal result ends its interrupted-operation recovery need.
+/// A failed rebind has an explicit resume consumer and keeps that root.
+pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
+    let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+    else {
+        return Ok(());
+    };
+    let path = report["report_path"]
+        .as_str()
+        .ok_or("lifecycle result path")?;
+    let originals = original_paths(root, report)?;
     inventory.dependencies_paths(path, &originals)?;
     if report["status"] == "failed" {
         inventory.protect_path_consumer(

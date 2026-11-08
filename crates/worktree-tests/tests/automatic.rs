@@ -1348,6 +1348,93 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
 }
 
 #[test]
+fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_reference() {
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    adopt_lifecycle_retention(&h);
+    let policy_path = h.root.join(POLICY_PATH);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
+    ]);
+    policy["max_related_outputs"] = value!(512);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("pending-result-handoff");
+    let (code, created, error) = h.invoke("integration", "pending-result-handoff", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    let receipt = used["managed_use_receipt"].clone();
+    let raw_path = h.root.join(receipt["path"].as_str().unwrap());
+    let raw = fs::read(&raw_path).unwrap();
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt])
+    );
+    let report_path = h.root.join(used["report_path"].as_str().unwrap());
+    let report_bytes = fs::read(&report_path).unwrap();
+    // Fault injection at the final report boundary: a partial JSON original
+    // cannot discharge the pending handoff or establish a command outcome.
+    fs::write(&report_path, b"{\"status\":").unwrap();
+    let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert_eq!(fs::read(&raw_path).unwrap(), raw);
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt])
+    );
+    let mut changed = json(&report_bytes).unwrap();
+    changed["untrusted_edit"] = value!(true);
+    fs::write(&report_path, serde_json::to_vec(&changed).unwrap()).unwrap();
+    let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt]),
+        "matching JSON fields do not replace the sealed producer bytes"
+    );
+    fs::write(&report_path, &report_bytes).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths(
+            "fixture-use-report",
+            &[used["report_path"].as_str().unwrap().into()],
+        )
+        .unwrap();
+    let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert!(h.ledger()["entries"][0]["enrollment"]["completed_uses"].is_null());
+    inventory.maintain().unwrap();
+    assert_eq!(
+        fs::read(&raw_path).unwrap(),
+        raw,
+        "report's actual consumer still needs the result"
+    );
+    inventory
+        .reference_paths("fixture-use-report", &[])
+        .unwrap();
+    inventory.maintain().unwrap();
+    assert!(
+        !raw_path.exists(),
+        "successful report handoff must not create permanent roots"
+    );
+    assert!(target.join("payload").is_file());
+}
+
+#[test]
 fn terminal_history_rotation_preserves_live_consumers_and_changed_originals() {
     let h = Host::new("payload");
     h.kernel_cleanup();
