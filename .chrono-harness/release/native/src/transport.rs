@@ -162,25 +162,39 @@ fn read_archive(
         Some(Ok(_)) => return Err(error("multiple executable archive entries")),
         None => {}
     }
-    if !policy::same_executable(&sha256,size,mode,&expected.sha256,expected.size,expected.mode) {
+    if !policy::same_executable(
+        &sha256,
+        size,
+        mode,
+        &expected.sha256,
+        expected.size,
+        expected.mode,
+    ) {
         return Err(error("transported executable identity mismatch"));
     }
-    Ok(ExecutableIdentity {sha256,size,mode})
+    Ok(ExecutableIdentity { sha256, size, mode })
 }
 
 /// collector 只流式核归档内容，不暂存或执行工具。
 pub fn validate(
-    archive: &Path, expected_archive: &ArchiveIdentity, expected: &ExecutableIdentity,
+    archive: &Path,
+    expected_archive: &ArchiveIdentity,
+    expected: &ExecutableIdentity,
 ) -> Result<ExecutableIdentity, String> {
-    read_archive(archive,expected_archive,expected,&mut std::io::sink())
+    read_archive(archive, expected_archive, expected, &mut std::io::sink())
 }
 
 pub fn import(
-    archive: &Path, expected_archive: &ArchiveIdentity, expected: &ExecutableIdentity,
-    root: &Path, relative: &str,
+    archive: &Path,
+    expected_archive: &ArchiveIdentity,
+    expected: &ExecutableIdentity,
+    root: &Path,
+    relative: &str,
 ) -> Result<ExecutableIdentity, String> {
     let destination = chrono_harness::prepare_publication(root, relative)?;
-    let parent = destination.parent().ok_or_else(|| error("missing destination parent"))?;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| error("missing destination parent"))?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(error)?;
     let identity = read_archive(archive, expected_archive, expected, temporary.as_file_mut())?;
     temporary.as_file_mut().flush().map_err(error)?;
