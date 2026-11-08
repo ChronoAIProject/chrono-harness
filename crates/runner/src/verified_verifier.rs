@@ -85,6 +85,99 @@ pub struct Verification {
     pub is_verifying_entire_crate: bool,
 }
 
+/// 原编译进程结束后取得的库文件身份；不在回执中复制库内容。
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct CompiledArtifact {
+    pub path: Vec<u8>,
+    pub sha256: Vec<u8>,
+    pub length: u64,
+}
+
+impl Clone for CompiledArtifact {
+    fn clone(&self) -> (out: Self)
+        ensures out.path@ == self.path@, out.sha256@ == self.sha256@,
+            out.length == self.length,
+    {
+        Self { path: self.path.clone(), sha256: self.sha256.clone(), length: self.length }
+    }
+}
+
+/// 外部文件／SHA-256 接口返回点名普通文件的实际摘要与长度或原错误。
+pub trait ArtifactRead {
+    fn identity(&self, path: &[u8]) -> Result<(Vec<u8>, u64), String>;
+}
+
+pub open spec fn artifact_matches(artifact: &CompiledArtifact, args: Seq<String>) -> bool {
+    verifier_arguments(args)
+        && artifact.path@ == vstd::utf8::encode_utf8(args[10]@)
+        && identifiers::digest_format(artifact.sha256@) && artifact.length > 0
+}
+
+/// 失败进程与非规范参数不读取库；原 IO 错误仍进入同一回执。
+pub fn observe_artifact<I: ArtifactRead>(
+    contract: &Option<OutputContract>, args: &Vec<String>,
+    exit: i32, process_failed: bool, io: &I,
+) -> (observed: Option<Result<CompiledArtifact, String>>)
+    ensures observed.is_none() == contract.is_none(),
+        match observed {
+            Some(Ok(artifact)) => exit == 0 && !process_failed && artifact_matches(&artifact, args@),
+            _ => true,
+        },
+{
+    if contract.is_none() { return None; }
+    if exit != 0 || process_failed || !canonical_verifier_arguments(args) {
+        return Some(Err("E_VERUS_ARTIFACT: original compiler process was not successful".to_string()));
+    }
+    let (sha256, length) = match io.identity(args[10].as_str().as_bytes()) {
+        Ok(value) => value,
+        Err(error) => { return Some(Err(error)); },
+    };
+    if length == 0 || !identifiers::valid_digest(sha256.as_slice()) {
+        return Some(Err("E_VERUS_ARTIFACT: empty library or invalid observed digest".to_string()));
+    }
+    let mut path = Vec::new();
+    append_bytes(&mut path, args[10].as_str().as_bytes());
+    Some(Ok(CompiledArtifact { path, sha256, length }))
+}
+
+pub open spec fn artifact_observed(
+    contract: &Option<OutputContract>, observed: &Option<Result<CompiledArtifact, String>>,
+    args: Seq<String>,
+) -> bool {
+    match contract {
+        None => observed.is_none(),
+        Some(_) => match observed {
+            Some(Ok(artifact)) => artifact_matches(artifact, args),
+            _ => false,
+        },
+    }
+}
+
+pub fn admit_artifact_observation(
+    contract: &Option<OutputContract>, observed: &Option<Result<CompiledArtifact, String>>,
+    args: &Vec<String>,
+) -> (out: Result<(), String>)
+    ensures out.is_ok() == artifact_observed(contract, observed, args@),
+{
+    if contract.is_none() {
+        return if observed.is_none() { Ok(()) }
+            else { Err("E_VERUS_ARTIFACT: ordinary operation has compiler library evidence".to_string()) };
+    }
+    if !canonical_verifier_arguments(args) {
+        return Err("E_VERUS_ARTIFACT: verifier arguments differ from the registered invocation".to_string());
+    }
+    let artifact = match observed {
+        Some(Ok(artifact)) => artifact,
+        _ => { return Err("E_VERUS_ARTIFACT: missing or failed original library observation".to_string()); },
+    };
+    if !equal_bytes(artifact.path.as_slice(), args[10].as_str().as_bytes())
+        || !identifiers::valid_digest(artifact.sha256.as_slice()) || artifact.length == 0 {
+        return Err("E_VERUS_ARTIFACT: library path, digest or length rejected".to_string());
+    }
+    Ok(())
+}
+
 pub open spec fn valid_contract(contract: &Option<OutputContract>) -> bool {
     match contract {
         None => true,
@@ -279,13 +372,19 @@ pub fn admit_observed_output(
     contract: &Option<OutputContract>, decoded: &Option<CompilerReport>,
     args: &Vec<String>, exit: i32, process_failed: bool,
     dependency: &Option<Result<Vec<u8>, String>>, limit: usize,
+    artifact: &Option<Result<CompiledArtifact, String>>,
 ) -> (out: Result<(), String>)
     ensures out.is_ok() == (output_accepted(contract, decoded, args@, exit, process_failed)
-        && sources::dependency_observed(contract, dependency, limit)),
+        && sources::dependency_observed(contract, dependency, limit)
+        && artifact_observed(contract, artifact, args@)),
 {
     match admit_output(contract, decoded, args, exit, process_failed) {
+        Err(error) => { return Err(error); },
+        Ok(()) => {},
+    }
+    match sources::admit_dependency_observation(contract, dependency, limit) {
         Err(error) => Err(error),
-        Ok(()) => sources::admit_dependency_observation(contract, dependency, limit),
+        Ok(()) => admit_artifact_observation(contract, artifact, args),
     }
 }
 
