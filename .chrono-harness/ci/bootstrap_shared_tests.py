@@ -1875,9 +1875,10 @@ def consume_runner_operation(response, candidate, registered):
         raise AssertionError("runner check did not pass for the current candidate")
     if evidence["blocked"]:
         raise AssertionError("runner check has blocked operations")
-    if not evidence["selected"]:
-        if evidence["executed"]:
-            raise AssertionError("unselected runner unit has executed operations")
+    runner = [row for row in evidence["executed"] if row["operation"] == "test.runner-tests"]
+    if "test:runner-tests" not in evidence["selected"]:
+        if runner:
+            raise AssertionError("unselected runner tests have executed operations")
         command = registered("test.runner-tests")
         if command["name"] != "test.runner-tests" or command["status"] != "passed" or command["exit_code"] != 0:
             raise AssertionError("independent runner tests did not pass")
@@ -1886,9 +1887,6 @@ def consume_runner_operation(response, candidate, registered):
         if b"test result: ok" not in stdout:
             raise AssertionError("independent runner tests did not pass")
         return {"operation": "test.runner-tests", "evidence": "registered-action", "command": command["name"]}
-    if evidence["selected"] != ["test:runner-tests"]:
-        raise AssertionError("unexpected runner unit selection")
-    runner = [row for row in evidence["executed"] if row["operation"] == "test.runner-tests"]
     if len(runner) != 1:
         raise AssertionError("startup alone cannot satisfy the later independent Cargo action")
     process = runner_execution_process(evidence, runner[0])
@@ -1953,6 +1951,25 @@ class RunnerConsumption(unittest.TestCase):
         self.assertEqual(self.consume(), {"operation": "test.runner-tests", "evidence": "runner-check"})
         self.assertEqual(self.attempt.result["commands"], [])
         self.assertFalse((self.root / "runner-consumed").exists())
+
+    def test_selected_runner_with_identifiers_reuses_original_runner_execution(self):
+        self.selected()
+        evidence = self.response["evidence"]
+        evidence["selected"].insert(0, "test:identifiers-tests")
+        evidence["executed"].insert(0, {"operation": "test.identifiers-tests"})
+        before = json.dumps(self.response, sort_keys=True)
+        self.assertEqual(self.consume(), {"operation": "test.runner-tests", "evidence": "runner-check"})
+        self.assertEqual(json.dumps(self.response, sort_keys=True), before)
+        self.assertEqual(self.attempt.result["commands"], [])
+
+    def test_only_identifiers_selected_still_runs_registered_runner_consumer(self):
+        self.response["evidence"].update(selected=["test:identifiers-tests"],
+            executed=[{"operation": "test.identifiers-tests"}])
+        before = json.dumps(self.response, sort_keys=True)
+        self.assertEqual(self.consume()["evidence"], "registered-action")
+        self.assertEqual(json.dumps(self.response, sort_keys=True), before)
+        self.assertEqual((self.root / "runner-consumed").read_bytes(), b"success")
+        self.assertEqual(len(self.attempt.result["commands"]), 1)
 
     def test_current_single_receipt_preserves_originals_and_rejects_drift(self):
         self.selected()

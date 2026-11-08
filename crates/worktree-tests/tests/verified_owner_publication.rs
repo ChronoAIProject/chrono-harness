@@ -10,8 +10,34 @@ use chrono_worktree::verified_owner_publication as policy;
 use policy::{Binding, Intent, Stage, Staged};
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn policy_namespace_binds_protocol_and_physical_address() {
+    broadcast use vstd::array::group_array_axioms;
+    proof { reveal_strlit("v2"); reveal_strlit("v1"); reveal_strlit("state");
+        reveal_strlit("other"); assert("v2"@[1] != "v1"@[1]);
+        assert("state"@[0] != "other"@[0]); }
+    let expected = policy::PolicyNamespace { schema: "v2".to_string(),
+        coordinator: vec![47u8, 97], state_directory: "state".to_string() };
+    let independent = policy::PolicyNamespace { schema: "v2".to_string(),
+        coordinator: vec![47u8, 97], state_directory: "state".to_string() };
+    let protocol = policy::PolicyNamespace { schema: "v1".to_string(),
+        coordinator: vec![47u8, 97], state_directory: "state".to_string() };
+    let coordinator = policy::PolicyNamespace { schema: "v2".to_string(),
+        coordinator: vec![47u8, 98], state_directory: "state".to_string() };
+    let directory = policy::PolicyNamespace { schema: "v2".to_string(),
+        coordinator: vec![47u8, 97], state_directory: "other".to_string() };
+    let same = policy::policy_namespace_matches(&expected, &independent);
+    let old_protocol = policy::policy_namespace_matches(&expected, &protocol);
+    let moved_owner = policy::policy_namespace_matches(&expected, &coordinator);
+    let moved_state = policy::policy_namespace_matches(&expected, &directory);
+    assert(same && !old_protocol && !moved_owner && !moved_state);
+    if !same || old_protocol || moved_owner || moved_state { panic!(); }
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn stage_report_value_drift_and_incomplete_processes_are_rejected() {

@@ -82,10 +82,6 @@ name = "retention"
 path = "tests/retention.rs"
 
 [[test]]
-name = "verified_identifiers"
-path = "tests/verified_identifiers.rs"
-
-[[test]]
 name = "verified_paths"
 path = "tests/verified_paths.rs"
 

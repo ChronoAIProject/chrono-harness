@@ -1,0 +1,15 @@
+[package]
+name = "chrono-identifiers"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[package.metadata.verus]
+verify = true
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"

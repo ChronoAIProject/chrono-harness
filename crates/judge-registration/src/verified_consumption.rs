@@ -5,7 +5,7 @@ use chrono_harness::verus;
 use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
-#[path = "../../runner/src/verified_identifiers.rs"]
+#[path = "../../identifiers/src/lib.rs"]
 mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
