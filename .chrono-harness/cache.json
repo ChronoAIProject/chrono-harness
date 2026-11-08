@@ -925,6 +925,11 @@
       "kind": "json-value",
       "path": ".chrono-harness/git/pinned-macos.json",
       "pointer": "/tools/0"
+    },
+    "bootstrap.native-script": {
+      "kind": "file",
+      "path": ".chrono-harness/ci/bootstrap-native.sh",
+      "presence": "present"
     }
   },
   "artifacts": {
@@ -6491,7 +6496,7 @@
         "judge-routes.lock",
         "runner.manifest",
         "runner.lock",
-        "bootstrap.script",
+        "bootstrap.native-script",
         "bootstrap.config",
         "bootstrap.toolchains"
       ],
@@ -6534,7 +6539,7 @@
         "diagnostics.lock",
         "runner.manifest",
         "runner.lock",
-        "bootstrap.script",
+        "bootstrap.native-script",
         "bootstrap.config",
         "bootstrap.toolchains"
       ],
@@ -6589,7 +6594,7 @@
         "judge-routes.lock",
         "runner.manifest",
         "runner.lock",
-        "bootstrap.script",
+        "bootstrap.native-script",
         "bootstrap.config",
         "bootstrap.toolchains"
       ],
@@ -6646,7 +6651,7 @@
         "runner.lock",
         "worktree.manifest",
         "worktree.lock",
-        "bootstrap.script",
+        "bootstrap.native-script",
         "bootstrap.config",
         "bootstrap.toolchains"
       ],
