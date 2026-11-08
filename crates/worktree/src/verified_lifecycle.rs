@@ -74,4 +74,17 @@ pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
     if !finished { interrupted } else if failed || diagnostics { failure } else { success }
 }
 
+pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: bool)
+    ensures accepted <==> (kind@ == "import"@
+        || (kind@ == "birth"@ && registered)),
+{
+    equal_text(kind, "import") || (equal_text(kind, "birth") && registered)
+}
+
+pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)
+    ensures accepted <==> (kind@ == "import"@ || registered),
+{
+    equal_text(kind, "import") || registered
+}
+
 }

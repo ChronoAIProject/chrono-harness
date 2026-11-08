@@ -94,6 +94,38 @@ fn rolling_windows_distinguish_failure_diagnostics_and_unknown_outcomes() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn explicit_import_preserves_external_branch_names_and_birth_keeps_its_rule() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("birth"); reveal_strlit("import"); reveal_strlit("unknown");
+        assert("birth"@.len() == 5 && "import"@.len() == 6 && "unknown"@.len() == 7);
+    }
+    let named_birth = policy::accepts_enrollment_branch("birth", true);
+    let other_birth = policy::accepts_enrollment_branch("birth", false);
+    let named_import = policy::accepts_enrollment_branch("import", true);
+    let other_import = policy::accepts_enrollment_branch("import", false);
+    let unknown_named = policy::accepts_enrollment_branch("unknown", true);
+    let unknown_other = policy::accepts_enrollment_branch("unknown", false);
+    expect(named_birth && !other_birth && named_import && other_import
+        && !unknown_named && !unknown_other);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cleanup_of_an_import_uses_its_enrollment_and_explicit_cleanup_keeps_the_prefix_rule() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("import"); reveal_strlit("birth"); reveal_strlit("explicit");
+        assert("import"@.len() == 6 && "birth"@.len() == 5 && "explicit"@.len() == 8);
+    }
+    let imported = policy::accepts_cleanup_branch("import", false);
+    let named_import = policy::accepts_cleanup_branch("import", true);
+    let other_birth = policy::accepts_cleanup_branch("birth", false);
+    let other_explicit = policy::accepts_cleanup_branch("explicit", false);
+    let named_explicit = policy::accepts_cleanup_branch("explicit", true);
+    expect(imported && named_import && !other_birth && !other_explicit && named_explicit);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn only_a_successful_original_with_absence_verification_establishes_disposal() {
     broadcast use vstd::string::group_string_axioms;
     proof {

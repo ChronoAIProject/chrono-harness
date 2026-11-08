@@ -2,6 +2,10 @@
 use crate::{
     facts::{Entry, Tree, TreePath, full_oid},
     relative_path,
+    verified_identifiers::{
+        git_index_metadata, git_inventory_row, git_inventory_termination, git_inventory_text,
+        git_tree_metadata,
+    },
 };
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
@@ -17,11 +21,8 @@ use std::{
 };
 
 fn rows(raw: &[u8]) -> Result<impl Iterator<Item = &str>, String> {
-    if !raw.is_empty() && !raw.ends_with(&[0]) {
-        return Err("incomplete Git inventory".into());
-    }
-    Ok(std::str::from_utf8(raw)
-        .map_err(|_| "non UTF-8 Git inventory")?
+    git_inventory_termination(raw)?;
+    Ok(git_inventory_text(std::str::from_utf8(raw).ok())?
         .split('\0')
         .filter(|r| !r.is_empty()))
 }
@@ -29,11 +30,9 @@ fn rows(raw: &[u8]) -> Result<impl Iterator<Item = &str>, String> {
 pub fn tree(raw: &[u8]) -> Result<Tree, String> {
     let mut result = Tree::new();
     for row in rows(raw)? {
-        let (meta, path) = row.split_once('\t').ok_or("invalid Git tree row")?;
+        let (meta, path) = git_inventory_row(row.split_once('\t'), "invalid Git tree row")?;
         let fields: Vec<_> = meta.split(' ').collect();
-        if fields.len() != 3 {
-            return Err("invalid Git tree metadata".into());
-        }
+        git_tree_metadata(&fields)?;
         relative_path(path)?;
         full_oid(fields[2])?;
         let entry = Entry {
@@ -53,11 +52,9 @@ pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>
     let mut changed = BTreeSet::new();
     let mut stages = BTreeMap::new();
     for row in rows(index)? {
-        let (meta, path) = row.split_once('\t').ok_or("invalid Git index row")?;
+        let (meta, path) = git_inventory_row(row.split_once('\t'), "invalid Git index row")?;
         let fields: Vec<_> = meta.split(' ').collect();
-        if fields.len() != 3 || !matches!(fields[2], "0" | "1" | "2" | "3") {
-            return Err("invalid Git index metadata".into());
-        }
+        git_index_metadata(&fields)?;
         relative_path(path)?;
         full_oid(fields[1])?;
         if stages.insert((path, fields[2]), ()).is_some() {

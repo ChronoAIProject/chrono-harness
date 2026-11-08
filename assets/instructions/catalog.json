@@ -804,14 +804,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "验证实际行为。解析、判断、状态维护等关键程序，应先独立定义成功、失败和边界预期，尽可能先观察修改前的预期失败，再实现并跑通；必要时用变异验证检测是否有效。可逆文字和纯转发不增加重复的形状测试，脚本中的关键逻辑也不能免检。"
+            "text": "验证实际行为。解析、判断、状态维护等关键程序，应先独立定义成功、失败和边界预期，尽可能先观察修改前的预期失败，再实现并跑通；必要时用变异验证检测是否有效。可逆文字和纯转发不增加重复的形状测试，脚本中的关键逻辑也不能免检。\n\n涉及具体外部可执行文件的测试一律使用 mock。在命令执行边界模拟外部程序，核对参数、标准输入、标准输出／错误、退出状态，以及必要的失败和超时行为；测试不得真正调用 Git、Cargo、curl、gh、编译器、安装器等外部依赖，也不得以集成测试或真实消费者测试为名例外执行。真实构建、生成、检查和交付仍走各自登记的生产入口；mock 通过只证明被测调用逻辑，不证明外部程序的实际行为。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Test behavior. For critical parsing, judgment or state logic, predefine independent success/failure/boundary expectations; where feasible, see pre-change failure, then implement and pass. Use mutation to verify detection when needed. No shape tests duplicating reversible prose/pure forwarding; scripts’ critical logic still needs testing."
+            "text": "Test behavior. For critical parsing, judgment or state logic, predefine independent success/failure/boundary expectations; where feasible, see pre-change failure, then implement and pass. Use mutation to verify detection when needed. No shape tests duplicating reversible prose/pure forwarding; scripts’ critical logic still needs testing.\n\nAll tests involving concrete external executables must use mocks. Mock external programs at the command execution boundary and verify arguments, stdin, stdout/stderr, exit status and applicable failure/timeout behavior. Tests must not invoke real external dependencies such as Git, Cargo, curl, gh, compilers or installers, including under integration-test or real-consumer-test labels. Actual builds, generation, checks and delivery still use their registered production entrypoints; passing mocks establish only the tested invocation logic, not the external program’s actual behavior."
           }
         }
       ]
