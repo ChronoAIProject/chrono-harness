@@ -372,33 +372,17 @@ v2 的 `report_bytes` 约束每单元原报告 metadata 加 stdout／stderr 总�
 
 本宿主现在上传各单元已有 `.chrono-harness/state/units/<id>/` 报告根。短准备已在该根保留报告、上下文、获取、原 stdout／stderr。成功汇总不消费临时测试宿主或其复制执行物。
 
-原生 run `42004257959` 的 CI fixture 占压缩成员 1,567,248,867 字节中的 1,566,217,208；整个 ZIP 为 1,575,243,167 字节，下载超时。这只描述一份产物，不是全流程节省结论。
-
 可选 `failure_artifact_directory` 在 job 失败时保留更广诊断目录，用同一固定上传 action、`failure()` 和独立 `diagnostics-` 产物前缀。本仓选 `.chrono-harness/state/`，保留失败 fixture 原件，不向成功汇总传其正文。普通报告上传及交付确认保留自己的产物／映射；目录相同时不重复上传。
 
 不加下载器、打包命令、权限或超时预算。原生报告根消费与仅失败上传须分别验证，成功 job 不能证明后者。
 
-### 资源观察
+### 成本排查
 
-采用 `job_gating` 时，`gather.resource_observation` 可明确登记 GitHub 步骤名到宿主类别名的 `step_categories`。拒绝空名、控制字符、保留名 `unclassified`；未知步骤仍属 unclassified，不从命令猜语言、依赖、必要性或类别。省略保留原 gather 输出，宿主可不改 Rust 地更新映射。
+检查时长和缓存传输情况直接查原生 Actions 步骤、日志及线上 API。AI 只为当前排查选定运行、输入、单位与测量窗口；原件按实际调试／验收义务保留，不持续生成分类报告、比较告警或重复摘要。
 
-已有分页 jobs 响应在原 gather 报告提供 `resources`（`chrono-ci-resources/v1`），不加请求、runner 或业务执行。它绑定响应进程索引／摘要、candidate、run、观察 attempt，跨页同 job ID 只计一次；冲突副本、无效身份明确列问题并排除。
+GitHub 当前 attempt 的 API 视图可能含沿用结果，新 job ID 不证明任务重跑。步骤秒数之和不是工作流墙钟、CPU 或计费时间；缺读数和未测成本保持未知，不能跨 attempt 相加后宣称节省。
 
-总计／比较只用当前 attempt API job 视图。`excluded_prior_attempts` 列旧 job ID／attempt，原响应保留其完整行和失败。GitHub 可能给沿用成功 job 分配新 ID，但保留原时间。因此当前视图可能含沿用结果，不是独立执行历史，也不是本次重跑成本。观察器不靠名称／时间猜执行身份，不把历史行加进当前视图。
-
-`known_step_seconds` 只加总已完成、非跳过、时间有效有序的步骤，没有测量则 null。每步骤保留类别、时间及 measured／unknown／skipped。类别和 job 各自汇总，未分类、缺步骤、冲突、未结束保持可见。
-
-`observed` 只表示返回行有可用分类数据，不表示完整工作流资源已知；`partial` 表示不完整。gather 没取得 jobs 则 `unavailable`；gather 前失败没有新报告。
-
-这些秒数不是计费分钟、并行工作流墙钟或 CPU 时间。排队、峰值内存、磁盘字节、快照后操作及标准检查内部编译／测试分摊都未测。汇总观察自身时仍在运行。原生失败、传输准入、最终判断规则不变，资源观察不能将失败变绿，也不能证明成功依赖必要。
-
-可选 `comparisons` 按宿主 ID 登记警告，点名两个不同登记类别 `category`／`reference_category`、正有限 `factor`、非负整数 `minimum_seconds`。已完成且可观察的 job，当前类别秒数达到最小值且严格大于 `factor * reference_seconds` 时告警；相等不告警，实测参考为零仍有效。
-
-本宿主选 `bootstrap-vs-check`，factor 1、最小 60 秒，用来显示启动超过同 job 标准检查的情况。只有点名两类别参与；缺类别、未知时间、未结束记 `unavailable` 并说明，跳过 job 为 `not-applicable`，其他类别不得代替参考。完成但失败的 job 仍保留成本。
-
-每次比较附去重 job 身份及 attempt，Actions 摘要显示 `W_CI_RESOURCE_COMPARISON` 和实测值。警告只是宿主政策，不证明冗余或优化收益，不改准入、不加请求／job／执行。省略保留原格式。
-
-可选 `summary_environment` 点名明确继承的环境变量，值为已有可追加摘要文件。本仓在输入环境采用 `GITHUB_STEP_SUMMARY`，向 Actions 页面展示同一类别总计和未知项。目的缺失／不可写在原报告记 unavailable，不替代准入结论。展示沿用同一次检查，不加工作流步骤。
+汇总检查仍取得并保留实际用于运行归属、job、artifact 和报告核验的原响应。只退役额外的资源投影，不以成本观察替代原生失败、传输准入或最终判词。
 
 ### 配置、凭据与独立工作流
 

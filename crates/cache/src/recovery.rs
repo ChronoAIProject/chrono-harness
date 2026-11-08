@@ -3,6 +3,33 @@ use chrono_harness::{decode, no_symlink_parents, prepared, sha256};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs, io::Write, path::Path};
 
+fn restore_status(cache: &Value, restore: &Value) -> &'static str {
+    let matched = restore["outputs"]["cache-matched-key"]
+        .as_str()
+        .filter(|key| !key.is_empty());
+    match restore["outcome"].as_str() {
+        Some("success") => match matched {
+            Some(key) if cache["key"] == key => "exact",
+            Some(key)
+                if cache["restore_keys"].as_array().is_some_and(|prefixes| {
+                    prefixes.iter().any(|prefix| {
+                        prefix
+                            .as_str()
+                            .is_some_and(|p| !p.is_empty() && key.starts_with(p))
+                    })
+                }) =>
+            {
+                "compatible"
+            }
+            Some(_) => "incompatible",
+            None => "miss-or-unavailable",
+        },
+        Some("failure" | "cancelled") => "error",
+        Some("skipped") => "not-attempted",
+        _ => "unavailable",
+    }
+}
+
 fn publish_once(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     let destination = chrono_harness::prepare_publication(root, path)?;
     fs::OpenOptions::new()
@@ -13,10 +40,7 @@ fn publish_once(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
         .map_err(|e| format!("E_CACHE_RECOVERY: {path}: {e}"))
 }
 
-pub(crate) fn retained(
-    root: &Path,
-    plan_path: &str,
-) -> Result<(prepared::Original, Value), String> {
+fn retained(root: &Path, plan_path: &str) -> Result<(prepared::Original, Value), String> {
     let directory = plan_path
         .rsplit_once('/')
         .ok_or("E_CACHE_RECOVERY: plan directory")?
@@ -110,7 +134,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         Err(e) => return Err(format!("E_CACHE_RECOVERY: intent metadata: {e}")),
     }
     let steps_original =
-        super::report::retain_for_upload(&root, &directory, "restore-steps", steps_raw.as_bytes())?;
+        super::retain_original(&root, &directory, "restore-steps", steps_raw.as_bytes())?;
     let mut report = json!({"schema":"chrono-cache-recovery/v1","plan":binding,"native_steps":steps_original,
         "status":"not-required","caches":{},"error":null,
         "limits":["isolated provider restore phase, before producers", "registered native observations only; no archive integrity or build verdict", "missing matched keys do not distinguish miss from backend or extraction failure", "linked worktree recovery unsupported"]});
@@ -147,7 +171,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         let mut paths = vec![];
         for (index, (id, cache)) in caches.into_iter().enumerate() {
             let restore = &steps[format!("cache_{index}_restore")];
-            let reason = super::report::restore_status(cache, restore);
+            let reason = restore_status(cache, restore);
             let mut discard = match restore["outcome"].as_str() {
                 Some("failure") => true,
                 Some("success") if config.recover_unconfirmed_restores => {
@@ -268,7 +292,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let raw = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
     let publication = (|| {
-        let original = super::report::retain_for_upload(&root, &directory, "cache-recovery", &raw)?;
+        let original = super::retain_original(&root, &directory, "cache-recovery", &raw)?;
         publish_once(
             &root,
             &output,
