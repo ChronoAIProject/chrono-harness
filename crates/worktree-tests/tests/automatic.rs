@@ -1263,7 +1263,7 @@ fn retired_address_preserves_directory_consumers_and_unknown_members() {
     let foreign = directory.join("unknown-work");
     fs::write(&foreign, b"retain this independent work").unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
-    assert_eq!(code, 1, "{maintained} {error}");
+    assert_eq!(code, 2, "{maintained} {error}");
     assert_eq!(fs::read(&foreign).unwrap(), b"retain this independent work");
     assert!(directory.join("owner.json").is_file());
     fs::remove_file(foreign).unwrap();
@@ -1290,7 +1290,7 @@ fn interrupted_address_retirement_preserves_changed_members_then_resumes_origina
     let directory = h.record_directory(&target);
     fs::write(directory.join("fixture-consumer"), b"owned by this fixture").unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
-    assert_eq!(code, 1, "{maintained} {error}");
+    assert_eq!(code, 2, "{maintained} {error}");
     assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
     fs::remove_file(directory.join("fixture-consumer")).unwrap();
     let members: Vec<_> = ["ledger.json", "owner.json", "metadata.lease"]
@@ -1318,7 +1318,7 @@ fn interrupted_address_retirement_preserves_changed_members_then_resumes_origina
     let original = fs::read(&owner).unwrap();
     fs::write(&owner, [original.as_slice(), b" "].concat()).unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
-    assert_eq!(code, 1, "{maintained} {error}");
+    assert_eq!(code, 2, "{maintained} {error}");
     assert!(directory.join("retirement.json").is_file());
     assert!(directory.join("metadata.lease").is_file());
     assert_eq!(
@@ -1378,7 +1378,7 @@ fn retired_capability_failure_keeps_the_creators_original_responsibility_visible
     let identity = chrono_harness::ownership::identity(&lease).unwrap();
     fs::write(&lease, b"unknown capability bytes").unwrap();
     let (code, maintained, error) = invoke("maintain", &[]);
-    assert_eq!(code, 1, "{maintained} {error}");
+    assert_eq!(code, 2, "{maintained} {error}");
     let (code, status, error) = invoke("status", &["--path", h.root.to_str().unwrap()]);
     assert_eq!(code, 0, "{status} {error}");
     let pending = status["worktree_status"]["worktrees"]
