@@ -83,7 +83,8 @@ fn configured(build_at_export: bool) -> Fixture {
             "schema":"chrono-host-startup/v1", "directory":format!("{TRANSFER}/"),
             "profiles":{"core":{"config":".chrono-harness/ci/build.json","build":build_at_export},
                 "extra":{"config":".chrono-harness/ci/extra.json","build":false}},
-            "consumers":{"unit":["core"]}
+            "consumers":{"unit":["core"]},
+            "installer":{"profile":"core","destination":".chrono-harness/bin/cargo"}
         }))
         .unwrap(),
     )
@@ -123,7 +124,17 @@ fn export(fixture: &Fixture) -> String {
     environment.insert("GITHUB_OUTPUT".into(), output.as_os_str().to_owned());
     passed(cli(&fixture.root, &environment, &["produce"]));
     let output = fs::read_to_string(output).unwrap();
-    output.trim().strip_prefix("binding=").unwrap().to_owned()
+    let outputs: std::collections::BTreeMap<_, _> = output
+        .lines()
+        .map(|line| line.split_once('=').unwrap())
+        .collect();
+    assert_eq!(
+        outputs["installer_sha256"],
+        chrono_harness::file_identity(&fixture.root.join(".chrono-harness/bin/cargo"))
+            .unwrap()
+            .0
+    );
+    outputs["binding"].to_owned()
 }
 
 fn copy_tree(source: &Path, destination: &Path) {
@@ -170,6 +181,11 @@ fn exports_installs_and_verifies_original_bytes_with_relocated_local_sdk() {
     let binding = export(&fixture);
     let manifest = fs::read(fixture.root.join(TRANSFER).join("manifest.json")).unwrap();
     assert_eq!(chrono_harness::sha256(&manifest), binding);
+    let descriptor: Value = serde_json::from_slice(&manifest).unwrap();
+    assert_eq!(
+        descriptor["profiles"]["core"]["files"][0]["path"], "tools/core/cargo",
+        "the startup launcher needs an explicit stable payload path"
+    );
     assert_eq!(
         fs::read(fixture.root.join(format!(
             ".chrono-harness/state/startup-originals/manifest-{binding}.json"
@@ -318,6 +334,161 @@ fn rejects_corrupt_artifact_before_any_installation_write() {
 }
 
 #[test]
+fn rebound_metadata_cannot_replace_original_execution_or_declared_payloads() {
+    let fixture = original();
+    export(&fixture);
+    for fault in [
+        "platform",
+        "destination",
+        "payload-path",
+        "mode",
+        "failed-report",
+        "missing-operation",
+    ] {
+        let (consumer, mut environment) = consumer(&fixture);
+        let manifest_path = consumer.path().join(TRANSFER).join("manifest.json");
+        let mut manifest: Value =
+            serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+        match fault {
+            "platform" => manifest["platform"]["machine"] = json!("other"),
+            "destination" => {
+                manifest["profiles"]["core"]["files"][0]["destination"] =
+                    json!(".chrono-harness/bin/other")
+            }
+            "mode" => manifest["profiles"]["core"]["files"][0]["mode"] = json!(0o644),
+            "payload-path" => {
+                let file = &mut manifest["profiles"]["core"]["files"][0];
+                fs::rename(
+                    consumer
+                        .path()
+                        .join(TRANSFER)
+                        .join(file["path"].as_str().unwrap()),
+                    consumer.path().join(TRANSFER).join("tools/other"),
+                )
+                .unwrap();
+                file["path"] = json!("tools/other");
+            }
+            "failed-report" | "missing-operation" => {
+                let reference = &mut manifest["profiles"]["core"]["report"];
+                let report_path = consumer
+                    .path()
+                    .join(TRANSFER)
+                    .join(reference["path"].as_str().unwrap());
+                let mut report: Value =
+                    serde_json::from_slice(&fs::read(&report_path).unwrap()).unwrap();
+                if fault == "failed-report" {
+                    report["status"] = json!("failed");
+                } else {
+                    report["operations"].as_array_mut().unwrap().pop();
+                }
+                let bytes = serde_json::to_vec(&report).unwrap();
+                reference["sha256"] = json!(chrono_harness::sha256(&bytes));
+                fs::write(report_path, bytes).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let bytes = serde_json::to_vec(&manifest).unwrap();
+        environment.insert(
+            "CHRONO_STARTUP_BINDING".into(),
+            chrono_harness::sha256(&bytes).into(),
+        );
+        fs::write(&manifest_path, bytes).unwrap();
+        let output = cli(consumer.path(), &environment, &["install", "unit"]);
+        assert!(!output.status.success(), "accepted rebound {fault}");
+        assert!(
+            !consumer.path().join(".chrono-harness/bin/cargo").exists(),
+            "installed rebound {fault}"
+        );
+        assert!(
+            !consumer
+                .path()
+                .join(".chrono-harness/state/startup-install.json")
+                .exists(),
+            "published rebound {fault}"
+        );
+    }
+}
+
+#[test]
+fn verifier_rejects_installed_and_local_sdk_drift_without_rewriting_originals() {
+    let fixture = original();
+    let binding = export(&fixture);
+    for fault in [
+        "bytes",
+        "report",
+        "stream",
+        "sdk-bytes",
+        "sdk-path",
+        "compiler",
+        "wrapper",
+        "workspace-wrapper",
+    ] {
+        let (consumer, mut environment) = consumer(&fixture);
+        environment.insert("CHRONO_STARTUP_BINDING".into(), binding.clone().into());
+        passed(cli(consumer.path(), &environment, &["install", "unit"]));
+        let receipt = consumer
+            .path()
+            .join(".chrono-harness/state/startup-install.json");
+        let before = fs::read(&receipt).unwrap();
+        let original = consumer
+            .path()
+            .join(".chrono-harness/state/startup-originals/core.json");
+        let original_bytes = fs::read(&original).unwrap();
+        let alternate = consumer.path().join("alternate tools");
+        match fault {
+            "bytes" => {
+                fs::write(consumer.path().join(".chrono-harness/bin/cargo"), b"drift").unwrap()
+            }
+            "report" => fs::write(
+                consumer.path().join(".chrono-harness/state/bootstrap.json"),
+                b"{}",
+            )
+            .unwrap(),
+            "stream" => {
+                let report: Value = serde_json::from_slice(&original_bytes).unwrap();
+                fs::write(
+                    consumer
+                        .path()
+                        .join(report["operations"][0]["stdout"]["path"].as_str().unwrap()),
+                    b"drift",
+                )
+                .unwrap();
+            }
+            "sdk-bytes" => fs::write(consumer.path().join("native tools/cargo"), b"drift").unwrap(),
+            "sdk-path" => {
+                copy_tree(&consumer.path().join("native tools"), &alternate);
+                let mut search = alternate.as_os_str().to_owned();
+                search.push(":");
+                search.push(environment.get(OsStr::new("PATH")).unwrap());
+                environment.insert("PATH".into(), search);
+            }
+            "compiler" | "wrapper" | "workspace-wrapper" => {
+                copy_tree(&consumer.path().join("native tools"), &alternate);
+                let key = match fault {
+                    "compiler" => "RUSTC",
+                    "wrapper" => "RUSTC_WRAPPER",
+                    _ => "RUSTC_WORKSPACE_WRAPPER",
+                };
+                environment.insert(key.into(), alternate.join("rustc").into_os_string());
+            }
+            _ => unreachable!(),
+        }
+        let output = cli(consumer.path(), &environment, &["verify", "core"]);
+        assert!(!output.status.success(), "accepted drift {fault}");
+        assert_eq!(
+            fs::read(&receipt).unwrap(),
+            before,
+            "rewrote receipt for {fault}"
+        );
+        assert_eq!(
+            fs::read(&original).unwrap(),
+            original_bytes,
+            "rewrote original for {fault}"
+        );
+    }
+}
+
+#[test]
 fn produce_builds_only_declared_profiles_and_keeps_originals_on_output_failure() {
     let fixture = configured(true);
     assert!(
@@ -424,6 +595,9 @@ fn invalid_registration_and_dirty_source_fail_before_transfer_publication() {
         ("duplicate-profile", "explicit unique"),
         ("profile-name", "profile name"),
         ("unknown-field", "unknown field"),
+        ("installer", "explicitly installed"),
+        ("installer-profile", "explicitly installed"),
+        ("missing-installer-profile", "explicit unique"),
     ] {
         let mut config = original.clone();
         match change {
@@ -442,6 +616,9 @@ fn invalid_registration_and_dirty_source_fail_before_transfer_publication() {
                 config["profiles"]["bad/name"] = config["profiles"]["core"].clone();
             }
             "unknown-field" => config["unknown"] = json!(true),
+            "installer" => config["installer"]["destination"] = json!(".chrono-harness/bin/absent"),
+            "installer-profile" => config["installer"]["profile"] = json!("absent"),
+            "missing-installer-profile" => config["consumers"]["unit"] = json!(["extra"]),
             _ => unreachable!(),
         }
         fs::write(

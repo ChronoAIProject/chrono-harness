@@ -102,8 +102,11 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
                     ["output_use"] = json!("")
             }
             "caller" => {
-                action(&mut s, "host.bootstrap-shared-install-unit_runner")["argv"][5] =
-                    json!("unit_ci")
+                *action(&mut s, "host.bootstrap-shared-install-unit_runner")["argv"]
+                    .as_array_mut()
+                    .unwrap()
+                    .last_mut()
+                    .unwrap() = json!("unit_ci")
             }
             "producer" => {
                 action(&mut s, "host.bootstrap-shared-produce")["operation"] =
@@ -140,8 +143,11 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
             }
             "check" => s.config["canonical_check"]["argv"] = json!(["some-other-runner", "check"]),
             "verify" => {
-                action(&mut s, "host.bootstrap-shared-verify-core")["argv"][5] =
-                    json!("absent-profile")
+                *action(&mut s, "host.bootstrap-shared-verify-core")["argv"]
+                    .as_array_mut()
+                    .unwrap()
+                    .last_mut()
+                    .unwrap() = json!("absent-profile")
             }
             "evidence-method" => {
                 action(&mut s, "host.bootstrap-real-consumer")["operation"] =
@@ -204,7 +210,11 @@ fn preparation_requires_registered_invocation_and_early_verification() {
             }
             "schema" => new.documents.get_mut(PREPARATION).unwrap()["schema"] = json!("other"),
             "tool" => {
-                new.documents.get_mut(PREPARATION).unwrap()["tools"]["python3"] = json!("other")
+                let tool = action(&mut new, "host.bootstrap-shared-verify-core")["tool"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
+                new.documents.get_mut(PREPARATION).unwrap()["tools"][tool] = json!("other")
             }
             "projects" => new.documents.get_mut(PREPARATION).unwrap()["projects"] = json!("other"),
             "entrypoint" => {
