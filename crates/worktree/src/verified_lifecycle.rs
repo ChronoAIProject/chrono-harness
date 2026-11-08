@@ -58,4 +58,11 @@ pub fn retain_evidence(disposal_authorized: bool, evidence_present: bool) -> (re
     !disposal_authorized && evidence_present
 }
 
+pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: bool)
+    ensures accepted <==> (kind@ == "import"@
+        || (kind@ == "birth"@ && registered)),
+{
+    equal_text(kind, "import") || (equal_text(kind, "birth") && registered)
+}
+
 }

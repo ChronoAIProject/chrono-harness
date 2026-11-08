@@ -1033,7 +1033,12 @@ fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_b
     git(
         &h.root,
         &[
-            "worktree", "add", "-b", "client/current-work", target.to_str().unwrap(), "dev",
+            "worktree",
+            "add",
+            "-b",
+            "client/current-work",
+            target.to_str().unwrap(),
+            "dev",
         ],
     );
     let original_head = git(&target, &["rev-parse", "HEAD"]);
@@ -1042,10 +1047,18 @@ fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_b
     let (code, observation, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{observation} {error}");
     let missing = observation["worktree_inventory"]
-        .as_array().unwrap().iter()
-        .find(|row| row["path"] == target.to_str().unwrap()).unwrap();
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == target.to_str().unwrap())
+        .unwrap();
     assert_eq!(missing["enrollment_match"], false);
-    assert!(missing["preserved_reason"].as_str().unwrap().contains("explicit import"));
+    assert!(
+        missing["preserved_reason"]
+            .as_str()
+            .unwrap()
+            .contains("explicit import")
+    );
     assert!(target.exists());
 
     // A refused command leaves an address record; an empty ledger is still unowned.
@@ -1055,8 +1068,11 @@ fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_b
     let (code, observation, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{observation} {error}");
     let empty = observation["worktree_inventory"]
-        .as_array().unwrap().iter()
-        .find(|row| row["path"] == target.to_str().unwrap()).unwrap();
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == target.to_str().unwrap())
+        .unwrap();
     assert_eq!(empty["enrollment_match"], false);
     assert!(target.exists());
 
@@ -1066,7 +1082,10 @@ fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_b
     assert_eq!(entry["branch"], "client/current-work");
     assert_eq!(entry["status"], "active");
     assert_eq!(entry["enrollment"]["kind"], "import");
-    assert_eq!(entry["enrollment"]["receipt"]["historical_birth"], "not-claimed");
+    assert_eq!(
+        entry["enrollment"]["receipt"]["historical_birth"],
+        "not-claimed"
+    );
     assert!(entry["terminal"].is_null());
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
     assert_eq!(fs::read(target.join("payload")).unwrap(), original_source);
