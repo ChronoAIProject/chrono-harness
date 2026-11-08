@@ -225,14 +225,20 @@ impl Fixture {
 
     pub fn unit(&self, executable: &Path) -> std::process::Output {
         let mut command = Command::new(executable);
-        command.arg(self.host.root()).arg(self.host.root().join("handoffs/none")).args(["--unit","test_none"]);
+        command
+            .arg(self.host.root())
+            .arg(self.host.root().join("handoffs/none"))
+            .args(["--unit", "test_none"]);
         self.native_unit(command)
     }
 
     pub fn unit_through_launcher(&self, directory: &Path) -> std::process::Output {
         let mut command = Command::new("/bin/sh");
-        command.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
-            .arg(self.host.root()).arg(directory).arg(self.host.root().join("handoffs/none"))
+        command
+            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
+            .arg(self.host.root())
+            .arg(directory)
+            .arg(self.host.root().join("handoffs/none"))
             .args(["--unit", "test_none"]);
         self.native_unit(command)
     }
