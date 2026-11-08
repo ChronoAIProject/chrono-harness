@@ -383,6 +383,8 @@ fn run_attempt(
                 serde_json::to_string(&rustflags).map_err(|e| e.to_string())?
             ),
             "--message-format=json".into(),
+            "--jobs".into(),
+            "1".into(),
             "--".into(),
             "--import".into(),
             format!("vstd={}", verus.join("vstd.vir").display()),

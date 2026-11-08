@@ -222,12 +222,6 @@
       "tracked": false
     },
     {
-      "path": ".chrono-harness/state/bootstrap-real/",
-      "owner": "host-bootstrap-tests",
-      "kind": "execution-evidence",
-      "tracked": false
-    },
-    {
       "path": "crates/runner/target/",
       "owner": "runner",
       "kind": "cargo-output",
@@ -526,7 +520,7 @@
     "bindings": [
       {
         "id": "bootstrap-entry-executables",
-        "consumer": "script:host-bootstrap",
+        "consumer": "script:host-bootstrap-launcher",
         "kind": "bootstrap-entry-executable-selection",
         "inputs": [
           "tool:cargo",

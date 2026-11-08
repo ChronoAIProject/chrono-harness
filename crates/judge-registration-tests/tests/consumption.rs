@@ -54,7 +54,10 @@ fn registered_startup_chain_requires_declared_mock_evidence() {
     let s = host();
     let result = consumption::validate_delta(None, &s, &BTreeSet::new(), &BTreeSet::new()).unwrap();
     assert_eq!(result.checked, paths(&["runner-startup"]));
-    assert_eq!(result.required_tests, paths(&["test:host-bootstrap-tests"]));
+    assert_eq!(
+        result.required_tests,
+        paths(&["test:host-bootstrap-native-tests"])
+    );
     let mut tools_only = host();
     tools_only.documents.get_mut(CORE).unwrap()["install"]
         .as_array_mut()
@@ -69,7 +72,7 @@ fn registered_startup_chain_requires_declared_mock_evidence() {
         consumption::validate_delta(None, &tools_only, &BTreeSet::new(), &BTreeSet::new())
             .unwrap()
             .required_tests,
-        paths(&["test:host-bootstrap-tests"])
+        paths(&["test:host-bootstrap-native-tests"])
     );
     let mut legacy = host();
     legacy.adoption = None;
@@ -213,15 +216,15 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
                     json!("absent-profile")
             }
             "evidence-method" => {
-                action(&mut s, "host.bootstrap-command-tests")["operation"] =
+                action(&mut s, "test.host-bootstrap-native-tests")["operation"] =
                     json!("retired.evidence")
             }
             "evidence-plan" => {
-                s.filemap["execution_plans"]["test:host-bootstrap-tests"]["operations"] =
-                    json!(["host.bootstrap-tests"])
+                s.filemap["execution_plans"]["test:host-bootstrap-native-tests"]["operations"] =
+                    json!(["build.host-bootstrap-native"])
             }
             "evidence-output" => {
-                s.filemap["execution_scheduling"]["claims"]["host.bootstrap-command-tests"]
+                s.filemap["execution_scheduling"]["claims"]["test.host-bootstrap-native-tests"]
                     .as_object_mut()
                     .unwrap()
                     .remove("outputs");
@@ -462,7 +465,7 @@ fn scoped_adapter_reads_fixed_native_git_endpoints_and_retains_original_failure(
         check(&base, &paths(&[CORE]))
             .unwrap()
             .required_tests
-            .contains("test:host-bootstrap-tests")
+            .contains("test:host-bootstrap-native-tests")
     );
     let mut core: Value = serde_json::from_slice(&fs::read(root.join(CORE)).unwrap()).unwrap();
     core["install"][0]["source"] = json!("wrong/producer");

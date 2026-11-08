@@ -155,6 +155,8 @@ impl Fixture {
             "--config".into(),
             format!("build.rustflags={flags}"),
             "--message-format=json".into(),
+            "--jobs".into(),
+            "1".into(),
             "--".into(),
             "--import".into(),
             format!("vstd={}/vstd.vir", verus.display()),
