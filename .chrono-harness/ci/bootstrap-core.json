@@ -3,7 +3,8 @@
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
   "tools": {
-    "bash": "/bin/bash"
+    "bash": "/bin/bash",
+    "bootstrap-native": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
   },
   "operations": [
     "inputs.fetch.runner",
@@ -11,12 +12,12 @@
     "inputs.fetch.ci",
     "inputs.fetch.worktree",
     "inputs.fetch.inputs",
+    "host.bootstrap-verus",
     "build.runner",
     "build.judge-ci",
     "build.ci",
     "build.worktree",
-    "build.inputs",
-    "host.bootstrap-verus"
+    "build.inputs"
   ],
   "install": [
     {

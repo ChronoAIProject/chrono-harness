@@ -71,14 +71,11 @@
     "required_inputs": [
       ".chrono-harness/ci/check.json",
       ".chrono-harness/ci/units.json",
-      ".chrono-harness/ci/bootstrap.py",
       ".chrono-harness/ci/bootstrap-core.json",
       ".chrono-harness/ci/bootstrap-native.sh",
       ".chrono-harness/ci/bootstrap-frontend.json",
       ".github/workflows/chrono-ci.yml",
       ".chrono-harness/ci/workflow-inventory.json",
-      ".chrono-harness/process_fds.py",
-      ".chrono-harness/ci/bootstrap_shared.py",
       ".chrono-harness/ci/bootstrap-shared.json",
       ".chrono-harness/ci/bootstrap-cache.json",
       ".chrono-harness/ci/bootstrap-toolchains.json",
@@ -221,7 +218,6 @@
       },
       "host-bootstrap": {
         "tests": [
-          "test:host-bootstrap-tests",
           "test:host-bootstrap-native-tests",
           "test:host-bootstrap-launcher-tests"
         ],
@@ -394,8 +390,8 @@
             }
           },
           "evidence": {
-            "test": "test:host-bootstrap-tests",
-            "operation": "host.bootstrap-command-tests"
+            "test": "test:host-bootstrap-native-tests",
+            "operation": "test.host-bootstrap-native-tests"
           },
           "preparation": {
             "operation": "host.bootstrap-unit",

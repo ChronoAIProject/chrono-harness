@@ -155,6 +155,15 @@
         "--version"
       ],
       "expected_version": null
+    },
+    {
+      "id": "bootstrap-native",
+      "program": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-host-bootstrap 0.1.0"
     }
   ],
   "protocol": {
@@ -209,12 +218,6 @@
     {
       "path": ".chrono-harness/state/",
       "owner": "repository",
-      "kind": "execution-evidence",
-      "tracked": false
-    },
-    {
-      "path": ".chrono-harness/state/bootstrap-real/",
-      "owner": "host-bootstrap-tests",
       "kind": "execution-evidence",
       "tracked": false
     },
@@ -517,7 +520,7 @@
     "bindings": [
       {
         "id": "bootstrap-entry-executables",
-        "consumer": "script:host-bootstrap",
+        "consumer": "script:host-bootstrap-launcher",
         "kind": "bootstrap-entry-executable-selection",
         "inputs": [
           "tool:cargo",

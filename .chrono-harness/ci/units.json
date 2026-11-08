@@ -160,9 +160,7 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-cost/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-cost/"
@@ -176,9 +174,7 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-mixed/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-mixed/"
@@ -192,9 +188,7 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow/"
@@ -208,9 +202,7 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/inputs/context.json",
       "artifact_directory": ".chrono-harness/state/units/inputs/"
@@ -254,9 +246,7 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-units/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-units/"
@@ -270,9 +260,7 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-short/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-short/"
@@ -316,9 +304,7 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/worktree-adoption/context.json",
       "artifact_directory": ".chrono-harness/state/units/worktree-adoption/"

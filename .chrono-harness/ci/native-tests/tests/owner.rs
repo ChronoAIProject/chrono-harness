@@ -36,7 +36,6 @@ impl Staged {
             registry["platforms"]["fixture/native"].clone();
         write_json(&registry_path, &registry);
         fixture.config["install"] = json!([]);
-        fixture.config["participation"]["git"] = json!("/usr/bin/git");
         fixture.config["participation"]["program"] = json!(".chrono-harness/bin/cargo");
         fixture.config["report_path"] = json!(".chrono-harness/state/bootstrap-owner-stage.json");
         fixture.config["owner_stage"] =
@@ -382,7 +381,7 @@ fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
 }
 
 #[test]
-fn public_bootstrap_seeds_a_real_git_main_and_keeps_the_actual_failed_child_exit() {
+fn public_bootstrap_keeps_mocked_main_source_and_the_original_failed_child_exit() {
     for failure in [None, Some(73)] {
         let mut fixture = Fixture::new();
         let native = native_platform().unwrap();
@@ -391,7 +390,6 @@ fn public_bootstrap_seeds_a_real_git_main_and_keeps_the_actual_failed_child_exit
         registry["platforms"][format!("{}/{}", native.system, native.machine)] =
             registry["platforms"]["fixture/native"].clone();
         write_json(&registry_path, &registry);
-        fixture.config["participation"]["git"] = json!("/usr/bin/git");
         if let Some(exit) = failure {
             fixture.failed_operation("build", exit);
         }
@@ -449,6 +447,312 @@ fn public_bootstrap_seeds_a_real_git_main_and_keeps_the_actual_failed_child_exit
             }
         );
         assert_eq!(original["operations"][1]["exit_code"], failure.unwrap_or(0));
+    }
+}
+
+fn participating_fixture() -> Fixture {
+    let fixture = Fixture::new();
+    let native = native_platform().unwrap();
+    let registry_path = fixture.root.join(".chrono-harness/ci/registry.json");
+    let mut registry = read_json(&registry_path);
+    registry["platforms"][format!("{}/{}", native.system, native.machine)] =
+        registry["platforms"]["fixture/native"].clone();
+    write_json(&registry_path, &registry);
+    fixture.commit();
+    let program = fixture.root.join(".chrono-harness/bin/chrono-worktree");
+    fs::create_dir_all(program.parent().unwrap()).unwrap();
+    fs::copy(env!("CARGO_BIN_EXE_chrono-test-bootstrap-tool"), program).unwrap();
+    fixture
+}
+
+fn mock_participation(fixture: &Fixture, stdout: &[u8], stderr: &[u8], exit: u8) {
+    let args = json!([
+        "bootstrap",
+        "--host-root",
+        fixture.root,
+        "--config",
+        ".chrono-harness/worktree.json",
+        "--bootstrap-config",
+        ".chrono-harness/ci/build.json"
+    ]);
+    let mut specification = json!({});
+    specification[serde_json::to_string(&args).unwrap()] = json!({
+        "cwd":fixture.root, "inherited_fds":true, "stdin":[],
+        "stdout":stdout, "stderr":stderr, "exit_code":exit
+    });
+    write_json(
+        &fixture
+            .root
+            .join(".chrono-harness/bin/chrono-worktree.json"),
+        &specification,
+    );
+}
+
+fn original_child(fixture: &Fixture, exit: u8) -> Value {
+    let process = chrono_harness::run_process(
+        &fixture.root,
+        &chrono_harness::CommandSpec {
+            program: env!("CARGO_BIN_EXE_chrono-test-bootstrap-operation").into(),
+            args: vec![
+                "run".into(),
+                serde_json::to_string(&json!([
+                    {"Stdout":[0,255,10]}, {"Stderr":[254,0,10]}, {"Exit":exit}
+                ]))
+                .unwrap(),
+            ],
+            env: Default::default(),
+            timeout_seconds: 10,
+            output_limit_bytes: 65536,
+        },
+        b"",
+    )
+    .unwrap();
+    assert_eq!(process.exit_code, i32::from(exit));
+    chrono_harness::full::compact_process(&serde_json::to_value(process).unwrap()).unwrap()
+}
+
+fn assert_no_local_build(fixture: &Fixture) {
+    for path in [
+        "prepared",
+        "out/cargo",
+        ".chrono-harness/state/bootstrap.json",
+        "native tools/calls.json",
+    ] {
+        assert!(
+            !fixture.root.join(path).exists(),
+            "unexpected build effect: {path}"
+        );
+    }
+    let calls = read_json(
+        &fixture
+            .root
+            .join(".chrono-harness/bin/chrono-worktree-calls.json"),
+    );
+    assert_eq!(calls.as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn delegated_bootstrap_forwards_capabilities_and_original_binary_streams_without_local_build() {
+    for exit in [0, 7] {
+        let fixture = participating_fixture();
+        let reminder = b"W_WORKTREE_ATTENTION: agent work remains\0\xfe\n";
+        let report = json!({
+            "status":if exit == 0 {"used"} else {"failed"},
+            "managed_command_failed":exit != 0,
+            "managed_process":original_child(&fixture, exit),
+            "report_path":".chrono-harness/state/worktrees/original.json"
+        });
+        mock_participation(
+            &fixture,
+            &serde_json::to_vec(&report).unwrap(),
+            reminder,
+            exit,
+        );
+        let output = Staged::invoke(
+            &fixture,
+            &[".", ".chrono-harness/ci/build.json"],
+            false,
+            true,
+        );
+        assert_eq!(output.status.code(), Some(i32::from(exit)), "{output:?}");
+        assert_eq!(output.stdout, [0, 255, 10]);
+        let expected_stderr = [&[254, 0, 10][..], reminder].concat();
+        assert!(output.stderr.starts_with(&expected_stderr), "{output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("worktrees/original.json"));
+        assert_no_local_build(&fixture);
+    }
+}
+
+#[test]
+fn lifecycle_refusal_preserves_the_child_streams_and_the_original_report_reference() {
+    let fixture = participating_fixture();
+    let reminder = b"W_WORKTREE_ATTENTION: owner retained work\n";
+    let report = json!({"status":"failed", "managed_command_failed":false,
+        "error":"coordinator policy/configuration ownership namespace mismatch",
+        "managed_process":original_child(&fixture, 7),
+        "report_path":".chrono-harness/state/worktrees/failed.json"});
+    mock_participation(&fixture, &serde_json::to_vec(&report).unwrap(), reminder, 2);
+    let output = Staged::invoke(
+        &fixture,
+        &[".", ".chrono-harness/ci/build.json"],
+        false,
+        true,
+    );
+    assert!(!output.status.success());
+    assert_ne!(
+        output.status.code(),
+        Some(7),
+        "lifecycle refusal was masked"
+    );
+    assert_eq!(output.stdout, [0, 255, 10]);
+    let expected_stderr = [&[254, 0, 10][..], reminder].concat();
+    assert!(output.stderr.starts_with(&expected_stderr));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("worktrees/failed.json"), "{error}");
+    assert!(error.contains("bootstrap lifecycle failed"), "{error}");
+    assert!(error.contains("ownership namespace mismatch"), "{error}");
+    assert_eq!(
+        chrono_harness::full::expand_process(&report["managed_process"]).unwrap()["exit_code"],
+        7
+    );
+    assert_no_local_build(&fixture);
+}
+
+#[test]
+fn refused_owner_before_a_managed_report_keeps_its_original_error_and_has_no_build_effect() {
+    let fixture = participating_fixture();
+    mock_participation(
+        &fixture,
+        b"original owner stdout\n",
+        b"original owner refusal\n",
+        19,
+    );
+    let output = Staged::invoke(
+        &fixture,
+        &[".", ".chrono-harness/ci/build.json"],
+        false,
+        true,
+    );
+    assert!(!output.status.success());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("original owner stdout"), "{error}");
+    assert!(error.contains("original owner refusal"), "{error}");
+    assert_no_local_build(&fixture);
+}
+
+#[test]
+fn ordinary_shared_install_requires_the_existing_owner_and_identical_bytes() {
+    let mut fixture = Fixture::new();
+    fixture.inventory(&fixture.root);
+    fixture.environment.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        fixture.root.as_os_str().to_owned(),
+    );
+    let profile = fixture.loaded().profile;
+    let selected = fixture.root.join(&profile.participation.program);
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"selected owner").unwrap();
+    let source = fixture.root.join("out/replacement");
+    fs::write(&source, b"selected owner").unwrap();
+    owner::check_shared_install(
+        &fixture.root,
+        &fixture.environment,
+        &profile,
+        &source,
+        &selected,
+    )
+    .unwrap();
+    fs::write(&source, b"changed owner").unwrap();
+    assert!(
+        owner::check_shared_install(
+            &fixture.root,
+            &fixture.environment,
+            &profile,
+            &source,
+            &selected
+        )
+        .unwrap_err()
+        .contains("exclusive owner deployment")
+    );
+    assert_eq!(fs::read(&selected).unwrap(), b"selected owner");
+    assert!(
+        owner::check_shared_install(
+            &fixture.root,
+            &fixture.environment,
+            &profile,
+            &source,
+            &fixture.root.join("out/other")
+        )
+        .unwrap_err()
+        .contains("destination differs")
+    );
+    fs::remove_file(&selected).unwrap();
+    assert!(
+        owner::check_shared_install(
+            &fixture.root,
+            &fixture.environment,
+            &profile,
+            &source,
+            &selected
+        )
+        .unwrap_err()
+        .contains("exclusive owner deployment")
+    );
+}
+
+#[test]
+fn linked_shared_install_publishes_local_bytes_without_changing_the_coordinator() {
+    let mut fixture = Fixture::new();
+    let coordinator = tempfile::tempdir().unwrap();
+    fixture.inventory(coordinator.path());
+    fixture.environment.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        fixture.root.as_os_str().to_owned(),
+    );
+    let profile = fixture.loaded().profile;
+    let selected = coordinator.path().join(&profile.participation.program);
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"coordinator owner").unwrap();
+    let local = fixture.root.join(&profile.participation.program);
+    fs::create_dir_all(local.parent().unwrap()).unwrap();
+    let source = fixture.root.join("out/replacement");
+    fs::write(&source, b"local replacement").unwrap();
+    owner::check_shared_install(
+        &fixture.root,
+        &fixture.environment,
+        &profile,
+        &source,
+        &local,
+    )
+    .unwrap();
+    fs::write(&local, b"old local owner").unwrap();
+    owner::check_shared_install(
+        &fixture.root,
+        &fixture.environment,
+        &profile,
+        &source,
+        &local,
+    )
+    .unwrap();
+    assert_eq!(fs::read(&selected).unwrap(), b"coordinator owner");
+    assert_eq!(fs::read(&local).unwrap(), b"old local owner");
+}
+
+#[test]
+fn linked_shared_install_refuses_hard_links_and_symbolic_aliases_of_the_coordinator() {
+    let mut fixture = Fixture::new();
+    let coordinator = tempfile::tempdir().unwrap();
+    fixture.inventory(coordinator.path());
+    fixture.environment.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        fixture.root.as_os_str().to_owned(),
+    );
+    let profile = fixture.loaded().profile;
+    let selected = coordinator.path().join(&profile.participation.program);
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"coordinator owner").unwrap();
+    let local = fixture.root.join(&profile.participation.program);
+    fs::create_dir_all(local.parent().unwrap()).unwrap();
+    let source = fixture.root.join("out/replacement");
+    fs::write(&source, b"changed owner").unwrap();
+    for symbolic in [false, true] {
+        if symbolic {
+            std::os::unix::fs::symlink(&selected, &local).unwrap();
+        } else {
+            fs::hard_link(&selected, &local).unwrap();
+        }
+        assert!(
+            owner::check_shared_install(
+                &fixture.root,
+                &fixture.environment,
+                &profile,
+                &source,
+                &local
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(&selected).unwrap(), b"coordinator owner");
+        fs::remove_file(&local).unwrap();
     }
 }
 
