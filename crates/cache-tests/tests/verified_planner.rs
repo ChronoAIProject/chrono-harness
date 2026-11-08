@@ -9,14 +9,26 @@ use chrono_cache::verified_planner as policy;
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
+
+// 同一预期也在普通 Cargo 中实际执行。
+fn expect_cache_true(actual: bool)
+    requires actual,
+{
+    if !actual {
+        panic!();
+    }
+}
 
 fn expect_registration(schema: &str, expected: bool)
     requires expected == (schema@ == "chrono-cache/v2"@),
 {
     let actual = policy::current_registration(schema);
     assert(actual == expected);
+    expect_cache_true(actual == expected);
 }
 
 fn expect_plan(schema: Option<&str>, expected: bool)
@@ -24,6 +36,7 @@ fn expect_plan(schema: Option<&str>, expected: bool)
 {
     let actual = policy::current_plan(schema);
     assert(actual == expected);
+    expect_cache_true(actual == expected);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -64,6 +77,7 @@ fn expect(
 {
     let actual = policy::matches_planner_identity(ds, dv, os, ov);
     assert(actual == expected);
+    expect_cache_true(actual == expected);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
