@@ -178,17 +178,11 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
         .iter()
         .find(|s| s["name"] == "Record original cache transport observations")
         .unwrap();
-    assert_eq!(report["env"]["GH_TOKEN"], "${{ github.token }}");
     assert!(
         report.get("continue-on-error").is_none(),
         "report production failure must fail the job"
     );
-    assert!(
-        steps
-            .iter()
-            .filter(|s| s["name"] != "Record original cache transport observations")
-            .all(|s| s["env"].get("GH_TOKEN").is_none())
-    );
+    assert!(steps.iter().all(|s| s["env"].get("GH_TOKEN").is_none()));
     assert_eq!(yaml.matches("Prepare registered caches").count(), 1);
     assert_eq!(yaml.matches("Save registered cache").count(), 2);
 }
@@ -276,7 +270,7 @@ fn actual_host_projections_fit_native_workflow_size() {
     }
     let yaml = chrono_ci::release::render(&release).unwrap();
     let expanded: Value = serde_yaml_ng::from_str(&yaml).unwrap();
-    assert_eq!(expanded["permissions"]["actions"], "read");
+    assert!(expanded["permissions"].get("actions").is_none());
     assert_eq!(
         expanded["jobs"].as_object().unwrap().len(),
         release.jobs.len()
