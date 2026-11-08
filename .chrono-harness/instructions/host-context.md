@@ -14,6 +14,12 @@
 
 本宿主采用“不阻塞独立工作、不使用额外权限、关注性能”。局部失败保留真实结果，只暂停沿明确依赖关系受阻的工作，其他已授权工作继续。只用现有权限；没有必要使用方、又依赖特殊权限的功能应退役，不增加替代激活或传输层。普通必要流程保留已有权限。使用方、IO、进程和验证范围按当前需求及 DELTA 影响收窄；成本未知就保持未知，不能跳过必需验收。产品默认与宿主 catalog 已同步采用这些要求，规则和验证成本边界见[指令说明](../../docs/instructions.md)。
 
+## 自动交付授权
+
+本仓所有已授权工作都自动完成提交、创建 PR、等待适用检查、合并和落地核验。无论先经 integration 分支集成，还是直接创建面向 dev 的 PR，都无需用户额外输入、确认或合并前提示；先合入 integration 的工作继续自动交付到 dev。
+
+按[宿主默认合并方案](../../docs/merging.md)执行必需检查和现有保护，处理实际依赖与冲突。失败时保留原始结果并在授权内修复，继续独立工作；不能把创建 PR、启用自动合并或检查通过当作已经合并，须核对实际合并状态、落地 SHA 和必要的落地检查。
+
 ## 文档规范
 
 本仓编写和维护的文档统一使用简体中文，包括 README、SPEC、操作说明、宿主上下文和技能说明。“优雅”以准确、自然、清楚、简洁为准；白话表达仍须保留必要条件。面向其他语言使用方的产品内容、第三方引文、许可原文和真实接口样本，按其实际用途保留原语言。
@@ -70,7 +76,7 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 .chrono-harness/bin/chrono-worktree maintain
 ```
 
-执行登记操作时，必须持有 use 保护。调用方等待全部自有任务和后台任务，核对实际完成及落地后，从仍存活的协调宿主执行 finish；maintain 负责独立重试。创建、重建、导入旧 checkout 和显式政策 migrate，按[工作树说明](../../docs/worktree.md)执行。本文不额外授权 Git／GitHub 生命周期操作。
+执行登记操作时，必须持有 use 保护。调用方等待全部自有任务和后台任务，核对实际完成及落地后，从仍存活的协调宿主执行 finish；maintain 负责独立重试。创建、重建、导入旧 checkout 和显式政策 migrate，按[工作树说明](../../docs/worktree.md)执行；Git／GitHub 交付沿用上文的自动交付授权。
 
 本宿主在 worktree.json／cleanup.json 中采用 automatic_cleanup/v2。协调锚是 Git owner inventory 的 main worktree，状态位于 `.chrono-harness/state/automatic-cleanup-v2/`。start／reconstruct 自动登记，只维护目标记录；本宿主采用的 bootstrap／check 委托同一负责方，不扫描无关工作树或输出。跨对象清理走显式 maintain。
 
@@ -112,4 +118,4 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 
 当前 scoped 路径只采用 runner-startup 的版本化内部消费关系检查。full judge 的类型化 prelaunch 和报告诊断已有范围有限的实现。detector→startup 导入与安装→runner 检查→原件汇总链已有 Darwin 原生观察；Linux、外部及全部使用方采用仍未完成，具体限制见负责文档和[覆盖表](../../docs/spec-coverage.md)。旧实验、回退和测试读数直接查 Git、原 PR／CI，不在本上下文维护副本。
 
-完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收，仍未完成；阶段成功不是交付。成本仍有 unmeasured 项。来源和许可是可选阅读资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其他工作树，不把过程转录写入产品源。
+完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收，仍未完成；阶段成功不是交付。成本仍有 unmeasured 项。来源和许可是可选阅读资料，不是执行政策。Git 生命周期沿用上文的自动交付授权和当前任务范围；不改全局配置、参考仓库或其他工作树，不把过程转录写入产品源。

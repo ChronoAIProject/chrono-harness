@@ -271,4 +271,98 @@ fn merge_parent_identity_boundaries() {
     expect_identifier_true(accepted64);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn commit_parent_selection_stops_at_the_first_empty_header_line() {
+    let empty: [u8; 0] = [];
+    proof {
+        policy::header_line_end_is(empty@, 0);
+        reveal_with_fuel(policy::commit_parent_lines, 1);
+        assert(policy::commit_parent_lines(empty@).len() == 0);
+    }
+    let out = policy::commit_parent_records(&empty);
+    expect_identifier_true(out.len() == 0);
+    let raw = [10u8, 112, 97, 114, 101, 110, 116, 32, 97, 10];
+    proof {
+        policy::header_line_end_is(raw@, 0);
+        reveal_with_fuel(policy::commit_parent_lines, 1);
+        assert(policy::commit_parent_lines(raw@).len() == 0);
+    }
+    let out = policy::commit_parent_records(&raw);
+    expect_identifier_true(out.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn commit_parent_selection_keeps_complete_order_and_ignores_continuations_and_body() {
+    let raw = [
+        116u8, 114, 101, 101, 32, 120, 10, // tree x LF
+        112, 97, 114, 101, 110, 116, 32, 97, 10, // parent a LF
+        32, 112, 97, 114, 101, 110, 116, 32, 122, 10, // continuation
+        112, 97, 114, 101, 110, 116, 32, 98, 10, // parent b LF
+        10, 112, 97, 114, 101, 110, 116, 32, 99, 10, // body
+    ];
+    proof {
+        policy::header_line_end_is(raw@, 6);
+        policy::header_line_end_is(raw@.skip(7), 8);
+        policy::header_line_end_is(raw@.skip(16), 9);
+        policy::header_line_end_is(raw@.skip(26), 8);
+        policy::header_line_end_is(raw@.skip(35), 0);
+        vstd::seq_lib::lemma_seq_skip_of_skip(raw@, 7, 9);
+        vstd::seq_lib::lemma_seq_skip_of_skip(raw@, 16, 10);
+        vstd::seq_lib::lemma_seq_skip_of_skip(raw@, 26, 9);
+        reveal_with_fuel(policy::commit_parent_lines, 1);
+        assert(policy::commit_parent_lines(raw@.skip(35)) == Seq::<Seq<u8>>::empty());
+        assert(raw@.skip(26).take(8).skip(7) =~= seq![98u8]);
+        assert(policy::commit_parent_lines(raw@.skip(26)) == seq![seq![98u8]]);
+        assert(policy::commit_parent_lines(raw@.skip(16)) == seq![seq![98u8]]);
+        assert(raw@.skip(7).take(8).skip(7) =~= seq![97u8]);
+        assert(policy::commit_parent_lines(raw@.skip(7)) == seq![seq![97u8], seq![98u8]]);
+        assert(policy::commit_parent_lines(raw@).len() == 2);
+        assert(policy::commit_parent_lines(raw@)[0] =~= seq![97u8]);
+        assert(policy::commit_parent_lines(raw@)[1] =~= seq![98u8]);
+    }
+    let out = policy::commit_parent_records(&raw);
+    expect_identifier_true(out.len() == 2);
+    let first = out[0];
+    let second = out[1];
+    assert(first@ =~= seq![97u8]);
+    assert(second@ =~= seq![98u8]);
+    expect_identifier_true(first.len() == 1 && first[0] == 97);
+    expect_identifier_true(second.len() == 1 && second[0] == 98);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn commit_parent_selection_preserves_empty_cr_nul_and_non_utf8_suffixes() {
+    let raw = [112u8, 97, 114, 101, 110, 116, 32, 10,
+        112, 97, 114, 101, 110, 116, 32, 97, 13, 10,
+        112, 97, 114, 101, 110, 116, 32, 255, 0];
+    proof {
+        policy::header_line_end_is(raw@, 7);
+        policy::header_line_end_is(raw@.skip(8), 9);
+        policy::header_line_end_is(raw@.skip(18), 9);
+        vstd::seq_lib::lemma_seq_skip_of_skip(raw@, 8, 10);
+        reveal_with_fuel(policy::commit_parent_lines, 1);
+        assert(raw@.skip(18).take(9).skip(7) =~= seq![255u8, 0u8]);
+        assert(policy::commit_parent_lines(raw@.skip(18)) == seq![seq![255u8, 0u8]]);
+        assert(raw@.skip(8).take(9).skip(7) =~= seq![97u8, 13u8]);
+        assert(policy::commit_parent_lines(raw@.skip(8))
+            == seq![seq![97u8, 13u8], seq![255u8, 0u8]]);
+        assert(raw@.take(7).skip(7) =~= Seq::<u8>::empty());
+        assert(policy::commit_parent_lines(raw@).len() == 3);
+        assert(policy::commit_parent_lines(raw@)[0] =~= Seq::<u8>::empty());
+        assert(policy::commit_parent_lines(raw@)[1] =~= seq![97u8, 13u8]);
+        assert(policy::commit_parent_lines(raw@)[2] =~= seq![255u8, 0u8]);
+    }
+    let out = policy::commit_parent_records(&raw);
+    expect_identifier_true(out.len() == 3);
+    let first = out[0];
+    let second = out[1];
+    let third = out[2];
+    assert(first@ =~= Seq::<u8>::empty());
+    assert(second@ =~= seq![97u8, 13u8]);
+    assert(third@ =~= seq![255u8, 0u8]);
+    expect_identifier_true(first.len() == 0);
+    expect_identifier_true(second.len() == 2 && second[0] == 97 && second[1] == 13);
+    expect_identifier_true(third.len() == 2 && third[0] == 255 && third[1] == 0);
+}
+
 }
