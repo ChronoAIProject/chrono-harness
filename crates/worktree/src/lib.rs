@@ -16,6 +16,8 @@ mod recovery;
 mod remote;
 mod start;
 #[allow(unexpected_cfgs)]
+pub mod verified_lifecycle;
+#[allow(unexpected_cfgs)]
 pub mod verified_owner_publication;
 use chrono_harness::{CliOutput, decode, no_symlink_parents, relative_path};
 mod fetch_recovery;
