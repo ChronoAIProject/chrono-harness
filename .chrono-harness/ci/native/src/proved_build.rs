@@ -369,9 +369,6 @@ fn run_attempt(
         tool: "cargo-verus".into(),
         argv: vec![
             "build".into(),
-            // Verus 报告没有目标标识，须防止并行编译插入其他库的产物记录。
-            "--jobs".into(),
-            "1".into(),
             "-v".into(),
             "--fwd-verus-args-to".into(),
             "all".into(),
@@ -386,6 +383,10 @@ fn run_attempt(
                 serde_json::to_string(&rustflags).map_err(|e| e.to_string())?
             ),
             "--message-format=json".into(),
+            // Verus 报告没有目标标识，须防止并行编译插入其他库的产物记录。
+            // Cargo 专用参数须在 Verus 相关 Cargo 参数之后。
+            "--jobs".into(),
+            "1".into(),
             "--".into(),
             "--import".into(),
             format!("vstd={}", verus.join("vstd.vir").display()),
