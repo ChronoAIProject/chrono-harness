@@ -61,7 +61,7 @@ jobs:
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.detect' --plan-output '.chrono-harness/state/cache/check.detect/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache detect.ci
         id: cache_0_restore
@@ -119,7 +119,7 @@ jobs:
         id: chrono_startup
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'produce'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'produce'
       - name: Publish registered startup artifact
         id: chrono_startup_upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -219,12 +219,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_cache'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_cache' --plan-output '.chrono-harness/state/cache/check.unit_cache/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.cache
         id: cache_0_restore
@@ -254,7 +254,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -346,12 +346,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_ci'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_ci'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_ci' --plan-output '.chrono-harness/state/cache/check.unit_ci/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.ci
         id: cache_0_restore
@@ -417,7 +417,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -509,12 +509,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_diagnostics'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_diagnostics'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_diagnostics' --plan-output '.chrono-harness/state/cache/check.unit_diagnostics/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.diagnostics
         id: cache_0_restore
@@ -544,7 +544,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -636,12 +636,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_distribution'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_distribution'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_distribution' --plan-output '.chrono-harness/state/cache/check.unit_distribution/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.distribution
         id: cache_0_restore
@@ -671,7 +671,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -763,11 +763,11 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_host-bootstrap'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_host-bootstrap'
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         shell: bash
         env:
@@ -834,12 +834,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_inputs'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_inputs'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_inputs' --plan-output '.chrono-harness/state/cache/check.unit_inputs/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.inputs
         id: cache_0_restore
@@ -941,7 +941,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1033,12 +1033,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_instructions'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_instructions'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_instructions' --plan-output '.chrono-harness/state/cache/check.unit_instructions/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.instructions
         id: cache_0_restore
@@ -1068,7 +1068,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1160,12 +1160,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-ci'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-ci'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-ci' --plan-output '.chrono-harness/state/cache/check.unit_judge-ci/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.judge-ci
         id: cache_0_restore
@@ -1204,7 +1204,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1296,12 +1296,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-cost'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-cost'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-cost' --plan-output '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.judge-cost
         id: cache_0_restore
@@ -1358,7 +1358,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1450,12 +1450,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-filemap'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-filemap'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-filemap' --plan-output '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.judge-filemap
         id: cache_0_restore
@@ -1521,7 +1521,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1613,12 +1613,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-mixed'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-mixed'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-mixed' --plan-output '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.judge-cost
         id: cache_0_restore
@@ -1684,7 +1684,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1776,12 +1776,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-projects'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-projects'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-projects' --plan-output '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.judge-ci
         id: cache_0_restore
@@ -1856,7 +1856,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -1948,12 +1948,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-registration'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-registration'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-registration' --plan-output '.chrono-harness/state/cache/check.unit_judge-registration/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.judge-registration
         id: cache_0_restore
@@ -1992,7 +1992,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -2084,12 +2084,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-routes'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-routes'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-routes' --plan-output '.chrono-harness/state/cache/check.unit_judge-routes/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.judge-routes
         id: cache_0_restore
@@ -2119,7 +2119,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -2211,12 +2211,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-workflow' --plan-output '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.ci
         id: cache_0_restore
@@ -2336,7 +2336,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -2428,12 +2428,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow-short'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow-short'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-workflow-short' --plan-output '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.ci
         id: cache_0_restore
@@ -2553,7 +2553,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -2637,12 +2637,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow-units'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow-units'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-workflow-units' --plan-output '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.ci
         id: cache_0_restore
@@ -2762,7 +2762,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -2846,11 +2846,11 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_release-build'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_release-build'
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         shell: bash
         env:
@@ -2917,12 +2917,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_release-build-integration'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_release-build-integration'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_release-build-integration' --plan-output '.chrono-harness/state/cache/check.unit_release-build-integration/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.distribution
         id: cache_0_restore
@@ -2943,7 +2943,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -3019,12 +3019,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_runner'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_runner'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_runner' --plan-output '.chrono-harness/state/cache/check.unit_runner/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.runner
         id: cache_0_restore
@@ -3054,7 +3054,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -3146,12 +3146,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_worktree'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_worktree'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_worktree' --plan-output '.chrono-harness/state/cache/check.unit_worktree/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.ci
         id: cache_0_restore
@@ -3199,7 +3199,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -3291,12 +3291,12 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_worktree-adoption'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_worktree-adoption'
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_worktree-adoption' --plan-output '.chrono-harness/state/cache/check.unit_worktree-adoption/plan.json' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache check.ci
         id: cache_0_restore
@@ -3344,7 +3344,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash
@@ -3426,11 +3426,11 @@ jobs:
         env:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'aggregate'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'aggregate'
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         shell: bash
         env:

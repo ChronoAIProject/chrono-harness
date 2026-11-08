@@ -34,7 +34,7 @@
 
 CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选择 Git。准备命令和绑定 Git 消费者使用同一原生执行物，故障适配器在输入登记保留所选路径。平台缺登记就失败，不从环境 PATH 回退。这不改变消费宿主 Git 政策，也不证明 Git 输入完整。
 
-从仓库根运行。core、Verus 准备和所有者阶段构建由 Rust 执行，薄 shell 入口需要 Git、rustup；首次前端编译使用固定 Rust 1.95.0，已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。其他仍使用 Python 的 profile 和测试继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
+从仓库根运行。core、缓存、detector、单元准备、共享启动、Verus 准备和所有者阶段构建由 Rust 执行，统一通过薄 shell 入口启动。首次前端编译需要 Git、rustup 和固定 Rust 1.95.0；已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。尚未迁移的所有者验证 profile 和 Python 测试继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
 
 没有现役 profile 使用的私有工具链安装分支及专属测试已退役。bootstrap 沿当前工具链选择：Cargo 不可用时安装指定版本的 minimal 加 rustfmt，缺格式化组件时只补该组件；可写构建目录仍由 `host_environment` 的缓存路径声明。工具身份、编译器选择及失败原件继续由原入口核验和保留，不为主机盘点另装完整 SDK。
 
@@ -50,12 +50,16 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 在已有 bootstrap 租约内用固定 Rust 1.95.0 构建并调用本宿主的 `chrono-host-bootstrap`。
 Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及两流，再交出现有 stage 描述符；
 阶段校验读取同一生产者的固定原件。shell 只转交参数，不复制构建配方或解释报告。
-普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再执行该保留文件；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
+普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再经同一固定版本的 `rustup run` 执行该保留文件，保持首次编译与后续调用的 Rustup 目录选择一致；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
+
+固定 Verus 下载在 `projects.json` 的 `host.verus-download` 操作中使用 GitHub 官方资产 API 的固定 ID `406260237`，以 `Accept: application/octet-stream` 获取原发布 ZIP，版本和 SHA-256 不变。这一个固定 GET 使用 curl 原生的 `--retry-all-errors`，覆盖 HTTP 504 被报为接收失败退出 56 的情况，最多重试 3 次；下载内容写入 `--output` 指定文件，由 curl 在重试前重置部分内容。连接上限为 15 秒，单次传输上限为 120 秒；启动重试的时间窗口为 120 秒，该窗口不限制已经开始的传输。原有操作／验收时限继续生效，下载后仍核固定 SHA-256。这里不重跑构建或验收，也不增加自研重试层；实际重试次数和耗时归原始输出。
+
+下载启用 curl 的 `--verbose`，将重定向、响应状态和响应头写入已有原始 stderr，供区分 API 响应与最终资产服务的失败。失败不能仅凭 HTTP 403 归因为权限、限流或链接过期；须读实际响应及原退出码。额外诊断字节沿用现有输出上限和保留规则。
 
 本宿主只维护当前采用的安装 profile。Python 入口省略配置时也选择现有 `bootstrap-core.json`；
 旧的全工具 `bootstrap.json` 与未被执行计划调用的 `host.bootstrap` 操作已退役。
 detector、缓存和各单元仍消费各自显式登记的 profile，不因默认安装而取得额外工具。
-共享启动当前仍由 Python 编排，但 produce 按所选 profile 的 `entrypoint` 和工具声明调用真实生产者，因此 core 产物来自 Rust。其余 Python profile 和测试仍待迁移，外部宿主不运行本仓这项源码构建。
+共享启动的 produce／install／verify 已登记到同一个 Rust 前端；produce 按所选 profile 的 `entrypoint` 和工具声明调用真实生产者。缓存、detector 和单元 profile 同样选择原生入口，操作 ID、原始回执、产物绑定及失败合同保留。消费者首次从源码准备前端的构建与存储成本仍须实测，不能把语言迁移算作性能收益。所有者验证的 Python 入口、伴生 Python 实现和测试，以及发布编排仍待迁移；外部宿主不运行本仓这项源码构建。
 **实现与宿主政策同时变更：**本批修改 core／Verus 的正式方法及所属登记，增加前端安装和共享生产入口的行为验证；原生构建、真实升级及受影响标准／CI 消费分别验收。新增前端构建、验证和存储总成本未测。
 
 提交修改、确保候选检出干净后，本地和生成 CI 使用同一标准判断命令：
