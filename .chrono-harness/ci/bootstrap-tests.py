@@ -745,6 +745,26 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    if "CHRONO_ARTIFACT_DIRECTORY" not in os.environ:
+        # The current lifecycle owner allocates one whole run directory and
+        # forwards its lease. The same registered action reenters below with
+        # that directory; no per-fixture catalogue or separate cleanup recipe.
+        import bootstrap
+        operation = "host.bootstrap-command-tests" if sys.argv[1:] == ["--command-mocks"] else "host.bootstrap-tests"
+        result = subprocess.run([
+            str(SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree"),
+            "use", "--host-root", str(SOURCE.parents[1]), "--operation", operation,
+        ], capture_output=True, pass_fds=PASS_FDS)
+        sys.stderr.buffer.write(result.stderr)
+        report = json.loads(result.stdout)
+        if "managed_process" not in report:
+            raise RuntimeError(report.get("error", "artifact operation did not launch"))
+        process = bootstrap.retained_process(report["managed_process"])
+        sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
+        sys.stderr.buffer.write(bytes(process["stderr_bytes"]))
+        if result.returncode:
+            print(report.get("error", "artifact operation failed"), file=sys.stderr)
+        sys.exit(process["exit_code"] or result.returncode)
     if sys.argv[1:] == ["--command-mocks"]:
         from bootstrap_shared_tests import BootstrapCommandMocks
         unittest.main(argv=[sys.argv[0]], defaultTest="BootstrapCommandMocks")

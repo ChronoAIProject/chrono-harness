@@ -3150,7 +3150,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         manager.inputs.registrations.as_ref(),
                         |(registrations, _)| registrations,
                     );
-                    let command = if operation == "check" {
+                    let mut command = if operation == "check" {
                         canonical_command(target, target_regs, &selection)?
                     } else if operation == "bootstrap" {
                         bootstrap_command(r, target, target_regs, values["--bootstrap-config"])?
@@ -3164,6 +3164,15 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     } else {
                         values["--operation"]
                     };
+                    let artifact_producer = manager
+                        .inputs
+                        .policy
+                        .retained_producers
+                        .iter()
+                        .find(|producer| {
+                            producer.operations.iter().any(|name| name == use_operation)
+                        })
+                        .map(|producer| producer.id.clone());
                     if e.ownership.is_some() {
                         use_guard = Some(
                             manager
@@ -3191,6 +3200,30 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.observe_attention(r, report, false)?;
                     let coordinator_bytes = manager.inputs.anchor_config_bytes.clone();
                     drop(manager);
+                    let mut artifact = artifact_producer
+                        .as_deref()
+                        .map(|producer| {
+                            TemporaryHost::registered_allocate(
+                                &coordinator,
+                                config_path,
+                                producer,
+                                "run-",
+                            )
+                        })
+                        .transpose()?;
+                    if let Some(artifact) = &artifact {
+                        let directory = artifact
+                            .path()
+                            .to_str()
+                            .ok_or("artifact directory UTF8")?
+                            .to_owned();
+                        command
+                            .env
+                            .insert("CHRONO_ARTIFACT_DIRECTORY".into(), directory.clone());
+                        command.env.insert("TMPDIR".into(), directory);
+                        report["artifact_directory"] =
+                            value!({"producer":artifact_producer,"path":artifact.path()});
+                    }
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
                     let process = chrono_harness::prepared::process_identities(
                         chrono_harness::run_process_observed(target, &command, &[], &digest)?,
@@ -3198,6 +3231,25 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     report["managed_process"] =
                         chrono_harness::full::compact_process(&value!(&process))?;
                     report["managed_process"]["environment_representation"] = value!("sha256");
+                    let artifact_error = if let Some(artifact) = &mut artifact {
+                        match artifact.finish(process.failure.is_some() || process.exit_code != 0) {
+                            Ok(handoff) => {
+                                report["artifact_directory"]["handoff"] = value!({"status":handoff["status"],"report_path":handoff["report_path"],"error":handoff["error"]});
+                                (handoff["status"] != "finished").then(|| {
+                                    format!(
+                                        "artifact directory handoff failed: {}",
+                                        handoff["error"]
+                                    )
+                                })
+                            }
+                            Err(error) => {
+                                report["artifact_directory"]["error"] = value!(error);
+                                Some(error)
+                            }
+                        }
+                    } else {
+                        None
+                    };
                     let mut manager = Manager::open(
                         r,
                         &coordinator,
@@ -3229,6 +3281,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             "registered managed command failed with exit {}: {:?}",
                             process.exit_code, process.failure
                         ));
+                    }
+                    if let Some(error) = artifact_error {
+                        return Err(error);
                     }
                     let mut post_use_cleanup = value!({});
                     let cleanup = manager.drain_for_admission(

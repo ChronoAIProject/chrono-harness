@@ -21,6 +21,9 @@ pub(super) struct ProducerPolicy {
     pub(super) fixture_bodies: bool,
     #[serde(default)]
     rolling_directory: Option<rolling::Policy>,
+    /// These exact registered operations publish one whole run directory.
+    #[serde(default)]
+    pub(super) operations: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -1363,6 +1366,23 @@ impl ProducerPolicy {
     pub(super) fn validate(&self, policy: &Policy) -> Result<(), String> {
         if self.rolling_directory.is_some() && !self.temporary {
             return Err("rolling directory requires prospective temporary ownership".into());
+        }
+        if !self.operations.is_empty() && self.rolling_directory.is_none() {
+            return Err("operation artifact directories require rolling ownership".into());
+        }
+        let mut operations = BTreeSet::new();
+        for operation in &self.operations {
+            if operation.trim().is_empty()
+                || !operations.insert(operation)
+                || policy
+                    .retained_producers
+                    .iter()
+                    .filter(|producer| producer.operations.contains(operation))
+                    .count()
+                    != 1
+            {
+                return Err("artifact operation requires one exact producer".into());
+            }
         }
         relative_path(self.directory.trim_end_matches('/'))?;
         if self.id.is_empty()
