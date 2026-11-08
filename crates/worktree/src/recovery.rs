@@ -71,6 +71,7 @@ fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(),
             "/original_report/result/input",
             "/unreferenced_original_receipt/input",
             "/original_result/input",
+            "/declaration_input",
         ] {
             if let Some(input) = report.pointer(pointer) {
                 inputs.push(
@@ -106,17 +107,47 @@ fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(),
     }
     Ok(())
 }
+
+/// Direct inputs declared by the producing lifecycle schema. Retention follows
+/// these edges; it does not discover dependencies by traversing arbitrary JSON.
+pub(crate) fn input_paths(root: &Path, report: &Value) -> Result<Vec<String>, String> {
+    let mut inputs = Vec::new();
+    collect_inputs(report, &mut inputs)?;
+    let mut paths = BTreeSet::new();
+    for input in inputs {
+        validate_input(root, &input)?;
+        paths.insert(input.path);
+    }
+    if report["schema"] == "chrono-worktree-interrupted-use/v2" {
+        let path = report["intent"]["path"].as_str().ok_or("interrupted use intent path")?;
+        state_path(root, path)?;
+        paths.insert(path.into());
+    }
+    if report["schema"] == "chrono-worktree-owner-adoption/v1" {
+        let path = report["stage_result"].as_str().ok_or("owner adoption stage path")?;
+        state_path(root, path)?;
+        paths.insert(path.into());
+    }
+    Ok(paths.into_iter().collect())
+}
+
+fn validate_input(root: &Path, input: &RetainedInput) -> Result<(), String> {
+    if input.schema != "chrono-worktree-retained-input/v1"
+        || input.source_root != root
+        || !matches!(input.format.as_str(), "bytes" | "receipt")
+    {
+        return Err("invalid retained lifecycle input binding".into());
+    }
+    state_path(root, &input.path)?;
+    Ok(())
+}
+
 pub(crate) fn verify_inputs(root: &Path, report: &Value) -> Result<(), String> {
     let mut inputs = Vec::new();
     let mut checked = BTreeSet::new();
     collect_inputs(report, &mut inputs)?;
     while let Some(input) = inputs.pop() {
-        if input.schema != "chrono-worktree-retained-input/v1"
-            || input.source_root != root
-            || !matches!(input.format.as_str(), "bytes" | "receipt")
-        {
-            return Err("invalid retained lifecycle input binding".into());
-        }
+        validate_input(root, &input)?;
         if !checked.insert((
             input.path.clone(),
             input.sha256.clone(),
@@ -494,23 +525,21 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
     let path = report["report_path"]
         .as_str()
         .ok_or("lifecycle result path")?;
-    let mut originals = Vec::new();
-    if let Some(input) = report.pointer("/prior_report/input") {
-        let input: RetainedInput = serde_json::from_value(input.clone())
-            .map_err(|e| format!("invalid retained prior report: {e}"))?;
-        if input.source_root != root || input.format != "receipt" {
-            return Err("invalid retained prior report binding".into());
-        }
-        originals.push(input.path);
-    }
+    let mut originals = input_paths(root, report)?;
     for binding in [
         "recovery_intent",
         "fetch_intent",
         "cache_intent",
         "main_cache_release",
         "managed_use_receipt",
+        "terminal_receipt",
     ] {
         if let Some(path) = report[binding]["path"].as_str() {
+            originals.push(path.into());
+        }
+    }
+    for pointer in ["/owner_deployment/receipt/path", "/owner_deployment/stage_result"] {
+        if let Some(path) = report.pointer(pointer).and_then(Value::as_str) {
             originals.push(path.into());
         }
     }

@@ -30,6 +30,7 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     let h = cache_history_host(0, 2);
     let index = fs::read(h.root.join(".git/index")).unwrap();
     let refs = git(&h.root, &["show-ref"]);
+    let inventory = || Inventory::adopted(&h.root).unwrap().unwrap();
     let mut old = None;
     for round in 0..3 {
         let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
@@ -43,6 +44,7 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
                     .join(attempt["intent"]["path"].as_str().unwrap())
                     .is_file()
             );
+            inventory().reference_paths("external-cache-diagnostic", &[attempt["path"].as_str().unwrap().into()]).unwrap();
             old = Some(attempt);
         }
     }
@@ -55,18 +57,17 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     assert!(attempts[0]["receipt"].is_object());
     assert!(entry["terminal"].is_null());
     let old = old.unwrap();
-    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     let state = retention_state::snapshot(&h.root);
-    if let Some(original) = state["outputs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|o| o["path"] == old["intent"]["path"])
-    {
-        inventory
-            .maintain_originals(&[original["id"].as_str().unwrap().to_owned()])
-            .unwrap();
+    let ids: Vec<_> = [&old["intent"]["path"], &old["path"]].into_iter().map(|path| {
+        state["outputs"].as_array().unwrap().iter().find(|o| o["path"] == *path).unwrap()["id"]
+            .as_str().unwrap().to_owned()
+    }).collect();
+    inventory().maintain_originals(&ids).unwrap();
+    for path in [&old["intent"]["path"], &old["path"]] {
+        assert!(h.root.join(path.as_str().unwrap()).is_file(), "external report retains its declared closure");
     }
+    inventory().reference_paths("external-cache-diagnostic", &[]).unwrap();
+    inventory().maintain_originals(&ids).unwrap();
     assert!(
         !h.root
             .join(old["intent"]["path"].as_str().unwrap())

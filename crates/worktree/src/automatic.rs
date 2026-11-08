@@ -1817,6 +1817,7 @@ impl Manager {
                 &self.original_role()?,
                 &paths.into_iter().collect::<Vec<_>>(),
             )?;
+            inventory.dependencies_paths(&path, &crate::recovery::input_paths(root, v)?)?;
             publication.complete(outcome)?;
             inventory.retain_diagnostic_path(&path)?;
             bytes
@@ -1835,6 +1836,13 @@ impl Manager {
             Ok(bytes) => {
                 if json(&bytes)? != *value {
                     return Err("interrupted use reconciliation receipt changed".into());
+                }
+                if let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(
+                    &self.inputs.policy.coordinator_root,
+                )? {
+                    inventory.dependencies_paths(&path, &crate::recovery::input_paths(
+                        &self.inputs.policy.coordinator_root, value,
+                    )?)?;
                 }
                 Ok(Receipt {
                     path,

@@ -2,6 +2,25 @@
 use super::*;
 use crate::verified_owner_publication as publication_policy;
 
+const CURRENT_OWNER_ROLE: &str = "bootstrap-owner-current";
+
+fn adoption_paths(root: &Path, adoption: &Value) -> Result<Vec<String>, String> {
+    if adoption["schema"] != "chrono-worktree-owner-adoption/v1" {
+        return Err("current owner adoption schema".into());
+    }
+    let receipt: Receipt = serde_json::from_value(adoption["receipt"].clone())
+        .map_err(|e| format!("current owner adoption receipt: {e}"))?;
+    let raw = crate::recovery::state_bytes(root, &receipt.path)?;
+    let mut original = adoption.clone();
+    original.as_object_mut().ok_or("owner adoption object")?.remove("receipt");
+    if sha256(&raw) != receipt.sha256 || json(&raw)? != original {
+        return Err("current owner adoption original changed".into());
+    }
+    let mut paths = crate::recovery::input_paths(root, &original)?;
+    paths.push(receipt.path);
+    Ok(paths)
+}
+
 fn executable_binding(path: &Path) -> Result<Value, String> {
     use std::os::unix::fs::MetadataExt;
     let id = crate::ownership::identity(path)?;
@@ -845,6 +864,19 @@ impl Manager {
         // Stage qualification and publication use the same original Rust owner.
         // No child process or synthetic managed-process receipt is produced.
         stable(r)?;
+        let index = no_symlink_parents(root, ".chrono-harness/state/bootstrap-owner-current.json")?;
+        let retention = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?;
+        let previous_paths = if let Some(inventory) = &retention {
+            let paths = match fs::read(&index) {
+                Ok(raw) => adoption_paths(root, &json(&raw)?)?,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+                Err(e) => return Err(e.to_string()),
+            };
+            inventory.reference_paths(CURRENT_OWNER_ROLE, &paths)?;
+            paths
+        } else {
+            Vec::new()
+        };
         let publication = publish_owner(root, record)?;
         stable(r)?;
         if publication["schema"] != "chrono-bootstrap-owner-publication/v1"
@@ -880,8 +912,14 @@ impl Manager {
             return Err("installed owner changed before adoption".into());
         }
         adoption["receipt"] = value!(receipt);
-        let index = no_symlink_parents(root, ".chrono-harness/state/bootstrap-owner-current.json")?;
+        let next_paths = adoption_paths(root, &adoption)?;
+        if let Some(inventory) = &retention {
+            inventory.reference_paths(CURRENT_OWNER_ROLE, &[previous_paths, next_paths.clone()].concat())?;
+        }
         write_json(&index, &adoption, false)?;
+        if let Some(inventory) = &retention {
+            inventory.reference_paths(CURRENT_OWNER_ROLE, &next_paths)?;
+        }
         stable(r)?;
         report["owner_deployment"] = adoption;
         Ok(())
