@@ -1107,6 +1107,13 @@ scoped judge-ci 经明确适配器复用 routes 计划及 projects 执行／回�
 
 scoped `chrono-ci-check/v2` 必须明确 `policy.facts_config` 为 `.chrono-harness/` 下路径，在获取对象前选择候选 full-v3 Git 绑定。同一 Reader 读取两端、原 commit parents、index／dirty 事实、可选 full-registration 解释及执行后事实。
 
+原始 commit parents 的物理头选择直接使用同源 Verus `commit_parent_records`：只以 LF 分行，
+在首个空行停止，仅选精确 `parent ` 前缀，完整保留原后缀、顺序和重复。
+空后缀、CR、NUL 和非 UTF-8 字节均不在选择层改写或丢弃；续行及正文不冒充 parent 头。
+返回完整序列和终止由 `commit_parent_lines` 及实际循环证明；`facts::commit_parents` 仍负责
+原 UTF-8 解码、完整 OID 检查与错误分类，这些外围组合及 Git 获取仍有独立证明义务。
+切片和 Vec 存取使用固定 vstd 的明确外部合同，独立预期和原运行测试沿同源入口验证。
+
 候选 profile／facts-config 字节须匹配固定 blob；构建后绑定失败和后续失败都在 `evidence.git_facts` 保留结构化进程原观察。可选 `registration_config` 独立采用原有登记／canonical 调用语义，单独 Git 绑定不要求完整登记。v1 拒绝新字段（含 null）。选测、initial 规则、操作环境、协议及唯一 check argv 保留 scoped 合同，base enforcement 写明真实端点 schema。
 
 这批历史实现时产品宿主尚未采用 v2；此能力不证明 Git／委托输入完整、full 治理或同判。
