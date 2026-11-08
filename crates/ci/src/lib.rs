@@ -14,7 +14,6 @@ pub mod inventory;
 pub mod migrate;
 pub mod native;
 pub mod release;
-pub mod resources;
 pub mod startup;
 pub mod units;
 pub mod verified_literals;
