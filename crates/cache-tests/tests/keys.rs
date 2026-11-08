@@ -1075,19 +1075,8 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         fs::create_dir_all(root.path().join(&path).parent().unwrap()).unwrap();
         fs::copy(host.join(&path), root.path().join(&path)).unwrap();
     }
-    register_artifacts(root.path(), &config);
-    let registry = root
-        .path()
-        .join(config["artifact_registry"].as_str().unwrap());
-    fs::create_dir_all(registry.parent().unwrap()).unwrap();
-    let artifacts: Value = serde_json::from_slice(
-        &fs::read(root.path().join(".chrono-harness/artifacts.json")).unwrap(),
-    )
-    .unwrap();
-    let mut policy: Value =
-        serde_json::from_slice(&fs::read(&registry).unwrap_or_else(|_| b"{}".to_vec())).unwrap();
-    policy["artifacts"] = artifacts["artifacts"].clone();
-    fs::write(registry, serde_json::to_vec(&policy).unwrap()).unwrap();
+    // Keep the actual host artifact declarations. Synthesizing rows from the
+    // cache config would hide missing or mismatched production registrations.
     (root, config)
 }
 

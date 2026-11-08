@@ -129,7 +129,9 @@ detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。
 
 ### Verus 固定下载包
 
-`verus.archive` 只缓存 checksum 文件点名的 ZIP，不缓存证明结果。
+`verus.archive` 缓存存放 checksum 文件点名 ZIP 的专属目录，不缓存证明结果。
+缓存与宿主产物清单均精确登记 `.chrono-harness/cache/bootstrap-verus/`，
+不把文件登记到只接受目录的宿主清单，也不以父目录声明替代精确匹配。
 键绑定 projects.json 中的真实下载动作及 `verus-macos-arm64.sha256` 原字节，
 采用精确恢复；编译器和无关源码变化不使这个固定包失效。
 detector 在启动前恢复、启动成功后保存。检查单元通过已有共享产物取得原包，
