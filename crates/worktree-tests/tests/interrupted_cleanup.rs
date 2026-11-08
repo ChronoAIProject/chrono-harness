@@ -2680,7 +2680,8 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     );
     assert!(
         String::from_utf8_lossy(&refused_bootstrap.stderr)
-            .contains("coordinator policy/configuration identity mismatch")
+            .contains("coordinator policy/configuration identity mismatch"),
+        "{refused_bootstrap:?}"
     );
     assert!(
         !target
