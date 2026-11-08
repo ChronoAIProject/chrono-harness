@@ -372,8 +372,6 @@ v2 的 `report_bytes` 约束每单元原报告 metadata 加 stdout／stderr 总�
 
 本宿主现在上传各单元已有 `.chrono-harness/state/units/<id>/` 报告根。短准备已在该根保留报告、上下文、获取、原 stdout／stderr。成功汇总不消费临时测试宿主或其复制执行物。
 
-原生 run `42004257959` 的 CI fixture 占压缩成员 1,567,248,867 字节中的 1,566,217,208；整个 ZIP 为 1,575,243,167 字节，下载超时。这只描述一份产物，不是全流程节省结论。
-
 可选 `failure_artifact_directory` 在 job 失败时保留更广诊断目录，用同一固定上传 action、`failure()` 和独立 `diagnostics-` 产物前缀。本仓选 `.chrono-harness/state/`，保留失败 fixture 原件，不向成功汇总传其正文。普通报告上传及交付确认保留自己的产物／映射；目录相同时不重复上传。
 
 不加下载器、打包命令、权限或超时预算。原生报告根消费与仅失败上传须分别验证，成功 job 不能证明后者。
