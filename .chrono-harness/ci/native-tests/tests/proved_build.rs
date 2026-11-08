@@ -409,6 +409,11 @@ fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
         request_path,
     ]);
     assert_eq!(released.exit_code, 0, "{}", released.stderr);
+    let release: Value = serde_json::from_str(&released.stdout).unwrap();
+    assert_eq!(release["consumer"], declaration["consumer"]);
+    assert_eq!(release["original_count"], 1);
+    assert_eq!(release["effects"], "consumer-root-release-only");
+    assert_eq!(release["completion"], "not-established");
     write(
         &f.root.join(request_path),
         &serde_json::to_vec(
@@ -425,16 +430,21 @@ fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
     assert_eq!(maintained.exit_code, 0, "{}", maintained.stderr);
     let maintenance: Value = serde_json::from_str(&maintained.stdout).unwrap();
     assert_eq!(maintenance["accounting_errors"], json!([]));
-    // 每轮仍受真实的 25 ms 限制；已释放对象可以完成删除，也可以留下可继续的删除游标。
+    // 25 ms 也可能在访问对象前用完；释放不承诺同轮开始或完成删除。
     if f.root.join(notice["path"].as_str().unwrap()).exists() {
-        assert_eq!(
-            maintenance["protected"],
-            json!([{"id":declaration["originals"][0]["id"],
-                "reason":"bounded partial disposal; resumes on ordinary entry"}]),
-            "release: {}; maintain: {}",
-            released.stdout,
-            maintained.stdout
-        );
+        if maintenance["nodes"] == 0 && maintenance["protected"] == json!([]) {
+            assert_eq!(maintenance["remaining_outputs"], 1);
+            assert_eq!(maintenance["disposed"], json!([]));
+        } else {
+            assert_eq!(
+                maintenance["protected"],
+                json!([{"id":declaration["originals"][0]["id"],
+                    "reason":"bounded partial disposal; resumes on ordinary entry"}]),
+                "release: {}; maintain: {}",
+                released.stdout,
+                maintained.stdout
+            );
+        }
     } else {
         assert_eq!(maintenance["remaining_outputs"], 0);
     }
