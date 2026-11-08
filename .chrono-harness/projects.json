@@ -2090,6 +2090,19 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "probe_rolling": {
+          "operation": "test.worktree.rolling",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "temporary::rolling_directory",
+            "--",
+            "--test-threads=1"
+          ]
         }
       },
       "tests_for": "worktree",

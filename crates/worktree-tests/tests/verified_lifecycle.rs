@@ -75,6 +75,15 @@ fn only_actual_unreleased_evidence_blocks_checkout_removal() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn whole_directory_requires_owned_lifetime_and_consumer_exclusion() {
+    expect(policy::rolling_disposal(true, true, true, true));
+    expect(!policy::rolling_disposal(false, true, true, true));
+    expect(!policy::rolling_disposal(true, false, true, true));
+    expect(!policy::rolling_disposal(true, true, false, true));
+    expect(!policy::rolling_disposal(true, true, true, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn only_a_successful_original_with_absence_verification_establishes_disposal() {
     broadcast use vstd::string::group_string_axioms;
     proof {

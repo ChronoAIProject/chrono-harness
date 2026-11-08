@@ -58,4 +58,10 @@ pub fn retain_evidence(disposal_authorized: bool, evidence_present: bool) -> (re
     !disposal_authorized && evidence_present
 }
 
+pub fn rolling_disposal(owned: bool, expired: bool, released: bool, exclusive: bool) -> (allowed: bool)
+    ensures allowed <==> (owned && expired && released && exclusive),
+{
+    owned && expired && released && exclusive
+}
+
 }

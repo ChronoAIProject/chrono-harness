@@ -39,6 +39,139 @@ fn command_carrier_count(command: &Command) -> usize {
         .unwrap_or(0)
 }
 
+fn rolling_host(keep_seconds: u64) -> Host {
+    let h = host();
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["retained_producers"][0]["rolling_directory"] = value!({"success_keep_seconds":0,"failure_keep_seconds":keep_seconds,
+            "interrupted_keep_seconds":keep_seconds,"metadata_keep_seconds":0});
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    h
+}
+
+#[test]
+fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
+    let h = rolling_host(0);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "rolling λ ",
+    )
+    .unwrap();
+    let path = fixture.path().to_owned();
+    fs::create_dir(path.join("copied input")).unwrap();
+    fs::write(path.join("copied input/source.rs"), b"fixture source").unwrap();
+    fs::create_dir(path.join(".git")).unwrap();
+    fs::write(
+        path.join(".git/fixture-metadata"),
+        b"owned test Git metadata",
+    )
+    .unwrap();
+    fs::write(
+        path.join("unlisted capture.bin"),
+        b"original fixture output",
+    )
+    .unwrap();
+    let survivor = h.parent.join("external survivor");
+    fs::write(&survivor, b"keep external bytes").unwrap();
+    std::os::unix::fs::symlink(&survivor, path.join("external link")).unwrap();
+    let result = fixture.finish(false).unwrap();
+    assert_eq!(result["status"], "finished", "{result}");
+    assert!(
+        !path.exists(),
+        "all owned fixture bytes must roll together: {result}"
+    );
+    assert_eq!(fs::read(survivor).unwrap(), b"keep external bytes");
+}
+
+#[test]
+fn rolling_directory_waits_for_real_capability_and_retention_window() {
+    let h = rolling_host(86400);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "held rolling λ ",
+    )
+    .unwrap();
+    let path = fixture.path().to_owned();
+    fs::write(path.join("result.bin"), b"retained while read").unwrap();
+    let reader = fixture.capability().unwrap();
+    let result = fixture.finish(false).unwrap();
+    assert!(
+        path.exists(),
+        "live capability must exclude disposal: {result}"
+    );
+    drop(reader);
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert!(
+        !path.exists(),
+        "released success should roll at next maintenance: {result}"
+    );
+
+    let mut failure = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "failed rolling λ ",
+    )
+    .unwrap();
+    let failed_path = failure.path().to_owned();
+    fs::write(failed_path.join("failure.stderr"), b"actual failure bytes").unwrap();
+    failure.finish(true).unwrap();
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert_eq!(
+        fs::read(failed_path.join("failure.stderr")).unwrap(),
+        b"actual failure bytes"
+    );
+}
+
+#[test]
+fn rolling_directory_reclaims_expired_interruption_without_claiming_task_completion() {
+    let h = rolling_host(0);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let legacy = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "unclaimed λ ",
+    )
+    .unwrap();
+    let legacy_path = legacy.path().to_owned();
+    fs::write(legacy_path.join("unique work"), b"keep unclaimed bytes").unwrap();
+    drop(legacy);
+    let unfinished = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "interrupted rolling λ ",
+    )
+    .unwrap();
+    let unfinished_path = unfinished.path().to_owned();
+    fs::write(
+        unfinished_path.join("partial stdout"),
+        b"keep unknown result",
+    )
+    .unwrap();
+    drop(unfinished);
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert_eq!(
+        fs::read(legacy_path.join("unique work")).unwrap(),
+        b"keep unclaimed bytes"
+    );
+    assert!(
+        !unfinished_path.exists(),
+        "owned interrupted fixture expires without a task-success claim: {result}"
+    );
+}
+
 #[test]
 fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
     use std::time::{Duration, Instant};

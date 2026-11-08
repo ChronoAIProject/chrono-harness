@@ -152,14 +152,18 @@ impl HostDirectory {
             }
         }
     }
-    fn retain_diagnostic(&self, reason: &str) -> Result<(), String> {
+    fn retain_diagnostic(&self, _reason: &str) -> Result<(), String> {
         if let Self::Retained(host) = self {
-            chrono_worktree::RetainedArtifact::resume(
-                host.path().parent().unwrap(),
-                "worktree-test-host",
-                host.path(),
-            )?
-            .acquire("fixture-diagnostic", reason)?;
+            host.retain_diagnostic()?;
+        }
+        Ok(())
+    }
+    fn finish(&mut self, failed: bool) -> Result<(), String> {
+        if let Self::Retained(host) = self {
+            let result = host.finish(failed)?;
+            if result["status"] != "finished" {
+                return Err(result["error"].to_string());
+            }
         }
         Ok(())
     }
@@ -188,10 +192,13 @@ fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> 
 }
 impl Drop for Host {
     fn drop(&mut self) {
-        let Some(directory) = Self::diagnostic_directory(std::thread::panicking()) else {
-            return;
-        };
-        self.retain_fixture_diagnostics(&directory);
+        let failed = std::thread::panicking();
+        if let Some(directory) = Self::diagnostic_directory(failed) {
+            self.retain_fixture_diagnostics(&directory);
+        }
+        if let Err(error) = self._dir.finish(failed) {
+            eprintln!("worktree fixture handoff failed; allocation preserved: {error}");
+        }
     }
 }
 impl Host {
@@ -268,16 +275,10 @@ impl Host {
         Self::in_directory(layout, HostDirectory::Ephemeral(dir))
     }
     fn retained(layout: &str) -> Self {
-        let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
+        let host = chrono_worktree::TemporaryHost::registered_allocate(
             &source(),
             POLICY,
             "worktree-test-host",
-        )
-        .unwrap();
-        let host = chrono_worktree::TemporaryHost::allocate(
-            &store,
-            "worktree-test-host",
-            &outputs,
             "worktree fixture λ ",
         )
         .unwrap();
