@@ -62,12 +62,20 @@ pub fn pack(root: &Path, relative: &str, archive: &Path) -> Result<PackedExecuta
     let mut input = File::open(source).map_err(error)?;
     let metadata = input.metadata().map_err(error)?;
     if !policy::executable_entry(
-        b"executable", metadata.is_file(), metadata.len(),
-        metadata.permissions().mode() & 0o7777, executable.size, executable.mode,
+        b"executable",
+        metadata.is_file(),
+        metadata.len(),
+        metadata.permissions().mode() & 0o7777,
+        executable.size,
+        executable.mode,
     ) {
         return Err(error("source metadata changed before archiving"));
     }
-    let output = OpenOptions::new().create_new(true).write(true).open(archive).map_err(error)?;
+    let output = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(archive)
+        .map_err(error)?;
     let mut builder = tar::Builder::new(output);
     let mut header = tar::Header::new_gnu();
     header.set_uid(0);
@@ -77,12 +85,17 @@ pub fn pack(root: &Path, relative: &str, archive: &Path) -> Result<PackedExecuta
     header.set_mode(executable.mode);
     header.set_size(executable.size);
     header.set_cksum();
-    builder.append_data(&mut header, "executable", &mut input).map_err(error)?;
+    builder
+        .append_data(&mut header, "executable", &mut input)
+        .map_err(error)?;
     let mut output = builder.into_inner().map_err(error)?;
     output.flush().map_err(error)?;
     drop(output);
     let (sha256, size) = chrono_harness::file_identity(archive)?;
-    Ok(PackedExecutable { executable, archive: ArchiveIdentity { sha256, size } })
+    Ok(PackedExecutable {
+        executable,
+        archive: ArchiveIdentity { sha256, size },
+    })
 }
 
 /// 先核完整归档，再流式核单一文件，最后原子替换登记的消费路径。
@@ -98,21 +111,36 @@ pub fn import(
         return Err(error("archive is not a regular file"));
     }
     let (sha256, size) = chrono_harness::file_identity(archive)?;
-    if !policy::same_content(&sha256, size, &expected_archive.sha256, expected_archive.size) {
+    if !policy::same_content(
+        &sha256,
+        size,
+        &expected_archive.sha256,
+        expected_archive.size,
+    ) {
         return Err(error("selected executable archive mismatch"));
     }
     let mut package = tar::Archive::new(File::open(archive).map_err(error)?);
     let mut entries = package.entries().map_err(error)?;
-    let mut entry = entries.next().ok_or_else(|| error("missing executable entry"))?.map_err(error)?;
+    let mut entry = entries
+        .next()
+        .ok_or_else(|| error("missing executable entry"))?
+        .map_err(error)?;
     let mode = entry.header().mode().map_err(error)?;
     if !policy::executable_entry(
-        entry.path_bytes().as_ref(), entry.header().entry_type().is_file(),
-        entry.size(), mode, expected.size, expected.mode,
-    ) || !policy::executable_file(true, mode) {
+        entry.path_bytes().as_ref(),
+        entry.header().entry_type().is_file(),
+        entry.size(),
+        mode,
+        expected.size,
+        expected.mode,
+    ) || !policy::executable_file(true, mode)
+    {
         return Err(error("invalid executable archive member/path/mode"));
     }
     let destination = chrono_harness::prepare_publication(root, relative)?;
-    let parent = destination.parent().ok_or_else(|| error("missing destination parent"))?;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| error("missing destination parent"))?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(error)?;
     let (sha256, size) = chrono_harness::copy_hashed(&mut entry, temporary.as_file_mut())?;
     drop(entry);
@@ -122,12 +150,32 @@ pub fn import(
         None => {}
     }
     temporary.as_file_mut().flush().map_err(error)?;
-    temporary.as_file().set_permissions(fs::Permissions::from_mode(mode)).map_err(error)?;
-    let actual_mode = temporary.as_file().metadata().map_err(error)?.permissions().mode() & 0o7777;
-    if !policy::same_executable(&sha256, size, actual_mode, &expected.sha256, expected.size, expected.mode) {
+    temporary
+        .as_file()
+        .set_permissions(fs::Permissions::from_mode(mode))
+        .map_err(error)?;
+    let actual_mode = temporary
+        .as_file()
+        .metadata()
+        .map_err(error)?
+        .permissions()
+        .mode()
+        & 0o7777;
+    if !policy::same_executable(
+        &sha256,
+        size,
+        actual_mode,
+        &expected.sha256,
+        expected.size,
+        expected.mode,
+    ) {
         return Err(error("transported executable identity mismatch"));
     }
     chrono_harness::no_symlink_parents(root, relative)?;
     temporary.persist(destination).map_err(error)?;
-    Ok(ExecutableIdentity { sha256, size, mode: actual_mode })
+    Ok(ExecutableIdentity {
+        sha256,
+        size,
+        mode: actual_mode,
+    })
 }
