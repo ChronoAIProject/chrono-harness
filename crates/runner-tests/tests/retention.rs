@@ -7,6 +7,7 @@ use std::{fs, path::Path};
 #[path = "support/isolated_capability.rs"]
 mod isolated_capability;
 use isolated_capability::isolated_capability_test;
+const FIXTURE_RECOVERY_ROUNDS: usize = 8;
 fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
     fs::create_dir_all(d.path().join(".chrono-harness/state/fixtures")).unwrap();
@@ -41,7 +42,7 @@ fn maintain_fixture_to(root: &Path, expected: u64) -> Value {
 fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
     let policy: Value = serde_json::from_slice(&fs::read(root.join(POLICY_PATH)).unwrap()).unwrap();
     let mut rounds = Vec::new();
-    for _ in 0..8 {
+    for _ in 0..FIXTURE_RECOVERY_ROUNDS {
         let round = maintenance(root);
         assert!(
             round["nodes"].as_u64().unwrap() <= policy["max_nodes_per_round"].as_u64().unwrap(),
@@ -123,10 +124,20 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
             .unwrap();
         second.complete(json!({"exit": 101})).unwrap();
         assert!(began.elapsed() < std::time::Duration::from_secs(5));
-        let round = maintenance(h.path());
+        // Ordinary maintenance may yield before completing an output. Keep
+        // the unrelated fault in place through each bounded continuation.
+        let mut rounds = Vec::new();
+        for _ in 0..FIXTURE_RECOVERY_ROUNDS {
+            let round = maintenance(h.path());
+            assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+            rounds.push(round);
+            if !h.path().join(&second_path).exists() {
+                break;
+            }
+        }
         assert!(
             !h.path().join(&second_path).exists(),
-            "independent disposal must progress: {round}"
+            "independent disposal must progress: {rounds:?}"
         );
         assert_eq!(
             fs::read(h.path().join(&first_path).join("body")).unwrap(),
@@ -1689,7 +1700,7 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
             .exists()
     );
     let child = env!("CARGO_BIN_EXE_chrono-test-retention-child");
-    let result = chrono_harness::run_process(
+    let result = chrono_harness::run_process_observed(
         h.path(),
         &chrono_harness::CommandSpec {
             program: child.into(),
@@ -1699,13 +1710,17 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
                 original["lease_id"].as_str().unwrap().into(),
                 unrelated.into(),
             ],
-            env: Default::default(),
+            // Preserve the inherited environment while retaining the original
+            // process result when the existing deadline or ownership bound fires.
+            env: std::env::vars().collect(),
             timeout_seconds: 5,
             output_limit_bytes: 4096,
         },
         b"",
+        &chrono_harness::sha256(&fs::read(child).unwrap()),
     )
     .unwrap();
+    assert!(result.failure.is_none(), "{result:#?}");
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert_eq!(result.stdout.trim(), "exact input capability inherited");
     assert!(
@@ -3292,9 +3307,9 @@ fn declared_consumer_survives_killed_real_reader_and_ordinary_reentry() {
     assert_eq!(maintain_fixture_to(h.path(), 1), 1);
     let release = consumer_release(h.path(), &declaration, "released");
     assert_eq!(consumer_call(h.path(), release).exit_code, 0);
-    retained_artifacts::retention::maintain_adopted(h.path()).unwrap();
+    let round = retained_artifacts::retention::maintain_adopted(h.path()).unwrap();
     assert_eq!(maintain_fixture_to(h.path(), 0), 0);
-    assert!(!h.path().join(path).exists());
+    assert!(!h.path().join(path).exists(), "{round:?}");
 }
 
 #[test]
