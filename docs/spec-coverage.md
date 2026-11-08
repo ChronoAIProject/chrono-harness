@@ -154,7 +154,7 @@
 | 日志、错误和协议 | runner、diagnostics；[诊断](diagnostics.md)、[执行](execution.md) | 真实进程、原退出／输出和有限故障边界有测试；跨产品诊断、完整响应组合、JSON／IO 和通用错误覆盖尚未完成 |
 | 工作树和任务等待 | worktree、runner；[工作树](worktree.md) | 已采用路径保护实际源码、消费者及可重建缓存，保留原失败／unknown；外部任务通道恢复、完整协作复用、PR／合并编排尚未实现 |
 | 原件及输出保留 | runner、worktree；[原件生命周期](artifact-retention.md) | 已采用原件引用、消费者保护和有限恢复／回收；所有历史输出、全部生产者接入、通用中断及原生交接尚未验收 |
-| 源码构建、安装与发布 | bootstrap、distribution、release；[CI](ci.md)、[发布](release-ci.md)、[分发](distribution.md) | core、共享启动和当前发布各有独立消费者；旧全工具安装已退役，原生获取、完整绑定和外部公开采用分别验收，不能由源码存在推导通过 |
+| 源码构建、安装与发布 | bootstrap、distribution、release；[CI](ci.md)、[发布](release-ci.md)、[分发](distribution.md) | core、共享启动和当前发布各有独立消费者；旧全工具安装和原生初始盘点已退役，完整绑定和外部公开采用分别验收，不能由源码存在推导通过 |
 | 指令默认与宿主采用 | instructions；[指令](instructions.md)、[方法来源](methodology-extraction.md) | 默认与宿主选择独立维护，生成根指南和完整输出；生成不证明 AI 阅读、遵守或翻译等价 |
 | 形式证明 | 实际生产根及专属独立预期；[Verus](verus.md) | 同源证明、固定结果合同和部分生产调用已接入；未覆盖部分、外部合同及外围组合明确保留，不把局部成功当作完整 SPEC 证明 |
 
@@ -164,7 +164,7 @@
 
 全对象“为什么”链是 AI 对真实使用方、替代方案、失败影响和验收终点负责的方法。产品默认和本宿主指南已呈现该规则；现有判官继续检查明确登记、引用、输入及实际回执。没有独立价值台账或机器价值门，规则文字也不证明全仓审计已经完成。
 
-已退役的 runner／diagnostics 额外 guard、专属主机观察及运行时来源模式，不再列为待激活的宿主义务。普通锁定 Cargo 构建和行为测试继续执行；通用输入／Cargo 产品与原生获取必须分别核对自己的当前消费者。现役完整宿主登记仍为 proposed／not-implemented／incomplete。
+已退役的 runner／diagnostics 额外 guard、专属主机观察、运行时来源模式和旧分支原生初始盘点，不再列为待激活的宿主义务。旧盘点的工作流、安装／观察声明、探测 helper、专属动作和测试同步退役；core／所有者 bootstrap 实际使用的 fetch 保留。普通锁定 Cargo 构建和行为测试继续执行，通用输入／Cargo 产品仍须分别核对当前消费者。现役完整宿主登记仍为 proposed／not-implemented／incomplete。
 
 旧安装身份、无人调用的本机观察声明和旧仓库审计快照已移除。四份宿主政策已去除无直接操作的编译器／rustup 重复项；本机 Cargo 通过调用环境解析，bootstrap 继续核官方组件字节，选择合同归[输入所有者](inputs.md#工具链入口与本机路径)。其余 host policy、完整安装及全部对象必要性仍须逐项验收。线上 CI 运行事实不在本表复制；当前仍需的来源／未完成工作由[输入保管者](input-source-custody.md)负责，历史失败和独有工作不能因本表收敛而被删除。
 
