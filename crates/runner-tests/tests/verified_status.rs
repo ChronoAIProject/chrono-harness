@@ -1095,20 +1095,18 @@ proof fn tree_fixture_row(raw: &str, path: &str)
     assert(scope_text::oid(oid.spec_bytes()));
 }
 
-fn expect_tree_parse_error(rows: &[&str], expected: &str)
-    requires exists|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
-        && policy::git_tree_error_at(rows@, i, policy::GitTreeErrorView::Message(expected@)),
+fn expect_tree_parse_error(rows: &[&str], first: usize, expected: &str)
+    requires first < rows.len(), policy::git_tree_prefix_valid(rows@, first as int),
+        policy::git_tree_error_at(rows@, first as int, policy::GitTreeErrorView::Message(expected@)),
 {
-    let ghost i = choose|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
-        && policy::git_tree_error_at(rows@, i, policy::GitTreeErrorView::Message(expected@));
-    proof { policy::git_tree_error_blocks_prefix(rows@, i,
+    proof { policy::git_tree_error_blocks_prefix(rows@, first as int,
         policy::GitTreeErrorView::Message(expected@), rows.len() as int); }
     match policy::parse_git_tree_rows(rows) {
         Err(error) => {
             proof {
                 let j = choose|j: int| 0 <= j < rows.len() && policy::git_tree_prefix_valid(rows@, j)
                     && policy::git_tree_error_at(rows@, j, error.view());
-                policy::git_tree_first_error_unique(rows@, i,
+                policy::git_tree_first_error_unique(rows@, first as int,
                     policy::GitTreeErrorView::Message(expected@), j, error.view());
             }
             match error {
@@ -1127,20 +1125,18 @@ fn copy_tree_fixture_path(path: &str) -> (out: String)
     ensures out@ == path@,
 { path.to_owned() }
 
-fn expect_tree_path_error(rows: &[&str], expected: &str)
-    requires exists|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
-        && policy::git_tree_error_at(rows@, i, policy::GitTreeErrorView::InvalidPath(expected.spec_bytes())),
+fn expect_tree_path_error(rows: &[&str], first: usize, expected: &str)
+    requires first < rows.len(), policy::git_tree_prefix_valid(rows@, first as int),
+        policy::git_tree_error_at(rows@, first as int, policy::GitTreeErrorView::InvalidPath(expected.spec_bytes())),
 {
-    let ghost i = choose|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
-        && policy::git_tree_error_at(rows@, i, policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()));
-    proof { policy::git_tree_error_blocks_prefix(rows@, i,
+    proof { policy::git_tree_error_blocks_prefix(rows@, first as int,
         policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()), rows.len() as int); }
     match policy::parse_git_tree_rows(rows) {
         Err(error) => {
             proof {
                 let j = choose|j: int| 0 <= j < rows.len() && policy::git_tree_prefix_valid(rows@, j)
                     && policy::git_tree_error_at(rows@, j, error.view());
-                policy::git_tree_first_error_unique(rows@, i,
+                policy::git_tree_first_error_unique(rows@, first as int,
                     policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()), j, error.view());
             }
             match error {
@@ -1224,16 +1220,18 @@ fn tree_parser_keeps_first_error_and_exact_path() {
         assert("bad".spec_bytes().take(3) =~= "bad".spec_bytes());
         assert(scope_text::ascii_split_records("bad".spec_bytes(), 32, true).len() == 1);
         assert(policy::paths::relative_path("a".spec_bytes()));
+        assert("a/../b\0tail".spec_bytes()[6] == 0);
+        assert(policy::paths::parent_component_at("a/../b\0tail".spec_bytes(), 2));
         assert(!policy::paths::relative_path("a/../b\0tail".spec_bytes()));
     }
-    expect_tree_parse_error(&[good, "missing", bad_path], "invalid Git tree row");
-    expect_tree_parse_error(&["bad\t", "missing"], "invalid Git tree metadata");
-    expect_tree_path_error(&[good, bad_path, "missing"], "a/../b\0tail");
-    expect_tree_parse_error(&[good, good, "missing"], "duplicate Git tree path");
-    expect_tree_parse_error(&[good, "missing", good], "invalid Git tree row");
-    expect_tree_path_error(&["  \t", good], "");
-    expect_tree_path_error(&["  \t/", "missing"], "/");
-    expect_tree_parse_error(&["  \ta", "missing"], "expected full nonzero lowercase commit OID");
+    expect_tree_parse_error(&[good, "missing", bad_path], 1, "invalid Git tree row");
+    expect_tree_parse_error(&["bad\t", "missing"], 0, "invalid Git tree metadata");
+    expect_tree_path_error(&[good, bad_path, "missing"], 1, "a/../b\0tail");
+    expect_tree_parse_error(&[good, good, "missing"], 1, "duplicate Git tree path");
+    expect_tree_parse_error(&[good, "missing", good], 1, "invalid Git tree row");
+    expect_tree_path_error(&["  \t", good], 0, "");
+    expect_tree_path_error(&["  \t/", "missing"], 0, "/");
+    expect_tree_parse_error(&["  \ta", "missing"], 0, "expected full nonzero lowercase commit OID");
 }
 
 fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
@@ -1247,6 +1245,11 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
     let ghost expected = choose|key: policy::TreePath| tree@.contains_key(key)
         && key@ == path@ && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
             "0000000000000000000000000000000000000001"@, "blob"@);
+    proof {
+        assert(tree@.contains_key(expected));
+        assert(tree@.kv_pairs().contains((expected, tree@[expected])));
+        assert(all.to_set().contains((expected, tree@[expected])));
+    }
     let ghost expected_index = choose|j: int| 0 <= j < all.len() && all[j] == (expected, tree@[expected]);
     let mut found = false;
     loop
@@ -1333,6 +1336,10 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
                     vstd::utf8::encode_utf8_decode_utf8("0000000000000000000000000000000000000001"@);
                     vstd::utf8::encode_utf8_decode_utf8("blob"@);
                 }
+            }
+            proof {
+                assert(policy::git_tree_row_at(rows@, 0).is_ok());
+                assert(policy::git_tree_row_at(rows@, 1).is_ok());
             }
             expect_fixture_tree_member(&tree, "a");
             expect_fixture_tree_member(&tree, "a//./b/");
@@ -1665,6 +1672,8 @@ proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
     assert(policy::delta_fields_ordered(a));
     assert(policy::delta_fields_ordered(b));
     delta_from_all_path_projections(a, b);
+    assert(actual =~= seq![actual[0]] + a);
+    assert(expected =~= seq![expected[0]] + b);
     assert(actual =~= expected);
 }
 
