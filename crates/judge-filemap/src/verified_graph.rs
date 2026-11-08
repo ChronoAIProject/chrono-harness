@@ -23,8 +23,7 @@ use chrono_harness::verified_identifiers as identifiers;
 pub use identifiers::compare_bytes;
 #[cfg(verus_keep_ghost)]
 pub use identifiers::{
-    byte_prefix, byte_lt, byte_lt_strict, byte_lt_transitive,
-    byte_lt_asymmetric, byte_trichotomy,
+    byte_lt, byte_lt_asymmetric, byte_lt_strict, byte_lt_transitive, byte_prefix, byte_trichotomy,
 };
 
 verus! {
