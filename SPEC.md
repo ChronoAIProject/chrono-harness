@@ -1189,6 +1189,15 @@ tree metadata 恰为三字段；index metadata 还要求 stage 恰为一个 ASCI
 标准安全 UTF-8 解码仍是明确外部接口，外围调用组合、重复检查与文件系统状态比较仍待证明，
 不能据此声明完整库存解析和状态维护已证明。
 
+tree 的实际条目构造、map 更新和重复路径拒绝由同源 Verus `insert_git_tree_entry` 拥有。
+新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，其他全部键值保留；
+成功当且仅当原 map 不含该路径，重复时完整返回 `duplicate Git tree path`。
+保留原 insert 顺序：重复条目已经替换，外围随后丢弃整棵失败候选树。
+不在此状态函数增设路径或字段限制；原 metadata、路径及 OID 检查仍在调用前执行。
+独立 Verus 预期与普通运行共同核完整状态、原错误及空／前缀／NUL／Unicode 身份边界。
+固定 vstd 的 map 插入合同只在本仓已证明的 TreePath 比较法则下使用。
+外围解析循环、动态路径诊断、index 重复 stage 和文件系统状态仍待证明，不据此扩大完整覆盖结论。
+
 候选 profile／facts-config 字节须匹配固定 blob；构建后绑定失败和后续失败都在 `evidence.git_facts` 保留结构化进程原观察。可选 `registration_config` 独立采用原有登记／canonical 调用语义，单独 Git 绑定不要求完整登记。v1 拒绝新字段（含 null）。选测、initial 规则、操作环境、协议及唯一 check argv 保留 scoped 合同，base enforcement 写明真实端点 schema。
 
 这批历史实现时产品宿主尚未采用 v2；此能力不证明 Git／委托输入完整、full 治理或同判。

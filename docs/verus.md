@@ -115,6 +115,22 @@ Vec 存取、Option／Result 和 `ToString` 合同，没有新增仓内受信函
 NUL 记录由惰性迭代改为借用数组，增加 O(K) 引用存储，meta 字段仍使用借用数组。
 其余新增判断读取末字节、字段数和至多一个 stage 字节；完整构建、证明、CI 与存储成本未测。
 
+tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
+`verified_status::insert_git_tree_entry` 维护，`checkout::tree` 在原 metadata／路径／OID 检查后直接调用。
+证明新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，所有其他键值均保留；
+成功当且仅当原 map 没有该路径，否则完整返回 `duplicate Git tree path`。
+沿用原标准 insert 的顺序：重复时条目也已替换，外围立即返回错误并丢弃整棵候选树。
+条目字段与路径本身不在此函数重复准入，不归一化或截取文本。
+独立 Verus 预期在普通运行中也核完整字段、map 数量、其他路径保留、不同字段及相同字段的重复拒绝、
+完整错误和失败后的替换状态；覆盖独立克隆、空路径、前缀／内部 NUL 及 Unicode 规范化差异。
+明确采用固定 vstd 的 `BTreeMap<TreePath, TreeEntry>::insert` 精确更新与原值返回合同，
+其 `obeys_cmp::<TreePath>()` 前提由现有真实比较和顺序法则证明；不信任仓内状态函数。
+复用状态所有者及独立预期的两项整 crate 证明、现有 FILEMAP 消费者边与未过滤测试，
+无新工具、依赖、操作、信任函数或预算。每条记录仍构造一个键和三个字段，map 操作为 O(log K)
+次完整路径比较，字符串复制及比较另计字节成本；完整证明、构建、运行和 CI 成本未测。
+该局部状态证明不覆盖外围解析循环、动态路径诊断、index 重复 stage 或文件系统比较；
+这些组合与全仓覆盖门继续保留未完成义务。
+
 原始 commit 物理头的 parent 行选择也由同一根的 `commit_parent_records` 实现。
 以 LF 字节分行，在首个空行停止；仅选择精确 `parent ` 前缀，完整借用原后缀，
 保持全部记录、顺序和重复，不删 CR、NUL、非 UTF-8 字节或空后缀，也不读取正文中的 parent。
