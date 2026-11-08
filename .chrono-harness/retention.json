@@ -18,7 +18,8 @@
       ".chrono-harness/state/"
     ],
     "lifecycle-original": [
-      ".chrono-harness/state/worktrees/"
+      ".chrono-harness/state/worktrees/",
+      ".chrono-harness/state/automatic-cleanup-v2/"
     ]
   },
   "keep_seconds": 0,
