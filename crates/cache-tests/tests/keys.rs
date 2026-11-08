@@ -1261,7 +1261,12 @@ fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality(
     let original: Value = serde_json::from_slice(&fs::read(&projects).unwrap()).unwrap();
     let first = plan(root.path(), &config, "check.unit_cache").unwrap();
     let mut unrelated = original.clone();
-    unrelated["projects"][0]["actions"]["build"]["argv"] = json!(["unrelated"]);
+    unrelated["projects"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|p| p["id"] == "runner")
+        .unwrap()["actions"]["build"]["argv"] = json!(["unrelated"]);
     fs::write(&projects, serde_json::to_vec(&unrelated).unwrap()).unwrap();
     assert_eq!(
         first["caches"],
