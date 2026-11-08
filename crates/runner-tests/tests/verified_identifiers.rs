@@ -142,25 +142,18 @@ fn git_inventory_row_boundaries() {
 }
 
 fn expect_inventory_records(actual: &Vec<&str>, expected: &[&str])
-    requires policy::inventory_record_views(actual@) == policy::inventory_record_views(expected@),
+    requires actual.len() == expected.len(),
+        forall|i: int| 0 <= i < actual.len() ==> (#[trigger] actual@[i]).spec_bytes()
+            == expected@[i].spec_bytes(),
 {
-    proof {
-        assert(policy::inventory_record_views(actual@).len() == actual@.len());
-        assert(policy::inventory_record_views(expected@).len() == expected@.len());
-    }
     expect_identifier_true(actual.len() == expected.len());
     let mut i = 0usize;
     while i < actual.len()
         invariant i <= actual.len(), actual.len() == expected.len(),
-            policy::inventory_record_views(actual@) == policy::inventory_record_views(expected@),
+            forall|k: int| 0 <= k < actual.len() ==> (#[trigger] actual@[k]).spec_bytes()
+                == expected@[k].spec_bytes(),
         decreases actual.len() - i,
     {
-        proof {
-            assert(policy::inventory_record_views(actual@)[i as int]
-                == actual@[i as int].spec_bytes());
-            assert(policy::inventory_record_views(expected@)[i as int]
-                == expected@[i as int].spec_bytes());
-        }
         let same = policy::equal_bytes(actual[i].as_bytes(), expected[i].as_bytes());
         expect_identifier_true(same);
         i += 1;
