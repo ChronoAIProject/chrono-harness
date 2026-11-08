@@ -1,4 +1,4 @@
-//! Git／Rustup／Cargo／rustc 的命令边界 mock；不执行外部工具。
+//! Git／工作树所有者／Rustup／Cargo／rustc 的命令边界 mock；不执行外部工具。
 use serde_json::{Value, json};
 use std::{
     env, fs,
@@ -8,12 +8,12 @@ use std::{
     process::{Command, ExitCode},
 };
 
-fn git_mock(root: &Path, args: &[String]) -> Result<u8, String> {
+fn command_mock(root: &Path, name: &str, args: &[String]) -> Result<u8, String> {
     let read = |path: &Path| -> Result<Value, String> {
         serde_json::from_slice(&fs::read(path).map_err(|error| error.to_string())?)
             .map_err(|error| error.to_string())
     };
-    let calls = root.join("git-calls.json");
+    let calls = root.join(format!("{name}-calls.json"));
     let mut observed = if calls.exists() {
         read(&calls)?
     } else {
@@ -30,21 +30,26 @@ fn git_mock(root: &Path, args: &[String]) -> Result<u8, String> {
         serde_json::to_vec(&observed).map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())?;
-    let specification = read(&root.join("git.json"))?;
+    let specification = read(&root.join(format!("{name}.json")))?;
     let key = serde_json::to_string(args).map_err(|error| error.to_string())?;
     let response = specification
         .get(&key)
-        .ok_or_else(|| format!("unexpected mock Git argv: {args:?}"))?;
+        .ok_or_else(|| format!("unexpected mock {name} argv: {args:?}"))?;
     if let Some(expected) = response.get("cwd") {
         if *expected != json!(env::current_dir().map_err(|error| error.to_string())?) {
-            return Err("mock Git cwd differs".into());
+            return Err(format!("mock {name} cwd differs"));
         }
     }
     if let Some(values) = response.get("environment").and_then(Value::as_object) {
         for (name, expected) in values {
             if json!(env::var(name).ok()) != *expected {
-                return Err(format!("mock Git environment differs: {name}"));
+                return Err(format!("mock environment differs: {name}"));
             }
+        }
+    }
+    if let Some(expected) = response.get("inherited_fds") {
+        if json!(chrono_harness::process_fds::inherited_available()?) != *expected {
+            return Err("mock inherited capabilities differ".into());
         }
     }
     if let Some(expected) = response.get("stdin") {
@@ -53,7 +58,7 @@ fn git_mock(root: &Path, args: &[String]) -> Result<u8, String> {
             .read_to_end(&mut bytes)
             .map_err(|error| error.to_string())?;
         if json!(bytes) != *expected {
-            return Err("mock Git stdin differs".into());
+            return Err(format!("mock {name} stdin differs"));
         }
     }
     for (name, mut output) in [
@@ -84,8 +89,8 @@ fn run() -> Result<u8, String> {
         .and_then(|name| name.to_str())
         .ok_or("invalid tool name")?;
     let args: Vec<String> = env::args().skip(1).collect();
-    if name == "git" {
-        return git_mock(root, &args);
+    if matches!(name, "git" | "chrono-worktree") {
+        return command_mock(root, name, &args);
     }
     let calls = root.join("calls.json");
     let mut values: Vec<Value> = if calls.exists() {
