@@ -360,6 +360,106 @@ pub struct Verified {
     pub sha256: String,
 }
 
+pub struct Imported {
+    pub original: Verified,
+    pub asset: String,
+    pub lineage: Value,
+}
+
+/// 所选原回执和 tar 共用一条消费路径；不另造未经回执校验的导入入口。
+pub fn import_build(
+    loaded: &Loaded,
+    root: &Path,
+    context: &Value,
+    parent: &Lineage,
+    unit: &Unit,
+    selection: &Selection,
+) -> Result<Imported, String> {
+    let Unit::Build { asset, .. } = unit else {
+        return Err(error("selected executable producer is not a build unit"));
+    };
+    let verified = read(loaded, root, context, parent, unit, selection)?;
+    let declared = &verified.receipt["assets"];
+    let members = declared.as_object().ok_or_else(|| error("missing build asset identities"))?;
+    let source = &loaded.plan.assets[asset];
+    if members.len() != 1 || !members.contains_key(asset) || declared[asset]["path"] != *source || declared[asset].get("error") != Some(&Value::Null) {
+        return Err(error("build asset membership/path differs"));
+    }
+    let identity = &declared[asset];
+    let mode = identity["mode"].as_u64().filter(|m| *m <= 0o7777).ok_or_else(|| error("invalid build executable mode"))? as u32;
+    if !policy::executable_file(true,mode) || !digest(text(identity,"sha256")?) {
+        return Err(error("invalid build executable identity"));
+    }
+    let executable = crate::transport::ExecutableIdentity {
+        sha256:text(identity,"sha256")?.into(),
+        size:identity["size"].as_u64().ok_or_else(|| error("missing build executable size"))?,
+        mode,
+    };
+    let transport = &verified.receipt["transport"];
+    if transport["path"] != "executable.tar" || !digest(text(transport,"sha256")?) {
+        return Err(error("invalid executable transport declaration"));
+    }
+    let archive = crate::transport::ArchiveIdentity {
+        sha256:text(transport,"sha256")?.into(),
+        size:transport["size"].as_u64().ok_or_else(|| error("missing executable archive size"))?,
+    };
+    let file = no_symlink_parents(&verified.directory,"executable.tar")?;
+    crate::transport::import(&file,&archive,&executable,root,source)?;
+    let lineage = json!({"receipt_sha256":verified.sha256,"transport":transport,"identity":identity,"selection":selection});
+    Ok(Imported { original:verified,asset:asset.clone(),lineage })
+}
+
+/// collector 核每项验证实际使用的资产向量，避免改换生产者后沿用旧成功。
+pub fn verify_consumption(loaded: &Loaded, verified: &Verified, assets: &Value) -> Result<(), String> {
+    let receipt = &verified.receipt;
+    let id = text(&receipt["unit"],"id")?;
+    let unit = loaded.unit(id)?;
+    let Unit::Verify { operation, .. } = unit else { return Err(error("consumption receipt is not a verifier")); };
+    let mut expected_assets = serde_json::Map::new();
+    let mut expected_selected = serde_json::Map::new();
+    for need in unit.needs() {
+        let build = loaded.unit(need)?;
+        let asset = build.asset().ok_or_else(|| error("verifier dependency is not a build"))?;
+        let lineage = assets.get(asset).ok_or_else(|| error("missing selected build asset"))?;
+        expected_assets.insert(asset.to_owned(),lineage.clone());
+        expected_selected.insert(need.clone(),lineage["selection"].clone());
+    }
+    if receipt["assets"] != Value::Object(expected_assets.clone()) || receipt["selected"] != Value::Object(expected_selected) {
+        return Err(error("selected binary or producer lineage changed after verification"));
+    }
+    let observations = receipt["consumer_staging"]["observations"].as_array().ok_or_else(|| error("missing consumer staging observations"))?;
+    let phases = ["staged","before-verification","after-verification"];
+    if observations.len() != phases.len() { return Err(error("incomplete before/after staging observations")); }
+    let mut expected_files = BTreeMap::new();
+    for row in &loaded.staging {
+        let Some(asset) = expected_assets.get(&row.asset) else { continue; };
+        let identity = &asset["identity"];
+        if identity["path"] != row.source { return Err(error("selected build source differs from staging")); }
+        for path in [&row.source,&row.destination] {
+            let mut expected = identity.clone();expected["path"] = json!(path);
+            expected_files.insert(path.as_str(),expected);
+        }
+    }
+    for (index,snapshot) in observations.iter().enumerate() {
+        let op = if index == 0 { Value::Null } else { json!(operation) };
+        if snapshot["phase"] != phases[index] || snapshot["matches"] != true || snapshot["operation"] != op {
+            return Err(error("missing successful original staging observation"));
+        }
+        let files = snapshot["files"].as_array().ok_or_else(|| error("missing staging file vector"))?;
+        let paths = files.iter().map(|f| text(f,"path")).collect::<Result<BTreeSet<_>,_>>()?;
+        if files.len() != expected_files.len() || paths != expected_files.keys().copied().collect() {
+            return Err(error("verification staging vector membership differs"));
+        }
+        for file in files {
+            let expected = &expected_files[text(file,"path")?];
+            if file.get("error") != Some(&Value::Null) || ["sha256","size","mode"].iter().any(|key| file[*key] != expected[*key]) {
+                return Err(error("verification staging identity differs"));
+            }
+        }
+    }
+    Ok(())
+}
+
 impl Verified {
     /// Git 身份逐回执核验；它不属于编译器指纹。
     pub fn compiler_fingerprint(&self) -> Option<Value> {
