@@ -3,7 +3,7 @@
 
 pub mod process;
 pub mod receipt;
-pub mod staging;
 pub mod recipe;
+pub mod staging;
 pub mod transport;
 pub mod verified_recipe;
