@@ -204,13 +204,7 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
     }
     let command = args.first().ok_or("E_USAGE: capture or pair required")?;
     let allowed = match command.as_str() {
-        "capture" => vec![
-            "--host-root",
-            "--config",
-            "--commit",
-            "--output",
-            "--unit",
-        ],
+        "capture" => vec!["--host-root", "--config", "--commit", "--output", "--unit"],
         "compose" => vec![
             "--host-root",
             "--config",
