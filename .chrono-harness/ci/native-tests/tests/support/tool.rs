@@ -9,6 +9,133 @@ use std::{
     process::{Command, ExitCode},
 };
 
+// 模拟已有 owner 的外部协议；构建阶段仍执行真正的候选 Rust bootstrap。
+fn owner_phase(executable: &Path, args: &[String]) -> Result<u8, String> {
+    let argument = |name: &str| {
+        args.iter()
+            .position(|arg| arg == name)
+            .and_then(|index| args.get(index + 1))
+            .cloned()
+            .ok_or_else(|| format!("missing owner argument: {name}"))
+    };
+    let root = std::path::PathBuf::from(argument("--host-root")?);
+    let phase = match args[0].as_str() {
+        "migrate" => "migration",
+        "bootstrap" => "construction",
+        "deploy-owner" => "deployment",
+        _ => return Err("unknown owner phase".into()),
+    };
+    let consumer = argument("--report-consumer")?;
+    let selected = root.join(".chrono-harness/bin/cargo");
+    let mut calls = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(root.join(".chrono-harness/state/owner-phase-calls.jsonl"))
+        .map_err(|error| error.to_string())?;
+    writeln!(
+        calls,
+        "{}",
+        json!({"phase":phase,"consumer":consumer,"argv":args,
+        "program":executable,"program_sha256":chrono_harness::file_identity(executable)?.0,
+        "selected":chrono_host_bootstrap::owner::file_binding(&selected)?})
+    )
+    .map_err(|error| error.to_string())?;
+    let defect = env::var("CHRONO_TEST_OWNER_DEFECT").unwrap_or_default();
+    let defective = env::var("CHRONO_TEST_OWNER_DEFECT_PHASE").as_deref() == Ok(phase);
+    let report_path = format!(".chrono-harness/state/worktrees/{phase}.json");
+    let mut report = json!({"status":"used","report_path":report_path,
+        "report_consumer":{"schema":"chrono-retention-consumer/v1","consumer":consumer,
+            "purpose":"test owner phase original consumption",
+            "originals":[{"id":"phase-original","path":report_path,"identity":"external-fixture"}]}});
+    if defective {
+        match defect.as_str() {
+            "missing-consumer" => {
+                report.as_object_mut().unwrap().remove("report_consumer");
+            }
+            "wrong-consumer" => report["report_consumer"]["consumer"] = json!("another caller"),
+            "wrong-original" => {
+                report["report_consumer"]["originals"][0]["path"] =
+                    json!(".chrono-harness/state/worktrees/another.json")
+            }
+            "child-exit" => {}
+            _ => return Err("unknown owner phase defect".into()),
+        }
+    }
+    let mut wrapper_exit = 0;
+    if phase == "construction" && (!defective || defect == "child-exit") {
+        let (program, arguments) = if defective {
+            (
+                env::var("CHRONO_TEST_OWNER_OPERATION").map_err(|error| error.to_string())?,
+                vec![
+                    "run".into(),
+                    json!([{"Stdout":[0,255,10]},{"Stderr":[254,0,10]},{"Exit":7}]).to_string(),
+                ],
+            )
+        } else {
+            (
+                env::var("CHRONO_TEST_OWNER_NATIVE").map_err(|error| error.to_string())?,
+                vec![
+                    "construct-owner-stage".into(),
+                    root.to_string_lossy().into_owned(),
+                    argument("--bootstrap-config")?,
+                ],
+            )
+        };
+        let mut environment: std::collections::BTreeMap<String, String> = env::vars().collect();
+        environment.insert(
+            "CHRONO_WORKTREE_BOOTSTRAP".into(),
+            root.to_string_lossy().into_owned(),
+        );
+        let process = chrono_harness::run_process(
+            &root,
+            &chrono_harness::CommandSpec {
+                program,
+                args: arguments,
+                env: environment,
+                timeout_seconds: 60,
+                output_limit_bytes: 1024 * 1024,
+            },
+            b"",
+        )?;
+        wrapper_exit = if process.exit_code == 0 { 0 } else { 2 };
+        report["status"] = json!(if wrapper_exit == 0 { "used" } else { "failed" });
+        report["managed_process"] = chrono_harness::full::compact_process(
+            &serde_json::to_value(process).map_err(|error| error.to_string())?,
+        )?;
+    }
+    if phase == "deployment" {
+        let stage: Value = serde_json::from_slice(
+            &fs::read(root.join(argument("--stage-result")?)).map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        let staged = root.join(
+            stage["owner_stage"]["staged"]["path"]
+                .as_str()
+                .ok_or("missing staged owner")?,
+        );
+        fs::rename(&selected, selected.with_file_name("previous-owner"))
+            .map_err(|error| error.to_string())?;
+        fs::copy(staged, &selected).map_err(|error| error.to_string())?;
+        fs::write(
+            root.join(chrono_host_bootstrap::owner::CURRENT),
+            serde_json::to_vec(&json!({
+                "source_commit":stage["source"]["commit"],
+                "installed":chrono_host_bootstrap::owner::file_binding(&selected)?,
+            }))
+            .map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    let original = root.join(&report_path);
+    fs::create_dir_all(original.parent().unwrap()).map_err(|error| error.to_string())?;
+    let raw = serde_json::to_vec(&report).map_err(|error| error.to_string())?;
+    fs::write(original, &raw).map_err(|error| error.to_string())?;
+    std::io::stdout()
+        .write_all(&raw)
+        .map_err(|error| error.to_string())?;
+    Ok(wrapper_exit)
+}
+
 fn run() -> Result<u8, String> {
     let invocation = env::args().next().ok_or("missing invocation")?;
     let executable = Path::new(&invocation);
@@ -18,6 +145,12 @@ fn run() -> Result<u8, String> {
         .and_then(|name| name.to_str())
         .ok_or("invalid tool name")?;
     let args: Vec<String> = env::args().skip(1).collect();
+    if args
+        .first()
+        .is_some_and(|arg| ["migrate", "bootstrap", "deploy-owner"].contains(&arg.as_str()))
+    {
+        return owner_phase(executable, &args);
+    }
     let calls = root.join("calls.json");
     let mut values: Vec<Value> = if calls.exists() {
         serde_json::from_slice(&fs::read(&calls).map_err(|e| e.to_string())?)
