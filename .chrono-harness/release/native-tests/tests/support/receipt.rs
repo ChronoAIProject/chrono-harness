@@ -153,21 +153,30 @@ impl Fixture {
         } else {
             tools["probe"] = identity("/tools/probe", 'b');
             if id == "test_a" {
-                process(&directory,&mut rows,"verification",&["/tools/probe","verify a"],"literal external command ran\n",Some("test.a"));
-            } else { process(
-                &directory,
-                &mut rows,
-                "verification",
-                &[
-                    "/tools/probe",
-                    "verify none",
-                    "space value",
-                    "$literal",
-                    "λ",
-                ],
-                "literal external command ran\n",
-                Some("test.none"),
-            ); }
+                process(
+                    &directory,
+                    &mut rows,
+                    "verification",
+                    &["/tools/probe", "verify a"],
+                    "literal external command ran\n",
+                    Some("test.a"),
+                );
+            } else {
+                process(
+                    &directory,
+                    &mut rows,
+                    "verification",
+                    &[
+                        "/tools/probe",
+                        "verify none",
+                        "space value",
+                        "$literal",
+                        "λ",
+                    ],
+                    "literal external command ran\n",
+                    Some("test.none"),
+                );
+            }
             None
         };
         process(
@@ -252,12 +261,19 @@ impl Fixture {
     }
 
     pub fn archive(&mut self, bytes: &[u8], mode: u32) {
-        assert_eq!(self.id,"build_a");
+        assert_eq!(self.id, "build_a");
         let path = self.directory().join("executable.tar");
         let mut builder = tar::Builder::new(fs::File::create(&path).unwrap());
         let mut header = tar::Header::new_gnu();
-        header.set_entry_type(tar::EntryType::Regular);header.set_size(bytes.len() as u64);header.set_mode(mode);header.set_cksum();
-        builder.append_data(&mut header,"executable",bytes).unwrap();builder.finish().unwrap();drop(builder);
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_size(bytes.len() as u64);
+        header.set_mode(mode);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "executable", bytes)
+            .unwrap();
+        builder.finish().unwrap();
+        drop(builder);
         self.report["assets"] = json!({"a":{"path":"out/a","sha256":chrono_harness::sha256(bytes),"size":bytes.len(),"mode":mode,"error":null}});
         let archive = fs::read(path).unwrap();
         self.report["transport"] = json!({"path":"executable.tar","sha256":chrono_harness::sha256(&archive),"size":archive.len()});

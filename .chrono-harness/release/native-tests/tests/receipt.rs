@@ -252,73 +252,139 @@ fn compiler_fingerprint_ignores_git_bytes_but_tracks_active_compilers() {
 #[test]
 fn validated_build_receipt_imports_exact_bytes_mode_and_producing_lineage() {
     use std::os::unix::fs::PermissionsExt;
-    let mut f=Fixture::new(true);let bytes=b"explicit external executable bytes";f.archive(bytes,0o751);
-    let selected=f.save();let loaded=f.loaded();
-    let imported=receipt::import_build(&loaded,f.host.root(),&f.context,&f.parent,loaded.unit(f.id).unwrap(),&selected).unwrap();
-    let output=f.host.root().join("out/a");
-    assert_eq!(fs::read(&output).unwrap(),bytes);
-    assert_eq!(fs::metadata(output).unwrap().permissions().mode() & 0o7777,0o751);
-    assert_eq!(imported.asset,"a");
-    assert_eq!(imported.lineage["receipt_sha256"],selected.artifact_id);
-    assert_eq!(imported.lineage["selection"],serde_json::to_value(&selected).unwrap());
-    assert_eq!(imported.original.receipt["assets"]["a"],imported.lineage["identity"]);
+    let mut f = Fixture::new(true);
+    let bytes = b"explicit external executable bytes";
+    f.archive(bytes, 0o751);
+    let selected = f.save();
+    let loaded = f.loaded();
+    let imported = receipt::import_build(
+        &loaded,
+        f.host.root(),
+        &f.context,
+        &f.parent,
+        loaded.unit(f.id).unwrap(),
+        &selected,
+    )
+    .unwrap();
+    let output = f.host.root().join("out/a");
+    assert_eq!(fs::read(&output).unwrap(), bytes);
+    assert_eq!(
+        fs::metadata(output).unwrap().permissions().mode() & 0o7777,
+        0o751
+    );
+    assert_eq!(imported.asset, "a");
+    assert_eq!(imported.lineage["receipt_sha256"], selected.artifact_id);
+    assert_eq!(
+        imported.lineage["selection"],
+        serde_json::to_value(&selected).unwrap()
+    );
+    assert_eq!(
+        imported.original.receipt["assets"]["a"],
+        imported.lineage["identity"]
+    );
 }
 
 #[test]
 fn failed_receipt_archive_or_member_identity_preserves_existing_consumer() {
     for mutation in 0..8 {
-        let mut f=Fixture::new(true);f.archive(b"selected program",0o755);
-        let output=f.host.root().join("out/a");fs::create_dir_all(output.parent().unwrap()).unwrap();fs::write(&output,b"existing consumer").unwrap();
+        let mut f = Fixture::new(true);
+        f.archive(b"selected program", 0o755);
+        let output = f.host.root().join("out/a");
+        fs::create_dir_all(output.parent().unwrap()).unwrap();
+        fs::write(&output, b"existing consumer").unwrap();
         match mutation {
-            0=>f.report["status"]=json!("failed"),
-            1=>f.report["assets"]["a"]["path"]=json!("other/program"),
-            2=>f.report["assets"]["extra"]=json!({}),
-            3=>f.report["assets"]["a"]["sha256"]=json!("9".repeat(64)),
-            4=>f.report["assets"]["a"]["mode"]=json!(0o751),
-            5=>f.report["transport"]["path"]=json!("other.tar"),
-            6=>fs::write(f.directory().join("executable.tar"),b"changed archive").unwrap(),
-            7=>f.report["processes"][8]["exit_code"]=json!(9),
-            _=>unreachable!(),
+            0 => f.report["status"] = json!("failed"),
+            1 => f.report["assets"]["a"]["path"] = json!("other/program"),
+            2 => f.report["assets"]["extra"] = json!({}),
+            3 => f.report["assets"]["a"]["sha256"] = json!("9".repeat(64)),
+            4 => f.report["assets"]["a"]["mode"] = json!(0o751),
+            5 => f.report["transport"]["path"] = json!("other.tar"),
+            6 => fs::write(f.directory().join("executable.tar"), b"changed archive").unwrap(),
+            7 => f.report["processes"][8]["exit_code"] = json!(9),
+            _ => unreachable!(),
         }
-        let selected=f.save();let loaded=f.loaded();
-        assert!(receipt::import_build(&loaded,f.host.root(),&f.context,&f.parent,loaded.unit(f.id).unwrap(),&selected).is_err(),"mutation {mutation}");
-        assert_eq!(fs::read(output).unwrap(),b"existing consumer");
+        let selected = f.save();
+        let loaded = f.loaded();
+        assert!(
+            receipt::import_build(
+                &loaded,
+                f.host.root(),
+                &f.context,
+                &f.parent,
+                loaded.unit(f.id).unwrap(),
+                &selected
+            )
+            .is_err(),
+            "mutation {mutation}"
+        );
+        assert_eq!(fs::read(output).unwrap(), b"existing consumer");
     }
 }
 
 #[test]
 fn verifier_consumption_checks_full_identity_and_selected_producer_before_after() {
-    let mut producer=Fixture::new(true);producer.archive(b"selected program",0o755);
-    let selected=producer.save();let loaded=producer.loaded();
-    let imported=receipt::import_build(&loaded,producer.host.root(),&producer.context,&producer.parent,loaded.unit(producer.id).unwrap(),&selected).unwrap();
-    let assets=json!({"a":imported.lineage});
-    let mut f=Fixture::for_unit("test_a");
-    let input=json!({"build_a":{"result":"success","outputs":{"artifact_id":selected.artifact_id,"run_id":"same-run","attempt":"1"}}});
-    f.report["dependency_input"]=original(&f.directory(),"dependency-context.json",&serde_json::to_vec(&input).unwrap());
-    f.report["selected"]=json!({"build_a":selected});f.report["assets"]=assets.clone();
-    let mut destination=assets["a"]["identity"].clone();destination["path"]=json!("consumer/a");
-    let files=json!([assets["a"]["identity"],destination]);
-    f.report["consumer_staging"]=json!({"observations":[
+    let mut producer = Fixture::new(true);
+    producer.archive(b"selected program", 0o755);
+    let selected = producer.save();
+    let loaded = producer.loaded();
+    let imported = receipt::import_build(
+        &loaded,
+        producer.host.root(),
+        &producer.context,
+        &producer.parent,
+        loaded.unit(producer.id).unwrap(),
+        &selected,
+    )
+    .unwrap();
+    let assets = json!({"a":imported.lineage});
+    let mut f = Fixture::for_unit("test_a");
+    let input = json!({"build_a":{"result":"success","outputs":{"artifact_id":selected.artifact_id,"run_id":"same-run","attempt":"1"}}});
+    f.report["dependency_input"] = original(
+        &f.directory(),
+        "dependency-context.json",
+        &serde_json::to_vec(&input).unwrap(),
+    );
+    f.report["selected"] = json!({"build_a":selected});
+    f.report["assets"] = assets.clone();
+    let mut destination = assets["a"]["identity"].clone();
+    destination["path"] = json!("consumer/a");
+    let files = json!([assets["a"]["identity"], destination]);
+    f.report["consumer_staging"] = json!({"observations":[
         {"phase":"staged","operation":null,"matches":true,"files":files},
         {"phase":"before-verification","operation":"test.a","matches":true,"files":files},
         {"phase":"after-verification","operation":"test.a","matches":true,"files":files}
     ]});
-    let original=f.report.clone();
-    let verified=f.read().unwrap();receipt::verify_consumption(&f.loaded(),&verified,&assets).unwrap();
+    let original = f.report.clone();
+    let verified = f.read().unwrap();
+    receipt::verify_consumption(&f.loaded(), &verified, &assets).unwrap();
     for mutation in 0..8 {
-        f.report=original.clone();
+        f.report = original.clone();
         match mutation {
-            0=>f.report["assets"]["a"]["receipt_sha256"]=json!("9".repeat(64)),
-            1=>f.report["consumer_staging"]["observations"][2]["files"][1]["sha256"]=json!("9".repeat(64)),
-            2=>f.report["consumer_staging"]["observations"][1]["files"][0]["mode"]=json!(0o751),
-            3=>f.report["consumer_staging"]["observations"][2]["files"]=json!([]),
-            4=>f.report["consumer_staging"]["observations"][1]["matches"]=json!(false),
-            5=>f.report["consumer_staging"]["observations"][1]["operation"]=json!("unrelated"),
-            6=>f.report["consumer_staging"]["observations"][2]["phase"]=json!("before-verification"),
-            7=>{f.report["consumer_staging"]["observations"].as_array_mut().unwrap().pop();},
-            _=>unreachable!(),
+            0 => f.report["assets"]["a"]["receipt_sha256"] = json!("9".repeat(64)),
+            1 => {
+                f.report["consumer_staging"]["observations"][2]["files"][1]["sha256"] =
+                    json!("9".repeat(64))
+            }
+            2 => f.report["consumer_staging"]["observations"][1]["files"][0]["mode"] = json!(0o751),
+            3 => f.report["consumer_staging"]["observations"][2]["files"] = json!([]),
+            4 => f.report["consumer_staging"]["observations"][1]["matches"] = json!(false),
+            5 => f.report["consumer_staging"]["observations"][1]["operation"] = json!("unrelated"),
+            6 => {
+                f.report["consumer_staging"]["observations"][2]["phase"] =
+                    json!("before-verification")
+            }
+            7 => {
+                f.report["consumer_staging"]["observations"]
+                    .as_array_mut()
+                    .unwrap()
+                    .pop();
+            }
+            _ => unreachable!(),
         }
-        let verified=f.read().unwrap();
-        assert!(receipt::verify_consumption(&f.loaded(),&verified,&assets).is_err(),"mutation {mutation}");
+        let verified = f.read().unwrap();
+        assert!(
+            receipt::verify_consumption(&f.loaded(), &verified, &assets).is_err(),
+            "mutation {mutation}"
+        );
     }
 }
