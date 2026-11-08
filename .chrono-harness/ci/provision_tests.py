@@ -164,8 +164,9 @@ class NativeCargoDomains(unittest.TestCase):
         cargo_home = ".chrono-harness/cache/bootstrap-owner-tooling/cargo"
         self.assertEqual(environment["CARGO_HOME"], cargo_home)
         self.assertEqual(environment.get("CARGO_NET_OFFLINE"), "false")
-        # Exercise distinct current consumers with their original locked manifests.
-        for operation in ("build.runner", "build.cache", "build.distribution",
+        # Runner Cargo-Verus is exercised by the native Rust mocks.
+        # Keep ordinary locked Cargo consumers in this environment test.
+        for operation in ("build.cache", "build.distribution",
                           "build.instructions", "build.judge-routes"):
             with self.subTest(operation=operation):
                 result = self.cargo(operation, environment)
