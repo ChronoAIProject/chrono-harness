@@ -52,7 +52,16 @@ fn original_parent_exit_does_not_leave_a_descendant_running_into_the_next_phase(
     let mut command = command(source.path(), json!([]));
     command.program = env!("CARGO_BIN_EXE_chrono-test-release-tool").into();
     command.args = vec!["--process-parent".into()];
-    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), io::sink(), io::sink()).unwrap();
+    let captured = execute(
+        source.path(),
+        &command,
+        output.path(),
+        0,
+        Duration::from_secs(10),
+        io::sink(),
+        io::sink(),
+    )
+    .unwrap();
     assert_eq!(captured.child_exit, Some(0));
     assert!(!source.path().join("late-descendant").exists());
     assert!(!String::from_utf8_lossy(&captured.stdout.bytes).contains("late descendant tail"));
@@ -63,16 +72,28 @@ fn original_parent_exit_does_not_leave_a_descendant_running_into_the_next_phase(
 fn deadline_keeps_original_prefix_and_actual_termination_signal() {
     let source = tempfile::tempdir().unwrap();
     let output = tempfile::tempdir().unwrap();
-    let command = command(source.path(), json!([
-        {"Stdout":[0,255,10]}, {"Stderr":[254,0,10]}, {"SleepMillis":2000},
-        {"Create":{"path":"too-late","bytes":[1]}}
-    ]));
-    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_millis(250), io::sink(), io::sink()).unwrap();
+    let command = command(
+        source.path(),
+        json!([
+            {"Stdout":[0,255,10]}, {"Stderr":[254,0,10]}, {"SleepMillis":2000},
+            {"Create":{"path":"too-late","bytes":[1]}}
+        ]),
+    );
+    let captured = execute(
+        source.path(),
+        &command,
+        output.path(),
+        0,
+        Duration::from_millis(250),
+        io::sink(),
+        io::sink(),
+    )
+    .unwrap();
     assert!(!captured.passed());
     assert_eq!(captured.child_exit, Some(-9));
     assert!(captured.failures.iter().any(|s| s.contains("timed out")));
-    assert_eq!(captured.stdout.bytes, [0,255,10]);
-    assert_eq!(captured.stderr.bytes, [254,0,10]);
+    assert_eq!(captured.stdout.bytes, [0, 255, 10]);
+    assert_eq!(captured.stderr.bytes, [254, 0, 10]);
     assert!(!source.path().join("too-late").exists());
     assert_eq!(captured.observation["exit_signal"], 9);
     assert_eq!(captured.observation["timeout_ns"], 250_000_000);
@@ -84,13 +105,30 @@ fn output_bound_keeps_only_original_prefix_and_reports_incomplete_stream() {
     let output = tempfile::tempdir().unwrap();
     let mut command = command(source.path(), json!([{"Stdout":vec![7u8;100000]}]));
     command.output_limit_bytes = 1024;
-    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), io::sink(), io::sink()).unwrap();
+    let captured = execute(
+        source.path(),
+        &command,
+        output.path(),
+        0,
+        Duration::from_secs(10),
+        io::sink(),
+        io::sink(),
+    )
+    .unwrap();
     assert!(!captured.passed());
-    assert!(captured.failures.iter().any(|s| s.contains("output limit exceeded")));
-    assert_eq!(captured.stdout.bytes, vec![7u8;1024]);
+    assert!(
+        captured
+            .failures
+            .iter()
+            .any(|s| s.contains("output limit exceeded"))
+    );
+    assert_eq!(captured.stdout.bytes, vec![7u8; 1024]);
     assert!(!captured.stdout.complete);
     assert_eq!(captured.stdout.receipt()["status"], "incomplete");
-    assert_eq!(fs::read(output.path().join("processes/0.stdout")).unwrap(), captured.stdout.bytes);
+    assert_eq!(
+        fs::read(output.path().join("processes/0.stdout")).unwrap(),
+        captured.stdout.bytes
+    );
 }
 
 #[test]
@@ -165,7 +203,16 @@ fn forwarding_failure_drains_the_original_tail_and_keeps_actual_child_failure() 
             {"Stdout":first}, {"Stderr":[0,255,10]}, {"Stdout":last}, {"Exit":41}
         ]),
     );
-    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), BrokenForward, io::sink()).unwrap();
+    let captured = execute(
+        source.path(),
+        &command,
+        output.path(),
+        0,
+        Duration::from_secs(10),
+        BrokenForward,
+        io::sink(),
+    )
+    .unwrap();
     assert_eq!(captured.child_exit, Some(41));
     assert_eq!(captured.exit_code(), 41);
     assert!(captured.auxiliary_failed());
@@ -189,7 +236,16 @@ fn child_success_is_failure_when_live_forwarding_failed() {
     let source = tempfile::tempdir().unwrap();
     let output = tempfile::tempdir().unwrap();
     let command = command(source.path(), json!([{"Stdout":[1,2,3]},{"Exit":0}]));
-    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), BrokenForward, io::sink()).unwrap();
+    let captured = execute(
+        source.path(),
+        &command,
+        output.path(),
+        0,
+        Duration::from_secs(10),
+        BrokenForward,
+        io::sink(),
+    )
+    .unwrap();
     assert_eq!(captured.child_exit, Some(0));
     assert_eq!(captured.exit_code(), 2);
     assert!(!captured.passed());
@@ -212,7 +268,16 @@ fn retention_failure_keeps_original_bytes_without_inventing_files_or_overwriting
                 {"Stdout":[0,255,10]}, {"Stderr":[254,0,10]}, {"Exit":child}
             ]),
         );
-        let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), io::sink(), io::sink()).unwrap();
+        let captured = execute(
+            source.path(),
+            &command,
+            output.path(),
+            0,
+            Duration::from_secs(10),
+            io::sink(),
+            io::sink(),
+        )
+        .unwrap();
         assert_eq!(captured.child_exit, Some(child));
         assert_eq!(captured.exit_code(), expected_exit);
         assert!(!captured.passed());
