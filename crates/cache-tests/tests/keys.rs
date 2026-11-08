@@ -1120,6 +1120,49 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
 }
 
 #[test]
+fn verus_archive_cache_binds_download_and_checksum_without_compiler_inputs() {
+    let (root, mut config) = host_cache_fixture(&["check.detect"]);
+    let host = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let path = ".chrono-harness/ci/verus-macos-arm64.sha256";
+    fs::copy(host.join(path), root.path().join(path)).unwrap();
+    config["inputs"]["verus.checksum"] = json!({"kind":"file","path":path,"presence":"present"});
+    let first =
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"].clone();
+    assert!(first.is_object(), "missing Verus archive cache");
+    assert_eq!(first["restore_keys"], json!([]));
+
+    config["inputs"]["rustc.file"] = json!({"kind":"literal","value":"another compiler"});
+    assert_eq!(
+        first,
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]
+    );
+    let projects = root.path().join(".chrono-harness/projects.json");
+    let mut changed: Value = serde_json::from_slice(&fs::read(&projects).unwrap()).unwrap();
+    changed["status"] = json!("unrelated metadata");
+    fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
+    assert_eq!(
+        first,
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]
+    );
+    changed["scripts"][2]["actions"]["verus-download"]["argv"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("different download identity"));
+    fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
+    assert_ne!(
+        first["key"],
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]["key"]
+    );
+
+    fs::copy(host.join(".chrono-harness/projects.json"), &projects).unwrap();
+    fs::write(root.path().join(path), b"different checksum declaration\n").unwrap();
+    assert_ne!(
+        first["key"],
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]["key"]
+    );
+}
+
+#[test]
 fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() {
     let consumers = ["check.unit_runner", "check.unit_ci"];
     let (root, config) = host_cache_fixture(&consumers);
@@ -1144,10 +1187,14 @@ fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() 
             fs::write(&checks, serde_json::to_vec(&changed).unwrap()).unwrap();
             let after = plan(root.path(), &config, consumer).unwrap();
             for (id, cache) in first["caches"].as_object().unwrap() {
-                assert_ne!(
-                    cache["restore_keys"], after["caches"][id]["restore_keys"],
-                    "{consumer} {id} {pointer}"
-                );
+                if id == "verus.archive" {
+                    assert_eq!(cache, &after["caches"][id], "{consumer} {id} {pointer}");
+                } else {
+                    assert_ne!(
+                        cache["restore_keys"], after["caches"][id]["restore_keys"],
+                        "{consumer} {id} {pointer}"
+                    );
+                }
             }
         }
         fs::remove_file(&checks).unwrap();

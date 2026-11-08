@@ -3,6 +3,7 @@
 
 pub mod bindings;
 pub mod construction;
+pub mod download;
 pub mod environment;
 pub mod execution;
 pub mod lifecycle;

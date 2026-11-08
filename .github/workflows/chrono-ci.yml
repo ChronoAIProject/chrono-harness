@@ -99,6 +99,15 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
           fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
         shell: bash
@@ -133,7 +142,7 @@ jobs:
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.detect/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'detect' --bootstrap chrono_startup --save-after-bootstrap '["detect.ci","detect.judge-ci","detect.runner","detect.worktree"]' --save-caches '["detect.ci","detect.judge-ci","detect.runner","detect.worktree"]' --github-output "$GITHUB_OUTPUT"
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.detect/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'detect' --bootstrap chrono_startup --save-after-bootstrap '["detect.ci","detect.judge-ci","detect.runner","detect.worktree","verus.archive"]' --save-caches '["detect.ci","detect.judge-ci","detect.runner","detect.worktree","verus.archive"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache detect.ci
         id: cache_0_save
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
@@ -166,6 +175,14 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+      - name: Save registered cache verus.archive
+        id: cache_4_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key && (steps.chrono_cache_plan.outputs.cache_4_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_4_sealed == 'true') }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
       - name: Preserve detector evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -226,6 +243,15 @@ jobs:
           key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
           fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
@@ -389,6 +415,15 @@ jobs:
           key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
           fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
@@ -747,11 +782,34 @@ jobs:
           CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_host-bootstrap'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_host-bootstrap' --plan-output '.chrono-harness/state/cache/check.unit_host-bootstrap/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache verus.archive
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_host-bootstrap/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -764,6 +822,14 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'host-bootstrap' --github-output "$GITHUB_OUTPUT"
+      - name: Seal producer cache contents
+        id: chrono_cache_seal
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_host-bootstrap/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '[]' --github-output "$GITHUB_OUTPUT"
       - name: Preserve actual check evidence
         id: chrono_evidence_upload
         if: ${{ always() }}
@@ -1177,6 +1243,15 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
           fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
         shell: bash
@@ -1493,6 +1568,15 @@ jobs:
           key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
           fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
@@ -1829,6 +1913,15 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
           fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
         shell: bash
@@ -1964,6 +2057,15 @@ jobs:
           key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
           fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
@@ -3027,6 +3129,15 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
           fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
         shell: bash
@@ -3171,6 +3282,15 @@ jobs:
           key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache verus.archive
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
           fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}

@@ -421,6 +421,12 @@
       "owner": "host-bootstrap",
       "kind": "startup-transfer",
       "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
+      "owner": "repository",
+      "kind": "download-cache",
+      "tracked": false
     }
   ],
   "environment": {

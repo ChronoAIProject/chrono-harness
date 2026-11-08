@@ -1710,6 +1710,10 @@ class RealSharedStartup(unittest.TestCase):
             acquire_parent_source(source_root, root, tools["git"], run)
             self.assertEqual(bootstrap.observe_source(root), observed)
             attempt.manage(root, owner, environment)
+            # 复用父启动已准备的固定包；fixture 的正式下载动作仍独立核对 SHA256。
+            archive = Path(".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip")
+            (root / archive).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source_root / archive, root / archive)
             try:
                 attempt.managed("host.bootstrap-real-fixture")
             finally:

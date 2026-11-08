@@ -714,8 +714,8 @@
     "save_action": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
     "jobs": {
       "detect": {
-        "need": "Build the current candidate detector and shared startup tools once.",
-        "output_use": "Restore the registered core bootstrap targets, build them and publish startup binaries for the explicitly registered consumers.",
+        "need": "Build candidate startup tools and reuse the checksum-verified fixed Verus archive.",
+        "output_use": "Restore registered core targets and the Verus archive before bootstrap; publish candidate startup binaries and save the verified archive for its declared consumers.",
         "prepare": [
           "/usr/bin/python3",
           ".chrono-harness/ci/bootstrap.py",
@@ -727,19 +727,22 @@
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree"
+          "detect.worktree",
+          "verus.archive"
         ],
         "save_after_bootstrap": [
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree"
+          "detect.worktree",
+          "verus.archive"
         ],
         "save_caches": [
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree"
+          "detect.worktree",
+          "verus.archive"
         ]
       },
       "unit_runner": {
@@ -756,7 +759,8 @@
         "consumer": "check.unit_runner",
         "caches": [
           "check.runner",
-          "check.runner-tests"
+          "check.runner-tests",
+          "verus.archive"
         ],
         "save_caches": [
           "check.runner-tests",
@@ -799,7 +803,8 @@
         "caches": [
           "check.judge-ci",
           "check.judge-ci-tests",
-          "check.runner"
+          "check.runner",
+          "verus.archive"
         ],
         "save_caches": [
           "check.judge-ci-tests",
@@ -824,7 +829,8 @@
           "check.judge-ci",
           "check.judge-registration",
           "check.runner",
-          "check.worktree"
+          "check.worktree",
+          "verus.archive"
         ],
         "save_caches": [
           "check.ci-tests",
@@ -846,7 +852,8 @@
         "caches": [
           "check.judge-registration",
           "check.judge-registration-tests",
-          "check.runner"
+          "check.runner",
+          "verus.archive"
         ],
         "save_caches": [
           "check.judge-registration",
@@ -871,7 +878,8 @@
           "check.judge-projects",
           "check.judge-registration",
           "check.judge-routes",
-          "check.runner"
+          "check.runner",
+          "verus.archive"
         ],
         "save_caches": [
           "check.judge-filemap",
@@ -918,7 +926,8 @@
           "check.judge-projects-tests",
           "check.judge-registration",
           "check.judge-routes",
-          "check.runner"
+          "check.runner",
+          "verus.archive"
         ],
         "save_caches": [
           "check.judge-projects",
@@ -1071,7 +1080,8 @@
           "check.ci",
           "check.runner",
           "check.worktree",
-          "check.worktree-tests"
+          "check.worktree-tests",
+          "verus.archive"
         ],
         "save_caches": [
           "check.worktree-tests",
@@ -1212,12 +1222,30 @@
         "consumer": "check.unit_cache",
         "caches": [
           "check.cache",
-          "check.cache-tests"
+          "check.cache-tests",
+          "verus.archive"
         ],
         "save_caches": [
           "check.cache",
           "check.cache-tests"
         ]
+      },
+      "unit_host-bootstrap": {
+        "need": "Prepare Verus for the registered proof operations.",
+        "output_use": "Restore the fixed archive before bootstrap; the registered download action verifies SHA256 before reuse.",
+        "prepare": [
+          "/usr/bin/python3",
+          ".chrono-harness/ci/bootstrap_shared.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
+        ],
+        "consumer": "check.unit_host-bootstrap",
+        "caches": [
+          "verus.archive"
+        ],
+        "save_caches": []
       }
     }
   }
