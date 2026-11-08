@@ -161,7 +161,9 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 ### 共享 startup
 
-本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 只构建并安装五项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-inputs`、`chrono-worktree`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。
+本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 构建并安装五项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-inputs`、`chrono-worktree`，并安装已校验的 Verus 原压缩包 `.chrono-harness/bin/verus.zip`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。单元从该包解压 Verus，不再各自下载、校验和构建 bootstrap 前端；本地 core 仍完成完整安装。
+
+**实现与宿主政策同时变更：**共享文件允许普通非零权限 `0001`–`0777`，包含无执行位的压缩包；不把数据文件改成可执行文件。Python 与 Rust 共享入口及其证明同步采用此范围。安装仍核全部来源、摘要、大小和原权限，使用时拒绝字节或权限漂移；特殊权限、零权限、损坏或缺失仍失败。压缩包随现有 startup 产物传输并沿用保留期限。逐单元外部下载已删除，传输、存储和完整 CI 总成本仍未测。
 
 runner 和 diagnostics 使用普通锁定 Cargo 构建，core 按当前消费者安装所需工具。项目 action、单元、缓存和发布集合由各自登记维护。
 
@@ -175,7 +177,7 @@ provider 在检测前上传声明目录，将生产 binding 和真实上传 arti
 
 本仓 bootstrap 可写工具链 home 也在已有 `.chrono-harness/cache/` 产物根，是可重建执行输入，不属于上传的 `.chrono-harness/state/`。原身份及生产回执留在 state。共享来源验证同一缓存位置，不要求为汇总报告传递编译器文件，见[bootstrap 边界](ci.md#this-repository)。
 
-宿主 Python 实现绑定干净主源码 commit／tree、平台、配置／profile 字节、原 bootstrap 报告、文件摘要／大小／执行模式。替换工具前验证整份传递，恢复传输丢失的执行位，在明确导入来源旁保留精确生产报告。安装不是本地构建；使用时验证拒绝已安装内容变化。
+宿主 Python 和 Rust 实现绑定干净主源码 commit／tree、平台、配置／profile 字节、原 bootstrap 报告、文件摘要／大小／权限。替换文件前验证整份传递，恢复原文件权限，在明确导入来源旁保留精确生产报告。安装不是本地构建；使用时验证拒绝已安装内容变化。
 
 绑定缺失／改变、源码／配置／平台不符、符号链接、内容损坏或发布失败都会停止 job。这只覆盖登记启动输出，不证明编译器／SDK 输入完整、对抗性认证、linked 所有权或多文件断电原子性。真实传递／重跑验收与 fixture 验证分开。上传／下载／安装有明确资源类别，实测成本计入复用评估。
 
