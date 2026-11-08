@@ -632,7 +632,7 @@ birth 在登记和回执封存期间持关联租约。生产者中断后，普�
 
 #### 创建 agent 与待维护提醒
 
-工作树配置的可选 `agent_identity_env` 点名当前调用方身份的环境变量；本宿主采用 `HECA_AGENT_ID`，并在 `environment.inherit` 转交该值。普通 agent 不需要另加 CLI 参数。没有配置、缺值、空值、控制字符或超过 256 字节时，原报告的 `agent.status` 为 `unknown`，不猜用户名、PID 或分支所有者。它是调用方声明，用于归属和提醒，不授予清理权限。
+工作树配置的可选 `agent_identity_env` 点名当前调用方身份的环境变量；本宿主采用 `HECA_AGENT_ID`，并在工作树和各平台检查配置的 `environment.inherit` 转交该值；公开 `check`、Python／Rust bootstrap 同时保留所有者的 stderr 提醒。普通 agent 不需要另加 CLI 参数。没有配置、缺值、空值、控制字符或超过 256 字节时，原报告的 `agent.status` 为 `unknown`，不猜用户名、PID 或分支所有者。它是调用方声明，用于归属和提醒，不授予清理权限。
 
 start／reconstruct 的原报告和创建前 intent 保存 agent；同一地址的 birth 登记保存 `creator_agent`。后续 use、finish、maintain 和其他 agent 的操作保持该创建者。显式 import 仅保存 `custodian_agent`；历史创建者未知时仍为 null。旧记录也保持 unknown，不根据当前调用方补写历史。
 

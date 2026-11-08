@@ -744,6 +744,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
             .extend([
                 value!("CHRONO_TEST_AUTHENTICATION"),
                 value!("CHRONO_TEST_AUTHENTICATION_ABSENT"),
+                value!("CHRONO_TEST_AGENT_ID"),
             ]);
         config["environment"]["credential_environment"] = value!([
             "CHRONO_TEST_AUTHENTICATION",
@@ -751,8 +752,19 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         ]);
         fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
         h.kernel_cleanup();
+        h.policy(|policy| {
+            policy["agent_identity_env"] = value!("CHRONO_TEST_AGENT_ID");
+            policy["environment"]["inherit"]
+                .as_array_mut()
+                .unwrap()
+                .push(value!("CHRONO_TEST_AGENT_ID"));
+        });
         let target = h.parent.join("console");
-        assert_eq!(h.invoke("feature", "console", &target).0, 0);
+        let created = h.native_output(
+            h.auto_command("start", &["--kind", "feature", "--name", "console", "--path", target.to_str().unwrap()])
+                .env("CHRONO_TEST_AGENT_ID", "console-agent"),
+        );
+        assert_eq!(h.received(created).0, 0);
         install_inner(&target, "original stdout\n", "original diagnostic\n", exit);
         let response = target.join(".chrono-harness/state/inner-check-response.json");
         let mut expected = json(&fs::read(&response).unwrap()).unwrap();
@@ -763,6 +775,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         fs::write(response, serde_json::to_vec(&expected).unwrap()).unwrap();
         let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
+            .env("CHRONO_TEST_AGENT_ID", "console-agent")
             .env(
                 "CHRONO_TEST_AUTHENTICATION",
                 "inert managed authentication λ",
@@ -778,13 +791,15 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         assert!(out.stderr.starts_with(b"original diagnostic\n"), "{out:?}");
         assert!(
             String::from_utf8_lossy(&out.stderr[b"original diagnostic\n".len()..])
-                .contains("W_WORKTREE_AGENT_SCOPE"),
-            "the public check consumer must forward the owner's scope reminder: {out:?}"
+                .contains("W_WORKTREE_ATTENTION"),
+            "the public check consumer must forward its creator's reminder: {out:?}"
         );
+        assert!(String::from_utf8_lossy(&out.stderr).contains(target.to_str().unwrap()));
         assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
         let (_, owner, _) = h.received(
             Command::new(target.join(".chrono-harness/bin/chrono-worktree"))
                 .current_dir(&target)
+                .env("CHRONO_TEST_AGENT_ID", "console-agent")
                 .env(
                     "CHRONO_TEST_AUTHENTICATION",
                     "inert managed authentication λ",
@@ -810,6 +825,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
                 .is_none()
         );
         let mut environment = std::collections::BTreeMap::from([
+            ("CHRONO_TEST_AGENT_ID".to_owned(), "console-agent".to_owned()),
             ("PATH".to_owned(), std::env::var("PATH").unwrap()),
             (
                 "CHRONO_TEST_AUTHENTICATION".to_owned(),
