@@ -296,6 +296,7 @@ fn upgrade_phase_hands_success_and_failure_originals_to_the_rolling_directory() 
             &["--fixture-phase"],
             &directory,
             "phase",
+            Some(&publication),
         );
         if exit_code == 0 {
             assert_eq!(result.unwrap(), report);

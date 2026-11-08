@@ -6,7 +6,11 @@ use crate::{
     profile::{self, Profile},
     source,
 };
-use chrono_harness::{ProcessResult, decode, file_identity, json, sha256};
+use chrono_harness::{
+    ProcessResult, decode, file_identity, json,
+    retained_artifacts::retention::{self, Consumer, Inventory, Publication},
+    sha256,
+};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{ffi::OsStr, fs, io::Write, os::unix::fs::PermissionsExt, path::Path};
@@ -18,6 +22,17 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .open(path)
         .and_then(|mut stream| stream.write_all(bytes))
         .map_err(|error| error.to_string())
+}
+
+fn write_attempt(
+    publication: Option<&Publication>,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<(), String> {
+    match publication {
+        Some(publication) => publication.write_file(path, bytes),
+        None => write_new(path, bytes),
+    }
 }
 
 fn retained_process(value: &Value) -> Result<ProcessResult, String> {
@@ -57,6 +72,7 @@ pub fn run_owner(
     arguments: &[&str],
     directory: &Path,
     name: &str,
+    publication: Option<&Publication>,
 ) -> Result<Value, BuildFailure> {
     let consumer = format!(
         "bootstrap-owner:{}:{name}",
@@ -70,11 +86,20 @@ pub fn run_owner(
         .args(["--report-consumer", &consumer])
         .output()
         .map_err(|error| error.to_string())?;
-    write_new(&directory.join(format!("{name}.stdout")), &output.stdout)?;
-    write_new(&directory.join(format!("{name}.stderr")), &output.stderr)?;
+    write_attempt(
+        publication,
+        &directory.join(format!("{name}.stdout")),
+        &output.stdout,
+    )?;
+    write_attempt(
+        publication,
+        &directory.join(format!("{name}.stderr")),
+        &output.stderr,
+    )?;
     use std::os::unix::process::ExitStatusExt;
     let exit = crate::verified_bindings::process_exit(output.status.code(), output.status.signal());
-    write_new(
+    write_attempt(
+        publication,
         &directory.join(format!("{name}.exit")),
         format!("{}\n", exit.unwrap_or(1)).as_bytes(),
     )?;
@@ -105,10 +130,16 @@ pub fn run_owner(
     {
         return Err("owner phase report consumer differs from the original".into());
     }
-    write_new(
+    write_attempt(
+        publication,
         &directory.join(format!("{name}-consumer.json")),
         &serde_json::to_vec(declaration).map_err(|error| error.to_string())?,
     )?;
+    if let Some(publication) = publication {
+        let consumer: Consumer =
+            decode(&serde_json::to_vec(declaration).map_err(|error| error.to_string())?)?;
+        publication.accept_consumer(&consumer)?;
+    }
     if let Some(value) = report.get("managed_process") {
         let process = retained_process(value)?;
         forward(&process)?;
@@ -224,117 +255,167 @@ pub fn upgrade(
         b".chrono-harness/state/",
     )?;
     fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
-    let directory = tempfile::Builder::new()
-        .prefix("attempt-")
-        .tempdir_in(parent)
+    let directory = retention::unique_path(&parent, "attempt-", "")?;
+    let publication = retention::create_adopted(
+        root,
+        "check-original",
+        &directory,
+        true,
+        serde_json::json!({"status":"started","completion":"not-established"}),
+    )?;
+    let relative = directory
+        .strip_prefix(root)
         .map_err(|error| error.to_string())?
-        .keep();
-    write_new(&directory.join("selected-producer.json"), &original)?;
-    write_new(
-        &directory.join("selected-qualification.json"),
-        &serde_json::to_vec(&qualification).map_err(|error| error.to_string())?,
-    )?;
-    let carrier = directory.join("construction-owner");
-    write_new(&carrier, &bytes)?;
-    fs::set_permissions(&carrier, fs::Permissions::from_mode(0o755))
-        .map_err(|error| error.to_string())?;
-    if !crate::verified_bindings::owner_publication::binding_equal(
-        &owner::file_binding(&selected)?,
-        &qualification.selected,
-    ) || file_identity(&carrier)?.0 != qualification.selected.sha256
-    {
-        return Err("qualified selected owner changed before construction".into());
+        .to_str()
+        .ok_or("non UTF-8 owner attempt")?;
+    if publication.is_some() {
+        Inventory::adopted(root)?
+            .ok_or("owner attempt retention policy disappeared")?
+            .retain_diagnostic_path(relative)?;
     }
-    write_new(
-        &directory.join("upgrade.json"),
-        &profile::read(
+    let outcome = (|| -> Result<(), BuildFailure> {
+        write_attempt(
+            publication.as_ref(),
+            &directory.join("selected-producer.json"),
+            &original,
+        )?;
+        write_attempt(
+            publication.as_ref(),
+            &directory.join("selected-qualification.json"),
+            &serde_json::to_vec(&qualification).map_err(|error| error.to_string())?,
+        )?;
+        let carrier = directory.join("construction-owner");
+        write_attempt(publication.as_ref(), &carrier, &bytes)?;
+        fs::set_permissions(&carrier, fs::Permissions::from_mode(0o755))
+            .map_err(|error| error.to_string())?;
+        if !crate::verified_bindings::owner_publication::binding_equal(
+            &owner::file_binding(&selected)?,
+            &qualification.selected,
+        ) || file_identity(&carrier)?.0 != qualification.selected.sha256
+        {
+            return Err("qualified selected owner changed before construction".into());
+        }
+        write_attempt(
+            publication.as_ref(),
+            &directory.join("upgrade.json"),
+            &profile::read(
+                root,
+                profile.owner_upgrade.as_ref().unwrap(),
+                b".chrono-harness/ci/",
+            )?,
+        )?;
+        let host = root.to_str().ok_or("non UTF-8 host root")?;
+        let common = [
+            "--host-root",
+            host,
+            "--config",
+            profile.participation.config.as_str(),
+        ];
+        run_owner(
             root,
-            profile.owner_upgrade.as_ref().unwrap(),
-            b".chrono-harness/ci/",
-        )?,
-    )?;
-    let host = root.to_str().ok_or("non UTF-8 host root")?;
-    let common = [
-        "--host-root",
-        host,
-        "--config",
-        profile.participation.config.as_str(),
-    ];
-    run_owner(
-        root,
-        environment,
-        &carrier,
-        &[
-            "migrate", common[0], common[1], common[2], common[3], "--path", host,
-        ],
-        &directory,
-        "migration",
-    )?;
-    let built = run_owner(
-        root,
-        environment,
-        &carrier,
-        &[
-            "bootstrap",
-            common[0],
-            common[1],
-            common[2],
-            common[3],
-            "--bootstrap-config",
-            &declaration.stage_config,
-        ],
-        &directory,
-        "construction",
-    )?;
-    let process = retained_process(&built["managed_process"])?;
-    let last = process
-        .stdout_bytes
-        .split(|byte| *byte == b'\n')
-        .filter(|line| !line.is_empty())
-        .next_back()
-        .ok_or("construction lacks its original stage result")?;
-    let descriptor: owner::Reference = decode(
-        last.strip_prefix(b"chrono-owner-stage-result ")
-            .ok_or("construction lacks its original stage result")?,
-    )?;
-    let qualified = owner::stage_report(
-        root,
-        environment,
-        native,
-        &descriptor.path,
-        Some(&descriptor.sha256),
-        None,
-    )?;
-    let staged = profile::path(root, &qualified.stage.staged.path, owner::STAGES.as_bytes())?;
-    run_owner(
-        root,
-        environment,
-        &staged,
-        &[
-            "deploy-owner",
-            common[0],
-            common[1],
-            common[2],
-            common[3],
-            "--bootstrap-config",
-            &declaration.stage_config,
-            "--stage-result",
+            environment,
+            &carrier,
+            &[
+                "migrate", common[0], common[1], common[2], common[3], "--path", host,
+            ],
+            &directory,
+            "migration",
+            publication.as_ref(),
+        )?;
+        let built = run_owner(
+            root,
+            environment,
+            &carrier,
+            &[
+                "bootstrap",
+                common[0],
+                common[1],
+                common[2],
+                common[3],
+                "--bootstrap-config",
+                &declaration.stage_config,
+            ],
+            &directory,
+            "construction",
+            publication.as_ref(),
+        )?;
+        let process = retained_process(&built["managed_process"])?;
+        let last = process
+            .stdout_bytes
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .next_back()
+            .ok_or("construction lacks its original stage result")?;
+        let descriptor: owner::Reference = decode(
+            last.strip_prefix(b"chrono-owner-stage-result ")
+                .ok_or("construction lacks its original stage result")?,
+        )?;
+        let qualified = owner::stage_report(
+            root,
+            environment,
+            native,
             &descriptor.path,
-            "--stage-sha256",
-            &descriptor.sha256,
-        ],
-        &directory,
-        "deployment",
-    )?;
-    let adopted = json(&fs::read(current_path).map_err(|error| error.to_string())?)?;
-    if adopted["source_commit"].as_str() != observed.commit.as_deref()
-        || adopted["installed"]
-            != serde_json::to_value(owner::file_binding(&selected)?)
-                .map_err(|error| error.to_string())?
-    {
-        return Err("owner deployment did not publish current adoption".into());
+            Some(&descriptor.sha256),
+            None,
+        )?;
+        let staged = profile::path(root, &qualified.stage.staged.path, owner::STAGES.as_bytes())?;
+        run_owner(
+            root,
+            environment,
+            &staged,
+            &[
+                "deploy-owner",
+                common[0],
+                common[1],
+                common[2],
+                common[3],
+                "--bootstrap-config",
+                &declaration.stage_config,
+                "--stage-result",
+                &descriptor.path,
+                "--stage-sha256",
+                &descriptor.sha256,
+            ],
+            &directory,
+            "deployment",
+            publication.as_ref(),
+        )?;
+        let adopted = json(&fs::read(current_path).map_err(|error| error.to_string())?)?;
+        if adopted["source_commit"].as_str() != observed.commit.as_deref()
+            || adopted["installed"]
+                != serde_json::to_value(owner::file_binding(&selected)?)
+                    .map_err(|error| error.to_string())?
+        {
+            return Err("owner deployment did not publish current adoption".into());
+        }
+        Ok(())
+    })();
+    if let Some(publication) = publication {
+        let completion = publication.complete(serde_json::json!({
+            "status":if outcome.is_ok() {"completed"} else {"failed"},
+            "error":outcome.as_ref().err().map(|error| &error.message),
+            "exit_code":outcome.as_ref().err().and_then(|error| error.exit_code),
+        }));
+        let diagnostic = if outcome.is_err() || completion.is_err() {
+            Inventory::adopted(root)?
+                .ok_or("owner attempt retention policy disappeared")?
+                .retain_diagnostic_path(relative)
+        } else {
+            Ok(())
+        };
+        if let Err(error) = completion.and(diagnostic) {
+            return Err(BuildFailure {
+                message: match &outcome {
+                    Ok(()) => error,
+                    Err(primary) => {
+                        format!("{}; owner attempt retention: {error}", primary.message)
+                    }
+                },
+                exit_code: outcome.as_ref().err().and_then(|error| error.exit_code),
+            });
+        }
     }
-    Ok(())
+    outcome
 }
 
 /// 返回 true 表示实际生命周期子进程已经完成本次 bootstrap。
