@@ -281,7 +281,7 @@ pub fn consume(
             let aggregate = parsed
                 .values()
                 .fold(wire::Status::Pass, |status, (_, _, response, _)| {
-                    status.max(response.status.clone())
+                    status.maximum(response.status.clone())
                 });
             let findings: Vec<Value> = records
                 .iter()
