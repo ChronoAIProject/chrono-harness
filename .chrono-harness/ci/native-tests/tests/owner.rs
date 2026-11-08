@@ -494,7 +494,9 @@ impl Staged {
         }
     }
     fn new() -> Self {
-        let fixture = Self::setup();
+        Self::from_fixture(Self::setup())
+    }
+    fn from_fixture(fixture: Fixture) -> Self {
         let selected = fixture.root.join(".chrono-harness/bin/cargo");
         let previous = owner::file_binding(&selected).unwrap();
         let output = Self::invoke(
@@ -1064,4 +1066,80 @@ fn owner_reuse_preserves_actual_original_operations_and_rejects_changed_selectio
         }
     }
     assert_eq!(fs::read(fixture.tools.join("calls.json")).unwrap(), calls);
+}
+
+#[test]
+fn public_core_reuses_the_published_stage_without_rebuilding_or_replacing_the_selected_owner() {
+    let fixture = Staged::setup();
+    let mut core = fixture.config.clone();
+    core["owner_stage"] = Value::Null;
+    core["owner_upgrade"] = json!(".chrono-harness/ci/upgrade.json");
+    core["reuse_owner_operations"] = json!(["build"]);
+    core["report_path"] = json!(".chrono-harness/state/bootstrap.json");
+    core["install"] = json!([{"source":"out/cargo","destination":".chrono-harness/bin/cargo"}]);
+    write_json(&fixture.root.join(".chrono-harness/ci/core.json"), &core);
+    write_json(
+        &fixture.root.join(".chrono-harness/ci/upgrade.json"),
+        &json!({"schema":"chrono-bootstrap-owner-upgrade/v1",
+            "stage_config":".chrono-harness/ci/build.json",
+            "selected_original":".chrono-harness/state/bootstrap.json"}),
+    );
+    fixture.commit();
+    let staged = Staged::from_fixture(fixture);
+    staged.publish_external_inputs();
+    let root = &staged.fixture.root;
+    let selected = root.join(".chrono-harness/bin/cargo");
+    let before = owner::file_binding(&selected).unwrap();
+    let build_count = || {
+        read_json(&staged.fixture.tools.join("calls.json"))
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|call| call[0] == "cargo" && call[1] == "build-fixture")
+            .count()
+    };
+    let original_builds = build_count();
+    assert_eq!(original_builds, 1);
+    fs::write(root.join("out/cargo"), b"unrelated scratch rebuild").unwrap();
+    let output = Staged::invoke(
+        &staged.fixture,
+        &[".", ".chrono-harness/ci/core.json"],
+        true,
+        true,
+    );
+    assert!(
+        output.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(build_count(), original_builds);
+    assert!(publication::binding_equal(
+        &owner::file_binding(&selected).unwrap(),
+        &before
+    ));
+    let result = read_json(&root.join(".chrono-harness/state/bootstrap.json"));
+    assert_eq!(result["status"], "passed");
+    assert_eq!(result["operations"].as_array().unwrap().len(), 2);
+    let mut reused = result["operations"][1].clone();
+    assert_eq!(
+        reused.as_object_mut().unwrap().remove("reused_from"),
+        Some(json!({"path":staged.reference,"sha256":staged.digest}))
+    );
+    assert_eq!(reused, staged.report["operations"][1]);
+    let validation = Staged::invoke(
+        &staged.fixture,
+        &[
+            "validate-original-execution",
+            ".",
+            ".chrono-harness/state/bootstrap.json",
+        ],
+        false,
+        false,
+    );
+    assert!(
+        validation.status.success(),
+        "{}",
+        String::from_utf8_lossy(&validation.stderr)
+    );
 }
