@@ -749,12 +749,6 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["--lifecycle-program"]:
-        if len(sys.argv) != 3:
-            raise ValueError("--lifecycle-program requires one candidate executable")
-        import bootstrap_shared_tests
-        bootstrap_shared_tests.LIFECYCLE_PROGRAM = Path(sys.argv[2]).resolve(strict=True)
-        sys.argv = [sys.argv[0]]
     if sys.argv[1:] == ["--real-consumer"]:
         from bootstrap_shared_tests import RealSharedStartup
         unittest.main(argv=[sys.argv[0]], defaultTest="RealSharedStartup")

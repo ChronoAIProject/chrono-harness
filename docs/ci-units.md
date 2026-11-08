@@ -135,19 +135,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 `detect` 为每个登记单元输出布尔值。单元 `needs: detect`，在 job 层 `if` 判断该值；无关 job 不分配 runner，也不 bootstrap 或准备 SDK。`aggregate` 使用 `if: always()`，依赖 detector 和全部单元。不生成工作流级 `paths`／`paths-ignore`，也不用 matrix fail-fast 联动单元失败。
 
-宿主增加以下可选 provider 块，自行登记工具获取：
-
-```json
-"job_gating": {
-  "schema": "chrono-job-gating/v1",
-  "detector": {
-    "runs_on": "macos-26",
-    "timeout_minutes": 45,
-    "bootstrap": ["/usr/bin/python3", ".chrono-harness/ci/bootstrap.py", ".", ".chrono-harness/ci/bootstrap-detector.json"],
-    "sparse_checkout": [".chrono-harness/", "crates/", "assets/", ".github/workflows/chrono-ci.yml", ".gitignore"]
-  }
-}
-```
+provider 的可选 `job_gating` 字段登记 detector 的平台、时限、bootstrap 和源码获取范围。本仓的当前声明见 [.chrono-harness/ci/units.json](../.chrono-harness/ci/units.json)，沿已登记的 Rust bootstrap 启动，不在本文维护第二份配方。
 
 此形式要求 collection provider v4。内部生成命令 `chrono-ci detect --host-root . --config SOURCE --github-output "$GITHUB_OUTPUT"` 自读事件及原生绑定，不加日常标志或手动准备。实际检查仍为 `chrono-harness check`、`check --unit ID`、`check --collect`。
 
@@ -465,4 +453,4 @@ gather 保留下载报告原字节，不用硬链接替换报告。本仓采用 
 
 输入生产失败可能只留下获取原件，没有最终报告文件。上传成功只导出已有证据，不造报告或通过结果。交付拒绝明确点名缺报告或无法核的原件，保留退出 2、原 outcome 和 delivery 根，不释放其他消费者或确认未生产证据。
 
-`test.runner.retention-delivery` 是登记 Rust 快速反馈操作，覆盖报告位置／原件缺失、引用摘要变化、失败 outcome 确认；标准选测仍保留完整 DELTA 计划。
+报告位置／原件缺失、引用摘要变化和失败 outcome 确认的回归，由原未过滤操作 `test.runner-tests` 执行；标准选测继续使用完整 DELTA 计划，不维护独立过滤入口。
