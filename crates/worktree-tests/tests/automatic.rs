@@ -775,11 +775,31 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
     let h = Host::new("payload");
     h.kernel_cleanup();
     adopt_lifecycle_retention(&h);
+    // Retention itself owns metadata under state/. The fixture consumer owns
+    // this separate evidence path and can release all of it without deleting
+    // another producer's metadata or weakening the original-receipt assertion.
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    for artifact in policy["artifacts"].as_array_mut().unwrap() {
+        if artifact["path"] == ".chrono-harness/state/" {
+            artifact["disposition"] = value!("retain");
+        }
+    }
+    policy["artifacts"].as_array_mut().unwrap().push(value!({
+        "path":"consumer-evidence/", "disposition":"evidence-retain"
+    }));
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    config["artifacts"].as_array_mut().unwrap().push(value!({
+        "path":"consumer-evidence/", "owner":"host", "kind":"evidence", "tracked":false
+    }));
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+    commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("retained-original");
     let (code, created, error) = h.invoke("integration", "retained-original", &target);
     assert_eq!(code, 0, "{created} {error}");
-    let evidence = target.join(".chrono-harness/state");
+    let evidence = target.join("consumer-evidence");
     fs::create_dir_all(&evidence).unwrap();
     fs::write(
         evidence.join("needed"),
