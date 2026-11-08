@@ -441,24 +441,36 @@ impl Loaded {
         if recipe.native_frontends.keys().ne(recipe.native_jobs.keys()) {
             return Err(error("native frontends need exact platform membership"));
         }
-        let business_jobs: BTreeSet<_> = recipe.native_jobs.values()
-            .flat_map(|bindings| bindings.values()).collect();
+        let business_jobs: BTreeSet<_> = recipe
+            .native_jobs
+            .values()
+            .flat_map(|bindings| bindings.values())
+            .collect();
         let mut frontend_jobs = BTreeSet::new();
         for frontend in recipe.native_frontends.values() {
             if !chrono_identifiers::valid_id(frontend.job.as_bytes())
                 || business_jobs.contains(&frontend.job)
                 || !frontend_jobs.insert(&frontend.job)
                 || frontend.cost.trim().is_empty()
-                || !frontend.bootstrap_profile.starts_with(".chrono-harness/ci/")
+                || !frontend
+                    .bootstrap_profile
+                    .starts_with(".chrono-harness/ci/")
                 || overlaps(&frontend.executable, &frontend.bootstrap_report)
-                || handoffs.iter().chain(destinations.iter()).chain(sources.iter())
+                || handoffs
+                    .iter()
+                    .chain(destinations.iter())
+                    .chain(sources.iter())
                     .any(|p| overlaps(&frontend.directory, p))
                 || overlaps(&frontend.directory, &collector.dependency_metadata)
             {
                 return Err(error("invalid or overlapping native frontend binding"));
             }
-            for relative in [&frontend.directory, &frontend.executable,
-                &frontend.bootstrap_report, &frontend.bootstrap_profile] {
+            for relative in [
+                &frontend.directory,
+                &frontend.executable,
+                &frontend.bootstrap_report,
+                &frontend.bootstrap_profile,
+            ] {
                 no_symlink_parents(root, relative)?;
             }
             for relative in [&frontend.executable, &frontend.bootstrap_report] {

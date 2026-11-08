@@ -96,10 +96,17 @@ fn select_row(job: &str, row: &Value, lineage: &Lineage) -> Result<Selection, St
         attempt: text(outputs, "attempt")?.into(),
     };
     if !policy::selected_producer(
-        &result, &selection.run_id, &lineage.run_id,
-        attempt(&selection.attempt)?, attempt(&lineage.attempt)?, &selection.artifact_id,
-    ) || (lineage.kind == Kind::Github && !decimal(&selection.artifact_id)) {
-        return Err(error(format!("failed or incompatible current dependency: {job}")));
+        &result,
+        &selection.run_id,
+        &lineage.run_id,
+        attempt(&selection.attempt)?,
+        attempt(&lineage.attempt)?,
+        &selection.artifact_id,
+    ) || (lineage.kind == Kind::Github && !decimal(&selection.artifact_id))
+    {
+        return Err(error(format!(
+            "failed or incompatible current dependency: {job}"
+        )));
     }
     Ok(selection)
 }
@@ -122,24 +129,31 @@ pub fn select(
             loaded.recipe.collector.needs.as_slice(),
         ),
     };
-    let (bindings, frontend): (BTreeMap<String, String>, Option<&str>) = if lineage.kind == Kind::Local {
-        if lineage.job != id {
-            return Err(error("local producing job differs from selected unit"));
-        }
-        (needs.iter().map(|id| (id.clone(), id.clone())).collect(), None)
-    } else {
-        let matching: Vec<_> = loaded
-            .recipe
-            .native_jobs
-            .iter()
-            .filter(|(_, b)| b.get(id) == Some(&lineage.job))
-            .collect();
-        if matching.len() != 1 {
-            return Err(error("unregistered or ambiguous native producing job"));
-        }
-        let (platform, bindings) = matching[0];
-        (bindings.clone(), Some(loaded.recipe.native_frontends[platform].job.as_str()))
-    };
+    let (bindings, frontend): (BTreeMap<String, String>, Option<&str>) =
+        if lineage.kind == Kind::Local {
+            if lineage.job != id {
+                return Err(error("local producing job differs from selected unit"));
+            }
+            (
+                needs.iter().map(|id| (id.clone(), id.clone())).collect(),
+                None,
+            )
+        } else {
+            let matching: Vec<_> = loaded
+                .recipe
+                .native_jobs
+                .iter()
+                .filter(|(_, b)| b.get(id) == Some(&lineage.job))
+                .collect();
+            if matching.len() != 1 {
+                return Err(error("unregistered or ambiguous native producing job"));
+            }
+            let (platform, bindings) = matching[0];
+            (
+                bindings.clone(),
+                Some(loaded.recipe.native_frontends[platform].job.as_str()),
+            )
+        };
     let input = chrono_harness::json(raw)?;
     let rows = input
         .as_object()
@@ -168,7 +182,9 @@ pub fn select(
     }
     Ok(Dependencies {
         units: selected,
-        frontend: frontend.map(|job| select_row(job, &rows[job], lineage)).transpose()?,
+        frontend: frontend
+            .map(|job| select_row(job, &rows[job], lineage))
+            .transpose()?,
     })
 }
 
@@ -607,7 +623,8 @@ pub fn read(
     let input = fs::read(original(&directory, &receipt["dependency_input"])?).map_err(error)?;
     let selected = select(loaded, Scope::Unit(unit.id()), &lineage, &input)?;
     if receipt["selected"] != json!(selected.units)
-        || receipt["frontend_selection"] != json!(selected.frontend) {
+        || receipt["frontend_selection"] != json!(selected.frontend)
+    {
         return Err(error(
             "selected dependencies differ from original current input",
         ));
