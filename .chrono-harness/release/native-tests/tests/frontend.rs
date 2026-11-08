@@ -324,6 +324,31 @@ fn consumer_and_collector_validate_original_production_without_rerunning_bootstr
 }
 
 #[test]
+fn consumer_rejects_relabelled_source_platform_role_and_producer() {
+    let f = Fixture::new();
+    let directory = f.exported();
+    let original: Value = serde_json::from_slice(&fs::read(directory.join("frontend.json")).unwrap()).unwrap();
+    for (pointer, value) in [
+        ("/schema", json!("other")),
+        ("/source/commit", json!("0".repeat(40))),
+        ("/source/tree", json!("0".repeat(40))),
+        ("/source/dirty", json!(true)),
+        ("/source/error", json!("failed source read")),
+        ("/system", json!("foreign")),
+        ("/machine", json!("foreign")),
+        ("/lineage/kind", json!("local")),
+        ("/lineage/job", json!("foreign")),
+        ("/lineage/run_id", json!("foreign")),
+        ("/lineage/attempt", json!("2")),
+    ] {
+        let mut changed = original.clone();
+        *changed.pointer_mut(pointer).unwrap() = value;
+        recipe::write(&directory,"frontend.json",&changed);
+        assert!(f.validate(&directory,&f.selected(),None).is_err(),"{pointer}");
+    }
+}
+
+#[test]
 fn consumer_rejects_changed_bootstrap_streams_and_even_rebound_invalid_original_reports() {
     let f = Fixture::new();
     let directory = f.exported();

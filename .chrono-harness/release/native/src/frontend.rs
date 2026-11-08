@@ -191,7 +191,11 @@ pub fn validate(
 ) -> Result<Value, String> {
     let manifest = crate::recipe::read_json(directory, "frontend.json")?;
     let lineage: Lineage = serde_json::from_value(manifest["lineage"].clone()).map_err(error)?;
+    let declared_source: SourceObservation = serde_json::from_value(manifest["source"].clone()).map_err(error)?;
     lineage.validate()?;
+    if !chrono_host_bootstrap::verified_bindings::observation_matches(&declared_source, source) {
+        return Err(error("frontend source observation differs"));
+    }
     if !policy::frontend_header(
         text(&manifest, "schema")?,
         matches!(lineage.kind, Kind::Github),
@@ -249,7 +253,7 @@ pub fn validate(
     )?;
     if let Some(path) = executing {
         let expected = chrono_harness::no_symlink_parents(directory, &declared.executable)?;
-        if fs::canonicalize(path).map_err(error)? != expected || !same(&actual(path)?, &identity) {
+        if fs::canonicalize(path).map_err(error)? != fs::canonicalize(expected).map_err(error)? || !same(&actual(path)?, &identity) {
             return Err(error(
                 "actual frontend differs from selected bootstrap artifact",
             ));
