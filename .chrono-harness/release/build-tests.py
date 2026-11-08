@@ -408,7 +408,7 @@ class ReleaseUnits(unittest.TestCase):
             covered.update(selected)
             owners.update({operation:owner for operation in selected})
         self.assertEqual(actual,covered)
-        original_operations={'test.'+name+'-tests' for name in ['distribution','worktree','runner','inputs','ci','judge-ci','judge-registration','judge-projects','judge-workflow','judge-cargo','instructions','judge-filemap','judge-routes','judge-cost','judge-mixed']}
+        original_operations={'test.'+name+'-tests' for name in ['distribution','worktree','runner','inputs','ci','judge-ci','judge-registration','judge-projects','judge-workflow','instructions','judge-filemap','judge-routes','judge-cost','judge-mixed']}
         self.assertTrue(original_operations <= actual)
         builds={u['id'] for u in cfg['units'] if u['kind']=='build'}
         self.assertEqual(set(cfg['verification_consumers']),{u['id'] for u in cfg['units'] if u['kind']=='verify'})

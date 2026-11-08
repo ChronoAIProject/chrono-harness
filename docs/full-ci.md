@@ -74,7 +74,7 @@ checkout 使用给定 candidate。候选绑定的 Git 核对 HEAD、完整配置
 
 ## 当前输入与采用边界
 
-输入观察、捕获、配对和组合归 [inputs 所有者](inputs.md)，可选 Cargo 保护归 [Cargo 所有者](cargo-projects.md)。本仓额外 runner／diagnostics guard 已退役，不是待激活入口；通用产品或源码测试不证明某份宿主政策仍有必要。
+输入观察、捕获、配对和组合归 [inputs 所有者](inputs.md)。Cargo 专用适配器已退役。本仓额外 runner／diagnostics guard 已退役，不是待激活入口；通用产品或源码测试不证明某份宿主政策仍有必要。
 
 现役完整宿主登记仍为 proposed，输入与执行物绑定未齐全。完整原生 CI、固定两端原件、安装后真实消费及同判分别验收，不能由工作流生成或历史绿色推导。后续采用须先绑定当前必要性终点，再用候选生产者验证实际范围。
 
