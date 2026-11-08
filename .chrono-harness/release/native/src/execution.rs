@@ -1,6 +1,6 @@
 //! 发布单元的真实执行：固定源码、原始操作、消费向量和原结果由本生产者发布。
 use crate::{
-    evidence, process,
+    evidence, frontend, process,
     receipt::{self, Kind, Lineage, Verified},
     recipe::{self, Loaded, Scope, Unit},
     staging::Staging,
@@ -415,6 +415,20 @@ impl<'a> Execution<'a> {
         self.report["lineage"] = json!(lineage);
         self.report["selected"] = json!(selected.units);
         self.report["frontend_selection"] = json!(selected.frontend);
+        if let Some(selected) = &selected.frontend {
+            self.phase = "frontend-source".into();
+            let declared = frontend::declaration(self.loaded,selected)?;
+            let directory = no_symlink_parents(&self.root,&declared.directory)?;
+            let source = chrono_host_bootstrap::source::SourceObservation {
+                commit:Some(source),tree:Some(tree),dirty:Some(false),error:None,
+            };
+            frontend::validate(&self.root,&directory,declared,&chrono_host_bootstrap::bindings::native_platform()?,
+                &source,selected,Some(&std::env::current_exe().map_err(error)?))?;
+            let files=frontend::retain_metadata(&directory,&self.output.join("frontend"))?;
+            let mut reference=files["frontend.json"].clone();
+            reference["path"]=json!("frontend/frontend.json");
+            self.report["frontend_input"]=reference;
+        }
         Ok(lineage)
     }
 
@@ -620,6 +634,15 @@ fn retain_original(output: &Path, id: &str, verified: &Verified) -> Result<Value
                     .to_owned(),
                 declaration.clone(),
             );
+        }
+    }
+    if verified.receipt["frontend_input"].is_object() {
+        for (name, mut declaration) in frontend::metadata_files(&verified.directory.join("frontend"))? {
+            let name=format!("frontend/{name}");
+            declaration["path"]=json!(name);
+            if declarations.insert(name,declaration).is_some() {
+                return Err(error("duplicate original frontend evidence path"));
+            }
         }
     }
     for (name, declaration) in &declarations {

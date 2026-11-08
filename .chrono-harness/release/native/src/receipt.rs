@@ -629,6 +629,23 @@ pub fn read(
             "selected dependencies differ from original current input",
         ));
     }
+    if let Some(frontend) = &selected.frontend {
+        if receipt["frontend_input"]["path"] != "frontend/frontend.json" {
+            return Err(error("missing original frontend metadata reference"));
+        }
+        original(&directory,&receipt["frontend_input"])?;
+        let declared=crate::frontend::declaration(loaded,frontend)?;
+        let source=chrono_host_bootstrap::source::SourceObservation {
+            commit:Some(text(context,"source_commit")?.into()),tree:Some(text(context,"source_tree")?.into()),dirty:Some(false),error:None,
+        };
+        let manifest=crate::frontend::validate_metadata(root,&directory.join("frontend"),declared,
+            &chrono_host_bootstrap::bindings::native_platform()?,&source,frontend)?;
+        let expected=crate::transport::ExecutableIdentity::from_receipt(&manifest["executable"])?;
+        let actual=crate::transport::ExecutableIdentity::from_receipt(&context["producer"])?;
+        if !policy::same_executable(&actual.sha256,actual.size,actual.mode,&expected.sha256,expected.size,expected.mode) {
+            return Err(error("original unit producer differs from selected frontend"));
+        }
+    }
     let identities = tools(loaded, unit, &receipt)?;
     let git = text(&identities["git"], "path")?;
     for (name, args, expected) in [

@@ -14,7 +14,7 @@ use chrono_host_bootstrap::{
     source::{self, SourceObservation},
 };
 use serde_json::{Value, json};
-use std::{ffi::OsStr, fs, io::Write, path::Path};
+use std::{collections::BTreeMap, ffi::OsStr, fs, io::Write, path::Path};
 
 const INSTALLED: &str = ".chrono-harness/bin/chrono-host-release";
 
@@ -178,16 +178,19 @@ pub fn export(root: &Path, output: &Path, environment: &Environment) -> Result<(
     Ok(())
 }
 
-/// needs 已选出原生产者；本边界另核原构建、工具字节和实际执行物。
-/// collector 不执行依赖工具，传 None；真正消费者传当前执行物路径。
-pub fn validate(
+pub fn declaration<'a>(loaded: &'a Loaded, selected: &Selection) -> Result<&'a NativeFrontend, String> {
+    loaded.recipe.native_frontends.values().find(|f| f.job == selected.job)
+        .ok_or_else(|| error("unregistered selected frontend job"))
+}
+
+/// 单元保留自己的原工具生产者元数据；汇总不要求它来自当前 attempt。
+pub fn validate_metadata(
     root: &Path,
     directory: &Path,
     declared: &NativeFrontend,
     native: &NativePlatform,
     source: &SourceObservation,
     selected: &Selection,
-    executing: Option<&Path>,
 ) -> Result<Value, String> {
     let manifest = crate::recipe::read_json(directory, "frontend.json")?;
     let lineage: Lineage = serde_json::from_value(manifest["lineage"].clone()).map_err(error)?;
@@ -229,17 +232,6 @@ pub fn validate(
         return Err(error("frontend declared artifact paths differ"));
     }
     let identity = ExecutableIdentity::from_receipt(&manifest["executable"])?;
-    let archive = receipt::original(directory, &manifest["archive"])?;
-    transport::validate(
-        &archive,
-        &transport::ArchiveIdentity {
-            sha256: text(&manifest["archive"], "sha256")?.into(),
-            size: manifest["archive"]["size"]
-                .as_u64()
-                .ok_or("missing archive size")?,
-        },
-        &identity,
-    )?;
     let raw = fs::read(receipt::original(directory, &manifest["bootstrap"])?).map_err(error)?;
     let producer = producer(root, declared, native)?;
     qualify(
@@ -252,6 +244,22 @@ pub fn validate(
         },
         &identity,
     )?;
+    Ok(manifest)
+}
+
+/// needs 已选出原生产者；本边界另核原构建、工具字节和实际执行物。
+/// collector 不执行依赖工具，传 None；真正消费者传当前执行物路径。
+pub fn validate(
+    root: &Path, directory: &Path, declared: &NativeFrontend, native: &NativePlatform,
+    source: &SourceObservation, selected: &Selection, executing: Option<&Path>,
+) -> Result<Value, String> {
+    let manifest = validate_metadata(root, directory, declared, native, source, selected)?;
+    let identity = ExecutableIdentity::from_receipt(&manifest["executable"])?;
+    let archive = receipt::original(directory, &manifest["archive"])?;
+    transport::validate(&archive, &transport::ArchiveIdentity {
+        sha256:text(&manifest["archive"],"sha256")?.into(),
+        size:manifest["archive"]["size"].as_u64().ok_or("missing archive size")?,
+    }, &identity)?;
     if let Some(path) = executing {
         let expected = chrono_harness::no_symlink_parents(directory, &declared.executable)?;
         if fs::canonicalize(path).map_err(error)? != fs::canonicalize(expected).map_err(error)?
@@ -263,4 +271,37 @@ pub fn validate(
         }
     }
     Ok(manifest)
+}
+
+/// 逐个列出原元数据；不扫描目录，也不复制二进制或其归档。
+pub fn metadata_files(directory: &Path) -> Result<BTreeMap<String, Value>, String> {
+    let path = chrono_harness::no_symlink_parents(directory, "frontend.json")?;
+    let (sha256,size) = chrono_harness::file_identity(&path)?;
+    let manifest=crate::recipe::read_json(directory,"frontend.json")?;
+    let raw=fs::read(receipt::original(directory,&manifest["bootstrap"])?).map_err(error)?;
+    let report:Report=chrono_harness::decode(&raw)?;
+    let mut files=BTreeMap::from([("frontend.json".into(),json!({"path":"frontend.json","sha256":sha256,"size":size}))]);
+    let mut insert=|value:Value| -> Result<(),String> {
+        let name=text(&value,"path")?.to_owned();
+        receipt::original(directory,&value)?;
+        if files.insert(name,value).is_some() { return Err(error("duplicate frontend metadata path")); }
+        Ok(())
+    };
+    insert(manifest["bootstrap"].clone())?;
+    for operation in report.operations {
+        insert(serde_json::to_value(operation.stdout).map_err(error)?)?;
+        insert(serde_json::to_value(operation.stderr).map_err(error)?)?;
+    }
+    Ok(files)
+}
+
+pub fn retain_metadata(directory: &Path, output: &Path) -> Result<BTreeMap<String,Value>,String> {
+    let files=metadata_files(directory)?;
+    fs::create_dir(output).map_err(error)?;
+    for (name,declaration) in &files {
+        let path=receipt::original(directory,declaration)?;
+        let retained=write(output,name,&fs::read(path).map_err(error)?)?;
+        if retained != *declaration { return Err(error("frontend metadata changed during retention")); }
+    }
+    Ok(files)
 }
