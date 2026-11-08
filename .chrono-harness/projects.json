@@ -2775,6 +2775,156 @@
         }
       },
       "tests_for": "pr"
+    },
+    {
+      "id": "host-release-native",
+      "kind": "production",
+      "manifest": ".chrono-harness/release/native/Cargo.toml",
+      "lockfile": ".chrono-harness/release/native/Cargo.lock",
+      "root": ".chrono-harness/release/native",
+      "language": "rust",
+      "actions": {
+        "format_check": {
+          "operation": "fmt.host-release-native",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            ".chrono-harness/release/native/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.host-release-native",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            ".chrono-harness/release/native/Cargo.toml"
+          ]
+        },
+        "lockfile": {
+          "operation": "inputs.lockfile.host-release-native",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--workspace",
+            "--manifest-path",
+            ".chrono-harness/release/native/Cargo.toml"
+          ]
+        },
+        "build": {
+          "operation": "build.host-release-native",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            ".chrono-harness/release/native/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/host-release-native/target"
+          ]
+        },
+        "verify_recipe": {
+          "operation": "verify.release-recipe",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.release-recipe.rlib,dep-info=.chrono-harness/state/verify.release-recipe.rlib.d",
+            ".chrono-harness/release/native/src/verified_recipe.rs",
+            "-o",
+            ".chrono-harness/state/verify.release-recipe.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        }
+      },
+      "test_project": "host-release-native-tests"
+    },
+    {
+      "id": "host-release-native-tests",
+      "kind": "test",
+      "manifest": ".chrono-harness/release/native-tests/Cargo.toml",
+      "lockfile": ".chrono-harness/release/native-tests/Cargo.lock",
+      "root": ".chrono-harness/release/native-tests",
+      "language": "rust",
+      "actions": {
+        "format_check": {
+          "operation": "fmt.host-release-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            ".chrono-harness/release/native-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.host-release-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            ".chrono-harness/release/native-tests/Cargo.toml"
+          ]
+        },
+        "lockfile": {
+          "operation": "inputs.lockfile.host-release-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--workspace",
+            "--manifest-path",
+            ".chrono-harness/release/native-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.host-release-native-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            ".chrono-harness/release/native-tests/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/host-release-native-tests/target"
+          ]
+        },
+        "verify_recipe": {
+          "operation": "verify.release-recipe-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.release-recipe-tests.rlib,dep-info=.chrono-harness/state/verify.release-recipe-tests.rlib.d",
+            ".chrono-harness/release/native-tests/tests/verified_recipe.rs",
+            "-o",
+            ".chrono-harness/state/verify.release-recipe-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        }
+      },
+      "tests_for": "host-release-native"
     }
   ],
   "scripts": [

@@ -286,9 +286,7 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/release-build/context.json",
       "artifact_directory": ".chrono-harness/state/units/release-build/"
@@ -330,7 +328,14 @@
       "name": "chrono / diagnostics",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
-      "bootstrap": ["/bin/bash",".chrono-harness/ci/bootstrap-native.sh",".",".chrono-harness/ci/bootstrap-shared.json","verify","core"],
+      "bootstrap": [
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
+        ".",
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
+      ],
       "context_path": ".chrono-harness/state/units/diagnostics/context.json",
       "artifact_directory": ".chrono-harness/state/units/diagnostics/"
     },
@@ -373,7 +378,8 @@
     "credential_environment": [
       "GH_TOKEN"
     ],
-    "environment": {},
+    "environment": {
+    },
     "timeout_seconds": 60,
     "output_limit_bytes": 8388608,
     "wait_seconds": 1800,
@@ -1149,7 +1155,9 @@
         "caches": [
           "check.distribution"
         ],
-        "save_caches": []
+        "save_caches": [
+
+        ]
       },
       "unit_worktree-adoption": {
         "need": "This job executes the explicitly referenced build and test operations.",

@@ -1,0 +1,109 @@
+//! 发布配方的实际判断；文件、进程和原生 metadata 解码由各自 IO 边界供应。
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+#[cfg(verus_keep_ghost)]
+#[path = "../../../../crates/identifiers/src/lib.rs"]
+mod identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_identifiers as identifiers;
+
+verus! {
+
+/// 调用者显式提供角色与选择；不根据项目语言、命令或资产数推断 SDK。
+pub enum Invocation {
+    Build,
+    Verify { rust_toolchain: bool },
+    Collect,
+}
+
+pub fn requires_rust(invocation: &Invocation) -> (required: bool)
+    ensures required == match invocation {
+        Invocation::Build => true,
+        Invocation::Verify { rust_toolchain } => *rust_toolchain,
+        Invocation::Collect => false,
+    },
+{
+    match invocation {
+        Invocation::Build => true,
+        Invocation::Verify { rust_toolchain } => *rust_toolchain,
+        Invocation::Collect => false,
+    }
+}
+
+/// 内核退出码为 0..255，信号按原进程回执记为 -1..-127。
+/// None 表示尚无真实子进程终态，不能冒充成功。
+pub fn result_exit(child: Option<i32>, auxiliary_failed: bool) -> (exit: i32)
+    requires child is Some ==> -127 <= child.unwrap() <= 255,
+    ensures
+        0 <= exit <= 255,
+        child is None ==> exit == 2,
+        child is Some && child.unwrap() > 0 ==> exit == child.unwrap(),
+        child is Some && child.unwrap() < 0 ==> exit == 128 - child.unwrap(),
+        child == Some(0) ==> exit == if auxiliary_failed { 2 } else { 0 },
+{
+    match child {
+        None => 2,
+        Some(code) => {
+            if code > 0 { code }
+            else if code < 0 { 128 - code }
+            else if auxiliary_failed { 2 }
+            else { 0 }
+        },
+    }
+}
+
+pub enum DependencyResult { Success, Failure, Cancelled, Skipped }
+
+/// 先核当前 needs 的结果，再接受同一 run 的原生产 attempt。
+/// 旧成功原件不能覆盖当前 failure／cancelled／skipped。
+pub fn selected_producer(
+    current: &DependencyResult,
+    selected_run: &str,
+    current_run: &str,
+    selected_attempt: u64,
+    current_attempt: u64,
+    artifact_id: &str,
+) -> (valid: bool)
+    ensures valid <==> (current is Success
+        && selected_run@ == current_run@ && selected_run@.len() > 0
+        && 0 < selected_attempt <= current_attempt && artifact_id@.len() > 0),
+{
+    matches!(current, DependencyResult::Success)
+        && identifiers::equal_text(selected_run, current_run)
+        && !selected_run.is_empty()
+        && selected_attempt > 0 && selected_attempt <= current_attempt
+        && !artifact_id.is_empty()
+}
+
+/// 同一逻辑单元只消费已声明的原生产 job，不能借同一 run 替换来源。
+pub fn producer_lineage(
+    producing_job: &str,
+    expected_job: &str,
+    producing_run: &str,
+    selected_run: &str,
+    producing_attempt: u64,
+    selected_attempt: u64,
+) -> (valid: bool)
+    ensures valid <==> (producing_job@ == expected_job@
+        && producing_job@.len() > 0
+        && producing_run@ == selected_run@
+        && producing_run@.len() > 0
+        && 0 < producing_attempt && producing_attempt == selected_attempt),
+{
+    identifiers::equal_text(producing_job, expected_job) && !producing_job.is_empty()
+        && identifiers::equal_text(producing_run, selected_run)
+        && !producing_run.is_empty()
+        && producing_attempt > 0 && producing_attempt == selected_attempt
+}
+
+/// 原始操作已结束后，观察或证据失败只能补充失败，不能抹去真实子进程失败。
+pub fn passed(child: Option<i32>, auxiliary_failed: bool) -> (success: bool)
+    ensures success <==> (child == Some(0) && !auxiliary_failed),
+{
+    matches!(child, Some(0)) && !auxiliary_failed
+}
+
+}

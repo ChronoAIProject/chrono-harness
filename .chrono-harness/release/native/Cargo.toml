@@ -1,0 +1,15 @@
+[package]
+name = "chrono-host-release"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+chrono-harness = { path = "../../../crates/runner" }
+chrono-identifiers = { path = "../../../crates/identifiers" }
+serde_json = "1"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"

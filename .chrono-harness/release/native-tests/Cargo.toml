@@ -1,0 +1,28 @@
+[package]
+name = "chrono-host-release-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[[test]]
+name = "verified_recipe"
+path = "tests/verified_recipe.rs"
+
+[dependencies]
+chrono-harness = { path = "../../../crates/runner" }
+chrono-host-release = { path = "../native" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
+
+[[test]]
+name = "process"
+path = "tests/process.rs"
+
+[[bin]]
+name = "chrono-test-release-operation"
+path = "../../../crates/judge-projects-tests/tests/support/execution_child.rs"
+test = false
+bench = false

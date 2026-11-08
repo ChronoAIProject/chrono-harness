@@ -2,7 +2,9 @@
   "schema": "chrono-ci-check/v3",
   "judge": {
     "program": ".chrono-harness/bin/chrono-judge-ci",
-    "args": [],
+    "args": [
+
+    ],
     "timeout_seconds": 2400,
     "output_limit_bytes": 8388608
   },
@@ -194,7 +196,8 @@
       },
       "release-build": {
         "tests": [
-          "test:release-build-tests"
+          "test:release-build-tests",
+          "test:host-release-native-tests"
         ],
         "report_path": ".chrono-harness/state/units/release-build/check.json"
       },
