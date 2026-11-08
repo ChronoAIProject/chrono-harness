@@ -77,8 +77,10 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 `facts::full_oid` 与 `units::id` 直接消费这些结果。
 
 标识符边界测试在普通 Cargo 模式下调用 runner 公开的 `verified_identifiers`，
-核对实际库的 OID、单元 ID、摘要、请求头和合并父提交判断。独立 Verus 根仅在证明模式下
-导入生产源码，保留原断言和整 crate 证明。这建立运行测试与实际 runner 导出的对应，
+核对实际库的 OID、单元 ID、摘要、请求头和合并父提交判断。布尔预期经带前置条件的
+运行时失败分支检查；Verus 同时证明这些预期成立，普通 Rust 也实际执行失败分支，
+不把证明用的 `assert(...)` 当成运行时断言。独立 Verus 根仅在证明模式下
+导入生产源码，保留原预期和整 crate 证明。这建立运行测试与实际 runner 导出的对应，
 尚不证明普通 Cargo 编译的运行库就是 Verus 输出的库，完整编译产物绑定仍未完成。
 
 摘要格式也由同一根的 `digest_format`／`valid_digest`／`valid_digest_text` 规定和实现：
