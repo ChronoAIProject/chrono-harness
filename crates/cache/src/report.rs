@@ -14,13 +14,8 @@ pub(crate) fn retain_for_upload(
     stem: &str,
     raw: &[u8],
 ) -> Result<prepared::Original, String> {
-    let original =
-        prepared::retain_original(root, ".chrono-harness/state/cache-reports/", stem, raw)?;
-    let name = Path::new(&original.path)
-        .file_name()
-        .and_then(|s| s.to_str())
-        .ok_or("E_CACHE_REPORT: original filename")?;
-    let path = format!("{directory}{name}");
+    let digest = sha256(raw);
+    let path = format!("{directory}{stem}-{digest}.json");
     let target = chrono_harness::prepare_publication(root, &path)?;
     match fs::OpenOptions::new()
         .write(true)
@@ -35,16 +30,10 @@ pub(crate) fn retain_for_upload(
         }
         Err(e) => return Err(format!("E_CACHE_REPORT: {e}")),
     }
-    Ok(prepared::Original { path, ..original })
-}
-
-pub fn transport_report(
-    plan: &Value,
-    steps: &Value,
-    work: &str,
-    bootstrap: Option<&str>,
-) -> Result<Value, String> {
-    transport_report_with_saves(plan, steps, work, bootstrap, None)
+    Ok(prepared::Original {
+        path,
+        sha256: digest,
+    })
 }
 
 pub(crate) fn restore_status(cache: &Value, restore: &Value) -> &'static str {
@@ -74,18 +63,14 @@ pub(crate) fn restore_status(cache: &Value, restore: &Value) -> &'static str {
     }
 }
 
-fn transport_report_with_saves(
+pub fn transport_report(
     plan: &Value,
     steps: &Value,
     work: &str,
     bootstrap: Option<&str>,
     saves: Option<&[String]>,
 ) -> Result<Value, String> {
-    if !matches!(
-        plan["schema"].as_str(),
-        Some("chrono-cache-plan/v1" | "chrono-cache-plan/v2")
-    ) || !steps.is_object()
-    {
+    if !crate::verified_planner::current_plan(plan["schema"].as_str()) || !steps.is_object() {
         return Err("E_CACHE_REPORT: expected cache plan and native step observations".into());
     }
     let selected: BTreeMap<_, _> = plan["caches"]
@@ -212,7 +197,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             serde_json::from_str(raw).map_err(|e| format!("E_CACHE_REPORT: save selection: {e}"))
         })
         .transpose()?;
-    let mut report = transport_report_with_saves(
+    let mut report = transport_report(
         &plan,
         &steps,
         required("--work")?,

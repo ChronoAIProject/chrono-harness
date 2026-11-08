@@ -1,10 +1,32 @@
-//! CI 配置文本的字面单行判断，供 full 与 release 共同使用。
+//! CI 配置的字面单行判断及原生缓存登记准入，供现役投影使用。
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "../../runner/src/verified_identifiers.rs"]
+mod identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+
 verus! {
+
+pub open spec fn cache_registry(schema: Option<&str>, primary_checkout: bool) -> bool {
+    match schema {
+        Some(schema) => schema@ == "chrono-cache/v2"@ && primary_checkout,
+        None => false,
+    }
+}
+
+pub fn valid_cache_registry(schema: Option<&str>, primary_checkout: bool) -> (valid: bool)
+    ensures valid <==> cache_registry(schema, primary_checkout),
+{
+    match schema {
+        Some(schema) => identifiers::equal_text(schema, "chrono-cache/v2") && primary_checkout,
+        None => false,
+    }
+}
 
 #[verifier::inline]
 pub open spec fn literal_byte(byte: u8) -> bool {

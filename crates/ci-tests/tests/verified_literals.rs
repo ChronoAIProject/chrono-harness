@@ -12,6 +12,34 @@ use vstd::prelude::*;
 
 verus! {
 
+fn expect_cache_registry(schema: Option<&str>, primary_checkout: bool, expected: bool)
+    requires expected == policy::cache_registry(schema, primary_checkout),
+{
+    let actual = policy::valid_cache_registry(schema, primary_checkout);
+    assert(actual == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cache_registry_requires_current_schema_and_primary_checkout() {
+    proof {
+        reveal_strlit("chrono-cache/v2"); reveal_strlit("chrono-cache/v1");
+        reveal_strlit("chrono-cache/v20"); reveal_strlit("chrono-cache/v2\n");
+        reveal_strlit("");
+        assert("chrono-cache/v2"@[14] != "chrono-cache/v1"@[14]);
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v20"@.len());
+        assert("chrono-cache/v2"@.len() != "chrono-cache/v2\n"@.len());
+        assert("chrono-cache/v2"@.len() != ""@.len());
+    }
+    expect_cache_registry(Some("chrono-cache/v2"), true, true);
+    expect_cache_registry(Some("chrono-cache/v2"), false, false);
+    expect_cache_registry(Some("chrono-cache/v1"), true, false);
+    expect_cache_registry(Some("chrono-cache/v20"), true, false);
+    expect_cache_registry(Some("chrono-cache/v2\n"), true, false);
+    expect_cache_registry(Some(""), true, false);
+    expect_cache_registry(None, true, false);
+    expect_cache_registry(None, false, false);
+}
+
 fn expect(bytes: &[u8], expected: bool)
     requires expected == policy::literal(bytes@),
 {
