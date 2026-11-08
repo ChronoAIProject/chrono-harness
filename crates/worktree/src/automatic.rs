@@ -225,7 +225,16 @@ struct Policy {
     main_cache_only: bool,
     #[serde(default)]
     retained_producers: Vec<producer::ProducerPolicy>,
+    #[serde(default)]
+    terminal_history: Option<TerminalHistory>,
     artifacts: Vec<Artifact>,
+}
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TerminalHistory {
+    keep_seconds: u64,
+    max_entries: usize,
+    max_bytes: u64,
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -314,6 +323,8 @@ struct Entry {
     cache_only: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cleanup: Option<CleanupProgress>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    disposed_at: Option<u64>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -521,6 +532,17 @@ fn load_policy(
     }
     if !p.retained_producers.is_empty() && p.schema != "chrono-worktree-automatic-cleanup/v2" {
         return Err("retained producer references require kernel cleanup v2".into());
+    }
+    if let Some(history) = &p.terminal_history {
+        if p.schema != "chrono-worktree-automatic-cleanup/v2"
+            || history.max_entries == 0
+            || history.max_bytes == 0
+        {
+            return Err(
+                "terminal history requires kernel cleanup v2 and positive record/byte limits"
+                    .into(),
+            );
+        }
     }
     if p.coordinator_root == Path::new("git-main-worktree") {
         // Explicit host selector delegates physical identity to Git's existing owner inventory.
@@ -1372,6 +1394,7 @@ impl Manager {
             main_cache_adoptions: vec![],
             cache_only,
             cleanup: None,
+            disposed_at: None,
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = r.config.host_config.clone();
@@ -2116,12 +2139,12 @@ impl Manager {
     }
     fn drain_entries(
         &mut self,
-        _r: &mut Runner,
+        r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
         maintenance: bool,
     ) -> Result<Vec<String>, String> {
-        let mut failures = vec![];
+        let mut failures = self.rotate_history(r, report)?;
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
             let cache =
@@ -2282,7 +2305,16 @@ impl Manager {
                     }
                     match &stage {
                         crate::verified_lifecycle::CleanupStage::Disposed => {
-                            self.ledger.entries[i].status = "disposed".into()
+                            self.ledger.entries[i].status = "disposed".into();
+                            if let Some(owner) = &mut self.ledger.entries[i].ownership {
+                                owner.cache_pending = false;
+                            }
+                            self.ledger.entries[i].disposed_at = Some(
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map_err(|error| error.to_string())?
+                                    .as_secs(),
+                            );
                         }
                         crate::verified_lifecycle::CleanupStage::Retained => {
                             self.ledger.entries[i].status = "retained".into()
@@ -2322,6 +2354,152 @@ impl Manager {
                 }
             }
         }
+        Ok(failures)
+    }
+    fn rotate_history(
+        &mut self,
+        r: &mut Runner,
+        report: &mut Value,
+    ) -> Result<Vec<String>, String> {
+        let Some(history) = self.inputs.policy.terminal_history.clone() else {
+            return Ok(vec![]);
+        };
+        let observed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| error.to_string())?
+            .as_secs();
+        let mut count = 0usize;
+        let mut bytes = 0u64;
+        let mut sizes = Vec::with_capacity(self.ledger.entries.len());
+        for entry in &self.ledger.entries {
+            let size = serde_json::to_vec(entry)
+                .map_err(|error| error.to_string())?
+                .len() as u64;
+            if entry.status == "disposed" {
+                count = count
+                    .checked_add(1)
+                    .ok_or("terminal history count overflow")?;
+                bytes = bytes
+                    .checked_add(size)
+                    .ok_or("terminal history byte count overflow")?;
+            }
+            sizes.push(size);
+        }
+        let mut removed = BTreeSet::new();
+        let mut leases = Vec::new();
+        let mut failures = vec![];
+        for (i, entry) in self.ledger.entries.iter().enumerate() {
+            let over_limit = count > history.max_entries || bytes > history.max_bytes;
+            if !crate::verified_lifecycle::retire_history(
+                entry.status == "disposed",
+                entry.uses.is_empty(),
+                entry.disposed_at,
+                observed,
+                history.keep_seconds,
+                over_limit,
+            ) {
+                continue;
+            }
+            let verified = (|| {
+                let terminal = entry
+                    .terminal
+                    .as_ref()
+                    .ok_or("disposed record lacks its terminal handoff")?;
+                if !entry.uses.is_empty()
+                    || entry.cache_only
+                    || terminal.artifacts_only
+                    || entry
+                        .ownership
+                        .as_ref()
+                        .is_none_or(|owner| owner.cache_pending)
+                {
+                    return Err("disposed history still has unresolved responsibilities".into());
+                }
+                let lease = self
+                    .lease(entry, true)?
+                    .ok_or("terminal history has live consumers")?;
+                let receipt = entry
+                    .attempts
+                    .last()
+                    .and_then(|attempt| attempt.receipt.as_ref())
+                    .ok_or("disposed history lacks its original cleanup result")?;
+                let original = json(&self.receipt(receipt)?)?;
+                let handoff = json(&self.receipt(&terminal.receipt)?)?;
+                if original["terminal_receipt"] != value!(terminal.receipt)
+                    || original["destination"] != value!(entry.path)
+                    || original["head"] != terminal.head
+                    || handoff["path"] != value!(entry.path)
+                    || handoff["attachment"] != value!(entry.attachment)
+                    || handoff["head"] != terminal.head
+                    || entry.cleanup.as_ref().is_none_or(|progress| {
+                        progress.stage != crate::verified_lifecycle::CleanupStage::Disposed
+                            || progress.report_path.as_deref() != Some(receipt.path.as_str())
+                    })
+                    || crate::verified_lifecycle::cleanup_result(
+                        false,
+                        original["status"].as_str().unwrap_or(""),
+                        original["worktree_removal"].as_str().unwrap_or(""),
+                    ) != crate::verified_lifecycle::CleanupStage::Disposed
+                {
+                    return Err(
+                        "disposed history original does not establish this attachment's removal"
+                            .into(),
+                    );
+                }
+                // A present/reused address remains protected. This method releases
+                // history only; it never removes a checkout or Git registration.
+                match fs::symlink_metadata(&entry.path) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.to_string()),
+                    Ok(_) => {
+                        return Err(
+                            "terminal history address is present; preserve its record".into()
+                        );
+                    }
+                }
+                if r.inventory(&self.inputs.policy.coordinator_root)?
+                    .iter()
+                    .any(|row| {
+                        row.get("worktree")
+                            .is_some_and(|path| Path::new(path) == entry.path)
+                    })
+                {
+                    return Err("terminal history address remains Git-registered".into());
+                }
+                self.stable(r)?;
+                lease.stable()?;
+                Ok::<_, String>(lease)
+            })();
+            match verified {
+                Ok(lease) => {
+                    removed.insert(i);
+                    count -= 1;
+                    bytes -= sizes[i];
+                    // Keep exclusion through publication of the replacement ledger.
+                    leases.push(lease);
+                }
+                Err(error) => failures.push(format!("{}: {error}", entry.path.display())),
+            }
+        }
+        if !removed.is_empty() {
+            let mut i = 0usize;
+            self.ledger.entries.retain(|_| {
+                let keep = !removed.contains(&i);
+                i += 1;
+                keep
+            });
+            self.save()?;
+        }
+        if report["history_rotation"].is_null() {
+            report["history_rotation"] = value!([]);
+        }
+        report["history_rotation"]
+            .as_array_mut()
+            .ok_or("history rotation report is not an array")?
+            .push(value!({"path":self.scope,"removed_records":removed.len(),
+                "remaining_disposed_records":count,"remaining_disposed_bytes":bytes,
+                "over_limit":count > history.max_entries || bytes > history.max_bytes,
+                "original_files":"not-disposed","checkout_disposal":"not-attempted"}));
         Ok(failures)
     }
     fn progress(

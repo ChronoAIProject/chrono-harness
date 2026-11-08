@@ -1013,6 +1013,84 @@ fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_r
 }
 
 #[test]
+fn terminal_history_count_and_byte_limits_release_verified_generations_before_the_ttl() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let set_history = |bytes| {
+        let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+        policy["terminal_history"] =
+            value!({"keep_seconds":86400,"max_entries":1,"max_bytes":bytes});
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    };
+    set_history(1048576);
+    let target = h.parent.join("reused-history-address");
+    for name in ["history-first", "history-second"] {
+        let (code, created, error) = h.invoke("integration", name, &target);
+        assert_eq!(code, 0, "{created} {error}");
+        let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+        assert_eq!(code, 0, "{finished} {error}");
+        assert!(!target.exists());
+    }
+    assert_eq!(h.ledger()["entries"].as_array().unwrap().len(), 2);
+    let newest = h.ledger()["entries"][1].clone();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert_eq!(h.ledger()["entries"], value!([newest]));
+    set_history(1);
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+    assert!(!target.exists());
+    assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/history-first"));
+    assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/history-second"));
+}
+
+#[test]
+fn terminal_history_rotation_preserves_live_consumers_and_changed_originals() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("protected-history");
+    assert_eq!(h.invoke("integration", "protected-history", &target).0, 0);
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    let lease = chrono_harness::ownership::Lease::acquire(
+        &h.root.join(entry["ownership"]["path"].as_str().unwrap()),
+        Some(entry["ownership"]["id"].as_str().unwrap()),
+        false,
+        false,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{maintained} {error}");
+    assert_eq!(h.ledger()["entries"], value!([entry.clone()]));
+    drop(lease);
+    let original_path = h
+        .root
+        .join(entry["attempts"][0]["receipt"]["path"].as_str().unwrap());
+    let original = fs::read(&original_path).unwrap();
+    fs::write(&original_path, b"changed original cleanup report").unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{maintained} {error}");
+    assert_eq!(h.ledger()["entries"], value!([entry]));
+    fs::write(&original_path, original).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");

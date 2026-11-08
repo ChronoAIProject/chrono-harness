@@ -77,4 +77,18 @@ pub fn pending_for_agent(creator: &str, current: &str, disposed: bool) -> (pendi
     equal_text(creator, current) && !equal_text(creator, "") && !disposed
 }
 
+pub fn retire_history(disposed: bool, consumers_released: bool,
+    confirmed_at: Option<u64>, observed: u64, keep_seconds: u64, over_limit: bool) -> (retire: bool)
+    ensures retire <==> (disposed && consumers_released
+        && confirmed_at.is_some()
+        && confirmed_at.unwrap() <= observed
+        && (over_limit || observed - confirmed_at.unwrap() >= keep_seconds)),
+{
+    match confirmed_at {
+        Some(confirmed) => disposed && consumers_released
+            && confirmed <= observed && (over_limit || observed - confirmed >= keep_seconds),
+        None => false,
+    }
+}
+
 }

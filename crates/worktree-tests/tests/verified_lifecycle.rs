@@ -90,6 +90,19 @@ fn pending_agent_reminders_require_the_same_nonempty_creator_and_unfinished_clea
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_history_keeps_unknown_future_live_and_unexpired_records() {
+    let boundary = policy::retire_history(true, true, Some(100), 110, 10, false);
+    let young = policy::retire_history(true, true, Some(100), 109, 10, false);
+    let capacity = policy::retire_history(true, true, Some(100), 100, 10, true);
+    let unknown = policy::retire_history(true, true, None, 110, 0, true);
+    let future = policy::retire_history(true, true, Some(111), 110, 0, true);
+    let active = policy::retire_history(false, true, Some(100), 110, 0, true);
+    let busy = policy::retire_history(true, false, Some(100), 110, 0, true);
+    let maximum = policy::retire_history(true, true, Some(u64::MAX), u64::MAX, 1, false);
+    expect(boundary && !young && capacity && !unknown && !future && !active && !busy && !maximum);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn explicit_import_preserves_external_branch_names_and_birth_keeps_its_rule() {
     broadcast use vstd::string::group_string_axioms;
     proof {
