@@ -1375,6 +1375,8 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     for (id, input) in config["inputs"].as_object_mut().unwrap() {
         if input["path"] != ".chrono-harness/ci/check.json"
             && input["path"] != ".chrono-harness/ci/bootstrap-core.json"
+            && input["path"] != ".chrono-harness/ci/bootstrap-native.sh"
+            && input["path"] != ".chrono-harness/ci/bootstrap.py"
             && input["path"] != ".chrono-harness/projects.json"
             && input["path"] != ".chrono-harness/git/pinned-macos.json"
         {
@@ -1398,6 +1400,8 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     let mut files = std::collections::BTreeSet::from([
         ".chrono-harness/ci/check.json".to_string(),
         ".chrono-harness/ci/bootstrap-core.json".to_string(),
+        ".chrono-harness/ci/bootstrap-native.sh".to_string(),
+        ".chrono-harness/ci/bootstrap.py".to_string(),
         ".chrono-harness/projects.json".to_string(),
         ".chrono-harness/git/pinned-macos.json".to_string(),
     ]);
@@ -1452,6 +1456,34 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
         first["caches"]["detect.ci"]["restore_keys"],
         build_change["caches"]["detect.ci"]["restore_keys"]
     );
+    fs::write(
+        root.path().join(".chrono-harness/ci/bootstrap.py"),
+        b"unrelated Python bootstrap change\n",
+    )
+    .unwrap();
+    assert_eq!(
+        build_change["caches"],
+        plan(root.path(), &config, "check.detect").unwrap()["caches"],
+        "the detector uses the native bootstrap, so Python changes must not invalidate it"
+    );
+    fs::write(
+        root.path().join(".chrono-harness/ci/bootstrap-native.sh"),
+        b"changed native bootstrap entrypoint\n",
+    )
+    .unwrap();
+    let launcher_change = plan(root.path(), &config, "check.detect").unwrap();
+    for id in [
+        "detect.ci",
+        "detect.runner",
+        "detect.judge-ci",
+        "detect.worktree",
+    ] {
+        assert_ne!(
+            build_change["caches"][id]["restore_keys"],
+            launcher_change["caches"][id]["restore_keys"],
+            "{id} must bind the native bootstrap entrypoint"
+        );
+    }
 }
 
 #[test]
