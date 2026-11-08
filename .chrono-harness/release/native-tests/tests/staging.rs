@@ -188,7 +188,10 @@ fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_i
     assert_eq!(original_recovery, recovered["observation"]);
     // 未声明命中且无失败恢复输出，本次应发布“不需恢复”的真实原件。
     assert_eq!(original_recovery["status"], "not-required");
-    assert_eq!(original_recovery["caches"]["tests"]["reason"], "miss-or-unavailable");
+    assert_eq!(
+        original_recovery["caches"]["tests"]["reason"],
+        "miss-or-unavailable"
+    );
     let loaded = Loaded::load(root).unwrap();
     let observed = chrono_host_release::transport::observe(root, asset).unwrap();
     let mut staging = Staging::selected(
