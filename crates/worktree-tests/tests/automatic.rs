@@ -933,6 +933,75 @@ fn automatic_maintenance_resumes_retained_checkout_after_evidence_release() {
 }
 
 #[test]
+fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_released() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    adopt_lifecycle_retention(&h);
+    // Retention itself owns metadata under state/. The fixture consumer owns
+    // this separate evidence path and can release all of it without deleting
+    // another producer's metadata or weakening the original-receipt assertion.
+    // Target-local retention metadata has no retained caller after cleanup; the
+    // ordinary disposal owner must verify its release before removing the tree.
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    for artifact in policy["artifacts"].as_array_mut().unwrap() {
+        if artifact["path"] == ".chrono-harness/state/" {
+            artifact["disposition"] = value!("dispose");
+        }
+    }
+    policy["artifacts"].as_array_mut().unwrap().push(value!({
+        "path":"consumer-evidence/", "disposition":"evidence-retain"
+    }));
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    config["artifacts"].as_array_mut().unwrap().push(value!({
+        "path":"consumer-evidence/", "owner":"host", "kind":"evidence", "tracked":false
+    }));
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("retained-original");
+    let (code, created, error) = h.invoke("integration", "retained-original", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let evidence = target.join("consumer-evidence");
+    fs::create_dir_all(&evidence).unwrap();
+    fs::write(
+        evidence.join("needed"),
+        "consumer has not released this original",
+    )
+    .unwrap();
+    output(&target);
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["status"], "retained");
+    assert_eq!(entry["cleanup"]["stage"], "retained");
+    let receipt = &entry["attempts"][0]["receipt"];
+    let path = h.root.join(receipt["path"].as_str().unwrap());
+    let original = fs::read(&path).unwrap();
+    assert_eq!(receipt["sha256"], sha256(&original));
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    let maintenance = inventory.maintain().unwrap();
+    assert!(
+        path.is_file(),
+        "an unresolved checkout still consumes its original cleanup result: {maintenance}"
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert!(target.join("payload").is_file());
+    assert_eq!(h.ledger()["entries"][0], entry);
+    // The sole fixture consumer now releases the evidence; the next entry must
+    // be able to read the preserved result and finish the physical cleanup.
+    fs::remove_file(evidence.join("needed")).unwrap();
+    fs::remove_dir(&evidence).unwrap();
+    let (code, resumed, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{resumed} {error}");
+    assert!(!target.exists(), "{resumed} {error}");
+    assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
+    assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
+}
+
+#[test]
 fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
