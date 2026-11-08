@@ -2468,8 +2468,9 @@ impl Publication {
     pub fn complete(self, outcome: Value) -> Result<(), String> {
         self.complete_with_release(outcome, None)
     }
-    /// A successful producer can account its own consumer before relinquishing protection.
-    /// Failed/unknown captures use complete and leave the root for genuine repair/recheck.
+    /// A joined producer can release its own publication consumer after the
+    /// actual caller has taken custody. Unsettled or interrupted publication
+    /// uses complete and preserves the repair handoff.
     pub fn complete_releasing_consumer(self, outcome: Value, consumer: &str) -> Result<(), String> {
         self.complete_with_release(outcome, Some(consumer))
     }
