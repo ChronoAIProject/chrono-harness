@@ -558,6 +558,14 @@ fn gather_host_config_and_retention(
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
     if let Some(policy) = retention {
         json_file(root, ".chrono-harness/retention.json", &policy);
+        let path = ".chrono-harness/FILEMAP.json";
+        let mut filemap: Value =
+            serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
+        filemap["files"].as_array_mut().unwrap().push(json!({
+            "path":".chrono-harness/retention.json","owner":"host",
+            "surface":"judge-policy","cost":"unmeasured","edges":[]
+        }));
+        json_file(root, path, &filemap);
     }
     generate(root, ".chrono-harness/ci/units.json", false).unwrap();
     git(root, &["add", "."]);
