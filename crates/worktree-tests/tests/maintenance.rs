@@ -149,15 +149,17 @@ fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it
     inventory
         .reference_paths("caller:recovered-report", &[recovered_path.into()])
         .unwrap();
-    inventory
-        .reference(
-            &format!(
-                "consumer:lifecycle-recheck:{}",
-                sha256(original_path.as_bytes())
-            ),
-            &[],
-        )
-        .unwrap();
+    // Observe expiry independently from the real recovered-report consumer.
+    // Its dependency still protects the exact failed original until release.
+    let mut output = retention_state::snapshot(&h.root)["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == original_path)
+        .unwrap()
+        .clone();
+    output["expires"] = value!(0);
+    retention_state::replace_output(&h.root, &output);
     inventory.maintain().unwrap();
     assert_eq!(fs::read(h.root.join(original_path)).unwrap(), bytes);
     assert_eq!(retained_report(&recovered["prior_report"]), original);

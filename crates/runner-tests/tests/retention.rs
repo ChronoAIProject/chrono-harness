@@ -145,6 +145,43 @@ fn materialized_originals_extend_the_owners_reference_before_content_and_release
 }
 
 #[test]
+fn diagnostic_window_expires_without_releasing_an_actual_consumer() {
+    if !isolated_capability_test("diagnostic_window_expires_without_releasing_an_actual_consumer") {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/failed-original";
+    fs::write(h.path().join(path), b"original failed output\0\xff").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!(null))
+        .unwrap();
+    let inventory = inventory(h.path());
+    let id = publication.id().to_owned();
+    assert!(inventory.retain_diagnostic_path(path).is_err());
+    publication.complete(json!({"exit_code":17})).unwrap();
+    inventory.retain_diagnostic_path(path).unwrap();
+    inventory.maintain().unwrap();
+    assert_eq!(
+        fs::read(h.path().join(path)).unwrap(),
+        b"original failed output\0\xff"
+    );
+    inventory
+        .reference_paths("actual-reader", &[path.into()])
+        .unwrap();
+    let mut output = ledger(h.path())["outputs"][0].clone();
+    assert_eq!(output["id"], id);
+    assert_eq!(output["outcome"]["exit_code"], 17);
+    output["expires"] = json!(0);
+    retention_state::replace_output(h.path(), &output);
+    inventory.maintain().unwrap();
+    assert!(h.path().join(path).exists());
+    inventory.reference_paths("actual-reader", &[]).unwrap();
+    maintain_fixture_to(h.path(), 0);
+    assert!(!h.path().join(path).exists());
+    assert!(inventory.retain_diagnostic_path(path).is_err());
+}
+
+#[test]
 fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
     if !isolated_capability_test(
         "busy_or_damaged_output_metadata_does_not_block_an_independent_publisher",
@@ -3706,9 +3743,70 @@ fn addressed_decoder_keeps_duplicate_unknown_and_opaque_json_refusals() {
 }
 
 #[test]
-fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it() {
+fn settling_a_report_keeps_an_unfinished_failed_dependency_handoff() {
+    if !isolated_capability_test("settling_a_report_keeps_an_unfinished_failed_dependency_handoff")
+    {
+        return;
+    }
+    use retained_artifacts::retention::{publish_final_original, reference_report, settle_report};
+    let h = report_host();
+    let failed = ".chrono-harness/state/preparation/unsettled-failure.json";
+    let current = ".chrono-harness/state/preparation/settled-report.json";
+    let activity = inventory(h.path()).read_scope().unwrap();
+    publish_final_original(
+        h.path(),
+        "check-original",
+        failed,
+        b"failed dependency",
+        json!({"exit_code":9}),
+        false,
+    )
+    .unwrap();
+    publish_final_original(
+        h.path(),
+        "check-original",
+        current,
+        b"current report",
+        json!({"exit_code":0}),
+        true,
+    )
+    .unwrap();
+    let _slot = reference_report(h.path(), "check.json", current, &[failed.into()], None).unwrap();
+    fs::write(h.path().join("check.json"), b"current report").unwrap();
+    settle_report(h.path(), "check.json", current).unwrap();
+    let output = ledger(h.path())["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == failed)
+        .unwrap()
+        .clone();
+    assert!(
+        ledger(h.path())["roots"]
+            .get(format!(
+                "consumer:report-recheck:{}",
+                output["id"].as_str().unwrap()
+            ))
+            .is_some()
+    );
+    drop(activity);
+    inventory(h.path())
+        .reference_paths(
+            &format!("current-report:{}", chrono_harness::sha256(b"check.json")),
+            &[],
+        )
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
+    assert_eq!(
+        fs::read(h.path().join(failed)).unwrap(),
+        b"failed dependency"
+    );
+}
+
+#[test]
+fn failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer() {
     if !isolated_capability_test(
-        "failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it",
+        "failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer",
     ) {
         return;
     }
@@ -3738,13 +3836,22 @@ fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it(
     };
     publish(failed, failed_bytes, 1);
     let failed_record = ledger(h.path())["outputs"][0].clone();
+    assert!(failed_record["expires"].as_u64().unwrap() > 0);
+    assert!(
+        ledger(h.path())["roots"]
+            .get(format!(
+                "consumer:report-recheck:{}",
+                failed_record["id"].as_str().unwrap()
+            ))
+            .is_none()
+    );
     publish(
         passed,
         br#"{"request":{"request_id":"passed-original"},"response":{"status":"passed"}}"#,
         0,
     );
     assert_eq!(maintain_fixture_to(h.path(), 2), 2);
-    let consumer = format!("report-recheck:{}", failed_record["id"].as_str().unwrap());
+    let consumer = "actual-failed-original-recheck";
     let declaration = consumer_input(
         h.path(),
         &consumer,
@@ -3754,6 +3861,15 @@ fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it(
             failed
         )]),
     );
+    let protected = consumer_call(
+        h.path(),
+        json!({"operation":"protect-consumer", "declaration":declaration}),
+    );
+    assert_eq!(protected.exit_code, 0, "{}", protected.stderr);
+    let mut expired = failed_record.clone();
+    expired["expires"] = json!(0);
+    retention_state::replace_output(h.path(), &expired);
+    assert_eq!(maintain_fixture_to(h.path(), 2), 2);
     fs::write(
         h.path().join("recheck-expectation.json"),
         serde_json::to_vec(
