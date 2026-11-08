@@ -8,8 +8,20 @@ task_name=${0##*/}
 } >> "$CHRONO_LAUNCHER_CALLS"
 case "$task_name" in
     chrono-worktree) task_exit=${CHRONO_LAUNCHER_OWNER_EXIT:-0} ;;
-    rustup) task_exit=${CHRONO_LAUNCHER_COMPILER_EXIT:-0} ;;
-    chrono-host-bootstrap) task_exit=${CHRONO_LAUNCHER_NATIVE_EXIT:-0} ;;
+    rustup)
+        if [ "$#" -ge 3 ] && [ "$1" = run ] && [ "$2" = 1.95.0 ]; then
+            shift 2
+            export RUSTUP_HOME="$CHRONO_LAUNCHER_RUSTUP_HOME"
+            exec "$@"
+        fi
+        task_exit=${CHRONO_LAUNCHER_COMPILER_EXIT:-0}
+        ;;
+    chrono-host-bootstrap)
+        test "${RUSTUP_HOME-}" = "$CHRONO_LAUNCHER_RUSTUP_HOME" || {
+            echo 'frontend did not inherit the selected Rustup home' >&2; exit 2;
+        }
+        task_exit=${CHRONO_LAUNCHER_NATIVE_EXIT:-0}
+        ;;
     *) echo 'unknown launcher fixture tool' >&2; exit 2 ;;
 esac
 if [ "$task_name" = chrono-worktree ] && [ "$task_exit" -eq 0 ]; then

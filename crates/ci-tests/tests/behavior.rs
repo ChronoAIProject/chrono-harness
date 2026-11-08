@@ -913,9 +913,15 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
         tool["program"]
     );
     let provider = read(".chrono-harness/ci/units.json");
-    assert_eq!(provider["collection"]["bootstrap"][0], tool["program"]);
+    let launcher = config["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["id"] == "bash")
+        .unwrap();
+    assert_eq!(provider["collection"]["bootstrap"][0], launcher["program"]);
     for unit in provider["units"].as_object().unwrap().values() {
-        assert_eq!(unit["bootstrap"][0], tool["program"]);
+        assert_eq!(unit["bootstrap"][0], launcher["program"]);
     }
 }
 
