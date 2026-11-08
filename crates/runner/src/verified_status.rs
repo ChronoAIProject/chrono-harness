@@ -6,6 +6,8 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
+use vstd::std_specs::cmp::OrdSpec;
+#[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(verus_keep_ghost)]
@@ -307,6 +309,62 @@ pub proof fn tree_path_obeys_cmp()
 
 pub type Tree = BTreeMap<TreePath, TreeEntry>;
 
+pub open spec fn tree_rows_view(rows: Seq<(&TreePath, &TreeEntry)>) -> Seq<(TreePath, TreeEntry)> {
+    rows.map(|i: int, row: (&TreePath, &TreeEntry)| (*row.0, *row.1))
+}
+
+pub open spec fn tree_rows_ordered(rows: Seq<(&TreePath, &TreeEntry)>) -> bool {
+    forall|i: int, j: int| 0 <= i < j < rows.len()
+        ==> identifiers::byte_lt((#[trigger] rows[i]).0.bytes(), (#[trigger] rows[j]).0.bytes())
+}
+
+/// 借用真实树的全部原键和值，保留字节严格顺序。
+fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
+    ensures
+        tree_rows_view(rows@).to_set() == tree@.kv_pairs(),
+        tree_rows_ordered(rows@),
+{
+    proof { tree_path_obeys_cmp(); }
+    let mut iterator = tree.iter();
+    let ghost all = iterator@.1;
+    let mut rows: Vec<(&TreePath, &TreeEntry)> = Vec::new();
+    loop
+        invariant
+            iterator@.1 == all,
+            iterator@.0 == rows.len(),
+            0 <= iterator@.0 <= all.len(),
+            tree_rows_view(rows@) == all.take(iterator@.0),
+            all.to_set() == tree@.kv_pairs(),
+            vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (TreePath, TreeEntry)| row.0)),
+        decreases all.len() - rows.len(),
+    {
+        match iterator.next() {
+            None => {
+                proof {
+                    tree_path_obeys_cmp();
+                    let keys = all.map(|i: int, row: (TreePath, TreeEntry)| row.0);
+                    vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
+                    assert(tree_rows_view(rows@) == all);
+                    assert forall|i: int, j: int| 0 <= i < j < rows.len()
+                        implies identifiers::byte_lt((#[trigger] rows@[i]).0.bytes(),
+                            (#[trigger] rows@[j]).0.bytes()) by {
+                        assert(keys[i] == all[i].0);
+                        assert(keys[j] == all[j].0);
+                        assert(keys[i].cmp_spec(&keys[j]) is Less);
+                        assert(all[i].0.order_spec(&all[j].0) is Less);
+                        identifiers::byte_lt_strict(all[i].0.bytes(), all[j].0.bytes());
+                    }
+                }
+                return rows;
+            }
+            Some((key, value)) => {
+                rows.push((key, value));
+                proof { assert(tree_rows_view(rows@) =~= all.take(iterator@.0)); }
+            }
+        }
+    }
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 pub struct TreeEntry {
     pub mode: String,
@@ -416,6 +474,437 @@ pub fn delta_for_entry(path: &str, old: Option<&TreeEntry>, new: Option<&TreeEnt
         old_mode: match old { None => None, Some(entry) => Some(entry.mode.clone()) },
         new_mode: match new { None => None, Some(entry) => Some(entry.mode.clone()) },
     })
+}
+
+#[cfg(verus_keep_ghost)]
+pub type DeltaFields = (Seq<char>, Seq<char>, Option<Seq<char>>, Option<Seq<char>>,
+    Option<Seq<char>>, Option<Seq<char>>);
+
+pub open spec fn delta_record_view(change: Delta) -> DeltaFields {
+    (change.path@, change.kind@, optional_text(&change.old_blob), optional_text(&change.new_blob),
+        optional_text(&change.old_mode), optional_text(&change.new_mode))
+}
+
+pub open spec fn delta_records_view(changes: Seq<Delta>) -> Seq<DeltaFields> {
+    changes.map(|i: int, change: Delta| delta_record_view(change))
+}
+
+pub open spec fn entry_delta_fields(path: Seq<char>, old_entry: Option<&TreeEntry>,
+    new_entry: Option<&TreeEntry>) -> Seq<DeltaFields>
+{
+    if tree_entries_equal(old_entry, new_entry) { seq![] }
+    else { seq![(path,
+        if old_entry.is_none() { "A"@ } else if new_entry.is_none() { "D"@ } else { "M"@ },
+        entry_blob(old_entry), entry_blob(new_entry), entry_mode(old_entry), entry_mode(new_entry))] }
+}
+
+#[cfg(verus_keep_ghost)]
+pub type TreeEntryFields = (Seq<char>, Seq<char>, Seq<char>);
+
+pub open spec fn tree_entry_fields(entry: &TreeEntry) -> TreeEntryFields {
+    (entry.mode@, entry.oid@, entry.kind@)
+}
+
+pub open spec fn optional_entry_fields(entry: Option<&TreeEntry>) -> Option<TreeEntryFields> {
+    match entry { None => None, Some(entry) => Some(tree_entry_fields(entry)) }
+}
+
+pub open spec fn fields_blob(entry: Option<TreeEntryFields>) -> Option<Seq<char>> {
+    match entry { None => None, Some(entry) => Some(entry.1) }
+}
+
+pub open spec fn fields_mode(entry: Option<TreeEntryFields>) -> Option<Seq<char>> {
+    match entry { None => None, Some(entry) => Some(entry.0) }
+}
+
+pub open spec fn entry_delta_values(path: Seq<char>, old_entry: Option<TreeEntryFields>,
+    new_entry: Option<TreeEntryFields>) -> Seq<DeltaFields>
+{
+    if old_entry == new_entry { seq![] }
+    else { seq![(path,
+        if old_entry.is_none() { "A"@ } else if new_entry.is_none() { "D"@ } else { "M"@ },
+        fields_blob(old_entry), fields_blob(new_entry), fields_mode(old_entry), fields_mode(new_entry))] }
+}
+
+pub open spec fn rows_entry(rows: Seq<(&TreePath, &TreeEntry)>, start: int,
+    path: Seq<char>) -> Option<TreeEntryFields>
+    decreases rows.len() - start,
+{
+    if !(0 <= start < rows.len()) { None }
+    else if rows[start].0@ == path { Some(tree_entry_fields(rows[start].1)) }
+    else { rows_entry(rows, start + 1, path) }
+}
+
+pub open spec fn rows_has_path(rows: Seq<(&TreePath, &TreeEntry)>, start: int,
+    path: Seq<char>) -> bool
+{
+    exists|k: int| start <= k < rows.len() && (#[trigger] rows[k]).0@ == path
+}
+
+proof fn rows_entry_witness(rows: Seq<(&TreePath, &TreeEntry)>, start: int, path: Seq<char>)
+    requires 0 <= start <= rows.len(),
+    ensures rows_entry(rows, start, path).is_some() == rows_has_path(rows, start, path),
+        match rows_entry(rows, start, path) {
+            None => true,
+            Some(fields) => exists|k: int| start <= k < rows.len()
+                && (#[trigger] rows[k]).0@ == path && tree_entry_fields(rows[k].1) == fields,
+        },
+    decreases rows.len() - start,
+{
+    if start < rows.len() {
+        if rows[start].0@ == path {
+            assert(rows_has_path(rows, start, path));
+        } else {
+            rows_entry_witness(rows, start + 1, path);
+            assert(rows_has_path(rows, start, path) == rows_has_path(rows, start + 1, path));
+        }
+    }
+}
+
+proof fn tree_path_same_text(a: &TreePath, b: &TreePath)
+    requires a.same(b),
+    ensures a@ == b@,
+{
+    vstd::utf8::encode_utf8_decode_utf8(a@);
+    vstd::utf8::encode_utf8_decode_utf8(b@);
+}
+
+proof fn rows_entry_absent(rows: Seq<(&TreePath, &TreeEntry)>, start: int, path: Seq<char>)
+    requires 0 <= start <= rows.len(),
+        forall|k: int| start <= k < rows.len() ==> (#[trigger] rows[k]).0@ != path,
+    ensures rows_entry(rows, start, path).is_none(),
+    decreases rows.len() - start,
+{
+    if start < rows.len() { rows_entry_absent(rows, start + 1, path); }
+}
+
+proof fn rows_entry_before_head(rows: Seq<(&TreePath, &TreeEntry)>, start: int, key: &TreePath)
+    requires tree_rows_ordered(rows), 0 <= start <= rows.len(),
+        start == rows.len() || identifiers::byte_lt(key.bytes(), rows[start].0.bytes()),
+    ensures rows_entry(rows, start, key@).is_none(),
+        forall|k: int| start <= k < rows.len()
+            ==> identifiers::byte_lt(key.bytes(), (#[trigger] rows[k]).0.bytes()),
+{
+    assert forall|k: int| start <= k < rows.len()
+        implies identifiers::byte_lt(key.bytes(), (#[trigger] rows[k]).0.bytes())
+            && rows[k].0@ != key@ by {
+        if start < k {
+            identifiers::byte_lt_transitive(key.bytes(), rows[start].0.bytes(), rows[k].0.bytes());
+        }
+        identifiers::byte_lt_strict(key.bytes(), rows[k].0.bytes());
+    }
+    rows_entry_absent(rows, start, key@);
+}
+
+proof fn entry_delta_projection(selected_path: Seq<char>, old_entry: Option<&TreeEntry>,
+    new_entry: Option<&TreeEntry>, path: Seq<char>)
+    ensures delta_at_path(entry_delta_fields(selected_path, old_entry, new_entry), path)
+        == if selected_path == path {
+            entry_delta_values(path, optional_entry_fields(old_entry), optional_entry_fields(new_entry))
+        } else { seq![] },
+{
+    reveal_with_fuel(Seq::filter, 2);
+}
+
+pub open spec fn tree_merge_fields(a: Seq<(&TreePath, &TreeEntry)>,
+    b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int) -> Seq<DeltaFields>
+    decreases a.len() - i + b.len() - j,
+{
+    if !(0 <= i <= a.len() && 0 <= j <= b.len()) { seq![] }
+    else if i == a.len() && j == b.len() { seq![] }
+    else if i == a.len() {
+        entry_delta_fields(b[j].0@, None, Some(b[j].1)) + tree_merge_fields(a, b, i, j + 1)
+    } else if j == b.len() || a[i].0.order_spec(b[j].0) is Less {
+        entry_delta_fields(a[i].0@, Some(a[i].1), None) + tree_merge_fields(a, b, i + 1, j)
+    } else if a[i].0.order_spec(b[j].0) is Greater {
+        entry_delta_fields(b[j].0@, None, Some(b[j].1)) + tree_merge_fields(a, b, i, j + 1)
+    } else {
+        entry_delta_fields(a[i].0@, Some(a[i].1), Some(b[j].1))
+            + tree_merge_fields(a, b, i + 1, j + 1)
+    }
+}
+
+/// 对任意完整路径，输出恰为该路径实际两端字段的零或一条变化。
+proof fn tree_merge_path_projection(a: Seq<(&TreePath, &TreeEntry)>,
+    b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int, path: Seq<char>)
+    requires tree_rows_ordered(a), tree_rows_ordered(b),
+        0 <= i <= a.len(), 0 <= j <= b.len(),
+    ensures delta_at_path(tree_merge_fields(a, b, i, j), path)
+        == entry_delta_values(path, rows_entry(a, i, path), rows_entry(b, j, path)),
+    decreases a.len() - i + b.len() - j,
+{
+    reveal_with_fuel(tree_merge_fields, 1);
+    if i == a.len() && j == b.len() {
+        reveal_with_fuel(Seq::filter, 1);
+        return;
+    }
+    if i < a.len() && j < b.len() {
+        identifiers::byte_trichotomy(a[i].0.bytes(), b[j].0.bytes());
+        if a[i].0.order_spec(b[j].0) is Equal {
+            tree_path_same_text(a[i].0, b[j].0);
+        }
+    }
+    let (key, old_entry, new_entry, ni, nj):
+        (&TreePath, Option<&TreeEntry>, Option<&TreeEntry>, int, int) =
+        if i == a.len() { (b[j].0, None, Some(b[j].1), i, j + 1) }
+        else if j == b.len() || a[i].0.order_spec(b[j].0) is Less {
+            (a[i].0, Some(a[i].1), None, i + 1, j)
+        } else if a[i].0.order_spec(b[j].0) is Greater {
+            (b[j].0, None, Some(b[j].1), i, j + 1)
+        } else { (a[i].0, Some(a[i].1), Some(b[j].1), i + 1, j + 1) };
+    assert(ni == a.len() || identifiers::byte_lt(key.bytes(), a[ni].0.bytes()));
+    assert(nj == b.len() || identifiers::byte_lt(key.bytes(), b[nj].0.bytes()));
+    tree_merge_path_projection(a, b, ni, nj, path);
+    let head = entry_delta_fields(key@, old_entry, new_entry);
+    let rest = tree_merge_fields(a, b, ni, nj);
+    assert(tree_merge_fields(a, b, i, j) == head + rest);
+    entry_delta_projection(key@, old_entry, new_entry, path);
+    Seq::<DeltaFields>::filter_distributes_over_add(head, rest,
+        delta_path_predicate(path));
+    if path == key@ {
+        rows_entry_before_head(a, ni, key);
+        rows_entry_before_head(b, nj, key);
+        assert(rows_entry(a, i, path) == optional_entry_fields(old_entry));
+        assert(rows_entry(b, j, path) == optional_entry_fields(new_entry));
+    } else {
+        assert(rows_entry(a, i, path) == rows_entry(a, ni, path));
+        assert(rows_entry(b, j, path) == rows_entry(b, nj, path));
+    }
+}
+
+proof fn tree_merge_sources(a: Seq<(&TreePath, &TreeEntry)>,
+    b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int)
+    requires tree_rows_ordered(a), tree_rows_ordered(b),
+        0 <= i <= a.len(), 0 <= j <= b.len(),
+    ensures forall|k: int| 0 <= k < tree_merge_fields(a, b, i, j).len()
+        ==> rows_has_path(a, i, (#[trigger] tree_merge_fields(a, b, i, j)[k]).0)
+            || rows_has_path(b, j, tree_merge_fields(a, b, i, j)[k].0),
+{
+    let changes = tree_merge_fields(a, b, i, j);
+    assert forall|k: int| 0 <= k < changes.len()
+        implies rows_has_path(a, i, (#[trigger] changes[k]).0)
+            || rows_has_path(b, j, changes[k].0) by {
+        let path = changes[k].0;
+        changes.lemma_filter_contains(delta_path_predicate(path), k);
+        tree_merge_path_projection(a, b, i, j, path);
+        rows_entry_witness(a, i, path);
+        rows_entry_witness(b, j, path);
+        assert(entry_delta_values(path, rows_entry(a, i, path), rows_entry(b, j, path)).len() > 0);
+    }
+}
+
+pub open spec fn delta_fields_ordered(changes: Seq<DeltaFields>) -> bool {
+    forall|i: int, j: int| 0 <= i < j < changes.len()
+        ==> identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] changes[i]).0),
+            vstd::utf8::encode_utf8((#[trigger] changes[j]).0))
+}
+
+proof fn tree_merge_ordered(a: Seq<(&TreePath, &TreeEntry)>,
+    b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int)
+    requires tree_rows_ordered(a), tree_rows_ordered(b),
+        0 <= i <= a.len(), 0 <= j <= b.len(),
+    ensures delta_fields_ordered(tree_merge_fields(a, b, i, j)),
+    decreases a.len() - i + b.len() - j,
+{
+    reveal_with_fuel(tree_merge_fields, 1);
+    if i == a.len() && j == b.len() { return; }
+    if i < a.len() && j < b.len() {
+        identifiers::byte_trichotomy(a[i].0.bytes(), b[j].0.bytes());
+    }
+    let (key, old_entry, new_entry, ni, nj):
+        (&TreePath, Option<&TreeEntry>, Option<&TreeEntry>, int, int) =
+        if i == a.len() { (b[j].0, None, Some(b[j].1), i, j + 1) }
+        else if j == b.len() || a[i].0.order_spec(b[j].0) is Less {
+            (a[i].0, Some(a[i].1), None, i + 1, j)
+        } else if a[i].0.order_spec(b[j].0) is Greater {
+            (b[j].0, None, Some(b[j].1), i, j + 1)
+        } else { (a[i].0, Some(a[i].1), Some(b[j].1), i + 1, j + 1) };
+    assert(ni == a.len() || identifiers::byte_lt(key.bytes(), a[ni].0.bytes()));
+    assert(nj == b.len() || identifiers::byte_lt(key.bytes(), b[nj].0.bytes()));
+    tree_merge_ordered(a, b, ni, nj);
+    tree_merge_sources(a, b, ni, nj);
+    rows_entry_before_head(a, ni, key);
+    rows_entry_before_head(b, nj, key);
+    let head = entry_delta_fields(key@, old_entry, new_entry);
+    let rest = tree_merge_fields(a, b, ni, nj);
+    let changes = tree_merge_fields(a, b, i, j);
+    assert(changes == head + rest);
+    assert(head.len() <= 1);
+    assert(head.len() > 0 ==> head[0].0 == key@);
+    assert forall|k: int| 0 <= k < rest.len()
+        implies identifiers::byte_lt(key.bytes(), vstd::utf8::encode_utf8((#[trigger] rest[k]).0)) by {
+        if rows_has_path(a, ni, rest[k].0) {
+            let index = choose|index: int| ni <= index < a.len() && a[index].0@ == rest[k].0;
+            assert(a[index].0.bytes() == vstd::utf8::encode_utf8(rest[k].0));
+        } else {
+            let index = choose|index: int| nj <= index < b.len() && b[index].0@ == rest[k].0;
+            assert(b[index].0.bytes() == vstd::utf8::encode_utf8(rest[k].0));
+        }
+    }
+    assert forall|x: int, y: int| 0 <= x < y < changes.len()
+        implies identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] changes[x]).0),
+            vstd::utf8::encode_utf8((#[trigger] changes[y]).0)) by {
+        if x < head.len() {
+            assert(x == 0 && head.len() == 1);
+            assert(changes[y] == rest[y - head.len()]);
+        } else {
+            assert(changes[x] == rest[x - head.len()]);
+            assert(changes[y] == rest[y - head.len()]);
+        }
+    }
+}
+
+fn push_tree_change(out: &mut Vec<Delta>, path: &str,
+    old_entry: Option<&TreeEntry>, new_entry: Option<&TreeEntry>)
+    ensures delta_records_view(out@) == delta_records_view(old(out)@)
+        + entry_delta_fields(path@, old_entry, new_entry),
+{
+    match delta_for_entry(path, old_entry, new_entry) {
+        None => {},
+        Some(change) => { out.push(change); },
+    }
+    proof { assert(delta_records_view(out@) =~= delta_records_view(old(out)@)
+        + entry_delta_fields(path@, old_entry, new_entry)); }
+}
+
+fn delta_for_rows(a: &Vec<(&TreePath, &TreeEntry)>, b: &Vec<(&TreePath, &TreeEntry)>)
+    -> (out: Vec<Delta>)
+    ensures delta_records_view(out@) == tree_merge_fields(a@, b@, 0, 0),
+{
+    let mut out: Vec<Delta> = Vec::new();
+    let mut i = 0usize;
+    let mut j = 0usize;
+    while i < a.len() || j < b.len()
+        invariant
+            i <= a.len(), j <= b.len(),
+            delta_records_view(out@) + tree_merge_fields(a@, b@, i as int, j as int)
+                == tree_merge_fields(a@, b@, 0, 0),
+        decreases a.len() - i + b.len() - j,
+    {
+        proof { reveal_with_fuel(tree_merge_fields, 1); }
+        if i == a.len() {
+            push_tree_change(&mut out, b[j].0.as_str(), None, Some(b[j].1));
+            j += 1;
+        } else if j == b.len() {
+            push_tree_change(&mut out, a[i].0.as_str(), Some(a[i].1), None);
+            i += 1;
+        } else {
+            let order = a[i].0.cmp(b[j].0);
+            match order {
+                Ordering::Less => {
+                    push_tree_change(&mut out, a[i].0.as_str(), Some(a[i].1), None);
+                    i += 1;
+                },
+                Ordering::Greater => {
+                    push_tree_change(&mut out, b[j].0.as_str(), None, Some(b[j].1));
+                    j += 1;
+                },
+                Ordering::Equal => {
+                    push_tree_change(&mut out, a[i].0.as_str(), Some(a[i].1), Some(b[j].1));
+                    i += 1;
+                    j += 1;
+                },
+            }
+        }
+    }
+    out
+}
+
+pub open spec fn map_has_path(tree: Map<TreePath, TreeEntry>, path: Seq<char>) -> bool {
+    exists|key: TreePath| tree.contains_key(key) && key@ == path
+}
+
+pub open spec fn map_path_key(tree: Map<TreePath, TreeEntry>, path: Seq<char>) -> TreePath {
+    choose|key: TreePath| tree.contains_key(key) && key@ == path
+}
+
+pub open spec fn map_entry_fields(tree: Map<TreePath, TreeEntry>, path: Seq<char>)
+    -> Option<TreeEntryFields>
+{
+    if map_has_path(tree, path) {
+        let key = map_path_key(tree, path);
+        Some(tree_entry_fields(&tree[key]))
+    } else { None }
+}
+
+pub open spec fn delta_path_predicate(path: Seq<char>) -> spec_fn(DeltaFields) -> bool {
+    |change: DeltaFields| change.0 == path
+}
+
+pub open spec fn delta_at_path(changes: Seq<DeltaFields>, path: Seq<char>) -> Seq<DeltaFields> {
+    changes.filter(delta_path_predicate(path))
+}
+
+proof fn map_rows_entry(tree: Map<TreePath, TreeEntry>, rows: Seq<(&TreePath, &TreeEntry)>,
+    path: Seq<char>)
+    requires tree_rows_view(rows).to_set() == tree.kv_pairs(), tree_rows_ordered(rows),
+    ensures map_entry_fields(tree, path) == rows_entry(rows, 0, path),
+{
+    rows_entry_witness(rows, 0, path);
+    if map_has_path(tree, path) {
+        let key = map_path_key(tree, path);
+        assert(tree.contains_key(key) && key@ == path);
+        assert(tree.kv_pairs().contains((key, tree[key])));
+        assert(tree_rows_view(rows).to_set().contains((key, tree[key])));
+        assert(tree_rows_view(rows).contains((key, tree[key])));
+        let index = tree_rows_view(rows).lemma_contains_to_index((key, tree[key]));
+        assert(rows[index].0@ == path);
+        assert(rows_has_path(rows, 0, path));
+        match rows_entry(rows, 0, path) {
+            None => { assert(false); },
+            Some(fields) => {
+                let found = choose|found: int| 0 <= found < rows.len()
+                    && rows[found].0@ == path && tree_entry_fields(rows[found].1) == fields;
+                if found < index {
+                    identifiers::byte_lt_strict(rows[found].0.bytes(), rows[index].0.bytes());
+                    assert(false);
+                } else if index < found {
+                    identifiers::byte_lt_strict(rows[index].0.bytes(), rows[found].0.bytes());
+                    assert(false);
+                }
+                assert(found == index);
+                assert(fields == tree_entry_fields(&tree[key]));
+            },
+        }
+    } else {
+        assert forall|k: int| 0 <= k < rows.len()
+            implies (#[trigger] rows[k]).0@ != path by {
+            assert(tree_rows_view(rows).contains(tree_rows_view(rows)[k]));
+            assert(tree.kv_pairs().contains(tree_rows_view(rows)[k]));
+            assert(tree.contains_key(*rows[k].0));
+            if rows[k].0@ == path { assert(map_has_path(tree, path)); }
+        }
+        rows_entry_absent(rows, 0, path);
+    }
+}
+
+pub fn delta_for_trees(a: &Tree, b: &Tree) -> (out: Vec<Delta>)
+    ensures
+        delta_fields_ordered(delta_records_view(out@)),
+        forall|path: Seq<char>| #[trigger] delta_at_path(delta_records_view(out@), path)
+            == entry_delta_values(path, map_entry_fields(a@, path), map_entry_fields(b@, path)),
+{
+    let left = tree_rows(a);
+    let right = tree_rows(b);
+    let out = delta_for_rows(&left, &right);
+    proof {
+        assert(delta_records_view(out@) == tree_merge_fields(left@, right@, 0, 0));
+        tree_merge_ordered(left@, right@, 0, 0);
+        assert forall|path: Seq<char>|
+            #[trigger] delta_at_path(delta_records_view(out@), path)
+                == entry_delta_values(path, map_entry_fields(a@, path), map_entry_fields(b@, path)) by {
+            tree_merge_path_projection(left@, right@, 0, 0, path);
+            map_rows_entry(a@, left@, path);
+            map_rows_entry(b@, right@, path);
+            assert(rows_entry(left@, 0, path) == map_entry_fields(a@, path));
+            assert(rows_entry(right@, 0, path) == map_entry_fields(b@, path));
+            assert(delta_at_path(tree_merge_fields(left@, right@, 0, 0), path)
+                == entry_delta_values(path, rows_entry(left@, 0, path), rows_entry(right@, 0, path)));
+            assert(delta_at_path(delta_records_view(out@), path)
+                == entry_delta_values(path, map_entry_fields(a@, path), map_entry_fields(b@, path)));
+        }
+    }
+    out
 }
 
 fn optional_text_equal(left: &Option<String>, right: &Option<String>) -> (equal: bool)

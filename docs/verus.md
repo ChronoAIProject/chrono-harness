@@ -200,7 +200,7 @@ pass／warn 为 0、fail 为 1、error 为 2。此处不另加非空或名称格
 
 实际 Git 树条目 `TreeEntry` 也由此根唯一定义，`facts::Entry` 直接重导出；mode、oid、kind 字段和
 Serde 外部格式保持原样。克隆证明三个字段完整保留，比较证明三个完整文本全部相等的充要条件。
-`facts::delta` 把原路径和两端真实可选条目交给 `delta_for_entry`，直接消费返回记录：两端均缺失或
+`delta_for_entry` 直接消费原路径和两端真实可选条目：两端均缺失或
 三个字段全同返回 None；仅新端存在为 A，仅旧端存在为 D，其余差异为 M，包括 oid／mode 相同而
 kind 单独变化。每条记录证明原路径、旧新 blob、旧新 mode 的完整投影，不把 Some("") 合并成 None。
 这里不新增字段准入、OID／mode 解析或路径规范化。
@@ -219,13 +219,29 @@ CI 初始库存从键复制原文到现役字符串数组；
 独立 Verus 预期在普通 Rust 中也执行失败分支，覆盖不同分配的同文、空文本、Unicode、
 NUL／换行、不同 Unicode 表示，以及大小写、完整前缀和内部 NUL 的顺序。
 固定 vstd 的 String／str 借用、to_owned、clone、as_bytes 合同沿用现役外部边界；
-标准库 `BTreeMap::{new,insert,get,contains_key,keys,iter,values}` 以及 BTreeSet 并集容器调用
+标准库 `BTreeMap::{new,insert,get,contains_key,keys,iter,values}` 及其它既有 BTreeSet 容器调用
 仍是原实际使用的接口，未增加标准库假设或受信仓内包装。
 worktree／CI 文本交接的 `Iterator::{map,chain,collect}` 仍是明确的外部容器适配，
 未声称逐项机械精化。
 键直接持有原 String，不另存比较用副本；比较最多读取公共字节前缀，完整运行／证明／CI 成本未测。
-外层 BTreeSet 路径并集和有序遍历、BTreeMap 获取、Git／JSON 适配及完整 DELTA 组合仍待证明，
-不把本条目判断的证明扩充为完整 Git 事实或完整 DELTA 证明。
+`facts::delta` 现在直接转发 `delta_for_trees`，移除原 BTreeSet 路径并集、逐键 map 查找及
+filter_map 组合。该函数借用两棵实际 BTreeMap 的全部原键和值，证明枚举与各自 map 的完整
+键值集合相等且 UTF-8 字节严格有序；两个索引线性合并，逐条调用 `delta_for_entry`。
+完整结果合同按任意路径投影：输出恰为该路径实际两端三个字段决定的零或一条 A／D／M，
+并且全部输出严格有序。因此完整 map 的遗漏、额外路径、重复和乱序均被合同排除。
+各端按自己的原键取值，内容相同但不同分配的两端路径也对应同一变化；不以跨树内部值身份查找。
+枚举、合并循环、递归规格、逐路径完备性、map 绑定及严格顺序都在同源根证明，包括终止。
+
+明确采用的外部接口是固定 vstd 的 `BTreeMap::iter` 与 `btree_map::Iter::next`：
+在本仓已证明的 TreePath Eq／Ord 法则下，枚举序列恰为原 map 的全部键值、键严格递增，
+每次 next 借用当前位置的原键值或仅在末尾返回 None。仓内完整借用序列和合并逻辑不作为受信接口。
+独立 Verus 预期保留双空树、增删及 kind 单独变化、不同分配但全同字段不输出、反向变化、
+空／Unicode／内部 NUL 路径和空字段，直接列出完整长度、顺序与六字段；普通 Rust 执行相同失败分支。
+独立 fixture 的字段表与预期序列不用生产合并递归生成；全部逐路径投影唯一确定严格有序输出的
+数学推论也由 Verus 证明。沿用原状态生产／独立根两项整 crate 操作，不新增依赖或信任项。
+新增借用数组占 O(|A|+|B|) 引用，合并步数至多 |A|+|B|；路径比较与变化字段复制另计字节成本。
+完整构建、证明、运行、CI 与存储成本未测。Git 命令、原始输出解析、JSON 适配及整个 Git 事实
+获取仍待证明，不把完整已解码 Tree DELTA 的证明扩充为完整 Git 事实证明。
 
 `valid_finding_reference` 直接借用普通请求的实际 DELTA 切片：引用首个 UTF-8 字节为 `/`，
 或完整文本等于任一 `Delta.path` 时接受；初始库存传 `None`，只接受前一类。
