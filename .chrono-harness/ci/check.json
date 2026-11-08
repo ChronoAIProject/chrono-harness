@@ -378,6 +378,12 @@
           "consumer": "unit_runner",
           "producer": "host.bootstrap-shared-produce",
           "caller": "host.bootstrap-shared-install-unit_runner",
+          "data_outputs": {
+            ".chrono-harness/bin/verus.zip": {
+              "producer": "host.bootstrap-verus",
+              "consumer": "host.verus-extract-shared"
+            }
+          },
           "evidence": {
             "test": "test:host-bootstrap-tests",
             "operation": "host.bootstrap-real-consumer"

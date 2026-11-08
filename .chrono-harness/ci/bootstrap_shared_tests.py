@@ -237,7 +237,7 @@ class SharedStartup(unittest.TestCase):
         for name in ["built-tool", "built-second"]:
             path = self.root / name
             path.write_bytes(b"second")
-            path.chmod(0o755)
+            path.chmod(0o644 if name == "built-second" else 0o755)
         self.shared = {"schema": "chrono-host-startup/v1", "directory": ".chrono-harness/startup/",
                        "profiles": {"core": {"config": ".chrono-harness/ci/bootstrap-core.json", "build": True}},
                        "consumers": {"unit_fixture": ["core"]}}
@@ -299,11 +299,16 @@ class SharedStartup(unittest.TestCase):
         for name, expected in [("tool", b"binary"), ("second", b"second")]:
             path = root / ".chrono-harness/bin" / name
             self.assertEqual(path.read_bytes(), expected)
-            self.assertEqual(path.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o644 if name == "second" else 0o755)
         self.assertFalse((root / "built-tool").exists(), "consumer ran a producer operation")
         result = json.loads((root / ".chrono-harness/state/bootstrap.json").read_bytes())
         self.assertEqual(result["provenance"]["kind"], "shared-startup")
         self.assertEqual(result["provenance"]["report_sha256"], hashlib.sha256(original).hexdigest())
+        self.host.succeeded(self.invoke("verify", "core", root=root))
+        data_file = root / ".chrono-harness/bin/second"
+        data_file.chmod(0o755)
+        self.assertNotEqual(self.invoke("verify", "core", root=root).returncode, 0)
+        data_file.chmod(0o644)
         self.host.succeeded(self.invoke("verify", "core", root=root))
         (root / ".chrono-harness/bin/tool").write_bytes(b"changed")
         failed = self.invoke("verify", "core", root=root)
@@ -312,7 +317,7 @@ class SharedStartup(unittest.TestCase):
 
     def test_bad_binding_source_platform_profile_or_late_asset_never_partially_installs(self):
         self.produce()
-        for defect in ["binding", "missing-binding", "dirty", "source", "platform", "profile", "late-asset", "symlink"]:
+        for defect in ["binding", "missing-binding", "dirty", "source", "platform", "profile", "late-asset", "symlink", "zero-mode", "special-mode", "boolean-mode"]:
             with self.subTest(defect=defect):
                 root = self.clone_consumer()
                 transfer = root / self.shared["directory"]
@@ -333,6 +338,11 @@ class SharedStartup(unittest.TestCase):
                 elif defect == "symlink":
                     (transfer / "tools/1").unlink()
                     (transfer / "tools/1").symlink_to(root / "product-source")
+                elif defect in ["zero-mode", "special-mode", "boolean-mode"]:
+                    manifest["profiles"]["core"]["files"][1]["mode"] = {
+                        "zero-mode": 0, "special-mode": 0o1000, "boolean-mode": True}[defect]
+                    manifest_path.write_text(json.dumps(manifest))
+                    self.environment["CHRONO_STARTUP_BINDING"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
                 target = root / ".chrono-harness/bin/tool"
                 target.parent.mkdir()
                 target.write_bytes(b"keep")

@@ -26,7 +26,15 @@ pub struct Chain {
     pub caller: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preparation: Option<Preparation>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub data_outputs: BTreeMap<String, DataOutput>,
     pub evidence: Evidence,
+}
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DataOutput {
+    pub producer: String,
+    pub consumer: String,
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -79,6 +87,18 @@ pub fn contract(value: Option<&Value>) -> Result<BTreeMap<String, Chain>, String
             relative_path(&p.config)?;
             if !p.config.starts_with(".chrono-harness/") {
                 return Err("E_CONSUMPTION_SCHEMA: host preparation path required".into());
+            }
+        }
+        for (path, output) in &chain.data_outputs {
+            relative_path(path)?;
+            if output.producer.is_empty()
+                || output.consumer.is_empty()
+                || chain.preparation.is_none()
+            {
+                return Err(
+                    "E_CONSUMPTION_SCHEMA: data output requires producer and preparation consumer"
+                        .into(),
+                );
             }
         }
         if !chain.evidence.test.starts_with("test:") || chain.evidence.test.len() == 5 {
@@ -155,6 +175,9 @@ impl Endpoint {
         ]);
         if let Some(p) = &c.preparation {
             operations.extend([p.operation.clone(), p.verifier.clone()]);
+        }
+        for output in c.data_outputs.values() {
+            operations.extend([output.producer.clone(), output.consumer.clone()]);
         }
         for path in self.paths(c) {
             if let Some(v) = self.documents.get(&path) {
@@ -319,6 +342,17 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
     let mut verify = argv(&units["units"][unit]["bootstrap"])?;
     if let Some(p) = &c.preparation {
         let config = s.document(&p.config)?;
+        for output in c.data_outputs.values() {
+            method(&output.consumer)?;
+            if !config["operations"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|op| op == &output.consumer)
+            {
+                return Err("data output consumer is not a preparation operation".into());
+            }
+        }
         let entrypoint = nonempty(&config["entrypoint"]["tool"])?;
         let tools: Vec<_> = s.config["tools"]
             .as_array()
@@ -363,6 +397,7 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
     }
     let mut installed = BTreeSet::new();
     let mut sources = BTreeSet::new();
+    let mut data_outputs = BTreeSet::new();
     for profile in profiles {
         let name = nonempty(profile)?;
         let path = nonempty(&startup["profiles"][name]["config"])?;
@@ -388,6 +423,15 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
             relative_path(destination)?;
             if !installed.insert(destination.to_owned()) || !sources.insert(source.to_owned()) {
                 return Err("ambiguous installed output".into());
+            }
+            if let Some(data) = c.data_outputs.get(destination) {
+                if !operations.iter().any(|op| op == &data.producer) {
+                    return Err(format!(
+                        "data output {destination} lacks its declared producer operation"
+                    ));
+                }
+                data_outputs.insert(destination.to_owned());
+                continue;
             }
             let producers = operations
                 .iter()
@@ -422,6 +466,9 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
                 ));
             }
         }
+    }
+    if data_outputs != c.data_outputs.keys().cloned().collect() {
+        return Err("declared data output is not installed".into());
     }
     let runner = nonempty(&s.config["runner"]["path"])?;
     for role in [
