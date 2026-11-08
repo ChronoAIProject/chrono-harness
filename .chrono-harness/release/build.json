@@ -15,7 +15,6 @@
     "crates/judge-workflow/Cargo.toml",
     "crates/inputs/Cargo.toml",
     "crates/distribution/Cargo.toml",
-    "crates/judge-cargo/Cargo.toml",
     "crates/worktree/Cargo.toml",
     "crates/cache/Cargo.toml"
   ],
@@ -38,7 +37,6 @@
     "test.judge-registration-tests",
     "test.judge-projects-tests",
     "test.judge-workflow-tests",
-    "test.judge-cargo-tests",
     "test.instructions-tests",
     "test.judge-filemap-tests",
     "test.judge-routes-tests",
@@ -145,13 +143,6 @@
         "destinations": [
           "crates/distribution/target/debug/chrono-distribution",
           ".chrono-harness/bin/chrono-distribution"
-        ]
-      },
-      {
-        "asset": "chrono-judge-cargo",
-        "destinations": [
-          "crates/judge-cargo/target/debug/chrono-judge-cargo",
-          ".chrono-harness/bin/chrono-judge-cargo"
         ]
       },
       {
@@ -276,14 +267,6 @@
       "asset": "chrono-distribution",
       "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/build_distribution"
-    },
-    {
-      "id": "build_judge_cargo",
-      "kind": "build",
-      "manifest": "crates/judge-cargo/Cargo.toml",
-      "asset": "chrono-judge-cargo",
-      "needs": [],
-      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_cargo"
     },
     {
       "id": "build_worktree",
@@ -413,25 +396,6 @@
         "build_worktree"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests",
-      "rust_toolchain": true
-    },
-    {
-      "id": "verify_judge_cargo_tests",
-      "kind": "verify",
-      "operation": "test.judge-cargo-tests",
-      "needs": [
-        "build_runner",
-        "build_judge_ci",
-        "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_judge_cargo"
-      ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests",
       "rust_toolchain": true
     },
     {
@@ -580,7 +544,6 @@
       "build_judge_workflow",
       "build_inputs",
       "build_distribution",
-      "build_judge_cargo",
       "build_worktree",
       "verify_distribution_tests",
       "verify_worktree_tests",
@@ -591,7 +554,6 @@
       "verify_judge_registration_tests",
       "verify_judge_projects_tests",
       "verify_judge_workflow_tests",
-      "verify_judge_cargo_tests",
       "verify_instructions_tests",
       "verify_judge_filemap_tests",
       "verify_judge_routes_tests",
@@ -625,7 +587,6 @@
       "build_judge_workflow": "linux_build_judge_workflow",
       "build_inputs": "linux_build_inputs",
       "build_distribution": "linux_build_distribution",
-      "build_judge_cargo": "linux_build_judge_cargo",
       "build_worktree": "linux_build_worktree",
       "verify_distribution_tests": "linux_verify_distribution_tests",
       "verify_worktree_tests": "linux_verify_worktree_tests",
@@ -636,7 +597,6 @@
       "verify_judge_registration_tests": "linux_verify_judge_registration_tests",
       "verify_judge_projects_tests": "linux_verify_judge_projects_tests",
       "verify_judge_workflow_tests": "linux_verify_judge_workflow_tests",
-      "verify_judge_cargo_tests": "linux_verify_judge_cargo_tests",
       "verify_instructions_tests": "linux_verify_instructions_tests",
       "verify_judge_filemap_tests": "linux_verify_judge_filemap_tests",
       "verify_judge_routes_tests": "linux_verify_judge_routes_tests",
@@ -666,7 +626,6 @@
       "build_judge_workflow": "macos_build_judge_workflow",
       "build_inputs": "macos_build_inputs",
       "build_distribution": "macos_build_distribution",
-      "build_judge_cargo": "macos_build_judge_cargo",
       "build_worktree": "macos_build_worktree",
       "verify_distribution_tests": "macos_verify_distribution_tests",
       "verify_worktree_tests": "macos_verify_worktree_tests",
@@ -677,7 +636,6 @@
       "verify_judge_registration_tests": "macos_verify_judge_registration_tests",
       "verify_judge_projects_tests": "macos_verify_judge_projects_tests",
       "verify_judge_workflow_tests": "macos_verify_judge_workflow_tests",
-      "verify_judge_cargo_tests": "macos_verify_judge_cargo_tests",
       "verify_instructions_tests": "macos_verify_instructions_tests",
       "verify_judge_filemap_tests": "macos_verify_judge_filemap_tests",
       "verify_judge_routes_tests": "macos_verify_judge_routes_tests",
@@ -708,7 +666,6 @@
     "build_judge_workflow": "unmeasured",
     "build_inputs": "unmeasured",
     "build_distribution": "unmeasured",
-    "build_judge_cargo": "unmeasured",
     "build_worktree": "unmeasured",
     "verify_distribution_tests": "unmeasured",
     "verify_worktree_tests": "unmeasured",
@@ -719,7 +676,6 @@
     "verify_judge_registration_tests": "unmeasured",
     "verify_judge_projects_tests": "unmeasured",
     "verify_judge_workflow_tests": "unmeasured",
-    "verify_judge_cargo_tests": "unmeasured",
     "verify_instructions_tests": "unmeasured",
     "verify_judge_filemap_tests": "unmeasured",
     "verify_judge_routes_tests": "unmeasured",
@@ -853,21 +809,6 @@
         "chrono-judge-workflow",
         "chrono-inputs",
         "chrono-worktree"
-      ]
-    },
-    "verify_judge_cargo_tests": {
-      "need": "crates/judge-cargo-tests/tests/support/cargo.rs runs judge-cargo for guarded operations and runner with registration, filemap, routes, projects, cost, mixed and workflow in the full consumer, plus judge-ci in scoped consumers. Assertions inspect actual Cargo actions, their reports and rejection of changed declared inputs.",
-      "release_assets": [
-        "chrono-harness",
-        "chrono-judge-ci",
-        "chrono-judge-registration",
-        "chrono-judge-filemap",
-        "chrono-judge-routes",
-        "chrono-judge-projects",
-        "chrono-judge-cost",
-        "chrono-judge-mixed",
-        "chrono-judge-workflow",
-        "chrono-judge-cargo"
       ]
     },
     "verify_judge_filemap_tests": {

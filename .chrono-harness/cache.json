@@ -732,42 +732,6 @@
         "compile"
       ]
     },
-    "judge-cargo.manifest": {
-      "kind": "file",
-      "path": "crates/judge-cargo/Cargo.toml",
-      "presence": "present"
-    },
-    "judge-cargo.lock": {
-      "kind": "file",
-      "path": "crates/judge-cargo/Cargo.lock",
-      "presence": "present"
-    },
-    "judge-cargo.sources": {
-      "kind": "registered-files",
-      "registry": ".chrono-harness/FILEMAP.json",
-      "node": "project:judge-cargo",
-      "edges": [
-        "compile"
-      ]
-    },
-    "judge-cargo-tests.manifest": {
-      "kind": "file",
-      "path": "crates/judge-cargo-tests/Cargo.toml",
-      "presence": "present"
-    },
-    "judge-cargo-tests.lock": {
-      "kind": "file",
-      "path": "crates/judge-cargo-tests/Cargo.lock",
-      "presence": "present"
-    },
-    "judge-cargo-tests.sources": {
-      "kind": "registered-files",
-      "registry": ".chrono-harness/FILEMAP.json",
-      "node": "project:judge-cargo-tests",
-      "edges": [
-        "compile"
-      ]
-    },
     "worktree.manifest": {
       "kind": "file",
       "path": "crates/worktree/Cargo.toml",
@@ -1036,14 +1000,6 @@
       "owner": "distribution-tests",
       "path": "crates/distribution-tests/target/"
     },
-    "judge-cargo.target": {
-      "owner": "judge-cargo",
-      "path": "crates/judge-cargo/target/"
-    },
-    "judge-cargo-tests.target": {
-      "owner": "judge-cargo-tests",
-      "path": "crates/judge-cargo-tests/target/"
-    },
     "worktree-tests.target": {
       "owner": "worktree-tests",
       "path": "crates/worktree-tests/target/"
@@ -1135,7 +1091,6 @@
       "producer": "build.judge-ci",
       "consumers": [
         "check.unit_ci",
-        "check.unit_judge-cargo",
         "check.unit_judge-ci",
         "check.unit_judge-projects"
       ],
@@ -1196,7 +1151,6 @@
       "consumers": [
         "check.unit_ci",
         "check.unit_inputs",
-        "check.unit_judge-cargo",
         "check.unit_judge-ci",
         "check.unit_judge-cost",
         "check.unit_judge-filemap",
@@ -1574,7 +1528,6 @@
       "consumers": [
         "check.unit_ci",
         "check.unit_inputs",
-        "check.unit_judge-cargo",
         "check.unit_judge-cost",
         "check.unit_judge-filemap",
         "check.unit_judge-mixed",
@@ -1679,7 +1632,6 @@
       "producer": "build.judge-filemap",
       "consumers": [
         "check.unit_inputs",
-        "check.unit_judge-cargo",
         "check.unit_judge-cost",
         "check.unit_judge-filemap",
         "check.unit_judge-mixed",
@@ -1791,7 +1743,6 @@
       "producer": "build.judge-projects",
       "consumers": [
         "check.unit_inputs",
-        "check.unit_judge-cargo",
         "check.unit_judge-filemap",
         "check.unit_judge-projects",
         "check.unit_judge-workflow",
@@ -1852,7 +1803,6 @@
       "producer": "build.judge-routes",
       "consumers": [
         "check.unit_inputs",
-        "check.unit_judge-cargo",
         "check.unit_judge-filemap",
         "check.unit_judge-projects",
         "check.unit_judge-routes",
@@ -2024,7 +1974,6 @@
       "producer": "build.judge-cost",
       "consumers": [
         "check.unit_inputs",
-        "check.unit_judge-cargo",
         "check.unit_judge-cost",
         "check.unit_judge-mixed",
         "check.unit_judge-workflow",
@@ -2138,7 +2087,6 @@
       "producer": "build.judge-mixed",
       "consumers": [
         "check.unit_inputs",
-        "check.unit_judge-cargo",
         "check.unit_judge-mixed",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
@@ -2305,7 +2253,6 @@
       "producer": "build.judge-workflow",
       "consumers": [
         "check.unit_inputs",
-        "check.unit_judge-cargo",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
         "check.unit_judge-workflow-units"
@@ -2571,118 +2518,6 @@
       ],
       "source_inputs": [
         "distribution-tests.sources"
-      ],
-      "restore": "compatible"
-    },
-    "check.judge-cargo": {
-      "owner": "judge-cargo",
-      "producer": "build.judge-cargo",
-      "consumers": [
-        "check.unit_judge-cargo"
-      ],
-      "artifacts": [
-        "judge-cargo.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "macos.cargo.home-config",
-        "macos.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-cargo.manifest",
-        "judge-cargo.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "check.cargo-tool",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "judge-cargo.sources"
-      ],
-      "restore": "compatible"
-    },
-    "check.judge-cargo-tests": {
-      "owner": "judge-cargo-tests",
-      "producer": "test.judge-cargo-tests",
-      "consumers": [
-        "check.unit_judge-cargo"
-      ],
-      "artifacts": [
-        "judge-cargo-tests.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "macos.cargo.home-config",
-        "macos.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-cargo.manifest",
-        "judge-cargo.lock",
-        "judge-cargo-tests.manifest",
-        "judge-cargo-tests.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "check.cargo-tool",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "judge-cargo-tests.sources"
       ],
       "restore": "compatible"
     },
@@ -3556,57 +3391,6 @@
       ],
       "restore": "compatible"
     },
-    "release.linux.release.judge-cargo": {
-      "owner": "judge-cargo",
-      "producer": "build_judge_cargo",
-      "consumers": [
-        "release.linux_build_judge_cargo"
-      ],
-      "artifacts": [
-        "judge-cargo.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "linux.cc",
-        "linux.linker",
-        "linux.cargo.home-config",
-        "linux.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-cargo.manifest",
-        "judge-cargo.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "release.script",
-        "release.config"
-      ],
-      "source_inputs": [
-        "judge-cargo.sources"
-      ],
-      "restore": "compatible"
-    },
     "release.linux.release.worktree": {
       "owner": "worktree",
       "producer": "build_worktree",
@@ -4122,59 +3906,6 @@
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
-      ],
-      "restore": "compatible"
-    },
-    "release.linux.verify.judge-cargo-tests": {
-      "owner": "judge-cargo-tests",
-      "producer": "test.judge-cargo-tests",
-      "consumers": [
-        "release.linux_verify_judge_cargo_tests"
-      ],
-      "artifacts": [
-        "judge-cargo-tests.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "linux.cc",
-        "linux.linker",
-        "linux.cargo.home-config",
-        "linux.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-cargo.manifest",
-        "judge-cargo.lock",
-        "judge-cargo-tests.manifest",
-        "judge-cargo-tests.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "release.script",
-        "release.config"
-      ],
-      "source_inputs": [
-        "judge-cargo-tests.sources"
       ],
       "restore": "compatible"
     },
@@ -5182,58 +4913,6 @@
       ],
       "restore": "compatible"
     },
-    "release.macos.release.judge-cargo": {
-      "owner": "judge-cargo",
-      "producer": "build_judge_cargo",
-      "consumers": [
-        "release.macos_build_judge_cargo"
-      ],
-      "artifacts": [
-        "judge-cargo.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "macos.cargo.home-config",
-        "macos.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-cargo.manifest",
-        "judge-cargo.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "release.script",
-        "release.config"
-      ],
-      "source_inputs": [
-        "judge-cargo.sources"
-      ],
-      "restore": "compatible"
-    },
     "release.macos.release.worktree": {
       "owner": "worktree",
       "producer": "build_worktree",
@@ -5759,60 +5438,6 @@
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
-      ],
-      "restore": "compatible"
-    },
-    "release.macos.verify.judge-cargo-tests": {
-      "owner": "judge-cargo-tests",
-      "producer": "test.judge-cargo-tests",
-      "consumers": [
-        "release.macos_verify_judge_cargo_tests"
-      ],
-      "artifacts": [
-        "judge-cargo-tests.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "macos.cargo.home-config",
-        "macos.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-cargo.manifest",
-        "judge-cargo.lock",
-        "judge-cargo-tests.manifest",
-        "judge-cargo-tests.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "release.script",
-        "release.config"
-      ],
-      "source_inputs": [
-        "judge-cargo-tests.sources"
       ],
       "restore": "compatible"
     },
@@ -6673,12 +6298,6 @@
         "pointer": "/execution_plans/test:distribution-tests/operations"
       }
     ],
-    "check.unit_judge-cargo": [
-      {
-        "registry": ".chrono-harness/FILEMAP.json",
-        "pointer": "/execution_plans/test:judge-cargo-tests/operations"
-      }
-    ],
     "check.unit_worktree": [
       {
         "registry": ".chrono-harness/FILEMAP.json",
@@ -6799,124 +6418,112 @@
         "pointer": "/units/12/id"
       }
     ],
-    "release.linux_build_judge_cargo": [
+    "release.linux_build_worktree": [
       {
         "registry": ".chrono-harness/release/build.json",
         "pointer": "/units/13/id"
       }
     ],
-    "release.linux_build_worktree": [
-      {
-        "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/14/id"
-      }
-    ],
     "release.linux_verify_distribution_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/15/operation"
+        "pointer": "/units/14/operation"
       }
     ],
     "release.linux_verify_worktree_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/16/operation"
+        "pointer": "/units/15/operation"
       }
     ],
     "release.linux_verify_runner_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/17/operation"
+        "pointer": "/units/16/operation"
       }
     ],
     "release.linux_verify_inputs_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/18/operation"
+        "pointer": "/units/17/operation"
       }
     ],
     "release.linux_verify_ci_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/19/operation"
+        "pointer": "/units/18/operation"
       }
     ],
     "release.linux_verify_judge_ci_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/20/operation"
+        "pointer": "/units/19/operation"
       }
     ],
     "release.linux_verify_judge_registration_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/21/operation"
+        "pointer": "/units/20/operation"
       }
     ],
     "release.linux_verify_judge_projects_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/22/operation"
+        "pointer": "/units/21/operation"
       }
     ],
     "release.linux_verify_judge_workflow_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/23/operation"
-      }
-    ],
-    "release.linux_verify_judge_cargo_tests": [
-      {
-        "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/24/operation"
+        "pointer": "/units/22/operation"
       }
     ],
     "release.linux_verify_instructions_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/25/operation"
+        "pointer": "/units/23/operation"
       }
     ],
     "release.linux_verify_judge_filemap_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/26/operation"
+        "pointer": "/units/24/operation"
       }
     ],
     "release.linux_verify_judge_routes_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/27/operation"
+        "pointer": "/units/25/operation"
       }
     ],
     "release.linux_verify_judge_cost_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/28/operation"
+        "pointer": "/units/26/operation"
       }
     ],
     "release.linux_verify_judge_mixed_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/29/operation"
+        "pointer": "/units/27/operation"
       }
     ],
     "release.linux_verify_diagnostics_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/32/operation"
+        "pointer": "/units/30/operation"
       }
     ],
     "release.linux_build_cache": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/34/id"
+        "pointer": "/units/32/id"
       }
     ],
     "release.linux_verify_cache_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/35/operation"
+        "pointer": "/units/33/operation"
       }
     ],
     "release.macos_build_runner": [
@@ -6997,124 +6604,112 @@
         "pointer": "/units/12/id"
       }
     ],
-    "release.macos_build_judge_cargo": [
+    "release.macos_build_worktree": [
       {
         "registry": ".chrono-harness/release/build.json",
         "pointer": "/units/13/id"
       }
     ],
-    "release.macos_build_worktree": [
-      {
-        "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/14/id"
-      }
-    ],
     "release.macos_verify_distribution_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/15/operation"
+        "pointer": "/units/14/operation"
       }
     ],
     "release.macos_verify_worktree_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/16/operation"
+        "pointer": "/units/15/operation"
       }
     ],
     "release.macos_verify_runner_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/17/operation"
+        "pointer": "/units/16/operation"
       }
     ],
     "release.macos_verify_inputs_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/18/operation"
+        "pointer": "/units/17/operation"
       }
     ],
     "release.macos_verify_ci_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/19/operation"
+        "pointer": "/units/18/operation"
       }
     ],
     "release.macos_verify_judge_ci_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/20/operation"
+        "pointer": "/units/19/operation"
       }
     ],
     "release.macos_verify_judge_registration_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/21/operation"
+        "pointer": "/units/20/operation"
       }
     ],
     "release.macos_verify_judge_projects_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/22/operation"
+        "pointer": "/units/21/operation"
       }
     ],
     "release.macos_verify_judge_workflow_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/23/operation"
-      }
-    ],
-    "release.macos_verify_judge_cargo_tests": [
-      {
-        "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/24/operation"
+        "pointer": "/units/22/operation"
       }
     ],
     "release.macos_verify_instructions_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/25/operation"
+        "pointer": "/units/23/operation"
       }
     ],
     "release.macos_verify_judge_filemap_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/26/operation"
+        "pointer": "/units/24/operation"
       }
     ],
     "release.macos_verify_judge_routes_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/27/operation"
+        "pointer": "/units/25/operation"
       }
     ],
     "release.macos_verify_judge_cost_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/28/operation"
+        "pointer": "/units/26/operation"
       }
     ],
     "release.macos_verify_judge_mixed_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/29/operation"
+        "pointer": "/units/27/operation"
       }
     ],
     "release.macos_verify_diagnostics_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/32/operation"
+        "pointer": "/units/30/operation"
       }
     ],
     "release.macos_build_cache": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/34/id"
+        "pointer": "/units/32/id"
       }
     ],
     "release.macos_verify_cache_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/35/operation"
+        "pointer": "/units/33/operation"
       }
     ]
   },

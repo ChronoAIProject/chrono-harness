@@ -64,10 +64,6 @@
       "cache",
       "core"
     ],
-    "unit_judge-cargo": [
-      "cache",
-      "core"
-    ],
     "unit_worktree": [
       "cache",
       "core"

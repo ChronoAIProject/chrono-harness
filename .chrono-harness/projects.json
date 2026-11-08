@@ -29,8 +29,6 @@
     "inputs-tests",
     "distribution",
     "distribution-tests",
-    "judge-cargo",
-    "judge-cargo-tests",
     "worktree",
     "worktree-tests",
     "release-build",
@@ -734,9 +732,13 @@
           "operation": "ci.generate",
           "tool": "chrono-ci",
           "argv": [
-            "generate",
+            "migrate",
             "--host-root",
             ".",
+            "--from",
+            ".chrono-harness/state/audit-r64-previous-units.json",
+            "--previous-config",
+            ".chrono-harness/ci/units.json",
             "--config",
             ".chrono-harness/ci/units.json"
           ]
@@ -1887,89 +1889,6 @@
       "language": "rust"
     },
     {
-      "id": "judge-cargo",
-      "kind": "production",
-      "manifest": "crates/judge-cargo/Cargo.toml",
-      "lockfile": "crates/judge-cargo/Cargo.lock",
-      "root": "crates/judge-cargo",
-      "actions": {
-        "build": {
-          "operation": "build.judge-cargo",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo/Cargo.toml"
-          ]
-        },
-        "format_check": {
-          "operation": "fmt.judge-cargo",
-          "tool": "cargo",
-          "argv": [
-            "fmt",
-            "--check",
-            "--manifest-path",
-            "crates/judge-cargo/Cargo.toml"
-          ]
-        }
-      },
-      "test_project": "judge-cargo-tests",
-      "language": "rust"
-    },
-    {
-      "id": "judge-cargo-tests",
-      "kind": "test",
-      "manifest": "crates/judge-cargo-tests/Cargo.toml",
-      "lockfile": "crates/judge-cargo-tests/Cargo.lock",
-      "root": "crates/judge-cargo-tests",
-      "actions": {
-        "format_check": {
-          "operation": "fmt.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "fmt",
-            "--check",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "execute": {
-          "operation": "test.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "update_lockfile": {
-          "operation": "lock.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "update",
-            "--offline",
-            "--package",
-            "chrono-judge-cargo-tests",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        },
-        "format": {
-          "operation": "format.judge-cargo-tests",
-          "tool": "cargo",
-          "argv": [
-            "fmt",
-            "--manifest-path",
-            "crates/judge-cargo-tests/Cargo.toml"
-          ]
-        }
-      },
-      "tests_for": "judge-cargo",
-      "language": "rust"
-    },
-    {
       "id": "worktree",
       "kind": "production",
       "manifest": "crates/worktree/Cargo.toml",
@@ -2253,7 +2172,12 @@
         "build": {
           "operation": "build.diagnostics",
           "tool": "cargo",
-          "argv": ["build","--locked","--manifest-path","crates/diagnostics/Cargo.toml"]
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
         },
         "format_check": {
           "operation": "fmt.diagnostics",
@@ -2594,12 +2518,20 @@
         "execute": {
           "operation": "host.bootstrap-core",
           "tool": "bash",
-          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-core.json"]
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-core.json"
+          ]
         },
         "verus": {
           "operation": "host.bootstrap-verus",
           "tool": "bash",
-          "argv": [".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-verus.json"]
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus.json"
+          ]
         }
       }
     },
@@ -2612,7 +2544,9 @@
         "execute": {
           "operation": "test.host-bootstrap-launcher-tests",
           "tool": "bash",
-          "argv": [".chrono-harness/ci/bootstrap-native-tests.sh"]
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native-tests.sh"
+          ]
         }
       }
     },
@@ -2831,18 +2765,6 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "unit_distribution"
-          ]
-        },
-        "shared-install-unit_judge-cargo": {
-          "operation": "host.bootstrap-shared-install-unit_judge-cargo",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap_shared.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_judge-cargo"
           ]
         },
         "shared-install-unit_worktree": {
