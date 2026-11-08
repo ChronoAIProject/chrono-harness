@@ -117,7 +117,7 @@ pub(crate) fn verify(
             json!({"observed":observed.as_ref().ok(),"observation_error":observed.as_ref().err()});
         let matches = match raw {
             Ok(raw) => {
-                row["manifest_original"] = json!(super::report::retain_for_upload(
+                row["manifest_original"] = json!(super::retain_original(
                     root,
                     directory,
                     "content-manifest",
@@ -146,7 +146,7 @@ pub(crate) fn verify(
         observations.insert(artifact_id, row);
     }
     let raw = serde_json::to_vec(&json!({"schema":METHOD,"cache":id,"producer":cache["producer"],"matched_key":matched,"artifacts":observations})).map_err(|e| e.to_string())?;
-    let original = super::report::retain_for_upload(root, directory, "content-verification", &raw)?;
+    let original = super::retain_original(root, directory, "content-verification", &raw)?;
     Ok(
         json!({"method":METHOD,"status":if valid {"matched"} else {"unusable"},"original":original,
         "elapsed_seconds":start.elapsed().as_secs_f64(),"measurement":"wall-clock inventory, manifest read and evidence publication"}),
@@ -234,7 +234,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         return Err("E_CACHE_CONTENT: unknown cache".into());
     }
     let mut report = json!({"schema":"chrono-cache-seal/v1","plan":{"path":plan_path,"sha256":chrono_harness::sha256(&plan_raw)},
-        "native_steps":super::report::retain_for_upload(&root,&directory,"producer-steps",steps_raw.as_bytes())?,"caches":{}});
+        "native_steps":super::retain_original(&root,&directory,"producer-steps",steps_raw.as_bytes())?,"caches":{}});
     let mut outputs = String::new();
     for (index, (id, cache)) in caches.iter().enumerate() {
         if cache["content_verification"] != METHOD
@@ -277,14 +277,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             fs::write(marker, &raw).map_err(|e| e.to_string())?;
             manifests.insert(
                 artifact_id,
-                super::report::retain_for_upload(&root, &directory, "producer-manifest", &raw)?,
+                super::retain_original(&root, &directory, "producer-manifest", &raw)?,
             );
         }
         report["caches"][id] = json!({"status":"sealed","producer":cache["producer"],"manifests":manifests,"elapsed_seconds":start.elapsed().as_secs_f64(),"measurement":"wall-clock content hashing and manifest publication"});
         outputs.push_str(&format!("cache_{index}_sealed=true\n"));
     }
     let raw = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
-    let original = super::report::retain_for_upload(&root, &directory, "producer-seal", &raw)?;
+    let original = super::retain_original(&root, &directory, "producer-seal", &raw)?;
     let pointer = chrono_harness::prepare_publication(&root, &format!("{directory}seal.json"))?;
     fs::write(
         pointer,

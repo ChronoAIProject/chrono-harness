@@ -69,14 +69,6 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
     if let Some(a) = &c.native_adoption {
         evidence.push(&a.seed_directory);
     }
-    if let Some(cache) = &c.persistent_cache {
-        evidence.extend(
-            cache
-                .jobs
-                .values()
-                .filter_map(|job| job.evidence_directory.as_deref()),
-        );
-    }
     if evidence
         .into_iter()
         .any(|path| overlap(directory, path.trim_end_matches('/')))
