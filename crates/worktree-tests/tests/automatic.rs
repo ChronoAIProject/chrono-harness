@@ -1267,10 +1267,13 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
     let h = Host::new("payload");
     h.kernel_cleanup();
     adopt_lifecycle_retention(&h);
-    let retention_path = h.root.join(chrono_harness::retained_artifacts::retention::POLICY_PATH);
+    let retention_path = h
+        .root
+        .join(chrono_harness::retained_artifacts::retention::POLICY_PATH);
     let mut retention = json(&fs::read(&retention_path).unwrap()).unwrap();
     retention["producers"]["lifecycle-original"] = value!([
-        ".chrono-harness/state/worktrees/", ".chrono-harness/state/automatic-cleanup/"
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
     ]);
     retention["max_related_outputs"] = value!(512);
     fs::write(&retention_path, serde_json::to_vec(&retention).unwrap()).unwrap();
@@ -1289,28 +1292,58 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
     let (code, created, error) = h.invoke("integration", "finite-originals", &target);
     assert_eq!(code, 0, "{created} {error}");
     let birth = h.ledger()["entries"][0]["enrollment"]["sealed_receipt"]["path"]
-        .as_str().unwrap().to_owned();
-    assert!(Inventory::adopted(&h.root).unwrap().unwrap().enrolled(&birth).unwrap(),
-        "the automatic producer must enroll its own original, not leave an unbounded file");
-    Inventory::adopted(&h.root).unwrap().unwrap().maintain().unwrap();
-    assert!(h.root.join(&birth).is_file(), "active enrollment still consumes birth");
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .enrolled(&birth)
+            .unwrap(),
+        "the automatic producer must enroll its own original, not leave an unbounded file"
+    );
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .maintain()
+        .unwrap();
+    assert!(
+        h.root.join(&birth).is_file(),
+        "active enrollment still consumes birth"
+    );
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
     assert!(!target.exists());
     let terminal = h.ledger()["entries"][0]["terminal"]["receipt"]["path"]
-        .as_str().unwrap().to_owned();
+        .as_str()
+        .unwrap()
+        .to_owned();
     let finished_path = finished["report_path"].as_str().unwrap();
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-    inventory.reference_paths("fixture-finish-consumer", &[finished_path.into()]).unwrap();
+    inventory
+        .reference_paths("fixture-finish-consumer", &[finished_path.into()])
+        .unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
     assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
     inventory.maintain().unwrap();
-    assert!(!h.root.join(&birth).exists(), "unconsumed birth must leave with history");
-    assert!(h.root.join(&terminal).is_file(), "finish report still consumes terminal input");
-    inventory.reference_paths("fixture-finish-consumer", &[]).unwrap();
+    assert!(
+        !h.root.join(&birth).exists(),
+        "unconsumed birth must leave with history"
+    );
+    assert!(
+        h.root.join(&terminal).is_file(),
+        "finish report still consumes terminal input"
+    );
+    inventory
+        .reference_paths("fixture-finish-consumer", &[])
+        .unwrap();
     inventory.maintain().unwrap();
-    assert!(!h.root.join(&terminal).exists(), "released terminal original must be reclaimed");
+    assert!(
+        !h.root.join(&terminal).exists(),
+        "released terminal original must be reclaimed"
+    );
     assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/finite-originals"));
 }
 
