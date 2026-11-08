@@ -449,8 +449,46 @@ fn missing_or_corrupt_fresh_dependency_metadata_recovers_once() {
         let mut invocations: Value = serde_json::from_slice(&fs::read(&plan).unwrap()).unwrap();
         invocations[2]["writes"] = json!([[metadata, original]]);
         write(&plan, &serde_json::to_vec(&invocations).unwrap());
-        f.run().unwrap();
+        let mut errors = Vec::new();
+        proved_build::build(
+            &f.root,
+            ".chrono-harness/ci/build.json",
+            &f.environment,
+            &mut Vec::new(),
+            &mut errors,
+        )
+        .unwrap();
+        if corrupt {
+            let start = errors.iter().position(|byte| *byte == b'{').unwrap();
+            let notice: Value = serde_json::from_slice(&errors[start..]).unwrap();
+            assert_eq!(
+                fs::read(
+                    f.root
+                        .join(notice["path"].as_str().unwrap())
+                        .join("rejected-dependency.d")
+                )
+                .unwrap(),
+                b"invalid dependency original",
+                "the damaged original survives registered cleanup and replacement"
+            );
+        }
         assert_eq!(fs::read_to_string(f.root.join("mock.calls")).unwrap(), "3");
+    }
+}
+
+#[test]
+fn an_original_that_cannot_be_retained_stops_before_cache_cleanup() {
+    for path in [
+        "app/target/.chrono-verus-proof.json",
+        "app/target/debug/deps/identity-01.d",
+    ] {
+        let f = Fixture::new();
+        let original = f.root.join(path);
+        write(&original, &vec![b'x'; 8_388_609]);
+        f.recovery_plan(0, false);
+        assert!(f.run().is_err());
+        assert_eq!(fs::read_to_string(f.root.join("mock.calls")).unwrap(), "1");
+        assert_eq!(fs::metadata(original).unwrap().len(), 8_388_609);
     }
 }
 

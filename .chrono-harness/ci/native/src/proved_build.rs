@@ -104,6 +104,14 @@ fn identity(path: &Path) -> Result<Identity, String> {
     })
 }
 
+fn preserve_if_present(source: &Path, destination: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(source) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+        Ok(_) => fs::write(destination, bounded(source)?).map_err(|e| e.to_string()),
+    }
+}
+
 fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let parent = path.parent().ok_or("missing proof parent")?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -542,9 +550,19 @@ fn run_attempt(
                                 &directory.join("cache-rejected.json"),
                                 &serde_json::json!({"error":error,"operation":operation,"recovery_operation":recovery.operation}),
                             )?;
-                            if let Ok(bytes) = bounded(&cache) {
-                                fs::write(directory.join("rejected-proof.json"), bytes)
-                                    .map_err(|e| e.to_string())?;
+                            preserve_if_present(&cache, &directory.join("rejected-proof.json"))?;
+                            if let Ok((dependency, outputs)) =
+                                library_paths(root, &config, &artifact)
+                            {
+                                preserve_if_present(
+                                    &dependency,
+                                    &directory.join("rejected-dependency.d"),
+                                )?;
+                                for output in outputs {
+                                    let name =
+                                        output.file_name().ok_or("missing library filename")?;
+                                    preserve_if_present(&output, &directory.join(name))?;
+                                }
                             }
                             let search = environment
                                 .get(std::ffi::OsStr::new("PATH"))
