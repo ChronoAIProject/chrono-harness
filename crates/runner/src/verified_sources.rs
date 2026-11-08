@@ -660,7 +660,7 @@ pub fn valid_source_declaration(file: &SourceFile) -> (valid: bool)
         decreases declaration.roots.len() - i,
     {
         let root = &declaration.roots[i];
-        if !canonical_source_name(root.path.as_str()) || root.operation.len() == 0
+        if !canonical_source_name(root.path.as_str()) || root.operation.as_str().as_bytes().len() == 0
             || !distinct_source_root(&declaration.roots, i) {
             return false;
         }
