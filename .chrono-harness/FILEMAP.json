@@ -11,6 +11,9 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/release/native/src/recipe.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/recipe.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/recipe.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native/src/transport.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native-tests/tests/transport.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/release/native-tests/tests/support/archive.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
@@ -559,6 +562,7 @@
     {"path":"crates/worktree-tests/tests/verified_lifecycle.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"}]}
   ],
   "project_edges": [
+    {"from":"project:judge-registration","kind":"compile","to":"project:host-release-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-release-native"},
     {"from":"project:runner","kind":"compile","to":"project:host-release-native-tests"},
     {"from":"project:identifiers","kind":"compile","to":"project:host-release-native"},

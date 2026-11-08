@@ -2,5 +2,6 @@
 #![allow(unexpected_cfgs)]
 
 pub mod process;
+pub mod recipe;
 pub mod transport;
 pub mod verified_recipe;
