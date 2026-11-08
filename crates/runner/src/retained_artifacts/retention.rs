@@ -30,7 +30,7 @@ pub struct Policy {
     pub schema: String,
     pub producers: BTreeMap<String, Vec<String>>,
     pub keep_seconds: u64,
-    #[serde(default = "default_metadata_seconds")]
+    #[serde(default = "default_diagnostic_seconds")]
     pub diagnostic_keep_seconds: u64,
     pub max_related_outputs: usize,
     pub max_summaries: usize,
@@ -55,6 +55,9 @@ fn default_output_bytes() -> u64 {
     1024 * 1024 * 1024
 }
 fn default_metadata_seconds() -> u64 {
+    86400
+}
+fn default_diagnostic_seconds() -> u64 {
     86400
 }
 fn default_manifest_nodes() -> usize {
@@ -2963,9 +2966,9 @@ fn publish_owned_with(
     Ok(true)
 }
 
-/// The final report's actual producer keeps a repair reference on failed/unknown
-/// outcomes. A successful original keeps its publication role until the actual
-/// fixed-slot settlement transfers its closure to the current report.
+/// The final report keeps its publication role until the actual fixed-slot
+/// settlement transfers its closure to the current report. A settled failure
+/// then has a finite diagnostic window rather than an invented permanent reader.
 pub fn publish_final_original(
     root: &Path,
     producer: &str,
@@ -3079,9 +3082,17 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
         inventory.reference_paths(&role, &[original.into()])?;
         let gate = inventory.addressed_gate(&[], &[original.into()], &[], None, false, true)?;
         let ledger = inventory.load(&gate)?;
-        let ids: Vec<_> = ledger.outputs.iter().map(|o| o.id.clone()).collect();
+        let outputs = ledger.outputs;
         drop(gate);
-        for id in ids {
+        for output in outputs {
+            let id = &output.id;
+            let diagnostic = format!("consumer:report-recheck:{id}");
+            if matches!(output.phase.as_str(), "released" | "sealing")
+                && ledger.roots.contains_key(&diagnostic)
+            {
+                inventory.retain_diagnostic_path(&output.path)?;
+                inventory.reference(&diagnostic, &[])?;
+            }
             inventory.reference(&format!("consumer:publication-recheck:{id}"), &[])?;
         }
     }

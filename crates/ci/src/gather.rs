@@ -931,10 +931,7 @@ pub(super) fn gather(
         if let Some(inventory) =
             chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
         {
-            inventory.protect_path_consumer(
-                &format!("gather-recheck:{}", sha256(gather_original.as_bytes())),
-                &gather_original,
-            )?;
+            inventory.retain_diagnostic_path(&gather_original)?;
         }
     }
     let _slot = chrono_harness::retained_artifacts::retention::reference_report(

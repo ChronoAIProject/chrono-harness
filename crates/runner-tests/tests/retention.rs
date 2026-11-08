@@ -3671,9 +3671,9 @@ fn addressed_decoder_keeps_duplicate_unknown_and_opaque_json_refusals() {
 }
 
 #[test]
-fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it() {
+fn failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer() {
     if !isolated_capability_test(
-        "failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it",
+        "failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer",
     ) {
         return;
     }
@@ -3703,13 +3703,17 @@ fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it(
     };
     publish(failed, failed_bytes, 1);
     let failed_record = ledger(h.path())["outputs"][0].clone();
+    assert!(failed_record["expires"].as_u64().unwrap() > 0);
+    assert!(ledger(h.path())["roots"]
+        .get(format!("consumer:report-recheck:{}", failed_record["id"].as_str().unwrap()))
+        .is_none());
     publish(
         passed,
         br#"{"request":{"request_id":"passed-original"},"response":{"status":"passed"}}"#,
         0,
     );
     assert_eq!(maintain_fixture_to(h.path(), 2), 2);
-    let consumer = format!("report-recheck:{}", failed_record["id"].as_str().unwrap());
+    let consumer = "actual-failed-original-recheck";
     let declaration = consumer_input(
         h.path(),
         &consumer,
@@ -3719,6 +3723,12 @@ fn failed_final_original_survives_rotation_until_real_exact_recheck_consumes_it(
             failed
         )]),
     );
+    let protected = consumer_call(h.path(), json!({"operation":"protect-consumer", "declaration":declaration}));
+    assert_eq!(protected.exit_code, 0, "{}", protected.stderr);
+    let mut expired = failed_record.clone();
+    expired["expires"] = json!(0);
+    retention_state::replace_output(h.path(), &expired);
+    assert_eq!(maintain_fixture_to(h.path(), 2), 2);
     fs::write(
         h.path().join("recheck-expectation.json"),
         serde_json::to_vec(
