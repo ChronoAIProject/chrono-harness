@@ -1518,6 +1518,62 @@ fn full_execution_units_reject_duplicate_report_paths() {
 }
 
 #[test]
+fn full_execution_units_preserve_path_boundaries() {
+    let profile = |collection: &str, one: &str, two: &str| {
+        json!({
+            "schema_version": 3,
+            "execution_units": {
+                "units": {
+                    "one": {"tests": ["test:one"], "report_path": format!(".chrono-harness/state/{one}")},
+                    "two": {"tests": ["test:two"], "report_path": format!(".chrono-harness/state/{two}")}
+                },
+                "shared_operations": {},
+                "collection_limits": {"manifest_bytes": 1024, "report_bytes": 1024},
+                "report_path": format!(".chrono-harness/state/{collection}")
+            }
+        })
+    };
+    for (collection, one, two, accepted) in [
+        ("collection.json", "one.json", "two.json", true),
+        ("collection.json", "unit", "unit-other", true),
+        ("汇总.json", "单元.json", "另一个.json", true),
+        ("collection.json", "nested//one.json", "two.json", true),
+        ("collection.json", "nested/./one.json", "two.json", true),
+        ("collection.json", "nested/", "two.json", true),
+        ("report.json", "one.json", "two.json", false),
+        ("collection.json", "report.json", "two.json", false),
+        ("same", "same", "two.json", false),
+        ("parent", "parent/child", "two.json", false),
+        ("parent/child", "parent", "two.json", false),
+        ("collection.json", "same", "same", false),
+        ("collection.json", "parent", "parent/child", false),
+        ("collection.json", "parent/child", "parent", false),
+        ("collection.json", "", "two.json", false),
+    ] {
+        let profile = profile(collection, one, two);
+        let result = chrono_harness::units::full_execution_units(&profile);
+        if accepted {
+            assert_eq!(result.unwrap(), Some(profile["execution_units"].clone()));
+        } else {
+            assert_eq!(
+                result.unwrap_err(),
+                "execution report paths overlap reserved evidence or another report",
+                "{collection:?}, {one:?}, {two:?}"
+            );
+        }
+    }
+    for invalid in [
+        ".chrono-harness/state/../outside.json",
+        ".chrono-harness/state/nul\0.json",
+        "outside.json",
+    ] {
+        let mut invalid_profile = profile("collection.json", "one.json", "two.json");
+        invalid_profile["execution_units"]["units"]["one"]["report_path"] = json!(invalid);
+        assert!(chrono_harness::units::full_execution_units(&invalid_profile).is_err());
+    }
+}
+
+#[test]
 fn publication_preflight_rejects_symlink_and_parent_type_conflicts() {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join(".chrono-harness/state")).unwrap();
