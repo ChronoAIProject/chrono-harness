@@ -29,15 +29,8 @@ pub const LITERAL_PATHSPEC_CONTROLS: [&str; 4] = [
 /// Do not normalize a declaration into a broader exclusion. Callers retain
 /// schema validation and classify any paths that the inventory returns.
 pub fn artifact_exclusions(artifacts: &[&str]) -> Vec<String> {
-    artifacts
-        .iter()
-        .filter(|path| {
-            path.strip_suffix('/').is_some_and(|directory| {
-                directory
-                    .split('/')
-                    .all(|part| !matches!(part, "" | "." | ".."))
-            })
-        })
+    crate::verified_paths::literal_artifact_directories(artifacts)
+        .into_iter()
         .map(|path| format!(":(top,exclude,literal){path}"))
         .collect()
 }

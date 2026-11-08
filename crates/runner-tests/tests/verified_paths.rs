@@ -10,26 +10,136 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
+#[path = "../../runner/src/verified_identifiers.rs"]
+mod identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+#[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
 verus! {
+
+fn expect_path_true(actual: bool)
+    requires actual,
+{
+    if !actual { panic!(); }
+}
+
+fn expect_path_text(actual: &str, expected: &str)
+    requires actual@ == expected@,
+{
+    let matched = identifiers::equal_text(actual, expected);
+    expect_path_true(matched);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn literal_exclusions_filter_components_and_keep_order_and_duplicates() {
+    proof {
+        reveal_strlit(""); reveal_strlit("/"); reveal_strlit("file");
+        reveal_strlit("./"); reveal_strlit("../"); reveal_strlit("/absolute/");
+        reveal_strlit("a//b/"); reveal_strlit("a/./b/"); reveal_strlit("a/../b/");
+        reveal_strlit("out/"); reveal_strlit("a..b/");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("/")
+            && vstd::string::is_ascii("file") && vstd::string::is_ascii("./")
+            && vstd::string::is_ascii("../") && vstd::string::is_ascii("/absolute/")
+            && vstd::string::is_ascii("a//b/") && vstd::string::is_ascii("a/./b/")
+            && vstd::string::is_ascii("a/../b/") && vstd::string::is_ascii("out/")
+            && vstd::string::is_ascii("a..b/"));
+        assert(!policy::artifact_directory("".spec_bytes()));
+        assert(!policy::artifact_component_ok("/".spec_bytes(), 0));
+        assert(!policy::artifact_directory("/".spec_bytes()));
+        assert(!policy::artifact_directory("file".spec_bytes()));
+        assert(!policy::artifact_component_ok("./".spec_bytes(), 0));
+        assert(!policy::artifact_directory("./".spec_bytes()));
+        assert(!policy::artifact_component_ok("../".spec_bytes(), 0));
+        assert(!policy::artifact_directory("../".spec_bytes()));
+        assert(!policy::artifact_component_ok("/absolute/".spec_bytes(), 0));
+        assert(!policy::artifact_directory("/absolute/".spec_bytes()));
+        assert(!policy::artifact_component_ok("a//b/".spec_bytes(), 2));
+        assert(!policy::artifact_directory("a//b/".spec_bytes()));
+        assert(!policy::artifact_component_ok("a/./b/".spec_bytes(), 2));
+        assert(!policy::artifact_directory("a/./b/".spec_bytes()));
+        assert(!policy::artifact_component_ok("a/../b/".spec_bytes(), 2));
+        assert(!policy::artifact_directory("a/../b/".spec_bytes()));
+        assert(policy::artifact_directory("out/".spec_bytes()));
+        assert(policy::artifact_directory("a..b/".spec_bytes()));
+        reveal_with_fuel(Seq::<_>::filter_map, 14);
+    }
+    let selected = policy::literal_artifact_directories(&[
+        "", "/", "file", "./", "../", "/absolute/", "a//b/", "a/./b/", "a/../b/",
+        "out/", "a..b/", "out/",
+    ]);
+    expect_path_true(selected.len() == 3);
+    expect_path_text(selected[0], "out/");
+    expect_path_text(selected[1], "a..b/");
+    expect_path_text(selected[2], "out/");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn literal_exclusions_preserve_globs_unicode_nul_and_control_text() {
+    proof {
+        reveal_strlit("目录/é/"); reveal_strlit("a*b?[x]/"); reveal_strlit("a\0b/");
+        reveal_strlit("a\nb/"); reveal_strlit("a\\b/"); reveal_strlit(".hidden/");
+        reveal_strlit(".../");
+        unicode_literal_directory_bytes();
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("a*b?[x]/") && vstd::string::is_ascii("a\0b/")
+            && vstd::string::is_ascii("a\nb/") && vstd::string::is_ascii("a\\b/")
+            && vstd::string::is_ascii(".hidden/") && vstd::string::is_ascii(".../"));
+        assert(policy::artifact_directory("目录/é/".spec_bytes()));
+        assert(policy::artifact_directory("a*b?[x]/".spec_bytes()));
+        assert(policy::artifact_directory("a\0b/".spec_bytes()));
+        assert(policy::artifact_directory("a\nb/".spec_bytes()));
+        assert(policy::artifact_directory("a\\b/".spec_bytes()));
+        assert(policy::artifact_directory(".hidden/".spec_bytes()));
+        assert(policy::artifact_directory(".../".spec_bytes()));
+        reveal_with_fuel(Seq::<_>::filter_map, 10);
+    }
+    let selected = policy::literal_artifact_directories(&[
+        "目录/é/", "a*b?[x]/", "a\0b/", "a\nb/", "a\\b/", ".hidden/", ".../",
+    ]);
+    expect_path_true(selected.len() == 7);
+    expect_path_text(selected[0], "目录/é/");
+    expect_path_text(selected[1], "a*b?[x]/");
+    expect_path_text(selected[2], "a\0b/");
+    expect_path_text(selected[3], "a\nb/");
+    expect_path_text(selected[4], "a\\b/");
+    expect_path_text(selected[5], ".hidden/");
+    expect_path_text(selected[6], ".../");
+    let empty = policy::literal_artifact_directories(&[]);
+    expect_path_true(empty.len() == 0);
+}
+
+proof fn unicode_literal_directory_bytes()
+    ensures "目录/é/".spec_bytes() == seq![231u8, 155, 174, 229, 189, 149, 47, 195, 169, 47],
+{
+    reveal_strlit("目录/é/");
+    assert("目录/é/"@ =~= seq!['目', '录', '/', 'é', '/']);
+    assert('目' as u32 == 30446 && '录' as u32 == 24405
+        && 'é' as u32 == 233 && '/' as u32 == 47);
+    assert(vstd::utf8::encode_scalar(30446) == seq![231u8, 155, 174]) by (compute);
+    assert(vstd::utf8::encode_scalar(24405) == seq![229u8, 189, 149]) by (compute);
+    assert(vstd::utf8::encode_scalar(233) == seq![195u8, 169]) by (compute);
+    assert(vstd::utf8::encode_scalar(47) == seq![47u8]) by (compute);
+    reveal_with_fuel(vstd::utf8::encode_utf8, 6);
+    assert("目录/é/".spec_bytes() =~= seq![231u8, 155, 174, 229, 189, 149, 47, 195, 169, 47]);
+}
 
 fn expect(path: &[u8], expected: bool)
     requires expected == policy::relative_path(path@),
 {
     let actual = policy::valid_relative_path(path);
-    if actual != expected {
-        panic!();
-    }
+    expect_path_true(actual == expected);
 }
 
 fn expect_state(path: &[u8], expected: bool)
     requires expected == policy::host_state_path(path@),
 {
     let actual = policy::valid_host_state_path(path);
-    if actual != expected {
-        panic!();
-    }
+    expect_path_true(actual == expected);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
