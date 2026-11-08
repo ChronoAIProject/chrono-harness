@@ -902,6 +902,7 @@
         "linux_build_worktree",
         "linux_verify_distribution_tests",
         "linux_verify_worktree_tests",
+        "linux_verify_identifiers_tests",
         "linux_verify_runner_tests",
         "linux_verify_inputs_tests",
         "linux_verify_ci_tests",
@@ -922,8 +923,7 @@
         "linux_build_cache",
         "linux_verify_cache_tests",
         "linux_verify_host_bootstrap_native_tests",
-        "linux_verify_host_bootstrap_launcher_tests",
-        "linux_verify_identifiers_tests"
+        "linux_verify_host_bootstrap_launcher_tests"
       ],
       "downloads": [
         {
@@ -993,6 +993,10 @@
         {
           "job": "linux_verify_worktree_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_worktree_tests/"
+        },
+        {
+          "job": "linux_verify_identifiers_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_identifiers_tests/"
         },
         {
           "job": "linux_verify_runner_tests",
@@ -1077,10 +1081,6 @@
         {
           "job": "linux_verify_host_bootstrap_launcher_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_launcher_tests/"
-        },
-        {
-          "job": "linux_verify_identifiers_tests",
-          "directory": ".chrono-harness/cache/release-handoffs/verify_identifiers_tests/"
         }
       ],
       "always": true,
@@ -1978,6 +1978,7 @@
         "macos_build_worktree",
         "macos_verify_distribution_tests",
         "macos_verify_worktree_tests",
+        "macos_verify_identifiers_tests",
         "macos_verify_runner_tests",
         "macos_verify_inputs_tests",
         "macos_verify_ci_tests",
@@ -1998,8 +1999,7 @@
         "macos_build_cache",
         "macos_verify_cache_tests",
         "macos_verify_host_bootstrap_native_tests",
-        "macos_verify_host_bootstrap_launcher_tests",
-        "macos_verify_identifiers_tests"
+        "macos_verify_host_bootstrap_launcher_tests"
       ],
       "downloads": [
         {
@@ -2069,6 +2069,10 @@
         {
           "job": "macos_verify_worktree_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_worktree_tests/"
+        },
+        {
+          "job": "macos_verify_identifiers_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_identifiers_tests/"
         },
         {
           "job": "macos_verify_runner_tests",
@@ -2153,10 +2157,6 @@
         {
           "job": "macos_verify_host_bootstrap_launcher_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_launcher_tests/"
-        },
-        {
-          "job": "macos_verify_identifiers_tests",
-          "directory": ".chrono-harness/cache/release-handoffs/verify_identifiers_tests/"
         }
       ],
       "always": true,
