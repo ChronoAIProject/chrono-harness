@@ -2605,7 +2605,8 @@ impl Manager {
                 e.ownership.as_ref().is_some_and(|o| o.cache_pending),
                 maintenance,
                 e.terminal.as_ref().is_some_and(|t| t.artifacts_only),
-            ) && !age {
+            ) && !age
+            {
                 continue;
             }
             if self._gate.lease.is_some() && e.ownership.is_none() {
@@ -2729,8 +2730,9 @@ impl Manager {
                     let b = crate::recovery::state_bytes(&root, &path)?;
                     let cache_outcome = result["age_outcome"]
                         == "reusable-source-preserved-caches-reclaimed"
-                        || (cache && result["age_outcome"]
-                            != "expired-checkout-verified-absent-source-branches-retained");
+                        || (cache
+                            && result["age_outcome"]
+                                != "expired-checkout-verified-absent-source-branches-retained");
                     let stage = crate::verified_lifecycle::cleanup_result(
                         cache_outcome,
                         result["status"].as_str().unwrap_or(""),
@@ -4177,11 +4179,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     } else {
                         vec![invoking.clone(), target.clone()]
                     };
-                    let cleanup = manager.drain_for_admission(
-                        r,
-                        &cleanup_exclusions,
-                        &mut post_use_cleanup,
-                    );
+                    let cleanup =
+                        manager.drain_for_admission(r, &cleanup_exclusions, &mut post_use_cleanup);
                     report["post_use_cleanup"] = post_use_cleanup;
                     cleanup?;
                     Ok(())

@@ -344,10 +344,12 @@ impl Manager {
                     .find(|row| row.get("worktree").is_some_and(|p| Path::new(p) == e.path))
                     .and_then(|row| row.get("locked").cloned());
                 if lock.as_deref() == Some(&prior.token) {
-                    let original = self.result_input(&prior.path, prior.receipt.as_ref())?;
-                    let input: RetainedInput = serde_json::from_value(original["input"].clone())
-                        .map_err(|_| "interrupted age lock needs its original report")?;
-                    let raw = crate::recovery::state_bytes(&input.source_root, &input.path)?;
+                    let raw = crate::recovery::retained_bytes(
+                        &self.inputs.policy.coordinator_root,
+                        report["prior_age_result"]
+                            .get("input")
+                            .ok_or("interrupted age lock needs its original report")?,
+                    )?;
                     let tree = r.oid(&e.path, &format!("{head}^{{tree}}"))?;
                     maintenance::release_reconciled(
                         r,
@@ -395,6 +397,7 @@ impl Manager {
             &self.inputs.registrations,
             token,
             report,
+            e.enrollment["kind"].as_str().unwrap_or(""),
             |r| {
                 self.stable(r)?;
                 self.git_locks(&e, None)?;
@@ -469,10 +472,12 @@ impl Manager {
                     sha256: sha256(&crate::recovery::state_bytes(&root, &a.path)?),
                 });
                 if result["status"] == "cleaned" {
-                    a.completed_at = Some(SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map_err(|error| error.to_string())?
-                        .as_secs());
+                    a.completed_at = Some(
+                        SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map_err(|error| error.to_string())?
+                            .as_secs(),
+                    );
                     self.ledger.entries[i]
                         .ownership
                         .as_mut()
