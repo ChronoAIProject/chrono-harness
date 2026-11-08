@@ -40,7 +40,11 @@ fn command_carrier_count(command: &Command) -> usize {
 }
 
 fn rolling_host(keep_seconds: u64) -> Host {
-    let h = host();
+    rolling_host_mode(keep_seconds, "noop")
+}
+
+fn rolling_host_mode(keep_seconds: u64, mode: &str) -> Host {
+    let h = host_mode(mode);
     let path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
     policy["retained_producers"][0]["rolling_directory"] = value!({"success_keep_seconds":0,"failure_keep_seconds":keep_seconds,
@@ -53,9 +57,8 @@ fn rolling_host(keep_seconds: u64) -> Host {
 #[test]
 fn rolling_directory_managed_operation_owns_all_products_and_keeps_original_failure() {
     for failed in [false, true] {
-        let h = rolling_host(86400);
-        super::automatic::native_consumer(
-            &h,
+        let h = rolling_host_mode(
+            86400,
             if failed {
                 "artifact-failure"
             } else {
