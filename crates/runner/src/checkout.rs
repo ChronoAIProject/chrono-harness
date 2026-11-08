@@ -1,6 +1,6 @@
 //! Compare an explicit Git tree/index inventory with literal filesystem objects.
 use crate::{
-    facts::{Entry, Tree, full_oid},
+    facts::{Entry, Tree, TreePath, full_oid},
     relative_path,
 };
 use sha1::Sha1;
@@ -41,7 +41,7 @@ pub fn tree(raw: &[u8]) -> Result<Tree, String> {
             kind: fields[1].into(),
             oid: fields[2].into(),
         };
-        if result.insert(path.into(), entry).is_some() {
+        if result.insert(TreePath::from_text(path), entry).is_some() {
             return Err("duplicate Git tree path".into());
         }
     }
@@ -73,7 +73,7 @@ pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>
     }
     for (path, entry) in expected {
         if !stages.contains_key(&(path.as_str(), "0")) || !matches_entry(root, path, entry)? {
-            changed.insert(path.clone());
+            changed.insert(path.text.clone());
         }
     }
     Ok(changed.into_iter().collect())
