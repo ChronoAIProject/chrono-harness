@@ -8,6 +8,93 @@ use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
+/// 一行在 LF 之前结束，或在完整输入末尾结束；CR 和 NUL 都保留。
+pub open spec fn first_header_line(raw: Seq<u8>, end: int) -> bool {
+    0 <= end <= raw.len() && (end == raw.len() || raw[end] == 10)
+        && forall|i: int| 0 <= i < end ==> raw[i] != 10
+}
+
+pub open spec fn header_line_end(raw: Seq<u8>) -> int {
+    choose|end: int| first_header_line(raw, end)
+}
+
+pub proof fn header_line_end_is(raw: Seq<u8>, end: int)
+    requires first_header_line(raw, end),
+    ensures header_line_end(raw) == end,
+{
+    assert(exists|stop: int| first_header_line(raw, stop));
+    let selected = header_line_end(raw);
+    if selected < end { assert(raw[selected] == 10 && raw[selected] != 10); }
+    if end < selected { assert(raw[end] == 10 && raw[end] != 10); }
+}
+
+pub open spec fn parent_header(line: Seq<u8>) -> bool {
+    line.len() >= 7 && line[0] == 112 && line[1] == 97 && line[2] == 114
+        && line[3] == 101 && line[4] == 110 && line[5] == 116 && line[6] == 32
+}
+
+pub open spec fn commit_parent_lines(raw: Seq<u8>) -> Seq<Seq<u8>>
+    decreases raw.len(),
+{
+    let end = header_line_end(raw);
+    if !(0 < end <= raw.len()) { seq![] }
+    else {
+        let line = raw.take(end);
+        let head = if parent_header(line) { seq![line.skip(7)] } else { seq![] };
+        head + if end < raw.len() { commit_parent_lines(raw.skip(end + 1)) } else { seq![] }
+    }
+}
+
+pub open spec fn parent_record_views(records: Seq<&[u8]>) -> Seq<Seq<u8>> {
+    records.map(|i: int, bytes: &[u8]| bytes@)
+}
+
+fn is_parent_header(line: &[u8]) -> (selected: bool)
+    ensures selected == parent_header(line@),
+{
+    line.len() >= 7 && line[0] == 112 && line[1] == 97 && line[2] == 114
+        && line[3] == 101 && line[4] == 110 && line[5] == 116 && line[6] == 32
+}
+
+/// 完整借用第一段 commit 头中的原 parent 后缀；验证与错误分类仍归实际使用方。
+pub fn commit_parent_records(raw: &[u8]) -> (out: Vec<&[u8]>)
+    ensures parent_record_views(out@) == commit_parent_lines(raw@),
+        out.len() == commit_parent_lines(raw@).len(),
+        forall|i: int| 0 <= i < out.len()
+            ==> (#[trigger] out@[i])@ == commit_parent_lines(raw@)[i],
+{
+    let mut remaining = raw;
+    let mut out: Vec<&[u8]> = Vec::new();
+    loop
+        invariant parent_record_views(out@) + commit_parent_lines(remaining@)
+            == commit_parent_lines(raw@),
+        decreases remaining.len(),
+    {
+        let mut end = 0usize;
+        while end < remaining.len() && remaining[end] != 10
+            invariant end <= remaining.len(),
+                forall|i: int| 0 <= i < end ==> remaining@[i] != 10,
+            decreases remaining.len() - end,
+        { end += 1; }
+        proof {
+            header_line_end_is(remaining@, end as int);
+            reveal_with_fuel(commit_parent_lines, 1);
+        }
+        if end == 0 { return out; }
+        let (line, rest) = remaining.split_at(end);
+        if is_parent_header(line) {
+            let (_, oid) = line.split_at(7);
+            let ghost previous = parent_record_views(out@);
+            out.push(oid);
+            proof { assert(parent_record_views(out@) =~= previous + seq![oid@]); }
+        }
+        if rest.len() == 0 { return out; }
+        let (_, tail) = rest.split_at(1);
+        proof { assert(tail@ =~= remaining@.skip(end as int + 1)); }
+        remaining = tail;
+    }
+}
+
 pub open spec fn byte_prefix(a: Seq<u8>, b: Seq<u8>, n: int) -> bool {
     0 <= n <= a.len() && n <= b.len()
         && forall|i: int| 0 <= i < n ==> a[i] == b[i]
