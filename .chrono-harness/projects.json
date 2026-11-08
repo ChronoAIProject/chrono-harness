@@ -33,6 +33,8 @@
     "worktree-tests",
     "diagnostics",
     "diagnostics-tests",
+    "host-release-native",
+    "host-release-native-tests",
     "host-bootstrap-native",
     "host-bootstrap-native-tests",
     "host-bootstrap-launcher",
