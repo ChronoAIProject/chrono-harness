@@ -157,7 +157,16 @@ fn diagnostic_window_expires_without_releasing_an_actual_consumer() {
         .unwrap();
     let inventory = inventory(h.path());
     let id = publication.id().to_owned();
-    assert!(inventory.retain_diagnostic_path(path).is_err());
+    inventory.retain_diagnostic_path(path).unwrap();
+    let publishing = ledger(h.path())["outputs"][0].clone();
+    assert_eq!(publishing["phase"], "publishing");
+    assert_eq!(publishing["outcome"], Value::Null);
+    assert!(publishing["expires"].as_u64().unwrap() > 0);
+    inventory.maintain().unwrap();
+    assert_eq!(
+        fs::read(h.path().join(path)).unwrap(),
+        b"original failed output\0\xff"
+    );
     publication.complete(json!({"exit_code":17})).unwrap();
     inventory.retain_diagnostic_path(path).unwrap();
     inventory.maintain().unwrap();
