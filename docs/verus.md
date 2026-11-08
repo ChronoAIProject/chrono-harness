@@ -86,23 +86,31 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 没有新增仓内受信函数、操作、依赖或证明预算。`units::id` 继续消费同一字节判断。
 最多扫描 64 字节，拒绝时构造固定长度的原诊断；完整构建、证明及 CI 成本未测。
 
-同根的 `git_inventory_termination`、`git_inventory_text`、`git_inventory_row`、
+同根的 `git_inventory_records`、`git_inventory_fields`、`git_inventory_row`、
+`git_inventory_termination`、`git_inventory_text`、
 `git_tree_metadata` 和 `git_index_metadata` 拥有 Git 库存的局部准入和错误分类。
 `checkout::tree`／`changes` 直接调用它们：空输入或末字节 NUL 才通过终止检查；
 UTF-8 解码失败、缺 TAB、字段数错误和非法 stage 保持原完整错误。
 终止检查仍先于解码，字段判断仍先于路径／OID；tree 恰三字段，index 还要求
 stage 恰为单字节 `0`–`3`，不加强其余字段内容或丢失空字段。
-解码和行拆分成功时证明完整文本及两字段原文保留。
+NUL 记录忽略空项，保留非空记录的顺序、重复及完整字节；metadata 只按 ASCII 空格拆分，
+保留首尾和重复空格产生的空字段。行只在第一个 TAB 分割，其后全部字节归 path。
+`ascii_split_records` 从完整字节递归定义序列；实际循环证明返回数量、每项完整字节及终止。
+ASCII 分隔字节由固定 vstd 的 UTF-8 引理证明是字符边界，跳过该单字节后继续安全借用；
+解码、记录和行拆分成功时保留完整原文，不作 Unicode 归一化或字符截取。
 独立 Verus 预期核空／内嵌 NUL／末尾非 NUL、任意完整文本和字段、缺行、
 0／2／3／4 字段以及精确 stage／相邻非法字节／尾随 NUL 和 LF；同一预期进入普通 Rust。
+拆分的独立预期明确列空记录、重复记录、CR／LF／TAB、缺分隔符、首尾及重复空格，
+以及多字节 UTF-8 的完整返回数组；普通运行逐项比较长度和全部字节。
 复用现有两项标识符整 crate 证明、FILEMAP 源码边及原未过滤 runner 测试，
 无新增工具、操作、信任函数、依赖或证明预算。
-外围明确使用标准 `str::from_utf8`／`Result::ok`、`str::split('\0')`／`filter`、
-`str::split_once('\t')`、`str::split(' ')`／`collect::<Vec<_>>`，再直接传入实际结果；
-Verus 内使用固定 vstd 的切片、`str::as_bytes`、Option／Result 和 `ToString` 合同。
-完整拆分循环及外围调用组合、重复检查与文件系统比较仍待证明，不把局部准入当完整解析证明。
-新增判断读取末字节、字段数和至多一个 stage 字节，使用常量额外状态，
-拒绝时构造原诊断；完整构建、证明、CI 与存储成本未测。
+外围仅使用标准安全 `str::from_utf8`／`Result::ok` 提供实际解码观察，拆分直接调用同源实现；
+Verus 内使用固定 vstd 的切片、`str::as_bytes`／`str::len`／`str::split_at`、
+Vec 存取、Option／Result 和 `ToString` 合同，没有新增仓内受信函数或 unsafe。
+外围调用组合、重复检查与文件系统比较仍待证明，不把拆分与局部准入当完整状态证明。
+拆分扫描 N 个字节、保存 K 个借用字段，时间 O(N + K)、额外引用 O(K)；
+NUL 记录由惰性迭代改为借用数组，增加 O(K) 引用存储，meta 字段仍使用借用数组。
+其余新增判断读取末字节、字段数和至多一个 stage 字节；完整构建、证明、CI 与存储成本未测。
 
 原始 commit 物理头的 parent 行选择也由同一根的 `commit_parent_records` 实现。
 以 LF 字节分行，在首个空行停止；仅选择精确 `parent ` 前缀，完整借用原后缀，

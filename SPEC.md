@@ -1175,12 +1175,17 @@ scoped `chrono-ci-check/v2` 必须明确 `policy.facts_config` 为 `.chrono-harn
 Git tree／index 库存的局部准入也直接使用同一标识符根：空输入或末字节 NUL 才通过终止检查，
 否则完整返回 `incomplete Git inventory`，且该检查先于 UTF-8 解码。
 标准 UTF-8 接口成功时完整借用文本，失败由 Verus 返回 `non UTF-8 Git inventory`。
-首 TAB 拆分结果缺失时保留 tree／index 各自原行错误；成功时完整保留 metadata 和 path。
+NUL 记录选择、首 TAB 分割和 metadata 的 ASCII 空格拆分也使用同源 Verus 循环。
+记录选择忽略全部空项，保留非空项的顺序、重复和完整字节；metadata 保留首尾及重复空格产生的空字段。
+首 TAB 缺失时保留 tree／index 各自原行错误；成功时完整保留 metadata 和其后全部 path 字节，包括后续 TAB。
+以完整输入字节递归定义结果序列，证明实际数组的数量、每项完整字节和循环终止。
+仅在已证明的 UTF-8 字符边界使用固定 vstd 的 `str::split_at`，不另信任仓内拆分函数。
 tree metadata 恰为三字段；index metadata 还要求 stage 恰为一个 ASCII 字节 `0`、`1`、`2` 或 `3`。
 字段数／stage 失败分别完整返回 `invalid Git tree metadata`／`invalid Git index metadata`，
 且仍先于路径和 OID 校验。不额外限制其余字段，不改写空字段。
-这些成功／失败与原错误由同源 Verus 及独立预期拥有；完整 NUL／TAB／空格拆分、
-外围调用组合、重复检查与文件系统状态比较仍待证明，不能据此声明完整库存解析已证明。
+这些成功／失败、拆分结果及原错误由同源 Verus 及独立预期拥有；
+标准安全 UTF-8 解码仍是明确外部接口，外围调用组合、重复检查与文件系统状态比较仍待证明，
+不能据此声明完整库存解析和状态维护已证明。
 
 候选 profile／facts-config 字节须匹配固定 blob；构建后绑定失败和后续失败都在 `evidence.git_facts` 保留结构化进程原观察。可选 `registration_config` 独立采用原有登记／canonical 调用语义，单独 Git 绑定不要求完整登记。v1 拒绝新字段（含 null）。选测、initial 规则、操作环境、协议及唯一 check argv 保留 scoped 合同，base enforcement 写明真实端点 schema。
 
