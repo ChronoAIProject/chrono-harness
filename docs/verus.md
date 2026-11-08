@@ -79,6 +79,17 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 每个字节都属于 ASCII 字母、数字或 `._-`。循环证明返回值与各自规格充要相等，包含边界和终止。
 `facts::full_oid` 与 `units::id` 直接消费这些结果。
 
+原始 commit 物理头的 parent 行选择也由同一根的 `commit_parent_records` 实现。
+以 LF 字节分行，在首个空行停止；仅选择精确 `parent ` 前缀，完整借用原后缀，
+保持全部记录、顺序和重复，不删 CR、NUL、非 UTF-8 字节或空后缀，也不读取正文中的 parent。
+规格 `commit_parent_lines` 定义完整序列，循环证明返回长度和每项原字节恰与它相等并终止。
+`facts::commit_parents` 直接消费这些切片，继续执行原 UTF-8 解码、完整 OID 检查和错误分类；
+该外围解析组合和 Git 获取仍未证明。独立预期核双空入口、正文／续行排除、完整顺序，
+以及空、CR、NUL、非 UTF-8 后缀的完整长度和每个字节；同一失败分支也在普通 Rust 中执行。
+复用原两项标识符整 crate 证明和原未过滤运行测试，无新增操作、信任、依赖或预算。
+切片 `split_at` 和 Vec 存取沿用固定 vstd 的明确外部容器合同，不引入仓内受信实现。
+扫描量随第一段物理头长度增长，额外保存所选记录的切片引用；完整成本未测。
+
 标识符边界测试在普通 Cargo 模式下调用 runner 公开的 `verified_identifiers`，
 核对实际库的 OID、单元 ID、摘要、请求头和合并父提交判断。布尔预期经带前置条件的
 运行时失败分支检查；Verus 同时证明这些预期成立，普通 Rust 也实际执行失败分支，
@@ -667,6 +678,10 @@ Rust 测试另外验证真实消费者，不替代证明。
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
 现有通用 bootstrap 消费明确登记的 HTTPS 下载、SHA-256 校验和解包操作。
+`host.verus-download` 通过 GitHub 固定发布资产 API 获取归档，唯一地址归 projects.json，
+请求采用 `Accept: application/octet-stream`。该外部接口只提供资产原字节；
+随后执行的 SHA-256 校验仍以 verus-macos-arm64.sha256 为准，校验通过后才解包。
+原响应头保留在 `.chrono-harness/state/verus-download.headers`，由现有失败工件上传供下载故障排查。
 含证明操作的单元先核共享 core，再安装工具；无证明操作的消费单元只核共享 core。
 启动参数由 units.json 维护，工作流由登记的 ci.generate 产生。
 共享 core 的校验不代表 Verus 已安装。

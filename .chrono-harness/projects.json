@@ -2925,6 +2925,8 @@
             "--tlsv1.2",
             "--header",
             "Accept: application/octet-stream",
+            "--dump-header",
+            ".chrono-harness/state/verus-download.headers",
             "--create-dirs",
             "--output",
             ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
