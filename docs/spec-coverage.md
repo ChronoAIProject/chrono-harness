@@ -8,6 +8,8 @@
 
 CI 的额外资源分类、比较告警和摘要投影已退役：没有当前准入、构建、恢复或发布结果依赖它，成本排查直接查原生 CI。删除专属测试及宿主环境／映射登记；真实运行归属、job、artifact、原报告和失败核验继续沿原汇总流程。此范围不证明完整成本已测或其余对象均有必要。
 
+旧固定宿主迁移的证据生产者、临时宿主和发布上传目录登记已退役。当前 projects 合同仍由原未过滤测试验证；移除登记不删除旧输出。持有旧政策绑定的协调者仍须沿已有迁移流程保全原件、排除活使用方，再切换政策。
+
 ## 宿主默认合并方案
 
 产品默认 `candidate.landing` 与本仓采用数据提供[并行验收、按依赖合并](merging.md)。CI 生成器和输入生产者改用固定 PR 合并树 M 及第一父 B，单独绑定事件 head H；`chrono-ci-detection/v2` 和汇总按 H 核对 GitHub 运行／job／artifact，按 M 核对测试原件。原生部署使用本仓登记的 admission 文件，生成器不修改远端保护。Rust 回归覆盖并发目标变化、head 检出拒绝、固定父身份、合并树汇总及 full 工作流的原生凭据交接。完整检查、原生事件、远端 strict 实际切换与落地核验须分别取得真实结果；不据源码或本地结果宣称部署、完整治理或严格同树保证。
@@ -41,7 +43,7 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 | 2.2 实现／测试语言 | 部分：指令、full／scoped projects v2 配对、原生 helper | 中英文 test.same-language 原子用于新宿主默认及本仓指南；项目／脚本明确语言，受影响配对须同 ID 或 shell→python。实际配对准入已由同源 Verus 定义，独立预期核完整字面相等、shell→python 的方向及非法边界。Rust schema／配对／语言 metadata DELTA 用例及登记 CI transport、context judge、protocol judge、CLI child、生命周期、Cargo、Git fault helper；本仓 v2、Rust 显式 workflow 清单及配对测试、worktree 核心／采用分组及完整覆盖。固定历史支持退役后 projects 保留原未过滤 action；owner 字节发布与 stage 原件核验迁入现有 Rust worktree 所有者，Python 保留构建／资格读取；Rust 用例覆盖原回调义务，候选验收另记。Python 构建配方／测试对不需 manifest，单元／真实二进制集成组独立 | 完整候选验收、示例采用；迁移剩余内嵌跨语言测试／helper，真实外部接口 fixture 单独登记。声明不能证明实际源码语言 |
 | 2.2 routes 回归 helper 迁移 | 已实现，范围有限 | 八项 judge-routes-tests 回归改用 Rust 测试自有子进程 helper。`tests/support/tool.rs` 是明确 Cargo binary 和 FILEMAP compile 输入，原 test:judge-routes-tests 计划沿用 Cargo test。保留字面／空／换行 argv、cwd／环境、回执篡改、错版本／执行物替换、PATH、版本观察复用、循环／预检拒绝、标准调用、汇总身份。真实标准 DELTA 消费沿原报告验证，运行事实不在表内复制 | 仅限此测试所有者。其余跨语言逻辑／helper、外部接口 fixture 登记、完整输入、启用、同判仍缺 |
 | 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入仍缺；有限配对、routes、迁移和快照已实现 |
-| 4 固定快照／上下文／CI | 部分 | runner facts.rs、registration lib.rs；G `context_and_config_identity_mismatch`、`ignored_untracked_staged_and_wrong_checkout_fail` | config v3 已为完整／初始消费者、明确 scoped v2、当前 provider v4 事件读取／fetch 绑定 Git，见 git-facts.md。完整原生 CI／同判及 Git／委托／Cargo／SDK 输入仍缺 |
+| 4 固定快照／上下文／CI | 部分 | runner facts.rs、registration lib.rs；G `context_and_config_identity_mismatch`、`ignored_untracked_staged_and_wrong_checkout_fail`。原 commit 的 parent 物理头选择已接入同源 Verus，证明首个空行前精确前缀选择的完整原字节序列、顺序及终止，独立预期核完整长度与字节；外围 UTF-8／OID 解析组合和 Git 获取仍待证明 | config v3 已为完整／初始消费者、明确 scoped v2、当前 provider v4 事件读取／fetch 绑定 Git，见 git-facts.md。完整原生 CI／同判及 Git／委托／Cargo／SDK 输入仍缺 |
 | 4.2 CI 缓存及增量构建 | 部分：两项采用编译缓存已有键、生产／内容绑定及有限原生冷／保存、兼容源码重建、健康精确命中、不兼容环境分域／重建 | 独立 Rust chrono-cache plan 消费明确消费者／输入／产物，分开源码／兼容键；JSON pointer 只绑定所选值，整文件来源在键外，回归区分单元 metadata／构建参数。v2 探测前解析消费操作引用，只改消费者不改生产键。引用原输出登记，拒绝重叠或缓存证据／源码。Rust 失效、选择、缺失、路径、真实 CLI 环境、planner 不符回归；check.unit_cache 两项绑定真实 action／Cargo，消费命中前核 producer manifest。真实 Cargo 重建／恢复仍属本地证据，见[缓存合同](ci-cache.md)。bootstrap／check／release 明确增量，发布汇总核值。provider 为 main 消费者生成固定 restore／save，保存成功不确认后端；持续后端查询及额外传输报告、CLI、上传目录政策已退役，排障直接查原生日志与线上 API。普通 CI 复用失败原件上传，发布以独立失败 artifact 保留 state，正式发布根和 collector 合同保持。声明启动缓存可在后续失败后保存，每键至多一保存 job，冲突在生成前拒绝。[有限原生验收](ci-cache.md#bounded-native-acceptance)保留两项原标准操作／汇总 | 不可用内容恢复及修复后健康精确命中的完整原生验收仍缺。Variables／PR 正文控制和专用 fixture 已退役。并发、完整后端生命周期、依赖／当前判官／bootstrap／逐项目输入仍缺，须扩大真实消费者验收 |
 | 5 DELTA 图 | 部分 | 实际 Tree DELTA 已由同源 Verus 完整枚举并线性合并两棵原树，逐路径结果与完整 UTF-8 严格顺序均有证明；独立预期核完整长度、六字段、顺序、空／Unicode／NUL 及反向变化。Git 原始事实获取／解析仍待证明。filemap 类型化合并／记录／传递及 CI 适配；F 全部，P actual_runner_registration_filemap_*。SPEC §5.1 固定两态局部性及定理 6 有条件节点集结论（trureturing PR #10868 已合），复用冻结 ConsequenceClosure，保留先前精确应用编译和旧 execution-edge 反例 | 同源 Verus 图内核覆盖类型并集、名称／槽位索引、FIFO 最短前驱、有限原因链、行投影、原因集合、逐 seed 迭代状态／根对应及真实遍历记录选测；两处诊断按完整 seed ID 查找首个原记录也由同源根证明。返回集合沿用明确列出的外部标准库转换。外层原因关联与合并、seed-ID 生产及关联完整性、JSON 适配、额外选测和完整 SPEC 对应仍待证明；完整宿主输入及原生启用未完成 |
 | 5.2 从消费者需要出发重构依赖 | 部分 | 已有 DELTA 合并／传递／所有者检查。无独立结构报告或自检，未用 SCC／深度／排名／claim 摘要已退役，循环、类型边、有限见证保留 | 真实消费者重构、适用本地／原生验证及核实落地 |
@@ -51,6 +53,8 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 | 7.2 异常链与通用处理 | 部分：原生 IO、真实 judge 启动前／报告有类型传播 | diagnostics::error 包装／导入 chrono-error/v1；NativeIoError 保留原种类／消息／OS 码，LogFailure 共用 IO 模块。Unix 原生 writer 保留只读描述符 EBADF；发布错误保留通道／阶段／原业务、独立次要输出／诊断失败。专属原生／无原生／部分／flush 测试。完整 judge 以 chrono-runner-transport-failure/v1 保留准备原因／码、封存请求／judge／operation，区分未启动，保留子原件，晚期报告发布失败关联原原因。真实 IO、协议／schema／上下文变异、次要发布回归，见[诊断边界](diagnostics.md) | 已有有限 Darwin 原生观察；Linux、其他产品原生适配／类型传播、非 Unix 输出、任意自定义原因序列化、协议采用、持久引用、其他次要失败发布仍缺；完整输入／启用／SPEC 未完成 |
 | 7.3 自我检测 | 部分 | 原接收器描述符耗尽回归保留 spawn 原错／共享观察；资源比较消费登记实测，恢复保留失败／未确认 outcome、逐项清理和原报告。真实文件系统／CLI 回归；最终传输拒绝恢复观察缺失／变化，保留两快照 | 全生产者及历史超时根因；有限故障测试不证明普遍检测 |
 | 7.4 完成归属与等待 | 部分：原生引擎及生命周期等待 | runner 用一个已有内核退出观察器／私有通知。静默期间阻塞到真实事件或原期限，取消／释放／关闭提示沿原 socket；mapping v5 拒绝不兼容嵌套观察器。独立原生计数及原退出／期限／输出／launcher 中断／描述符预算回归 | 外部宿主／调用方通道选择、句柄、丢通道后不重复启动的恢复尚未实现；不控制其他任务，原生 Linux 待验 |
+| 7.5 所有工具本地状态与终态追踪 | 待实现，只有统一目标合同 | 现有进程回执、worktree intent／result 和原件保留可复用；它们不证明全部工具已接入。本仓尚无 pr-open／pr-watch 实现 | 逐工具持久记录、跨会话恢复、命令与对象终态分离、发布失败恢复；终态确认且消费者释放后滚动清理，索引／摘要／回执也有限保留，活跃及 unknown 状态继续保护 |
+| 7.5 工作树登记、恢复与清理 | 待实现完整接续 | 现役 worktree 创建／导入／use／finish／maintain、逐地址登记、内核保护及缓存恢复已有各自有限实现；其他客户端与全部本地工作树接入未验收 | 协调宿主持久状态、漏登／空记录核对、明确接管、工作／交付与清理分态、交接中断恢复、具体保留项释放后的整树回收；未处置对象不先丢当前记录 |
 | 8 七判官／混合修改 | 部分 | 七个有限生产者及 W 完整链消费者 | 完整宿主输入及启用 |
 | 9 报告／成本 | 部分 | runner full.rs；G full_report_* 核必需字段、配置／实测执行物区别、发现／具名输出来源、null／未解原因、pass／warn／fail／error 退出、旧明确存储／stdout 一致。声明成本报告已实现，有限 routes 工具／projects 证据已有 | 完整工具链／输入和可选测量；未知／冲突不能证明完整治理 |
 | 9.1 资源诊断 | 部分 | 发布 v5 核明确消费／前置；cache 生成验证拒绝多保存者。父 gather 在当前 API attempt 视图暴露时间／未知、保留旧 attempt 排除，不跨 attempt 重计沿用结果；可选分类比较沿同原响应／Actions 摘要告警，无额外 job／请求 | 其他消费审计、编译／测试拆分、排队、内存／磁盘／计费、通用冗余检测、公开工具采用 |
@@ -143,6 +147,16 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 | 72 固定版本读取，或继续使用兼容的现有工作树 | 待实现：目前只有 SPEC §10.2 目标 | 读取不切分支；复用前核身份、工作和绑定；新分支仍须满足最新 dev 和现有验收 |
 | 73 协作者的编辑、index、ref 或整树操作重叠 | 待实现：目前只有 SPEC §10.2 目标 | 按真实语义依赖和冲突范围协调，保留其他参与者及其子孙任务的保护 |
 | 74 工作已保存／检查，但仍有消费者或未核落地 | 待实现：目前只有 SPEC §10.2 目标 | 分清源码保存、任务加入、检查结果、实际落地与清理；单个成功或退出不释放其他消费者 |
+| 75 工具返回后会话结束／机器重启 | 待实现：§7.5 | 从本地记录恢复原操作及对象、结果和句柄，不重复派发未知工作 |
+| 76 worktree 创建／pr-open 成功，对象仍活跃 | 待实现：§7.5 | 命令终态与对象状态分别追踪，打开不等于合并，创建不等于可删除 |
+| 77 pr-watch 超时／中断／失败／身份不符 | 待实现：§7.5 | 保留原观察与失败，未确认对象保持 unknown，沿原通道恢复 |
+| 78 状态发布中断或副作用后发布失败 | 待实现：§7.5 | 原 intent／部分结果及错误可恢复，不报完整成功、不重复创建 |
+| 79 终态状态达到滚动清理条件 | 待实现：§7.5、§10.1 | 只清理已确认终态、消费者已释放且满足政策的状态；活跃／unknown／恢复状态保护，超限据实报告 |
+| 80 清理终态状态后再次查询 | 待实现：§7.5、§10.1 | 索引／摘要／回执也有限保留，已回收结果明确不可取得，不反推成功或取得对象删除权 |
+| 81 Git 工作树漏登／空记录／其他客户端创建 | 待实现：§7.5 | 报明确差异，受管使用前接管当前保管，历史结果保持 unknown，不猜删除资格 |
+| 82 工作树创建／交接／清理中断或漏调 finish | 待实现完整合同：§7.5 | 原所有者在存活协调宿主持久保存待办及恢复条件，后续入口接续，仍须真实终态与消费者排除 |
+| 83 缓存清理或 PR 合并后工作树仍存在 | 待实现：§7.5 | 工作／交付与清理阶段分别记录，清缓存不报整树移除，保留须有具体对象和解除条件 |
+| 84 必要原件已释放或工作树仅部分移除 | 待实现：§7.5、§10.1 | 核原件／引用及提交保全后继续处置；路径和 Git 登记核实移除前不丢恢复状态，仍保留／复用对象的当前记录持续可用 |
 
 ## 当前实现的负责位置
 

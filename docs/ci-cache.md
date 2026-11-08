@@ -117,7 +117,7 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 宿主 bootstrap 接受可选的 `.chrono-harness/state/` 下字面报告文件，拒绝越界或符号链接位置，并传递报告发布错误。各配方拥有自己的报告位置；重复用同一位置会替换最新结果。已有产物上传保留两份独立记录。
 
-计划保留 planner 的执行路径、实测文件摘要及版本，恢复和封存核对同一身份。独立 bootstrap 记录安装二进制摘要及源码身份。文件摘要不证明编译器输入完整或内存加载身份；bootstrap 证据缺失或源码不干净，不能证明绑定到干净源码。
+计划保留 planner 的执行路径、实测文件摘要及版本。首次恢复按保留输入重核登记、宿主和所选观察，沿用原 planner 身份；封存另核当前执行物与原 planner 一致。独立 bootstrap 记录安装二进制摘要及源码身份。文件摘要不证明编译器输入完整或内存加载身份；bootstrap 证据缺失或源码不干净，不能证明绑定到干净源码。
 
 detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
 
@@ -141,7 +141,7 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 
 缓存不跳过标准检查，不用缓存状态替代构建／测试结果。计划、探测、恢复、内容核验和封存由各自生产者在 `.chrono-harness/state/` 保留原件及摘要引用；所选原生 action 日志保留恢复／保存的实际输出。保存 action 成功不能证明归档已保存、编译器复用或当前执行物验证。
 
-恢复和封存要求计划中的 planner SHA-256 和版本完整，且与当前执行物一致；缺失或不匹配在效果前失败。普通检查复用已有失败诊断上传，detector 的 `job_gating.detector.evidence_directory` 继续通过已有固定上传 action 保留声明原件。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划和探测原件；目录、隐藏文件和缺失原件规则保持。
+封存要求计划中的 planner SHA-256 和版本完整，且与当前执行物一致；缺失或不匹配在封存前失败。恢复核对原计划及当前登记，不比较当前执行物与原 planner 身份。普通检查复用已有失败诊断上传，detector 的 `job_gating.detector.evidence_directory` 继续通过已有固定上传 action 保留声明原件。本宿主选择 `.chrono-harness/state/`，包括 bootstrap、计划和探测原件；目录、隐藏文件和缺失原件规则保持。
 
 采用缓存的发布单元在失败时用配方已有的固定上传 action 单独上传 `.chrono-harness/state/`，包含隐藏文件。诊断 artifact 与正式发布 artifact 分开命名；正式上传目录、归档根和 collector 下载合同保持。上传失败仍使对应步骤失败，原业务结果独立保留。原件随线上 artifact 的保留期清理，本地按既有生命周期处理，不入 Git。
 

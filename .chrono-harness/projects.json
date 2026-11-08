@@ -2906,6 +2906,8 @@
             "--tlsv1.2",
             "--header",
             "Accept: application/octet-stream",
+            "--dump-header",
+            ".chrono-harness/state/verus-download.headers",
             "--create-dirs",
             "--output",
             ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
@@ -2920,6 +2922,18 @@
             "256",
             "-c",
             ".chrono-harness/ci/verus-macos-arm64.sha256"
+          ]
+        },
+        "verus-extract-shared": {
+          "operation": "host.verus-extract-shared",
+          "tool": "tar",
+          "argv": [
+            "-x",
+            "-f",
+            ".chrono-harness/bin/verus.zip",
+            "-s",
+            "|^verus-arm64-macos|.chrono-harness/bin/verus|",
+            "--no-same-owner"
           ]
         },
         "verus-extract": {
