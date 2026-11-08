@@ -125,10 +125,6 @@
       "disposition": "dispose"
     },
     {
-      "path": ".chrono-harness/cache/",
-      "disposition": "dispose"
-    },
-    {
       "path": "crates/worktree/target/",
       "disposition": "dispose"
     },
@@ -163,6 +159,58 @@
     {
       "path": "crates/pr-tests/target/",
       "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-verus/",
+      "disposition": "retain"
+    },
+    {
+      "path": ".chrono-harness/cache/host-bootstrap-native/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/host-bootstrap-native-tests/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/identifiers/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/identifiers-tests/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/release/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/release-dependencies/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/release-handoffs/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/release-results/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/",
+      "disposition": "retain"
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/rustup/",
+      "disposition": "retain"
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/home/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/tmp/",
+      "disposition": "dispose"
     }
   ],
   "main_cache_only": true,
@@ -172,7 +220,10 @@
       "directory": ".chrono-harness/state/entry-runs/",
       "temporary": true,
       "generated_outputs": [],
-      "operations": ["validate.delta", "bootstrap.build"],
+      "operations": [
+        "validate.delta",
+        "bootstrap.build"
+      ],
       "rolling_directory": {
         "success_keep_seconds": 0,
         "failure_keep_seconds": 86400,
@@ -185,7 +236,10 @@
       "directory": ".chrono-harness/state/bootstrap-test-runs/",
       "temporary": true,
       "generated_outputs": [],
-      "operations": ["host.bootstrap-tests", "host.bootstrap-command-tests"],
+      "operations": [
+        "host.bootstrap-tests",
+        "host.bootstrap-command-tests"
+      ],
       "rolling_directory": {
         "success_keep_seconds": 0,
         "failure_keep_seconds": 86400,

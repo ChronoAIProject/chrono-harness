@@ -12,6 +12,44 @@ use vstd::prelude::*;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn download_contracts_reject_each_missing_obligation() {
+    let good = policy::valid_download_entry(1, 1, 1, 1, true, true, true, true);
+    assert(good);
+    let absent_paths = policy::valid_download_entry(0, 1, 1, 1, true, true, true, true);
+    let absent_domain = policy::valid_download_entry(1, 0, 1, 1, true, true, true, true);
+    let absent_sources = policy::valid_download_entry(1, 1, 0, 1, true, true, true, true);
+    let absent_consumer = policy::valid_download_entry(1, 1, 1, 0, true, true, true, true);
+    let duplicate = policy::valid_download_entry(1, 1, 1, 1, false, true, true, true);
+    let bad_writer = policy::valid_download_entry(1, 1, 1, 1, true, false, true, true);
+    let incompatible = policy::valid_download_entry(1, 1, 1, 1, true, true, false, true);
+    let no_purpose = policy::valid_download_entry(1, 1, 1, 1, true, true, true, false);
+    assert(!absent_paths && !absent_domain && !absent_sources && !absent_consumer
+        && !duplicate && !bad_writer && !incompatible && !no_purpose);
+    let missing = policy::single_download_binding(0);
+    let one = policy::single_download_binding(1);
+    let ambiguous = policy::single_download_binding(2);
+    assert(!missing && one && !ambiguous);
+    let empty = policy::valid_download_path(&[]);
+    let path = policy::valid_download_path(&[97u8, 47, 98, 46, 108, 111, 99, 107]);
+    let wildcard = policy::valid_download_path(&[97u8, 47, 42]);
+    let quote = policy::valid_download_path(&[97u8, 39]);
+    assert(!empty && path && !wildcard && !quote);
+    let artifact = policy::valid_download_artifact(Some("p"), "p", Some("o"), "o", Some(false), Some("download-cache"));
+    let tracked_result = policy::valid_download_artifact(Some("p"), "p", Some("o"), "o", Some(true), Some("download-cache"));
+    let missing_kind = policy::valid_download_artifact(Some("p"), "p", Some("o"), "o", Some(false), None);
+    let missing_owner = policy::valid_download_artifact(Some("p"), "p", None, "o", Some(false), Some("download-cache"));
+    let wrong_owner = policy::valid_download_artifact(Some("p"), "p", Some("p"), "o", Some(false), Some("download-cache"));
+    let evidence = policy::valid_download_artifact(Some("p"), "p", Some("o"), "o", Some(false), Some("execution-evidence"));
+    proof {
+        reveal_strlit("p"); reveal_strlit("o");
+        reveal_strlit("download-cache"); reveal_strlit("execution-evidence");
+        assert("p"@[0] != "o"@[0]);
+        assert("download-cache"@.len() != "execution-evidence"@.len());
+    }
+    assert(artifact && !tracked_result && !missing_kind && !missing_owner && !wrong_owner && !evidence);
+}
+
 fn expect_cache_registry(schema: Option<&str>, primary_checkout: bool, expected: bool)
     requires expected == policy::cache_registry(schema, primary_checkout),
 {

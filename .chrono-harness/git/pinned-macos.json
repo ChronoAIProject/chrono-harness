@@ -460,7 +460,14 @@
       "owner": "pr-tests",
       "kind": "cargo-output",
       "tracked": false
-    }
+    },
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/","owner":"repository","kind":"download-cache","tracked":false}
   ],
   "environment": {
     "credential_environment": [

@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 pub mod cache;
 mod check_inputs;
+pub mod downloads;
 mod event_git;
 pub mod full;
 mod gather;

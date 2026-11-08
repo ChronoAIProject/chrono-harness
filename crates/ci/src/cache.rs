@@ -17,6 +17,8 @@ pub struct Config {
     pub config: String,
     pub restore_action: String,
     pub save_action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<crate::downloads::Config>,
     pub jobs: BTreeMap<String, Consumer>,
 }
 
@@ -57,6 +59,9 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
     }
     action(&c.restore_action, "actions/cache/restore")?;
     action(&c.save_action, "actions/cache/save")?;
+    if let Some(downloads) = &c.downloads {
+        crate::downloads::validate(downloads, jobs)?;
+    }
     let mut saving_jobs = BTreeMap::new();
     for (job, consumer) in &c.jobs {
         let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
@@ -118,6 +123,9 @@ pub(crate) fn validate_registry(root: &Path, c: Option<&Config>) -> Result<(), S
     let caches = registry["caches"]
         .as_object()
         .ok_or("persistent cache registry needs caches")?;
+    if let Some(downloads) = &c.downloads {
+        crate::downloads::validate_registry(root, downloads, &registry)?;
+    }
     for consumer in c.jobs.values() {
         let selected = caches
             .iter()
@@ -158,6 +166,7 @@ pub(crate) fn project(
     let Some(c) = c else {
         return Ok(body);
     };
+    let body = crate::downloads::project(c, job, body)?;
     let Some(consumer) = c.jobs.get(job) else {
         return Ok(body);
     };

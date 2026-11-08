@@ -3,6 +3,8 @@
 set -eu
 test "$#" -ge 2 || { echo 'usage: bootstrap-native.sh HOST CONFIG [ARGUMENTS]' >&2; exit 2; }
 task_root=$(CDPATH= cd -- "$1" && pwd -P)
+export CARGO_HOME="$task_root/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+export RUSTUP_HOME="${RUSTUP_HOME-$HOME/.rustup}"
 if [ "${CHRONO_WORKTREE_BOOTSTRAP+x}" = x ]; then
     test "$CHRONO_WORKTREE_BOOTSTRAP" = "$task_root" && test -n "${CHRONO_PROCESS_FDS-}" || {
         echo 'bootstrap reentry requires the original root and ownership capabilities' >&2; exit 2;
