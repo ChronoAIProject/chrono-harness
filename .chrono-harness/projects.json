@@ -2893,6 +2893,7 @@
             "--show-error",
             "--retry",
             "3",
+            "--retry-all-errors",
             "--retry-max-time",
             "120",
             "--connect-timeout",
