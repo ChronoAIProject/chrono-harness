@@ -22,7 +22,8 @@ fn fixture_with_entrypoint(
         let mut policy = json(&fs::read(&path).unwrap()).unwrap();
         policy["producers"]["lifecycle-original"] =
             value!([".chrono-harness/state/worktrees/", ".chrono-harness/state/automatic-cleanup/"]);
-        policy["producers"]["bootstrap-fixture"] = value!([".chrono-harness/state/bootstrap-"]);
+        policy["producers"]["bootstrap-fixture"] =
+            value!([".chrono-harness/state/bootstrap-fixture/"]);
         policy["diagnostic_keep_seconds"] = value!(0);
         policy["max_related_outputs"] = value!(512);
         fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
@@ -90,7 +91,7 @@ fn fixture_with_entrypoint(
         serde_json::to_vec_pretty(&registration).unwrap(),
     )
     .unwrap();
-    let profile = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0",
+    let mut profile = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0",
         "tools":{"cargo":tools.join("cargo"),"rustc":tools.join("rustc")},"operations":["owner.fixture-version"],"install":[],
         "require_tool_bindings":true,"rust_incremental":false,
         "tool_bindings_registry":registry_path,
@@ -98,6 +99,9 @@ fn fixture_with_entrypoint(
         "entrypoint":{"tool":"owner-probe","script":entrypoint},
         "participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":fixture_git(),"config":POLICY},
         "owner_stage":{"source":".chrono-harness/bin/built-owner","selected":".chrono-harness/bin/chrono-worktree"}});
+    if retention {
+        profile["report_path"] = value!(".chrono-harness/state/bootstrap-fixture/current.json");
+    }
     fs::write(
         h.root.join(PROFILE),
         serde_json::to_vec_pretty(&profile).unwrap(),

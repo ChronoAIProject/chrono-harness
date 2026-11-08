@@ -155,17 +155,25 @@ fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     fs::write(&result_path, b"changed cache cleanup original").unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{maintained} {error}");
+    let after_failure = h.ledger()["entries"][0].clone();
+    let protected = after_failure["cache_attempts"].as_array().unwrap();
+    assert_eq!(protected.len(), 3, "{maintained}");
+    assert_eq!(protected[0], entry["cache_attempts"][0]);
+    assert_eq!(protected[1], entry["cache_attempts"][1]);
+    // Migration can open a new current generation. Independent completed
+    // history may retire while the unknown and changed originals stay rooted.
     assert_eq!(
-        h.ledger()["entries"][0]["cache_attempts"],
-        entry["cache_attempts"]
+        protected[2]["generation"],
+        after_failure["ownership"]["generation"]
     );
+    assert!(protected[2]["receipt"].is_object());
     fs::write(&result_path, original).unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
     let remaining = h.ledger()["entries"][0]["cache_attempts"].clone();
     assert_eq!(remaining.as_array().unwrap().len(), 2);
     assert_eq!(remaining[0], entry["cache_attempts"][0]);
-    assert_eq!(remaining[1], entry["cache_attempts"][2]);
+    assert_eq!(remaining[1], protected[2]);
 }
 
 pub(super) fn main_host_mode(mode: &str) -> Host {
