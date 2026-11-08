@@ -12,6 +12,62 @@ mod consumption;
 mod support;
 
 #[test]
+fn execution_report_registration_preserves_path_boundaries() {
+    use chrono_judge_registration::Registrations;
+    let mut values = support::values();
+    let config = values.get_mut(support::CONFIG).unwrap();
+    config["schema_version"] = json!(3);
+    config["facts_git"] = json!({"tool":"sh","input":"git-bytes"});
+    // Registration loads declarations only; this test does not launch Git.
+    config["environment"]["inputs"] = json!([{
+        "id":"git-bytes", "location":"declared-git", "presence":"present",
+        "sha256":"a".repeat(64)
+    }]);
+    config["input_closure"]["status"] = json!("incomplete");
+    config["execution_units"] = json!({
+        "units":{
+            "one":{"tests":["test:t"],"report_path":".chrono-harness/state/one.json"},
+            "two":{"tests":["test:other"],"report_path":".chrono-harness/state/two.json"}
+        },
+        "shared_operations":{},
+        "collection_limits":{"manifest_bytes":1024,"report_bytes":1024},
+        "report_path":".chrono-harness/state/collected.json"
+    });
+    for (collection, one, two, accepted) in [
+        ("collected.json", "one.json", "two.json", true),
+        ("collected.json", "unit", "unit-other", true),
+        ("汇总.json", "单元一.json", "单元二.json", true),
+        ("report.json", "one.json", "two.json", false),
+        ("collected.json", "report.json", "two.json", false),
+        ("one.json", "one.json", "two.json", false),
+        ("reports", "reports/one.json", "two.json", false),
+        ("reports/all.json", "reports", "two.json", false),
+        ("collected.json", "one.json", "one.json", false),
+        ("collected.json", "reports", "reports/two.json", false),
+        ("collected.json", "reports/one.json", "reports", false),
+        ("", "one.json", "two.json", false),
+        ("collected.json", "", "two.json", false),
+        ("collected.json", "a/../one.json", "two.json", false),
+        ("collected.json", "one.json\0", "two.json", false),
+        ("collected.json", "a//one.json", "two.json", false),
+        ("a/./all.json", "one.json", "two.json", false),
+        ("collected.json", "a/./one.json", "two.json", false),
+    ] {
+        let mut candidate = values.clone();
+        let block = &mut candidate.get_mut(support::CONFIG).unwrap()["execution_units"];
+        block["report_path"] = json!(format!(".chrono-harness/state/{collection}"));
+        block["units"]["one"]["report_path"] = json!(format!(".chrono-harness/state/{one}"));
+        block["units"]["two"]["report_path"] = json!(format!(".chrono-harness/state/{two}"));
+        let error = Registrations::load(&candidate, support::CONFIG).err();
+        assert_eq!(
+            error.is_none(),
+            accepted,
+            "{collection:?}, {one:?}, {two:?}: {error:?}"
+        );
+    }
+}
+
+#[test]
 fn retained_state_paths_require_nonempty_suffix_and_keep_lexical_spelling() {
     use chrono_judge_registration::inputs::retained_shape;
     for (path, accepted) in [

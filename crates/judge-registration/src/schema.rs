@@ -366,9 +366,6 @@ fn validate_execution_units(v: &Value) -> Result {
         &fields["report_path"],
         "execution_units.report_path must reside in .chrono-harness/state/",
     )?;
-    if fields["report_path"] == ".chrono-harness/state/report.json" {
-        return Err("execution_units.report_path collides with canonical full report".into());
-    }
     let units = fields["units"].as_object().ok_or("execution_units.units")?;
     if units.is_empty() {
         return Err("execution_units.units must be nonempty".into());
@@ -387,26 +384,6 @@ fn validate_execution_units(v: &Value) -> Result {
             &unit["report_path"],
             "execution unit report must reside in .chrono-harness/state/",
         )?;
-        if unit["report_path"] == fields["report_path"] {
-            return Err(format!(
-                "execution unit report collides with full report: {id}"
-            ));
-        }
-        for (other_id, other) in units {
-            if id != other_id
-                && (unit["report_path"] == other["report_path"]
-                    || unit["report_path"]
-                        .as_str()
-                        .unwrap()
-                        .starts_with(&format!("{}/", other["report_path"].as_str().unwrap()))
-                    || other["report_path"]
-                        .as_str()
-                        .unwrap()
-                        .starts_with(&format!("{}/", unit["report_path"].as_str().unwrap())))
-            {
-                return Err("execution unit report paths overlap".into());
-            }
-        }
     }
     let limits = object(
         &fields["collection_limits"],
