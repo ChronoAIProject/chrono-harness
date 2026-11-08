@@ -102,15 +102,10 @@ pub fn parents(root: &Path, oid: &str) -> Result<Vec<String>, String> {
 /// Parse physical commit headers, without revision-walk shallow semantics.
 pub fn commit_parents(bytes: &[u8]) -> Result<Vec<String>, String> {
     let mut parents = vec![];
-    for line in bytes
-        .split(|b| *b == b'\n')
-        .take_while(|line| !line.is_empty())
-    {
-        if let Some(oid) = line.strip_prefix(b"parent ") {
-            let oid = std::str::from_utf8(oid).map_err(|_| "invalid parent OID")?;
-            full_oid(oid)?;
-            parents.push(oid.into());
-        }
+    for oid in crate::verified_identifiers::commit_parent_records(bytes) {
+        let oid = std::str::from_utf8(oid).map_err(|_| "invalid parent OID")?;
+        full_oid(oid)?;
+        parents.push(oid.into());
     }
     Ok(parents)
 }
