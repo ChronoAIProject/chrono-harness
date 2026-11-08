@@ -343,14 +343,29 @@ fn local_driver_publishes_real_release_from_isolated_roots_with_registered_worke
         f.host.config["local_workers"] = json!(workers);
         f.host.save();
         f.git(&["add", "--all"]);
-        f.git(&["-c", "user.name=Release test", "-c", "user.email=release-test@example.invalid", "commit", "--quiet", "-m", "local worker selection"]);
+        f.git(&[
+            "-c",
+            "user.name=Release test",
+            "-c",
+            "user.email=release-test@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "local worker selection",
+        ]);
         let output = f.outputs.path().join("local");
         let out = f.local(&output);
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-        let local: Value = serde_json::from_slice(&fs::read(output.join("local.json")).unwrap()).unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let local: Value =
+            serde_json::from_slice(&fs::read(output.join("local.json")).unwrap()).unwrap();
         assert_eq!(local["status"], "passed");
         assert_eq!(local["units"].as_object().unwrap().len(), 5);
-        let receipt: Value = serde_json::from_slice(&fs::read(output.join("receipt.json")).unwrap()).unwrap();
+        let receipt: Value =
+            serde_json::from_slice(&fs::read(output.join("receipt.json")).unwrap()).unwrap();
         assert_eq!(receipt["status"], "passed");
         assert!(output.join("release.json").is_file());
         assert!(!output.join("units/collect").exists());
@@ -363,7 +378,10 @@ fn local_driver_publishes_real_release_from_isolated_roots_with_registered_worke
             let source = processes[1]["cwd"].as_str().unwrap();
             assert!(source.ends_with(&format!("/roots/{id}")));
             events.push((processes[0]["started_ns"].as_u64().unwrap(), 1i32));
-            events.push((processes.last().unwrap()["finished_ns"].as_u64().unwrap(), -1));
+            events.push((
+                processes.last().unwrap()["finished_ns"].as_u64().unwrap(),
+                -1,
+            ));
             for process in processes {
                 for stream in ["stdout", "stderr"] {
                     let declaration = &process[stream];
@@ -375,9 +393,15 @@ fn local_driver_publishes_real_release_from_isolated_roots_with_registered_worke
         }
         events.sort();
         let (mut active, mut peak) = (0, 0);
-        for (_, change) in events { active += change; peak = peak.max(active); }
+        for (_, change) in events {
+            active += change;
+            peak = peak.max(active);
+        }
         assert_eq!(active, 0);
-        assert!(peak > 0 && peak <= workers as i32, "workers {workers}, observed {peak}");
+        assert!(
+            peak > 0 && peak <= workers as i32,
+            "workers {workers}, observed {peak}"
+        );
     }
 }
 
@@ -387,15 +411,27 @@ fn local_driver_keeps_original_failure_and_finishes_independent_siblings() {
     let output = f.outputs.path().join("local");
     let out = f.local(&output);
     assert_eq!(out.status.code(), Some(2));
-    let local: Value = serde_json::from_slice(&fs::read(output.join("local.json")).unwrap()).unwrap();
+    let local: Value =
+        serde_json::from_slice(&fs::read(output.join("local.json")).unwrap()).unwrap();
     assert_eq!(local["status"], "failed");
     assert_eq!(local["units"].as_object().unwrap().len(), 5);
-    for id in ["build_a", "build_b"] { assert_eq!(local["units"][id]["result"], "success"); }
-    for id in ["test_none", "test_a", "collect"] { assert_eq!(local["units"][id]["result"], "failure"); }
+    for id in ["build_a", "build_b"] {
+        assert_eq!(local["units"][id]["result"], "success");
+    }
+    for id in ["test_none", "test_a", "collect"] {
+        assert_eq!(local["units"][id]["result"], "failure");
+    }
     for id in ["test_none", "test_a"] {
-        let original: Value = serde_json::from_slice(&fs::read(output.join("units").join(id).join("receipt.json")).unwrap()).unwrap();
+        let original: Value = serde_json::from_slice(
+            &fs::read(output.join("units").join(id).join("receipt.json")).unwrap(),
+        )
+        .unwrap();
         assert_eq!(original["failure"]["exit_code"], 37);
-        assert!(local["units"][id]["retained_root"].as_str().is_some_and(|path|std::path::Path::new(path).is_dir()));
+        assert!(
+            local["units"][id]["retained_root"]
+                .as_str()
+                .is_some_and(|path| std::path::Path::new(path).is_dir())
+        );
     }
     assert!(!output.join("release.json").exists());
 }

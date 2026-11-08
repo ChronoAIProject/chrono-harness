@@ -198,7 +198,11 @@ impl Fixture {
     }
 
     pub fn local(&self, output: &Path) -> Output {
-        capture(Command::new(env!("CARGO_BIN_EXE_chrono-test-release-cli")).arg(self.root()).arg(output))
+        capture(
+            Command::new(env!("CARGO_BIN_EXE_chrono-test-release-cli"))
+                .arg(self.root())
+                .arg(output),
+        )
     }
 }
 
