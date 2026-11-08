@@ -102,14 +102,14 @@ fn policy_migration_adopts_new_registered_outputs_without_disposal_or_rewriting_
 }
 
 #[test]
-fn policy_migration_requires_committed_matching_target_and_coordinator() {
+fn policy_migration_requires_each_endpoints_own_committed_inputs() {
     let (h, target) = fixture();
     advance(&h);
     cache(&target);
     let ledger = fs::read(h.ledger_path(&target)).unwrap();
     let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
-    assert_ne!(code, 0, "{report} {error}");
-    assert!(report.to_string().contains("must adopt the coordinator"));
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(report["policy_migration"]["status"], "already-current");
     assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
     adopt(&h, &target);
     let adopted = fs::read(target.join(CLEANUP)).unwrap();
@@ -129,6 +129,45 @@ fn policy_migration_requires_committed_matching_target_and_coordinator() {
     fs::write(h.root.join(CLEANUP), adopted).unwrap();
     migrate(&h, &target);
     assert!(target.join("output λ/cache").exists());
+}
+
+#[test]
+fn independent_worktree_policy_migrates_without_changing_coordinator_choices() {
+    let (h, target) = fixture();
+    let coordinator_policy = fs::read(h.root.join(CLEANUP)).unwrap();
+    let original = h.ledger()["entries"][0].clone();
+    edit(&target, CLEANUP, |v| {
+        v["artifacts"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|a| a["path"] != "nested/cache/");
+    });
+    commit(&target);
+    cache(&target);
+    fs::create_dir_all(target.join("nested/cache")).unwrap();
+    fs::write(
+        target.join("nested/cache/keep"),
+        "another owner's selection",
+    )
+    .unwrap();
+    assert_ne!(h.auto("maintain", &[]).0, 0);
+    assert!(target.join("output λ/cache").exists());
+    let result = migrate(&h, &target);
+    assert_eq!(result["policy_migration"]["status"], "adopted");
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"],
+        original["enrollment"]
+    );
+    assert_eq!(
+        h.ledger()["entries"][0]["ownership"]["id"],
+        original["ownership"]["id"]
+    );
+    assert_eq!(fs::read(h.root.join(CLEANUP)).unwrap(), coordinator_policy);
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(!target.join("output λ").exists());
+    assert!(target.join("nested/cache/keep").exists());
+    assert_eq!(fs::read(h.root.join(CLEANUP)).unwrap(), coordinator_policy);
 }
 
 #[test]
@@ -215,7 +254,7 @@ fn policy_migration_corrupt_receipt_or_retained_policy_blocks_later_disposal() {
 }
 
 #[test]
-fn policy_migration_requires_artifact_registration_at_both_endpoints() {
+fn policy_migration_requires_artifact_registration_by_target_owner() {
     let (h, target) = fixture();
     edit(&h.root, CONFIG, |v| {
         v["artifacts"].as_array_mut().unwrap().push(
@@ -238,6 +277,108 @@ fn policy_migration_requires_artifact_registration_at_both_endpoints() {
     fs::copy(h.root.join(CONFIG), target.join(CONFIG)).unwrap();
     commit(&target);
     migrate(&h, &target);
+}
+
+#[test]
+fn target_policy_can_add_registered_outputs_without_coordinator_registration() {
+    let (h, target) = fixture();
+    let coordinator_policy = fs::read(h.root.join(CLEANUP)).unwrap();
+    edit(&target, CONFIG, |v| {
+        v["artifacts"].as_array_mut().unwrap().push(
+            value!({"path":"local/output/","owner":"host","kind":"declared-output","tracked":false}));
+    });
+    edit(&target, CLEANUP, |v| {
+        v["artifacts"]
+            .as_array_mut()
+            .unwrap()
+            .push(value!({"path":"local/output/","disposition":"dispose"}));
+    });
+    let ignore = target.join(".gitignore");
+    fs::write(
+        &ignore,
+        fs::read_to_string(&ignore).unwrap() + "local/output/\n",
+    )
+    .unwrap();
+    commit(&target);
+    fs::create_dir_all(target.join("local/output")).unwrap();
+    fs::write(target.join("local/output/cache"), "rebuildable").unwrap();
+    migrate(&h, &target);
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(!target.join("local/output").exists());
+    assert_eq!(fs::read(h.root.join(CLEANUP)).unwrap(), coordinator_policy);
+}
+
+#[test]
+fn linked_policy_cannot_redefine_shared_producer_storage_or_outputs() {
+    let (h, target) = fixture();
+    edit(&h.root, CLEANUP, |v| {
+        v["retained_producers"] = value!([{"id":"actual-owner",
+            "directory":".chrono-harness/state/actual-producer/", "temporary":true,
+            "generated_outputs":["cache/"]}]);
+    });
+    commit(&h.root);
+    edit(&target, CLEANUP, |v| {
+        v["retained_producers"] = value!([{"id":"actual-owner",
+            "directory":".chrono-harness/state/another-producer/", "temporary":true,
+            "generated_outputs":["other-output/"]}]);
+    });
+    commit(&target);
+    let (directory, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&target, POLICY, "actual-owner").unwrap();
+    assert_eq!(
+        directory,
+        h.root.join(".chrono-harness/state/actual-producer")
+    );
+    assert_eq!(outputs, vec!["cache/".to_string()]);
+    assert!(!directory.exists());
+    assert!(
+        !h.root
+            .join(".chrono-harness/state/another-producer")
+            .exists()
+    );
+}
+
+#[test]
+fn interrupted_removal_restores_target_config_even_when_cleanup_policy_is_identical() {
+    let h = Host::new("payload");
+    super::automatic::native_git(&h, "automatic-remove", value!({"after_effect":true}));
+    h.kernel_cleanup();
+    let target = h.parent.join("independent-config");
+    assert_eq!(h.invoke("integration", "independent-config", &target).0, 0);
+    edit(&target, POLICY, |v| {
+        v["timeout_seconds"] = value!(v["timeout_seconds"].as_u64().unwrap() + 1);
+    });
+    commit(&target);
+    migrate(&h, &target);
+    let target_head = git(&target, &["rev-parse", "HEAD"]);
+    git(&h.root, &["merge", "--ff-only", target_head.trim()]);
+    edit(&h.root, POLICY, |v| {
+        v["timeout_seconds"] = value!(v["timeout_seconds"].as_u64().unwrap() + 1);
+    });
+    commit(&h.root);
+    assert_eq!(
+        fs::read(target.join(CLEANUP)).unwrap(),
+        fs::read(h.root.join(CLEANUP)).unwrap()
+    );
+    cache(&target);
+    fs::write(h.parent.join("fail-remove"), "one failure").unwrap();
+    let (code, failed, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+    );
+    assert_ne!(code, 0, "{failed} {error}");
+    assert!(!target.exists());
+    let original = drain_report(&failed["drain"][0]);
+    let receipt = h.root.join(original["report_path"].as_str().unwrap());
+    let bytes = fs::read(&receipt).unwrap();
+    fs::remove_file(h.parent.join("fail-remove")).unwrap();
+    let (code, retried, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{retried} {error}");
+    let recovered = drain_report(&retried["drain"][0]);
+    assert_eq!(recovered["policy_source_commit"], target_head.trim());
+    assert_eq!(fs::read(receipt).unwrap(), bytes);
+    assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
 }
 
 #[test]

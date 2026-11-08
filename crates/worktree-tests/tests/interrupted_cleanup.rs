@@ -775,7 +775,12 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
             .unwrap();
         assert_eq!(out.status.code(), Some(exit), "{out:?}");
         assert_eq!(out.stdout, b"original stdout\n");
-        assert_eq!(out.stderr, b"original diagnostic\n");
+        assert!(out.stderr.starts_with(b"original diagnostic\n"), "{out:?}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr[b"original diagnostic\n".len()..])
+                .contains("W_WORKTREE_AGENT_SCOPE"),
+            "the public check consumer must forward the owner's scope reminder: {out:?}"
+        );
         assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
         let (_, owner, _) = h.received(
             Command::new(target.join(".chrono-harness/bin/chrono-worktree"))
@@ -2299,7 +2304,8 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let allocation = h._dir.path().to_owned();
     let coordinator = source();
     let maintain_allocation = || {
-        let mut command = Command::new(coordinator.join(".chrono-harness/bin/chrono-worktree"));
+        let mut command =
+            Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output =
@@ -2656,7 +2662,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     assert_eq!(refused_check.status.code(), Some(2), "{refused_check:?}");
     assert!(
         String::from_utf8_lossy(&refused_check.stderr)
-            .contains("coordinator policy/configuration identity mismatch")
+            .contains("coordinator policy/configuration ownership namespace mismatch")
     );
     fs::remove_file(target.join(".chrono-harness/state/bootstrap-holder")).unwrap();
     let refused_bootstrap = Command::new("/usr/bin/python3")
@@ -2671,7 +2677,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     );
     assert!(
         String::from_utf8_lossy(&refused_bootstrap.stderr)
-            .contains("coordinator policy/configuration identity mismatch")
+            .contains("coordinator policy/configuration ownership namespace mismatch")
     );
     assert!(
         !target

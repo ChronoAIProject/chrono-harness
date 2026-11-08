@@ -4,7 +4,7 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
-#[path = "../verified_identifiers.rs"]
+#[path = "../../../identifiers/src/lib.rs"]
 mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
