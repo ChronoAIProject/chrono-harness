@@ -33,6 +33,6 @@ GitHub 运行、job 和 artifact API 的 `head_sha` 对 PR 指 H，不能拿它�
 
 ## 参考与验收
 
-参考 trureturing 固定修订 [`b6bf8a2f`](https://github.com/the-omega-institute/trureturing/blob/b6bf8a2fbae0e4e6fbef60c6985362066171ade1/CLAUDE.md) 的 §7.7、§9.5，以及其 [CI 入口](https://github.com/the-omega-institute/trureturing/blob/b6bf8a2fbae0e4e6fbef60c6985362066171ade1/.github/workflows/ci-current.yml)。2026-11-08 查询其规则集 `24324809`，strict 为 false。本仓原规则集 `24355777` 为 true；UTC 2026-11-07 16:53:56—19:22:51 取得的主 CI 样本中，19 次已完成且成功的运行，从创建到最后更新耗时为 23.1—32.5 分钟，中位数 28.2 分钟。该读数包含 PR 和 push，不能用来宣称纯执行耗时、计费成本或修改后的收益。
+参考 trureturing 固定修订 [`b6bf8a2f`](https://github.com/the-omega-institute/trureturing/blob/b6bf8a2fbae0e4e6fbef60c6985362066171ade1/CLAUDE.md) 的 §7.7、§9.5，以及其 [CI 入口](https://github.com/the-omega-institute/trureturing/blob/b6bf8a2fbae0e4e6fbef60c6985362066171ade1/.github/workflows/ci-current.yml)。当前规则以实际 API 结果为准；历史规则查询和运行耗时直接查原 PR／CI，不在本文维护观察副本。成本比较须固定输入与测量窗口，区分排队、执行和计费范围。
 
 验收需覆盖：PR 合并树包含 head 之外的目标分支变化；旧事件 base 不覆盖固定第一父；head 检出或错误父身份拒绝；运行／工件归属与被验树分别正确绑定；完整 push DELTA 和独立运行保留。Rust 行为测试只证明相应程序行为，原生事件、工件传递、规则实际生效和交付后检查仍须真实核验。尚未实测的新吞吐、总成本和严格同树保证保持未知。

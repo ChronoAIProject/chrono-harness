@@ -37,7 +37,7 @@ macOS 27 与其他直接配置一样使用共享判官登记，`runner.sha256` �
 
 其他消费者、原快照、完整编译器／SDK 输入和真实 CI 采用仍不齐，政策保持 `status: proposed`、`enforcement: not-implemented`、`input_closure.status: incomplete`。验证沿用候选 bootstrap、标准变更检查和真实 PR／落地检查，总验证及存储成本未测。
 
-可写 `CARGO_HOME` 现为当前工作树的 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与登记源码 bootstrap 一致。HOME、TMPDIR 继承现有环境，不写其他工作树目录；独立工作树因此不共享可变 Cargo 缓存／配置，明确绑定的 Rust 工具链和 SDK 仍是共享只读输入。
+可写 `CARGO_HOME` 为当前工作树的 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与登记源码 bootstrap 一致；每个工作树使用自己的 Cargo home 缓存／配置。HOME、TMPDIR 继承现有环境，不写其他工作树目录。bootstrap 绑定所选 Rust 工具的版本和组件摘要；SDKROOT／DEVELOPER_DIR 等环境值只选择路径，没有建立 SDK 内容绑定，祖先 Cargo 配置及其余输入是否完整仍待验证。
 
 bootstrap 与标准检查继续使用该 Cargo home，所选必需输入缺失仍失败。本地和 CI 必须使用同一登记命令；环境间必然同判还要求完整相同有效输入和确定性求值。当前生产者仍为 `completeness_proven: false`，报告保持 `parity: unestablished`，没有独立比较或改写报告命令，也不增加普通完整检查门。
 

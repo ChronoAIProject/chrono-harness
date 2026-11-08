@@ -337,7 +337,7 @@ v4 的工作流只调用 `check`、`check --unit ID` 或 `check --collect`，输
 | 未匹配的已有分支 push | 载荷 `before`／`after` |
 | 创建配置基线分支（`created`、before 全零、ref 匹配） | 无父 `after` 由同一短命令选择显式初始 profile，无 base，模式 `initial-inventory`；有父候选要求明确范围 |
 | 创建其他未匹配分支（`created`、before 全零、ref 不同） | 观察一次配置创建基线 ref，固定提交，与载荷 `after` 比较；候选等于已有基线就如实无操作 |
-| 指向 dev 的 PR | 固定 workflow merge commit 的第一父提交／该合并提交；须恰有两个父提交且第二父提交等于事件 head；检出合并提交 |
+| 指向 dev 或 integration/** 的 PR | 固定 workflow merge commit 的第一父提交／该合并提交；须恰有两个父提交且第二父提交等于事件 head；检出合并提交 |
 | workflow_dispatch | 明确完整 base／candidate，或明确 initial 加无父 candidate |
 | 删除分支 | 无候选检查，不能生成通过的候选报告 |
 

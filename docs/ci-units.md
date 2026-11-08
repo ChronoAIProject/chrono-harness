@@ -129,7 +129,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 父工作流用原生 concurrency 替换同一 PR 的旧运行。组名绑定工作流路径、事件、PR 号；非 PR 事件用唯一 run ID，所以 push 的各次完整 before／after 不会因取消排队而丢失。父工作流内各单元独立调度。
 
-本宿主通过目标为 dev 或 integration/** 的 PR 检查候选，使用事件 base／head；dev push 用完整 before／after 检查实际落地。integration 分支推送不另行触发主 CI，需要候选检查时创建 PR，草稿 PR 也支持。各宿主自行登记触发分支；本仓的[独立发布](release-ci.md)和[原生获取工作流](../.github/workflows/chrono-native-acquisition.yml)仍按各自登记触发。
+本宿主通过目标为 dev 或 integration/** 的 PR 检查固定合并候选，端点身份按上文分别绑定；dev push 用完整 before／after 检查实际落地。integration 分支推送不另行触发主 CI，需要候选检查时创建 PR，草稿 PR 也支持。各宿主自行登记触发分支；本仓的[独立发布](release-ci.md)和[原生获取工作流](../.github/workflows/chrono-native-acquisition.yml)仍按各自登记触发。
 
 最小生成结果是 `collection.workflow_path` 的单个父工作流。分支保护只要求汇总 job，即 `collection.name`，本仓当前为 **chrono / collection**；生成器不改分支保护。
 
@@ -181,7 +181,7 @@ provider 在检测前上传声明目录，将生产 binding 和真实上传 arti
 
 ### 端点、状态与原生产身份
 
-PR 用固定 workflow merge commit 的第一父提交作 base，事件 head 作 candidate；必须恰有两个父提交且第二父提交等于事件 head。事件载荷中的旧 base 不决定选测。默认 push 用完整 before／after，含多提交。明确 `push_baselines` 和创建规则保持原义；detector 只观察一次配置远端基线，将固定输出交依赖 job。
+PR 用固定 workflow merge commit 的第一父提交作 base，该合并提交作 candidate；必须恰有两个父提交且第二父提交等于事件 head。事件载荷中的旧 base 不决定选测。默认 push 用完整 before／after，含多提交。明确 `push_baselines` 和创建规则保持原义；detector 只观察一次配置远端基线，将固定输出交依赖 job。
 
 足够时获取从不含 blob 的 depth-two checkout／fetch 开始，缺端点 OID 明确用 `--depth=2 --filter=blob:none` fetch。深度二不保证任意历史。full 单元／汇总为分支／分叉判官保留完整历史获取并过滤 blob，detector 仍从浅获取读精确端点树。
 
