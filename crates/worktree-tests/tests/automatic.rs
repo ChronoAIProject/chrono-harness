@@ -1026,6 +1026,59 @@ fn automatic_cache_only_preserves_evidence_dirty_and_unretained_work() {
 }
 
 #[test]
+fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_birth() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let target = h.parent.join("client-checkout");
+    git(
+        &h.root,
+        &[
+            "worktree", "add", "-b", "client/current-work", target.to_str().unwrap(), "dev",
+        ],
+    );
+    let original_head = git(&target, &["rev-parse", "HEAD"]);
+    let original_source = fs::read(target.join("payload")).unwrap();
+
+    let (code, observation, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{observation} {error}");
+    let missing = observation["worktree_inventory"]
+        .as_array().unwrap().iter()
+        .find(|row| row["path"] == target.to_str().unwrap()).unwrap();
+    assert_eq!(missing["enrollment_match"], false);
+    assert!(missing["preserved_reason"].as_str().unwrap().contains("explicit import"));
+    assert!(target.exists());
+
+    // A refused command leaves an address record; an empty ledger is still unowned.
+    assert_ne!(h.auto("finish", &["--path", target.to_str().unwrap()]).0, 0);
+    let empty = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
+    assert!(empty["entries"].as_array().unwrap().is_empty());
+    let (code, observation, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{observation} {error}");
+    let empty = observation["worktree_inventory"]
+        .as_array().unwrap().iter()
+        .find(|row| row["path"] == target.to_str().unwrap()).unwrap();
+    assert_eq!(empty["enrollment_match"], false);
+    assert!(target.exists());
+
+    let (code, imported, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{imported} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["branch"], "client/current-work");
+    assert_eq!(entry["status"], "active");
+    assert_eq!(entry["enrollment"]["kind"], "import");
+    assert_eq!(entry["enrollment"]["receipt"]["historical_birth"], "not-claimed");
+    assert!(entry["terminal"].is_null());
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), original_source);
+
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists());
+    assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
+    assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
+}
+
+#[test]
 fn automatic_import_is_explicit_and_not_a_historical_birth() {
     let h = Host::new("payload");
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
