@@ -600,12 +600,22 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
     let intent = no_symlink_parents(root, &format!("{parent}/publication-intent.json"))?;
     let next = no_symlink_parents(root, &format!("{parent}/publication-next-owner"))?;
     let result_path = no_symlink_parents(root, &format!("{parent}/publication-result.json"))?;
-    if result_path.exists() {
+    if result_path.is_file() {
         // A completed directory is immutable. A retry can consume its exact
         // publication, but cannot reopen it or repair changed originals.
         let planned: publication_policy::Intent =
             decode(&fs::read(&intent).map_err(|e| e.to_string())?)?;
         let installed = owner_binding(&target)?;
+        if !matches!(
+            publication_policy::selected_action(
+                &installed,
+                &expected.previous,
+                &planned.replacement
+            ),
+            publication_policy::SelectedAction::Keep
+        ) {
+            return Err("selected owner drifted after publication intent".into());
+        }
         let result = json(&fs::read(&result_path).map_err(|e| e.to_string())?)?;
         let original = value!({"schema":"chrono-bootstrap-owner-publication/v1","stage":record,
             "installed":installed,"adoption":"not-claimed","task_completion":"not-claimed"});
