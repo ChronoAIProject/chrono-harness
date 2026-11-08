@@ -1278,7 +1278,6 @@
             ".chrono-harness/ci/native/Cargo.lock",
             "crates/cache/Cargo.lock",
             "crates/ci/Cargo.lock",
-            "crates/inputs/Cargo.lock",
             "crates/judge-ci/Cargo.lock",
             "crates/runner/Cargo.lock",
             "crates/worktree/Cargo.lock"
