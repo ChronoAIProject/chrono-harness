@@ -389,21 +389,26 @@ pub fn participate(
             String::from_utf8_lossy(&output.stderr)
         )
     })?;
-    let process = retained_process(&report["managed_process"])?;
-    forward(&process)?;
-    eprintln!(
-        "bootstrap ownership original report: {}",
-        anchor
-            .join(
-                report["report_path"]
-                    .as_str()
-                    .ok_or("bootstrap ownership original path is missing")?
-            )
-            .display()
-    );
+    let process = report
+        .get("managed_process")
+        .filter(|value| !value.is_null())
+        .map(retained_process)
+        .transpose()?;
+    if let Some(process) = &process {
+        forward(process)?;
+    }
+    let reference = report["report_path"].as_str();
+    if let Some(reference) = reference {
+        eprintln!(
+            "bootstrap ownership original report: {}",
+            anchor.join(reference).display()
+        );
+    }
     if report["status"] != "used" && report["managed_command_failed"] != true {
         return Err(format!("bootstrap lifecycle failed: {}", report["error"]).into());
     }
+    reference.ok_or("bootstrap ownership original path is missing")?;
+    let process = process.ok_or("bootstrap ownership managed process is missing")?;
     process_outcome(&process)?;
     if !output.status.success() {
         return Err("bootstrap lifecycle wrapper failed".into());

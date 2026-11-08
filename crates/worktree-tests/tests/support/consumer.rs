@@ -128,6 +128,12 @@ fn main() -> ExitCode {
             wait("release");
             print!("completed");
         }
+        ".chrono-harness/ci/bootstrap-installed.sh" => {
+            mark("python-wrapper", std::process::id().to_string());
+            let mut bootstrap = Command::new("/bin/bash");
+            bootstrap.args(std::env::args_os().skip(1));
+            exec(bootstrap);
+        }
         "python-consumer" => {
             let config: serde_json::Value = serde_json::from_slice(
                 &fs::read(Path::new(STATE).join("python-consumer.json")).unwrap(),
@@ -182,7 +188,9 @@ fn main() -> ExitCode {
         "cargo-prepare" | "cargo-run" => {
             let root = std::env::current_dir().unwrap();
             let fixture = Path::new(STATE).join("cargo-case");
-            let mut cargo = Command::new("cargo");
+            let cargo_program = Path::new(env!("CARGO"));
+            let mut cargo = Command::new(cargo_program);
+            cargo.env("RUSTC", cargo_program.with_file_name("rustc"));
             // This fixture owns one native library test. Compile/list/run that
             // target without starting unrelated library or documentation builds.
             // Keep compiler and linker stages in the original bounded stderr.
