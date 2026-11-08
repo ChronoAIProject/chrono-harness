@@ -2323,6 +2323,7 @@
     "config": ".chrono-harness/cache.json",
     "restore_action": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
     "save_action": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+    "save_on_push_only": false,
     "jobs": {
       "linux_build_runner": {
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",

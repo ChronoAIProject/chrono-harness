@@ -17,7 +17,225 @@ fn adoption(job: &str) -> Value {
         "program":".chrono-harness/bin/chrono-cache", "config":".chrono-harness/cache.json",
         "restore_action":"actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
         "save_action":"actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+        "save_on_push_only":false,
         "jobs":{job:{"need":"Reuse this existing job's compilation outputs between runners", "output_use":"The original registered build revalidates the restored target before checking", "prepare":["/usr/bin/printf","%s","literal ' argument $(printf unsafe)"], "consumer":"host.build", "caches":["core.target"]}}})
+}
+
+fn download_adoption() -> Value {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("unit_example");
+    let entry = json!({"owner":"fixture", "need":"Reuse package downloads", "output_use":"Cargo validates the locked packages before compiling",
+        "paths":[".chrono-harness/cache/cargo/registry/"],
+        "compatibility_files":[".chrono-harness/ci/toolchain.json"], "source_files":["producer/Cargo.lock"],
+        "consumers":["detect"], "save_job":"detect"});
+    let mut consumer = entry.clone();
+    consumer["consumers"] = json!(["unit_example"]);
+    consumer["save_job"] = json!("unit_example");
+    consumer["source_files"] = json!(["tests/Cargo.lock"]);
+    consumer["restore_from"] = json!("seed");
+    value["persistent_cache"]["downloads"] = json!({"schema":"chrono-github-downloads/v1", "namespace":"fixture",
+        "environment":{"CARGO_HOME":".chrono-harness/cache/cargo","RUSTUP_HOME":".chrono-harness/cache/rustup"},
+        "entries":{"seed":entry,"unit":consumer}});
+    value
+}
+
+#[test]
+fn push_only_target_saving_preserves_downloads_and_pr_restores() {
+    let mut value = download_adoption();
+    value["persistent_cache"]["save_on_push_only"] = json!(true);
+    let config = serde_json::from_value(value).unwrap();
+    let output = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&output[".github/workflows/chrono-ci.yml"]).unwrap();
+    let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
+    let target_save = steps
+        .iter()
+        .find(|s| s["name"] == "Save registered cache core.target")
+        .unwrap();
+    assert!(
+        target_save["if"]
+            .as_str()
+            .unwrap()
+            .starts_with("${{ github.event_name == 'push' && ")
+    );
+    assert!(
+        steps
+            .iter()
+            .any(|s| s["name"] == "Restore registered cache core.target" && s.get("if").is_none())
+    );
+    let seal = steps
+        .iter()
+        .find(|s| s["name"] == "Seal producer cache contents")
+        .unwrap();
+    assert!(
+        seal["if"]
+            .as_str()
+            .unwrap()
+            .starts_with("${{ github.event_name == 'push' && ")
+    );
+    let download_save = steps
+        .iter()
+        .find(|s| s["name"] == "Save download cache unit")
+        .unwrap();
+    assert_eq!(
+        download_save["if"],
+        "${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
+    );
+}
+
+#[test]
+fn downloads_restore_before_compiling_the_planner_and_keep_the_original_check() {
+    let value = download_adoption();
+    let config = serde_json::from_value(value).unwrap();
+    let output = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&output[".github/workflows/chrono-ci.yml"]).unwrap();
+    for (job, cache) in [("detect", "seed"), ("unit_example", "unit")] {
+        let steps = yaml["jobs"][job]["steps"].as_array().unwrap();
+        assert_eq!(steps[1]["name"], format!("Restore download cache {cache}"));
+        assert_eq!(
+            steps[1]["uses"],
+            "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830"
+        );
+        assert_eq!(
+            steps[1]["with"]["path"],
+            ".chrono-harness/cache/cargo/registry/\n"
+        );
+        assert_eq!(
+            yaml["jobs"][job]["env"]["CARGO_HOME"],
+            "${{ github.workspace }}/.chrono-harness/cache/cargo"
+        );
+        assert_eq!(
+            steps.last().unwrap()["name"],
+            format!("Save download cache {cache}")
+        );
+        assert_eq!(
+            steps.last().unwrap()["if"],
+            "${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
+        );
+    }
+    let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
+    let restore = &steps[1];
+    assert!(
+        restore["with"]["key"]
+            .as_str()
+            .unwrap()
+            .contains("hashFiles('tests/Cargo.lock')")
+    );
+    assert!(
+        restore["with"]["restore-keys"]
+            .as_str()
+            .unwrap()
+            .contains("fixture-seed-")
+    );
+    assert!(
+        steps
+            .iter()
+            .any(|s| s["name"] == "Prepare registered caches")
+    );
+    assert!(steps.iter().any(|s| s["name"] == "Canonical harness check"));
+    assert!(yaml["jobs"]["aggregate"].get("env").is_none());
+}
+
+#[test]
+fn downloads_reject_missing_writers_duplicate_inputs_and_incompatible_fallbacks() {
+    let value = download_adoption();
+    for (pointer, replacement) in [
+        ("/entries/unit/save_job", json!("unknown")),
+        ("/entries/unit/source_files", json!([])),
+        (
+            "/entries/unit/source_files",
+            json!(["p/Cargo.lock", "p/Cargo.lock"]),
+        ),
+        ("/entries/unit/source_files", json!(["p/*.lock"])),
+        ("/entries/unit/source_files", json!(["p/'injection.lock"])),
+        ("/entries/unit/restore_from", json!("unknown")),
+        ("/entries/unit/restore_from", json!("unit")),
+        (
+            "/entries/unit/paths",
+            json!([".chrono-harness/cache/other/"]),
+        ),
+        (
+            "/entries/unit/compatibility_files",
+            json!(["different-toolchain.json"]),
+        ),
+        (
+            "/environment",
+            json!({"GH_TOKEN":".chrono-harness/cache/token"}),
+        ),
+    ] {
+        let mut candidate = value.clone();
+        *candidate["persistent_cache"]["downloads"]
+            .pointer_mut(pointer)
+            .unwrap() = replacement;
+        let config = serde_json::from_value(candidate).unwrap();
+        assert!(
+            chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").is_err(),
+            "{pointer}"
+        );
+    }
+}
+
+#[test]
+fn downloads_bind_exact_artifact_owners_and_inputs_before_writing_a_workflow() {
+    let root = tempfile::tempdir().unwrap();
+    let write = |path: &str, bytes: &[u8]| {
+        let path = root.path().join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    };
+    let config = serde_json::from_value(download_adoption()).unwrap();
+    write(
+        ".chrono-harness/ci/check.json",
+        &serde_json::to_vec(&source(
+            "examples/ci-host-job-gating/.chrono-harness/ci/check.json",
+        ))
+        .unwrap(),
+    );
+    write(".chrono-harness/cache.json", br#"{"schema":"chrono-cache/v2","require_primary_checkout":true,"artifact_registry":".chrono-harness/artifacts.json","caches":{"core.target":{"consumers":["host.build"]}}}"#);
+    write(".chrono-harness/ci/toolchain.json", b"{}");
+    write("producer/Cargo.lock", b"locked producer");
+    write("tests/Cargo.lock", b"locked tests");
+    let registry = json!({"artifacts":[{"path":".chrono-harness/cache/cargo/registry/","owner":"fixture","tracked":false,"kind":"download-cache"}]});
+    let output = root.path().join(".github/workflows/chrono-ci.yml");
+    for (field, bad) in [
+        ("owner", json!("another-owner")),
+        ("tracked", json!(true)),
+        ("kind", json!("execution-evidence")),
+    ] {
+        let mut invalid = registry.clone();
+        invalid["artifacts"][0][field] = bad;
+        write(
+            ".chrono-harness/artifacts.json",
+            &serde_json::to_vec(&invalid).unwrap(),
+        );
+        let error = chrono_ci::units::generate(
+            root.path(),
+            ".chrono-harness/ci/units.json",
+            &config,
+            false,
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("registered non-evidence artifact"),
+            "{error}"
+        );
+        assert!(!output.exists());
+    }
+    write(
+        ".chrono-harness/artifacts.json",
+        &serde_json::to_vec(&registry).unwrap(),
+    );
+    fs::remove_file(root.path().join("tests/Cargo.lock")).unwrap();
+    let error =
+        chrono_ci::units::generate(root.path(), ".chrono-harness/ci/units.json", &config, false)
+            .unwrap_err();
+    assert!(error.contains("tests/Cargo.lock"), "{error}");
+    assert!(!output.exists());
+    write("tests/Cargo.lock", b"locked tests");
+    assert!(
+        chrono_ci::units::generate(root.path(), ".chrono-harness/ci/units.json", &config, false)
+            .unwrap()
+    );
+    assert!(output.is_file());
 }
 
 #[test]

@@ -17,6 +17,9 @@ pub struct Config {
     pub config: String,
     pub restore_action: String,
     pub save_action: String,
+    pub save_on_push_only: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<crate::downloads::Config>,
     pub jobs: BTreeMap<String, Consumer>,
 }
 
@@ -57,6 +60,9 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
     }
     action(&c.restore_action, "actions/cache/restore")?;
     action(&c.save_action, "actions/cache/save")?;
+    if let Some(downloads) = &c.downloads {
+        crate::downloads::validate(downloads, jobs)?;
+    }
     let mut saving_jobs = BTreeMap::new();
     for (job, consumer) in &c.jobs {
         let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
@@ -118,6 +124,9 @@ pub(crate) fn validate_registry(root: &Path, c: Option<&Config>) -> Result<(), S
     let caches = registry["caches"]
         .as_object()
         .ok_or("persistent cache registry needs caches")?;
+    if let Some(downloads) = &c.downloads {
+        crate::downloads::validate_registry(root, downloads, &registry)?;
+    }
     for consumer in c.jobs.values() {
         let selected = caches
             .iter()
@@ -158,6 +167,7 @@ pub(crate) fn project(
     let Some(c) = c else {
         return Ok(body);
     };
+    let body = crate::downloads::project(c, job, body)?;
     let Some(consumer) = c.jobs.get(job) else {
         return Ok(body);
     };
@@ -189,6 +199,7 @@ pub(crate) fn project(
     // Registry validation guarantees the same selected set as the planner.
     let selected: BTreeSet<_> = consumer.caches.iter().collect();
     let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
+    let event_guard = crate::verified_literals::cache_save_event_guard(c.save_on_push_only);
     for (index, id) in selected.into_iter().enumerate() {
         let key = format!("cache_{index}");
         let step = &key;
@@ -201,7 +212,7 @@ pub(crate) fn project(
         } else {
             work_id
         };
-        suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {step}_save\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.{producer_step}.outcome == 'success' && steps.{step}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key && (steps.chrono_cache_plan.outputs.{key}_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.{key}_sealed == 'true') }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
+        suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {step}_save\n        if: ${{{{ {event_guard}always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.{producer_step}.outcome == 'success' && steps.{step}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key && (steps.chrono_cache_plan.outputs.{key}_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.{key}_sealed == 'true') }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
     }
     prefix.push_str(&format!("      - name: Recover failed cache restores\n        if: ${{{{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_RESTORE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} recover --host-root . --config {} --plan {} --steps-env CHRONO_CACHE_RESTORE_STEPS\n", shell(&c.program), shell(&c.config), shell(&plan_path)));
     let saves_arg = consumer
@@ -223,7 +234,7 @@ pub(crate) fn project(
         )
     };
     let seal = format!(
-        "      - name: Seal producer cache contents\n        id: chrono_cache_seal\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_PRODUCER_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} seal --host-root . --config {} --plan {} --steps-env CHRONO_CACHE_PRODUCER_STEPS --work {}{bootstrap_seal_arg}{saves_arg} --github-output \"$GITHUB_OUTPUT\"\n",
+        "      - name: Seal producer cache contents\n        id: chrono_cache_seal\n        if: ${{{{ {event_guard}always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_PRODUCER_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} seal --host-root . --config {} --plan {} --steps-env CHRONO_CACHE_PRODUCER_STEPS --work {}{bootstrap_seal_arg}{saves_arg} --github-output \"$GITHUB_OUTPUT\"\n",
         shell(&c.program),
         shell(&c.config),
         shell(&plan_path),
