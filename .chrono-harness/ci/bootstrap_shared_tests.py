@@ -1720,10 +1720,11 @@ class RealSharedStartup(unittest.TestCase):
             acquire_parent_source(source_root, root, tools["git"], run)
             self.assertEqual(bootstrap.observe_source(root), observed)
             attempt.manage(root, owner, environment)
-            # 复用父启动已准备的固定包；fixture 的正式下载动作仍独立核对 SHA256。
-            archive = Path(".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip")
-            (root / archive).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source_root / ".chrono-harness/bin/verus.zip", root / archive)
+            # 父任务保留包引用；只有取得所有权保护的 fixture 子任务才能写缓存。
+            archive = source_root / ".chrono-harness/bin/verus.zip"
+            attempt.result["verus_archive"] = {"path": str(archive), "sha256": bootstrap.file_digest(archive),
+                                               "size": archive.stat().st_size}
+            attempt.publish()
             try:
                 attempt.managed("host.bootstrap-real-fixture")
             finally:
@@ -1941,6 +1942,10 @@ class RealFixtureStartup(unittest.TestCase):
                 run(operation, [tools[action["tool"]], *action["argv"]], root)
                 return attempt.result["commands"][-1]
 
+            # 此处已继承父所有者租约；正式下载动作仍按现役声明独立核对 SHA256。
+            archive = root / ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip"
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            archive.write_bytes(RealAttempt.original(parent["verus_archive"]))
             registered("host.bootstrap-cache")
             try:
                 registered("host.bootstrap-shared-produce")
