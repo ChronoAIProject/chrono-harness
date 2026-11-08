@@ -20,8 +20,10 @@ fn fixture_with_entrypoint(
         adopt_lifecycle_retention(&h);
         let path = h.root.join(".chrono-harness/retention.json");
         let mut policy = json(&fs::read(&path).unwrap()).unwrap();
-        policy["producers"]["lifecycle-original"] =
-            value!([".chrono-harness/state/worktrees/", ".chrono-harness/state/automatic-cleanup/"]);
+        policy["producers"]["lifecycle-original"] = value!([
+            ".chrono-harness/state/worktrees/",
+            ".chrono-harness/state/automatic-cleanup/"
+        ]);
         policy["producers"]["bootstrap-fixture"] =
             value!([".chrono-harness/state/bootstrap-fixture/"]);
         policy["diagnostic_keep_seconds"] = value!(0);

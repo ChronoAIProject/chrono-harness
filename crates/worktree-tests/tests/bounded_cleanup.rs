@@ -15,8 +15,10 @@ fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
     let path = h.root.join(".chrono-harness/retention.json");
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
-    policy["producers"]["lifecycle-original"] =
-        value!([".chrono-harness/state/worktrees/", ".chrono-harness/state/automatic-cleanup/"]);
+    policy["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
+    ]);
     policy["diagnostic_keep_seconds"] = value!(0);
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
     commit(&h.root);

@@ -1419,8 +1419,10 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     adopt_lifecycle_retention(&h);
     let policy_path = h.root.join(".chrono-harness/retention.json");
     let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
-    policy["producers"]["lifecycle-original"] =
-        value!([".chrono-harness/state/worktrees/", ".chrono-harness/state/automatic-cleanup/"]);
+    policy["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
+    ]);
     policy["diagnostic_keep_seconds"] = value!(0);
     policy["max_related_outputs"] = value!(512);
     fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
