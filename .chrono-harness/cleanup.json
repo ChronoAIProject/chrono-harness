@@ -168,6 +168,19 @@
   "main_cache_only": true,
   "retained_producers": [
     {
+      "id": "bootstrap-test-run",
+      "directory": ".chrono-harness/state/bootstrap-test-runs/",
+      "temporary": true,
+      "generated_outputs": [],
+      "operations": ["host.bootstrap-tests", "host.bootstrap-command-tests"],
+      "rolling_directory": {
+        "success_keep_seconds": 0,
+        "failure_keep_seconds": 86400,
+        "interrupted_keep_seconds": 86400,
+        "metadata_keep_seconds": 3600
+      }
+    },
+    {
       "id": "ci-command-result",
       "directory": ".chrono-harness/state/ci-test-failures/",
       "generated_outputs": [

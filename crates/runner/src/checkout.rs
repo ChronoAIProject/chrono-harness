@@ -6,6 +6,7 @@ use crate::{
         git_index_metadata, git_inventory_fields, git_inventory_records, git_inventory_row,
         git_inventory_termination, git_inventory_text, git_tree_metadata,
     },
+    verified_status::insert_git_tree_entry,
 };
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
@@ -35,14 +36,13 @@ pub fn tree(raw: &[u8]) -> Result<Tree, String> {
         git_tree_metadata(&fields)?;
         relative_path(path)?;
         full_oid(fields[2])?;
-        let entry = Entry {
-            mode: fields[0].into(),
-            kind: fields[1].into(),
-            oid: fields[2].into(),
-        };
-        if result.insert(TreePath::from_text(path), entry).is_some() {
-            return Err("duplicate Git tree path".into());
-        }
+        insert_git_tree_entry(
+            &mut result,
+            TreePath::from_text(path),
+            fields[0],
+            fields[2],
+            fields[1],
+        )?;
     }
     Ok(result)
 }
