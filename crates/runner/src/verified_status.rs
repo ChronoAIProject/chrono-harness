@@ -151,6 +151,69 @@ impl PartialOrd for WireStatus {
 }
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+pub struct TreeEntry {
+    pub mode: String,
+    pub oid: String,
+    pub kind: String,
+}
+
+pub open spec fn tree_entry_equal(left: &TreeEntry, right: &TreeEntry) -> bool {
+    left.mode@ == right.mode@ && left.oid@ == right.oid@ && left.kind@ == right.kind@
+}
+
+impl Clone for TreeEntry {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    {
+        Self { mode: self.mode.clone(), oid: self.oid.clone(), kind: self.kind.clone() }
+    }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for TreeEntry {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { tree_entry_equal(self, other) }
+}
+
+impl PartialEq for TreeEntry {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == tree_entry_equal(self, other),
+    {
+        identifiers::equal_text(self.mode.as_str(), other.mode.as_str())
+            && identifiers::equal_text(self.oid.as_str(), other.oid.as_str())
+            && identifiers::equal_text(self.kind.as_str(), other.kind.as_str())
+    }
+}
+
+impl Eq for TreeEntry {}
+
+pub open spec fn tree_entries_equal(old: Option<&TreeEntry>, new: Option<&TreeEntry>) -> bool {
+    match (old, new) {
+        (None, None) => true,
+        (Some(a), Some(b)) => tree_entry_equal(a, b),
+        _ => false,
+    }
+}
+
+fn unchanged_tree_entries(old: Option<&TreeEntry>, new: Option<&TreeEntry>) -> (equal: bool)
+    ensures equal == tree_entries_equal(old, new),
+{
+    match (old, new) {
+        (None, None) => true,
+        (Some(a), Some(b)) => a.eq(b),
+        _ => false,
+    }
+}
+
+pub open spec fn entry_blob(entry: Option<&TreeEntry>) -> Option<Seq<char>> {
+    match entry { None => None, Some(entry) => Some(entry.oid@) }
+}
+
+pub open spec fn entry_mode(entry: Option<&TreeEntry>) -> Option<Seq<char>> {
+    match entry { None => None, Some(entry) => Some(entry.mode@) }
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct Delta {
     pub kind: String,
@@ -170,6 +233,32 @@ fn clone_optional_text(value: &Option<String>) -> (out: Option<String>)
 #[verifier::inline]
 pub open spec fn optional_text(value: &Option<String>) -> Option<Seq<char>> {
     match value { None => None, Some(text) => Some(text@) }
+}
+
+/// 直接读取两端实际条目；kind 变化也属于修改，即使 blob 和 mode 相同。
+pub fn delta_for_entry(path: &str, old: Option<&TreeEntry>, new: Option<&TreeEntry>) -> (out: Option<Delta>)
+    ensures
+        out.is_none() == tree_entries_equal(old, new),
+        match out {
+            None => true,
+            Some(change) => change.path@ == path@
+                && change.kind@ == (if old.is_none() { "A"@ }
+                    else if new.is_none() { "D"@ } else { "M"@ })
+                && optional_text(&change.old_blob) == entry_blob(old)
+                && optional_text(&change.new_blob) == entry_blob(new)
+                && optional_text(&change.old_mode) == entry_mode(old)
+                && optional_text(&change.new_mode) == entry_mode(new),
+        },
+{
+    if unchanged_tree_entries(old, new) { return None; }
+    let kind = if old.is_none() { "A" } else if new.is_none() { "D" } else { "M" };
+    Some(Delta {
+        kind: kind.to_owned(), path: path.to_owned(),
+        old_blob: match old { None => None, Some(entry) => Some(entry.oid.clone()) },
+        new_blob: match new { None => None, Some(entry) => Some(entry.oid.clone()) },
+        old_mode: match old { None => None, Some(entry) => Some(entry.mode.clone()) },
+        new_mode: match new { None => None, Some(entry) => Some(entry.mode.clone()) },
+    })
 }
 
 fn optional_text_equal(left: &Option<String>, right: &Option<String>) -> (equal: bool)
