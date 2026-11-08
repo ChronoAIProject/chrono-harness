@@ -198,6 +198,20 @@ kind 单独变化。每条记录证明原路径、旧新 blob、旧新 mode 的�
 六个输出字段，不借用生产比较谓词决定预期。沿用原两项整 crate 状态操作及实际消费计划。
 String 借用／克隆与 Option 枚举沿用已列固定 vstd 合同，没有新增外部假设或仓内受信实现。
 逐条比较最多读取三个完整文本，只为变化记录复制路径和两端字段；完整构建、证明、运行、CI 与存储成本未测。
+实际 `facts::Tree` 的键现在是同根 `TreePath`；原文 String 不归一化，内容比较、
+UTF-8 字节词典序、Eq／Ord 法则、克隆和 `str`／String 借用都由 Verus 实现并证明。
+真实 Git 树解析使用 `from_text`／`from_owned` 构造；checkout、export、registration 和
+worktree 在明确文本边界借用或复制原文，judge-ci 向现役字符串库存移动原文，
+CI 初始库存从键复制原文到现役字符串数组；
+这些交接不维护第二份键或比较实现。
+独立 Verus 预期在普通 Rust 中也执行失败分支，覆盖不同分配的同文、空文本、Unicode、
+NUL／换行、不同 Unicode 表示，以及大小写、完整前缀和内部 NUL 的顺序。
+固定 vstd 的 String／str 借用、to_owned、clone、as_bytes 合同沿用现役外部边界；
+标准库 `BTreeMap::{new,insert,get,contains_key,keys,iter,values}` 以及 BTreeSet 并集容器调用
+仍是原实际使用的接口，未增加标准库假设或受信仓内包装。
+worktree／CI 文本交接的 `Iterator::{map,chain,collect}` 仍是明确的外部容器适配，
+未声称逐项机械精化。
+键直接持有原 String，不另存比较用副本；比较最多读取公共字节前缀，完整运行／证明／CI 成本未测。
 外层 BTreeSet 路径并集和有序遍历、BTreeMap 获取、Git／JSON 适配及完整 DELTA 组合仍待证明，
 不把本条目判断的证明扩充为完整 Git 事实或完整 DELTA 证明。
 

@@ -4,7 +4,7 @@ pub use crate::facts_binding::{
     declaration as git_declaration,
 };
 pub use crate::facts_configs::Identity as ConfigIdentity;
-pub use crate::verified_status::TreeEntry as Entry;
+pub use crate::verified_status::{Tree, TreeEntry as Entry, TreePath};
 use crate::{
     json, no_symlink_parents, relative_path,
     wire::{Checkout, Delta, IndexFlag},
@@ -17,7 +17,6 @@ use std::{
     process::Command,
 };
 
-pub type Tree = BTreeMap<String, Entry>;
 pub use crate::checkout::{changes as checkout_changes, tree as parse_tree};
 /// Inventory uses literal, case-sensitive registered directory prefixes.
 pub const LITERAL_PATHSPEC_CONTROLS: [&str; 4] = [
@@ -404,7 +403,7 @@ impl Reader {
             let paths = t
                 .iter()
                 .filter(|(_, entry)| entry.kind == "blob")
-                .map(|(path, _)| path.clone())
+                .map(|(path, _)| path.text.clone())
                 .collect::<Vec<_>>();
             self.immutable_blobs(root, oid, &paths)?;
         }

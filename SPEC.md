@@ -507,6 +507,8 @@ DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID �
 逐路径条目判断由 `verified_status.rs::delta_for_entry` 直接读取实际两端 `TreeEntry` 并证明；
 `facts::Entry` 重导出同一类型，完整文本比较 mode、oid、kind。两端均缺失或三字段全部相同不产生记录，
 kind 单独变化也产生 M；产生记录时精确保留原路径和旧新 blob／mode，缺失端为 None，存在但为空的字段仍为 Some("")。
+实际 `facts::Tree` 的路径键为同根 `TreePath`，内容身份与 UTF-8 字节顺序由其 Verus
+`same`／`order_spec` 定义；真实比较、构造、克隆和文本借用完成证明，保留原文且不归一化。
 外层路径并集、排序、Git／JSON 获取及完整 DELTA 组合仍有各自未完成的证明义务。
 
 第 1 步：读取 B/C 两份登记，解析变更文件及变更的记录 ID、字段和边。第 2 步：建立 `G = G_base ∪ G_candidate`，保留每条边来源 base/candidate/both。第 3 步：变更文件、已登记有效输入的两端变化为种子；登记变化另把变更记录目标加入种子；有类型边的增加、删除或改接必须把两端节点加入种子。例如只删除 `runner → runner-tests` 测试边，也把 runner 与旧测试作为影响种子。

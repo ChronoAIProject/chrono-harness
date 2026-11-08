@@ -86,7 +86,7 @@ impl<'a> EventGit<'a> {
                     .map(|d| d.path)
                     .collect()
             }
-            None => candidate.keys().cloned().collect(),
+            None => candidate.keys().map(|path| path.text.clone()).collect(),
         })
     }
     pub(crate) fn parents(&self, candidate: &str) -> Result<Vec<String>, String> {
