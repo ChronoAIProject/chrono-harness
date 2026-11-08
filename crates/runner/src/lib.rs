@@ -710,7 +710,14 @@ pub fn run_process_observed_forwarded_for(
     forward: ProcessForward<'_>,
 ) -> Result<ProcessResult, String> {
     finish_detailed(run_process_inner_with_stdout(
-        root, s, input, Some(digest), timeout, s.output_limit_bytes, None, Some(forward),
+        root,
+        s,
+        input,
+        Some(digest),
+        timeout,
+        s.output_limit_bytes,
+        None,
+        Some(forward),
     ))
 }
 
@@ -1418,15 +1425,24 @@ fn run_process_inner_with_stdout(
                         monitor();
                     }
                     let keep = n.min(limit.saturating_sub(result.bytes.len()));
-                    if keep != n { result.complete = false; }
+                    if keep != n {
+                        result.complete = false;
+                    }
                     // Publication errors cannot discard bytes already read or
                     // prevent collection of the child's remaining bounded output.
                     result.bytes.extend_from_slice(&buf[..keep]);
                     if let Some(writer) = forward.as_mut() {
-                        if let Err(error) = writer.write_all(&buf[..keep]).and_then(|()| writer.flush()) {
+                        if let Err(error) =
+                            writer.write_all(&buf[..keep]).and_then(|()| writer.flush())
+                        {
                             result.failures.push(
-                                Failure::wrap("E_PROCESS_FORWARD", format!("{stream} forwarding: {error}"), NativeIoError::new(error))
-                                    .at("stream", stream).at("phase", "forward"),
+                                Failure::wrap(
+                                    "E_PROCESS_FORWARD",
+                                    format!("{stream} forwarding: {error}"),
+                                    NativeIoError::new(error),
+                                )
+                                .at("stream", stream)
+                                .at("phase", "forward"),
                             );
                             forward = None;
                         }
@@ -1714,9 +1730,14 @@ fn run_process_inner_with_stdout(
             exit_code: status.and_then(|s| s.code()).unwrap_or(-1),
             exit_signal: {
                 #[cfg(unix)]
-                { use std::os::unix::process::ExitStatusExt; status.and_then(|s| s.signal()) }
+                {
+                    use std::os::unix::process::ExitStatusExt;
+                    status.and_then(|s| s.signal())
+                }
                 #[cfg(not(unix))]
-                { None }
+                {
+                    None
+                }
             },
             executable,
             sha256: hash,

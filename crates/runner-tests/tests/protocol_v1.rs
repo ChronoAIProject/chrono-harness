@@ -85,7 +85,7 @@ fn live_forwarding_error_keeps_both_original_streams_and_actual_child_status() {
         assert_eq!(live_stderr, stderr);
         assert!(result.stdout_complete && result.stderr_complete);
         assert!(result.failure.as_deref().unwrap().contains("closed live consumer"));
-        assert!(result.failure_record.unwrap().to_string().contains("E_PROCESS_FORWARD"));
+        assert!(serde_json::to_value(result.failure_record.unwrap()).unwrap().to_string().contains("E_PROCESS_FORWARD"));
     }
 }
 
