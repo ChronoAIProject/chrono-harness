@@ -274,7 +274,7 @@ fn actual_host_projections_fit_native_workflow_size() {
     }
     let yaml = chrono_ci::release::render(&release).unwrap();
     let expanded: Value = serde_yaml_ng::from_str(&yaml).unwrap();
-    assert_eq!(expanded["permissions"]["actions"], "read");
+    assert!(expanded["permissions"].get("actions").is_none());
     assert_eq!(
         expanded["jobs"].as_object().unwrap().len(),
         release.jobs.len()
