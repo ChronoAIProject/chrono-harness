@@ -36,7 +36,6 @@ impl Staged {
             registry["platforms"]["fixture/native"].clone();
         write_json(&registry_path, &registry);
         fixture.config["install"] = json!([]);
-        fixture.config["participation"]["git"] = json!("/usr/bin/git");
         fixture.config["participation"]["program"] = json!(".chrono-harness/bin/cargo");
         fixture.config["report_path"] = json!(".chrono-harness/state/bootstrap-owner-stage.json");
         fixture.config["owner_stage"] =
@@ -382,7 +381,7 @@ fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
 }
 
 #[test]
-fn public_bootstrap_seeds_a_real_git_main_and_keeps_the_actual_failed_child_exit() {
+fn public_bootstrap_keeps_mocked_main_source_and_the_original_failed_child_exit() {
     for failure in [None, Some(73)] {
         let mut fixture = Fixture::new();
         let native = native_platform().unwrap();
@@ -391,7 +390,6 @@ fn public_bootstrap_seeds_a_real_git_main_and_keeps_the_actual_failed_child_exit
         registry["platforms"][format!("{}/{}", native.system, native.machine)] =
             registry["platforms"]["fixture/native"].clone();
         write_json(&registry_path, &registry);
-        fixture.config["participation"]["git"] = json!("/usr/bin/git");
         if let Some(exit) = failure {
             fixture.failed_operation("build", exit);
         }
@@ -449,6 +447,142 @@ fn public_bootstrap_seeds_a_real_git_main_and_keeps_the_actual_failed_child_exit
             }
         );
         assert_eq!(original["operations"][1]["exit_code"], failure.unwrap_or(0));
+    }
+}
+
+#[test]
+fn ordinary_shared_install_requires_the_existing_owner_and_identical_bytes() {
+    let mut fixture = Fixture::new();
+    fixture.inventory(&fixture.root);
+    fixture.environment.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        fixture.root.as_os_str().to_owned(),
+    );
+    let profile = fixture.loaded().profile;
+    let selected = fixture.root.join(&profile.participation.program);
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"selected owner").unwrap();
+    let source = fixture.root.join("out/replacement");
+    fs::write(&source, b"selected owner").unwrap();
+    owner::check_shared_install(
+        &fixture.root,
+        &fixture.environment,
+        &profile,
+        &source,
+        &selected,
+    )
+    .unwrap();
+    fs::write(&source, b"changed owner").unwrap();
+    assert!(
+        owner::check_shared_install(
+            &fixture.root,
+            &fixture.environment,
+            &profile,
+            &source,
+            &selected
+        )
+        .unwrap_err()
+        .contains("exclusive owner deployment")
+    );
+    assert_eq!(fs::read(&selected).unwrap(), b"selected owner");
+    assert!(
+        owner::check_shared_install(
+            &fixture.root,
+            &fixture.environment,
+            &profile,
+            &source,
+            &fixture.root.join("out/other")
+        )
+        .unwrap_err()
+        .contains("destination differs")
+    );
+    fs::remove_file(&selected).unwrap();
+    assert!(
+        owner::check_shared_install(
+            &fixture.root,
+            &fixture.environment,
+            &profile,
+            &source,
+            &selected
+        )
+        .unwrap_err()
+        .contains("exclusive owner deployment")
+    );
+}
+
+#[test]
+fn linked_shared_install_publishes_local_bytes_without_changing_the_coordinator() {
+    let mut fixture = Fixture::new();
+    let coordinator = tempfile::tempdir().unwrap();
+    fixture.inventory(coordinator.path());
+    fixture.environment.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        fixture.root.as_os_str().to_owned(),
+    );
+    let profile = fixture.loaded().profile;
+    let selected = coordinator.path().join(&profile.participation.program);
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"coordinator owner").unwrap();
+    let local = fixture.root.join(&profile.participation.program);
+    fs::create_dir_all(local.parent().unwrap()).unwrap();
+    let source = fixture.root.join("out/replacement");
+    fs::write(&source, b"local replacement").unwrap();
+    owner::check_shared_install(
+        &fixture.root,
+        &fixture.environment,
+        &profile,
+        &source,
+        &local,
+    )
+    .unwrap();
+    fs::write(&local, b"old local owner").unwrap();
+    owner::check_shared_install(
+        &fixture.root,
+        &fixture.environment,
+        &profile,
+        &source,
+        &local,
+    )
+    .unwrap();
+    assert_eq!(fs::read(&selected).unwrap(), b"coordinator owner");
+    assert_eq!(fs::read(&local).unwrap(), b"old local owner");
+}
+
+#[test]
+fn linked_shared_install_refuses_hard_links_and_symbolic_aliases_of_the_coordinator() {
+    let mut fixture = Fixture::new();
+    let coordinator = tempfile::tempdir().unwrap();
+    fixture.inventory(coordinator.path());
+    fixture.environment.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        fixture.root.as_os_str().to_owned(),
+    );
+    let profile = fixture.loaded().profile;
+    let selected = coordinator.path().join(&profile.participation.program);
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"coordinator owner").unwrap();
+    let local = fixture.root.join(&profile.participation.program);
+    fs::create_dir_all(local.parent().unwrap()).unwrap();
+    let source = fixture.root.join("out/replacement");
+    fs::write(&source, b"changed owner").unwrap();
+    for symbolic in [false, true] {
+        if symbolic {
+            std::os::unix::fs::symlink(&selected, &local).unwrap();
+        } else {
+            fs::hard_link(&selected, &local).unwrap();
+        }
+        assert!(
+            owner::check_shared_install(
+                &fixture.root,
+                &fixture.environment,
+                &profile,
+                &source,
+                &local
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(&selected).unwrap(), b"coordinator owner");
+        fs::remove_file(&local).unwrap();
     }
 }
 

@@ -1,12 +1,79 @@
-//! Rustup／Cargo／rustc 的真实进程接口夹具；不触及已安装 SDK。
+//! Git／Rustup／Cargo／rustc 的命令边界 mock；不执行外部工具。
 use serde_json::{Value, json};
 use std::{
     env, fs,
-    io::Write,
+    io::{Read, Write},
     os::unix::fs::PermissionsExt,
     path::Path,
     process::{Command, ExitCode},
 };
+
+fn git_mock(root: &Path, args: &[String]) -> Result<u8, String> {
+    let read = |path: &Path| -> Result<Value, String> {
+        serde_json::from_slice(&fs::read(path).map_err(|error| error.to_string())?)
+            .map_err(|error| error.to_string())
+    };
+    let calls = root.join("git-calls.json");
+    let mut observed = if calls.exists() {
+        read(&calls)?
+    } else {
+        json!([])
+    };
+    observed
+        .as_array_mut()
+        .ok_or("invalid mock calls")?
+        .push(json!({
+            "argv":args,"cwd":env::current_dir().map_err(|error| error.to_string())?
+        }));
+    fs::write(
+        calls,
+        serde_json::to_vec(&observed).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    let specification = read(&root.join("git.json"))?;
+    let key = serde_json::to_string(args).map_err(|error| error.to_string())?;
+    let response = specification
+        .get(&key)
+        .ok_or_else(|| format!("unexpected mock Git argv: {args:?}"))?;
+    if let Some(expected) = response.get("cwd") {
+        if *expected != json!(env::current_dir().map_err(|error| error.to_string())?) {
+            return Err("mock Git cwd differs".into());
+        }
+    }
+    if let Some(values) = response.get("environment").and_then(Value::as_object) {
+        for (name, expected) in values {
+            if json!(env::var(name).ok()) != *expected {
+                return Err(format!("mock Git environment differs: {name}"));
+            }
+        }
+    }
+    if let Some(expected) = response.get("stdin") {
+        let mut bytes = Vec::new();
+        std::io::stdin()
+            .read_to_end(&mut bytes)
+            .map_err(|error| error.to_string())?;
+        if json!(bytes) != *expected {
+            return Err("mock Git stdin differs".into());
+        }
+    }
+    for (name, mut output) in [
+        ("stdout", Box::new(std::io::stdout()) as Box<dyn Write>),
+        ("stderr", Box::new(std::io::stderr()) as Box<dyn Write>),
+    ] {
+        let bytes: Vec<u8> =
+            serde_json::from_value(response.get(name).cloned().unwrap_or(json!([])))
+                .map_err(|error| error.to_string())?;
+        output
+            .write_all(&bytes)
+            .map_err(|error| error.to_string())?;
+    }
+    u8::try_from(
+        response["exit_code"]
+            .as_u64()
+            .ok_or("missing mock exit code")?,
+    )
+    .map_err(|error| error.to_string())
+}
 
 fn run() -> Result<u8, String> {
     let invocation = env::args().next().ok_or("missing invocation")?;
@@ -17,6 +84,9 @@ fn run() -> Result<u8, String> {
         .and_then(|name| name.to_str())
         .ok_or("invalid tool name")?;
     let args: Vec<String> = env::args().skip(1).collect();
+    if name == "git" {
+        return git_mock(root, &args);
+    }
     let calls = root.join("calls.json");
     let mut values: Vec<Value> = if calls.exists() {
         serde_json::from_slice(&fs::read(&calls).map_err(|e| e.to_string())?)
