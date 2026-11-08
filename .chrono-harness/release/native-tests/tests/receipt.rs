@@ -9,6 +9,44 @@ use serde_json::{Value, json};
 use std::{fs, os::unix::fs::symlink};
 
 #[test]
+fn native_frontend_is_required_separately_from_business_assets() {
+    let mut host = fixture::recipe::Fixture::new();
+    host.config["native_frontends"] = json!({"fixture":{
+        "job":"native_frontend", "directory":"frontend",
+        "executable":"chrono-host-release", "bootstrap_profile":".chrono-harness/ci/bootstrap-release.json",
+        "bootstrap_report":"bootstrap.json", "cost":"unmeasured"
+    }});
+    host.save();
+    let loaded = Loaded::load(host.root()).unwrap();
+    let parent = Lineage {
+        kind: Kind::Github, run_id:"1234".into(), attempt:"3".into(),
+        job:"native_test_none".into(),
+    };
+    let input = json!({"native_frontend":{"result":"success","outputs":{
+        "artifact_id":"98765","run_id":"1234","attempt":"1"
+    }}});
+    let select = |input: &Value| receipt::select(&loaded, Scope::Unit("test_none"), &parent,
+        &serde_json::to_vec(input).unwrap());
+    let value = serde_json::to_value(select(&input).unwrap()).unwrap();
+    assert_eq!(value["units"], json!({}));
+    assert_eq!(value["frontend"], json!({"job":"native_frontend","artifact_id":"98765","run_id":"1234","attempt":"1"}));
+    assert!(select(&json!({})).is_err());
+    for outcome in ["failure", "cancelled", "skipped"] {
+        let mut bad = input.clone();
+        bad["native_frontend"]["result"] = json!(outcome);
+        assert!(select(&bad).is_err(), "{outcome}");
+    }
+    for (key, value) in [("run_id","foreign"),("attempt","4"),("artifact_id","by-name")] {
+        let mut bad = input.clone();
+        bad["native_frontend"]["outputs"][key] = json!(value);
+        assert!(select(&bad).is_err(), "{key}");
+    }
+    let mut extra = input.clone();
+    extra["unregistered-tool"] = input["native_frontend"].clone();
+    assert!(select(&extra).unwrap_err().contains("membership"));
+}
+
+#[test]
 fn literal_non_rust_receipt_needs_no_sdk_and_accepts_exact_time_boundary() {
     let mut f = Fixture::new(false);
     f.report["finished_ns"] = json!(30_000_000_001u64);
