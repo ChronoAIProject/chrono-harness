@@ -1016,6 +1016,7 @@
     {"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:diagnostics-tests"},
     {"from":"project:diagnostics","kind":"compile","to":"project:diagnostics-tests"},
     {"from":"project:diagnostics","kind":"compile","to":"project:runner"},
+    {"from":"project:diagnostics","kind":"compile","to":"project:runner-tests"},
     {"from":"project:diagnostics","kind":"test-execution","to":"test:diagnostics-tests"},
     {"from":"project:diagnostics-tests","kind":"test-execution","to":"test:diagnostics-tests"},
     {"from":"script:host-bootstrap","kind":"test-execution","to":"test:host-bootstrap-tests"},

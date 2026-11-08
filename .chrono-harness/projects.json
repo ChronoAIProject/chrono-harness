@@ -396,6 +396,18 @@
             "crates/runner-tests/Cargo.toml"
           ]
         },
+        "update_lockfile": {
+          "operation": "lock.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--package",
+            "chrono-harness-tests"
+          ]
+        },
         "verify_paths": {
           "operation": "verify.runner-paths-tests",
           "tool": "verus",

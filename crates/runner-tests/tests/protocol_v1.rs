@@ -2585,8 +2585,8 @@ fn delayed_monitor_helper() {
         timeout_seconds: 1,
         output_limit_bytes: 4096,
     };
-    // Complete this launcher's first owned process handoff before recording the
-    // short experiment's conservative start. The probe uses the same executable,
+    // Complete this launcher's first owned process handoff before the short
+    // experiment. The probe uses the same executable,
     // ownership engine and bounds, and leaves no child or readiness marker.
     let mut readiness = spec.clone();
     readiness.args = vec!["exit".into(), "0".into()];
@@ -2595,26 +2595,21 @@ fn delayed_monitor_helper() {
     assert!(ready.failure.is_none(), "{ready:?}");
     assert!(ready.stdout_bytes.is_empty(), "{ready:?}");
     assert!(ready.stderr_bytes.is_empty(), "{ready:?}");
-    fs::write(
-        root.join("launcher"),
-        serde_json::to_vec(&value!({
-            "pid": std::process::id(),
-        }))
-        .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(
-        chrono_harness::logged_main_at(root, "delayed-monitor", "child", || {
+    let stream = std::os::unix::net::UnixStream::connect(root.join("monitor.sock")).unwrap();
+    let logger = chrono_diagnostics::logging::Logger::new(
+        "delayed-monitor",
+        chrono_diagnostics::logging::Level::DEBUG,
+        stream,
+    );
+    logger.run(|| {
             let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
             fs::write(
                 root.join("result.json"),
                 serde_json::to_vec(&result).unwrap(),
             )
             .unwrap();
-            0
-        }),
-        0
-    );
+    });
+    logger.finish().unwrap();
 }
 
 #[cfg(unix)]
@@ -2625,17 +2620,6 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         "delayed monitor originals ({case}): {}",
         root.path().display()
     );
-    fs::create_dir(root.path().join(".chrono-harness")).unwrap();
-    fs::write(
-        root.path().join(".chrono-harness/logging.json"),
-        serde_json::to_vec(&value!({
-            "schema":"chrono-runtime-logging/v1", "level":"debug",
-            "directory":".chrono-harness/state/monitor/", "max_bytes":65536,
-            "max_files":1, "stderr":false,
-        }))
-        .unwrap(),
-    )
-    .unwrap();
     let exe = std::env::current_exe().unwrap();
     let digest = sha256(&fs::read(&exe).unwrap());
     // Only the nested launcher is suspended. The child and independent kernel
@@ -2649,18 +2633,18 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         .spawn()
         .unwrap();
     // The independent observer publishes readiness before the timed launch and
-    // reads that launch's actual monitor deadline from the existing debug sink.
-    let preparing = std::time::Instant::now();
-    while !root.path().join("controller-ready").exists() {
-        if preparing.elapsed() >= std::time::Duration::from_secs(5)
-            || controller.try_wait().unwrap().is_some()
-        {
-            let _ = controller.kill();
-            let original = controller.wait_with_output().unwrap();
-            panic!("controller did not become ready: {original:?}");
-        }
-        std::thread::sleep(std::time::Duration::from_millis(5));
+    // reads that launch's actual monitor deadline from the existing logger.
+    use std::{io::{BufRead, BufReader}, os::fd::AsRawFd};
+    let ready = controller.stdout.take().unwrap();
+    let mut event = libc::pollfd { fd: ready.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+    if unsafe { libc::poll(&mut event, 1, 5000) } != 1 {
+        let _ = controller.kill();
+        let original = controller.wait_with_output().unwrap();
+        panic!("controller did not become ready: {original:?}");
     }
+    let mut line = String::new();
+    BufReader::new(ready).read_line(&mut line).unwrap();
+    assert_eq!(line, "ready\n");
     let spec = chrono_harness::CommandSpec {
         program: exe.to_string_lossy().into(),
         args: vec![
