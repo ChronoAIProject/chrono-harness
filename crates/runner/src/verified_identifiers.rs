@@ -352,6 +352,21 @@ pub fn valid_oid(bytes: &[u8]) -> (valid: bool)
     nonzero
 }
 
+/// 完整文本准入及原固定诊断；调用方不再另行维护成功／失败分支。
+pub fn full_oid(text: &str) -> (out: Result<(), String>)
+    ensures
+        out.is_ok() == oid(text.spec_bytes()),
+        match out {
+            Ok(()) => true,
+            Err(message) => message@ == "expected full nonzero lowercase commit OID"@,
+        },
+{
+    if !valid_oid(text.as_bytes()) {
+        return Err("expected full nonzero lowercase commit OID".to_string());
+    }
+    Ok(())
+}
+
 pub fn valid_merge_parents(
     count: usize, base: &[u8], second: &[u8], head: &[u8],
 ) -> (valid: bool)

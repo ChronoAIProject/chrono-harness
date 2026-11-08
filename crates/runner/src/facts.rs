@@ -4,6 +4,7 @@ pub use crate::facts_binding::{
     declaration as git_declaration,
 };
 pub use crate::facts_configs::Identity as ConfigIdentity;
+pub use crate::verified_identifiers::full_oid;
 pub use crate::verified_status::{Tree, TreeEntry as Entry, TreePath};
 use crate::{
     json, no_symlink_parents, relative_path,
@@ -82,12 +83,6 @@ pub(crate) fn git_inventory(
 }
 pub fn utf8(b: Vec<u8>) -> Result<String, String> {
     String::from_utf8(b).map_err(|_| "E_INPUT_UNSUPPORTED: non UTF-8 Git output".into())
-}
-pub fn full_oid(s: &str) -> Result<(), String> {
-    if !crate::verified_identifiers::valid_oid(s.as_bytes()) {
-        return Err("expected full nonzero lowercase commit OID".into());
-    }
-    Ok(())
 }
 pub fn verify_oid(root: &Path, oid: &str) -> Result<String, String> {
     Reader::legacy().verify_oid(root, oid)

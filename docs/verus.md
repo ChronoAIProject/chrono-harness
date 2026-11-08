@@ -77,7 +77,14 @@ CI 测试计划先执行两项整 crate 证明及编译，再执行原有构建�
 `crates/runner/src/verified_identifiers.rs` 是实际 OID 和 CI 单元 ID 判断的唯一实现。
 OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID 必须非空，
 每个字节都属于 ASCII 字母、数字或 `._-`。循环证明返回值与各自规格充要相等，包含边界和终止。
-`facts::full_oid` 与 `units::id` 直接消费这些结果。
+`facts::full_oid` 直接重导出同一根的 `full_oid`，成功／失败分支也由 Verus 拥有：
+返回 `Ok(())` 当且仅当完整输入字节满足 OID 规格；拒绝时返回完整原错误文本
+`expected full nonzero lowercase commit OID`。不截取、不归一化输入，现役调用方无需迁移接口。
+独立 Verus 预期核两种长度、仅一个非零位、全零、空／短／长、大小写、NUL、换行，
+以及任意位置的非法字节；同一成功／错误文本预期也在普通 Rust 中实际执行。
+文本借用和诊断字符串构造沿用固定 vstd 的 `str::as_bytes`／`ToString` 外部合同，
+没有新增仓内受信函数、操作、依赖或证明预算。`units::id` 继续消费同一字节判断。
+最多扫描 64 字节，拒绝时构造固定长度的原诊断；完整构建、证明及 CI 成本未测。
 
 原始 commit 物理头的 parent 行选择也由同一根的 `commit_parent_records` 实现。
 以 LF 字节分行，在首个空行停止；仅选择精确 `parent ` 前缀，完整借用原后缀，

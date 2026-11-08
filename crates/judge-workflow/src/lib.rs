@@ -80,19 +80,7 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
         b.workflow(),
     )?;
     let observation = &req.observations["preparation"]["result"]["evidence"]["current_observation"];
-    let provider =
-        req.observations["preparation"]["request"]["native_artifacts"]["config_path"].as_str();
-    let requires_current = if let Some(path) = provider {
-        let raw = std::fs::read(chrono_harness::no_symlink_parents(
-            &req.candidate.root,
-            path,
-        )?)
-        .map_err(|e| e.to_string())?;
-        json(&raw)?.get("native_adoption").is_some()
-    } else {
-        false
-    };
-    if requires_current || !observation.is_null() {
+    if !observation.is_null() {
         if observation["context_digest"] != req.context.sha256 {
             return Err("E_BRANCH_CONTEXT: current observation context binding differs".into());
         }
