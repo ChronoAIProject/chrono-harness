@@ -95,7 +95,7 @@ fn successful_current_needs_can_select_the_original_earlier_attempt() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn missing_future_or_foreign_producers_are_rejected() {
     proof {
-        reveal_strlit("run"); reveal_strlit("foreign");
+        reveal_strlit("run"); reveal_strlit("foreign"); reveal_strlit("");
         assert("run"@.len() != "foreign"@.len());
     }
     let zero = policy::selected_producer(&DependencyResult::Success, "run", "run", 0, 2, "artifact");
@@ -110,6 +110,7 @@ fn missing_future_or_foreign_producers_are_rejected() {
 fn receipt_job_run_and_attempt_must_match_the_selected_producer() {
     proof {
         reveal_strlit("job"); reveal_strlit("other"); reveal_strlit("run"); reveal_strlit("changed");
+        reveal_strlit("");
         assert("job"@.len() != "other"@.len());
         assert("run"@.len() != "changed"@.len());
     }
