@@ -4,13 +4,13 @@
 #[path = "../../runner/src/verified_status.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as scope_text;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_status as policy;
 use core::cmp::Ordering;
-use policy::{Status, WireStatus};
 #[cfg(verus_keep_ghost)]
 use policy::identifiers as scope_text;
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::verified_identifiers as scope_text;
+use policy::{Status, WireStatus};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]

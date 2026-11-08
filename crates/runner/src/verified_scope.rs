@@ -1,9 +1,9 @@
 //! 实际 CI 选择类型、完整字段身份与规范参数。
+use super::identifiers::equal_text;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
-use super::identifiers::equal_text;
 
 verus! {
 
