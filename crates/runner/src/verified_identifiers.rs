@@ -68,6 +68,8 @@ pub proof fn byte_trichotomy(a: Seq<u8>, b: Seq<u8>)
     } else {
         let x = a.subrange(1, a.len() as int);
         let y = b.subrange(1, b.len() as int);
+        assert(x.len() == a.len() - 1);
+        assert(y.len() == b.len() - 1);
         byte_trichotomy(x, y);
         if x == y {
             assert(a.len() == b.len());
