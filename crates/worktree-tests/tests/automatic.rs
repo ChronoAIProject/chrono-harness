@@ -701,6 +701,142 @@ fn automatic_birth_enrollment_and_active_retained_checkout_survives_start() {
     assert!(first.join("output λ/data").exists());
 }
 
+fn attention_row<'a>(report: &'a Value, path: &Path) -> &'a Value {
+    report["worktree_status"]["worktrees"]
+        .as_array()
+        .expect("persistent lifecycle status must be observable")
+        .iter()
+        .find(|row| row["path"] == value!(path))
+        .expect("status must include the addressed worktree")
+}
+
+#[test]
+fn automatic_attention_persists_across_commands_and_stops_after_verified_removal() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    native_consumer(&h, "finished");
+    let target = h.parent.join("attention active");
+    let (code, birth, stderr) = h.invoke("integration", "attention", &target);
+    assert_eq!(code, 0, "{birth} {stderr}");
+    assert_eq!(attention_row(&birth, &target)["work_state"], "active");
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    assert_eq!(attention_row(&status, &target)["attention_required"], true);
+    assert_eq!(attention_row(&status, &h.root)["attention_required"], false);
+    let (code, used, stderr) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {stderr}");
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+    let (code, finished, stderr) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+    );
+    assert_eq!(code, 0, "{finished} {stderr}");
+    assert!(!target.exists());
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    let row = attention_row(&status, &target);
+    assert_eq!(row["cleanup_state"], "disposed");
+    assert_eq!(row["work_state"], "terminal");
+    assert_eq!(row["attention_required"], false);
+    assert!(!stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+}
+
+#[test]
+fn automatic_attention_preserves_unregistered_dirty_and_corrupt_worktrees() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let healthy = h.parent.join("healthy");
+    let corrupt = h.parent.join("corrupt");
+    assert_eq!(h.invoke("feature", "healthy", &healthy).0, 0);
+    assert_eq!(h.invoke("feature", "corrupt", &corrupt).0, 0);
+    let unknown = h.parent.join("unknown");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            unknown.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    fs::write(unknown.join("unique-work"), "keep this source").unwrap();
+    fs::write(h.ledger_path(&corrupt), b"broken original ledger").unwrap();
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    assert_eq!(attention_row(&status, &healthy)["work_state"], "active");
+    assert_eq!(attention_row(&status, &corrupt)["work_state"], "unknown");
+    assert_eq!(
+        attention_row(&status, &unknown)["work_state"],
+        "unregistered"
+    );
+    assert_eq!(
+        fs::read(unknown.join("unique-work")).unwrap(),
+        b"keep this source"
+    );
+    assert_eq!(
+        fs::read(h.ledger_path(&corrupt)).unwrap(),
+        b"broken original ledger"
+    );
+    assert!(
+        !h.ledger_path(&unknown).exists(),
+        "observation must not import work"
+    );
+}
+
+#[test]
+fn automatic_attention_keeps_retained_terminal_work_visible_and_scopes_ordinary_commands() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let target = h.parent.join("retained");
+    let other = h.parent.join("other");
+    assert_eq!(h.invoke("feature", "retained", &target).0, 0);
+    fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();
+    fs::write(
+        target.join(".chrono-harness/state/evidence"),
+        "required evidence",
+    )
+    .unwrap();
+    let (code, report, stderr) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert!(target.exists());
+    let row = attention_row(&report, &target);
+    assert_eq!(row["work_state"], "terminal");
+    assert_eq!(row["cleanup_state"], "retained");
+    assert_eq!(row["attention_required"], true);
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+    let (code, report, stderr) = h.invoke("feature", "other", &other);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(
+        report["worktree_status"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(attention_row(&report, &other)["work_state"], "active");
+    let (code, report, stderr) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(
+        report["worktree_status"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(attention_row(&report, &target)["attention_required"], true);
+}
+
 #[test]
 fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     let h = Host::new("input.custom");
