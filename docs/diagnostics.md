@@ -1,6 +1,6 @@
 # 结构化日志与错误
 
-`chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner、宿主目录或 Git。宿主明确登记它的构建、测试计划、输入、输出和 CI 单元。
+`chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner 或 Git。核心记录和 tracing 层不依赖宿主目录；`runtime` 适配器从明确宿主根读取日志选择。宿主登记它的构建、测试计划、输入、输出和 CI 单元。
 
 ## 保留原错误及其原因
 
@@ -13,6 +13,24 @@
 `ReceivedError` 导入记录并保留原因链，但不声称接收进程执行过原操作。未知格式版本和字段会被拒绝。这套记录独立于严格的 judge v1 协议；要加进检查请求或响应，须明确更新相应协议。
 
 ## 日志和上下文
+
+本仓通过 `.chrono-harness/logging.json` 采用统一文件日志。已接入的 Rust 命令入口在业务启动前初始化 logger，记录 `cli.started` 和 `cli.finished`，包含实际生产者、PID、操作、宿主路径和返回码。info 记录正常活动，失败返回用 error。运行日志位于 `.chrono-harness/state/logs/runtime.jsonl`；直接查看可用：
+
+```sh
+tail -F .chrono-harness/state/logs/runtime.jsonl
+```
+
+当前每份上限 10485760 字节（10 MiB），共保留 5 份，包含当前文件及 `runtime.1.jsonl` 至 `runtime.4.jsonl`。越接近 1 越新。下一条完整记录将超过上限时先轮换，删除最旧份。正文最多 50 MiB，另有一个空的 `runtime.lock`；不压缩、不按调用创建新文件、不启动清理线程或定时器。`max_files` 必须为 1 至 64，`max_bytes` 必须为 1 至 67108864，`level` 支持 trace、debug、info、warn、error。`stderr: false` 使普通入口的新增日志只写文件；已有业务输出仍走原通道。
+
+`chrono-diagnostics::runtime` 负责配置和入口，`rolling::RollingFile` 负责受限文件写入；已有 `Logger` 继续负责记录和格式。使用 Rust 标准库文件锁和文件操作，无新增外部依赖。已有 tracing 层不提供大小与份数轮换，因此在它的 `Write` 边界补齐文件目的。每次写入持有同一个日志家族的文件锁，在锁内核大小、轮换并重新打开当前文件；各进程不会持有轮换前的旧日志句柄。初始化只核登记的 64 个有限保留位置，不扫描其他 state 文件；降低份数后回收超出的日志成员。
+
+日志目录专用于当前家族。目录符号链接、成员符号链接或非普通文件会被拒绝；无关文件保持原状。单条记录超限不截断，日志失败由 `finish()` 保留，入口向 stderr 尝试发布 `runtime.logging_failed` 及原生原因／相关错误。初始化失败阻止业务启动；运行中失败保留原业务输出和返回码，入口最终退出 2。应急 stderr 也不可用时，只能保留失败退出，不能声称已经写下完整记录。文件关闭不代表 fsync；突然终止、断电和任意外部修改的完整恢复不在此保证内。
+
+入口使用明确 `--host-root`；Rust bootstrap 按实际命令选择位置参数中的宿主，再通过同一 `cli_at` 适配器记录。未指定宿主时使用真实 cwd，不向父目录搜索，也不使用新的环境开关。没有该文件时，沿用使用方原目的；这不证明该宿主已经采用文件日志。当前接入 runner、worktree、CI、cache、inputs、distribution、本宿主 Rust bootstrap 及 Rust 判官入口。独立 instructions 工具、Python 宿主脚本、非 Rust 适配和所有领域错误链的迁移仍待完成，不据此宣称完整 §7.1／§7.2 已实现。
+
+CI 的 `chrono-log-stderr/v1` 仍要求原 stderr：检查 logger 在保留该原通道的同时写入滚动文件，沿用原请求／计划／操作上下文与真实等待行为。`stderr` 配置只控制普通入口的新增副本，不能取消已登记的判官证据通道。机器 stdout 不加入日志。滚动文件不接受不可变证据引用；报告引用的原始输出和错误继续由现有 retention 所有者回收，不能让日志轮换删除它们。
+
+**产品与宿主政策同步修改：**本次增加标准诊断库的文件目的和入口接入，同时登记日志选择、FILEMAP 输入和 Rust 回归。验证包含真实 CLI 成功／失败与超限、轮换和重启、大小边界、降低保留份数、四进程并发、路径拒绝及原始输出保持。标准检查仍按两端明确变更依赖选测，完整构建／CI／维护成本未知。
 
 `Logger` 建立限定范围的 `tracing` 分发器，明确设置生产者、级别和 `Write` 目的。`Logger::stderr` 选择标准错误和 info。每个事件输出一行 UTF-8 JSON，时间为实际 UTC RFC3339。记录保留有类型字段，并合入外层 span 上下文，较近层优先。未指定 `event_id` 时使用 `tracing.external`。
 
@@ -54,11 +72,11 @@ runner 的无效 UTF-8 参数路径使用共享 logger，不写 stdout，退出 
 
 Rust 回归使用真实缺失可执行文件、权限拒绝、摘要拒绝、原生 source 类型还原、序列化版本／上下文变异、双存储完整报告、健康执行、依赖阻断、二进制协议失败输出，以及真实文件大小限制导致的次要流发布失败。已有所有权耗尽回归继续核原 exec 前错误和 fork 分配限制。
 
-**产品与宿主登记曾同步修改：**runner-tests 增加 `test.runner.diagnostics`，使用已有 cargo、项目输入和独立构建目录，对 Rust 诊断用例提供受保护快速反馈。它补充而不替代完整 runner 操作；标准本地／CI 仍按两端变更范围选择检查。已有明确单元和消费者不需要再改 FILEMAP 边。完整构建／检查、远端 CI 和存储成本未测；局部耗时观察归实现交接证据。
+这些诊断回归由原未过滤操作 `test.runner-tests` 执行，沿用已有 Cargo、项目输入和独立构建目录。没有当前计划或发布使用方的临时过滤入口已退役；标准本地／CI 仍按两端变更范围选择检查。完整构建／检查、远端 CI 和存储成本未测；局部耗时观察归实现交接证据。
 
 这还没完成 SPEC §7.1／§7.2。其他 runner 领域路径和程序保留原诊断。通用原生错误适配器、全产品有类型错误、统一应急发布、登记格式／目的选择、持久记录引用、子进程上下文传递和非 Rust 适配仍待完成。诊断发布失败不能算证据已保存。
 
-macos-26 的已有观察来自生产 `72b1d08` 的运行 `39690377913/1` 和场景 `c515cd05` 的运行 `39695762671/1`。两份标准 runner 原报告在六个二进制中记录 166 项通过、1 项已有忽略，包括三个 `prelaunch_diagnostics_*` 和 `execution_self_diagnostic_rejects_mutated_prelaunch_error_records`。当前启动导入、安装工具身份、单元原进程输出和成功汇总均保留。这只证明有限 Darwin 测试／消费，不证明通用持久诊断发布或 Linux 行为。
+macos-26 的已有观察见[原生产运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[原场景运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)。具体源码、测试数量和进程输出直接查原 runner 报告及汇总；这些观察只覆盖对应的 Darwin 测试和消费，不证明通用持久诊断发布或 Linux 行为。
 
 候选真实 CI 验收须在当前共享启动安装／验证后，由已有 macos-26 `unit_runner` 运行标准 runner 单元。保留实际完整调用回归输出、原进程／输出流／错误记录、当前二进制／源码绑定，以及原单元／汇总产物生产身份。Linux 的进程、描述符、exec 前覆盖仍须登记的 Linux 真实验证，不能从本地 Darwin 外推 errno 或所有权行为。业务检查成功却没这些原件，不足以支撑对应证据结论。源／产物／run／attempt 条件归[共享启动交接](filemap-impact.md#bounded-internal-causal-consumption)，不新增工作流或替代诊断测试入口。
 
@@ -90,13 +108,17 @@ projects 增加已验证计划和操作身份，把分发器及父 span 明确�
 
 runner 进程／所有权记录、projects 工作者上下文和 CI 采用与所选配置一起调整。FILEMAP 明确登记两份 Rust 样本源及 diagnostics 直接编译依赖；锁文件直接引用已锁定的 `tracing`／`chrono-diagnostics`，不引入新外部包或版本。
 
-专属 CI Rust 项目登记 `test.ci.execution-diagnostics` 快速反馈，使用当前 v3 单元、retained-reference/v2 和真实共享执行，核对：失败操作的精确字节／退出、请求／计划／启动对应；最终汇总前发生外层真实超时时的原输出；日志 IO 失败与原业务失败同时保留；健康结果；配置选中／省略／未知值；真实 DEBUG 成功／失败进程；以及原超时快照中的位置、代次、父位置一致。
+专属 CI Rust 项目通过原未过滤操作 `test.judge-ci-tests` 执行这些回归，使用当前 v3 单元、retained-reference/v2 和真实共享执行，核对：失败操作的精确字节／退出、请求／计划／启动对应；最终汇总前发生外层真实超时时的原输出；日志 IO 失败与原业务失败同时保留；健康结果；配置选中／省略／未知值；真实 DEBUG 成功／失败进程；以及原超时快照中的位置、代次、父位置一致。
 
 INFO 测试要求操作上下文和结果，并拒绝进程细节事件。DEBUG 测试用已有调用者范围的 Logger 实际调用共享引擎，不新增日志政策或 API。Rust 子进程样本由项目已有 Cargo 测试操作构建。标准验证仍选完整登记的变更影响范围，局部快速反馈不能证明已提交候选的标准或真实 CI 验收。
 
 正常输出量随领域操作和阶段数增长，DEBUG 还随进程调用和参数大小增长，不随等待时长或采集流大小增长。身份上下文每条重复，但不复制请求正文、环境值或流正文。原检查程序的流／输出／报告上限继续有效，超限仍失败。
 
 逐条序列化、同步写入、保留 stderr 和上传字节都是新增成本；完整宿主／真实 CI 成本未测。快速反馈耗时和字节观察归工作者交接，不能据此宣称改善超时。独立启动程序的通用子进程上下文传递，以及更广 SPEC §7.1／§7.2 采用仍未完成。
+
+### 历史失败保留原结论
+
+历史失败的上下文和原参与报告直接查[原运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/41315147398)。该次超时的根因仍未解决；最后记录的子进程已终止，仍不能还原其完整参数或解释外层等待。最终单元报告缺失和上传确认拒绝继续按原失败保留。当前日志改动不宣称修复该次超时，也不允许在必要原件缺失时释放它们。
 
 ### 跨线程日志与失败保留
 

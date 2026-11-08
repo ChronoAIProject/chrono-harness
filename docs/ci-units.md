@@ -76,50 +76,7 @@ registration／input 统一负责真实单元验证、`chrono-inputs capture --u
 
 本产品宿主当前采用按范围 v1 和明确 job gating。干净候选准入、真实原生完整采用、公开二进制发布及完整 SPEC 验收仍各自处理。
 
-## 可选的原生输入准备扩展
-
-使用条件父工作流的 full units/v2 可明确选择 schema `chrono-native-adoption/v2` 的 `native_adoption`，省略保留原生成行为。采用前须安装兼容发布生成器。产品由已安装的 Rust `chrono-ci native-adoption` 执行输入准备、传输和转发；生成器只输出工作流。宿主拥有以下扩展值和登记操作：
-
-```json
-"native_adoption": {
-  "schema": "chrono-native-adoption/v2",
-  "lineage": {"path": ".chrono-harness/ci/lineage.json", "sha256": "ORIGINAL_BIRTH_SHA256"},
-  "inputs_program": ".chrono-harness/bin/chrono-inputs",
-  "seed_directory": ".chrono-harness/state/shared-seed/",
-  "seed_artifact": "chrono-context",
-  "retained_inputs": ".chrono-harness/state/inputs.json",
-  "composition_sources": [{"path": ".chrono-harness/state/inputs/base-capture.json", "sha256": "ORIGINAL_BASE_CAPTURE_SHA256"}],
-  "push_roles": {"refs/heads/integration/": "integration", "refs/heads/dev": "delivery"},
-  "pull_request_role": "delivery",
-  "integration_evidence": null
-}
-```
-
-候选提交前，调用方将未改的成功 start／reconstruct 原报告作为 `lineage` 跟踪并登记。原生消费者核摘要、原分支／分叉／时间和事件关联，不读取目标 origin 或编造历史 birth。`prepare-endpoints` 在加载完整上下文前暴露原完整政策事件准备。detector 委托它，观察一次真实 UTC，保留真实事件／载荷／revision／仓库记录，发布 schema2 上下文。
-
-检测器从明确寻址的 `composition_sources` 快照或端点对导入原基线治理观察，再用 `chrono-inputs capture-governance` 采集当前候选治理输入。输入模块核固定端点／配置、存在状态、流式数据身份，在种子证据内保留来源字节和出处回执。基线快照可在候选存在前采集，再把摘要绑定到 provider，避免候选身份循环。这支持同位置 H0→H1 变化；原件缺失／损坏／错绑或当前治理输入变化都失败，不证明过去业务执行过。
-
-种子在依赖 job 启动前上传。单元和之后汇总不轮询地取得唯一原 detector run／生产 attempt／摘要绑定种子，保留原字节及生产者依赖证据。获取缺失、歧义或错绑失败，传输核观察顺序。
-
-CI 生产者另记真实当前观察，不改原上下文；只有 workflow 判官应用未改的年龄上限，同时约束消费者和凭据生产者。本地复用上下文时同样保留独立当前观察，原上下文摘要、成功报告不变。获取 job 有 `actions: read`，生成步骤收到实际 `CHRONO_WORKFLOW_REVISION`。
-
-bootstrap 接收宿主登记 argv。hook 如需该 revision，须明确在 bootstrap 登记 argv 前缀 `["env", "CHRONO_WORKFLOW_REVISION=${{ github.workflow_sha }}", ...]`，生成器保留这个宿主选择。
-
-将已安装的 `chrono-ci` 工具登记为唯一 `canonical_check.inputs.ci`，argv 为 `["native-adoption", "forward", "--host-root", ".", "--config", PROVIDER_PATH]`，恰好一个 provider `--config` 对绑定所选上传合同。不生成适配器，也不要求宿主安装 Python。
-
-从业务继承移除只用于获取的 `GITHUB_EVENT_NAME`、`GITHUB_EVENT_PATH`、`CHRONO_WORKFLOW_REVISION`、`GITHUB_REPOSITORY`，保留 `CHRONO_CHECK_SOURCE`、实际业务变量和已有凭据合同。转发读取真实保留获取记录，将实际具名环境值交给 `chrono-ci check-inputs`。
-
-原生输入准备直接复用已有 Rust 有界进程传输，保留 stdin／stdout／stderr、执行物身份和进程结果。它处理不在业务继承内的事件字段及凭据；无需跨进程桥接协议。外层生产回执仍记录自身真实环境。
-
-汇总先转发 gather，再调用输入模块组合，之后才返回完整执行。原 detector 治理对和所选单元贡献提供汇总输入。`composition_sources` 给种子准备提供原基线快照／对；汇总从传递种子消费已验证治理投影，出处中保留来源字节，因此其他检出不必仍有 detector 原路径。
-
-FILEMAP／routes 继续负责 DELTA 选择；registration 按两端分配投影所选单元，核汇总覆盖。不选单元无需 SDK 快照或合成报告，汇总不装 SDK 或探测业务。
-
-可选 `integration_evidence_path` 选择传输的原凭据字节用于 delivery，其实际 SHA-256 成为上下文绑定。缺字节保留原 null，由 workflow 按影响判断是否足够。声明可选 `integration_evidence` 摘要时须与实际字节匹配。
-
-可选 `integration_transport: {source_directory, directory}` 将生产原上传根连到交付下载根，含最终报告及嵌套数据。宿主 bootstrap 获取明确完成的凭据／报告依赖证据，扩展不加调度器。workflow 保留九项凭据绑定，影响选中 integration 时要求匹配的最终生产者。普通 feature 准备可带 null，仍由 workflow 决定是否足够。
-
-lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原件都须登记到宿主 FILEMAP／输入／依赖。种子、单元、汇总、下载根互不重叠。已有输出预检保留宿主定制，拒绝无所有权覆盖。这些源码合同不自动启用主仓或示例；公开发布及真实 push／PR／dev 采用仍归调用方。
+**产品与宿主登记同时收窄：**未发现当前使用方的 `native_adoption` 扩展、种子发布／获取／转发及专属治理采集已退役。删除专属 Cargo target、三条 FILEMAP 文件登记和 CI 的直接 `time` 依赖；其他所有者仍使用的传递依赖保留。普通 scoped 原生 CI、full 上下文／汇总、共享启动以及输入 capture／pair／compose 继续由现有入口负责。完整输入、full 采用和同判仍未建立，构建、CI、存储及维护总成本收益未测。
 
 <a id="conditional-jobs-and-the-required-aggregate"></a>
 
@@ -135,19 +92,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
 
 `detect` 为每个登记单元输出布尔值。单元 `needs: detect`，在 job 层 `if` 判断该值；无关 job 不分配 runner，也不 bootstrap 或准备 SDK。`aggregate` 使用 `if: always()`，依赖 detector 和全部单元。不生成工作流级 `paths`／`paths-ignore`，也不用 matrix fail-fast 联动单元失败。
 
-宿主增加以下可选 provider 块，自行登记工具获取：
-
-```json
-"job_gating": {
-  "schema": "chrono-job-gating/v1",
-  "detector": {
-    "runs_on": "macos-26",
-    "timeout_minutes": 45,
-    "bootstrap": ["/bin/bash", ".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-detector.json"],
-    "sparse_checkout": [".chrono-harness/", "crates/", "assets/", ".github/workflows/chrono-ci.yml", ".gitignore"]
-  }
-}
-```
+provider 的可选 `job_gating` 字段登记 detector 的平台、时限、bootstrap 和源码获取范围。本仓的当前声明见 [.chrono-harness/ci/units.json](../.chrono-harness/ci/units.json)，沿已登记的 Rust bootstrap 启动，不在本文维护第二份配方。
 
 此形式要求 collection provider v4。内部生成命令 `chrono-ci detect --host-root . --config SOURCE --github-output "$GITHUB_OUTPUT"` 自读事件及原生绑定，不加日常标志或手动准备。实际检查仍为 `chrono-harness check`、`check --unit ID`、`check --collect`。
 
@@ -410,7 +355,7 @@ push／pull_request 准备将生成 provider、工作流、profile 绑定候选�
 
 本产品宿主的条件单元及汇总归 [.chrono-harness/ci/units.json](../.chrono-harness/ci/units.json) 维护，core 安装范围归 [bootstrap-core.json](../.chrono-harness/ci/bootstrap-core.json) 维护。各所选计划保留明确的构建／检查／测试，共享操作明确列在 profile，只在隔离检出重复。
 
-CI 生成器消费者在已提交 push 事件上执行生成单元的真实短 `chrono-harness check`，由登记输入程序准备绑定候选的工作流源码／上下文，再读取原报告。普通 `chrono-ci prepare` CLI 已退役；`prepare-endpoints` 与 `acquire-seed` 仍由原生采用流程调用。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
+CI 生成器消费者在已提交 push 事件上执行生成单元的真实短 `chrono-harness check`，由登记输入程序准备绑定候选的工作流源码／上下文，再读取原报告。普通 `chrono-ci prepare`、`prepare-endpoints` 和 `acquire-seed` CLI 已退役；事件准备由登记输入程序调用内部 API。`crates/ci-tests/tests/units.rs` 核字面生成命令及所选操作，避免生成结果静默偏离本地命令。
 
 Go／TS／mix 的接入方式与验证限制见[示例索引](examples.md)，原 CI 记录直接查各宿主的 Actions／PR。固定旧发布的有限采用不证明当前候选；有效输入完整、各 provider 版本宿主采用、确定同判及完整启用仍分别验收。
 
@@ -465,4 +410,4 @@ gather 保留下载报告原字节，不用硬链接替换报告。本仓采用 
 
 输入生产失败可能只留下获取原件，没有最终报告文件。上传成功只导出已有证据，不造报告或通过结果。交付拒绝明确点名缺报告或无法核的原件，保留退出 2、原 outcome 和 delivery 根，不释放其他消费者或确认未生产证据。
 
-`test.runner.retention-delivery` 是登记 Rust 快速反馈操作，覆盖报告位置／原件缺失、引用摘要变化、失败 outcome 确认；标准选测仍保留完整 DELTA 计划。
+报告位置／原件缺失、引用摘要变化和失败 outcome 确认的回归，由原未过滤操作 `test.runner-tests` 执行；标准选测继续使用完整 DELTA 计划，不维护独立过滤入口。

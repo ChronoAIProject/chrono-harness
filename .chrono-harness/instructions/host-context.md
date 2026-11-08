@@ -16,9 +16,11 @@
 
 ## 自动交付授权
 
-本仓所有已授权工作都自动完成提交、创建 PR、等待适用检查、合并和落地核验。无论先经 integration 分支集成，还是直接创建面向 dev 的 PR，都无需用户额外输入、确认或合并前提示；先合入 integration 的工作继续自动交付到 dev。
+本仓所有已授权工作都自动完成提交、推送、创建 PR、修复冲突、等待适用检查、合并和落地核验。当前 PR head 对应的必需 CI 全部通过且 PR 可合并后，立即合并到目标分支。无论先经 integration 分支集成，还是直接创建面向 dev 的 PR，都无需用户额外输入、确认或合并前提示；先合入 integration 的工作继续自动交付到 dev。
 
 按[宿主默认合并方案](../../docs/merging.md)执行必需检查和现有保护，处理实际依赖与冲突。失败时保留原始结果并在授权内修复，继续独立工作；不能把创建 PR、启用自动合并或检查通过当作已经合并，须核对实际合并状态、落地 SHA 和必要的落地检查。
+
+合并入口为 `gh pr merge <PR> --repo ChronoAIProject/chrono-harness --merge --match-head-commit <已验运行绑定的PR_head_SHA>`。该参数匹配事件 head；检查原件按下文 CI 合同核对固定合并候选，二者不能混用，也不能使用旧候选的通过结果。沿用现有 GitHub 权限和分支保护，不使用管理员绕过。等待和原报告核对沿用已有 CI 流程；GitHub 原生自动合并开关不可用时，也由 AI 在 CI 通过后执行该入口，不增加权限前置或新的人工确认。合并不等于已部署。
 
 ## 文档规范
 
@@ -104,7 +106,7 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 
 完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
 
-宿主 Git facts 采用 `chrono-git-configs/v3` 精确摘要选择；实际映射和固定数据路径归[选择器](../config.json)，工作树接受的主身份及补充身份归[工作树政策](../worktree.json)。版本预期和完整验收仍须实际 bound probe 验证，未知摘要仍在执行前拒绝。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不在本上下文复制运行号或摘要。
+宿主 Git facts 仍采用 `chrono-git-configs/v3` 精确摘要选择，实际映射和固定数据路径归[选择器](../config.json)；未知摘要仍在该路径执行前拒绝，版本预期和完整验收仍须实际 bound probe 验证。[工作树政策](../worktree.json)采用 v2，不维护主机 Git 摘要／版本白名单：每次运行观察实际程序，后续命令绑定同一字节，观察归本轮 state 原件。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不在本上下文复制运行号或摘要。
 
 政策与产品同时变更时，候选决定实际执行程序。固定端点先按候选程序身份读取明确登记；端点未登记该身份时，只读取候选声明的 registry_path 和端点原字节，不启动历史 Git，也不猜其他路径。额外读取和完整验证成本未测。
 
