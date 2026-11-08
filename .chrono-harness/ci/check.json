@@ -13,7 +13,6 @@
     "tools": {
       "cargo": "cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
-      "chrono-inputs": ".chrono-harness/bin/chrono-inputs",
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
       "python3": "/usr/bin/python3",
       "bash": "/bin/bash",
