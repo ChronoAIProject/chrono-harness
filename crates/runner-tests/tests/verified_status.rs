@@ -1285,7 +1285,8 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
         Ok(tree) => {
             expect_status_true(tree.len() == 2);
             proof {
-                assert forall|i: int| 0 <= i < rows.len() implies exists|key: policy::TreePath|
+                assert forall|i: int| #![trigger policy::git_tree_row_at(rows@, i)]
+                    0 <= i < rows.len() implies exists|key: policy::TreePath|
                     tree@.contains_key(key) && key@ == (if i == 0 { "a//./b/"@ } else { "a"@ })
                         && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
                             "0000000000000000000000000000000000000001"@, "blob"@) by {

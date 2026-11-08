@@ -686,7 +686,8 @@ pub open spec fn git_tree_prefix_map(tree: Map<TreePath, TreeEntry>, rows: Seq<&
     tree.len() == count
         && (forall|key: TreePath| tree.contains_key(key) ==> exists|i: int| 0 <= i < count
             && git_tree_entry_matches(key, tree[key], (git_tree_row_at(rows, i)->Ok_0)))
-        && (forall|i: int| 0 <= i < count ==> exists|key: TreePath| tree.contains_key(key)
+        && (forall|i: int| #![trigger git_tree_row_at(rows, i)]
+            0 <= i < count ==> exists|key: TreePath| tree.contains_key(key)
             && git_tree_entry_matches(key, tree[key], (git_tree_row_at(rows, i)->Ok_0)))
 }
 
@@ -784,7 +785,8 @@ pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitTreeEr
                         key, before[key], (git_tree_row_at(rows@, j)->Ok_0));
                 }
             }
-            assert forall|j: int| 0 <= j < i + 1 implies exists|key: TreePath|
+            assert forall|j: int| #![trigger git_tree_row_at(rows@, j)]
+                0 <= j < i + 1 implies exists|key: TreePath|
                 tree@.contains_key(key) && git_tree_entry_matches(
                     key, tree@[key], (git_tree_row_at(rows@, j)->Ok_0)) by {
                 if j == i {
