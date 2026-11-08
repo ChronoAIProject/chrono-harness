@@ -122,6 +122,48 @@ fn all_status_pairs_preserve_variant_identity_and_cloning() {
     expect(&Status::Blocked, &Status::Blocked, true);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn severity_maximum_keeps_all_sixteen_expected_results() {
+    let pp = WireStatus::Pass.maximum(WireStatus::Pass);
+    let pw = WireStatus::Pass.maximum(WireStatus::Warn);
+    let pf = WireStatus::Pass.maximum(WireStatus::Fail);
+    let pe = WireStatus::Pass.maximum(WireStatus::Error);
+    assert(pp == WireStatus::Pass && pw == WireStatus::Warn
+        && pf == WireStatus::Fail && pe == WireStatus::Error);
+    let wp = WireStatus::Warn.maximum(WireStatus::Pass);
+    let ww = WireStatus::Warn.maximum(WireStatus::Warn);
+    let wf = WireStatus::Warn.maximum(WireStatus::Fail);
+    let we = WireStatus::Warn.maximum(WireStatus::Error);
+    assert(wp == WireStatus::Warn && ww == WireStatus::Warn
+        && wf == WireStatus::Fail && we == WireStatus::Error);
+    let fp = WireStatus::Fail.maximum(WireStatus::Pass);
+    let fw = WireStatus::Fail.maximum(WireStatus::Warn);
+    let ff = WireStatus::Fail.maximum(WireStatus::Fail);
+    let fe = WireStatus::Fail.maximum(WireStatus::Error);
+    assert(fp == WireStatus::Fail && fw == WireStatus::Fail
+        && ff == WireStatus::Fail && fe == WireStatus::Error);
+    let ep = WireStatus::Error.maximum(WireStatus::Pass);
+    let ew = WireStatus::Error.maximum(WireStatus::Warn);
+    let ef = WireStatus::Error.maximum(WireStatus::Fail);
+    let ee = WireStatus::Error.maximum(WireStatus::Error);
+    assert(ep == WireStatus::Error && ew == WireStatus::Error
+        && ef == WireStatus::Error && ee == WireStatus::Error);
+}
+
+fn severity_maximum_keeps_idempotence_commutativity_and_associativity(
+    a: WireStatus, b: WireStatus, c: WireStatus,
+) {
+    let aa = a.clone().maximum(a.clone());
+    assert(aa == a);
+    let ab = a.clone().maximum(b.clone());
+    let ba = b.clone().maximum(a.clone());
+    assert(ab == ba);
+    let left = ab.maximum(c.clone());
+    let bc = b.maximum(c);
+    let right = a.maximum(bc);
+    assert(left == right);
+}
+
 fn protocol_pair(a: &WireStatus, b: &WireStatus, expected: Ordering)
     requires expected == a.order_spec(b),
         (expected == Ordering::Equal) == (*a == *b),
@@ -207,7 +249,9 @@ fn response_header_keeps_empty_full_text_and_integer_boundaries() {
 }
 
 fn finding(level: &str) -> (out: policy::Finding)
-    ensures out.level@ == level@,
+    ensures out.level@ == level@, out.code@ == "fixture"@,
+        out.message@ == "independent expectation"@,
+        out.delta_refs@ == Seq::<String>::empty(), out.causes@ == Seq::<String>::empty(),
 {
     policy::Finding { code: "fixture".to_owned(), level: level.to_owned(),
         message: "independent expectation".to_owned(), delta_refs: Vec::new(), causes: Vec::new() }
@@ -757,6 +801,241 @@ fn finding_reference_list_checks_every_position_and_preserves_duplicates() {
     let empty = policy::Finding { delta_refs: Vec::new(), ..finding };
     let accepted = policy::valid_finding_references(&empty, None); assert(accepted);
     let fields = policy::valid_finding_fields(&empty); assert(!fields);
+}
+
+fn complete_finding(level: &str, reference: &str) -> (out: policy::Finding)
+    ensures out.level@ == level@, out.code@ == "fixture"@,
+        out.message@ == "independent expectation"@,
+        out.delta_refs.len() == 1, out.delta_refs@[0]@ == reference@,
+        out.causes@ == Seq::<String>::empty(),
+{
+    policy::Finding { delta_refs: vec![reference.to_owned()], ..finding(level) }
+}
+
+proof fn response_fixture_texts()
+    ensures
+        "fixture"@.len() > 0, "independent expectation"@.len() > 0, ""@.len() == 0,
+        "/a".spec_bytes().len() > 0, "/a".spec_bytes()[0] == 47,
+        "x".spec_bytes().len() > 0, "x".spec_bytes()[0] != 47,
+        "info"@ != "warning"@, "info"@ != "error"@, "warning"@ != "error"@,
+{
+    reveal_strlit("fixture"); reveal_strlit("independent expectation"); reveal_strlit("");
+    reveal_strlit("info"); reveal_strlit("warning"); reveal_strlit("error");
+    assert("info"@[0] != "warning"@[0]);
+    assert("info"@[0] != "error"@[0]);
+    assert("warning"@[0] != "error"@[0]);
+    reveal_strlit("/a"); reveal_strlit("x");
+    assert(vstd::string::is_ascii("/a")); assert(vstd::string::is_ascii("x"));
+    vstd::string::is_ascii_spec_bytes("/a"); vstd::string::is_ascii_spec_bytes("x");
+}
+
+fn expect_response_error(result: Result<(), String>, expected: &str)
+    requires result.is_err(), result.unwrap_err()@ == expected@,
+{
+    assert(result.is_err());
+    match result { Err(message) => { assert(message@ == expected@); }, Ok(()) => {} }
+}
+
+fn exact_header_accepts_empty_pass(protocol: &str, request: &str, judge: &str) {
+    let findings: Vec<policy::Finding> = Vec::new();
+    let accepted = policy::validate_response_fields(protocol, request, judge, &WireStatus::Pass, 0,
+        protocol, request, judge, findings.as_slice(), None);
+    assert(accepted.is_ok());
+}
+
+fn mismatched_header_precedes_bad_finding_and_status(a: &str, b: &str)
+    requires a@ != b@,
+{
+    let invalid = vec![finding("error")];
+    let protocol = policy::validate_response_fields(b, a, a, &WireStatus::Pass, 0,
+        a, a, a, invalid.as_slice(), None);
+    expect_response_error(protocol, "E_PROTOCOL: response identity/status/exit mismatch");
+    let request = policy::validate_response_fields(a, b, a, &WireStatus::Pass, 0,
+        a, a, a, invalid.as_slice(), None);
+    expect_response_error(request, "E_PROTOCOL: response identity/status/exit mismatch");
+    let judge = policy::validate_response_fields(a, a, b, &WireStatus::Pass, 0,
+        a, a, a, invalid.as_slice(), None);
+    expect_response_error(judge, "E_PROTOCOL: response identity/status/exit mismatch");
+    let negative = policy::validate_response_fields(a, a, a, &WireStatus::Pass, i32::MIN,
+        a, a, a, invalid.as_slice(), None);
+    expect_response_error(negative, "E_PROTOCOL: response identity/status/exit mismatch");
+    let large = policy::validate_response_fields(a, a, a, &WireStatus::Pass, i32::MAX,
+        a, a, a, invalid.as_slice(), None);
+    expect_response_error(large, "E_PROTOCOL: response identity/status/exit mismatch");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn response_preflight_keeps_exact_headers_and_error_priority() {
+    exact_header_accepts_empty_pass("", "", "");
+    exact_header_accepts_empty_pass("协议\0", "é", "e\u{301}");
+    proof { reveal_strlit("a"); reveal_strlit("b"); assert("a"@[0] != "b"@[0]); }
+    mismatched_header_precedes_bad_finding_and_status("a", "b");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn response_preflight_checks_actual_findings_before_status() {
+    proof { response_fixture_texts(); }
+    let good = complete_finding("info", "/a");
+    let bad = policy::Finding { code: "".to_owned(), level: "warning".to_owned(), ..good.clone() };
+    let first = vec![bad.clone(), good.clone()];
+    let middle = vec![good.clone(), bad.clone(), good.clone()];
+    let last = vec![good.clone(), good.clone(), bad];
+    let a = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", first.as_slice(), None);
+    assert(a.is_err());
+    expect_response_error(a, "E_PROTOCOL: invalid finding");
+    let b = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", middle.as_slice(), None);
+    expect_response_error(b, "E_PROTOCOL: invalid finding");
+    let c = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", last.as_slice(), None);
+    expect_response_error(c, "E_PROTOCOL: invalid finding");
+    let empty_refs = vec![policy::Finding { delta_refs: Vec::new(), ..good }];
+    let empty = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", empty_refs.as_slice(), None);
+    expect_response_error(empty, "E_PROTOCOL: invalid finding");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn response_preflight_preserves_ordinary_and_initial_reference_scope() {
+    proof { response_fixture_texts(); }
+    let good = complete_finding("info", "/a");
+    let relative = complete_finding("info", "x");
+    let first = vec![relative.clone(), good.clone()];
+    let middle = vec![good.clone(), relative.clone(), good.clone()];
+    let last = vec![good.clone(), good, relative];
+    let a = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", first.as_slice(), None);
+    expect_response_error(a, "E_PROTOCOL: invalid finding");
+    let b = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", middle.as_slice(), None);
+    expect_response_error(b, "E_PROTOCOL: invalid finding");
+    let c = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", last.as_slice(), None);
+    expect_response_error(c, "E_PROTOCOL: invalid finding");
+    let no_delta: Vec<policy::Delta> = Vec::new();
+    let absent = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", first.as_slice(), Some(no_delta.as_slice()));
+    expect_response_error(absent, "E_PROTOCOL: invalid finding");
+    let delta = vec![policy::Delta { kind: "unexamined\0".to_owned(), path: "x".to_owned(),
+        old_blob: Some("arbitrary\0".to_owned()), new_blob: None, old_mode: None, new_mode: None }];
+    let slice = delta.as_slice();
+    proof {
+        assert(slice.len() == 1 && slice[0].path@ == "x"@);
+        assert(exists|i: int| 0 <= i < slice.len() && slice[i].path@ == "x"@);
+        assert(policy::reference_allowed("x"@, Some(slice)));
+        assert forall|i: int| 0 <= i < first.len()
+            implies policy::finding_fields(&(#[trigger] first@[i]))
+                && policy::finding_references(&first@[i], Some(slice)) by {
+            assert(first@[i].delta_refs.len() == 1);
+            if i == 0 { assert(first@[i].delta_refs@[0]@ == "x"@); }
+            else { assert(i == 1 && first@[i].delta_refs@[0]@ == "/a"@); }
+        }
+    }
+    let allowed = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", first.as_slice(), Some(slice));
+    assert(allowed.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn response_preflight_keeps_status_agreement_after_valid_fields() {
+    proof { response_fixture_texts(); }
+    let info = vec![complete_finding("info", "/a")];
+    let warning = vec![complete_finding("warning", "/a")];
+    let error = vec![complete_finding("error", "/a")];
+    let pass = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", info.as_slice(), None);
+    let warn = policy::validate_response_fields("p", "r", "j", &WireStatus::Warn, 0,
+        "p", "r", "j", warning.as_slice(), None);
+    let fail = policy::validate_response_fields("p", "r", "j", &WireStatus::Fail, 1,
+        "p", "r", "j", error.as_slice(), None);
+    let failure = policy::validate_response_fields("p", "r", "j", &WireStatus::Error, 2,
+        "p", "r", "j", error.as_slice(), None);
+    assert(pass.is_ok() && warn.is_ok() && fail.is_ok() && failure.is_ok());
+    let bad_pass = policy::validate_response_fields("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", warning.as_slice(), None);
+    expect_response_error(bad_pass, "E_PROTOCOL: finding/status disagreement");
+    let bad_warn = policy::validate_response_fields("p", "r", "j", &WireStatus::Warn, 0,
+        "p", "r", "j", info.as_slice(), None);
+    expect_response_error(bad_warn, "E_PROTOCOL: finding/status disagreement");
+    let bad_fail = policy::validate_response_fields("p", "r", "j", &WireStatus::Fail, 1,
+        "p", "r", "j", warning.as_slice(), None);
+    expect_response_error(bad_fail, "E_PROTOCOL: finding/status disagreement");
+    let bad_error = policy::validate_response_fields("p", "r", "j", &WireStatus::Error, 2,
+        "p", "r", "j", info.as_slice(), None);
+    expect_response_error(bad_error, "E_PROTOCOL: finding/status disagreement");
+}
+
+fn exact_record_header_accepts_empty_pass(protocol: &str, request: &str, judge: &str) {
+    let findings: Vec<policy::Finding> = Vec::new();
+    let accepted = policy::validate_record_response(protocol, request, judge, &WireStatus::Pass, 0,
+        protocol, request, judge, findings.as_slice());
+    assert(accepted.is_ok());
+}
+
+fn record_header_errors_precede_status(a: &str, b: &str)
+    requires a@ != b@,
+{
+    let findings = vec![complete_finding("warning", "/a")];
+    let protocol = policy::validate_record_response(b, a, a, &WireStatus::Pass, 0,
+        a, a, a, findings.as_slice());
+    expect_response_error(protocol, "response identity/status/exit mismatch");
+    let request = policy::validate_record_response(a, b, a, &WireStatus::Pass, 0,
+        a, a, a, findings.as_slice());
+    expect_response_error(request, "response identity/status/exit mismatch");
+    let judge = policy::validate_record_response(a, a, b, &WireStatus::Pass, 0,
+        a, a, a, findings.as_slice());
+    expect_response_error(judge, "response identity/status/exit mismatch");
+    let negative = policy::validate_record_response(a, a, a, &WireStatus::Pass, i32::MIN,
+        a, a, a, findings.as_slice());
+    expect_response_error(negative, "response identity/status/exit mismatch");
+    let large = policy::validate_record_response(a, a, a, &WireStatus::Pass, i32::MAX,
+        a, a, a, findings.as_slice());
+    expect_response_error(large, "response identity/status/exit mismatch");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_response_keeps_exact_headers_and_error_priority() {
+    exact_record_header_accepts_empty_pass("", "", "");
+    exact_record_header_accepts_empty_pass("协议\0", "é", "e\u{301}");
+    proof { reveal_strlit("a"); reveal_strlit("b"); assert("a"@[0] != "b"@[0]); }
+    record_header_errors_precede_status("a", "b");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_response_keeps_four_success_states() {
+    proof { response_fixture_texts(); }
+    let info = vec![complete_finding("info", "/a")];
+    let warning = vec![complete_finding("warning", "/a")];
+    let error = vec![complete_finding("error", "/a")];
+    let pass = policy::validate_record_response("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", info.as_slice());
+    let warn = policy::validate_record_response("p", "r", "j", &WireStatus::Warn, 0,
+        "p", "r", "j", warning.as_slice());
+    let fail = policy::validate_record_response("p", "r", "j", &WireStatus::Fail, 1,
+        "p", "r", "j", error.as_slice());
+    let failure = policy::validate_record_response("p", "r", "j", &WireStatus::Error, 2,
+        "p", "r", "j", error.as_slice());
+    assert(pass.is_ok() && warn.is_ok() && fail.is_ok() && failure.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_response_preserves_exact_status_errors() {
+    proof { response_fixture_texts(); }
+    let info = vec![complete_finding("info", "/a")];
+    let warning = vec![complete_finding("warning", "/a")];
+    let bad_pass = policy::validate_record_response("p", "r", "j", &WireStatus::Pass, 0,
+        "p", "r", "j", warning.as_slice());
+    expect_response_error(bad_pass, "response findings/status disagree");
+    let bad_warn = policy::validate_record_response("p", "r", "j", &WireStatus::Warn, 0,
+        "p", "r", "j", info.as_slice());
+    expect_response_error(bad_warn, "response findings/status disagree");
+    let bad_fail = policy::validate_record_response("p", "r", "j", &WireStatus::Fail, 1,
+        "p", "r", "j", warning.as_slice());
+    expect_response_error(bad_fail, "response findings/status disagree");
+    let bad_error = policy::validate_record_response("p", "r", "j", &WireStatus::Error, 2,
+        "p", "r", "j", info.as_slice());
+    expect_response_error(bad_error, "response findings/status disagree");
 }
 
 }

@@ -62,6 +62,13 @@ impl WireStatus {
     {
         match self { Self::Pass | Self::Warn => 0, Self::Fail => 1, Self::Error => 2 }
     }
+
+    /// 汇总实际协议状态，精确保留严重程度较高的那个变体。
+    pub fn maximum(self, other: Self) -> (out: Self)
+        ensures out == (if self.rank_spec() >= other.rank_spec() { self } else { other }),
+    {
+        if self.rank() >= other.rank() { self } else { other }
+    }
 }
 
 /// 普通响应和保留报告共用实际头部字段；不另加名称或协议内容限制。
@@ -235,9 +242,7 @@ pub fn append_finding(
         *status == (if old(status).rank_spec() >= severity.rank_spec() { *old(status) } else { severity }),
         findings@ == old(findings)@.push(finding),
 {
-    if status.rank() < severity.rank() {
-        *status = severity;
-    }
+    *status = status.clone().maximum(severity);
     findings.push(finding);
 }
 
@@ -425,6 +430,115 @@ pub fn findings_match_status(status: &WireStatus, findings: &[Finding]) -> (matc
         WireStatus::Warn => !errors && warnings,
         WireStatus::Fail | WireStatus::Error => errors,
     }
+}
+
+pub open spec fn response_findings_valid(findings: Seq<Finding>, delta: Option<&[Delta]>) -> bool {
+    forall|i: int| 0 <= i < findings.len()
+        ==> finding_fields(&(#[trigger] findings[i])) && finding_references(&findings[i], delta)
+}
+
+/// 同时核对每条真实 finding 的字段和引用，不接受预先计算的有效标志。
+pub fn valid_response_findings(findings: &[Finding], delta: Option<&[Delta]>) -> (valid: bool)
+    ensures valid == response_findings_valid(findings@, delta),
+{
+    let mut i = 0;
+    while i < findings.len()
+        invariant
+            0 <= i <= findings.len(),
+            forall|j: int| 0 <= j < i
+                ==> finding_fields(&(#[trigger] findings@[j]))
+                    && finding_references(&findings@[j], delta),
+        decreases findings.len() - i,
+    {
+        if !valid_finding_fields(&findings[i]) || !valid_finding_references(&findings[i], delta) {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn response_fields_error(
+    protocol: &str, request_id: &str, judge_id: &str, status: &WireStatus, exit: i32,
+    expected_protocol: &str, expected_request_id: &str, expected_judge_id: &str,
+    findings: Seq<Finding>, delta: Option<&[Delta]>,
+) -> Option<Seq<char>> {
+    if protocol@ != expected_protocol@ || request_id@ != expected_request_id@
+        || judge_id@ != expected_judge_id@ || exit != status.exit_spec() {
+        Some("E_PROTOCOL: response identity/status/exit mismatch"@)
+    } else if !response_findings_valid(findings, delta) {
+        Some("E_PROTOCOL: invalid finding"@)
+    } else if !finding_status_agreement(status, findings) {
+        Some("E_PROTOCOL: finding/status disagreement"@)
+    } else { None }
+}
+
+/// 普通与初始响应共用原错误优先级；成功后仍须由证据 IO 负责方完成验证。
+pub fn validate_response_fields(
+    protocol: &str, request_id: &str, judge_id: &str, status: &WireStatus, exit: i32,
+    expected_protocol: &str, expected_request_id: &str, expected_judge_id: &str,
+    findings: &[Finding], delta: Option<&[Delta]>,
+) -> (out: Result<(), String>)
+    ensures
+        out.is_ok() == response_fields_error(protocol, request_id, judge_id, status, exit,
+            expected_protocol, expected_request_id, expected_judge_id, findings@, delta).is_none(),
+        match out {
+            Ok(()) => true,
+            Err(message) => response_fields_error(protocol, request_id, judge_id, status, exit,
+                expected_protocol, expected_request_id, expected_judge_id, findings@, delta)
+                    == Some(message@),
+        },
+{
+    if !wire_header_matches(protocol, request_id, judge_id, status, exit,
+        expected_protocol, expected_request_id, expected_judge_id) {
+        return Err("E_PROTOCOL: response identity/status/exit mismatch".to_string());
+    }
+    if !valid_response_findings(findings, delta) {
+        return Err("E_PROTOCOL: invalid finding".to_string());
+    }
+    if !findings_match_status(status, findings) {
+        return Err("E_PROTOCOL: finding/status disagreement".to_string());
+    }
+    Ok(())
+}
+
+pub open spec fn record_response_error(
+    protocol: &str, request_id: &str, judge_id: &str, status: &WireStatus, exit: i32,
+    expected_protocol: &str, expected_request_id: &str, expected_judge_id: &str,
+    findings: Seq<Finding>,
+) -> Option<Seq<char>> {
+    if protocol@ != expected_protocol@ || request_id@ != expected_request_id@
+        || judge_id@ != expected_judge_id@ || exit != status.exit_spec() {
+        Some("response identity/status/exit mismatch"@)
+    } else if !finding_status_agreement(status, findings) {
+        Some("response findings/status disagree"@)
+    } else { None }
+}
+
+/// 留存报告的头部与状态审计；原件、JSON 与其它协议条件仍由其负责方处理。
+pub fn validate_record_response(
+    protocol: &str, request_id: &str, judge_id: &str, status: &WireStatus, exit: i32,
+    expected_protocol: &str, expected_request_id: &str, expected_judge_id: &str,
+    findings: &[Finding],
+) -> (out: Result<(), String>)
+    ensures
+        out.is_ok() == record_response_error(protocol, request_id, judge_id, status, exit,
+            expected_protocol, expected_request_id, expected_judge_id, findings@).is_none(),
+        match out {
+            Ok(()) => true,
+            Err(message) => record_response_error(protocol, request_id, judge_id, status, exit,
+                expected_protocol, expected_request_id, expected_judge_id, findings@)
+                    == Some(message@),
+        },
+{
+    if !wire_header_matches(protocol, request_id, judge_id, status, exit,
+        expected_protocol, expected_request_id, expected_judge_id) {
+        return Err("response identity/status/exit mismatch".to_string());
+    }
+    if !findings_match_status(status, findings) {
+        return Err("response findings/status disagree".to_string());
+    }
+    Ok(())
 }
 
 impl Clone for Status {
