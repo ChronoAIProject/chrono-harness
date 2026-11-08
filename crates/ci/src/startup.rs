@@ -52,9 +52,6 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
         .units
         .keys()
         .any(|unit| s.artifact == format!("chrono-unit-{unit}"))
-        || c.native_adoption
-            .as_ref()
-            .is_some_and(|a| s.artifact == a.seed_artifact)
     {
         return Err("startup artifact collides with an evidence artifact".into());
     }
@@ -66,9 +63,6 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
     ];
     evidence.extend(c.units.values().map(|u| u.artifact_directory.as_str()));
     evidence.extend(g.detector.evidence_directory.as_deref());
-    if let Some(a) = &c.native_adoption {
-        evidence.push(&a.seed_directory);
-    }
     if evidence
         .into_iter()
         .any(|path| overlap(directory, path.trim_end_matches('/')))
