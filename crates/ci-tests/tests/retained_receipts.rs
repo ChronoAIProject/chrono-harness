@@ -322,6 +322,7 @@ fn producer_store_resolution_rejects_undeclared_ambiguous_drifted_and_symlink_ro
         "drift",
         "symlink",
         "linked-mismatch",
+        "linked-namespace",
     ] {
         let owner = Owner::new();
         let unknown = owner._dir.path().join("unknown-store");
@@ -354,7 +355,7 @@ fn producer_store_resolution_rejects_undeclared_ambiguous_drifted_and_symlink_ro
                 std::os::unix::fs::symlink(&unknown, owner.root.join(FAMILY.trim_end_matches('/')))
                     .unwrap();
             }
-            "linked-mismatch" => {
+            "linked-mismatch" | "linked-namespace" => {
                 invoking = fs::canonicalize(owner._dir.path()).unwrap().join("linked");
                 git(
                     &owner.root,
@@ -367,19 +368,25 @@ fn producer_store_resolution_rejects_undeclared_ambiguous_drifted_and_symlink_ro
                         invoking.to_str().unwrap(),
                     ],
                 );
-                policy["retained_producers"][0]["directory"] =
-                    json!(".chrono-harness/state/mismatched/");
+                if kind == "linked-mismatch" {
+                    policy["retained_producers"][0]["directory"] =
+                        json!(".chrono-harness/state/mismatched/");
+                    policy["retained_producers"][0]["generated_outputs"] =
+                        json!(["unowned/target/"]);
+                } else {
+                    policy["state_directory"] = json!(".chrono-harness/state/mismatched/");
+                }
                 fs::write(
                     invoking.join(".chrono-harness/cleanup.json"),
                     serde_json::to_vec_pretty(&policy).unwrap(),
                 )
                 .unwrap();
                 git(&invoking, &["add", "."]);
-                git(&invoking, &["commit", "-qm", "incompatible linked policy"]);
+                git(&invoking, &["commit", "-qm", "independent linked policy"]);
             }
             _ => unreachable!(),
         }
-        if !["symlink", "linked-mismatch"].contains(&kind) {
+        if !["symlink", "linked-mismatch", "linked-namespace"].contains(&kind) {
             fs::write(&path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
             if kind != "drift" {
                 git(&owner.root, &["add", "."]);
@@ -389,21 +396,30 @@ fn producer_store_resolution_rejects_undeclared_ambiguous_drifted_and_symlink_ro
                 );
             }
         }
-        let error = chrono_worktree::RetainedArtifact::registered_store(
+        let result = chrono_worktree::RetainedArtifact::registered_store(
             &invoking,
             config,
             "ci-command-result",
-        )
-        .unwrap_err();
-        let expected = match kind {
-            "undeclared" => "not declared",
-            "duplicate" | "overlap" => "repeated or overlapping",
-            "drift" => "differs from source commit",
-            "linked-mismatch" => "coordinator policy/configuration identity mismatch",
-            "symlink" => "symlink",
-            _ => unreachable!(),
-        };
-        assert!(error.contains(expected), "{kind}: {error}");
+        );
+        if kind == "linked-mismatch" {
+            let (directory, generated) = result.unwrap();
+            assert_eq!(directory, owner.root.join(FAMILY));
+            assert_eq!(generated, GENERATED);
+            for root in [&owner.root, &invoking] {
+                assert!(!root.join(".chrono-harness/state/mismatched").exists());
+            }
+        } else {
+            let error = result.unwrap_err();
+            let expected = match kind {
+                "undeclared" => "not declared",
+                "duplicate" | "overlap" => "repeated or overlapping",
+                "drift" => "differs from source commit",
+                "linked-namespace" => "ownership namespace mismatch",
+                "symlink" => "symlink",
+                _ => unreachable!(),
+            };
+            assert!(error.contains(expected), "{kind}: {error}");
+        }
         assert_eq!(
             fs::read_to_string(unknown.join("original")).unwrap(),
             "unknown original destination"

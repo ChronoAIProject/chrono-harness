@@ -1,3 +1,4 @@
+#![allow(unexpected_cfgs)]
 //! 实际身份判断及其精确 Verus 合同。
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;

@@ -242,6 +242,18 @@
       "owner": "pr-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/identifiers/target/",
+      "owner": "identifiers",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/identifiers-tests/target/",
+      "owner": "identifiers-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "facts_git": {

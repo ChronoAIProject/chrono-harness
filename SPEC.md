@@ -76,6 +76,8 @@ crates/                         独立 Cargo 项目的目录分组
   diagnostics-tests/            诊断库专属测试
   runner/                       运输、协议与统一 check 入口
   runner-tests/                 runner 专属测试
+  identifiers/                  runner 等使用方共用的身份判断库
+  identifiers-tests/            身份判断库专属测试
   inputs/                       显式输入快照与保留内容运输
   inputs-tests/                 输入生产者专属测试
   worktree/                     显式远端目标上的新工作树生产者
@@ -282,7 +284,7 @@ Config v3 可显式采用版本化 `input_closure.coverage`，合同为`{schema:
 
 通用 projects 判官检查一对一配对、显式测试边、实际文件归属与声明产物目录的隔离，不解析语言文件，也不根据路径猜 `target/`。产物登记变更与删除按两端显式 owner 唤醒对应 project/script，再沿 FILEMAP 边选择测试。构建、测试依赖只由 FILEMAP 提供。宿主采用的语言工具须消费显式政策与既有边，不能补登记或选测试。
 
-v3 可显式选择逐项祖先清单，或断言宿主根的所有严格祖先都没有 Cargo 配置；后一种只核验具名范围的缺失，发现文件即失败，不推断登记或依赖。Cargo home 可显式相对同一宿主根解释，避免将 checkout 深度或个人绝对路径写死进可搬移政策。根、Cargo home、命令行与 include 输入仍逐项登记；v2 合同保留原义。适用迁移与观测边界见同文档，不能由配置可搬移推断整个宿主或完整输入已可移植。脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。
+脚本、fixture、环境文件和生成器输入都必须逐个登记依赖，不能按目录名猜测试集。
 
 生成器自举 init/generate 通过已登记 cargo 工具的 `run --locked --manifest-path ... -- ...` 调用，argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定制；首次采用内嵌精选核心与空上下文。不新增工具发现或路径模板。任意外部宿主直接用 §16 的 CLI。
 
