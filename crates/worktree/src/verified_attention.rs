@@ -68,7 +68,7 @@ pub fn needs_attention(view: &Attention) -> (needed: bool)
 }
 
 pub fn pending_for_agent(creator: &str, current: &str, attention: bool) -> (pending: bool)
-    ensures pending <==> (creator@ == current@ && creator@.len() > 0 && attention),
+    ensures pending <==> (creator@ == current@ && creator@ != ""@ && attention),
 {
     equal_text(creator, current) && !equal_text(creator, "") && attention
 }
