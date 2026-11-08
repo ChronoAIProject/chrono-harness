@@ -1,4 +1,5 @@
 //! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
+mod age;
 mod cache_adoption;
 mod migration;
 mod owner_deployment;
@@ -233,6 +234,8 @@ struct Policy {
     terminal_history: Option<TerminalHistory>,
     #[serde(default)]
     cache_history: Option<TerminalHistory>,
+    #[serde(default)]
+    age_policy: Option<age::AgePolicy>,
     artifacts: Vec<Artifact>,
 }
 #[derive(Clone, Deserialize)]
@@ -593,6 +596,9 @@ fn parse_policy(r: &mut Runner, root: &Path, policy_bytes: &[u8]) -> Result<Poli
         return Err("invalid automatic cleanup policy".into());
     }
     relative_path(p.state_directory.trim_end_matches('/'))?;
+    if let Some(age) = &p.age_policy {
+        age.validate(p.schema == "chrono-worktree-automatic-cleanup/v2")?;
+    }
     if p.main_cache_only && p.schema != "chrono-worktree-automatic-cleanup/v2" {
         return Err("main cache ownership requires kernel cleanup v2".into());
     }
@@ -2580,12 +2586,26 @@ impl Manager {
             let e = self.ledger.entries[i].clone();
             let cache =
                 e.status == "active" && e.ownership.as_ref().is_some_and(|o| o.cache_pending);
+            let age = if matches!(e.status.as_str(), "active" | "retained" | "terminal")
+                && e.enrollment["age_retirement"].is_null()
+            {
+                match self.age_eligible(&e, false) {
+                    Ok(eligible) => eligible,
+                    Err(error) => {
+                        report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,
+                            "status":"preserved","age_eligibility":"unknown","preserved_reason":error}));
+                        false
+                    }
+                }
+            } else {
+                false
+            };
             if !crate::verified_lifecycle::select_cleanup(
                 &e.status,
                 e.ownership.as_ref().is_some_and(|o| o.cache_pending),
                 maintenance,
                 e.terminal.as_ref().is_some_and(|t| t.artifacts_only),
-            ) {
+            ) && !age {
                 continue;
             }
             if self._gate.lease.is_some() && e.ownership.is_none() {
@@ -2679,7 +2699,9 @@ impl Manager {
                     if let Some(lease) = &_lease {
                         self.reconcile_birth(r, i, lease)?;
                     }
-                    if cache {
+                    if age {
+                        self.execute_age(r, i, token, attempt, true)
+                    } else if cache {
                         self.execute_cache(r, i, token, attempt)
                     } else {
                         self.execute_entry(r, i, token, attempt)
@@ -2705,12 +2727,16 @@ impl Manager {
                         .ok_or("cleanup report path")?
                         .to_owned();
                     let b = crate::recovery::state_bytes(&root, &path)?;
+                    let cache_outcome = result["age_outcome"]
+                        == "reusable-source-preserved-caches-reclaimed"
+                        || (cache && result["age_outcome"]
+                            != "expired-checkout-verified-absent-source-branches-retained");
                     let stage = crate::verified_lifecycle::cleanup_result(
-                        cache,
+                        cache_outcome,
                         result["status"].as_str().unwrap_or(""),
                         result["worktree_removal"].as_str().unwrap_or(""),
                     );
-                    if cache {
+                    if cache_outcome {
                         if let Some(a) = self.ledger.entries[i]
                             .cache_attempts
                             .last_mut()
@@ -3399,6 +3425,9 @@ impl Manager {
         token: &str,
         report: &mut Value,
     ) -> Result<(), String> {
+        if !self.ledger.entries[i].enrollment["age_retirement"].is_null() {
+            return self.execute_age_retirement(r, i, token, report);
+        }
         if self.ledger.entries[i].cache_only
             || self.ledger.entries[i].path == self.inputs.policy.coordinator_root
         {
@@ -3885,6 +3914,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
                     manager.drain_for_admission(r, &[invoking.clone(), target.clone()], report)?;
+                    manager.prepare_age_use(r, target, report)?;
                     if manager.current_entry(target).is_none()
                         && target == &manager.inputs.policy.coordinator_root
                         && manager.inputs.policy.main_cache_only
@@ -4137,10 +4167,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if let Some(error) = artifact_error {
                         return Err(error);
                     }
+                    let age_cleanup = manager.inputs.policy.age_policy.is_some();
+                    if age_cleanup {
+                        drop(use_guard.take());
+                    }
                     let mut post_use_cleanup = value!({});
+                    let cleanup_exclusions = if age_cleanup {
+                        vec![invoking.clone()]
+                    } else {
+                        vec![invoking.clone(), target.clone()]
+                    };
                     let cleanup = manager.drain_for_admission(
                         r,
-                        &[invoking.clone(), target.clone()],
+                        &cleanup_exclusions,
                         &mut post_use_cleanup,
                     );
                     report["post_use_cleanup"] = post_use_cleanup;
