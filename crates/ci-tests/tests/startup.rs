@@ -170,7 +170,7 @@ fn startup_consumers_and_transfer_paths_must_be_explicit_and_separate_from_evide
 }
 
 #[test]
-fn shared_producer_preserves_original_cache_save_and_report_identity() {
+fn shared_producer_preserves_original_cache_save_identity() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["job_gating"]["startup"] = registration();
     value["persistent_cache"] = adoption("detect");
@@ -199,14 +199,4 @@ fn shared_producer_preserves_original_cache_save_and_report_identity() {
                 .contains("steps.chrono_startup.outcome == 'success'")
         );
     }
-    let report = steps
-        .iter()
-        .find(|s| s["name"] == "Record original cache transport observations")
-        .unwrap();
-    assert!(
-        report["run"]
-            .as_str()
-            .unwrap()
-            .contains("--bootstrap chrono_startup")
-    );
 }

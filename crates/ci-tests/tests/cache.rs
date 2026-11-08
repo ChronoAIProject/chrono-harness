@@ -55,7 +55,7 @@ fn explicit_save_ownership_keeps_restores_and_original_checks_in_read_only_consu
 }
 
 #[test]
-fn detector_retains_declared_originals_after_cache_reporting_even_when_work_fails() {
+fn detector_retains_declared_originals_even_when_work_fails() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("detect");
     value["collection"]["include_hidden_files"] = json!(true);
@@ -86,10 +86,6 @@ fn detector_retains_declared_originals_after_cache_reporting_even_when_work_fail
     assert_eq!(upload["with"]["path"], ".chrono-harness/state/");
     assert_eq!(upload["with"]["if-no-files-found"], "error");
     assert_eq!(upload["with"]["include-hidden-files"], true);
-    assert_eq!(
-        steps[steps.len() - 2]["name"],
-        "Record original cache transport observations"
-    );
     for directory in [
         "../outside/",
         ".chrono-harness/",
@@ -130,7 +126,6 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
         "Bootstrap registered tools",
         "Canonical harness check",
         "Save registered cache core.target",
-        "Record original cache transport observations",
         "Preserve actual check evidence",
     ]
     .iter()
@@ -170,18 +165,9 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
     assert!(job.contains("steps.chrono_cache_work.outcome == 'success'"));
     assert!(job.contains("continue-on-error: true"));
     assert!(job.contains("--plan-output '.chrono-harness/state/cache/host.build/plan.json'"));
-    assert!(job.contains("CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}"));
     let parsed: Value = serde_yaml_ng::from_str(yaml).unwrap();
     assert_eq!(parsed["permissions"]["actions"], "read");
     let steps = parsed["jobs"]["unit_example"]["steps"].as_array().unwrap();
-    let report = steps
-        .iter()
-        .find(|s| s["name"] == "Record original cache transport observations")
-        .unwrap();
-    assert!(
-        report.get("continue-on-error").is_none(),
-        "report production failure must fail the job"
-    );
     assert!(steps.iter().all(|s| s["env"].get("GH_TOKEN").is_none()));
     assert_eq!(yaml.matches("Prepare registered caches").count(), 1);
     assert_eq!(yaml.matches("Save registered cache").count(), 2);
@@ -312,6 +298,10 @@ fn actual_host_projections_fit_native_workflow_size() {
 #[test]
 fn release_cache_wraps_only_the_named_original_unit() {
     let mut value = source(".chrono-harness/ci/release.json");
+    value.as_object_mut().unwrap().remove("persistent_cache");
+    let original = chrono_ci::release::render(&serde_json::from_value(value.clone()).unwrap())
+        .unwrap();
+    let original: Value = serde_yaml_ng::from_str(&original).unwrap();
     value["persistent_cache"] = adoption("linux_build_runner");
     let config = serde_json::from_value(value).unwrap();
     let yaml = chrono_ci::release::render(&config).unwrap();
@@ -338,6 +328,34 @@ fn release_cache_wraps_only_the_named_original_unit() {
             < job.find("Save registered cache").unwrap()
     );
     assert_eq!(yaml.matches("Prepare registered caches").count(), 1);
+    let projected: Value = serde_yaml_ng::from_str(&yaml).unwrap();
+    let steps = projected["jobs"]["linux_build_runner"]["steps"]
+        .as_array()
+        .unwrap();
+    let release_upload = steps.iter().find(|s| s["id"] == "release_upload").unwrap();
+    assert_eq!(
+        release_upload,
+        original["jobs"]["linux_build_runner"]["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == "release_upload")
+            .unwrap(),
+        "diagnostics must preserve the release archive root and collector contract"
+    );
+    let diagnostics = steps.last().unwrap();
+    assert_eq!(diagnostics["name"], "Preserve failed cache diagnostics");
+    assert_eq!(diagnostics["if"], "${{ failure() }}");
+    assert_eq!(diagnostics["uses"], release_upload["uses"]);
+    assert_eq!(diagnostics["with"]["path"], ".chrono-harness/state/");
+    assert_eq!(diagnostics["with"]["include-hidden-files"], true);
+    assert_eq!(diagnostics["with"]["if-no-files-found"], "error");
+    assert_ne!(diagnostics["with"]["name"], release_upload["with"]["name"]);
+    for (id, job) in projected["jobs"].as_object().unwrap() {
+        if id != "linux_build_runner" {
+            assert_eq!(job, &original["jobs"][id]);
+        }
+    }
 }
 
 #[test]

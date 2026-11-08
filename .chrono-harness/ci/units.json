@@ -423,7 +423,6 @@
         "Bind original unit artifact production": "evidence-binding",
         "Preserve actual check evidence": "evidence-upload",
         "Prepare registered caches": "cache-prepare",
-        "Record original cache transport observations": "cache-report",
         "Restore registered cache detect.ci": "cache-restore",
         "Save registered cache detect.ci": "cache-save",
         "Restore registered cache check.ci": "cache-restore",
