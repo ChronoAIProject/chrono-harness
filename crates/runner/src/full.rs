@@ -1671,14 +1671,13 @@ pub fn check_prepared(
             let outcome = value!({"status":report["status"],"request_id":req.request_id,"exit_code":status.exit_code()});
             if current_written {
                 let consumer = format!("report-recheck:{}", publication.id());
-                publication.complete(outcome)?;
-                if let Some(inventory) =
-                    crate::retained_artifacts::retention::Inventory::adopted(root)?
-                {
-                    if status.exit_code() != 0 {
+                publication.complete_releasing_consumer(outcome, &consumer)?;
+                if status.exit_code() != 0 {
+                    if let Some(inventory) =
+                        crate::retained_artifacts::retention::Inventory::adopted(root)?
+                    {
                         inventory.retain_diagnostic_path(&report_path)?;
                     }
-                    inventory.reference(&format!("consumer:{consumer}"), &[])?;
                 }
             } else {
                 publication.complete(outcome)?;

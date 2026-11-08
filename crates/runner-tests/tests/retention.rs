@@ -3671,6 +3671,67 @@ fn addressed_decoder_keeps_duplicate_unknown_and_opaque_json_refusals() {
 }
 
 #[test]
+fn settling_a_report_keeps_an_unfinished_failed_dependency_handoff() {
+    if !isolated_capability_test("settling_a_report_keeps_an_unfinished_failed_dependency_handoff")
+    {
+        return;
+    }
+    use retained_artifacts::retention::{publish_final_original, reference_report, settle_report};
+    let h = report_host();
+    let failed = ".chrono-harness/state/preparation/unsettled-failure.json";
+    let current = ".chrono-harness/state/preparation/settled-report.json";
+    let activity = inventory(h.path()).read_scope().unwrap();
+    publish_final_original(
+        h.path(),
+        "check-original",
+        failed,
+        b"failed dependency",
+        json!({"exit_code":9}),
+        false,
+    )
+    .unwrap();
+    publish_final_original(
+        h.path(),
+        "check-original",
+        current,
+        b"current report",
+        json!({"exit_code":0}),
+        true,
+    )
+    .unwrap();
+    let _slot = reference_report(h.path(), "check.json", current, &[failed.into()], None).unwrap();
+    fs::write(h.path().join("check.json"), b"current report").unwrap();
+    settle_report(h.path(), "check.json", current).unwrap();
+    let output = ledger(h.path())["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == failed)
+        .unwrap()
+        .clone();
+    assert!(
+        ledger(h.path())["roots"]
+            .get(format!(
+                "consumer:report-recheck:{}",
+                output["id"].as_str().unwrap()
+            ))
+            .is_some()
+    );
+    drop(activity);
+    inventory(h.path())
+        .reference_paths(
+            &format!("current-report:{}", chrono_harness::sha256(b"check.json")),
+            &[],
+        )
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
+    assert_eq!(
+        fs::read(h.path().join(failed)).unwrap(),
+        b"failed dependency"
+    );
+}
+
+#[test]
 fn failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer() {
     if !isolated_capability_test(
         "failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer",
