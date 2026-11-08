@@ -280,10 +280,20 @@ fn fresh_artifacts_require_original_proof_and_matching_bytes() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn parallel_dependency_artifacts_can_arrive_between_selected_proof_and_library() {
+    let state = State::new().step(Event::Proof { accepted: true }).unwrap();
+    let interleaved = state.step(Event::OtherArtifact);
+    expect(interleaved.is_ok());
+    let library = interleaved.unwrap().step(Event::Library { fresh: false, matches: true }).unwrap();
+    let binary = library.step(Event::Binary { matches: true }).unwrap();
+    expect(binary.step(Event::Finished { success: true }).unwrap().accepted());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn duplicate_proofs_libraries_and_terminal_records_are_errors() {
     let proof = State::new().step(Event::Proof { accepted: true }).unwrap();
     expect(proof.step(Event::Proof { accepted: true }).is_err());
-    expect(proof.step(Event::OtherArtifact).is_err());
+    expect(proof.step(Event::Binary { matches: true }).is_err());
     expect(proof.step(Event::Library { fresh: true, matches: true }).is_err());
     let library = proof.step(Event::Library { fresh: false, matches: true }).unwrap();
     expect(library.step(Event::Library { fresh: true, matches: true }).is_err());
