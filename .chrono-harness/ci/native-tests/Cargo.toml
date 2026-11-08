@@ -9,6 +9,20 @@ autotests = false
 name = "download"
 path = "tests/download.rs"
 
+[[test]]
+name = "verified_cargo"
+path = "tests/verified_cargo.rs"
+
+[[test]]
+name = "proved_build"
+path = "tests/proved_build.rs"
+
+[[bin]]
+name = "chrono-test-proved-cargo"
+path = "tests/support/proved_cargo.rs"
+test = false
+bench = false
+
 [[bin]]
 name = "chrono-test-bootstrap-download"
 path = "tests/support/download.rs"
