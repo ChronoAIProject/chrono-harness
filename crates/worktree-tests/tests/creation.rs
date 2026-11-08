@@ -1870,7 +1870,7 @@ fn adopt_lifecycle_retention(h: &Host) {
 }
 
 #[test]
-fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_consumer() {
+fn adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window() {
     use chrono_harness::retained_artifacts::retention::Inventory;
     let h = Host::new("payload");
     adopt_lifecycle_retention(&h);
@@ -1894,7 +1894,7 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
         "consumer:lifecycle-recheck:{}",
         sha256(report_path.as_bytes())
     );
-    assert_eq!(ledger["roots"][&role].as_array().unwrap().len(), 1);
+    assert!(ledger["roots"].get(&role).is_none());
     assert!(
         ledger["roots"]
             .get(format!("recovery:{report_path}"))
@@ -1903,6 +1903,23 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
     drop(activity);
     inventory.maintain().unwrap();
     assert_eq!(fs::read(h.root.join(report_path)).unwrap(), raw);
+    let mut original = retention_state::snapshot(&h.root)["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == report_path)
+        .unwrap()
+        .clone();
+    assert!(original["expires"].as_u64().unwrap() > 0);
+    original["expires"] = value!(0);
+    retention_state::replace_output(&h.root, &original);
+    for _ in 0..8 {
+        inventory.maintain().unwrap();
+        if !h.root.join(report_path).exists() {
+            break;
+        }
+    }
+    assert!(!h.root.join(report_path).exists());
     assert_eq!(
         fs::read(occupied.join("original-source")).unwrap(),
         b"preserve existing target"
