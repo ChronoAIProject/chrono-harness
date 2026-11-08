@@ -42,7 +42,7 @@ pub fn result_exit(child: Option<i32>, auxiliary_failed: bool) -> (exit: i32)
         child is None ==> exit == 2,
         child is Some && child.unwrap() > 0 ==> exit == child.unwrap(),
         child is Some && child.unwrap() < 0 ==> exit == 128 - child.unwrap(),
-        child == Some(0i32) ==> exit == if auxiliary_failed { 2 } else { 0 },
+        child == Some(0i32) ==> exit == if auxiliary_failed { 2i32 } else { 0i32 },
 {
     match child {
         None => 2,
