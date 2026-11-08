@@ -2,10 +2,8 @@
 mod content;
 mod probe;
 mod recovery;
-mod report;
 pub mod verified_planner;
 use chrono_harness::{decode, file_identity, no_symlink_parents, sha256, wire};
-pub use report::transport_report;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -26,6 +24,34 @@ pub(crate) fn current_executable_identity() -> Result<Value, String> {
         "bytes": bytes,
         "version": env!("CARGO_PKG_VERSION"),
     }))
+}
+
+pub(crate) fn retain_original(
+    root: &Path,
+    directory: &str,
+    stem: &str,
+    raw: &[u8],
+) -> Result<chrono_harness::prepared::Original, String> {
+    let digest = sha256(raw);
+    let path = format!("{directory}{stem}-{digest}.json");
+    let target = chrono_harness::prepare_publication(root, &path)?;
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
+    {
+        Ok(mut file) => file.write_all(raw).map_err(|e| e.to_string())?,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            if fs::read(target).map_err(|e| e.to_string())? != raw {
+                return Err("E_CACHE_ORIGINAL: retained original differs".into());
+            }
+        }
+        Err(e) => return Err(format!("E_CACHE_ORIGINAL: {e}")),
+    }
+    Ok(chrono_harness::prepared::Original {
+        path,
+        sha256: digest,
+    })
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -761,9 +787,6 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     if args.first().map(String::as_str) == Some("recover") {
         return recovery::dispatch(&args[1..]);
     }
-    if args.first().map(String::as_str) == Some("report") {
-        return report::dispatch(&args[1..]);
-    }
     if args.first().map(String::as_str) != Some("plan") {
         return Err("expected chrono-cache plan".into());
     }
@@ -823,8 +846,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             if let Some(original) = input["original"].as_str() {
                 let raw =
                     fs::read(no_symlink_parents(root, original)?).map_err(|e| e.to_string())?;
-                input["original"] =
-                    json!(report::retain_for_upload(root, &directory, "probe", &raw)?.path);
+                input["original"] = json!(retain_original(root, &directory, "probe", &raw)?.path);
             }
         }
         let raw = serde_json::to_vec(&plan).map_err(|e| e.to_string())?;

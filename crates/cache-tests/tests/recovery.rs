@@ -68,29 +68,6 @@ fn result(root: &Path) -> Value {
     serde_json::from_slice(&raw).unwrap()
 }
 
-fn transport(root: &Path, steps: &Value) -> std::process::Output {
-    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"))
-        .args([
-            "report",
-            "--host-root",
-            root.to_str().unwrap(),
-            "--plan",
-            ".chrono-harness/state/restore/plan.json",
-            "--report-directory",
-            ".chrono-harness/cache/release-result/",
-            "--steps-env",
-            "CACHE_RECOVERY_STEPS",
-            "--work",
-            "work",
-        ])
-        .env(
-            "CACHE_RECOVERY_STEPS",
-            serde_json::to_string(steps).unwrap(),
-        )
-        .output()
-        .unwrap()
-}
-
 #[test]
 fn failed_restore_clears_only_its_registered_artifacts_and_does_not_repeat_after_build() {
     let (root, _, _) = recovery_host();
@@ -139,138 +116,6 @@ fn failed_restore_clears_only_its_registered_artifacts_and_does_not_repeat_after
         fs::read(root.path().join("out/project/new-build")).unwrap(),
         b"new build"
     );
-    let mut final_steps = steps.clone();
-    final_steps["work"] = json!({"outcome":"failure"});
-    let delivered = transport(root.path(), &final_steps);
-    assert!(
-        delivered.status.success(),
-        "{}",
-        String::from_utf8_lossy(&delivered.stderr)
-    );
-    let delivered: Value = serde_json::from_slice(&delivered.stdout).unwrap();
-    assert_eq!(delivered["observation"]["work"]["outcome"], "failure");
-    assert_eq!(
-        delivered["observation"]["caches"]["project"]["restore"]["status"],
-        "error"
-    );
-    let recovery = &delivered["observation"]["recovery"];
-    assert_eq!(recovery["status"], "recovered");
-    let uploaded = fs::read(
-        root.path()
-            .join(recovery["original"]["path"].as_str().unwrap()),
-    )
-    .unwrap();
-    assert_eq!(serde_json::from_slice::<Value>(&uploaded).unwrap(), report);
-    let uploaded_steps = fs::read(
-        root.path()
-            .join(recovery["native_steps"]["path"].as_str().unwrap()),
-    )
-    .unwrap();
-    assert_eq!(
-        serde_json::from_slice::<Value>(&uploaded_steps).unwrap(),
-        steps
-    );
-}
-
-#[test]
-fn missing_or_damaged_recovery_evidence_stops_report_production() {
-    for damaged in [false, true] {
-        let (root, _, _) = recovery_host();
-        let steps = json!({"cache_0_restore":{"outcome":"success"},"work":{"outcome":"success"}});
-        if damaged {
-            assert!(recover(root.path(), &steps).status.success());
-            let pointer: Value = serde_json::from_slice(
-                &fs::read(
-                    root.path()
-                        .join(".chrono-harness/state/restore/recovery.json"),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-            fs::write(
-                root.path().join(pointer["path"].as_str().unwrap()),
-                b"damaged original",
-            )
-            .unwrap();
-        }
-        let output = transport(root.path(), &steps);
-        assert!(!output.status.success());
-        assert!(output.stdout.is_empty());
-        assert!(
-            String::from_utf8_lossy(&output.stderr).contains(if damaged {
-                "digest mismatch"
-            } else {
-                "missing recovery result"
-            })
-        );
-    }
-}
-
-#[test]
-fn changed_restore_observations_stop_transport_and_preserve_both_originals() {
-    for fault in ["missing", "outcome", "key"] {
-        let (root, _, prepared) = recovery_host();
-        let restore = if fault == "key" {
-            json!({"outcome":"success","outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}})
-        } else {
-            json!({"outcome":"failure","conclusion":"success","outputs":{}})
-        };
-        let initial = json!({"cache_0_restore":restore});
-        assert!(recover(root.path(), &initial).status.success());
-        let recovery = result(root.path());
-        let mut final_steps = initial.clone();
-        final_steps["work"] = json!({"outcome":"failure"});
-        match fault {
-            "missing" => {
-                final_steps
-                    .as_object_mut()
-                    .unwrap()
-                    .remove("cache_0_restore");
-            }
-            "outcome" => final_steps["cache_0_restore"]["outcome"] = json!("success"),
-            "key" => {
-                final_steps["cache_0_restore"]["outputs"]["cache-matched-key"] =
-                    json!("different-key");
-            }
-            _ => unreachable!(),
-        }
-        let output = transport(root.path(), &final_steps);
-        assert!(
-            !output.status.success(),
-            "{fault}: contradictory restore observations were accepted: {}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-        assert!(output.stdout.is_empty());
-        let error = String::from_utf8_lossy(&output.stderr);
-        assert!(error.contains("E_CACHE_REPORT"), "{error}");
-        assert!(error.contains("project"), "{error}");
-        assert!(error.contains("restore observation"), "{error}");
-        assert_eq!(result(root.path()), recovery);
-        let upload = root.path().join(".chrono-harness/cache/release-result");
-        for (prefix, expected) in [
-            ("restore-steps-", &initial),
-            ("native-steps-", &final_steps),
-        ] {
-            let originals: Vec<_> = fs::read_dir(&upload)
-                .unwrap()
-                .map(|e| e.unwrap().path())
-                .filter(|p| p.file_name().unwrap().to_str().unwrap().starts_with(prefix))
-                .collect();
-            assert_eq!(originals.len(), 1, "{fault}: {prefix}");
-            let raw = fs::read(&originals[0]).unwrap();
-            assert_eq!(&serde_json::from_slice::<Value>(&raw).unwrap(), expected);
-            assert!(error.contains(originals[0].file_name().unwrap().to_str().unwrap()));
-        }
-        assert!(fs::read_dir(&upload).unwrap().all(|entry| {
-            !entry
-                .unwrap()
-                .file_name()
-                .to_str()
-                .unwrap()
-                .starts_with("cache-transport-")
-        }));
-        assert_eq!(fs::read(root.path().join("source")).unwrap(), b"source-one");
-    }
 }
 
 #[test]
@@ -328,7 +173,7 @@ fn unconfirmed_success_discards_partial_outputs_and_retains_original_uncertainty
         if let Some(key) = matched {
             restore["outputs"]["cache-matched-key"] = json!(key);
         }
-        let mut steps = json!({"cache_0_restore":restore});
+        let steps = json!({"cache_0_restore":restore});
         let output = recover(root.path(), &steps);
         assert!(
             output.status.success(),
@@ -356,21 +201,6 @@ fn unconfirmed_success_discards_partial_outputs_and_retains_original_uncertainty
         assert_eq!(
             fs::read(root.path().join("out/project/rebuilt")).unwrap(),
             b"rebuilt"
-        );
-        steps["work"] = json!({"outcome":"failure"});
-        let transported = transport(root.path(), &steps);
-        assert!(
-            transported.status.success(),
-            "{}",
-            String::from_utf8_lossy(&transported.stderr)
-        );
-        let transported: Value = serde_json::from_slice(&transported.stdout).unwrap();
-        let observed = &transported["observation"];
-        assert_eq!(observed["work"]["outcome"], "failure");
-        assert_eq!(observed["caches"]["project"]["restore"]["status"], reason);
-        assert_eq!(
-            observed["caches"]["project"]["restore"]["observation"],
-            restore
         );
         let original = fs::read(
             root.path()
@@ -571,18 +401,6 @@ fn partial_cleanup_failure_retains_each_result_and_refuses_a_second_deletion() {
         fs::read(root.path().join("out/project/new-build")).unwrap(),
         b"new build"
     );
-    let delivered = transport(root.path(), &steps);
-    assert!(
-        delivered.status.success(),
-        "{}",
-        String::from_utf8_lossy(&delivered.stderr)
-    );
-    let delivered: Value = serde_json::from_slice(&delivered.stdout).unwrap();
-    assert_eq!(delivered["observation"]["recovery"]["status"], "failed");
-    assert_eq!(
-        delivered["observation"]["recovery"]["error"],
-        original["error"]
-    );
 }
 
 fn verified_host() -> (Host, Value, Value) {
@@ -716,34 +534,6 @@ fn verified_hit_requires_producer_seal_and_retains_mismatched_content_before_rec
             fs::write(root.path().join("out/project/rebuilt"), b"candidate").unwrap();
             assert!(recover(root.path(), &steps).status.success());
             assert!(root.path().join("out/project/rebuilt").is_file());
-            let mut final_steps = steps.clone();
-            final_steps["work"] = json!({"outcome":"failure"});
-            let delivered = transport(root.path(), &final_steps);
-            assert!(
-                delivered.status.success(),
-                "{}",
-                String::from_utf8_lossy(&delivered.stderr)
-            );
-            let delivered: Value = serde_json::from_slice(&delivered.stdout).unwrap();
-            let observed = &delivered["observation"];
-            assert_eq!(
-                observed["caches"]["project"]["restore"]["status"],
-                "unusable-content"
-            );
-            assert_eq!(
-                observed["caches"]["project"]["restore"]["key_status"],
-                "exact"
-            );
-            assert_eq!(observed["work"]["outcome"], "failure");
-            assert!(
-                root.path()
-                    .join(
-                        observed["caches"]["project"]["content_verification"]["upload"]["path"]
-                            .as_str()
-                            .unwrap()
-                    )
-                    .is_file()
-            );
         }
     }
 }
