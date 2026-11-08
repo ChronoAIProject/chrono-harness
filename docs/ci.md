@@ -50,6 +50,8 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 阶段校验读取同一生产者的固定原件。shell 只转交参数，不复制构建配方或解释报告。
 普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再执行该保留文件；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
 
+Verus 的下载由 `projects.json` 的 `host.verus-download` 操作负责：curl 向 GitHub 官方 Releases 资产 API 请求固定资产 ID，并用 `Accept: application/octet-stream` 获取文件。版本、输出路径及 SHA-256 校验仍由现役登记固定；更新资产时同步核对发行版本、文件名、大小和摘要，再执行原有下载、校验与解压流程。
+
 本宿主只维护当前采用的安装 profile。Python 入口省略配置时也选择现有 `bootstrap-core.json`；
 旧的全工具 `bootstrap.json` 与未被执行计划调用的 `host.bootstrap` 操作已退役。
 detector、缓存和各单元仍消费各自显式登记的 profile，不因默认安装而取得额外工具。
