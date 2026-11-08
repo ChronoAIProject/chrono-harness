@@ -29,8 +29,7 @@ pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
-#[allow(unexpected_cfgs)]
-pub mod verified_identifiers;
+pub use chrono_identifiers as verified_identifiers;
 #[allow(unexpected_cfgs)]
 pub mod verified_limits;
 #[allow(unexpected_cfgs)]

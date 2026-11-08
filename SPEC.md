@@ -76,6 +76,8 @@ crates/                         独立 Cargo 项目的目录分组
   diagnostics-tests/            诊断库专属测试
   runner/                       运输、协议与统一 check 入口
   runner-tests/                 runner 专属测试
+  identifiers/                  runner 等使用方共用的身份判断库
+  identifiers-tests/            身份判断库专属测试
   inputs/                       显式输入快照与保留内容运输
   inputs-tests/                 输入生产者专属测试
   worktree/                     显式远端目标上的新工作树生产者

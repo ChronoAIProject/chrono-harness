@@ -8,7 +8,7 @@ use vstd::prelude::*;
 use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(verus_keep_ghost)]
-#[path = "verified_identifiers.rs"]
+#[path = "../../identifiers/src/lib.rs"]
 pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;

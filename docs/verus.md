@@ -74,24 +74,34 @@ CI 测试计划先执行两项整 crate 证明及编译，再执行原有构建�
 两项整 crate 证明和原未过滤测试；无新增工具、项目、证明进程、共享状态或预算。
 全文比较和文本复制成本随实际字符串长度增长；完整构建、证明、CI 和存储成本未测。
 
-`crates/runner/src/verified_identifiers.rs` 是实际 OID 和 CI 单元 ID 判断的唯一实现。
+`crates/identifiers/src/lib.rs` 是实际 OID 和 CI 单元 ID 判断的唯一实现。
+它是独立生产库 `chrono-identifiers`，有自己的 manifest、lock、target 和专属测试项目
+`identifiers-tests`；runner 通过直接路径依赖使用它，`verified_identifiers` 重导出唯一真源。
+其余证明根在证明模式下明确导入同一源文件。没有根 workspace 或第二份实现。
 OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID 必须非空，
 每个字节都属于 ASCII 字母、数字或 `._-`。循环证明返回值与各自规格充要相等，包含边界和终止。
 `facts::full_oid` 与 `units::id` 直接消费这些结果。
 
-标识符边界测试在普通 Cargo 模式下调用 runner 公开的 `verified_identifiers`，
+标识符边界测试在普通 Cargo 模式下直接调用独立的 `chrono_identifiers` 库，
 核对实际库的 OID、单元 ID、摘要、请求头和合并父提交判断。布尔预期经带前置条件的
 运行时失败分支检查；Verus 同时证明这些预期成立，普通 Rust 也实际执行失败分支，
 不把证明用的 `assert(...)` 当成运行时断言。独立 Verus 根仅在证明模式下
-导入生产源码，保留原预期和整 crate 证明。这建立运行测试与实际 runner 导出的对应，
+导入生产源码，保留原预期和整 crate 证明。两项原证明和未过滤运行测试归独立库的专属计划，
+沿用 runner CI 单元；这建立测试与 runner 所依赖真源的对应，
 尚不证明普通 Cargo 编译的运行库就是 Verus 输出的库，完整编译产物绑定仍未完成。
+
+**产品与宿主政策同改：**共享身份判断及原边界测试迁到各自的自然所有者，
+同步当前路径引用、独立锁、FILEMAP、项目配对和单元；两个独立 target 明确位于
+已采用清理的 `.chrono-harness/cache/identifiers/` 和 `identifiers-tests/` 下。
+原判断、全部预期、两项证明及原预算保留；没有新增证明进程或共享状态。
+独立构建增加两个 target 的管理范围，完整构建、验证、CI 和存储成本未测。
 
 摘要格式也由同一根的 `digest_format`／`valid_digest`／`valid_digest_text` 规定和实现：
 必须恰为 64 个 ASCII 小写十六进制字节，允许全零。`wire::is_digest` 直接重导出文本判断，
 现役响应、原件、输入和工作树使用方消费同一实现。字节循环证明完整输入的充要条件和终止，
 文本入口证明借用完整 UTF-8 字节；不把格式证明当作 SHA-256 计算、真实性或原件存在证明。
 独立根核 0／40／63／64／65 长度、全零、数字和 a–f 端点、任意位置的非法字节，
-以及完整混合文本、NUL、换行、大小写和 UTF-8 序列。复用原六项 runner 整 crate 操作；
+以及完整混合文本、NUL、换行、大小写和 UTF-8 序列。复用身份判断的原两项整 crate 操作；
 `str::as_bytes` 与切片长度／索引使用固定 vstd 的外部合同，没有新增受信仓内实现。
 最多读取 64 个字节，使用常量额外状态；这是算法估计，完整构建、验证、CI 与存储成本未测。
 
@@ -100,7 +110,7 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 普通请求绑定 `chrono-judge/v1`／`evaluate`，初始请求绑定
 `chrono-initial-judge/v1`／`inventory`；不额外限制 judge ID 的字符。
 独立根核两个有效组合、交叉协议／模式、空名称、大小写、版本后缀、NUL、换行，
-并证明任意非空名称均接受，包括 Unicode。复用 runner 现有两项标识符整 crate 证明，
+并证明任意非空名称均接受，包括 Unicode。复用身份判断的原两项整 crate 证明，
 没有新增验证进程。请求封存、JSON／摘要和外层组合仍待证明。
 比较最多读取协议和模式的完整字节，名称只查空值；构建、验证和完整运行成本未测。
 
@@ -287,7 +297,7 @@ finding 字段形状、引用允许条件和响应头的局部证明见上文；
 ## 实际图内核
 
 图内核的字节词典序、完整比较和严格性／传递性／非对称性／三歧性证明，
-统一归 runner 的 `verified_identifiers.rs`；`verified_graph.rs` 直接重导出同源实现，
+统一归 `chrono-identifiers`；`verified_graph.rs` 直接重导出同源实现，
 原图使用方和独立边界预期继续读取它。比较逐字节保留空串、前缀、NUL 和任意字节的顺序，
 最多读取两个输入的公共长度，使用常量额外状态，不新增运行时进程。
 这是现有 Verus 实现与证明的归属调整，没有新增算法或受信接口。
