@@ -75,6 +75,38 @@ fn ledger(root: &Path) -> Value {
 }
 
 #[test]
+fn executable_output_requires_an_explicit_subdirectory_and_preserves_selected_binary() {
+    if !isolated_capability_test(
+        "executable_output_requires_an_explicit_subdirectory_and_preserves_selected_binary",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    for scope in [".chrono-harness/bin/", ".chrono-harness/", "crates/"] {
+        policy["producers"]["fixture"] = json!([scope]);
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        assert!(Inventory::adopted(h.path()).is_err(), "{scope}");
+    }
+    policy["producers"]["fixture"] = json!([".chrono-harness/bin/owner-stages/"]);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let parent = h.path().join(".chrono-harness/bin/owner-stages");
+    fs::create_dir_all(&parent).unwrap();
+    let selected = h.path().join(".chrono-harness/bin/chrono-worktree");
+    fs::write(&selected, b"current installed executable").unwrap();
+    let stage = parent.join("stage-fixture");
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(), "fixture", &stage, true, json!({}),
+    ).unwrap().unwrap();
+    publication.write_file(&stage.join("candidate"), b"candidate executable").unwrap();
+    publication.complete(json!({"status":"joined"})).unwrap();
+    maintain_fixture_to(h.path(), 0);
+    assert!(!stage.exists());
+    assert_eq!(fs::read(&selected).unwrap(), b"current installed executable");
+}
+
+#[test]
 fn live_publication_accepts_exact_caller_without_leaving_a_durable_root() {
     if !isolated_capability_test(
         "live_publication_accepts_exact_caller_without_leaving_a_durable_root",

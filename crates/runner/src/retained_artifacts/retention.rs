@@ -371,12 +371,14 @@ impl Inventory {
             }
             for scope in scopes {
                 crate::relative_path(scope.trim_end_matches('/'))?;
-                if !scope.starts_with(".chrono-harness/state/")
+                let managed_bin = scope.starts_with(".chrono-harness/bin/")
+                    && scope != ".chrono-harness/bin/";
+                if (!scope.starts_with(".chrono-harness/state/") && !managed_bin)
                     || !scope.ends_with('/')
                     || scope.starts_with(STATE)
                 {
                     return Err(
-                        "retention scope must be explicit state output, outside retention metadata"
+                        "retention scope must be explicit state output or bin subdirectory, outside retention metadata"
                             .into(),
                     );
                 }
