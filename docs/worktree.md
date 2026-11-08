@@ -770,7 +770,7 @@ core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候�
 
 普通共享 bootstrap 复用相同协调者字节，改变须走现有 owner 部署入口。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
 
-真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。本宿主的阶段 profile 通过薄 shell 选择 Rust 构建生产者，外层 core／shared 的 Python 编排仍在迁移。Rust 的现有部署所有者直接核构建报告、登记摘要、工具链绑定、原操作与两流，并负责原 inode 保全、原子替换、中断发布重入、原准入／登记 EX 和采用检查。发布不再调用构建解释器，不生成不存在的 managed_process；不可变 intent／result 继续由实际发布者产生。
+真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。本宿主的阶段、core 和 shared 入口均通过薄 shell 选择 Rust 实现；所有者验证的 Python profile 与伴生实现和测试仍待迁移。Rust 的现有部署所有者直接核构建报告、登记摘要、工具链绑定、原操作与两流，并负责原 inode 保全、原子替换、中断发布重入、原准入／登记 EX 和采用检查。发布不再调用构建解释器，不生成不存在的 managed_process；不可变 intent／result 继续由实际发布者产生。
 
 发布的身份／内容比较、发布意图的完整阶段绑定、原件／意图／替换状态选择由同源 Verus 实现，
 阶段报告值匹配、操作／原流唯一性、进程退出与 PID、摘要形状、执行物绝对路径和搬迁许可使用同一证明根的有限条件序列，保留首个失败的具体信息。
