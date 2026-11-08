@@ -134,7 +134,7 @@ fn scoped_facts_observe_git_without_a_host_allowlist_and_recheck_its_bytes() {
     );
     let trace = fs::read_to_string(h.root.join("trace")).unwrap();
     assert_eq!(trace.lines().count(), 2);
-    assert!(trace.lines().next().unwrap().ends_with(" --version"));
+    assert_eq!(trace.lines().next(), Some("--version"));
     assert!(trace.lines().last().unwrap().ends_with(" status"));
     // 修改执行物后必须在启动任何新命令之前拒绝。
     let permissions = fs::metadata(&h.tool).unwrap().permissions();
