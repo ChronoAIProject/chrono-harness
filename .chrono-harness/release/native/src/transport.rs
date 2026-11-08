@@ -119,12 +119,11 @@ pub fn pack(root: &Path, relative: &str, archive: &Path) -> Result<PackedExecuta
 
 /// 先核完整归档，再流式核单一文件，最后原子替换登记的消费路径。
 /// 原生 artifact/run/attempt 和 receipt 由上层在调用前核对。
-pub fn import(
+fn read_archive(
     archive: &Path,
     expected_archive: &ArchiveIdentity,
     expected: &ExecutableIdentity,
-    root: &Path,
-    relative: &str,
+    output: &mut impl Write,
 ) -> Result<ExecutableIdentity, String> {
     if !fs::symlink_metadata(archive).map_err(error)?.is_file() {
         return Err(error("archive is not a regular file"));
@@ -156,22 +155,38 @@ pub fn import(
     {
         return Err(error("invalid executable archive member/path/mode"));
     }
-    let destination = chrono_harness::prepare_publication(root, relative)?;
-    let parent = destination
-        .parent()
-        .ok_or_else(|| error("missing destination parent"))?;
-    let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(error)?;
-    let (sha256, size) = chrono_harness::copy_hashed(&mut entry, temporary.as_file_mut())?;
+    let (sha256, size) = chrono_harness::copy_hashed(&mut entry, output)?;
     drop(entry);
     match entries.next() {
         Some(Err(failure)) => return Err(error(failure)),
         Some(Ok(_)) => return Err(error("multiple executable archive entries")),
         None => {}
     }
+    if !policy::same_executable(&sha256,size,mode,&expected.sha256,expected.size,expected.mode) {
+        return Err(error("transported executable identity mismatch"));
+    }
+    Ok(ExecutableIdentity {sha256,size,mode})
+}
+
+/// collector 只流式核归档内容，不暂存或执行工具。
+pub fn validate(
+    archive: &Path, expected_archive: &ArchiveIdentity, expected: &ExecutableIdentity,
+) -> Result<ExecutableIdentity, String> {
+    read_archive(archive,expected_archive,expected,&mut std::io::sink())
+}
+
+pub fn import(
+    archive: &Path, expected_archive: &ArchiveIdentity, expected: &ExecutableIdentity,
+    root: &Path, relative: &str,
+) -> Result<ExecutableIdentity, String> {
+    let destination = chrono_harness::prepare_publication(root, relative)?;
+    let parent = destination.parent().ok_or_else(|| error("missing destination parent"))?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(error)?;
+    let identity = read_archive(archive, expected_archive, expected, temporary.as_file_mut())?;
     temporary.as_file_mut().flush().map_err(error)?;
     temporary
         .as_file()
-        .set_permissions(fs::Permissions::from_mode(mode))
+        .set_permissions(fs::Permissions::from_mode(identity.mode))
         .map_err(error)?;
     let actual_mode = temporary
         .as_file()
@@ -181,8 +196,8 @@ pub fn import(
         .mode()
         & 0o7777;
     if !policy::same_executable(
-        &sha256,
-        size,
+        &identity.sha256,
+        identity.size,
         actual_mode,
         &expected.sha256,
         expected.size,
@@ -192,9 +207,5 @@ pub fn import(
     }
     chrono_harness::no_symlink_parents(root, relative)?;
     temporary.persist(destination).map_err(error)?;
-    Ok(ExecutableIdentity {
-        sha256,
-        size,
-        mode: actual_mode,
-    })
+    Ok(identity)
 }

@@ -71,6 +71,28 @@ impl Fixture {
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         command.output().unwrap()
     }
+
+    fn exported(&self) -> std::path::PathBuf {
+        let directory = self.output.path().join("export");
+        let out = self.export(&directory);
+        assert!(out.status.success(), "stderr={}",String::from_utf8_lossy(&out.stderr));
+        let mut tar = tar::Archive::new(fs::File::open(directory.join("executable.tar")).unwrap());
+        let mut entries = tar.entries().unwrap();
+        entries.next().unwrap().unwrap().unpack(directory.join("chrono-host-release")).unwrap();
+        directory
+    }
+
+    fn selected(&self) -> chrono_host_release::receipt::Selection {
+        serde_json::from_value(json!({"job":"native_frontend","artifact_id":"98765","run_id":"1234","attempt":"1"})).unwrap()
+    }
+
+    fn validate(&self, directory: &Path, selected: &chrono_host_release::receipt::Selection, executing: Option<&Path>) -> Result<Value,String> {
+        let loaded = chrono_host_release::recipe::Loaded::load(self.host.root()).unwrap();
+        let source = serde_json::from_value(self.report["source"]["before"].clone()).unwrap();
+        chrono_host_release::frontend::validate(self.host.root(), directory,
+            &loaded.recipe.native_frontends["fixture"], &chrono_host_bootstrap::bindings::native_platform().unwrap(),
+            &source, selected, executing)
+    }
 }
 
 #[test]
@@ -97,4 +119,94 @@ fn actual_export_preserves_original_bootstrap_streams_and_the_executable_archive
     assert_eq!(bytes, fs::read(f.host.root().join(".chrono-harness/bin/chrono-host-release")).unwrap());
     assert!(members.next().is_none());
     assert!(!f.export(&destination).status.success());
+}
+
+#[test]
+fn export_rejects_original_build_failure_source_drift_and_wrong_installations_before_output() {
+    let mut f = Fixture::new();
+    let original = f.report.clone();
+    for (index,(pointer,value)) in [
+        ("/status",json!("failed")),
+        ("/source/before/dirty",json!(true)),
+        ("/source/commit",json!("0".repeat(40))),
+        ("/operations/0/exit_code",json!(41)),
+        ("/operations/0/argv/1",json!("unregistered-build")),
+        ("/installed/0/sha256",json!("0".repeat(64))),
+        ("/installed/0/path",json!(".chrono-harness/bin/other")),
+        ("/installed",json!([])),
+        ("/installed",json!([original["installed"][0].clone(),original["installed"][0].clone()])),
+    ].into_iter().enumerate() {
+        f.report = original.clone();
+        *f.report.pointer_mut(pointer).unwrap()=value;
+        f.save();
+        let directory = f.output.path().join(format!("rejected-{index}"));
+        let out = f.export(&directory);
+        assert_eq!(out.status.code(),Some(2),"{pointer}");
+        assert!(!directory.exists(),"{pointer}");
+    }
+}
+
+#[test]
+fn consumer_and_collector_validate_original_production_without_rerunning_bootstrap_tools() {
+    let f = Fixture::new();
+    let directory = f.exported();
+    let binary = directory.join("chrono-host-release");
+    let selected = f.selected();
+    assert!(f.validate(&directory,&selected,Some(&binary)).is_ok());
+    assert!(f.validate(&directory,&selected,None).is_ok());
+    for (field,value) in [("job","unregistered"),("run_id","foreign"),("attempt","2")] {
+        let mut changed = serde_json::to_value(&selected).unwrap();
+        changed[field]=json!(value);
+        assert!(f.validate(&directory,&serde_json::from_value(changed).unwrap(),Some(&binary)).is_err(),"{field}");
+    }
+    // 外部报告中的编译器路径不存在；成功消费不能执行 producer 的工具。
+    assert!(!Path::new("/fixture/cargo").exists());
+    fs::set_permissions(&binary,fs::Permissions::from_mode(0o744)).unwrap();
+    assert!(f.validate(&directory,&selected,Some(&binary)).is_err());
+    fs::set_permissions(&binary,fs::Permissions::from_mode(0o755)).unwrap();
+    let source = f.host.root().join(".chrono-harness/bin/chrono-host-release");
+    assert!(f.validate(&directory,&selected,Some(&source)).is_err());
+    fs::write(&binary,b"substituted frontend").unwrap();
+    assert!(f.validate(&directory,&selected,Some(&binary)).is_err());
+}
+
+#[test]
+fn consumer_rejects_changed_bootstrap_streams_and_even_rebound_invalid_original_reports() {
+    let f = Fixture::new();
+    let directory = f.exported();
+    let manifest:Value=serde_json::from_slice(&fs::read(directory.join("frontend.json")).unwrap()).unwrap();
+    let bootstrap=fs::read(directory.join("bootstrap.json")).unwrap();
+    let path=directory.join(".chrono-harness/state/frontend.stdout");
+    let stream=fs::read(&path).unwrap();
+    fs::write(&path,b"changed original stream").unwrap();
+    assert!(f.validate(&directory,&f.selected(),None).is_err());
+    fs::write(&path,stream).unwrap();
+    for (pointer,value) in [("/operations/0/exit_code",json!(73)),("/installed/0/sha256",json!("0".repeat(64)))] {
+        let mut changed:Value=serde_json::from_slice(&bootstrap).unwrap();
+        *changed.pointer_mut(pointer).unwrap()=value;
+        let raw=serde_json::to_vec(&changed).unwrap();
+        fs::write(directory.join("bootstrap.json"),&raw).unwrap();
+        let mut rebound=manifest.clone();
+        rebound["bootstrap"]["sha256"]=json!(chrono_harness::sha256(&raw));
+        rebound["bootstrap"]["size"]=json!(raw.len());
+        recipe::write(&directory,"frontend.json",&rebound);
+        assert!(f.validate(&directory,&f.selected(),None).is_err(),"{pointer}");
+    }
+}
+
+#[test]
+fn collector_rejects_archive_content_substitution_even_with_recomputed_transport_digest() {
+    let f = Fixture::new();
+    let directory=f.exported();
+    let mut manifest:Value=serde_json::from_slice(&fs::read(directory.join("frontend.json")).unwrap()).unwrap();
+    let file=fs::File::create(directory.join("executable.tar")).unwrap();
+    let mut builder=tar::Builder::new(file);
+    let raw=b"substituted executable";
+    let mut header=tar::Header::new_gnu();
+    header.set_path("executable").unwrap();header.set_size(raw.len() as u64);header.set_mode(0o755);header.set_cksum();
+    builder.append(&header,raw.as_slice()).unwrap();builder.finish().unwrap();drop(builder);
+    let (sha,size)=chrono_harness::file_identity(&directory.join("executable.tar")).unwrap();
+    manifest["archive"]["sha256"]=json!(sha);manifest["archive"]["size"]=json!(size);
+    recipe::write(&directory,"frontend.json",&manifest);
+    assert!(f.validate(&directory,&f.selected(),None).is_err());
 }

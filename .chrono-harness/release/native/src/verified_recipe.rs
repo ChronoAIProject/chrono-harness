@@ -57,6 +57,36 @@ pub fn result_exit(child: Option<i32>, auxiliary_failed: bool) -> (exit: i32)
 
 pub enum DependencyResult { Success, Failure, Cancelled, Skipped }
 
+/// 工具产物与业务单元共享源码，但原生平台与实际生产者必须分别绑定。
+pub fn frontend_header(
+    schema: &str, github: bool, commit: &str, tree: &str, system: &str, machine: &str,
+    expected_commit: &str, expected_tree: &str, expected_system: &str, expected_machine: &str,
+) -> (valid: bool)
+    ensures valid <==> (schema@ == "chrono-release-frontend/v1"@ && github
+        && commit@ == expected_commit@ && tree@ == expected_tree@
+        && system@ == expected_system@ && machine@ == expected_machine@),
+{
+    identifiers::equal_text(schema, "chrono-release-frontend/v1") && github
+        && identifiers::equal_text(commit, expected_commit)
+        && identifiers::equal_text(tree, expected_tree)
+        && identifiers::equal_text(system, expected_system)
+        && identifiers::equal_text(machine, expected_machine)
+}
+
+pub fn frontend_installation(
+    planned: u64, reported: u64, destination: &str, installed: &str,
+    hash: &str, expected_hash: &str,
+) -> (valid: bool)
+    ensures valid <==> (planned == 1 && reported == 1
+        && destination@ == ".chrono-harness/bin/chrono-host-release"@
+        && installed@ == destination@ && hash@ == expected_hash@),
+{
+    planned == 1 && reported == 1
+        && identifiers::equal_text(destination, ".chrono-harness/bin/chrono-host-release")
+        && identifiers::equal_text(installed, destination)
+        && identifiers::equal_text(hash, expected_hash)
+}
+
 pub fn executable_file(regular: bool, mode: u32) -> (valid: bool)
     ensures valid == (regular && mode <= 4095 && mode & 73 != 0),
 {

@@ -10,6 +10,7 @@ name = "verified_recipe"
 path = "tests/verified_recipe.rs"
 
 [dependencies]
+chrono-host-bootstrap = { path = "../../ci/native" }
 chrono-harness = { path = "../../../crates/runner" }
 chrono-host-release = { path = "../native" }
 chrono-distribution = { path = "../../../crates/distribution" }

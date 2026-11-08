@@ -1,4 +1,4 @@
-use chrono_host_release::{execution, local, recipe::Scope};
+use chrono_host_release::{execution, frontend, local, recipe::Scope};
 use std::{path::Path, process::ExitCode};
 
 fn run() -> Result<i32, String> {
@@ -27,7 +27,11 @@ fn run() -> Result<i32, String> {
             Scope::Collect,
             std::env::vars_os().collect(),
         ),
-        _ => Err("usage: chrono-host-release ROOT ABSENT_OUTPUT [--unit ID | --collect]".into()),
+        [root, output, flag] if flag == "--export-frontend" => {
+            frontend::export(Path::new(root), Path::new(output), &std::env::vars_os().collect())?;
+            Ok(0)
+        },
+        _ => Err("usage: chrono-host-release ROOT ABSENT_OUTPUT [--unit ID | --collect | --export-frontend]".into()),
     }
 }
 

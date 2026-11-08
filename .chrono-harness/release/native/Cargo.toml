@@ -9,6 +9,7 @@ test = false
 doctest = false
 
 [dependencies]
+chrono-host-bootstrap = { path = "../../ci/native" }
 chrono-harness = { path = "../../../crates/runner" }
 chrono-identifiers = { path = "../../../crates/identifiers" }
 chrono-judge-registration = { path = "../../../crates/judge-registration" }

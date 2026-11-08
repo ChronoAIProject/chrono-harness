@@ -25,6 +25,40 @@ fn expect_recipe(actual: bool)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn frontend_header_requires_the_original_source_platform_and_github_role() {
+    proof {
+        reveal_strlit("chrono-release-frontend/v1"); reveal_strlit("other");
+        reveal_strlit("commit"); reveal_strlit("other-commit");
+        reveal_strlit("tree"); reveal_strlit("other-tree");
+        reveal_strlit("system"); reveal_strlit("other-system");
+        reveal_strlit("machine"); reveal_strlit("other-machine");
+    }
+    let same=policy::frontend_header("chrono-release-frontend/v1",true,"commit","tree","system","machine","commit","tree","system","machine");
+    let schema=policy::frontend_header("other",true,"commit","tree","system","machine","commit","tree","system","machine");
+    let role=policy::frontend_header("chrono-release-frontend/v1",false,"commit","tree","system","machine","commit","tree","system","machine");
+    let commit=policy::frontend_header("chrono-release-frontend/v1",true,"other-commit","tree","system","machine","commit","tree","system","machine");
+    let tree=policy::frontend_header("chrono-release-frontend/v1",true,"commit","other-tree","system","machine","commit","tree","system","machine");
+    let system=policy::frontend_header("chrono-release-frontend/v1",true,"commit","tree","other-system","machine","commit","tree","system","machine");
+    let machine=policy::frontend_header("chrono-release-frontend/v1",true,"commit","tree","system","other-machine","commit","tree","system","machine");
+    expect_recipe(same && !schema && !role && !commit && !tree && !system && !machine);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn frontend_installation_requires_exactly_the_declared_tool_and_digest() {
+    proof {
+        reveal_strlit(".chrono-harness/bin/chrono-host-release"); reveal_strlit("other");
+        reveal_strlit("hash"); reveal_strlit("other-hash");
+    }
+    let same=policy::frontend_installation(1,1,".chrono-harness/bin/chrono-host-release",".chrono-harness/bin/chrono-host-release","hash","hash");
+    let missing=policy::frontend_installation(1,0,".chrono-harness/bin/chrono-host-release",".chrono-harness/bin/chrono-host-release","hash","hash");
+    let extra=policy::frontend_installation(2,1,".chrono-harness/bin/chrono-host-release",".chrono-harness/bin/chrono-host-release","hash","hash");
+    let tool=policy::frontend_installation(1,1,"other","other","hash","hash");
+    let path=policy::frontend_installation(1,1,".chrono-harness/bin/chrono-host-release","other","hash","hash");
+    let hash=policy::frontend_installation(1,1,".chrono-harness/bin/chrono-host-release",".chrono-harness/bin/chrono-host-release","other-hash","hash");
+    expect_recipe(same && !missing && !extra && !tool && !path && !hash);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn non_rust_verification_and_collection_do_not_require_rust() {
     let verification = policy::requires_rust(&Invocation::Verify { rust_toolchain: false });
     let collection = policy::requires_rust(&Invocation::Collect);
