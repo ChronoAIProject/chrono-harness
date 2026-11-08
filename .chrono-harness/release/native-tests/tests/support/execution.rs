@@ -70,6 +70,13 @@ impl Fixture {
         }
         host.config["limits"] = json!({"unit_seconds":120,"platform_seconds":600});
         host.config["failure_evidence"]["test.none"] = json!(["failures/test-a/"]);
+        // 真实打包器要求发布安装器；它仍由 build_a 产生并暂存到 consumer/a。
+        host.config["units"][0]["asset"] = json!("chrono-distribution");
+        host.config["consumer_staging"]["bindings"][0]["asset"] = json!("chrono-distribution");
+        host.config["collector"]["package_asset"] = json!("chrono-distribution");
+        host.config["verification_consumers"]["test_a"]["release_assets"] = json!(["chrono-distribution"]);
+        host.plan["assets"].as_object_mut().unwrap().remove("a");
+        host.plan["assets"]["chrono-distribution"] = json!("out/a");
         host.save();
         fs::create_dir_all(host.root().join("a")).unwrap();
         fs::create_dir_all(host.root().join("b")).unwrap();
