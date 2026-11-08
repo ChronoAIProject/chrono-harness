@@ -24,9 +24,9 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 本宿主采用 `chrono-cache/v2`，登记归自身 `.chrono-harness/`。内容包括：
 
-- namespace 和 `artifact_registry` 路径。宿主缓存产物精确引用该登记的 `artifacts` 路径，所有者须相同、`tracked: false`，且不得为执行证据。明确的外部依赖缓存可用绝对路径，其他产物相对宿主。不发现目录或语言。
+- namespace 和 `artifact_registry` 路径。宿主缓存产物精确引用该登记的 `artifacts` 路径，所有者须相同、`tracked: false`，且不得为执行证据。所有缓存产物使用相对宿主的字面路径；依赖下载缓存也须登记在宿主内。不发现目录或语言。
 - 具名输入。各种输入的具体规则见下表。
-- 具名产物，声明 `owner`、`path`、`kind`（`dependencies`、`compilation`）和明确 `external` 布尔值。
+- 具名产物，只声明 `owner` 和宿主内的 `path`。
 - 具名缓存，声明 `owner`、登记 `producer` 操作 ID、`consumers`、产物 ID、互不相交的 `compatibility_inputs`／`source_inputs`、`restore`（`exact` 或 `compatible`）。每个列表均非空且成员唯一。
 - `consumer_operations`，将每个消费者绑定到已有方法登记。每个引用用字面宿主 `registry` 路径和 JSON `pointer` 选择一个操作 ID，或非空且唯一的 ID 数组。引用缺失、值错误、订阅缓存的 producer 不在消费者所选操作内，都会在输入探测和原生恢复前失败。计划保留来源摘要和所选 ID，不从语言、路径或运行活动猜方法；声明有效也不证明实际执行。
 
@@ -47,6 +47,8 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 输入 ID 排序变化不改摘要；无关缓存声明或文件变化不使所选缓存失效。
 
+**产品与宿主政策同改：**当前 34 个产物均为宿主内路径，外部产物分支及重复的 `kind`／`external` 字段已移除；当前登记、恢复和发布测试一并迁移。产物路径复用 runner 已有的 Verus 相对路径判断，每项产物仍须精确匹配未跟踪、非执行证据的宿主登记。字段删除会改变兼容摘要，旧缓存键失效并重新构建；完整构建、验证、CI、存储和维护成本收益未知。
+
 只接受 `chrono-cache/v2` 登记和 `chrono-cache-plan/v2` 计划；旧格式在发布计划或报告前拒绝，不生成或恢复 `chrono-v1-` 键。CI 投影也在写入前拒绝旧登记。格式准入复用现有同源 Verus 证明入口；JSON 解码、完整登记与恢复行为仍有各自的验证边界。
 
 `compatible` 只提供一个到兼容摘要为止的恢复前缀，使源码变化可找到同范围旧编译数据。适用的编译器、target、profile、标志、SDK、构建脚本、配置、环境身份都须由宿主明确登记到兼容范围；planner 不推断这些依赖，也不证明列表完整。lockfile、manifest 也须按真实兼容作用归类。
@@ -59,7 +61,7 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 
 ## 恢复失败后如何清理
 
-v2 可为隔离主检出明确启用 `recover_failed_restores: true`。外部产物所有权尚未建立，不支持。该选择保留在计划中，不进入构建缓存键。planner 将所选方法交给原生 provider；旧登记和旧 planner 不执行恢复。
+v2 可为隔离主检出明确启用 `recover_failed_restores: true`。该选择保留在计划中，不进入构建缓存键。planner 将所选方法交给原生 provider；旧登记和旧 planner 不执行恢复。
 
 最终传输报告把每个计划恢复步骤与恢复程序消费的原观察核对。可增加后续 bootstrap、构建、测试、保存步骤，但已有恢复观察不能消失或改变。不符时在上传目录保留两份快照，返回带缓存 ID 和两个原路径的 `E_CACHE_REPORT`，不发布正常传输报告，也不查后端。这只核保留观察一致，不证明原生 action 声明真实。
 

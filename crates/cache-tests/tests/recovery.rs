@@ -522,7 +522,7 @@ fn changed_registration_and_symlinked_outputs_preserve_original_failure_without_
 fn partial_cleanup_failure_retains_each_result_and_refuses_a_second_deletion() {
     let (root, mut config, _) = recovery_host();
     config["artifacts"]["zz-socket"] = json!({
-        "owner":"project","path":"out/socket","kind":"compilation","external":false
+        "owner":"project","path":"out/socket"
     });
     config["caches"]["project"]["artifacts"] = json!(["target", "zz-socket"]);
     register_artifacts(root.path(), &config);

@@ -49,8 +49,8 @@ fn fixture() -> (Host, Value) {
             "profile":{"kind":"literal","value":{"profile":"debug","incremental":true}},
             "other":{"kind":"file","path":"unavailable-other-input","presence":"present"}},
         "artifacts":{
-            "target":{"owner":"project","path":"out/project","kind":"compilation","external":false},
-            "other-target":{"owner":"other","path":"out/other","kind":"compilation","external":false}},
+            "target":{"owner":"project","path":"out/project"},
+            "other-target":{"owner":"other","path":"out/other"}},
         "caches":{
             "project":{"owner":"project","producer":"build.project","consumers":["check.one","check.two"],
                 "artifacts":["target"],"compatibility_inputs":["compiler","profile"],"source_inputs":["source"],"restore":"compatible"},
@@ -63,7 +63,6 @@ fn fixture() -> (Host, Value) {
 
 fn register_artifacts(root: &Path, config: &Value) {
     let rows: Vec<_> = config["artifacts"].as_object().unwrap().values()
-        .filter(|a| a["external"] == false)
         .map(|a| json!({"path":a["path"],"owner":a["owner"],"kind":"fixture-output","tracked":false})).collect();
     fs::write(
         root.join(".chrono-harness/artifacts.json"),
@@ -130,10 +129,6 @@ fn register_consumer_contract(root: &Path, config: &mut Value) {
 #[test]
 fn only_current_cache_registration_is_admitted() {
     let (root, mut config) = fixture();
-    for artifact in config["artifacts"].as_object_mut().unwrap().values_mut() {
-        artifact.as_object_mut().unwrap().remove("kind");
-        artifact.as_object_mut().unwrap().remove("external");
-    }
     let current = plan(root.path(), &config, "check.one").unwrap();
     assert_eq!(current["schema"], "chrono-cache-plan/v2");
     assert_eq!(
@@ -815,7 +810,7 @@ fn absent_inputs_are_explicit_and_empty_files_are_present() {
 }
 
 #[test]
-fn exact_keys_still_require_builds_and_retired_executable_kind_is_rejected() {
+fn exact_keys_still_require_builds_and_artifact_fields_are_closed() {
     let (root, mut config) = fixture();
     config["caches"]["project"]["restore"] = json!("exact");
     let result = plan(root.path(), &config, "check.one").unwrap();
@@ -824,8 +819,17 @@ fn exact_keys_still_require_builds_and_retired_executable_kind_is_rejected() {
         result["caches"]["project"]["handling"],
         "registered-build-required"
     );
-    config["artifacts"]["target"]["kind"] = json!("executable-candidate");
-    assert!(plan(root.path(), &config, "check.one").is_err());
+    for (field, value) in [
+        ("kind", json!("compilation")),
+        ("kind", json!("dependencies")),
+        ("kind", json!("executable-candidate")),
+        ("external", json!(false)),
+        ("external", json!(true)),
+    ] {
+        let mut changed = config.clone();
+        changed["artifacts"]["target"][field] = value;
+        assert!(plan(root.path(), &changed, "check.one").is_err(), "{field}");
+    }
 }
 
 #[test]
@@ -842,7 +846,6 @@ fn registration_rejects_missing_ambiguous_and_cross_owner_references() {
             json!(["check.one", "check.one"]),
         ),
         ("/caches/project/compatibility_inputs", json!([])),
-        ("/artifacts/target/external", json!(true)),
     ] {
         let mut changed = config.clone();
         *changed.pointer_mut(pointer).unwrap() = value;
@@ -889,7 +892,7 @@ fn cache_paths_exclude_evidence_metadata_sources_and_overlapping_outputs() {
     }
     let mut changed = config.clone();
     changed["caches"]["project"]["artifacts"] = json!(["target", "overlap"]);
-    changed["artifacts"]["overlap"] = json!({"owner":"project","path":"out/project/nested","kind":"compilation","external":false});
+    changed["artifacts"]["overlap"] = json!({"owner":"project","path":"out/project/nested"});
     register_artifacts(root.path(), &changed);
     assert!(
         plan(root.path(), &changed, "check.one")
@@ -899,7 +902,7 @@ fn cache_paths_exclude_evidence_metadata_sources_and_overlapping_outputs() {
 }
 
 #[test]
-fn host_artifacts_require_exact_existing_registration_and_external_caches_are_explicit() {
+fn cache_artifacts_require_host_paths_and_exact_existing_registration() {
     let (root, mut config) = fixture();
     let catalog = root.path().join(".chrono-harness/artifacts.json");
     for rows in [
@@ -922,26 +925,26 @@ fn host_artifacts_require_exact_existing_registration_and_external_caches_are_ex
     }
     register_artifacts(root.path(), &config);
     let external = tempfile::tempdir().unwrap();
-    config["artifacts"]["target"]["path"] = json!(fs::canonicalize(external.path()).unwrap());
-    assert!(
-        plan(root.path(), &config, "check.one")
-            .unwrap_err()
-            .contains("external/path")
-    );
-    config["artifacts"]["target"]["external"] = json!(true);
-    assert!(
-        plan(root.path(), &config, "check.one")
-            .unwrap_err()
-            .contains("dependency caches")
-    );
-    config["artifacts"]["target"]["kind"] = json!("dependencies");
-    assert!(plan(root.path(), &config, "check.one").is_ok());
-    config["artifacts"]["target"]["path"] = json!(fs::canonicalize(root.path()).unwrap());
-    assert!(
-        plan(root.path(), &config, "check.one")
-            .unwrap_err()
-            .contains("E_CACHE_PATH")
-    );
+    let external_path = fs::canonicalize(external.path()).unwrap();
+    let host_path = fs::canonicalize(root.path()).unwrap();
+    for path in [
+        external_path.to_str().unwrap(),
+        host_path.to_str().unwrap(),
+        "/",
+        "",
+        ".",
+        "./out/project",
+        "../out/project",
+        "out/../project",
+    ] {
+        config["artifacts"]["target"]["path"] = json!(path);
+        assert!(
+            plan(root.path(), &config, "check.one")
+                .unwrap_err()
+                .contains("E_CACHE_PATH"),
+            "{path}"
+        );
+    }
 }
 
 #[cfg(unix)]

@@ -113,7 +113,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         super::report::retain_for_upload(&root, &directory, "restore-steps", steps_raw.as_bytes())?;
     let mut report = json!({"schema":"chrono-cache-recovery/v1","plan":binding,"native_steps":steps_original,
         "status":"not-required","caches":{},"error":null,
-        "limits":["isolated provider restore phase, before producers", "registered native observations only; no archive integrity or build verdict", "missing matched keys do not distinguish miss from backend or extraction failure", "linked worktree and external artifact recovery unsupported"]});
+        "limits":["isolated provider restore phase, before producers", "registered native observations only; no archive integrity or build verdict", "missing matched keys do not distinguish miss from backend or extraction failure", "linked worktree recovery unsupported"]});
     let result = (|| -> Result<(), String> {
         let config: super::Config =
             decode(&fs::read(no_symlink_parents(&root, config_path)?).map_err(|e| e.to_string())?)?;
@@ -200,7 +200,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                     .as_str()
                     .ok_or("E_CACHE_RECOVERY: artifact path")?;
                 let target = super::path(&root, path)?;
-                if !target.starts_with(&root) || artifact["external"] != false {
+                if !target.starts_with(&root) {
                     return Err(
                         "E_CACHE_RECOVERY: only registered host artifacts may be discarded".into(),
                     );
