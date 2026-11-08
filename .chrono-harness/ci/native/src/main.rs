@@ -2,7 +2,7 @@
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
-    lifecycle, original, owner, profile, shared,
+    download, lifecycle, original, owner, profile, shared,
 };
 use serde_json::json;
 use std::{path::Path, process::ExitCode};
@@ -89,6 +89,16 @@ fn run() -> Result<(), BuildFailure> {
     let environment = std::env::vars_os().collect();
     let native = bindings::native_platform()?;
     match arguments.as_slice() {
+        [command, host, checksum, curl, headers, url] if command == "download" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            let archive =
+                download::prepare(&root, checksum, Path::new(curl), headers, url, &environment)?;
+            println!(
+                "{}",
+                serde_json::to_string(&archive).map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
         [host, config, command] if command == "produce" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             shared::Shared::read(&root, config, &native)?.produce(&root, &environment, &native)
@@ -123,18 +133,46 @@ fn run() -> Result<(), BuildFailure> {
     }
 }
 
-fn main() -> ExitCode {
+fn execute() -> u8 {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(()) => 0,
         Err(error) => {
+            chrono_harness::log_cli_error(&format!("E_BOOTSTRAP: {}", error.message));
             eprintln!("E_BOOTSTRAP: {}", error.message);
-            ExitCode::from(
-                error
-                    .exit_code
-                    .and_then(|code| u8::try_from(code).ok())
-                    .filter(|code| *code != 0)
-                    .unwrap_or(1),
-            )
+            error
+                .exit_code
+                .and_then(|code| u8::try_from(code).ok())
+                .filter(|code| *code != 0)
+                .unwrap_or(1)
         }
     }
+}
+
+fn main() -> ExitCode {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    let (host, operation) = match arguments.as_slice() {
+        [host, _, operation] if operation.to_str() == Some("produce") => (Some(host), "produce"),
+        [host, _, operation, _] if matches!(operation.to_str(), Some("install" | "verify")) => {
+            (Some(host), operation.to_str().unwrap())
+        }
+        [operation, host, _]
+            if matches!(
+                operation.to_str(),
+                Some("bootstrap" | "construct-owner-stage" | "validate-original-execution")
+            ) =>
+        {
+            (Some(host), operation.to_str().unwrap())
+        }
+        [host, _] => (Some(host), "bootstrap"),
+        _ => (None, ""),
+    };
+    ExitCode::from(match host {
+        Some(host) => chrono_harness::logged_main_at(
+            Path::new(host),
+            "chrono-host-bootstrap",
+            operation,
+            execute,
+        ),
+        None => chrono_harness::logged_main("chrono-host-bootstrap", execute),
+    })
 }

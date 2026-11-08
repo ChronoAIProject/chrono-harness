@@ -308,6 +308,15 @@ struct Entry {
     main_cache_adoptions: Vec<Receipt>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     cache_only: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cleanup: Option<CleanupProgress>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CleanupProgress {
+    stage: crate::verified_lifecycle::CleanupStage,
+    detail: String,
+    report_path: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1231,6 +1240,7 @@ impl Manager {
             policy_migrations: vec![],
             main_cache_adoptions: vec![],
             cache_only,
+            cleanup: None,
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = r.config.host_config.clone();
@@ -1737,6 +1747,12 @@ impl Manager {
             receipt: receipt.clone(),
         });
         self.ledger.entries[i].status = "terminal".into();
+        self.progress(
+            i,
+            crate::verified_lifecycle::CleanupStage::Pending,
+            "terminal handoff recorded; cleanup not completed",
+            report,
+        )?;
         self.save()?;
         report["terminal_receipt"] = value!(receipt);
         Ok(())
@@ -1866,7 +1882,7 @@ impl Manager {
             value!({"kind":"worktree","path":self.scope})
         };
         self.observe_inventory(r, exclude, report, all)?;
-        let mut failures = self.drain_entries(r, exclude, report)?;
+        let mut failures = self.drain_entries(r, exclude, report, all)?;
         if !all {
             report["cleanup_failures"] = value!(failures);
             return if failures.is_empty() {
@@ -1896,7 +1912,7 @@ impl Manager {
                 );
                 match opened {
                     Ok(Some(mut owner)) => {
-                        failures.extend(owner.drain_entries(r, exclude, report)?)
+                        failures.extend(owner.drain_entries(r, exclude, report, true)?)
                     }
                     Ok(None) => return Err("cleanup policy disappeared during maintenance".into()),
                     Err(error)
@@ -1968,13 +1984,19 @@ impl Manager {
         _r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
+        maintenance: bool,
     ) -> Result<Vec<String>, String> {
         let mut failures = vec![];
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
             let cache =
                 e.status == "active" && e.ownership.as_ref().is_some_and(|o| o.cache_pending);
-            if e.status != "terminal" && !cache {
+            if !crate::verified_lifecycle::select_cleanup(
+                &e.status,
+                e.ownership.as_ref().is_some_and(|o| o.cache_pending),
+                maintenance,
+                e.terminal.as_ref().is_some_and(|t| t.artifacts_only),
+            ) {
                 continue;
             }
             if self._gate.lease.is_some() && e.ownership.is_none() {
@@ -1989,10 +2011,18 @@ impl Manager {
                 match self.lease(&e, true) {
                     Ok(Some(lease)) => Some(lease),
                     Ok(None) => {
+                        self.progress(i, crate::verified_lifecycle::CleanupStage::WaitingForConsumers,
+                            "live registered consumers hold enrollment lease; retry after their release", report)?;
                         report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,"status":"preserved","preserved_reason":"live registered consumers hold enrollment lease"}));
                         continue;
                     }
                     Err(error) => {
+                        self.progress(
+                            i,
+                            crate::verified_lifecycle::CleanupStage::Failed,
+                            &error,
+                            report,
+                        )?;
                         failures.push(format!("{}: {error}", e.path.display()));
                         report["drain"]
                             .as_array_mut()
@@ -2006,6 +2036,12 @@ impl Manager {
             };
             if let Some(lease) = &_lease {
                 if let Err(error) = self.reconcile_uses(i, lease) {
+                    self.progress(
+                        i,
+                        crate::verified_lifecycle::CleanupStage::Failed,
+                        &error,
+                        report,
+                    )?;
                     failures.push(format!("{}: {error}", e.path.display()));
                     report["drain"]
                         .as_array_mut()
@@ -2015,6 +2051,8 @@ impl Manager {
                 }
             }
             if !self.ledger.entries[i].uses.is_empty() {
+                self.progress(i, crate::verified_lifecycle::CleanupStage::WaitingForConsumers,
+                    "active/unknown managed use; establish original result or reconcile under exclusive lease", report)?;
                 failures.push(format!("{}: active/unknown managed use", e.path.display()));
                 report["drain"].as_array_mut().unwrap().push(
                     value!({"path":e.path,"status":"failed","error":"active/unknown managed use"}),
@@ -2027,6 +2065,12 @@ impl Manager {
             )?;
             let root = self.inputs.policy.coordinator_root.clone();
             let config_path = self.inputs.config_path.clone();
+            self.progress(
+                i,
+                crate::verified_lifecycle::CleanupStage::InProgress,
+                "cleanup started; retain original attempt across interruption",
+                report,
+            )?;
             let outcome = start::with_report(
                 &root,
                 &config_path,
@@ -2069,6 +2113,11 @@ impl Manager {
                         .ok_or("cleanup report path")?
                         .to_owned();
                     let b = crate::recovery::state_bytes(&root, &path)?;
+                    let stage = crate::verified_lifecycle::cleanup_result(
+                        cache,
+                        result["status"].as_str().unwrap_or(""),
+                        result["worktree_removal"].as_str().unwrap_or(""),
+                    );
                     if cache {
                         if let Some(a) = self.ledger.entries[i]
                             .cache_attempts
@@ -2096,24 +2145,27 @@ impl Manager {
                             });
                         }
                     }
-                    if !cache
-                        && result["status"] == "cleaned"
-                        && matches!(
-                            result["worktree_removal"].as_str(),
-                            Some("verified-absent" | "already-absent")
-                        )
-                    {
-                        self.ledger.entries[i].status = "disposed".into();
-                    } else if !cache
-                        && result["status"] == "cleaned"
-                        && result["worktree_removal"] == "preserved"
-                    {
-                        self.ledger.entries[i].status = "retained".into();
+                    match &stage {
+                        crate::verified_lifecycle::CleanupStage::Disposed => {
+                            self.ledger.entries[i].status = "disposed".into()
+                        }
+                        crate::verified_lifecycle::CleanupStage::Retained => {
+                            self.ledger.entries[i].status = "retained".into()
+                        }
+                        _ => {}
                     }
                     if result["status"] != "cleaned" {
                         failures.push(format!("{}: {}", e.path.display(), result["error"]));
                     }
-                    self.save()?;
+                    self.progress(
+                        i,
+                        stage,
+                        result["error"]
+                            .as_str()
+                            .or_else(|| result["preserved_reason"].as_str())
+                            .unwrap_or("original cleanup result recorded"),
+                        &result,
+                    )?;
                     report["drain"].as_array_mut().unwrap().push(value!({
                         "path":e.path,"status":result["status"],"error":result["error"],
                         "receipt":{"path":path,"sha256":sha256(&b)},
@@ -2121,6 +2173,12 @@ impl Manager {
                     }));
                 }
                 Err(error) => {
+                    self.progress(
+                        i,
+                        crate::verified_lifecycle::CleanupStage::Failed,
+                        &error,
+                        report,
+                    )?;
                     failures.push(format!("{}: {error}", e.path.display()));
                     report["drain"]
                         .as_array_mut()
@@ -2130,6 +2188,20 @@ impl Manager {
             }
         }
         Ok(failures)
+    }
+    fn progress(
+        &mut self,
+        i: usize,
+        stage: crate::verified_lifecycle::CleanupStage,
+        detail: &str,
+        report: &Value,
+    ) -> Result<(), String> {
+        self.ledger.entries[i].cleanup = Some(CleanupProgress {
+            stage,
+            detail: detail.into(),
+            report_path: report["report_path"].as_str().map(str::to_owned),
+        });
+        self.save()
     }
     fn enrollment_paths(&self) -> Result<Vec<PathBuf>, String> {
         let namespace = no_symlink_parents(&self.directory, "enrollments")?;
@@ -2266,14 +2338,10 @@ impl Manager {
         let mut preserved = None;
         if t.artifacts_only {
             preserved = Some("terminal owner requested artifacts only".to_owned());
-        } else if self
-            .inputs
-            .policy
-            .artifacts
-            .iter()
-            .any(|a| a.disposition == Disposition::EvidenceRetain)
-            && !t.dispose_evidence
-        {
+        } else if crate::verified_lifecycle::retain_evidence(
+            t.dispose_evidence,
+            self.evidence_present(&e.path)?,
+        ) {
             preserved =
                 Some("needed evidence remains retained by policy and terminal owner".to_owned());
         }
@@ -2398,6 +2466,23 @@ impl Manager {
                 )
             }
         })
+    }
+    fn evidence_present(&self, target: &Path) -> Result<bool, String> {
+        for artifact in self
+            .inputs
+            .policy
+            .artifacts
+            .iter()
+            .filter(|a| a.disposition == Disposition::EvidenceRetain)
+        {
+            let path = no_symlink_parents(target, artifact.path.trim_end_matches('/'))?;
+            match fs::symlink_metadata(path) {
+                Ok(_) => return Ok(true),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(format!("cannot establish evidence presence: {error}")),
+            }
+        }
+        Ok(false)
     }
 }
 

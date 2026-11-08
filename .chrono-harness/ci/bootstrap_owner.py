@@ -163,7 +163,7 @@ def reuse_construction(root, config, result, observed):
     report, profile = stage_report(root, current["stage_result"], current["stage_sha256"])
     for field in ("projects", "rust_toolchain", "rust_incremental", "require_tool_bindings",
                   "tool_bindings_registry", "tool_bindings", "native_platform",
-                  "host_environment", "environment", "toolchain_provision"):
+                  "host_environment", "environment"):
         if profile.get(field) != config.get(field):
             raise ValueError("owner construction selection differs: " + field)
     for field in ("environment", "executables", "selection", "versions", "host_environment"):

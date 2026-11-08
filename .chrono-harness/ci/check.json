@@ -20,7 +20,8 @@
       "verus": ".chrono-harness/bin/verus/verus",
       "curl": "/usr/bin/curl",
       "shasum": "/usr/bin/shasum",
-      "tar": "/usr/bin/tar"
+      "tar": "/usr/bin/tar",
+      "bootstrap-native": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -67,7 +68,6 @@
       ".chrono-harness/ci/bootstrap-core.json",
       ".chrono-harness/ci/bootstrap-native.sh",
       ".chrono-harness/ci/bootstrap-frontend.json",
-      ".chrono-harness/ci/bootstrap-detector.json",
       ".github/workflows/chrono-ci.yml",
       ".chrono-harness/ci/workflow-inventory.json",
       ".chrono-harness/process_fds.py",
@@ -76,7 +76,8 @@
       ".chrono-harness/ci/bootstrap-cache.json",
       ".chrono-harness/ci/bootstrap-toolchains.json",
       "crates/ci/src/inventory.rs",
-      "crates/ci-tests/tests/inventory.rs"
+      "crates/ci-tests/tests/inventory.rs",
+      ".chrono-harness/logging.json"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,

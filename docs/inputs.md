@@ -129,10 +129,6 @@ v2 采集生成 `chrono-input-snapshot/v2`，普通文件仍用 blob，实际缺
 
 快照 v3 校验接受现役 Git v3 选择器生产的 `selection.registry_path`，要求它为有效相对路径；组合仍核对完整选择身份与固定端点登记，路径漂移继续拒绝。Rust 真实采集／配对／组合用例覆盖该字段及无效路径，真实宿主两端组合另作验收。完整输入／治理和同判仍未建立，验证总成本未测。
 
-`chrono-inputs capture-governance --host-root H --config P --base OID --candidate OID --manifest P --output P` 使用同一原来源清单提供基线检查程序输入投影，再单独观察已检出候选，不把候选字节当历史基线。必需输入来自 registration 已有的空业务计划投影。
-
-生成 pair、流式 blob 和 `OUTPUT.receipt.json` 保留源身份及原字节；缺基线观察／覆盖，或端点／配置／存在状态／blob 不符都会拒绝。真实 CI 发布在种子发布前，把 provider 明确的 `composition_sources` 交给此命令。原件由宿主登记 bootstrap 提供，日常检查命令不变。
-
 pair 原样传递缺失状态，不打开历史路径。registration、routes、projects 共用验证，操作后再核候选。任一端为 config v2 时，有效结果用 `chrono-effective-inputs/v2`；文件事实含 `presence`，存在项另有摘要／长度，缺失项两者都没有。状态变化须匹配登记变化，只沿明确 `input:ID` 边传播，包括旧边；稳定缺失及无连接变化不选无关测试。
 
 v2 位置拒绝符号链接路径段，包括悬空链接，以及 `..`。平台临时目录经链接暴露时使用标准绝对位置。父目录不存在可算缺失，但文件位置是目录、祖先不是目录、权限或其他 IO 错误都不是缺失。前后观察检测持续变化，不检测观察间改后恢复。
@@ -143,13 +139,13 @@ v2 位置拒绝符号链接路径段，包括悬空链接，以及 `..`。平台
 
 通用 `observe` 命令及其目录盘点输出已退役。当前宿主与已审计的四个固定外部宿主未发现采用，找到的调用仅来自专属合成测试；未知外部使用仍未知。不另建替代观察入口。
 
-当前输入工具保留 `capture`、`pair`、`capture-governance` 和 `compose`。它们按明确端点和登记保留实际文件、缺失状态、环境及来源原件，不自动发现依赖，也不补齐编译器／SDK／配置输入。完整输入闭包和同判仍未建立，成本收益未测。
+当前输入工具保留 `capture`、`pair` 和 `compose`。它们按明确端点和登记保留实际文件、缺失状态、环境及来源原件，不自动发现依赖，也不补齐编译器／SDK／配置输入。完整输入闭包和同判仍未建立，成本收益未测。
 
 本仓已退役只向旧输入分支上传主机盘点的原生初始获取链：当前检查和发布没有消费其全工具安装及编译器／SDK／Python／配置盘点输出。对应工作流、转发脚本、宿主观察声明、探测 helper、acquire／observe／metadata 操作和专属测试一同移除；不另建替代盘点入口，也不把这项退役列为待激活义务。
 
 普通构建继续使用登记的锁定 Cargo 操作；core／所有者 bootstrap 仍实际调用的 fetch 保留。安装工具与原件由当前生产者按自己的实际使用方保管，不为历史盘点重建主机快照。普通输入快照与传输保持各自合同；其余采用仍须核对当前使用方，不能由测试或声明存在证明必要。
 
-根 `chrono-git-configs/v3` 及 worktree v3 的实际身份归各自登记，未知字节仍失败。格式与不可变数据范围见[Git 选择](git-facts.md#exact-host-executable-selection)。
+根 `chrono-git-configs/v3` 的实际身份仍归其登记，未知字节在该路径失败。工作树采用 v2 的运行内实际字节绑定，不维护主机身份白名单；观察归 state 原件。格式与不可变数据范围见[Git 选择](git-facts.md#exact-host-executable-selection)和[工作树政策](worktree.md#git-身份与固定输入)。
 
 旧样本、声明和比较归 Git 历史；仍有用途的缺失原件与独有工作由[输入保管者](input-source-custody.md)负责。退役不补齐历史观察，也不证明完整输入、固定两端原件、full CI 验收或同判。
 
