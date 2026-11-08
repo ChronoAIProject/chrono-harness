@@ -476,6 +476,12 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 
 `verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。现有分支的显式 import 与新建 birth 的分支规则由同一源码区分：import 不要求创建前缀，birth 仍要求已登记前缀，未知活动拒绝。已登记 import 的自动清理消费原 enrollment kind 和身份 guard；直接 cleanup 的前缀边界另有同源独立预期。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
 
+## 本地工作树提醒
+
+`crates/worktree/src/verified_attention.rs` 是本地提醒分类的唯一判断实现。`automatic.rs` 把现役账本状态、终态交接有无、可读性、Git 登记、物理路径及已观察附件匹配交给该函数，并直接消费分类与提醒判断。正常协调者无需终结；任务 active、终态清理待办、retained、未登记和 unknown 均需关注。只有 disposed、已有终态交接且两处都已缺失才取消清理提醒；单凭 disposed 字符串不够。
+
+生产根及独立边界根通过登记的 `verify.worktree-attention`／`verify.worktree-attention-tests` 整 crate 证明并编译，版本及参数归 projects.json。独立边界核活跃／保留／待清理、只缺一处、缺终态、未知附件和协调者；Cargo 行为测试继续消费同一源码，核真实跨命令状态、原报告一致、损坏项隔离与原件保全。OS／Git 观察、JSON 编解码、namespace 枚举及已有账本读取是外部接口；此局部分类证明不证明它们的事务性、完整迁移或全仓状态逻辑。
+
 ## 所有者可执行文件发布
 
 `crates/worktree/src/verified_owner_publication.rs` 是实际发布身份比较、原件保全、意图读取／准备、

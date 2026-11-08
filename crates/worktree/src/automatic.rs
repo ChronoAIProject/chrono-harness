@@ -2250,6 +2250,101 @@ impl Manager {
         }
         Ok(Some(ledger))
     }
+    /// Project existing local state and Git inventory; never enroll or dispose.
+    fn observe_attention(
+        &self,
+        r: &mut Runner,
+        report: &mut Value,
+        all: bool,
+    ) -> Result<(), String> {
+        use crate::verified_attention::{Attention, classify, needs_attention};
+        let mut inventory = value!({});
+        self.observe_inventory(r, &[], &mut inventory, all)?;
+        let git_rows: BTreeMap<PathBuf, Value> = inventory["worktree_inventory"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| (PathBuf::from(row["path"].as_str().unwrap()), row.clone()))
+            .collect();
+        let mut paths: BTreeSet<PathBuf> = git_rows.keys().cloned().collect();
+        let mut rows = Vec::new();
+        if all {
+            match self.enrollment_paths() {
+                Ok(enrolled) => paths.extend(enrolled),
+                Err(error) => rows.push(value!({"path":null,"work_state":"unknown",
+                    "cleanup_state":"unknown","attention_required":true,
+                    "next_action":"inspect-enrollment-namespace","error":error})),
+            }
+        } else {
+            paths.insert(self.scope.clone());
+        }
+        for path in paths {
+            let snapshot = self.enrollment_snapshot(&path);
+            let entry = snapshot
+                .as_ref()
+                .ok()
+                .and_then(Option::as_ref)
+                .and_then(|ledger| {
+                    ledger
+                        .entries
+                        .iter()
+                        .find(|e| e.status != "disposed")
+                        .or_else(|| ledger.entries.last())
+                });
+            let physical = fs::symlink_metadata(&path);
+            let physical_readable = physical
+                .as_ref()
+                .map(|_| true)
+                .unwrap_or_else(|e| e.kind() == std::io::ErrorKind::NotFound);
+            let git = git_rows.get(&path);
+            let error = snapshot
+                .as_ref()
+                .err()
+                .cloned()
+                .or_else(|| {
+                    physical
+                        .as_ref()
+                        .err()
+                        .filter(|e| e.kind() != std::io::ErrorKind::NotFound)
+                        .map(ToString::to_string)
+                })
+                .or_else(|| {
+                    git.and_then(|g| g["attachment_error"].as_str())
+                        .map(str::to_owned)
+                });
+            let cleanup = entry.map(|e| e.status.as_str()).unwrap_or("unregistered");
+            let view = classify(
+                cleanup,
+                path == self.inputs.policy.coordinator_root,
+                snapshot.is_ok() && physical_readable && error.is_none(),
+                entry.is_some(),
+                physical.is_ok(),
+                git.is_some(),
+                git.is_some_and(|g| g["enrollment_match"] == true),
+                entry.is_some_and(|e| e.terminal.is_some()),
+            );
+            // This match only encodes the proved classification for JSON/CLI.
+            let (work, action) = match &view {
+                Attention::Coordinator => ("coordinator", "none"),
+                Attention::Active => ("active", "complete-work-and-finish"),
+                Attention::TerminalPending => ("terminal", "maintain"),
+                Attention::Retained => ("terminal", "resolve-retention-and-finish"),
+                Attention::Disposed => ("terminal", "none"),
+                Attention::Unregistered => ("unregistered", "inspect-and-import"),
+                Attention::Unknown => ("unknown", "inspect-original-state"),
+            };
+            rows.push(value!({"path":path,"work_state":work,"cleanup_state":cleanup,
+                "attention_required":needs_attention(&view),"next_action":action,
+                "ledger_path":record_directory(&self.directory, &path)?.join("ledger.json"),
+                "physical_present":physical.is_ok(),"git_registered":git.is_some(),
+                "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
+                "cleanup_receipt":entry.and_then(|e| e.attempts.last()).and_then(|a| a.receipt.as_ref()),
+                "error":error}));
+        }
+        report["worktree_status"] = value!({"schema":"chrono-worktree-status/v1",
+            "scope":if all {"coordinator"} else {"target"},"worktrees":rows});
+        Ok(())
+    }
     /// Entry-local refusals remain in the drain report and immutable receipts.
     /// Coordinator/state publication failures still prevent admission.
     fn drain_for_admission(
@@ -2527,6 +2622,7 @@ pub(crate) fn create(
     manager.stable(r)?;
     manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"]}))?;
     report["cleanup_enrollment"] = value!({"coordinator_root":manager.inputs.policy.coordinator_root,"state_directory":manager.inputs.policy.state_directory,"kind":"birth"});
+    manager.observe_attention(r, report, false)?;
     Ok(())
 }
 
@@ -2648,14 +2744,16 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         .get("--path")
         .map(|p| invoking.join(p))
         .unwrap_or_else(|| invoking.clone());
-    let target = if operation == "maintain" {
-        None
-    } else {
-        Some(absolute(&target, false)?)
-    };
+    let target =
+        if operation == "maintain" || (operation == "status" && !values.contains_key("--path")) {
+            None
+        } else {
+            Some(absolute(&target, operation == "status")?)
+        };
     let success = match operation.as_str() {
         "finish" => "finished",
         "maintain" => "maintained",
+        "status" => "observed",
         "import" => "imported",
         "migrate" => "migrated",
         "deploy-owner" => "owner-deployed",
@@ -2697,8 +2795,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     values["--stage-sha256"],
                     report,
                 ),
-                "maintain" => manager.drain(r, &[invoking.clone()], report, true),
-                "import" => manager.enroll(
+                "status" => manager.observe_attention(r, report, target.is_none()),
+                "maintain" => {
+                    let result = manager.drain(r, &[invoking.clone()], report, true);
+                    manager.observe_attention(r, report, true)?;
+                    result
+                }
+                "import" => {
+                    manager.enroll(
                     r,
                     target.as_ref().unwrap(),
                     if manager.inputs.policy.main_cache_only
@@ -2709,7 +2813,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         "import"
                     },
                     value!({"report_path":report["report_path"],"historical_birth":"not-claimed"}),
-                ),
+                    )?;
+                    manager.observe_attention(r, report, false)
+                }
                 "migrate" => {
                     let target = target.as_ref().unwrap();
                     manager.migrate(r, target, report)?;
@@ -2722,7 +2828,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if let Some(plan) = values.get("--adopt-fixtures") {
                         manager.adopt_fixture_bodies(r, target, plan, report)?;
                     }
-                    Ok(())
+                    manager.observe_attention(r, report, false)
                 }
                 "finish" => {
                     manager.finish(
@@ -2734,7 +2840,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         token,
                         report,
                     )?;
-                    manager.drain(r, &[invoking.clone()], report, false)
+                    let result = manager.drain(r, &[invoking.clone()], report, false);
+                    manager.observe_attention(r, report, false)?;
+                    result
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
@@ -2870,6 +2978,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
                     let coordinator = manager.inputs.policy.coordinator_root.clone();
+                    manager.observe_attention(r, report, false)?;
                     drop(manager);
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
                     let process = chrono_harness::prepared::process_identities(
@@ -2924,6 +3033,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             }
         },
     )
+}
+
+/// Warnings are a projection of the already-persisted report, never new state.
+pub(crate) fn attention_reminder(report: &Value) -> String {
+    let mut text = String::new();
+    if let Some(rows) = report["worktree_status"]["worktrees"].as_array() {
+        for row in rows {
+            if row["attention_required"] == true {
+                text.push_str(&format!(
+                    "W_WORKTREE_ATTENTION: path={} work_state={} cleanup_state={} next_action={}; inspect chrono-worktree status before handing off unfinished work.\n",
+                    row["path"], row["work_state"], row["cleanup_state"], row["next_action"]
+                ));
+            }
+        }
+    }
+    text
 }
 fn registered_command(
     root: &Path,
