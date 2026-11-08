@@ -12,10 +12,7 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 root = Path.cwd()
 
-if route == "bootstrap":
-    sys.argv = [str(source), str(root), ".chrono-harness/ci/python-bootstrap.json"]
-    module.main()
-elif route == "detached":
+if route == "detached":
     config = json.loads(Path(".chrono-harness/state/python-consumer.json").read_text())
     subprocess.Popen(
         [config["child"], "detached-holder"],
