@@ -1087,6 +1087,11 @@ proof fn tree_fixture_row(raw: &str, path: &str)
     reveal_with_fuel(scope_text::ascii_split_records, 4);
     assert(scope_text::ascii_split_records(meta.spec_bytes(), 32, true)
         =~= seq!["100644".spec_bytes(), "blob".spec_bytes(), oid.spec_bytes()]);
+    assert forall|i: int| 0 <= i < oid.spec_bytes().len()
+        implies scope_text::oid_byte(#[trigger] oid.spec_bytes()[i]) by {
+        assert(oid.spec_bytes()[i] == 48 || oid.spec_bytes()[i] == 49);
+    }
+    assert(oid.spec_bytes()[39] == 49);
     assert(scope_text::oid(oid.spec_bytes()));
 }
 
@@ -1189,6 +1194,7 @@ fn tree_parser_keeps_first_error_and_exact_path() {
     let bad_path = "100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail";
     proof {
         reveal(policy::git_tree_row_spec);
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\t");
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta");
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail");
         reveal_strlit("a"); reveal_strlit("a/../b\0tail"); reveal_strlit("missing");
@@ -1201,7 +1207,12 @@ fn tree_parser_keeps_first_error_and_exact_path() {
             && vstd::string::is_ascii("bad") && vstd::string::is_ascii(""));
         assert(vstd::string::is_ascii("  \t") && vstd::string::is_ascii("  \ta")
             && vstd::string::is_ascii("  \t/") && vstd::string::is_ascii("/"));
+        assert(good@ =~= "100644 blob 0000000000000000000000000000000000000001\t"@ + "a"@);
+        assert(bad_path@ =~= "100644 blob 0000000000000000000000000000000000000001\t"@ + "a/../b\0tail"@);
         tree_fixture_row(good, "a"); tree_fixture_row(bad_path, "a/../b\0tail");
+        assert("  \t"@ =~= "  \t"@ + ""@);
+        assert("  \ta"@ =~= "  \t"@ + "a"@);
+        assert("  \t/"@ =~= "  \t"@ + "/"@);
         empty_metadata_tree_fixture("  \t", "");
         empty_metadata_tree_fixture("  \ta", "a");
         empty_metadata_tree_fixture("  \t/", "/");
@@ -1233,30 +1244,42 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
     proof { policy::tree_path_obeys_cmp(); }
     let mut iterator = tree.iter();
     let ghost all = iterator@.1;
+    let ghost expected = choose|key: policy::TreePath| tree@.contains_key(key)
+        && key@ == path@ && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
+            "0000000000000000000000000000000000000001"@, "blob"@);
+    let ghost expected_index = choose|j: int| 0 <= j < all.len() && all[j] == (expected, tree@[expected]);
     let mut found = false;
     loop
         invariant
             iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
             all.to_set() == tree@.kv_pairs(),
+            0 <= expected_index < all.len(), all[expected_index].0@ == path@,
+            policy::tree_entry_fields(&all[expected_index].1) == ("100644"@,
+                "0000000000000000000000000000000000000001"@, "blob"@),
             vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0)),
             found == (exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@),
         decreases all.len() - iterator@.0,
     {
         match iterator.next() {
-            None => { expect_status_true(found); return; },
+            None => {
+                proof {
+                    assert(0 <= expected_index < iterator@.0);
+                    assert(exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@);
+                }
+                expect_status_true(found); return;
+            },
             Some((key, entry)) => {
                 if scope_text::equal_text(key.as_str(), path) {
                     // 所有同路径键属于实际唯一键；预期完整字段独立写在此处。
                     proof {
-                        let expected = choose|key: policy::TreePath| tree@.contains_key(key)
-                            && key@ == path@ && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
-                                "0000000000000000000000000000000000000001"@, "blob"@);
-                        let j = choose|j: int| 0 <= j < all.len() && all[j] == (expected, tree@[expected]);
+                        policy::tree_path_obeys_cmp();
+                        let j = expected_index;
                         let k = iterator@.0 - 1;
                         let keys = all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0);
                         vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
                         if j < k { assert(keys[j].cmp_spec(&keys[k]) is Less); }
                         if k < j { assert(keys[k].cmp_spec(&keys[j]) is Less); }
+                        assert(j == k);
                     }
                     expect_status_text(entry.mode.as_str(), "100644");
                     expect_status_text(entry.oid.as_str(), "0000000000000000000000000000000000000001");
@@ -1273,12 +1296,16 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
     let a = "100644 blob 0000000000000000000000000000000000000001\ta";
     let b = "100644 blob 0000000000000000000000000000000000000001\ta//./b/";
     proof {
+        policy::tree_path_obeys_cmp();
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\t");
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta");
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta//./b/");
         reveal_strlit("a"); reveal_strlit("a//./b/");
         broadcast use vstd::string::is_ascii_spec_bytes;
         assert(vstd::string::is_ascii(a) && vstd::string::is_ascii(b)
             && vstd::string::is_ascii("a") && vstd::string::is_ascii("a//./b/"));
+        assert(a@ =~= "100644 blob 0000000000000000000000000000000000000001\t"@ + "a"@);
+        assert(b@ =~= "100644 blob 0000000000000000000000000000000000000001\t"@ + "a//./b/"@);
         tree_fixture_row(a, "a"); tree_fixture_row(b, "a//./b/");
         assert(policy::paths::relative_path("a".spec_bytes()));
         assert(policy::paths::relative_path("a//./b/".spec_bytes()));
@@ -1564,25 +1591,15 @@ proof fn ordered_delta_head(changes: Seq<policy::DeltaFields>)
     tail.lemma_filter_prepend(changes[0], pred);
 }
 
-// 严格有序序列由全部逐路径投影唯一决定；不把完整输出退化为若干成员检查。
-proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
+proof fn delta_projection_heads(actual: Seq<policy::DeltaFields>,
     expected: Seq<policy::DeltaFields>)
-    requires policy::delta_fields_ordered(actual), policy::delta_fields_ordered(expected),
+    requires actual.len() > 0,
+        policy::delta_fields_ordered(actual), policy::delta_fields_ordered(expected),
         forall|path: Seq<char>| #[trigger] policy::delta_at_path(actual, path)
             == policy::delta_at_path(expected, path),
-    ensures actual == expected,
-    decreases actual.len() + expected.len(),
+    ensures expected.len() > 0, actual[0] == expected[0],
 {
-    if actual.len() == 0 {
-        if expected.len() > 0 {
-            ordered_delta_head(expected);
-            assert(policy::delta_at_path(actual, expected[0].0).len() == 0) by {
-                reveal_with_fuel(Seq::filter, 1);
-            }
-        }
-        assert(actual =~= expected);
-        return;
-    }
+    hide(scope_text::byte_lt);
     let path = actual[0].0;
     ordered_delta_head(actual);
     assert(policy::delta_at_path(expected, path) == seq![actual[0]]);
@@ -1595,6 +1612,11 @@ proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
     actual.lemma_filter_contains_rev(policy::delta_path_predicate(expected[0].0), expected[0]);
     let j = actual.lemma_contains_to_index(expected[0]);
     if i > 0 {
+        if j == 0 {
+            scope_text::byte_lt_strict(vstd::utf8::encode_utf8(expected[0].0),
+                vstd::utf8::encode_utf8(expected[i].0));
+            assert(false);
+        }
         assert(j > 0);
         scope_text::byte_lt_transitive(vstd::utf8::encode_utf8(actual[0].0),
             vstd::utf8::encode_utf8(expected[0].0), vstd::utf8::encode_utf8(actual[0].0));
@@ -1603,6 +1625,29 @@ proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
         assert(false);
     }
     assert(actual[0] == expected[0]);
+}
+
+// 严格有序序列由全部逐路径投影唯一决定；首项与递归尾部各自证明。
+proof fn delta_from_all_path_projections(actual: Seq<policy::DeltaFields>,
+    expected: Seq<policy::DeltaFields>)
+    requires policy::delta_fields_ordered(actual), policy::delta_fields_ordered(expected),
+        forall|path: Seq<char>| #[trigger] policy::delta_at_path(actual, path)
+            == policy::delta_at_path(expected, path),
+    ensures actual == expected,
+    decreases actual.len() + expected.len(),
+{
+    hide(scope_text::byte_lt);
+    if actual.len() == 0 {
+        if expected.len() > 0 {
+            ordered_delta_head(expected);
+            assert(policy::delta_at_path(actual, expected[0].0).len() == 0) by {
+                reveal_with_fuel(Seq::filter, 1);
+            }
+        }
+        assert(actual =~= expected);
+        return;
+    }
+    delta_projection_heads(actual, expected);
     let a = actual.skip(1);
     let b = expected.skip(1);
     assert forall|path: Seq<char>| #[trigger] policy::delta_at_path(a, path)
