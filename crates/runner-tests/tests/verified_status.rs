@@ -1231,7 +1231,8 @@ fn tree_parser_keeps_first_error_and_exact_path() {
     proof {
         assert(policy::git_tree_row_at(duplicate@, 0).is_ok());
         assert(policy::git_tree_row_at(duplicate@, 0) == policy::git_tree_row_at(duplicate@, 1));
-        assert(exists|j: int| 0 <= j < 1 && (policy::git_tree_row_at(duplicate@, j)->Ok_0).0
+        assert(exists|j: int| #![trigger policy::git_tree_row_at(duplicate@, j)]
+            0 <= j < 1 && (policy::git_tree_row_at(duplicate@, j)->Ok_0).0
             == (policy::git_tree_row_at(duplicate@, 1)->Ok_0).0) by {
             assert((policy::git_tree_row_at(duplicate@, 0)->Ok_0).0
                 == (policy::git_tree_row_at(duplicate@, 1)->Ok_0).0);
