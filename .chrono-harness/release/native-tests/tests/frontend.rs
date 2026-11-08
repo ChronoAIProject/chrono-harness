@@ -485,32 +485,70 @@ fn collector_rejects_archive_content_substitution_even_with_recomputed_transport
 
 #[test]
 fn actual_native_unit_retains_original_frontend_metadata_for_the_collector() {
-    use chrono_host_release::{receipt::{self,Kind,Lineage,Selection},recipe::Loaded};
-    let f=Fixture::new();
-    let directory=f.exported();
-    let out=f.unit(&directory.join("chrono-host-release"));
-    assert!(out.status.success(),"stderr={}",String::from_utf8_lossy(&out.stderr));
-    let handoff=f.host.root().join("handoffs/none");
-    let report:Value=serde_json::from_slice(&fs::read(handoff.join("receipt.json")).unwrap()).unwrap();
-    assert_eq!(report["status"],"passed");
-    assert_eq!(report["frontend_input"]["path"],"frontend/frontend.json");
-    assert_eq!(fs::read(handoff.join("frontend/bootstrap.json")).unwrap(),fs::read(directory.join("bootstrap.json")).unwrap());
+    use chrono_host_release::{
+        receipt::{self, Kind, Lineage, Selection},
+        recipe::Loaded,
+    };
+    let f = Fixture::new();
+    let directory = f.exported();
+    let out = f.unit(&directory.join("chrono-host-release"));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let handoff = f.host.root().join("handoffs/none");
+    let report: Value =
+        serde_json::from_slice(&fs::read(handoff.join("receipt.json")).unwrap()).unwrap();
+    assert_eq!(report["status"], "passed");
+    assert_eq!(report["frontend_input"]["path"], "frontend/frontend.json");
+    assert_eq!(
+        fs::read(handoff.join("frontend/bootstrap.json")).unwrap(),
+        fs::read(directory.join("bootstrap.json")).unwrap()
+    );
     assert!(!handoff.join("frontend/executable.tar").exists());
     assert!(!handoff.join("frontend/chrono-host-release").exists());
-    let loaded=Loaded::load(f.host.root()).unwrap();
-    let parent=Lineage{kind:Kind::Github,run_id:"1234".into(),attempt:"2".into(),job:"native_collect".into()};
-    let selected=Selection{job:"native_test_none".into(),run_id:"1234".into(),attempt:"2".into(),artifact_id:"8765".into()};
-    let verify=||receipt::read(&loaded,f.host.root(),&report["context"],&parent,loaded.unit("test_none").unwrap(),&selected);
-    assert!(verify().is_ok(),"{:?}",verify().unwrap_err());
-    fs::write(handoff.join("frontend/.chrono-harness/state/frontend.stderr"),b"changed original build stream").unwrap();
+    let loaded = Loaded::load(f.host.root()).unwrap();
+    let parent = Lineage {
+        kind: Kind::Github,
+        run_id: "1234".into(),
+        attempt: "2".into(),
+        job: "native_collect".into(),
+    };
+    let selected = Selection {
+        job: "native_test_none".into(),
+        run_id: "1234".into(),
+        attempt: "2".into(),
+        artifact_id: "8765".into(),
+    };
+    let verify = || {
+        receipt::read(
+            &loaded,
+            f.host.root(),
+            &report["context"],
+            &parent,
+            loaded.unit("test_none").unwrap(),
+            &selected,
+        )
+    };
+    assert!(verify().is_ok(), "{:?}", verify().unwrap_err());
+    fs::write(
+        handoff.join("frontend/.chrono-harness/state/frontend.stderr"),
+        b"changed original build stream",
+    )
+    .unwrap();
     assert!(verify().is_err());
 }
 
 #[test]
 fn native_unit_rejects_an_identical_frontend_executed_outside_the_selected_artifact() {
-    let f=Fixture::new();
+    let f = Fixture::new();
     f.exported();
-    let out=f.unit(&f.host.root().join(".chrono-harness/bin/chrono-host-release"));
-    assert_eq!(out.status.code(),Some(2));
+    let out = f.unit(
+        &f.host
+            .root()
+            .join(".chrono-harness/bin/chrono-host-release"),
+    );
+    assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("frontend"));
 }
