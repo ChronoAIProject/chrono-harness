@@ -62,9 +62,7 @@
       "crates/diagnostics-tests/target/",
       "crates/cache/target/",
       "crates/cache-tests/target/",
-      ".chrono-harness/startup/",
-      "crates/pr/target/",
-      "crates/pr-tests/target/"
+      ".chrono-harness/startup/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -175,8 +173,7 @@
       },
       "worktree": {
         "tests": [
-          "test:worktree-tests",
-          "test:pr-tests"
+          "test:worktree-tests"
         ],
         "report_path": ".chrono-harness/state/units/worktree/check.json"
       },

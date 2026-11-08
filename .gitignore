@@ -38,5 +38,3 @@ crates/inputs-tests/target/
 /crates/cache/target/
 /crates/cache-tests/target/
 /.chrono-harness/startup/
-/crates/pr/target/
-/crates/pr-tests/target/

@@ -356,6 +356,18 @@
       "id": "judge-cargo-tests",
       "replacement": null,
       "reason": "与 judge-cargo 同时退役，其 guard／metadata 专属行为不再作为当前支持接口。保留其他项目的真实构建和未过滤行为测试；不宣称它们替代被删除的断言。"
+    },
+    {
+      "kind": "project",
+      "id": "pr",
+      "replacement": null,
+      "reason": "当前宿主直接使用现有 gh 完成 PR 交付，没有生产配置调用 chrono-pr，且该工具未公开分发；退役重复的 PR 封装，保留宿主合并方案及真实原件和落地核验要求。"
+    },
+    {
+      "kind": "test",
+      "id": "pr-tests",
+      "replacement": null,
+      "reason": "与 pr 产品联合退役，其专属 CLI、JSON、配置和状态语义退出支持范围；删除仅服务该产品的构建与测试计划，不宣称其他测试替代这些断言。"
     }
   ],
   "migrations": [],

@@ -232,18 +232,6 @@
       "tracked": false
     },
     {
-      "path": "crates/pr/target/",
-      "owner": "pr",
-      "kind": "cargo-output",
-      "tracked": false
-    },
-    {
-      "path": "crates/pr-tests/target/",
-      "owner": "pr-tests",
-      "kind": "cargo-output",
-      "tracked": false
-    },
-    {
       "path": ".chrono-harness/cache/identifiers/target/",
       "owner": "identifiers",
       "kind": "cargo-output",

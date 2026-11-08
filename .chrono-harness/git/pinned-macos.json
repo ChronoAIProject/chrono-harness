@@ -439,18 +439,6 @@
       "owner": "repository",
       "kind": "download-cache",
       "tracked": false
-    },
-    {
-      "path": "crates/pr/target/",
-      "owner": "pr",
-      "kind": "cargo-output",
-      "tracked": false
-    },
-    {
-      "path": "crates/pr-tests/target/",
-      "owner": "pr-tests",
-      "kind": "cargo-output",
-      "tracked": false
     }
   ],
   "environment": {
