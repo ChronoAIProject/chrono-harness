@@ -30,6 +30,8 @@ pub struct Policy {
     pub schema: String,
     pub producers: BTreeMap<String, Vec<String>>,
     pub keep_seconds: u64,
+    #[serde(default = "default_metadata_seconds")]
+    pub diagnostic_keep_seconds: u64,
     pub max_related_outputs: usize,
     pub max_summaries: usize,
     pub max_nodes_per_round: usize,
@@ -916,6 +918,26 @@ impl Inventory {
             .producers
             .get(producer)
             .is_some_and(|scopes| scopes.iter().any(|scope| path.starts_with(scope)))
+    }
+    /// A completed producer selects a finite diagnostic window. Actual caller
+    /// and recovery roots remain authoritative and are never released here.
+    pub fn retain_diagnostic_path(&self, path: &str) -> Result<(), String> {
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|output| output.path == path)
+            .ok_or("diagnostic original is not enrolled")?;
+        if !matches!(output.phase.as_str(), "released" | "sealing")
+            || identity(&no_symlink_parents(&self.root, path)?)? != output.identity
+        {
+            return Err("diagnostic original is unfinished, disposing or replaced".into());
+        }
+        output.expires = output
+            .expires
+            .max(now()?.saturating_add(self.policy.diagnostic_keep_seconds));
+        self.save(&ledger, &gate)
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {

@@ -75,6 +75,41 @@ fn ledger(root: &Path) -> Value {
 }
 
 #[test]
+fn diagnostic_window_expires_without_releasing_an_actual_consumer() {
+    if !isolated_capability_test("diagnostic_window_expires_without_releasing_an_actual_consumer") {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/failed-original";
+    fs::write(h.path().join(path), b"original failed output\0\xff").unwrap();
+    let inventory = inventory(h.path());
+    let publication = inventory.begin("fixture", path, json!(null)).unwrap();
+    let id = publication.id().to_owned();
+    assert!(inventory.retain_diagnostic_path(path).is_err());
+    publication.complete(json!({"exit_code":17})).unwrap();
+    inventory.retain_diagnostic_path(path).unwrap();
+    inventory.maintain().unwrap();
+    assert_eq!(
+        fs::read(h.path().join(path)).unwrap(),
+        b"original failed output\0\xff"
+    );
+    inventory
+        .reference_paths("actual-reader", &[path.into()])
+        .unwrap();
+    let mut output = ledger(h.path())["outputs"][0].clone();
+    assert_eq!(output["id"], id);
+    assert_eq!(output["outcome"]["exit_code"], 17);
+    output["expires"] = json!(0);
+    retention_state::replace_output(h.path(), &output);
+    inventory.maintain().unwrap();
+    assert!(h.path().join(path).exists());
+    inventory.reference_paths("actual-reader", &[]).unwrap();
+    maintain_fixture_to(h.path(), 0);
+    assert!(!h.path().join(path).exists());
+    assert!(inventory.retain_diagnostic_path(path).is_err());
+}
+
+#[test]
 fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
     if !isolated_capability_test(
         "busy_or_damaged_output_metadata_does_not_block_an_independent_publisher",
