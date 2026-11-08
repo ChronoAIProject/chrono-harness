@@ -54,12 +54,23 @@ fn large_executable_streams_between_independent_roots_with_exact_mode() {
     assert!(packed.archive.size > 64 * 1024 * 1024);
     let destination = executable(consumer.path(), "out/tool", b"previous", 0o700);
     let received = transport::import(
-        &package, &packed.archive, &packed.executable, consumer.path(), "out/tool",
-    ).unwrap();
+        &package,
+        &packed.archive,
+        &packed.executable,
+        consumer.path(),
+        "out/tool",
+    )
+    .unwrap();
     assert_eq!(received.size, size);
     assert_eq!(received.sha256, source_hash);
-    assert_eq!(fs::metadata(&destination).unwrap().permissions().mode() & 0o7777, 0o751);
-    assert_eq!(chrono_harness::file_identity(&destination).unwrap().0, source_hash);
+    assert_eq!(
+        fs::metadata(&destination).unwrap().permissions().mode() & 0o7777,
+        0o751
+    );
+    assert_eq!(
+        chrono_harness::file_identity(&destination).unwrap().0,
+        source_hash
+    );
     let mut file = File::open(destination).unwrap();
     let mut bytes = [0; 3];
     file.read_exact(&mut bytes).unwrap();
@@ -104,9 +115,15 @@ fn incorrect_archive_or_executable_identity_never_replaces_the_consumer() {
             4 => identity.mode = 0o755,
             _ => unreachable!(),
         }
-        assert!(transport::import(&package, &archive, &identity, root.path(), "consumer/tool").is_err(), "variant {variant}");
+        assert!(
+            transport::import(&package, &archive, &identity, root.path(), "consumer/tool").is_err(),
+            "variant {variant}"
+        );
         assert_eq!(fs::read(&consumer).unwrap(), b"previous");
-        assert_eq!(fs::metadata(&consumer).unwrap().permissions().mode() & 0o7777, 0o700);
+        assert_eq!(
+            fs::metadata(&consumer).unwrap().permissions().mode() & 0o7777,
+            0o700
+        );
     }
 }
 
@@ -115,20 +132,52 @@ fn archive_members_must_be_one_regular_literal_executable() {
     let root = tempfile::tempdir().unwrap();
     let package = root.path().join("executable.tar");
     let previous = executable(root.path(), "consumer", b"previous", 0o700);
-    let valid = || Entry { name: b"executable", kind: tar::EntryType::Regular, mode: 0o751, bytes: b"source" };
+    let valid = || Entry {
+        name: b"executable",
+        kind: tar::EntryType::Regular,
+        mode: 0o751,
+        bytes: b"source",
+    };
     for variant in 0..7 {
         let entries = match variant {
             0 => vec![],
-            1 => vec![Entry { name: b"other", ..valid() }],
-            2 => vec![Entry { name: b"dir/executable", ..valid() }],
-            3 => vec![Entry { name: b"../executable", ..valid() }],
-            4 => vec![Entry { kind: tar::EntryType::Symlink, bytes: b"", ..valid() }],
+            1 => vec![Entry {
+                name: b"other",
+                ..valid()
+            }],
+            2 => vec![Entry {
+                name: b"dir/executable",
+                ..valid()
+            }],
+            3 => vec![Entry {
+                name: b"../executable",
+                ..valid()
+            }],
+            4 => vec![Entry {
+                kind: tar::EntryType::Symlink,
+                bytes: b"",
+                ..valid()
+            }],
             5 => vec![valid(), valid()],
-            6 => vec![Entry { kind: tar::EntryType::Directory, bytes: b"", ..valid() }],
+            6 => vec![Entry {
+                kind: tar::EntryType::Directory,
+                bytes: b"",
+                ..valid()
+            }],
             _ => unreachable!(),
         };
         archive::write(&package, &entries);
-        assert!(transport::import(&package, &archive_identity(&package), &expected(b"source", 0o751), root.path(), "consumer").is_err(), "variant {variant}");
+        assert!(
+            transport::import(
+                &package,
+                &archive_identity(&package),
+                &expected(b"source", 0o751),
+                root.path(),
+                "consumer"
+            )
+            .is_err(),
+            "variant {variant}"
+        );
         assert_eq!(fs::read(&previous).unwrap(), b"previous");
     }
 }
@@ -145,7 +194,16 @@ fn changed_archive_and_rehashed_wrong_payload_are_both_rejected() {
     file.write_all(b"broken").unwrap();
     drop(file);
     for archive in [&packed.archive, &archive_identity(&package)] {
-        assert!(transport::import(&package, archive, &packed.executable, root.path(), "consumer").is_err());
+        assert!(
+            transport::import(
+                &package,
+                archive,
+                &packed.executable,
+                root.path(),
+                "consumer"
+            )
+            .is_err()
+        );
         assert_eq!(fs::read(&previous).unwrap(), b"previous");
     }
 }
@@ -154,13 +212,52 @@ fn changed_archive_and_rehashed_wrong_payload_are_both_rejected() {
 fn truncated_payload_and_symlink_destination_leave_existing_work_intact() {
     let root = tempfile::tempdir().unwrap();
     let package = root.path().join("executable.tar");
-    archive::write(&package, &[Entry { name: b"executable", kind: tar::EntryType::Regular, mode: 0o751, bytes: b"source" }]);
-    OpenOptions::new().write(true).open(&package).unwrap().set_len(517).unwrap();
+    archive::write(
+        &package,
+        &[Entry {
+            name: b"executable",
+            kind: tar::EntryType::Regular,
+            mode: 0o751,
+            bytes: b"source",
+        }],
+    );
+    OpenOptions::new()
+        .write(true)
+        .open(&package)
+        .unwrap()
+        .set_len(517)
+        .unwrap();
     let previous = executable(root.path(), "consumer", b"previous", 0o700);
-    assert!(transport::import(&package, &archive_identity(&package), &expected(b"source", 0o751), root.path(), "consumer").is_err());
+    assert!(
+        transport::import(
+            &package,
+            &archive_identity(&package),
+            &expected(b"source", 0o751),
+            root.path(),
+            "consumer"
+        )
+        .is_err()
+    );
     assert_eq!(fs::read(&previous).unwrap(), b"previous");
-    archive::write(&package, &[Entry { name: b"executable", kind: tar::EntryType::Regular, mode: 0o751, bytes: b"source" }]);
+    archive::write(
+        &package,
+        &[Entry {
+            name: b"executable",
+            kind: tar::EntryType::Regular,
+            mode: 0o751,
+            bytes: b"source",
+        }],
+    );
     symlink(root.path().join("consumer"), root.path().join("alias")).unwrap();
-    assert!(transport::import(&package, &archive_identity(&package), &expected(b"source", 0o751), root.path(), "alias").is_err());
+    assert!(
+        transport::import(
+            &package,
+            &archive_identity(&package),
+            &expected(b"source", 0o751),
+            root.path(),
+            "alias"
+        )
+        .is_err()
+    );
     assert_eq!(fs::read(previous).unwrap(), b"previous");
 }
