@@ -271,8 +271,9 @@ pub fn validate(c: &Config) -> Result<(), String> {
     for (id, artifact) in &c.artifacts {
         name(id)?;
         name(&artifact.owner)?;
-        chrono_harness::relative_path(&artifact.path)
-            .map_err(|e| format!("E_CACHE_PATH: artifact {id} must be relative to the host: {e}"))?;
+        chrono_harness::relative_path(&artifact.path).map_err(|e| {
+            format!("E_CACHE_PATH: artifact {id} must be relative to the host: {e}")
+        })?;
     }
     for (id, cache) in &c.caches {
         if cache.verify_contents && !c.recover_unconfirmed_restores {
