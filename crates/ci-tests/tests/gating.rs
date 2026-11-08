@@ -1898,9 +1898,9 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         dir.path(),
         &["config", "user.email", "fixture@example.invalid"],
     );
-    // Both fixed endpoints belong to this synthetic host. Bind its actual Git
-    // and the same complete policy before each commit; the source selector can
-    // choose a different native platform and is not this fixture's policy.
+    // Both fixed endpoints belong to this synthetic host. This fixture explicitly
+    // requests digest/version rejection controls; the product host need not
+    // maintain expected executable identities for every native machine.
     let program = fixture_git();
     let version = Command::new(&program).arg("--version").output().unwrap();
     assert!(version.status.success());
@@ -1912,7 +1912,8 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         )
         .unwrap();
         let tool_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();
-        let input_id = config["facts_git"]["input"].as_str().unwrap().to_owned();
+        let input_id = "fixture-git-executable";
+        config["facts_git"]["input"] = json!(input_id);
         let tool = config["tools"]
             .as_array_mut()
             .unwrap()
@@ -1921,14 +1922,20 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
             .unwrap();
         tool["program"] = json!(program);
         tool["expected_version"] = json!(version.trim());
-        let input = config["environment"]["inputs"]
+        config["environment"]["inputs"]
             .as_array_mut()
             .unwrap()
-            .iter_mut()
-            .find(|input| input["id"] == input_id)
-            .unwrap();
-        input["location"] = json!(program);
-        input["sha256"] = json!(sha256(&fs::read(&program).unwrap()));
+            .push(
+                json!({"id":input_id,"location":program,"presence":"present",
+                "sha256":sha256(&fs::read(&program).unwrap())}),
+            );
+        let map_path = ".chrono-harness/FILEMAP.json";
+        let mut map: Value =
+            serde_json::from_slice(&fs::read(root.join(map_path)).unwrap()).unwrap();
+        map["project_edges"].as_array_mut().unwrap().push(json!({
+            "from":"input:fixture-git-executable", "kind":"runtime-input", "to":"project:ci"
+        }));
+        json_file(root, map_path, &map);
         json_file(root, config_path, &config);
         config
     };

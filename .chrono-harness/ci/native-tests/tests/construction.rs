@@ -149,6 +149,179 @@ fn adopted_bootstrap_retains_failed_and_interrupted_originals_for_diagnosis() {
 }
 
 #[test]
+fn upgrade_attempt_without_json_retains_raw_failure_then_expires() {
+    if !isolated_capability_test("upgrade_attempt_without_json_retains_raw_failure_then_expires") {
+        return;
+    }
+    let mut fixture = Fixture::new();
+    fixture.adopt_retention(3600);
+    fixture.config["participation"]["program"] = json!(".chrono-harness/bin/cargo");
+    fixture.commit();
+    // Source reads use the fixed Git mock. Retention must not mistake its
+    // empty marker for a physical repository owned by the real Git binary.
+    fs::remove_dir(fixture.root.join(".git")).unwrap();
+    let original = successful_build(&fixture);
+    assert!(original.outcome.is_ok());
+    fixture.config["owner_upgrade"] = json!(".chrono-harness/ci/upgrade.json");
+    fs::write(
+        fixture.root.join(".chrono-harness/ci/upgrade.json"),
+        serde_json::to_vec(&json!({
+            "schema":"chrono-bootstrap-owner-upgrade/v1",
+            "selected_original":".chrono-harness/state/bootstrap.json",
+            "stage_config":".chrono-harness/ci/build.json"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let loaded = fixture.commit();
+    fs::remove_dir(fixture.root.join(".git")).unwrap();
+    let failure = chrono_host_bootstrap::lifecycle::upgrade(
+        &fixture.root,
+        ".chrono-harness/ci/build.json",
+        &loaded.profile,
+        &chrono_host_bootstrap::bindings::NativePlatform {
+            system: "fixture".into(),
+            machine: "native".into(),
+        },
+        &fixture.environment,
+    )
+    .unwrap_err();
+    // The actual registered Rust command mock exits 99 for this owner phase.
+    assert_eq!(failure.exit_code, Some(99), "{}", failure.message);
+    assert!(
+        failure.message.contains("no original JSON report"),
+        "{}",
+        failure.message
+    );
+    let directory = fs::read_dir(
+        fixture
+            .root
+            .join(".chrono-harness/state/bootstrap-owner-upgrade"),
+    )
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .collect::<Vec<_>>();
+    assert_eq!(directory.len(), 1);
+    let directory = &directory[0];
+    let path = directory
+        .strip_prefix(&fixture.root)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let retained = retention::read_guard(&fixture.root, path).unwrap();
+    assert!(
+        retained.is_some(),
+        "upgrade attempt must belong to the rolling owner"
+    );
+    assert_eq!(fs::read(directory.join("migration.stdout")).unwrap(), b"");
+    assert_eq!(fs::read(directory.join("migration.stderr")).unwrap(), b"");
+    assert_eq!(fs::read(directory.join("migration.exit")).unwrap(), b"99\n");
+    drop(retained);
+    maintain(&fixture);
+    assert!(directory.exists());
+    let expires = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 3601;
+    let inventory = Inventory::adopted(&fixture.root).unwrap().unwrap();
+    for _ in 0..8 {
+        let result = inventory.maintain_at(expires).unwrap();
+        assert_eq!(result["accounting_errors"], json!([]), "{result}");
+    }
+    assert!(!directory.exists());
+}
+
+#[test]
+fn upgrade_phase_hands_success_and_failure_originals_to_the_rolling_directory() {
+    if !isolated_capability_test(
+        "upgrade_phase_hands_success_and_failure_originals_to_the_rolling_directory",
+    ) {
+        return;
+    }
+    for exit_code in [0, 37] {
+        let fixture = Fixture::new();
+        fixture.adopt_retention(0);
+        let directory = fixture.root.join(".chrono-harness/state/attempt-phase");
+        fs::create_dir_all(directory.parent().unwrap()).unwrap();
+        let publication = retention::create_adopted(
+            &fixture.root,
+            "check-original",
+            &directory,
+            true,
+            json!({"status":"started"}),
+        )
+        .unwrap()
+        .unwrap();
+        let original_path = ".chrono-harness/state/phase-original.json";
+        let original = retention::create_adopted(
+            &fixture.root,
+            "check-original",
+            &fixture.root.join(original_path),
+            false,
+            json!({"status":if exit_code == 0 {"observed"} else {"failed"}}),
+        )
+        .unwrap()
+        .unwrap();
+        original
+            .replace_file(
+                &fixture.root.join(original_path),
+                b"original lifecycle result\n",
+            )
+            .unwrap();
+        let consumer = "bootstrap-owner:attempt-phase:phase";
+        let identity = original.protect_consumer(consumer).unwrap();
+        original.complete(json!({"status":"joined"})).unwrap();
+        let report = json!({
+            "report_path":original_path,
+            "status":if exit_code == 0 {"observed"} else {"failed"},
+            "report_consumer":{
+                "schema":"chrono-retention-consumer/v1", "consumer":consumer,
+                "purpose":"Upgrade caller consumes its original", "originals":[identity]
+            }
+        });
+        let stdout = serde_json::to_vec(&report).unwrap();
+        let stderr = b"original phase stderr\0\xff";
+        let program = fixture.tools.join("chrono-worktree");
+        fs::copy(env!("CARGO_BIN_EXE_chrono-test-bootstrap-tool"), &program).unwrap();
+        fs::write(fixture.tools.join("chrono-worktree.json"), serde_json::to_vec(&json!({
+            serde_json::to_string(&["--fixture-phase", "--report-consumer", consumer]).unwrap():{
+                "exit_code":exit_code, "stdout":stdout, "stderr":stderr
+            }
+        })).unwrap()).unwrap();
+        let result = chrono_host_bootstrap::lifecycle::run_owner(
+            &fixture.root,
+            &fixture.environment,
+            &program,
+            &["--fixture-phase"],
+            &directory,
+            "phase",
+            Some(&publication),
+        );
+        if exit_code == 0 {
+            assert_eq!(result.unwrap(), report);
+        } else {
+            assert_eq!(result.unwrap_err().exit_code, Some(exit_code));
+        }
+        assert_eq!(fs::read(directory.join("phase.stdout")).unwrap(), stdout);
+        assert_eq!(fs::read(directory.join("phase.stderr")).unwrap(), stderr);
+        assert_eq!(
+            fs::read(directory.join("phase.exit")).unwrap(),
+            format!("{exit_code}\n").as_bytes()
+        );
+        maintain(&fixture);
+        assert!(fixture.root.join(original_path).is_file());
+        publication.complete(json!({"status":"joined"})).unwrap();
+        maintain(&fixture);
+        assert!(!directory.exists());
+        assert!(
+            !fixture.root.join(original_path).exists(),
+            "joined caller root was not handed off"
+        );
+    }
+}
+
+#[test]
 fn construction_preserves_order_selected_tools_installation_and_original_report() {
     let fixture = Fixture::new();
     let mut build = fixture.committed();
