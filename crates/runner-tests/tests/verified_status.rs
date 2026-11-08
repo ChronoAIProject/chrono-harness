@@ -16,9 +16,9 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
-use vstd::string::StringSliceAdditionalSpecFns;
-#[cfg(verus_keep_ghost)]
 use vstd::std_specs::cmp::OrdSpec;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
