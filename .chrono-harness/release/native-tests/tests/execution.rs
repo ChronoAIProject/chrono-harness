@@ -342,8 +342,9 @@ fn local_driver_publishes_real_release_from_isolated_roots_with_registered_worke
         let mut f = fixture::Fixture::new("pass", false);
         f.host.config["local_workers"] = json!(workers);
         f.host.save();
-        f.git(&["add", "--all"]);
-        f.git(&[
+        if workers != 2 {
+            f.git(&["add", "--all"]);
+            f.git(&[
             "-c",
             "user.name=Release test",
             "-c",
@@ -352,7 +353,8 @@ fn local_driver_publishes_real_release_from_isolated_roots_with_registered_worke
             "--quiet",
             "-m",
             "local worker selection",
-        ]);
+            ]);
+        }
         let output = f.outputs.path().join("local");
         let out = f.local(&output);
         assert!(

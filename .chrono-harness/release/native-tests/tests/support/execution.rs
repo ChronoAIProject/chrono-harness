@@ -133,7 +133,9 @@ impl Fixture {
         let out = capture(Command::new(&self.git).current_dir(self.root()).args(args));
         assert!(
             out.status.success(),
-            "{}",
+            "git {args:?}: exit {:?}, stdout={}, stderr={}",
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr)
         );
         out
