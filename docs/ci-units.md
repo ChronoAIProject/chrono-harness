@@ -106,7 +106,9 @@ provider 的可选 `job_gating` 字段登记 detector 的平台、时限、boots
 
 ### 共享 startup
 
-本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 构建并安装五项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-inputs`、`chrono-worktree`，并安装已校验的 Verus 原压缩包 `.chrono-harness/bin/verus.zip`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。单元从该包解压 Verus，不再各自下载、校验和构建 bootstrap 前端；本地 core 仍完成完整安装。
+本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 构建并安装四项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-worktree`，并安装已校验的 Verus 原压缩包 `.chrono-harness/bin/verus.zip`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。单元从该包解压 Verus，不再各自下载、校验和构建 bootstrap 前端；本地 core 仍完成完整安装。
+
+当前宿主没有启用调用 `chrono-inputs` 的 `native_adoption`，登记 action 也不调用它，因此 core 不预先获取、构建、安装或传递这个程序。inputs 和 workflow 测试仍按自己的计划构建并消费真实 inputs 程序；公开发布资产保留。宿主工具表及专属依赖边同步移除这项闲置安装的声明，避免把产物的存在当作使用理由。
 
 **实现与宿主政策同时变更：**共享文件允许普通非零权限 `0001`–`0777`，包含无执行位的压缩包；不把数据文件改成可执行文件。Python 与 Rust 共享入口及其证明同步采用此范围。安装仍核全部来源、摘要、大小和原权限，使用时拒绝字节或权限漂移；特殊权限、零权限、损坏或缺失仍失败。压缩包随现有 startup 产物传输并沿用保留期限。逐单元外部下载已删除，传输、存储和完整 CI 总成本仍未测。
 
