@@ -153,14 +153,18 @@ impl HostDirectory {
             }
         }
     }
-    fn retain_diagnostic(&self, reason: &str) -> Result<(), String> {
+    fn retain_diagnostic(&self, _reason: &str) -> Result<(), String> {
         if let Self::Retained(host) = self {
-            chrono_worktree::RetainedArtifact::resume(
-                host.path().parent().unwrap(),
-                "worktree-test-host",
-                host.path(),
-            )?
-            .acquire("fixture-diagnostic", reason)?;
+            host.retain_diagnostic()?;
+        }
+        Ok(())
+    }
+    fn finish(&mut self, failed: bool) -> Result<(), String> {
+        if let Self::Retained(host) = self {
+            let result = host.finish(failed)?;
+            if result["status"] != "finished" {
+                return Err(result["error"].to_string());
+            }
         }
         Ok(())
     }
@@ -189,10 +193,13 @@ fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> 
 }
 impl Drop for Host {
     fn drop(&mut self) {
-        let Some(directory) = Self::diagnostic_directory(std::thread::panicking()) else {
-            return;
-        };
-        self.retain_fixture_diagnostics(&directory);
+        let failed = std::thread::panicking();
+        if let Some(directory) = Self::diagnostic_directory(failed) {
+            self.retain_fixture_diagnostics(&directory);
+        }
+        if let Err(error) = self._dir.finish(failed) {
+            eprintln!("worktree fixture handoff failed; allocation preserved: {error}");
+        }
     }
 }
 impl Host {
@@ -269,16 +276,10 @@ impl Host {
         Self::in_directory(layout, HostDirectory::Ephemeral(dir))
     }
     fn retained(layout: &str) -> Self {
-        let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
+        let host = chrono_worktree::TemporaryHost::registered_allocate(
             &source(),
             POLICY,
             "worktree-test-host",
-        )
-        .unwrap();
-        let host = chrono_worktree::TemporaryHost::allocate(
-            &store,
-            "worktree-test-host",
-            &outputs,
             "worktree fixture λ ",
         )
         .unwrap();
@@ -1869,7 +1870,7 @@ fn adopt_lifecycle_retention(h: &Host) {
 }
 
 #[test]
-fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_consumer() {
+fn adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window() {
     use chrono_harness::retained_artifacts::retention::Inventory;
     let h = Host::new("payload");
     adopt_lifecycle_retention(&h);
@@ -1893,7 +1894,7 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
         "consumer:lifecycle-recheck:{}",
         sha256(report_path.as_bytes())
     );
-    assert_eq!(ledger["roots"][&role].as_array().unwrap().len(), 1);
+    assert!(ledger["roots"].get(&role).is_none());
     assert!(
         ledger["roots"]
             .get(format!("recovery:{report_path}"))
@@ -1902,6 +1903,23 @@ fn adopted_lifecycle_publisher_retains_failed_original_under_an_exact_recheck_co
     drop(activity);
     inventory.maintain().unwrap();
     assert_eq!(fs::read(h.root.join(report_path)).unwrap(), raw);
+    let mut original = retention_state::snapshot(&h.root)["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == report_path)
+        .unwrap()
+        .clone();
+    assert!(original["expires"].as_u64().unwrap() > 0);
+    original["expires"] = value!(0);
+    retention_state::replace_output(&h.root, &original);
+    for _ in 0..8 {
+        inventory.maintain().unwrap();
+        if !h.root.join(report_path).exists() {
+            break;
+        }
+    }
+    assert!(!h.root.join(report_path).exists());
     assert_eq!(
         fs::read(occupied.join("original-source")).unwrap(),
         b"preserve existing target"

@@ -39,6 +39,302 @@ fn command_carrier_count(command: &Command) -> usize {
         .unwrap_or(0)
 }
 
+fn rolling_host(keep_seconds: u64) -> Host {
+    rolling_host_mode(keep_seconds, "noop")
+}
+
+fn rolling_host_mode(keep_seconds: u64, mode: &str) -> Host {
+    let h = host_mode(mode);
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["retained_producers"][0]["rolling_directory"] = value!({"success_keep_seconds":0,"failure_keep_seconds":keep_seconds,
+            "interrupted_keep_seconds":keep_seconds,"metadata_keep_seconds":0});
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    h
+}
+
+#[test]
+fn rolling_directory_managed_operation_owns_all_products_and_keeps_original_failure() {
+    for failed in [false, true] {
+        let h = rolling_host_mode(
+            86400,
+            if failed {
+                "artifact-failure"
+            } else {
+                "artifact-success"
+            },
+        );
+        let path = h.root.join(".chrono-harness/cleanup.json");
+        let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+        policy["retained_producers"][0]["operations"] = value!(["use.consumer"]);
+        fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        commit(&h.root);
+        let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
+        assert_eq!(code, if failed { 2 } else { 0 }, "{report} {error}");
+        let process = &report["managed_process"];
+        assert_eq!(process["exit_code"], if failed { 23 } else { 0 });
+        assert_eq!(process["stderr"], "original artifact diagnostic");
+        let allocation = PathBuf::from(process["stdout"].as_str().unwrap());
+        assert_eq!(report["artifact_directory"]["path"], value!(allocation));
+        if failed {
+            assert_eq!(
+                fs::read(allocation.join("arbitrary products/original.bin")).unwrap(),
+                b"original artifact\0\xff"
+            );
+        } else {
+            assert!(!allocation.exists(), "all unlisted products roll together");
+        }
+        assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
+    }
+}
+
+#[test]
+fn rolling_directory_ambiguous_operation_owner_refuses_before_launch() {
+    let h = rolling_host(0);
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["retained_producers"][0]["operations"] = value!(["use.consumer"]);
+    let mut duplicate = policy["retained_producers"][0].clone();
+    duplicate["id"] = value!("another-owner");
+    duplicate["directory"] = value!(".chrono-harness/state/another-run/");
+    policy["retained_producers"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
+    assert_eq!(code, 2, "{report} {error}");
+    assert!(format!("{report} {error}").contains("artifact operation requires one exact producer"));
+    assert!(report["managed_process"].is_null());
+    assert!(!h.root.join(".chrono-harness/state/another-run").exists());
+}
+
+#[test]
+fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
+    let h = rolling_host(0);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "rolling λ ",
+    )
+    .unwrap();
+    let path = fixture.path().to_owned();
+    fs::create_dir(path.join("copied input")).unwrap();
+    fs::write(path.join("copied input/source.rs"), b"fixture source").unwrap();
+    fs::create_dir(path.join(".git")).unwrap();
+    fs::write(
+        path.join(".git/fixture-metadata"),
+        b"owned test Git metadata",
+    )
+    .unwrap();
+    fs::write(
+        path.join("unlisted capture.bin"),
+        b"original fixture output",
+    )
+    .unwrap();
+    let survivor = h.parent.join("external survivor");
+    fs::write(&survivor, b"keep external bytes").unwrap();
+    std::os::unix::fs::symlink(&survivor, path.join("external link")).unwrap();
+    let result = fixture.finish(false).unwrap();
+    assert_eq!(result["status"], "finished", "{result}");
+    assert!(
+        !path.exists(),
+        "all owned fixture bytes must roll together: {result}"
+    );
+    assert_eq!(fs::read(survivor).unwrap(), b"keep external bytes");
+    let store = path.parent().unwrap();
+    assert!(
+        producer_state(store)["objects"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        !store
+            .join("rolling-metadata")
+            .join(sha256(path.file_name().unwrap().as_encoded_bytes()))
+            .exists()
+    );
+}
+
+#[test]
+fn rolling_directory_diagnostics_have_a_finite_window_without_permanent_reference_or_duplicate_input()
+ {
+    let h = rolling_host(86400);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "diagnostic rolling ",
+    )
+    .unwrap();
+    let path = fixture.path().to_owned();
+    let store = path.parent().unwrap();
+    let source = h.parent.join("actual-copy-input");
+    fs::write(&source, b"reconstructible fixture input").unwrap();
+    let destination = path.join("copy.bin");
+    chrono_worktree::TemporaryHost::register_copy(
+        store,
+        "test-allocation",
+        &source,
+        &destination,
+        None,
+        "actual whole-directory copy",
+    )
+    .unwrap();
+    assert!(!destination.exists());
+    fs::copy(source, &destination).unwrap();
+    fixture.retain_diagnostic().unwrap();
+    let result = fixture.finish(false).unwrap();
+    assert_eq!(result["status"], "finished", "{result}");
+    assert_eq!(
+        fs::read(destination).unwrap(),
+        b"reconstructible fixture input"
+    );
+    assert!(!store.join("body-inputs").exists());
+    let object = &producer_state(store)["objects"][0];
+    assert_eq!(object["rolling"]["terminal"]["failed"], false);
+    assert_eq!(object["rolling"]["diagnostics"], true);
+    assert_eq!(object["consumers"], value!({}));
+}
+
+#[test]
+fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal() {
+    let h = rolling_host(0);
+    let policy_path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(86400);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "metadata rolling ",
+    )
+    .unwrap();
+    let path = fixture.path().to_owned();
+    let store = path.parent().unwrap();
+    let result = fixture.finish(false).unwrap();
+    assert_eq!(result["status"], "finished", "{result}");
+    assert!(!path.exists());
+    let record_path = producer_record_path(store, &path);
+    let original = fs::read(&record_path).unwrap();
+    let record = json(&original).unwrap();
+    let metadata = store.join(record["object"]["rolling"]["metadata"].as_str().unwrap());
+    // The real producer established disposal; only its atomic record move is
+    // replayed to model interruption before the following directory handoff.
+    fs::rename(&record_path, metadata.join("retired-record.json")).unwrap();
+    policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(0);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert!(!metadata.exists());
+    assert!(!record_path.exists());
+    let trash = store.join("rolling-disposals");
+    let partial = trash.join("partially-removed");
+    fs::create_dir(&partial).unwrap();
+    fs::write(partial.join("remaining receipt"), original).unwrap();
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert!(!partial.exists());
+    assert_eq!(
+        fs::read_dir(trash).unwrap().count(),
+        1,
+        "only the constant namespace owner remains"
+    );
+}
+
+#[test]
+fn rolling_directory_waits_for_real_capability_and_retention_window() {
+    let h = rolling_host(86400);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "held rolling λ ",
+    )
+    .unwrap();
+    let path = fixture.path().to_owned();
+    fs::write(path.join("result.bin"), b"retained while read").unwrap();
+    let reader = fixture.capability().unwrap();
+    let result = fixture.finish(false).unwrap();
+    assert!(
+        path.exists(),
+        "live capability must exclude disposal: {result}"
+    );
+    drop(reader);
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert!(
+        !path.exists(),
+        "released success should roll at next maintenance: {result}"
+    );
+
+    let mut failure = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "failed rolling λ ",
+    )
+    .unwrap();
+    let failed_path = failure.path().to_owned();
+    fs::write(failed_path.join("failure.stderr"), b"actual failure bytes").unwrap();
+    failure.finish(true).unwrap();
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert_eq!(
+        fs::read(failed_path.join("failure.stderr")).unwrap(),
+        b"actual failure bytes"
+    );
+}
+
+#[test]
+fn rolling_directory_reclaims_expired_interruption_without_claiming_task_completion() {
+    let h = rolling_host(0);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let legacy = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "unclaimed λ ",
+    )
+    .unwrap();
+    let legacy_path = legacy.path().to_owned();
+    fs::write(legacy_path.join("unique work"), b"keep unclaimed bytes").unwrap();
+    drop(legacy);
+    let unfinished = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root,
+        POLICY,
+        "test-allocation",
+        "interrupted rolling λ ",
+    )
+    .unwrap();
+    let unfinished_path = unfinished.path().to_owned();
+    fs::write(
+        unfinished_path.join("partial stdout"),
+        b"keep unknown result",
+    )
+    .unwrap();
+    drop(unfinished);
+    let (code, result, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{result} {error}");
+    assert_eq!(
+        fs::read(legacy_path.join("unique work")).unwrap(),
+        b"keep unclaimed bytes"
+    );
+    assert!(
+        !unfinished_path.exists(),
+        "owned interrupted fixture expires without a task-success claim: {result}"
+    );
+}
+
 #[test]
 fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
     use std::time::{Duration, Instant};
@@ -1104,7 +1400,11 @@ fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams
         json(&fs::read(capture.join("stdout.bytes")).unwrap()).unwrap(),
         report
     );
-    assert!(fs::read(capture.join("stderr.bytes")).unwrap().is_empty());
+    assert!(error.contains("W_WORKTREE_AGENT_SCOPE"), "{error}");
+    assert_eq!(
+        fs::read(capture.join("stderr.bytes")).unwrap(),
+        error.as_bytes()
+    );
     let joined = json(&fs::read(capture.join("result.json")).unwrap()).unwrap();
     assert_eq!(joined["exit_code"], 2);
     assert_eq!(joined["joined"], true);

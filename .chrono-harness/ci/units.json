@@ -17,8 +17,8 @@
     "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
     "timeout_minutes": 45,
     "bootstrap": [
-      "/usr/bin/python3",
-      ".chrono-harness/ci/bootstrap_shared.py",
+      "/bin/bash",
+      ".chrono-harness/ci/bootstrap-native.sh",
       ".",
       ".chrono-harness/ci/bootstrap-shared.json",
       "verify",
@@ -41,8 +41,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -55,8 +55,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-shared.json",
         "verify",
@@ -71,8 +71,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -85,8 +85,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -99,8 +99,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -113,8 +113,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -127,8 +127,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-shared.json",
         "verify",
@@ -143,8 +143,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -157,12 +157,10 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-cost/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-cost/"
@@ -173,12 +171,10 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-mixed/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-mixed/"
@@ -189,12 +185,10 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow/"
@@ -205,12 +199,10 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/inputs/context.json",
       "artifact_directory": ".chrono-harness/state/units/inputs/"
@@ -221,8 +213,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-shared.json",
         "verify",
@@ -237,8 +229,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -251,12 +243,10 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-units/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-units/"
@@ -267,12 +257,10 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-short/context.json",
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-short/"
@@ -283,8 +271,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-shared.json",
         "verify",
@@ -299,8 +287,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-shared.json",
         "verify",
@@ -315,12 +303,10 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/worktree-adoption/context.json",
       "artifact_directory": ".chrono-harness/state/units/worktree-adoption/"
@@ -331,8 +317,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-shared.json",
         "verify",
@@ -347,8 +333,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -361,8 +347,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-unit.json"
       ],
@@ -406,8 +392,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
-        "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap_shared.py",
+        "/bin/bash",
+        ".chrono-harness/ci/bootstrap-native.sh",
         ".",
         ".chrono-harness/ci/bootstrap-shared.json",
         "produce"
@@ -431,8 +417,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -443,8 +429,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -455,8 +441,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -467,8 +453,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -479,8 +465,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -491,8 +477,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -503,8 +489,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -515,8 +501,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -527,8 +513,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -539,8 +525,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -551,8 +537,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -563,8 +549,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -575,8 +561,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -587,8 +573,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -599,8 +585,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -611,8 +597,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -623,8 +609,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -635,8 +621,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -647,8 +633,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -659,8 +645,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -671,8 +657,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -683,8 +669,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -695,8 +681,8 @@
           "need": "Run the current candidate canonical check and its registered preparation.",
           "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
           "install": [
-            "/usr/bin/python3",
-            ".chrono-harness/ci/bootstrap_shared.py",
+            "/bin/bash",
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
@@ -717,8 +703,8 @@
         "need": "Build candidate startup tools and reuse the checksum-verified fixed Verus archive.",
         "output_use": "Restore registered core targets and the Verus archive before bootstrap; publish candidate startup binaries and save the verified archive for its declared consumers.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -749,8 +735,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -770,8 +756,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -791,8 +777,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -813,8 +799,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -838,8 +824,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -860,8 +846,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -885,8 +871,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -906,8 +892,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -932,8 +918,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -956,8 +942,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -981,8 +967,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1012,8 +998,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1041,8 +1027,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1062,8 +1048,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1085,8 +1071,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1115,8 +1101,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1145,8 +1131,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1162,8 +1148,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1184,8 +1170,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",
@@ -1205,8 +1191,8 @@
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-shared.json",
           "verify",

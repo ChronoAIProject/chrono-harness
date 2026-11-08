@@ -531,6 +531,14 @@ fn gather_host_config(
     mode: &str,
     configure: impl FnOnce(&mut Value),
 ) -> (short::ShortHost, String, String) {
+    gather_host_config_and_retention(mode, configure, None)
+}
+
+fn gather_host_config_and_retention(
+    mode: &str,
+    configure: impl FnOnce(&mut Value),
+    retention: Option<Value>,
+) -> (short::ShortHost, String, String) {
     let (mut host, b, _) = consumer();
     let root = host.path();
     let policy = ".chrono-harness/config.json";
@@ -548,6 +556,17 @@ fn gather_host_config(
     configure_mock_transport(&mut cfg);
     configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
+    if let Some(policy) = retention {
+        json_file(root, ".chrono-harness/retention.json", &policy);
+        let path = ".chrono-harness/FILEMAP.json";
+        let mut filemap: Value =
+            serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
+        filemap["files"].as_array_mut().unwrap().push(json!({
+            "path":".chrono-harness/retention.json","owner":"host",
+            "surface":"judge-policy","cost":"unmeasured","edges":[]
+        }));
+        json_file(root, path, &filemap);
+    }
     generate(root, ".chrono-harness/ci/units.json", false).unwrap();
     git(root, &["add", "."]);
     git(root, &["commit", "-qm", "transport fixture"]);
@@ -912,7 +931,18 @@ fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
         ("wrong-source", "different workflow source"),
         ("changed-attempt", "run changed"),
     ] {
-        let (host, _, _) = gather_host(mode);
+        let (host, _, _) = gather_host_config_and_retention(
+            mode,
+            |_| {},
+            Some(json!({
+                "schema":"chrono-output-retention/v2",
+                "producers":{"check-original":[".chrono-harness/state/"]},
+                "keep_seconds":0,"diagnostic_keep_seconds":86400,
+                "max_related_outputs":512,"max_summaries":128,
+                "max_nodes_per_round":256,"max_bytes_per_round":67108864,
+                "max_millis_per_round":25
+            })),
+        );
         let result = collect_cli(&host);
         assert!(!result.status.success(), "{mode}");
         let report: Value = serde_json::from_slice(
@@ -927,6 +957,39 @@ fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
             report["error"].as_str().unwrap().contains(needle),
             "{mode}: {report}"
         );
+        let original = report["retained_report"].as_str().unwrap();
+        let namespace = host
+            .path()
+            .join(".chrono-harness/state/output-retention-v1");
+        let output = fs::read_dir(namespace.join("objects"))
+            .unwrap()
+            .map(|entry| {
+                serde_json::from_slice::<Value>(
+                    &fs::read(entry.unwrap().path().join("record.json")).unwrap(),
+                )
+                .unwrap()["output"]
+                    .clone()
+            })
+            .find(|output| output["path"] == original)
+            .unwrap();
+        assert!(output["expires"].as_u64().unwrap() > 0);
+        let role = format!(
+            "consumer:gather-recheck:{}",
+            chrono_harness::sha256(original.as_bytes())
+        );
+        assert!(
+            !namespace
+                .join("roles")
+                .join(chrono_harness::sha256(role.as_bytes()))
+                .join("record.json")
+                .exists()
+        );
+        chrono_harness::retained_artifacts::retention::Inventory::adopted(host.path())
+            .unwrap()
+            .unwrap()
+            .maintain()
+            .unwrap();
+        assert!(host.path().join(original).exists()); // current report still consumes it
         assert!(
             !host
                 .path()

@@ -13,7 +13,7 @@ else
     task_owner="$task_anchor/.chrono-harness/bin/chrono-worktree"
     if [ -e "$task_owner" ] || [ -L "$task_owner" ]; then
         "$task_owner" bootstrap --host-root "$task_root" --config .chrono-harness/worktree.json --bootstrap-config .chrono-harness/ci/bootstrap-frontend.json
-        exec "$task_root/.chrono-harness/bin/chrono-host-bootstrap" "$@"
+        exec rustup run 1.95.0 "$task_root/.chrono-harness/bin/chrono-host-bootstrap" "$@"
     fi
     test "$task_anchor" = "$task_root" || { echo 'linked bootstrap requires its deployed coordinator' >&2; exit 2; }
 fi

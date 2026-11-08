@@ -171,7 +171,7 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
                     ["output_use"] = json!("")
             }
             "caller" => {
-                action(&mut s, "host.bootstrap-shared-install-unit_runner")["argv"][5] =
+                action(&mut s, "host.bootstrap-shared-install-unit_runner")["argv"][4] =
                     json!("unit_ci")
             }
             "producer" => {
@@ -209,7 +209,7 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
             }
             "check" => s.config["canonical_check"]["argv"] = json!(["some-other-runner", "check"]),
             "verify" => {
-                action(&mut s, "host.bootstrap-shared-verify-core")["argv"][5] =
+                action(&mut s, "host.bootstrap-shared-verify-core")["argv"][4] =
                     json!("absent-profile")
             }
             "evidence-method" => {
@@ -258,7 +258,7 @@ fn preparation_requires_registered_invocation_and_early_verification() {
         let mut new = host();
         match defect {
             "invocation" => {
-                new.documents.get_mut(UNITS).unwrap()["units"]["runner"]["bootstrap"][3] =
+                new.documents.get_mut(UNITS).unwrap()["units"]["runner"]["bootstrap"][2] =
                     json!("other")
             }
             "missing" => new.documents.get_mut(PREPARATION).unwrap()["prerequisites"] = json!([]),
@@ -274,9 +274,7 @@ fn preparation_requires_registered_invocation_and_early_verification() {
                 ])
             }
             "schema" => new.documents.get_mut(PREPARATION).unwrap()["schema"] = json!("other"),
-            "tool" => {
-                new.documents.get_mut(PREPARATION).unwrap()["tools"]["python3"] = json!("other")
-            }
+            "tool" => new.documents.get_mut(PREPARATION).unwrap()["tools"]["bash"] = json!("other"),
             "projects" => new.documents.get_mut(PREPARATION).unwrap()["projects"] = json!("other"),
             "entrypoint" => {
                 new.documents.get_mut(PREPARATION).unwrap()["entrypoint"]["script"] = json!("other")

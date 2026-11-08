@@ -62,4 +62,20 @@ fn unknown_unregistered_and_coordinator_are_distinct() {
     assert(a && b && !c);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn pending_agent_reminders_require_the_same_nonempty_creator_and_unfinished_cleanup() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("agent-A"); reveal_strlit("agent-B"); reveal_strlit("");
+        assert("agent-A"@.len() == 7 && "agent-B"@.len() == 7 && ""@.len() == 0);
+        assert("agent-A"@[6] != "agent-B"@[6]);
+    }
+    let own = policy::pending_for_agent("agent-A", "agent-A", true);
+    let other = policy::pending_for_agent("agent-B", "agent-A", true);
+    let disposed = policy::pending_for_agent("agent-A", "agent-A", false);
+    let absent = policy::pending_for_agent("", "", true);
+    assert(own && !other && !disposed && !absent);
+}
+
+
 }

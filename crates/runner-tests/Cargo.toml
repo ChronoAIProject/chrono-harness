@@ -16,6 +16,7 @@ sha2 = "0.10"
 chrono-harness = { path = "../runner", features = ["retention-test"] }
 
 [dev-dependencies]
+chrono-diagnostics = { path = "../diagnostics" }
 tempfile = "3"
 verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 

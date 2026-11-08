@@ -228,7 +228,16 @@ struct Policy {
     main_cache_only: bool,
     #[serde(default)]
     retained_producers: Vec<producer::ProducerPolicy>,
+    #[serde(default)]
+    terminal_history: Option<TerminalHistory>,
     artifacts: Vec<Artifact>,
+}
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TerminalHistory {
+    keep_seconds: u64,
+    max_entries: usize,
+    max_bytes: u64,
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -293,6 +302,10 @@ struct CacheAttempt {
 #[serde(deny_unknown_fields)]
 struct Entry {
     path: PathBuf,
+    #[serde(default)]
+    creator_agent: Option<crate::AgentIdentity>,
+    #[serde(default)]
+    custodian_agent: Option<crate::AgentIdentity>,
     branch: String,
     attachment: Attachment,
     policy_sha256: String,
@@ -313,6 +326,40 @@ struct Entry {
     cache_only: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cleanup: Option<CleanupProgress>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    disposed_at: Option<u64>,
+}
+impl Entry {
+    fn report_handoff_pending(&self) -> bool {
+        ["completed_uses", "main_cache_releases"]
+            .iter()
+            .any(|field| {
+                !self.enrollment[*field].is_null()
+                    && self.enrollment[*field]
+                        .as_array()
+                        .is_none_or(|rows| !rows.is_empty())
+            })
+    }
+    fn check_agents(&self) -> Result<(), String> {
+        if self.creator_agent.as_ref().is_some_and(|a| !a.valid())
+            || self.custodian_agent.as_ref().is_some_and(|a| !a.valid())
+        {
+            return Err("invalid recorded agent identity".into());
+        }
+        if self.enrollment["kind"] == "birth"
+            && self.creator_agent
+                != serde_json::from_value::<Option<crate::AgentIdentity>>(
+                    self.enrollment["receipt"]["creator_agent"].clone(),
+                )
+                .map_err(|error| format!("invalid recorded creator identity: {error}"))?
+        {
+            return Err("enrollment creator differs from its original creation input".into());
+        }
+        if self.enrollment["kind"] != "birth" && self.creator_agent.is_some() {
+            return Err("imported worktree cannot claim a historical creator".into());
+        }
+        Ok(())
+    }
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -532,6 +579,17 @@ fn parse_policy(r: &mut Runner, root: &Path, policy_bytes: &[u8]) -> Result<Poli
     }
     if !p.retained_producers.is_empty() && p.schema != "chrono-worktree-automatic-cleanup/v2" {
         return Err("retained producer references require kernel cleanup v2".into());
+    }
+    if let Some(history) = &p.terminal_history {
+        if p.schema != "chrono-worktree-automatic-cleanup/v2"
+            || history.max_entries == 0
+            || history.max_bytes == 0
+        {
+            return Err(
+                "terminal history requires kernel cleanup v2 and positive record/byte limits"
+                    .into(),
+            );
+        }
     }
     if p.coordinator_root == Path::new("git-main-worktree") {
         // Explicit host selector delegates physical identity to Git's existing owner inventory.
@@ -926,6 +984,7 @@ impl Manager {
             if e.path != scope {
                 return Err("enrollment record contains another worktree".into());
             }
+            e.check_agents()?;
             if e.cache_only && (e.path != *anchor || e.status != "active" || e.terminal.is_some()) {
                 return Err(
                     "main cache enrollment cannot authorize terminal worktree disposal".into(),
@@ -955,7 +1014,175 @@ impl Manager {
             _gate: gate,
         };
         manager.restore_absent_policy(r)?;
+        manager.protect_originals()?;
         Ok(Some(manager))
+    }
+    /// The enrollment is an actual durable consumer, independently of any
+    /// invocation's read scope. These are the fields owned by this schema;
+    /// neither JSON traversal nor a directory scan defines dependencies.
+    fn original_paths(&self, ledger: &Ledger) -> Result<BTreeSet<String>, String> {
+        let mut paths = BTreeSet::new();
+        for e in &ledger.entries {
+            if e.enrollment["receipt"]["source_root"].is_null()
+                || e.enrollment["receipt"]["source_root"]
+                    == value!(self.inputs.policy.coordinator_root)
+            {
+                if let Some(path) = e.enrollment["receipt"]["report_path"].as_str() {
+                    paths.insert(path.into());
+                }
+            }
+            for field in ["sealed_receipt", "recovered_receipt"] {
+                if !e.enrollment[field].is_null() {
+                    let receipt: Receipt = serde_json::from_value(e.enrollment[field].clone())
+                        .map_err(|error| format!("invalid enrollment {field}: {error}"))?;
+                    paths.insert(receipt.path);
+                }
+            }
+            for field in [
+                "interrupted_uses",
+                "completed_uses",
+                "main_cache_releases",
+                "terminal_history",
+            ] {
+                if !e.enrollment[field].is_null() {
+                    let receipts: Vec<Receipt> =
+                        serde_json::from_value(e.enrollment[field].clone())
+                            .map_err(|error| format!("invalid enrollment {field}: {error}"))?;
+                    paths.extend(receipts.into_iter().map(|receipt| receipt.path));
+                }
+            }
+            if let Some(terminal) = &e.terminal {
+                paths.insert(terminal.receipt.path.clone());
+            }
+            for attempt in &e.attempts {
+                paths.insert(attempt.path.clone());
+            }
+            for attempt in &e.cache_attempts {
+                paths.insert(attempt.intent.path.clone());
+                paths.insert(attempt.path.clone());
+            }
+            paths.extend(e.policy_migrations.iter().map(|r| r.path.clone()));
+            paths.extend(e.main_cache_adoptions.iter().map(|r| r.path.clone()));
+            if let Some(path) = e.cleanup.as_ref().and_then(|p| p.report_path.as_ref()) {
+                paths.insert(path.clone());
+            }
+            for token in &e.uses {
+                relative_path(token)?;
+                for prefix in ["use-intent-", "use-"] {
+                    paths.insert(format!(
+                        "{}{prefix}{token}.json",
+                        self.inputs.policy.state_directory
+                    ));
+                }
+            }
+        }
+        Ok(paths)
+    }
+    fn original_role(&self) -> Result<String, String> {
+        Ok(format!(
+            "worktree-enrollment:{}",
+            sha256(
+                self.scope
+                    .to_str()
+                    .ok_or("enrollment address UTF-8")?
+                    .as_bytes()
+            )
+        ))
+    }
+    fn protect_originals(&self) -> Result<(), String> {
+        if let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(
+            &self.inputs.policy.coordinator_root,
+        )? {
+            inventory.reference_paths(
+                &self.original_role()?,
+                &self
+                    .original_paths(&self.ledger)?
+                    .into_iter()
+                    .collect::<Vec<_>>(),
+            )?;
+        }
+        Ok(())
+    }
+    /// These are pending report handoffs, not an additional command history.
+    /// A full original accepting this receipt ends only its interim ledger
+    /// reference. The report's own consumers and dependency edges remain.
+    fn reconcile_published_results(&mut self) -> Result<(), String> {
+        let mut changed = false;
+        for i in 0..self.ledger.entries.len() {
+            for (field, binding) in [
+                ("completed_uses", "managed_use_receipt"),
+                ("main_cache_releases", "main_cache_release"),
+            ] {
+                if self.ledger.entries[i].enrollment[field].is_null() {
+                    continue;
+                }
+                let receipts: Vec<Receipt> =
+                    serde_json::from_value(self.ledger.entries[i].enrollment[field].clone())
+                        .map_err(|e| format!("invalid pending result handoff: {e}"))?;
+                let mut pending = Vec::new();
+                for receipt in receipts {
+                    let original = json(&self.receipt(&receipt)?)?;
+                    let accepted = if let Some(path) = original["report_path"].as_str() {
+                        let physical =
+                            no_symlink_parents(&self.inputs.policy.coordinator_root, path)?;
+                        let _input = chrono_harness::retained_artifacts::retention::read_guard(
+                            &self.inputs.policy.coordinator_root,
+                            path,
+                        )?;
+                        match fs::read(physical) {
+                            Ok(bytes) => {
+                                if let Ok(report) = json(&bytes) {
+                                    let mut matches = report["schema"]
+                                        == "chrono-worktree-report/v1"
+                                        && report["report_path"] == path
+                                        && matches!(
+                                            report["status"].as_str(),
+                                            Some("used" | "finished" | "failed")
+                                        )
+                                        && report[binding] == value!(receipt);
+                                    if matches {
+                                        if let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(&self.inputs.policy.coordinator_root)? {
+                                        matches = inventory.published_original(path, &sha256(&bytes), bytes.len() as u64)?;
+                                    }
+                                    }
+                                    if matches {
+                                        crate::recovery::bind_report_inputs(
+                                            &self.inputs.policy.coordinator_root,
+                                            &report,
+                                        )?;
+                                    }
+                                    matches
+                                } else {
+                                    false
+                                }
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    } else {
+                        false
+                    };
+                    if accepted {
+                        changed = true;
+                    } else {
+                        pending.push(receipt);
+                    }
+                }
+                if pending.is_empty() {
+                    self.ledger.entries[i]
+                        .enrollment
+                        .as_object_mut()
+                        .ok_or("enrollment object")?
+                        .remove(field);
+                } else {
+                    self.ledger.entries[i].enrollment[field] = value!(pending);
+                }
+            }
+        }
+        if changed {
+            self.save()?;
+        }
+        Ok(())
     }
 
     fn adopt_live_policy(&mut self, r: &mut Runner) -> Result<(), String> {
@@ -1067,11 +1294,31 @@ impl Manager {
         if let Some(lease) = &self._gate.lease {
             lease.stable()?;
         }
-        write_json(
-            &no_symlink_parents(&self.record_directory, "ledger.json")?,
-            &self.ledger,
-            false,
+        let path = no_symlink_parents(&self.record_directory, "ledger.json")?;
+        let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(
+            &self.inputs.policy.coordinator_root,
         )?;
+        if let Some(inventory) = &inventory {
+            let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
+            let mut paths = self.original_paths(&previous)?;
+            paths.extend(self.original_paths(&self.ledger)?);
+            // Protect both possible durable records before publication. A
+            // failed ledger write leaves the previous recovery inputs rooted.
+            inventory.reference_paths(
+                &self.original_role()?,
+                &paths.into_iter().collect::<Vec<_>>(),
+            )?;
+        }
+        write_json(&path, &self.ledger, false)?;
+        if let Some(inventory) = inventory {
+            inventory.reference_paths(
+                &self.original_role()?,
+                &self
+                    .original_paths(&self.ledger)?
+                    .into_iter()
+                    .collect::<Vec<_>>(),
+            )?;
+        }
         Ok(())
     }
     fn stable(&self, r: &mut Runner) -> Result<(), String> {
@@ -1426,6 +1673,18 @@ impl Manager {
         }
         let entry = Entry {
             path: target,
+            creator_agent: if kind == "birth" {
+                serde_json::from_value(receipt["creator_agent"].clone())
+                    .map_err(|error| format!("invalid birth creator identity: {error}"))?
+            } else {
+                None
+            },
+            custodian_agent: if kind == "import" {
+                serde_json::from_value(receipt["custodian_agent"].clone())
+                    .map_err(|error| format!("invalid import custodian identity: {error}"))?
+            } else {
+                None
+            },
             branch,
             attachment: attached,
             policy_sha256: sha256(&self.inputs.policy_bytes),
@@ -1440,6 +1699,7 @@ impl Manager {
             main_cache_adoptions: vec![],
             cache_only,
             cleanup: None,
+            disposed_at: None,
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = decode::<crate::Config>(&self.inputs.config_bytes)?.host_config;
@@ -1480,10 +1740,14 @@ impl Manager {
         Ok(())
     }
     fn birth_binding(e: &Entry) -> Value {
-        value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,
+        let mut binding = value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,
             "policy_sha256":e.policy_sha256,"observed_head":e.enrollment["observed_head"],
             "policy_inputs":e.enrollment["policy_inputs"],"original_receipt":e.enrollment["receipt"],
-            "ownership":e.ownership.as_ref().map(|o| value!({"path":o.path,"id":o.id}))})
+            "ownership":e.ownership.as_ref().map(|o| value!({"path":o.path,"id":o.id}))});
+        if let Some(agent) = &e.creator_agent {
+            binding["creator_agent"] = value!(agent);
+        }
+        binding
     }
     fn birth_ready(&self, e: &Entry) -> Result<(), String> {
         if e.enrollment["kind"] == "birth" {
@@ -1614,20 +1878,80 @@ impl Manager {
     fn immutable(&self, name: &str, v: &Value) -> Result<Receipt, String> {
         relative_path(name)?;
         let path = format!("{}{name}", self.inputs.policy.state_directory);
-        let target = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
-        let b = write_json(&target, v, true)?;
+        let mut b = serde_json::to_vec_pretty(v).map_err(|error| error.to_string())?;
+        b.push(b'\n');
+        self.publish_original(&path, &b, Some(v), false)?;
         Ok(Receipt {
             path,
             sha256: sha256(&b),
         })
     }
+    fn publish_original(
+        &self,
+        path: &str,
+        bytes: &[u8],
+        receipt: Option<&Value>,
+        reuse: bool,
+    ) -> Result<(), String> {
+        self._namespace.stable()?;
+        if let Some(lease) = &self._gate.lease {
+            lease.stable()?;
+        }
+        let root = &self.inputs.policy.coordinator_root;
+        let target = no_symlink_parents(root, path)?;
+        if reuse && target.exists() {
+            if crate::recovery::state_bytes(root, path)? != bytes {
+                return Err("retained lifecycle input changed".into());
+            }
+            return Ok(());
+        }
+        let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?;
+        if let Some(inventory) = inventory.filter(|i| i.accepts("lifecycle-original", path)) {
+            let dependencies = receipt
+                .map(|v| crate::recovery::original_paths(root, v))
+                .transpose()?
+                .unwrap_or_default();
+            let publication = inventory.plan(
+                "lifecycle-original",
+                path,
+                false,
+                value!({"kind":"automatic-original","completion":"not-established"}),
+            )?;
+            publication.materialize_for_reference(&self.original_role()?)?;
+            publication.replace_file(&target, bytes)?;
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+                .ok_or("automatic original retention disappeared")?
+                .dependencies_paths(path, &dependencies)?;
+            publication.complete(value!({"kind":"automatic-original","publication":"complete"}))?;
+        } else {
+            write_bytes(&target, bytes, true)?;
+        }
+        Ok(())
+    }
     fn immutable_reconciled(&self, name: &str, value: &Value) -> Result<Receipt, String> {
         let path = format!("{}{name}", self.inputs.policy.state_directory);
         let physical = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
+        let _input = chrono_harness::retained_artifacts::retention::read_guard(
+            &self.inputs.policy.coordinator_root,
+            &path,
+        )?;
         match fs::read(&physical) {
             Ok(bytes) => {
                 if json(&bytes)? != *value {
                     return Err("interrupted use reconciliation receipt changed".into());
+                }
+                if let Some(inventory) =
+                    chrono_harness::retained_artifacts::retention::Inventory::adopted(
+                        &self.inputs.policy.coordinator_root,
+                    )?
+                {
+                    inventory.dependencies_paths(
+                        &path,
+                        &crate::recovery::original_paths(
+                            &self.inputs.policy.coordinator_root,
+                            value,
+                        )?,
+                    )?;
                 }
                 Ok(Receipt {
                     path,
@@ -1656,20 +1980,7 @@ impl Manager {
             self.inputs.policy.state_directory,
             sha256(bytes)
         );
-        let physical = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
-        match fs::symlink_metadata(&physical) {
-            Ok(_) => {
-                if crate::recovery::state_bytes(&self.inputs.policy.coordinator_root, &path)?
-                    != bytes
-                {
-                    return Err("retained lifecycle input changed".into());
-                }
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                write_bytes(&physical, bytes, true)?;
-            }
-            Err(e) => return Err(e.to_string()),
-        }
+        self.publish_original(&path, bytes, None, true)?;
         Ok(self.retained_input(&path, bytes, "bytes"))
     }
     fn verify_inputs(&self, report: &Value) -> Result<(), String> {
@@ -1894,12 +2205,23 @@ impl Manager {
             let receipt = self.immutable(
                 &format!("main-release-{token}.json"),
                 &value!({
-                    "schema":"chrono-main-cache-release/v1","path":target,"head":head,
+                    "schema":"chrono-main-cache-release/v1","path":target,"head":head,"report_path":report["report_path"],
                     "attachment":e.attachment,"ownership":e.ownership,
                     "worktree_removal":"not-authorized","task_completion":"not-claimed"
                 }),
             )?;
             report["main_cache_release"] = value!(receipt);
+            self.ledger.entries[i]
+                .enrollment
+                .as_object_mut()
+                .ok_or("enrollment object")?
+                .entry("main_cache_releases")
+                .or_insert(value!([]))
+                .as_array_mut()
+                .ok_or("main cache release history")?
+                .push(value!(receipt));
+            self.save()?;
+            crate::recovery::bind_report_inputs(&self.inputs.policy.coordinator_root, report)?;
             report["worktree_removal"] = value!("preserved");
             return Ok(());
         }
@@ -1969,11 +2291,14 @@ impl Manager {
         exclude: &[PathBuf],
         report: &mut Value,
         all: bool,
-    ) -> Result<(), String> {
+        selected: &BTreeSet<PathBuf>,
+    ) -> Result<BTreeSet<PathBuf>, String> {
         report["worktree_inventory"] = value!([]);
+        let mut addresses = BTreeSet::new();
         for git in r.inventory(&self.inputs.policy.coordinator_root)? {
             let path = PathBuf::from(&git["worktree"]);
-            if !all && path != self.scope && !exclude.contains(&path) {
+            addresses.insert(path.clone());
+            if !all && path != self.scope && !exclude.contains(&path) && !selected.contains(&path) {
                 continue;
             }
             let snapshot = self.enrollment_snapshot(&path);
@@ -2059,7 +2384,7 @@ impl Manager {
                 .unwrap()
                 .push(row);
         }
-        Ok(())
+        Ok(addresses)
     }
     fn drain(
         &mut self,
@@ -2085,7 +2410,7 @@ impl Manager {
         } else {
             value!({"kind":"worktree","path":self.scope})
         };
-        self.observe_inventory(r, exclude, report, all)?;
+        self.observe_inventory(r, exclude, report, all, &BTreeSet::new())?;
         let mut failures = self.drain_entries(r, exclude, report, all)?;
         if !all {
             report["cleanup_failures"] = value!(failures);
@@ -2185,12 +2510,13 @@ impl Manager {
     }
     fn drain_entries(
         &mut self,
-        _r: &mut Runner,
+        r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
         maintenance: bool,
     ) -> Result<Vec<String>, String> {
-        let mut failures = vec![];
+        self.reconcile_published_results()?;
+        let mut failures = self.rotate_history(r, report)?;
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
             let cache =
@@ -2354,7 +2680,16 @@ impl Manager {
                     }
                     match &stage {
                         crate::verified_lifecycle::CleanupStage::Disposed => {
-                            self.ledger.entries[i].status = "disposed".into()
+                            self.ledger.entries[i].status = "disposed".into();
+                            if let Some(owner) = &mut self.ledger.entries[i].ownership {
+                                owner.cache_pending = false;
+                            }
+                            self.ledger.entries[i].disposed_at = Some(
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map_err(|error| error.to_string())?
+                                    .as_secs(),
+                            );
                         }
                         crate::verified_lifecycle::CleanupStage::Retained => {
                             self.ledger.entries[i].status = "retained".into()
@@ -2394,6 +2729,153 @@ impl Manager {
                 }
             }
         }
+        Ok(failures)
+    }
+    fn rotate_history(
+        &mut self,
+        r: &mut Runner,
+        report: &mut Value,
+    ) -> Result<Vec<String>, String> {
+        let Some(history) = self.inputs.policy.terminal_history.clone() else {
+            return Ok(vec![]);
+        };
+        let observed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| error.to_string())?
+            .as_secs();
+        let mut count = 0usize;
+        let mut bytes = 0u64;
+        let mut sizes = Vec::with_capacity(self.ledger.entries.len());
+        for entry in &self.ledger.entries {
+            let size = serde_json::to_vec(entry)
+                .map_err(|error| error.to_string())?
+                .len() as u64;
+            if entry.status == "disposed" {
+                count = count
+                    .checked_add(1)
+                    .ok_or("terminal history count overflow")?;
+                bytes = bytes
+                    .checked_add(size)
+                    .ok_or("terminal history byte count overflow")?;
+            }
+            sizes.push(size);
+        }
+        let mut removed = BTreeSet::new();
+        let mut leases = Vec::new();
+        let mut failures = vec![];
+        for (i, entry) in self.ledger.entries.iter().enumerate() {
+            let over_limit = count > history.max_entries || bytes > history.max_bytes;
+            if !crate::verified_lifecycle::retire_history(
+                entry.status == "disposed",
+                entry.uses.is_empty(),
+                entry.disposed_at,
+                observed,
+                history.keep_seconds,
+                over_limit,
+            ) {
+                continue;
+            }
+            let verified = (|| {
+                let terminal = entry
+                    .terminal
+                    .as_ref()
+                    .ok_or("disposed record lacks its terminal handoff")?;
+                if !entry.uses.is_empty()
+                    || entry.report_handoff_pending()
+                    || entry.cache_only
+                    || terminal.artifacts_only
+                    || entry
+                        .ownership
+                        .as_ref()
+                        .is_none_or(|owner| owner.cache_pending)
+                {
+                    return Err("disposed history still has unresolved responsibilities".into());
+                }
+                let lease = self
+                    .lease(entry, true)?
+                    .ok_or("terminal history has live consumers")?;
+                let receipt = entry
+                    .attempts
+                    .last()
+                    .and_then(|attempt| attempt.receipt.as_ref())
+                    .ok_or("disposed history lacks its original cleanup result")?;
+                let original = json(&self.receipt(receipt)?)?;
+                let handoff = json(&self.receipt(&terminal.receipt)?)?;
+                if original["terminal_receipt"] != value!(terminal.receipt)
+                    || original["destination"] != value!(entry.path)
+                    || original["head"] != terminal.head
+                    || handoff["path"] != value!(entry.path)
+                    || handoff["attachment"] != value!(entry.attachment)
+                    || handoff["head"] != terminal.head
+                    || entry.cleanup.as_ref().is_none_or(|progress| {
+                        progress.stage != crate::verified_lifecycle::CleanupStage::Disposed
+                            || progress.report_path.as_deref() != Some(receipt.path.as_str())
+                    })
+                    || crate::verified_lifecycle::cleanup_result(
+                        false,
+                        original["status"].as_str().unwrap_or(""),
+                        original["worktree_removal"].as_str().unwrap_or(""),
+                    ) != crate::verified_lifecycle::CleanupStage::Disposed
+                {
+                    return Err(
+                        "disposed history original does not establish this attachment's removal"
+                            .into(),
+                    );
+                }
+                // A present/reused address remains protected. This method releases
+                // history only; it never removes a checkout or Git registration.
+                match fs::symlink_metadata(&entry.path) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.to_string()),
+                    Ok(_) => {
+                        return Err(
+                            "terminal history address is present; preserve its record".into()
+                        );
+                    }
+                }
+                if r.inventory(&self.inputs.policy.coordinator_root)?
+                    .iter()
+                    .any(|row| {
+                        row.get("worktree")
+                            .is_some_and(|path| Path::new(path) == entry.path)
+                    })
+                {
+                    return Err("terminal history address remains Git-registered".into());
+                }
+                self.stable(r)?;
+                lease.stable()?;
+                Ok::<_, String>(lease)
+            })();
+            match verified {
+                Ok(lease) => {
+                    removed.insert(i);
+                    count -= 1;
+                    bytes -= sizes[i];
+                    // Keep exclusion through publication of the replacement ledger.
+                    leases.push(lease);
+                }
+                Err(error) => failures.push(format!("{}: {error}", entry.path.display())),
+            }
+        }
+        if !removed.is_empty() {
+            let mut i = 0usize;
+            self.ledger.entries.retain(|_| {
+                let keep = !removed.contains(&i);
+                i += 1;
+                keep
+            });
+            self.save()?;
+        }
+        if report["history_rotation"].is_null() {
+            report["history_rotation"] = value!([]);
+        }
+        report["history_rotation"]
+            .as_array_mut()
+            .ok_or("history rotation report is not an array")?
+            .push(value!({"path":self.scope,"removed_records":removed.len(),
+                "remaining_disposed_records":count,"remaining_disposed_bytes":bytes,
+                "over_limit":count > history.max_entries || bytes > history.max_bytes,
+                "original_files":"not-disposed","checkout_disposal":"not-attempted"}));
         Ok(failures)
     }
     fn progress(
@@ -2452,6 +2934,9 @@ impl Manager {
         {
             return Err("enrollment snapshot belongs to a different owner".into());
         }
+        for entry in &ledger.entries {
+            entry.check_agents()?;
+        }
         Ok(Some(ledger))
     }
     /// Project existing local state and Git inventory; never enroll or dispose.
@@ -2461,9 +2946,79 @@ impl Manager {
         report: &mut Value,
         all: bool,
     ) -> Result<(), String> {
-        use crate::verified_attention::{Attention, classify, needs_attention};
+        use crate::verified_attention::{Attention, classify, needs_attention, pending_for_agent};
+        let current = crate::AgentIdentity::from_report(report)?;
+        let mut selected = BTreeSet::new();
+        let mut unknown_creators = BTreeSet::new();
+        let mut declared = BTreeSet::new();
+        let mut empty_records = BTreeSet::new();
+        let mut unreadable_records = 0;
+        let mut namespace_error = None;
+        // Read only the declared enrollment metadata to select this agent's work.
+        // Other agents' physical checkouts are observed only by explicit all-status.
+        if all || current.is_some() {
+            match self.enrollment_paths() {
+                Ok(paths) => {
+                    for path in paths {
+                        declared.insert(path.clone());
+                        match self.enrollment_snapshot(&path) {
+                            Ok(Some(ledger)) => {
+                                let entry = ledger
+                                    .entries
+                                    .iter()
+                                    .find(|e| e.status != "disposed")
+                                    .or_else(|| ledger.entries.last());
+                                if let Some(entry) = entry {
+                                    if path != self.inputs.policy.coordinator_root
+                                        && entry.status != "disposed"
+                                        && entry.creator_agent.is_none()
+                                    {
+                                        unknown_creators.insert(path.clone());
+                                    }
+                                    if all
+                                        || pending_for_agent(
+                                            entry
+                                                .creator_agent
+                                                .as_ref()
+                                                .map(|a| a.id.as_str())
+                                                .unwrap_or(""),
+                                            current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
+                                            true,
+                                        )
+                                    {
+                                        selected.insert(path);
+                                    }
+                                } else {
+                                    empty_records.insert(path);
+                                }
+                            }
+                            Ok(None) => {
+                                unknown_creators.insert(path.clone());
+                                if all {
+                                    selected.insert(path);
+                                }
+                            }
+                            Err(_) => {
+                                unreadable_records += 1;
+                                if all {
+                                    selected.insert(path);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(error) => namespace_error = Some(error),
+            }
+        }
         let mut inventory = value!({});
-        self.observe_inventory(r, &[], &mut inventory, all)?;
+        let git_addresses = self.observe_inventory(r, &[], &mut inventory, all, &selected)?;
+        for path in git_addresses {
+            if path != self.inputs.policy.coordinator_root
+                && (!declared.contains(&path) || empty_records.contains(&path))
+            {
+                unknown_creators.insert(path);
+            }
+        }
         let git_rows: BTreeMap<PathBuf, Value> = inventory["worktree_inventory"]
             .as_array()
             .unwrap()
@@ -2472,15 +3027,13 @@ impl Manager {
             .collect();
         let mut paths: BTreeSet<PathBuf> = git_rows.keys().cloned().collect();
         let mut rows = Vec::new();
-        if all {
-            match self.enrollment_paths() {
-                Ok(enrolled) => paths.extend(enrolled),
-                Err(error) => rows.push(value!({"path":null,"work_state":"unknown",
-                    "cleanup_state":"unknown","attention_required":true,
-                    "next_action":"inspect-enrollment-namespace","error":error})),
-            }
-        } else {
-            paths.insert(self.scope.clone());
+        paths.extend(selected);
+        paths.insert(self.scope.clone());
+        if let Some(error) = &namespace_error {
+            rows.push(value!({"path":null,"work_state":"unknown",
+                "cleanup_state":"unknown","attention_required":true,
+                "agent_attention_required":false,
+                "next_action":"inspect-enrollment-namespace","error":error}));
         }
         for path in paths {
             let snapshot = self.enrollment_snapshot(&path);
@@ -2537,8 +3090,26 @@ impl Manager {
                 Attention::Unregistered => ("unregistered", "inspect-and-import"),
                 Attention::Unknown => ("unknown", "inspect-original-state"),
             };
+            let creator = entry.and_then(|e| e.creator_agent.as_ref());
+            let report_handoff_pending = entry.is_some_and(Entry::report_handoff_pending);
+            let attention_required = needs_attention(&view) || report_handoff_pending;
+            let action = if report_handoff_pending {
+                "recover-result-handoff"
+            } else {
+                action
+            };
+            let agent_attention = pending_for_agent(
+                creator.map(|a| a.id.as_str()).unwrap_or(""),
+                current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
+                attention_required,
+            );
             rows.push(value!({"path":path,"work_state":work,"cleanup_state":cleanup,
-                "attention_required":needs_attention(&view),"next_action":action,
+                "branch":entry.map(|e| &e.branch),"creator_agent":creator,
+                "custodian_agent":entry.and_then(|e| e.custodian_agent.as_ref()),
+                "cleanup_progress":entry.and_then(|e| e.cleanup.as_ref()),
+                "agent_attention_required":agent_attention,
+                "attention_required":attention_required,"next_action":action,
+                "report_handoff_pending":report_handoff_pending,
                 "ledger_path":record_directory(&self.directory, &path)?.join("ledger.json"),
                 "physical_present":physical.is_ok(),"git_registered":git.is_some(),
                 "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
@@ -2546,7 +3117,11 @@ impl Manager {
                 "error":error}));
         }
         report["worktree_status"] = value!({"schema":"chrono-worktree-status/v1",
-            "scope":if all {"coordinator"} else {"target"},"worktrees":rows});
+            "scope":if all {"coordinator"} else if current.is_some() {"target-and-current-agent"} else {"target"},
+            "agent":report["agent"],"unknown_creator_records":unknown_creators.len(),
+            "unreadable_records":unreadable_records,"namespace_error":namespace_error,
+            "agent_observation_complete":current.is_some() && unknown_creators.is_empty()
+                && unreadable_records == 0 && namespace_error.is_none(),"worktrees":rows});
         Ok(())
     }
     /// Entry-local refusals remain in the drain report and immutable receipts.
@@ -2825,7 +3400,7 @@ pub(crate) fn create(
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
     manager.stable(r)?;
-    manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"]}))?;
+    manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"],"creator_agent":crate::AgentIdentity::from_report(report)?}))?;
     report["cleanup_enrollment"] = value!({"coordinator_root":manager.inputs.policy.coordinator_root,"state_directory":manager.inputs.policy.state_directory,"kind":"birth"});
     manager.observe_attention(r, report, false)?;
     Ok(())
@@ -3005,7 +3580,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     values["--stage-sha256"],
                     report,
                 ),
-                "status" => manager.observe_attention(r, report, target.is_none()),
+                "status" => {
+                    manager.reconcile_published_results()?;
+                    manager.observe_attention(r, report, target.is_none())
+                }
                 "maintain" => {
                     let result = manager.drain(r, &[invoking.clone()], report, true);
                     manager.observe_attention(r, report, true)?;
@@ -3022,7 +3600,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     } else {
                         "import"
                     },
-                    value!({"report_path":report["report_path"],"historical_birth":"not-claimed"}),
+                    value!({"report_path":report["report_path"],"historical_birth":"not-claimed",
+                        "custodian_agent":crate::AgentIdentity::from_report(report)?}),
                     )?;
                     manager.observe_attention(r, report, false)
                 }
@@ -3109,6 +3688,20 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                                 chrono_harness::full::compact_process(&value!(&process))?;
                             report["managed_process"]["environment_representation"] =
                                 value!("sha256");
+                            // This main checkout has no cache enrollment, but
+                            // its caller still consumes the agent's pending work.
+                            let observer = Manager::open(
+                                r,
+                                &invoking,
+                                config_path,
+                                &bytes,
+                                token,
+                                target,
+                                false,
+                                true,
+                            )?
+                            .ok_or("cleanup policy disappeared during main check")?;
+                            observer.observe_attention(r, report, false)?;
                             if process.failure.is_some() || process.exit_code != 0 {
                                 report["managed_command_failed"] = value!(true);
                                 return Err(format!(
@@ -3150,7 +3743,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         manager.inputs.registrations.as_ref(),
                         |(registrations, _)| registrations,
                     );
-                    let command = if operation == "check" {
+                    let mut command = if operation == "check" {
                         canonical_command(target, target_regs, &selection)?
                     } else if operation == "bootstrap" {
                         bootstrap_command(r, target, target_regs, values["--bootstrap-config"])?
@@ -3164,6 +3757,15 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     } else {
                         values["--operation"]
                     };
+                    let artifact_producer = manager
+                        .inputs
+                        .policy
+                        .retained_producers
+                        .iter()
+                        .find(|producer| {
+                            producer.operations.iter().any(|name| name == use_operation)
+                        })
+                        .map(|producer| producer.id.clone());
                     if e.ownership.is_some() {
                         use_guard = Some(
                             manager
@@ -3191,6 +3793,30 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.observe_attention(r, report, false)?;
                     let coordinator_bytes = manager.inputs.anchor_config_bytes.clone();
                     drop(manager);
+                    let mut artifact = artifact_producer
+                        .as_deref()
+                        .map(|producer| {
+                            TemporaryHost::registered_allocate(
+                                &coordinator,
+                                config_path,
+                                producer,
+                                "run-",
+                            )
+                        })
+                        .transpose()?;
+                    if let Some(artifact) = &artifact {
+                        let directory = artifact
+                            .path()
+                            .to_str()
+                            .ok_or("artifact directory UTF8")?
+                            .to_owned();
+                        command
+                            .env
+                            .insert("CHRONO_ARTIFACT_DIRECTORY".into(), directory.clone());
+                        command.env.insert("TMPDIR".into(), directory);
+                        report["artifact_directory"] =
+                            value!({"producer":artifact_producer,"path":artifact.path()});
+                    }
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
                     let process = chrono_harness::prepared::process_identities(
                         chrono_harness::run_process_observed(target, &command, &[], &digest)?,
@@ -3198,6 +3824,25 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     report["managed_process"] =
                         chrono_harness::full::compact_process(&value!(&process))?;
                     report["managed_process"]["environment_representation"] = value!("sha256");
+                    let artifact_error = if let Some(artifact) = &mut artifact {
+                        match artifact.finish(process.failure.is_some() || process.exit_code != 0) {
+                            Ok(handoff) => {
+                                report["artifact_directory"]["handoff"] = value!({"status":handoff["status"],"report_path":handoff["report_path"],"error":handoff["error"]});
+                                (handoff["status"] != "finished").then(|| {
+                                    format!(
+                                        "artifact directory handoff failed: {}",
+                                        handoff["error"]
+                                    )
+                                })
+                            }
+                            Err(error) => {
+                                report["artifact_directory"]["error"] = value!(error);
+                                Some(error)
+                            }
+                        }
+                    } else {
+                        None
+                    };
                     let mut manager = Manager::open(
                         r,
                         &coordinator,
@@ -3209,8 +3854,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         true,
                     )?
                     .ok_or("cleanup policy disappeared during managed use")?;
-                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"process":report["managed_process"]}))?;
+                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"report_path":report["report_path"],"process":report["managed_process"]}))?;
                     report["managed_use_receipt"] = value!(receipt);
+                    crate::recovery::bind_report_inputs(&coordinator, report)?;
                     let i = manager
                         .current_entry(target)
                         .ok_or("managed enrollment disappeared")?;
@@ -3221,6 +3867,15 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     {
                         return Err("managed use identity disappeared".into());
                     }
+                    manager.ledger.entries[i]
+                        .enrollment
+                        .as_object_mut()
+                        .ok_or("enrollment object")?
+                        .entry("completed_uses")
+                        .or_insert(value!([]))
+                        .as_array_mut()
+                        .ok_or("completed use history")?
+                        .push(value!(receipt));
                     manager.ledger.entries[i].uses.retain(|s| s != token);
                     manager.save()?;
                     if process.failure.is_some() || process.exit_code != 0 {
@@ -3229,6 +3884,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             "registered managed command failed with exit {}: {:?}",
                             process.exit_code, process.failure
                         ));
+                    }
+                    if let Some(error) = artifact_error {
+                        return Err(error);
                     }
                     let mut post_use_cleanup = value!({});
                     let cleanup = manager.drain_for_admission(
@@ -3249,18 +3907,44 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
 /// Warnings are a projection of the already-persisted report, never new state.
 pub(crate) fn attention_reminder(report: &Value) -> String {
     let mut text = String::new();
-    if let Some(rows) = report["worktree_status"]["worktrees"].as_array() {
+    let status = &report["worktree_status"];
+    let known = status["agent"]["status"] == "known";
+    if let Some(rows) = status["worktrees"].as_array() {
+        let mut total = 0;
         for row in rows {
-            if row["attention_required"] == true {
-                text.push_str(&format!(
-                    "W_WORKTREE_ATTENTION: path={} work_state={} cleanup_state={} next_action={}; inspect chrono-worktree status before handing off unfinished work.\n",
-                    row["path"], row["work_state"], row["cleanup_state"], row["next_action"]
-                ));
+            let required = if known {
+                row["agent_attention_required"] == true
+            } else {
+                row["attention_required"] == true
+            };
+            if required {
+                total += 1;
+                if total <= 64 {
+                    let detail: String = row["cleanup_progress"]["detail"]
+                        .as_str()
+                        .unwrap_or("")
+                        .chars()
+                        .take(512)
+                        .collect();
+                    text.push_str(&format!(
+                        "W_WORKTREE_ATTENTION: creator={} path={} branch={} work_state={} cleanup_state={} detail={} next_action={}; inspect chrono-worktree status and maintain unfinished work.\n",
+                        row["creator_agent"], row["path"], row["branch"], row["work_state"],
+                        row["cleanup_state"], value!(detail), row["next_action"]
+                    ));
+                }
             }
+        }
+        if total > 64 {
+            text.push_str(&format!("W_WORKTREE_ATTENTION: {total} pending objects; showing 64; inspect chrono-worktree status for all rows.\n"));
+        }
+        if status["agent_observation_complete"] != true {
+            text.push_str(&format!("W_WORKTREE_AGENT_SCOPE: agent={} unknown_creator_records={} unreadable_records={} namespace_error={}; observation is incomplete; unknown ownership is preserved.\n",
+                status["agent"], status["unknown_creator_records"], status["unreadable_records"], status["namespace_error"]));
         }
     }
     text
 }
+
 fn registered_command(
     root: &Path,
     registrations: &Registrations,

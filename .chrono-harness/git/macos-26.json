@@ -146,6 +146,15 @@
         "--version"
       ],
       "expected_version": null
+    },
+    {
+      "id": "bootstrap-native",
+      "program": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-host-bootstrap 0.1.0"
     }
   ],
   "protocol": {
@@ -451,6 +460,7 @@
     "inherit": [
       "PATH",
       "HOME",
+      "HECA_AGENT_ID",
       "CARGO_HOME",
       "RUSTUP_HOME",
       "RUSTUP_TOOLCHAIN",
@@ -513,6 +523,14 @@
           "environment:RUSTC_WRAPPER",
           "environment:RUSTC_WORKSPACE_WRAPPER",
           "input:bootstrap-native-toolchains"
+        ]
+      },
+      {
+        "id": "worktree-agent-identity",
+        "consumer": "project:worktree",
+        "kind": "declared-worktree-agent-identity",
+        "inputs": [
+          "environment:HECA_AGENT_ID"
         ]
       }
     ]

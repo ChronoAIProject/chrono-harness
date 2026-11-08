@@ -946,15 +946,16 @@ fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
 
 #[test]
 fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_commands() {
-    use std::{os::unix::fs::MetadataExt, sync::mpsc, time::Duration};
+    use std::{os::unix::fs::MetadataExt, sync::mpsc};
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);
     let commands = [cargo_result(true), cargo_result(false)];
-    let (created_tx, created_rx) = mpsc::channel();
-    let (resume_tx, resume_rx) = mpsc::channel();
-    let (busy_tx, busy_rx) = mpsc::channel();
-    let (finished_tx, finished_rx) = mpsc::channel();
     let (first, second) = std::thread::scope(|scope| {
+        // 控制端退出时先关闭释放信道，再由 scope 等待生产者，避免断言失败留下阻塞线程。
+        let (created_tx, created_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let (busy_tx, busy_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
         let root = &owner.root;
         let command = &commands[0];
         let store = &directory;
@@ -962,7 +963,7 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
             let mut observer = |phase: &str| {
                 if phase == "birth-gate-acquired" {
                     created_tx.send(()).unwrap();
-                    resume_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                    resume_rx.recv().unwrap();
                 }
             };
             retain_command_result_observed(
@@ -976,7 +977,7 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
                 Some(&mut observer),
             )
         });
-        created_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        created_rx.recv().unwrap();
         assert!(!directory.join("objects.json").exists());
         let namespace_identity = fs::metadata(&directory).unwrap();
         let namespace = fs::File::open(&directory).unwrap();
@@ -995,7 +996,10 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
             commands[0].1.stdout
         );
         assert!(first_copy.join("original-state/recovery/original").exists());
-        let second = scope.spawn(|| {
+        let root = &owner.root;
+        let command = &commands[1];
+        let store = &directory;
+        let second = scope.spawn(move || {
             let mut reported_busy = false;
             let mut observer = |phase: &str| {
                 if phase == "birth-gate-busy" && !reported_busy {
@@ -1004,19 +1008,21 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
                 }
             };
             let receipt = retain_command_result_observed(
-                &owner.root,
-                commands[1].0.path(),
-                &commands[1].2,
+                root,
+                command.0.path(),
+                &command.2,
                 &json!({"publisher":1}),
-                &commands[1].1,
+                &command.1,
                 Some(0),
-                Some(&directory),
+                Some(store),
                 Some(&mut observer),
             );
             finished_tx.send(()).unwrap();
             receipt
         });
-        let busy = busy_rx.recv_timeout(Duration::from_secs(5));
+        // Sender lifetime also reports an early publisher return. Wait for the
+        // actual handshake; the registered operation owns the runtime bound.
+        let busy = busy_rx.recv();
         let waiting = matches!(finished_rx.try_recv(), Err(mpsc::TryRecvError::Empty));
         let registry_absent = !directory.join("objects.json").exists();
         // Always unblock A and join both publishers before evaluating the result.

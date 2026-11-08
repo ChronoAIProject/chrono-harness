@@ -2,6 +2,7 @@
 use super::*;
 use std::sync::Arc;
 mod body;
+mod rolling;
 use body::fingerprint;
 
 #[derive(Clone, Deserialize)]
@@ -18,6 +19,11 @@ pub(super) struct ProducerPolicy {
     /// Exact copied input members are enrolled by the producer, never discovered.
     #[serde(default)]
     pub(super) fixture_bodies: bool,
+    #[serde(default)]
+    rolling_directory: Option<rolling::Policy>,
+    /// These exact registered operations publish one whole run directory.
+    #[serde(default)]
+    pub(super) operations: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -57,6 +63,8 @@ struct Object {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(deserialize_with = "strict_map")]
     bodies: BTreeMap<String, body::Body>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rolling: Option<rolling::Directory>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -436,7 +444,7 @@ impl Store {
         self.state.objects.clear();
         drop(self.object_guard.take());
         self.object_guard = Some(DirectoryGate::acquire(
-            &no_symlink_parents(&self.directory, object)?,
+            &self.gate_path(object)?,
             self.began,
             std::time::Duration::from_secs(30),
             &mut |_| {},
@@ -478,15 +486,41 @@ impl Store {
 
     fn load_available(&mut self, object: &str) -> Result<bool, String> {
         self.owner_stable()?;
+        if self
+            .state
+            .objects
+            .first()
+            .is_some_and(|current| current.path == object)
+        {
+            self.object_guard
+                .as_ref()
+                .ok_or("loaded producer metadata has no exclusion")?
+                .stable()?;
+            return Ok(true);
+        }
         self.state.objects.clear();
         drop(self.object_guard.take());
-        self.object_guard =
-            DirectoryGate::available(&no_symlink_parents(&self.directory, object)?)?;
+        self.object_guard = DirectoryGate::available(&self.gate_path(object)?)?;
         if self.object_guard.is_none() {
             return Ok(false);
         }
         self.load_owned(object)?;
         Ok(true)
+    }
+
+    fn gate_path(&self, object: &str) -> Result<PathBuf, String> {
+        let record = no_symlink_parents(&self.directory, &Self::record_name(object)?)?;
+        if record.exists() {
+            let snapshot = self.decode_record(&record)?;
+            if let Some(rolling) = &snapshot.rolling {
+                let path = no_symlink_parents(&self.directory, &rolling.metadata)?;
+                if directory_id(&path)? != rolling.metadata_identity {
+                    return Err("rolling directory metadata identity changed".into());
+                }
+                return Ok(path);
+            }
+        }
+        no_symlink_parents(&self.directory, object)
     }
 
     fn load_owned(&mut self, object: &str) -> Result<usize, String> {
@@ -542,11 +576,10 @@ impl Store {
         directory_id_expected: &str,
         object: &Object,
     ) -> Result<(), String> {
-        if directory_id(directory)? != directory_id_expected
-            || directory_id(&no_symlink_parents(directory, &object.path)?)? != object.identity
-        {
+        if directory_id(directory)? != directory_id_expected {
             return Err("producer artifact identity changed; preserve object".into());
         }
+        rolling::physical_stable(directory, object)?;
         let intent = no_symlink_parents(directory, &object.intent.path)?;
         let bytes = fs::read(intent).map_err(|e| e.to_string())?;
         let intent = json(&bytes)?;
@@ -554,6 +587,11 @@ impl Store {
             || intent["path"] != object.path
             || intent["identity"] != object.identity
             || intent["producer"] != producer
+            || intent["rolling_directory"].as_bool().unwrap_or(false) != object.rolling.is_some()
+            || object
+                .rolling
+                .as_ref()
+                .is_some_and(|r| intent["born_at"] != r.born_at)
             || (object.cache_lease.is_some() && intent["cache_lease"] != value!(object.cache_lease))
         {
             return Err("producer intent changed; preserve object".into());
@@ -900,6 +938,7 @@ impl RetainedArtifact {
             attempts: vec![],
             cache_lease: None,
             bodies: BTreeMap::new(),
+            rolling: None,
         }));
         store.save(store.state.objects.len() - 1)?;
         Ok(Self {
@@ -1056,7 +1095,8 @@ impl RetainedArtifact {
 /// Native consumers use bind_command; engine consumers inherit the same Scope.
 pub struct TemporaryHost {
     path: PathBuf,
-    lease: Lease,
+    lease: Option<Lease>,
+    owner: Option<rolling::Owner>,
 }
 
 impl TemporaryHost {
@@ -1073,6 +1113,16 @@ impl TemporaryHost {
         producer: &str,
         generated_outputs: &[String],
         prefix: &str,
+    ) -> Result<Self, String> {
+        Self::allocate_owned(directory, producer, generated_outputs, prefix, None)
+    }
+
+    fn allocate_owned(
+        directory: &Path,
+        producer: &str,
+        generated_outputs: &[String],
+        prefix: &str,
+        owner: Option<rolling::Owner>,
     ) -> Result<Self, String> {
         generated_paths(generated_outputs)?;
         if prefix.contains(['/', '\\', '\0']) {
@@ -1092,7 +1142,36 @@ impl TemporaryHost {
             .and_then(|s| s.to_str())
             .ok_or("allocation UTF-8")?
             .to_owned();
-        let lease_path = format!("allocation-{}.lease", sha256(object.as_bytes()));
+        let identity = directory_id(&path)?;
+        let rolling = if owner.is_some() {
+            let metadata = format!("rolling-metadata/{}", sha256(object.as_bytes()));
+            let physical = no_symlink_parents(directory, &metadata)?;
+            fs::create_dir_all(physical.parent().unwrap()).map_err(|e| e.to_string())?;
+            fs::create_dir(&physical).map_err(|e| e.to_string())?;
+            store.object_guard = Some(DirectoryGate::acquire(
+                &physical,
+                store.began,
+                std::time::Duration::from_secs(30),
+                &mut |_| {},
+            )?);
+            Some(rolling::Directory {
+                metadata,
+                metadata_identity: directory_id(&physical)?,
+                born_at: rolling::now()?,
+                diagnostics: false,
+                terminal: None,
+                disposal_intent: None,
+                disposed: false,
+                disposed_at: None,
+            })
+        } else {
+            store.bind(&object)?;
+            None
+        };
+        let lease_path = rolling
+            .as_ref()
+            .map(|r| format!("{}/allocation.lease", r.metadata))
+            .unwrap_or_else(|| format!("allocation-{}.lease", sha256(object.as_bytes())));
         let lease = Lease::acquire(
             &no_symlink_parents(directory, &lease_path)?,
             None,
@@ -1105,14 +1184,15 @@ impl TemporaryHost {
             path: lease_path,
             id: lease.id().into(),
         };
-        let identity = directory_id(&path)?;
-        store.bind(&object)?;
         let intent = store.receipt(
-            "producer-intent",
+            &rolling.as_ref().map(|r| format!("{}/producer-intent", r.metadata))
+                .unwrap_or_else(|| "producer-intent".into()),
             &value!({
                 "schema":"chrono-temporary-host-intent/v1","producer":producer,
                 "path":object,"identity":identity,"generated_outputs":generated_outputs,
-                "cache_lease":binding,"evidence_disposal":"not-authorized",
+                "cache_lease":binding,"evidence_disposal":if rolling.is_some() { "terminal-handoff-and-retention" } else { "not-authorized" },
+                "rolling_directory":rolling.is_some(),
+                "born_at":rolling.as_ref().map(|r| r.born_at),
                 "producer_outcome":"not-established","task_completion":"not-claimed"
             }),
         )?;
@@ -1131,9 +1211,14 @@ impl TemporaryHost {
             attempts: vec![],
             cache_lease: Some(binding),
             bodies: BTreeMap::new(),
+            rolling,
         }));
         store.save(store.state.objects.len() - 1)?;
-        Ok(Self { path, lease })
+        Ok(Self {
+            path,
+            lease: Some(lease),
+            owner,
+        })
     }
 
     pub fn path(&self) -> &Path {
@@ -1143,12 +1228,19 @@ impl TemporaryHost {
     /// A declared cross-thread engine consumer enters its own process_fds Scope
     /// with this owned copy. It shares the existing kernel open description.
     pub fn capability(&self) -> Result<fs::File, String> {
-        self.lease.stable()?;
-        self.lease.capability()
+        let lease = self
+            .lease
+            .as_ref()
+            .ok_or("temporary allocation was handed off")?;
+        lease.stable()?;
+        lease.capability()
     }
 
     pub fn bind_command(&self, command: &mut std::process::Command) -> Result<(), String> {
-        self.lease.stable()?;
+        self.lease
+            .as_ref()
+            .ok_or("temporary allocation was handed off")?
+            .stable()?;
         // The same exact allocation also holds nested default tempfile outputs.
         // It is retained source/evidence, never a disposable mixed TMPDIR root.
         command.env("TMPDIR", &self.path);
@@ -1284,6 +1376,26 @@ impl ProducerPolicy {
     }
 
     pub(super) fn validate(&self, policy: &Policy) -> Result<(), String> {
+        if self.rolling_directory.is_some() && !self.temporary {
+            return Err("rolling directory requires prospective temporary ownership".into());
+        }
+        if !self.operations.is_empty() && self.rolling_directory.is_none() {
+            return Err("operation artifact directories require rolling ownership".into());
+        }
+        let mut operations = BTreeSet::new();
+        for operation in &self.operations {
+            if operation.trim().is_empty()
+                || !operations.insert(operation)
+                || policy
+                    .retained_producers
+                    .iter()
+                    .filter(|producer| producer.operations.contains(operation))
+                    .count()
+                    != 1
+            {
+                return Err("artifact operation requires one exact producer".into());
+            }
+        }
         relative_path(self.directory.trim_end_matches('/'))?;
         if self.id.is_empty()
             || !self.directory.ends_with('/')
@@ -1373,6 +1485,16 @@ impl ProducerPolicy {
         r: &mut Runner,
         report: &mut Value,
     ) -> Result<(), String> {
+        self.drain_selected(inputs, r, report, None)
+    }
+
+    fn drain_selected(
+        &self,
+        inputs: &PolicyInputs,
+        r: &mut Runner,
+        report: &mut Value,
+        selected: Option<&str>,
+    ) -> Result<(), String> {
         let root = &inputs.policy.coordinator_root;
         let directory = self.directory(root)?;
         if !directory.exists() || !no_symlink_parents(&directory, "objects.json")?.exists() {
@@ -1380,8 +1502,18 @@ impl ProducerPolicy {
                 "status":"protected-unknown","reason":"no explicit producer registry; historical objects remain untouched"}));
             return Ok(());
         }
-        let opened = Store::open(&directory, &self.id, false)?;
-        let (objects, registration_errors) = opened.records()?;
+        if selected.is_none() {
+            rolling::recover(self, inputs, r, &directory, report)?;
+        }
+        let mut opened = Store::open(&directory, &self.id, false)?;
+        let (objects, registration_errors) = if let Some(selected) = selected {
+            // finish joins its exact allocation's existing bounded admission.
+            // Broad maintenance still skips unrelated busy addresses below.
+            opened.load(selected)?;
+            (opened.state.objects.clone(), vec![])
+        } else {
+            opened.records()?
+        };
         let registry_id = opened.state.directory_id.clone();
         let mut store = Some(opened);
         let mut failures = vec![];
@@ -1485,6 +1617,24 @@ impl ProducerPolicy {
             let mut row = value!({"producer":self.id,"path":format!("{}{}",self.directory,object.path),
                 "retention_reason":object.retention_reason,"consumers":object.consumers,
                 "registered_generated_objects":object.generated.len(),"evidence":"retained"});
+            if object.rolling.is_some() {
+                drop(store.take());
+                match rolling::drain(self, inputs, r, &directory, object, cache_guard.as_ref()) {
+                    Ok(result) => {
+                        if result["status"] == "failed" {
+                            failures.push(format!("{}: {}", object.path, result["error"]));
+                        }
+                        row["rolling_directory"] = result;
+                    }
+                    Err(error) => {
+                        failures.push(format!("{}: {error}", object.path));
+                        row["rolling_directory"] = value!({"status":"failed","error":error});
+                    }
+                }
+                row["status"] = row["rolling_directory"]["status"].clone();
+                report["producer_objects"].as_array_mut().unwrap().push(row);
+                continue;
+            }
             // Body recovery has its own membership and receipts. A historical
             // Cargo disposal bit cannot settle a subsequently adopted body.
             if !object.bodies.is_empty() {

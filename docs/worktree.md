@@ -630,9 +630,33 @@ birth 在登记和回执封存期间持关联租约。生产者中断后，普�
 
 清理拒绝只影响自身登记项。普通 start／reconstruct／use／check／bootstrap 不尝试无关项或 fixture 清理，目标准入／所有权／状态发布失败仍阻断。明确 maintain 在 drain、不可变失败回执、cleanup_failures 保留无关失败，继续独立项；只要本轮尝试有失败仍非零，不丢旧回执。
 
+#### 创建 agent 与待维护提醒
+
+工作树配置的可选 `agent_identity_env` 点名当前调用方身份的环境变量；本宿主采用 `HECA_AGENT_ID`，并在工作树和各平台检查配置的 `environment.inherit` 转交该值；公开 `check`、Python／Rust bootstrap 同时保留所有者的 stderr 提醒。普通 agent 不需要另加 CLI 参数。没有配置、缺值、空值、控制字符或超过 256 字节时，原报告的 `agent.status` 为 `unknown`，不猜用户名、PID 或分支所有者。它是调用方声明，用于归属和提醒，不授予清理权限。
+
+start／reconstruct 的原报告和创建前 intent 保存 agent；同一地址的 birth 登记保存 `creator_agent`。后续 use、finish、maintain 和其他 agent 的操作保持该创建者。显式 import 仅保存 `custodian_agent`；历史创建者未知时仍为 null。旧记录也保持 unknown，不根据当前调用方补写历史。
+
+相关自动生命周期入口复用 `worktree_status`。已知 agent 的普通操作读取同一协调宿主的显式 enrollment 元数据，观察目标及该 agent 创建的地址；不为提醒检查其他 agent 的物理检出。status／maintain 仍提供全部状态。每行保存 `creator_agent`、`custodian_agent`、分支、工作／清理状态、清理详情、后续动作及 `agent_attention_required`；stderr 只提醒当前已知 agent 自己的未完对象，最多显示 64 项，超出时报实际项数，完整清单保存在原报告。完成工作仍须加入自有任务并执行 finish；已交接但 retained 的对象继续提醒。
+
+`worktree_status.agent`、`unknown_creator_records`、`unreadable_records`、`namespace_error` 和 `agent_observation_complete` 明确观察范围。身份未知时保留通用目标／全量状态提醒，并报 `W_WORKTREE_AGENT_SCOPE`；不能把这些对象认作当前 agent 创建，或把未知范围解释为没有待办。损坏记录保留错误，独立合法操作继续。提醒不设置终态、不授权删除，也不增加后台扫描器或人审门。
+
+**产品与宿主配置同改：**这批新增身份输入和即时提醒，宿主显式选择身份来源，使用现有 ledger 和原报告，不另建 agent 状态索引。相关读数和提示的总成本待实测；旧协调宿主仍须按原配套部署／迁移边界切换。它不补齐历史创建者，也不证明终态历史、租约及空地址目录已全部有限回收。
+
 #### 保留后的接续与清理阶段
 
 每项登记可带 `cleanup`，分别保留 `stage`、原因 `detail` 和原 `report_path`。阶段为 `pending`、`in-progress`、`waiting-for-consumers`、`retained`、`failed`、`caches-released`、`disposed`。它与工作状态 `status`／`terminal` 分开：缓存释放不表示工作完成；原进程或清理中断仍保留原尝试，不能仅凭阶段补写成功。旧记录缺少该字段时，表示尚无此阶段观察。
+
+v2 政策可登记 `terminal_history` 的 `keep_seconds`、`max_entries`、`max_bytes`；后两项须为正，作用于每个地址 ledger 的 disposed 历史。字节口径为各条目紧凑 JSON 的字节和。本宿主采用 24 小时、64 条、4 MiB。成功整树处置的生产者保存实际 `disposed_at`；后续同地址操作或显式 maintain 在达到保留时间、条数或字节上限后，按原登记顺序移出合格记录，不在 finish 返回前立即丢失新结果。
+
+移出前重新核对原终态和清理回执、附件、实际物理路径及 Git 登记，并持有原关联的独占租约直到 ledger 更新；仍活跃、保留、缺时刻、未知、忙碌、回执损坏或地址已复用的条目继续保护。它只释放 ledger 的历史使用方引用，不额外删除工作树或分支。`history_rotation` 报告实际移出量、剩余条数／字节和是否仍超限。租约文件和空地址目录仍未全部接入有限回收；这项 ledger 轮转不宣称这些边界已完成。
+
+已采用原件保留时，每个地址的 ledger 也是实际使用方。打开登记时保护其明确引用的已登记原件；保存前先保护旧、新记录所需原件的并集，ledger 发布成功后才释放不再引用的部分。消费范围由登记、终态、清理／缓存尝试、迁移及未完成 use 的字段明确列出，不扫描目录或遍历任意 JSON 猜引用。这样，一次调用返回后，独立 retention 维护仍须保护后续恢复所需的清理结果。尚未接入原件保留的历史文件保持原语义；此保护本身不证明终态历史已有有限轮转。
+
+自动所有者发布的不可变回执和保留字节，现也使用 `lifecycle-original`。物理字节出现前，将原件加入同一地址的 `worktree-enrollment` 引用；随后按 typed 输入字段登记依赖并封存发布。调用方实际读取／产生的原件能力持续保护报告交接，use 释放令牌前先把原结果依赖接到原报告。账本收窄或终态轮转后，仍被报告或其他使用方引用的原件继续保留，其余沿 retention 的有限维护回收。中断留下的现有登记按原身份恢复，不据新政策扫描、认领或删除未登记的历史文件。
+
+use 结果及 main-cache release 在最终报告交接前，暂存在所属 enrollment 的 `completed_uses`／`main_cache_releases`。后续 status 或清理准入核对精确原回执、最终报告的绑定、retention 生产者封存的摘要／长度和物理身份，再登记报告依赖并释放临时引用；部署和政策迁移的拒绝不顺带改写这项登记。待交接结果本身也引用最终报告，避免独立原件维护先回收它；已有保留图会回收失去全部根的循环引用。报告缺失、部分写入、字节变化或尚未封存时继续保留，并阻止该条目滚出历史；即使工作树已移除，仍用 `report_handoff_pending` 和 `recover-result-handoff` 提醒后续处理。这不是永久操作历史，也不改变工作树的工作终态。
+
+**产品与宿主政策同改：**宿主 `retention.json` 为 `lifecycle-original` 增加已采用的 automatic state 地址，只覆盖该生产者实际发布的文件。新增共享引用的原件发布行为及工作树回归；DELTA 沿 runner 和 worktree 的明确依赖验证。额外 IO、维护耗时和存储收益尚未实测。旧协调宿主仍须配套迁移，不能据候选提交宣称已部署。
 
 显式 `maintain` 会重试等待整树回收的 `retained`，重新取得原关联的独占租约并核政策、提交、源码和原回执。普通启动不重试无关保留项。`evidence-retain` 仅在实际登记路径存在且未获释放时阻止整树移除；访问错误或链接仍拒绝。证据使用方释放自己的路径后，下次维护可继续删除整树，无需伪造新的工作终态。`artifacts-only` 完成本轮缓存处置后仍保留检出，不由维护重复消费其旧交接；政策迁移后的新责任需重新 `finish`。
 
@@ -786,7 +810,7 @@ core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候�
 
 普通共享 bootstrap 复用相同协调者字节，改变须走现有 owner 部署入口。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
 
-真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。本宿主的阶段 profile 通过薄 shell 选择 Rust 构建生产者，外层 core／shared 的 Python 编排仍在迁移。Rust 的现有部署所有者直接核构建报告、登记摘要、工具链绑定、原操作与两流，并负责原 inode 保全、原子替换、中断发布重入、原准入／登记 EX 和采用检查。发布不再调用构建解释器，不生成不存在的 managed_process；不可变 intent／result 继续由实际发布者产生。
+真实 Git 回归覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接、inode 别名。本宿主的阶段、core 和 shared 入口均通过薄 shell 选择 Rust 实现；所有者验证的 Python profile 与伴生实现和测试仍待迁移。Rust 的现有部署所有者直接核构建报告、登记摘要、工具链绑定、原操作与两流，并负责原 inode 保全、原子替换、中断发布重入、原准入／登记 EX 和采用检查。发布不再调用构建解释器，不生成不存在的 managed_process；不可变 intent／result 继续由实际发布者产生。
 
 发布的身份／内容比较、发布意图的完整阶段绑定、原件／意图／替换状态选择由同源 Verus 实现，
 阶段报告值匹配、操作／原流唯一性、进程退出与 PID、摘要形状、执行物绝对路径和搬迁许可使用同一证明根的有限条件序列，保留首个失败的具体信息。

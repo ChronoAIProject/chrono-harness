@@ -6,6 +6,11 @@
   "retention": "same-tree",
   "remove_branch": false,
   "allow_evidence_disposal": false,
+  "terminal_history": {
+    "keep_seconds": 86400,
+    "max_entries": 64,
+    "max_bytes": 4194304
+  },
   "artifacts": [
     {
       "path": ".chrono-harness/bin/",
@@ -163,6 +168,32 @@
   "main_cache_only": true,
   "retained_producers": [
     {
+      "id": "entry-run",
+      "directory": ".chrono-harness/state/entry-runs/",
+      "temporary": true,
+      "generated_outputs": [],
+      "operations": ["validate.delta", "bootstrap.build"],
+      "rolling_directory": {
+        "success_keep_seconds": 0,
+        "failure_keep_seconds": 86400,
+        "interrupted_keep_seconds": 86400,
+        "metadata_keep_seconds": 3600
+      }
+    },
+    {
+      "id": "bootstrap-test-run",
+      "directory": ".chrono-harness/state/bootstrap-test-runs/",
+      "temporary": true,
+      "generated_outputs": [],
+      "operations": ["host.bootstrap-tests", "host.bootstrap-command-tests"],
+      "rolling_directory": {
+        "success_keep_seconds": 0,
+        "failure_keep_seconds": 86400,
+        "interrupted_keep_seconds": 86400,
+        "metadata_keep_seconds": 3600
+      }
+    },
+    {
       "id": "ci-command-result",
       "directory": ".chrono-harness/state/ci-test-failures/",
       "generated_outputs": [
@@ -186,7 +217,13 @@
         "source with spaces/",
         "cargo-linked/",
         "native-cargo/"
-      ]
+      ],
+      "rolling_directory": {
+        "success_keep_seconds": 0,
+        "failure_keep_seconds": 86400,
+        "interrupted_keep_seconds": 86400,
+        "metadata_keep_seconds": 3600
+      }
     },
     {
       "id": "ci-test-host",
@@ -202,7 +239,13 @@
       "source_roots": [
         "arbitrary non Cargo layout/",
         "unavailable original checkout/"
-      ]
+      ],
+      "rolling_directory": {
+        "success_keep_seconds": 0,
+        "failure_keep_seconds": 86400,
+        "interrupted_keep_seconds": 86400,
+        "metadata_keep_seconds": 3600
+      }
     },
     {
       "id": "projects-test-host",
@@ -222,7 +265,13 @@
       "source_roots": [
         "fixture/",
         "retained-offline-checkout/"
-      ]
+      ],
+      "rolling_directory": {
+        "success_keep_seconds": 0,
+        "failure_keep_seconds": 86400,
+        "interrupted_keep_seconds": 86400,
+        "metadata_keep_seconds": 3600
+      }
     },
     {
       "id": "workflow-test-tools",
@@ -237,7 +286,13 @@
       ],
       "source_roots": [
         "fixture/local-lane/"
-      ]
+      ],
+      "rolling_directory": {
+        "success_keep_seconds": 0,
+        "failure_keep_seconds": 86400,
+        "interrupted_keep_seconds": 86400,
+        "metadata_keep_seconds": 3600
+      }
     }
   ]
 }

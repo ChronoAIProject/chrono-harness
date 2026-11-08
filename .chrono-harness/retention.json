@@ -18,10 +18,12 @@
       ".chrono-harness/state/"
     ],
     "lifecycle-original": [
-      ".chrono-harness/state/worktrees/"
+      ".chrono-harness/state/worktrees/",
+      ".chrono-harness/state/automatic-cleanup-v2/"
     ]
   },
   "keep_seconds": 0,
+  "diagnostic_keep_seconds": 86400,
   "max_related_outputs": 512,
   "max_summaries": 128,
   "max_nodes_per_round": 256,

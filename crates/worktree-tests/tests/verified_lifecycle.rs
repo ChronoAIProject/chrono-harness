@@ -75,6 +75,38 @@ fn only_actual_unreleased_evidence_blocks_checkout_removal() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_history_keeps_unknown_future_live_and_unexpired_records() {
+    let boundary = policy::retire_history(true, true, Some(100), 110, 10, false);
+    let young = policy::retire_history(true, true, Some(100), 109, 10, false);
+    let capacity = policy::retire_history(true, true, Some(100), 100, 10, true);
+    let unknown = policy::retire_history(true, true, None, 110, 0, true);
+    let future = policy::retire_history(true, true, Some(111), 110, 0, true);
+    let active = policy::retire_history(false, true, Some(100), 110, 0, true);
+    let busy = policy::retire_history(true, false, Some(100), 110, 0, true);
+    let maximum = policy::retire_history(true, true, Some(u64::MAX), u64::MAX, 1, false);
+    expect(boundary && !young && capacity && !unknown && !future && !active && !busy && !maximum);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn whole_directory_requires_owned_lifetime_and_consumer_exclusion() {
+    expect(policy::rolling_disposal(true, true, true, true));
+    expect(!policy::rolling_disposal(false, true, true, true));
+    expect(!policy::rolling_disposal(true, false, true, true));
+    expect(!policy::rolling_disposal(true, true, false, true));
+    expect(!policy::rolling_disposal(true, true, true, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn rolling_windows_distinguish_failure_diagnostics_and_unknown_outcomes() {
+    expect(policy::rolling_keep(true, false, false, 0, 86400, 3600) == 0);
+    expect(policy::rolling_keep(true, true, false, 0, 86400, 3600) == 86400);
+    expect(policy::rolling_keep(true, false, true, 0, 86400, 3600) == 86400);
+    expect(policy::rolling_keep(false, false, false, 0, 86400, 3600) == 3600);
+    expect(policy::rolling_keep(false, true, true, 0, 86400, 3600) == 3600);
+    expect(policy::rolling_keep(true, true, true, u64::MAX, 0, u64::MAX) == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn explicit_import_preserves_external_branch_names_and_birth_keeps_its_rule() {
     broadcast use vstd::string::group_string_axioms;
     proof {

@@ -30,6 +30,8 @@ pub struct Policy {
     pub schema: String,
     pub producers: BTreeMap<String, Vec<String>>,
     pub keep_seconds: u64,
+    #[serde(default = "default_diagnostic_seconds")]
+    pub diagnostic_keep_seconds: u64,
     pub max_related_outputs: usize,
     pub max_summaries: usize,
     pub max_nodes_per_round: usize,
@@ -53,6 +55,9 @@ fn default_output_bytes() -> u64 {
     1024 * 1024 * 1024
 }
 fn default_metadata_seconds() -> u64 {
+    86400
+}
+fn default_diagnostic_seconds() -> u64 {
     86400
 }
 fn default_manifest_nodes() -> usize {
@@ -911,11 +916,53 @@ impl Inventory {
         self.stable(&gate)?;
         Ok(l.outputs.iter().any(|o| o.path == path))
     }
+    /// A domain may discharge an interim handoff only from the producer's
+    /// sealed original, with matching bytes and the original physical inode.
+    /// The caller keeps its read capability through the ensuing handoff.
+    pub fn published_original(
+        &self,
+        path: &str,
+        digest: &str,
+        length: u64,
+    ) -> Result<bool, String> {
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let ledger = self.load(&gate)?;
+        let published = match ledger.outputs.iter().find(|o| o.path == path) {
+            Some(output) if !output.tree && output.phase == "released" => {
+                output.sha256.as_deref() == Some(digest)
+                    && output.length == Some(length)
+                    && identity(&no_symlink_parents(&self.root, path)?)? == output.identity
+            }
+            _ => false,
+        };
+        self.stable(&gate)?;
+        Ok(published)
+    }
     pub fn accepts(&self, producer: &str, path: &str) -> bool {
         self.policy
             .producers
             .get(producer)
             .is_some_and(|scopes| scopes.iter().any(|scope| path.starts_with(scope)))
+    }
+    /// A completed producer selects a finite diagnostic window. Actual caller
+    /// and recovery roots remain authoritative and are never released here.
+    pub fn retain_diagnostic_path(&self, path: &str) -> Result<(), String> {
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|output| output.path == path)
+            .ok_or("diagnostic original is not enrolled")?;
+        if !matches!(output.phase.as_str(), "released" | "sealing")
+            || identity(&no_symlink_parents(&self.root, path)?)? != output.identity
+        {
+            return Err("diagnostic original is unfinished, disposing or replaced".into());
+        }
+        output.expires = output
+            .expires
+            .max(now()?.saturating_add(self.policy.diagnostic_keep_seconds));
+        self.save(&ledger, &gate)
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
@@ -2253,23 +2300,41 @@ impl Publication {
         self.materialize_for_consumer(None)
     }
     fn materialize_for_consumer(&self, consumer: Option<&str>) -> Result<(), String> {
+        self.materialize_with_reference(consumer, None)
+    }
+    /// The owning domain holds its own metadata exclusion and supplies one
+    /// durable reference shared by its originals. Attach before exposing bytes;
+    /// that owner later narrows the reference from its published domain state.
+    pub fn materialize_for_reference(&self, reference: &str) -> Result<(), String> {
+        if reference.is_empty() || reference.len() > 256 {
+            return Err("invalid original owner reference".into());
+        }
+        self.materialize_with_reference(None, Some(reference))
+    }
+    fn materialize_with_reference(
+        &self,
+        consumer: Option<&str>,
+        reference: Option<&str>,
+    ) -> Result<(), String> {
         self.lease.stable()?;
-        let roles = consumer
+        let mut roles = consumer
             .map(|c| self.inventory.consumer_role(c))
             .transpose()?
             .into_iter()
             .collect::<Vec<_>>();
+        roles.extend(reference.map(str::to_owned));
         let gate =
             self.inventory
                 .addressed_gate(&[self.id.clone()], &[], &roles, None, false, true)?;
         let mut l = self.inventory.load(&gate)?;
-        self.materialize_excluded(&mut l, &gate, consumer)
+        self.materialize_excluded(&mut l, &gate, consumer, reference)
     }
     fn materialize_excluded(
         &self,
         l: &mut Ledger,
         gate: &Gate,
         consumer: Option<&str>,
+        reference: Option<&str>,
     ) -> Result<(), String> {
         self.lease.stable()?;
         let o = l
@@ -2296,6 +2361,13 @@ impl Publication {
                 .map_err(|e| e.to_string())?;
         }
         o.identity = identity(&staged)?;
+        if let Some(reference) = reference {
+            let mut ids = l.roots.get(reference).cloned().unwrap_or_default();
+            if !ids.contains(&self.id) {
+                ids.push(self.id.clone());
+            }
+            self.inventory.reference_locked(l, reference, &ids)?;
+        }
         self.inventory.save(l, gate)?;
         crate::artifact_disposal::publish_entry(&staged, &target)?;
         let o = l
@@ -2443,8 +2515,9 @@ impl Publication {
     pub fn complete(self, outcome: Value) -> Result<(), String> {
         self.complete_with_release(outcome, None)
     }
-    /// A successful producer can account its own consumer before relinquishing protection.
-    /// Failed/unknown captures use complete and leave the root for genuine repair/recheck.
+    /// A joined producer can release its own publication consumer after the
+    /// actual caller has taken custody. Unsettled or interrupted publication
+    /// uses complete and preserves the repair handoff.
     pub fn complete_releasing_consumer(self, outcome: Value, consumer: &str) -> Result<(), String> {
         self.complete_with_release(outcome, Some(consumer))
     }
@@ -2941,9 +3014,9 @@ fn publish_owned_with(
     Ok(true)
 }
 
-/// The final report's actual producer keeps a repair reference on failed/unknown
-/// outcomes. A successful original keeps its publication role until the actual
-/// fixed-slot settlement transfers its closure to the current report.
+/// The final report keeps its publication role until the actual fixed-slot
+/// settlement transfers its closure to the current report. A settled failure
+/// then has a finite diagnostic window rather than an invented permanent reader.
 pub fn publish_final_original(
     root: &Path,
     producer: &str,
@@ -3057,9 +3130,18 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
         inventory.reference_paths(&role, &[original.into()])?;
         let gate = inventory.addressed_gate(&[], &[original.into()], &[], None, false, true)?;
         let ledger = inventory.load(&gate)?;
-        let ids: Vec<_> = ledger.outputs.iter().map(|o| o.id.clone()).collect();
+        let outputs = ledger.outputs;
         drop(gate);
-        for id in ids {
+        for output in outputs {
+            let id = &output.id;
+            let diagnostic = format!("consumer:report-recheck:{id}");
+            if output.path == original
+                && matches!(output.phase.as_str(), "released" | "sealing")
+                && ledger.roots.contains_key(&diagnostic)
+            {
+                inventory.retain_diagnostic_path(&output.path)?;
+                inventory.reference(&diagnostic, &[])?;
+            }
             inventory.reference(&format!("consumer:publication-recheck:{id}"), &[])?;
         }
     }

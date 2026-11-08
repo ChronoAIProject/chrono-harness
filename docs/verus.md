@@ -9,6 +9,58 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 同次 DELTA 检查必须汇总受影响证明和实际消费者的行为结果，消费 job 不重复同一证明。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
+## runner 构建中的证明库与缓存
+
+本宿主的 `build.runner` 由 Rust 启动程序读取
+`.chrono-harness/ci/runner-build.json`，调用固定版本的官方 Cargo-Verus。
+core bootstrap 先准备同一 Verus，再调用此登记操作；调用前端本身仍由普通 Cargo 构建。
+执行计划含 `build.runner` 的检查单元也采用现有 `bootstrap-unit.json`，
+在原检查前解包共享 Verus ZIP，不另下载，也不因该单元自身没有独立证明而省略编译器。
+没有自研编译器包装器，也不解析终端上的成功文字。
+
+`verified_cargo.rs` 负责完整 Cargo JSON 记录的顺序判断。冷构建必须依次出现
+当前版本的整 crate 成功证明、点名库、点名二进制和唯一成功终态；
+暖构建可以省去新证明，但必须引用保留的原成功证明。
+编译错误、未知记录、重复证明、缺少产物和终态之后的记录均拒绝。
+目标选择比较完整 manifest、源码、名称和类型；库的 rlib／rmeta 必须来自同一登记目录，
+并具有同一个非空的小写十六进制指纹。原始 dep-info 的完整多目标头、源码列表和
+checksum 由 `verified_sources.rs` 核对，最终二进制的原 dep-info 还须包含这两份库的字节身份。
+这些原件均由实际编译器产生，测试用 Rust mock 提供独立的外部命令样本。
+
+证明缓存只占 runner target 中的一个 `.chrono-verus-proof.json`，保留原编译进程、
+原 stdout／stderr、原 dep-info 和库身份。stdout 和 dep-info 使用无损 UTF-8 文本存储，
+避免 JSON 字节数组的膨胀；stderr 保留任意原字节。
+暖调用重新核对当前输入、工具、原记录和库字节，不制造一次新的证明成功。
+缓存键只绑定实际选中的恢复方法，不因登记表里无关操作的变化而失效。
+只有本次完整原输出有效且点名库标为 `fresh` 时，原证明或依赖原件损坏才可执行
+登记的 `recover.identifiers-proof`，随后沿同一入口构建一次。失败或无效恢复非零返回，
+原构建错误不会因缓存清理而重试。恢复只调用登记的 Cargo 清理，实际编译使用 `--locked`，
+沿用调用方选定的 Cargo 依赖缓存；元数据所需的缺包由 Cargo 补齐，不额外强制离线。
+清理前保留已有证明、依赖原件和两份库的原字节；原件无法读取或超过读取上限时，
+本次恢复失败并保全原路径，不先删除再尝试重建。
+
+成功调用直接输出当前库、二进制和证明缓存的身份，临时两流与操作目录在消费后删除；
+缓存身份是当前产物观察，不是永久历史引用。失败和被拒缓存的原件保留在
+`.chrono-harness/state/proved-builds/`，并通过已有 `check-original` 保留所有者登记
+实际诊断使用方 `proved-build-repair:<目录>`。调用方完成调试和验收后释放该使用方，
+所需的完整 `chrono-retention-consumer/v1` 声明由原件输出中的 `report_consumer` 给出；
+调用方将声明存到待清理原件之外，按现有保留入口释放并回收。
+可重建材料在使用方结束后七日内清理。未确认完成的使用方继续受保护。
+无保留政策的外部宿主由调用方保管原目录；不扫描或清理其他调用的输出。
+
+**源码与宿主政策同时修改：**runner 构建入口、启动顺序、当前构建配置、FILEMAP 和
+Rust mock／独立 Verus 根同步登记。生产判断复用 `verify.verus-result`，独立边界根为
+`verify.bootstrap-cargo-tests`；不增加版本、安装器、全局缓存索引或共享准入锁。
+macOS 的正式工具表也登记 `bootstrap-native`，由同一原生前端的 `--version` 提供版本观察；
+仅在 bootstrap 配方中给出路径不足以让普通检查消费该构建入口。
+runner 已离开普通 Cargo 配方，其锁定参数和 Cargo／Rustup 目录保留改由
+同语言的原生 Rust mock 验证；Python 的普通 Cargo 环境测试只覆盖仍采用该路径的使用方。
+每个原件的读取上限为 8 MiB；最终二进制只枚举登记 target 的 `debug/deps`，至多 4096 项，
+按明确前缀、合法指纹和实际二进制字节选择原件。这不是测试发现或选测规则。
+构建、存储、原生 CI 和完整生命周期成本以实际验收为准，未测部分保持未知。
+本节描述 runner 对点名 identifiers 库的局部绑定；其他生产者、独立库测试的编译产物采用、
+完整工具链输入、外部接口假设及全仓生产调用覆盖，仍须分别完成，不能据此宣称完整 SPEC 已验收。
+
 ## 缓存 planner 身份
 
 `crates/cache/src/verified_planner.rs` 负责报告与封存的身份准入。四个可选文本字段分别来自计划和当前执行物的 SHA-256／版本；必须全部存在，且两对全文相等。JSON 适配器把缺失、null、非文本交为 `None`，直接消费判断结果。复用 runner 已证明的 `equal_text`，没有第二份字符串比较实现。JSON 解码、执行物读取、摘要计算和外层发布仍是未证明的接口边界；此处不证明 SHA-256 真实性或编译器复用。
@@ -89,23 +141,47 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 没有新增仓内受信函数、操作、依赖或证明预算。`units::id` 继续消费同一字节判断。
 最多扫描 64 字节，拒绝时构造固定长度的原诊断；完整构建、证明及 CI 成本未测。
 
-同根的 `git_inventory_termination`、`git_inventory_text`、`git_inventory_row`、
+同根的 `git_inventory_records`、`git_inventory_fields`、`git_inventory_row`、
+`git_inventory_termination`、`git_inventory_text`、
 `git_tree_metadata` 和 `git_index_metadata` 拥有 Git 库存的局部准入和错误分类。
 `checkout::tree`／`changes` 直接调用它们：空输入或末字节 NUL 才通过终止检查；
 UTF-8 解码失败、缺 TAB、字段数错误和非法 stage 保持原完整错误。
 终止检查仍先于解码，字段判断仍先于路径／OID；tree 恰三字段，index 还要求
 stage 恰为单字节 `0`–`3`，不加强其余字段内容或丢失空字段。
-解码和行拆分成功时证明完整文本及两字段原文保留。
+NUL 记录忽略空项，保留非空记录的顺序、重复及完整字节；metadata 只按 ASCII 空格拆分，
+保留首尾和重复空格产生的空字段。行只在第一个 TAB 分割，其后全部字节归 path。
+`ascii_split_records` 从完整字节递归定义序列；实际循环证明返回数量、每项完整字节及终止。
+ASCII 分隔字节由固定 vstd 的 UTF-8 引理证明是字符边界，跳过该单字节后继续安全借用；
+解码、记录和行拆分成功时保留完整原文，不作 Unicode 归一化或字符截取。
 独立 Verus 预期核空／内嵌 NUL／末尾非 NUL、任意完整文本和字段、缺行、
 0／2／3／4 字段以及精确 stage／相邻非法字节／尾随 NUL 和 LF；同一预期进入普通 Rust。
-复用现有两项标识符整 crate 证明、FILEMAP 源码边及原未过滤 runner 测试，
+拆分的独立预期明确列空记录、重复记录、CR／LF／TAB、缺分隔符、首尾及重复空格，
+以及多字节 UTF-8 的完整返回数组；普通运行逐项比较长度和全部字节。
+复用现有两项标识符整 crate 证明、FILEMAP 源码边及标识符／runner 的未过滤测试，
 无新增工具、操作、信任函数、依赖或证明预算。
-外围明确使用标准 `str::from_utf8`／`Result::ok`、`str::split('\0')`／`filter`、
-`str::split_once('\t')`、`str::split(' ')`／`collect::<Vec<_>>`，再直接传入实际结果；
-Verus 内使用固定 vstd 的切片、`str::as_bytes`、Option／Result 和 `ToString` 合同。
-完整拆分循环及外围调用组合、重复检查与文件系统比较仍待证明，不把局部准入当完整解析证明。
-新增判断读取末字节、字段数和至多一个 stage 字节，使用常量额外状态，
-拒绝时构造原诊断；完整构建、证明、CI 与存储成本未测。
+外围仅使用标准安全 `str::from_utf8`／`Result::ok` 提供实际解码观察，拆分直接调用同源实现；
+Verus 内使用固定 vstd 的切片、`str::as_bytes`／`str::len`／`str::split_at`、
+Vec 存取、Option／Result 和 `ToString` 合同，没有新增仓内受信函数或 unsafe。
+外围调用组合、重复检查与文件系统比较仍待证明，不把拆分与局部准入当完整状态证明。
+拆分扫描 N 个字节、保存 K 个借用字段，时间 O(N + K)、额外引用 O(K)；
+NUL 记录由惰性迭代改为借用数组，增加 O(K) 引用存储，meta 字段仍使用借用数组。
+其余新增判断读取末字节、字段数和至多一个 stage 字节；完整构建、证明、CI 与存储成本未测。
+
+tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
+`verified_status::insert_git_tree_entry` 维护，`checkout::tree` 在原 metadata／路径／OID 检查后直接调用。
+证明新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，所有其他键值均保留；
+成功当且仅当原 map 没有该路径，否则完整返回 `duplicate Git tree path`。
+沿用原标准 insert 的顺序：重复时条目也已替换，外围立即返回错误并丢弃整棵候选树。
+条目字段与路径本身不在此函数重复准入，不归一化或截取文本。
+独立 Verus 预期在普通运行中也核完整字段、map 数量、其他路径保留、不同字段及相同字段的重复拒绝、
+完整错误和失败后的替换状态；覆盖独立克隆、空路径、前缀／内部 NUL 及 Unicode 规范化差异。
+明确采用固定 vstd 的 `BTreeMap<TreePath, TreeEntry>::insert` 精确更新与原值返回合同，
+其 `obeys_cmp::<TreePath>()` 前提由现有真实比较和顺序法则证明；不信任仓内状态函数。
+复用状态所有者及独立预期的两项整 crate 证明、现有 FILEMAP 消费者边与未过滤测试，
+无新工具、依赖、操作、信任函数或预算。每条记录仍构造一个键和三个字段，map 操作为 O(log K)
+次完整路径比较，字符串复制及比较另计字节成本；完整证明、构建、运行和 CI 成本未测。
+该局部状态证明不覆盖外围解析循环、动态路径诊断、index 重复 stage 或文件系统比较；
+这些组合与全仓覆盖门继续保留未完成义务。
 
 原始 commit 物理头的 parent 行选择也由同一根的 `commit_parent_records` 实现。
 以 LF 字节分行，在首个空行停止；仅选择精确 `parent ` 前缀，完整借用原后缀，
@@ -124,7 +200,8 @@ Verus 内使用固定 vstd 的切片、`str::as_bytes`、Option／Result 和 `To
 不把证明用的 `assert(...)` 当成运行时断言。独立 Verus 根仅在证明模式下
 导入生产源码，保留原预期和整 crate 证明。两项原证明和未过滤运行测试归独立库的专属计划，
 沿用 runner CI 单元；这建立测试与 runner 所依赖真源的对应，
-尚不证明普通 Cargo 编译的运行库就是 Verus 输出的库，完整编译产物绑定仍未完成。
+独立测试的普通 Cargo 编译库仍未与 Verus 产物绑定。runner 的点名库采用见
+[构建中的证明库与缓存](#runner-构建中的证明库与缓存)，其余使用方的完整绑定仍未完成。
 
 **产品与宿主政策同改：**共享身份判断及原边界测试迁到各自的自然所有者，
 同步当前路径引用、独立锁、FILEMAP、项目配对和单元；两个独立 target 明确位于
@@ -486,6 +563,10 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 
 `crates/worktree/src/verified_lifecycle.rs` 直接供自动清理所有者调用：终态进入清理，活跃记录仅在有缓存责任时进入，等待整树回收的保留项仅由显式维护重试；指定 artifacts-only 的已完成处置不重试。证据阻挡要求实际存在且未经释放。清理原结果失败时记失败，缓存成功仅记缓存释放，整树成功还须有 `verified-absent` 或 `already-absent` 才记移除。
 
+整体临时分配的回收另要求已声明所有权、保留窗口届满、实际消费者释放和独占内核凭据四项同时成立。
+成功、失败／诊断和中断的窗口选择也由此同源根负责；中断过期不授予任务成功状态。
+独立边界分别核每项缺失及三个窗口，真实目录回归核活读取者、失败原件、复制输入、外部链接和元数据交接恢复。
+
 `verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。现有分支的显式 import 与新建 birth 的分支规则由同一源码区分：import 不要求创建前缀，birth 仍要求已登记前缀，未知活动拒绝。已登记 import 的自动清理消费原 enrollment kind 和身份 guard；直接 cleanup 的前缀边界另有同源独立预期。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
 
 ## 本地工作树提醒
@@ -493,6 +574,10 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 `crates/worktree/src/verified_attention.rs` 是本地提醒分类的唯一判断实现。`automatic.rs` 把现役账本状态、终态交接有无、可读性、Git 登记、物理路径及已观察附件匹配交给该函数，并直接消费分类与提醒判断。正常协调者无需终结；任务 active、终态清理待办、retained、未登记和 unknown 均需关注。只有 disposed、已有终态交接且两处都已缺失才取消清理提醒；单凭 disposed 字符串不够。
 
 生产根及独立边界根通过登记的 `verify.worktree-attention`／`verify.worktree-attention-tests` 整 crate 证明并编译，版本及参数归 projects.json。独立边界核活跃／保留／待清理、只缺一处、缺终态、未知附件和协调者；Cargo 行为测试继续消费同一源码，核真实跨命令状态、原报告一致、损坏项隔离与原件保全。OS／Git 观察、JSON 编解码、namespace 枚举及已有账本读取是外部接口；此局部分类证明不证明它们的事务性、完整迁移或全仓状态逻辑。
+
+创建 agent 的提醒选择也由 `verified_attention.rs` 同源执行：只有相同、非空的创建者身份且分类结果仍需关注的对象才进入该 agent 的清单。独立预期覆盖同一 agent、其他 agent、空身份及已处置对象；配置读取、身份来源、原回执绑定和提醒传递仍由 Rust 适配器与真实 Git 回归负责。
+
+终态历史到期选择同源判断已处置、使用方释放、实际确认时刻与当前时刻、保留时长及容量条件。未知时刻、未来时刻、活跃使用方和未到期记录受保护；独立预期覆盖到期边界、容量触发和 u64 最大值。原回执、物理／Git 移除状态及租约仍由真实适配器重验，不能用时间选择代替这些核验。
 
 ## 所有者可执行文件发布
 
