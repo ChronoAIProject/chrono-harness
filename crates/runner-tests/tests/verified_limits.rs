@@ -9,8 +9,19 @@ use chrono_harness::verified_limits as policy;
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
+
+// 前置条件由独立预期证明，普通 Rust 同时执行失败分支。
+fn expect_limit_true(actual: bool)
+    requires actual,
+{
+    if !actual {
+        panic!();
+    }
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn positive_timeout_accepts_the_complete_inclusive_output_boundary() {
@@ -18,7 +29,7 @@ fn positive_timeout_accepts_the_complete_inclusive_output_boundary() {
     let below_maximum = policy::valid_execution_bounds(30, 67_108_863);
     let maximum = policy::valid_execution_bounds(1, 67_108_864);
     let maximum_timeout = policy::valid_execution_bounds(u64::MAX, 67_108_864);
-    assert(minimum && below_maximum && maximum && maximum_timeout);
+    expect_limit_true(minimum && below_maximum && maximum && maximum_timeout);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -29,8 +40,8 @@ fn zero_timeout_and_invalid_output_are_rejected_independently() {
     let zero_output = policy::valid_execution_bounds(u64::MAX, 0);
     let above_maximum = policy::valid_execution_bounds(1, 67_108_865);
     let largest_output = policy::valid_execution_bounds(u64::MAX, usize::MAX);
-    assert(!zero_pair && !zero_timeout && !zero_timeout_at_maximum && !zero_output);
-    assert(!above_maximum && !largest_output);
+    expect_limit_true(!zero_pair && !zero_timeout && !zero_timeout_at_maximum && !zero_output);
+    expect_limit_true(!above_maximum && !largest_output);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -40,7 +51,7 @@ fn transport_output_uses_the_same_inclusive_byte_boundary() {
     let maximum = policy::valid_output_limit(67_108_864);
     let above_maximum = policy::valid_output_limit(67_108_865);
     let largest = policy::valid_output_limit(usize::MAX);
-    assert(!zero && minimum && maximum && !above_maximum && !largest);
+    expect_limit_true(!zero && minimum && maximum && !above_maximum && !largest);
 }
 
 }
