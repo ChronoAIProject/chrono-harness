@@ -130,11 +130,15 @@ fn register_consumer_contract(root: &Path, config: &mut Value) {
 #[test]
 fn only_current_cache_registration_is_admitted() {
     let (root, mut config) = fixture();
+    for artifact in config["artifacts"].as_object_mut().unwrap().values_mut() {
+        artifact.as_object_mut().unwrap().remove("kind");
+        artifact.as_object_mut().unwrap().remove("external");
+    }
     let current = plan(root.path(), &config, "check.one").unwrap();
     assert_eq!(current["schema"], "chrono-cache-plan/v2");
     assert_eq!(
         current["caches"]["project"]["key"],
-        "chrono-v2-9f71474db4351e9476d1494c918fb420df36237fa619af8b33b7e53530413577-2817b202120fe2d9d5434847a76c712e5a06002285d5d0d51d404cfc72ea60e7"
+        "chrono-v2-ef3e935698c7b7325b4b7e209aa4073f6f4a9ad0f07ff015ca000c9e0780e7c1-2817b202120fe2d9d5434847a76c712e5a06002285d5d0d51d404cfc72ea60e7"
     );
     // A retired registration must fail even without the current contract map.
     config
