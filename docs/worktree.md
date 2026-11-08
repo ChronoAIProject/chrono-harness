@@ -562,7 +562,7 @@ Rust `RetainedArtifact` 接纳精确保留对象并发布 intent。采用 wrappe
 
 结果缺失／中断、关联／HEAD／政策／ref 变化、其他锁或源码损坏，均保留供明确协调。重试不覆盖原失败。存储失败、未登记并发写入、断电不保证事务；失效准入／use 记录须调用方等待原 job 后协调，v2 内核恢复的明确范围见后文。
 
-import 为一个明确已有 linked 工作树登记，核当前登记／关联并绑定原政策输入，含明确缺失。可导入旧检出而不编辑它，也不假装它采用新自动政策。处置路径须已在两端声明。观察为 import，不声称历史 birth，不枚举旧宿主。
+import 为一个明确已有 linked 工作树登记，核当前登记／关联并绑定原政策输入，含明确缺失。它接受其他客户端已有的本地分支名；feature／integration 前缀约束仍用于新建 birth。已导入对象的自动清理消费同一 enrollment 及其物理身份保护；直接 cleanup 计划仍要求登记前缀。当前仍要求直接附着的本地分支，不接管 detached HEAD。可导入旧检出而不编辑它，也不假装它采用新自动政策。处置路径须已在两端声明。观察为 import，不声称历史 birth；已有空地址记录也不能充当历史登记或完成证据。
 
 调用方 Git／GitHub、发布、立即回收旧宿主、证据结算仍不属本生产者。worktree fixture 从 `.chrono-harness/tests/worktree-tools.json` 按明确 OS／架构选 Git，再通过原绑定记录真实身份／版本；产品宿主 Git 政策独立。测试平台缺登记失败，不回退 PATH。
 

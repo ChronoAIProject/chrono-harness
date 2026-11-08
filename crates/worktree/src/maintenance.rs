@@ -749,7 +749,15 @@ impl Cleanup {
         token: &str,
         report: &mut Value,
     ) -> Result<(), String> {
-        self.execute_checked(r, root, registrations, token, report, |_| Ok(()))
+        self.execute_checked(
+            r,
+            root,
+            registrations,
+            token,
+            report,
+            "explicit",
+            |_| Ok(()),
+        )
     }
     pub(crate) fn execute_checked(
         mut self,
@@ -758,6 +766,7 @@ impl Cleanup {
         registrations: &Registrations,
         token: &str,
         report: &mut Value,
+        enrollment_kind: &str,
         mut guard: impl FnMut(&mut Runner) -> Result<(), String>,
     ) -> Result<(), String> {
         guard(r)?;
@@ -777,11 +786,14 @@ impl Cleanup {
             return Err("retention must name a distinct explicit local branch".into());
         }
         let workflow = registrations.workflow();
-        if !["feature_prefix", "integration_prefix"].iter().any(|k| {
-            workflow[k]
-                .as_str()
-                .is_some_and(|prefix| self.branch.starts_with(prefix))
-        }) {
+        if !crate::verified_lifecycle::accepts_cleanup_branch(
+            enrollment_kind,
+            ["feature_prefix", "integration_prefix"].iter().any(|k| {
+                workflow[k]
+                    .as_str()
+                    .is_some_and(|prefix| self.branch.starts_with(prefix))
+            }),
+        ) {
             return Err("cleanup branch does not match a registered work prefix".into());
         }
         // Parent resolution supports an explicitly allowed absent final component without following it.
