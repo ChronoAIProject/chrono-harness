@@ -23,7 +23,7 @@ pub mod verified_lifecycle;
 pub mod verified_owner_publication;
 use chrono_harness::{CliOutput, decode, no_symlink_parents, relative_path};
 mod fetch_recovery;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fs,
@@ -50,6 +50,8 @@ pub struct Config {
     #[serde(default)]
     pub automatic_cleanup: Option<String>,
     #[serde(default)]
+    pub agent_identity_env: Option<String>,
+    #[serde(default)]
     pub check_inputs: Option<check_inputs::Policy>,
     pub host_config: String,
     pub remote: String,
@@ -60,6 +62,58 @@ pub struct Config {
     #[serde(default)]
     pub immutable_input_limits: BTreeMap<String, usize>,
     pub report_directory: String,
+}
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AgentIdentity {
+    id: String,
+    environment: String,
+}
+impl AgentIdentity {
+    fn valid(&self) -> bool {
+        !self.id.is_empty()
+            && self.id.len() <= 256
+            && !self.id.chars().any(char::is_control)
+            && !self.environment.is_empty()
+            && self.environment.len() <= 128
+            && self
+                .environment
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    }
+    fn context(config: &Config) -> serde_json::Value {
+        use serde_json::json;
+        let Some(name) = &config.agent_identity_env else {
+            return json!({"status":"unknown","reason":"agent identity input is not configured"});
+        };
+        if name.is_empty()
+            || name.len() > 128
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        {
+            return json!({"status":"unknown","reason":"configured agent environment name is invalid"});
+        }
+        match std::env::var(name) {
+            Ok(id) if !id.is_empty() && id.len() <= 256 && !id.chars().any(char::is_control) => {
+                json!({"status":"known","identity":Self {id,environment:name.clone()}})
+            }
+            _ => {
+                json!({"status":"unknown","reason":"configured agent identity is missing or invalid","environment":name})
+            }
+        }
+    }
+    pub(crate) fn from_report(report: &serde_json::Value) -> Result<Option<Self>, String> {
+        if report["agent"]["status"] != "known" {
+            return Ok(None);
+        }
+        let identity: Self = serde_json::from_value(report["agent"]["identity"].clone())
+            .map_err(|error| format!("invalid current agent identity: {error}"))?;
+        if !identity.valid() {
+            return Err("current agent identity is invalid".into());
+        }
+        Ok(Some(identity))
+    }
 }
 pub struct Start {
     pub root: PathBuf,

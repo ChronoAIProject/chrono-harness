@@ -158,6 +158,7 @@ def participate(root, config_path, config):
         raise ValueError("bootstrap ownership refused: " + result.stdout.decode("utf-8", "replace") + result.stderr.decode("utf-8", "replace"))
     sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
     sys.stderr.buffer.write(bytes(process["stderr_bytes"]))
+    sys.stderr.buffer.write(result.stderr)
     print("bootstrap ownership original report: " + str(anchor / report["report_path"]),
           file=sys.stderr)
     if report["status"] != "used" and report.get("managed_command_failed") is not True:

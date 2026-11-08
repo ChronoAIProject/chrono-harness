@@ -1898,6 +1898,41 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         dir.path(),
         &["config", "user.email", "fixture@example.invalid"],
     );
+    // Both fixed endpoints belong to this synthetic host. Bind its actual Git
+    // and the same complete policy before each commit; the source selector can
+    // choose a different native platform and is not this fixture's policy.
+    let program = fixture_git();
+    let version = Command::new(&program).arg("--version").output().unwrap();
+    assert!(version.status.success());
+    let version = String::from_utf8(version.stdout).unwrap();
+    let config_path = ".chrono-harness/config.json";
+    let bind_config = |root: &Path| {
+        let mut config: Value = serde_json::from_slice(
+            &fs::read(root.join(".chrono-harness/git/pinned-macos.json")).unwrap(),
+        )
+        .unwrap();
+        let tool_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();
+        let input_id = config["facts_git"]["input"].as_str().unwrap().to_owned();
+        let tool = config["tools"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|tool| tool["id"] == tool_id)
+            .unwrap();
+        tool["program"] = json!(program);
+        tool["expected_version"] = json!(version.trim());
+        let input = config["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|input| input["id"] == input_id)
+            .unwrap();
+        input["location"] = json!(program);
+        input["sha256"] = json!(sha256(&fs::read(&program).unwrap()));
+        json_file(root, config_path, &config);
+        config
+    };
+    bind_config(dir.path());
     git(dir.path(), &["add", "."]);
     git(dir.path(), &["commit", "-qm", "fixed source baseline data"]);
     let base = git(dir.path(), &["rev-parse", "HEAD"]);
@@ -1932,35 +1967,9 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
             fs::copy(source.join(path), target).unwrap();
         }
     }
-    // The copied registration belongs to the source host. This fixture owns
-    // its actual Git invocation and binds it before fixing the candidate.
-    let program = fixture_git();
-    let version = Command::new(&program).arg("--version").output().unwrap();
-    assert!(version.status.success());
-    let config_path = ".chrono-harness/config.json";
-    let mut config: Value = serde_json::from_slice(
-        &fs::read(dir.path().join(".chrono-harness/git/pinned-macos.json")).unwrap(),
-    )
-    .unwrap();
+    let config = bind_config(dir.path());
     let tool_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();
     let input_id = config["facts_git"]["input"].as_str().unwrap().to_owned();
-    let tool = config["tools"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|tool| tool["id"] == tool_id)
-        .unwrap();
-    tool["program"] = json!(program);
-    tool["expected_version"] = json!(String::from_utf8(version.stdout).unwrap().trim());
-    let input = config["environment"]["inputs"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|input| input["id"] == input_id)
-        .unwrap();
-    input["location"] = json!(program);
-    input["sha256"] = json!(sha256(&fs::read(&program).unwrap()));
-    json_file(dir.path(), config_path, &config);
     // A containing migration fixture deliberately supplies workflow drift.
     // This test owns a separate candidate projection; the outer verifier still
     // rejects its original drift and is never modified here.
