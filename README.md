@@ -108,7 +108,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 | `worktree` | 创建、重建、恢复和清理工作树 |
 | `distribution` | 打包发布、锁定版本和安装工具 |
 | `instructions` | 从登记规则生成指南和技能文件 |
-| `diagnostics` | JSON Lines 日志和明确的错误链；目前先用于 runner 的无效 UTF-8 参数处理 |
+| `diagnostics` | JSON Lines 日志和明确的错误链；本仓运行日志位于 `.chrono-harness/state/logs/runtime.jsonl`，每份 10 MiB、共 5 份自动滚动 |
 
 `assets/instructions/` 提供可分发的产品默认规则。接入仓库的选择放在自己的 `.chrono-harness/`，升级产品不会自动覆盖它们。`docs/` 放说明、规范解释和来源资料，`examples/` 放示例，`skills/` 放本仓生成的技能文件。
 

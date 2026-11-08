@@ -5,6 +5,10 @@ edition = "2024"
 publish = false
 autotests = false
 
+[[test]]
+name = "runtime_logging"
+path = "tests/runtime_logging.rs"
+
 [dependencies]
 serde_json = "1"
 libc = "0.2"

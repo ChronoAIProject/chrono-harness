@@ -47,7 +47,6 @@ dependencies = [
  "chrono-judge-ci",
  "serde",
  "serde_json",
- "time",
  "verus_builtin_macros",
 ]
 

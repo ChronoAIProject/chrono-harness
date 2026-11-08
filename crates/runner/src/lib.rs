@@ -1,4 +1,7 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
+pub use chrono_diagnostics::runtime::cli as logged_main;
+pub use chrono_diagnostics::runtime::cli_at as logged_main_at;
+pub use chrono_diagnostics::runtime::diagnostic as log_cli_error;
 pub mod artifact_disposal;
 mod canonical_request;
 mod checkout;

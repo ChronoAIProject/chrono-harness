@@ -202,20 +202,12 @@ pub fn consume(
             .as_str()
             .filter(|p| p.starts_with(".chrono-harness/state/"))
             .ok_or("retained report path")?;
-        // The producer transports its retained report together with the certificate.
-        let transport = artifact_transport(req)?;
-        if transport
-            .as_ref()
-            .is_some_and(|t| producer["artifact_directory"] != t.source_directory)
-        {
-            return Err("producer report transport root differs".into());
-        }
         let physical = chrono_harness::prepared::original_path(
             &chrono_harness::prepared::Original {
                 path: report_path.into(),
                 sha256: String::new(),
             },
-            transport.as_ref(),
+            None,
         )?;
         let report_file = no_symlink_parents(&req.candidate.root, &physical)?;
         if results.completion.is_some()
@@ -331,7 +323,7 @@ pub fn consume(
                 r,
                 &report["artifacts"],
                 &req.candidate.root,
-                transport.as_ref(),
+                None,
             )? != proof["effective_inputs"]
             {
                 return Err("collected producer retained inputs differ".into());
@@ -345,7 +337,7 @@ pub fn consume(
                 &results,
                 Some(&chrono_harness::retained_artifacts::transport_map(
                     &report["artifacts"],
-                    transport.as_ref(),
+                    None,
                 )?),
                 &req.candidate.root,
             )?;
@@ -404,28 +396,4 @@ pub fn consume(
         )
     };
     check().map_err(|e| format!("E_INTEGRATION_MISMATCH: {e}"))
-}
-
-/// Host selection comes from the bound native provider; no destination-origin inference.
-fn artifact_transport(
-    req: &Request,
-) -> Result<Option<chrono_harness::prepared::ArtifactTransport>, String> {
-    let native = &req.observations["preparation"]["request"]["native_artifacts"];
-    let Some(path) = native["config_path"].as_str() else {
-        return Ok(None);
-    };
-    let bytes =
-        fs::read(no_symlink_parents(&req.candidate.root, path)?).map_err(|e| e.to_string())?;
-    if native["config_sha256"] != sha256(&bytes) {
-        return Err("certificate transport provider drift".into());
-    }
-    let provider = json(&bytes)?;
-    if provider["native_adoption"].is_null() {
-        return Ok(None);
-    }
-    if provider["native_adoption"]["schema"] != "chrono-native-adoption/v2" {
-        return Err("certificate transport extension schema".into());
-    }
-    serde_json::from_value(provider["native_adoption"]["integration_transport"].clone())
-        .map_err(|e| e.to_string())
 }

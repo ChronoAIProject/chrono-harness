@@ -12,7 +12,6 @@ mod gather;
 pub mod gating;
 pub mod inventory;
 pub mod migrate;
-pub mod native;
 pub mod release;
 pub mod startup;
 pub mod units;
@@ -787,9 +786,6 @@ fn store_context(
     Ok(())
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {
-    if args.first().map(String::as_str) == Some("native-adoption") {
-        return native::dispatch(args);
-    }
     if args.first().map(String::as_str) == Some("production") {
         return gating::production(args);
     }
@@ -810,19 +806,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     while i < args.len() {
         let k = &args[i];
         let v = args.get(i + 1).ok_or("missing option value")?;
-        if ![
-            "--host-root",
-            "--config",
-            "--event",
-            "--payload",
-            "--workflow-revision",
-            "--github-output",
-            "--unit",
-            "--repository",
-            "--from",
-            "--previous-config",
-        ]
-        .contains(&k.as_str())
+        if !["--host-root", "--config", "--from", "--previous-config"].contains(&k.as_str())
             || opts.insert(k.as_str(), v.as_str()).is_some()
         {
             return Err(format!("unknown/duplicate option {k}"));
@@ -831,11 +815,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let root = PathBuf::from(*opts.get("--host-root").ok_or("--host-root required")?);
     let config = *opts.get("--config").ok_or("--config required")?;
-    if !matches!(
-        command.as_str(),
-        "prepare-endpoints" | "acquire-seed" | "migrate"
-    ) && opts.len() != 2
-    {
+    if command != "migrate" && opts.len() != 2 {
         return Err("extra arguments".into());
     }
     match command.as_str() {
@@ -866,63 +846,6 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             command,
             generate(&root, config, command == "verify")?
         )),
-        "acquire-seed" => {
-            if ![6, 7].contains(&opts.len()) {
-                return Err("acquire-seed requires host-root/config/unit/repository/event/payload/workflow-revision".into());
-            }
-            let Projection::Units(c) = load_projection(&no_symlink_parents(&root, config)?)? else {
-                return Err("seed requires full units".into());
-            };
-            let payload = chrono_harness::json(
-                &fs::read(opts.get("--payload").ok_or("payload required")?)
-                    .map_err(|e| e.to_string())?,
-            )?;
-            gather::acquire_seed(
-                &root,
-                config,
-                &c,
-                opts.get("--unit").copied(),
-                opts.get("--repository").ok_or("repository required")?,
-                opts.get("--event").ok_or("event required")?,
-                &payload,
-                opts.get("--workflow-revision").ok_or("revision required")?,
-            )
-        }
-        "prepare-endpoints" => {
-            if ["--repository", "--from", "--previous-config"]
-                .iter()
-                .any(|k| opts.contains_key(k))
-            {
-                return Err(
-                    "unexpected transport or migration option for prepare-endpoints".into(),
-                );
-            }
-            let Projection::Units(c) = load_projection(&no_symlink_parents(&root, config)?)? else {
-                return Err("early endpoints require full units".into());
-            };
-            let payload = chrono_harness::json(
-                &fs::read(opts.get("--payload").ok_or("--payload required")?)
-                    .map_err(|e| e.to_string())?,
-            )?;
-            let context = units::prepare_endpoints(
-                &root,
-                config,
-                &c,
-                opts.get("--unit").copied(),
-                opts.get("--event").ok_or("--event required")?,
-                &payload,
-                opts.get("--workflow-revision")
-                    .ok_or("--workflow-revision required")?,
-            )?;
-            let workflow = c.workflow(opts.get("--unit").copied())?;
-            store_context(
-                &root,
-                &workflow.context_path,
-                &context,
-                opts.get("--github-output").copied(),
-            )?;
-            Ok(serde_json::to_string(&context).map_err(|e| e.to_string())? + "\n")
-        }
         _ => Err("unknown command".into()),
     }
 }
