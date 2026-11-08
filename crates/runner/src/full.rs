@@ -1672,7 +1672,9 @@ pub fn check_prepared(
             if current_written {
                 let consumer = format!("report-recheck:{}", publication.id());
                 publication.complete(outcome)?;
-                if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
+                if let Some(inventory) =
+                    crate::retained_artifacts::retention::Inventory::adopted(root)?
+                {
                     if status.exit_code() != 0 {
                         inventory.retain_diagnostic_path(&report_path)?;
                     }

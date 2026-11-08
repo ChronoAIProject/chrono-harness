@@ -3087,7 +3087,8 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
         for output in outputs {
             let id = &output.id;
             let diagnostic = format!("consumer:report-recheck:{id}");
-            if matches!(output.phase.as_str(), "released" | "sealing")
+            if output.path == original
+                && matches!(output.phase.as_str(), "released" | "sealing")
                 && ledger.roots.contains_key(&diagnostic)
             {
                 inventory.retain_diagnostic_path(&output.path)?;

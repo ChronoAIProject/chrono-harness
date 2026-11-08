@@ -3704,9 +3704,14 @@ fn failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer() {
     publish(failed, failed_bytes, 1);
     let failed_record = ledger(h.path())["outputs"][0].clone();
     assert!(failed_record["expires"].as_u64().unwrap() > 0);
-    assert!(ledger(h.path())["roots"]
-        .get(format!("consumer:report-recheck:{}", failed_record["id"].as_str().unwrap()))
-        .is_none());
+    assert!(
+        ledger(h.path())["roots"]
+            .get(format!(
+                "consumer:report-recheck:{}",
+                failed_record["id"].as_str().unwrap()
+            ))
+            .is_none()
+    );
     publish(
         passed,
         br#"{"request":{"request_id":"passed-original"},"response":{"status":"passed"}}"#,
@@ -3723,7 +3728,10 @@ fn failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer() {
             failed
         )]),
     );
-    let protected = consumer_call(h.path(), json!({"operation":"protect-consumer", "declaration":declaration}));
+    let protected = consumer_call(
+        h.path(),
+        json!({"operation":"protect-consumer", "declaration":declaration}),
+    );
     assert_eq!(protected.exit_code, 0, "{}", protected.stderr);
     let mut expired = failed_record.clone();
     expired["expires"] = json!(0);
