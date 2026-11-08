@@ -42,14 +42,14 @@ pub fn cleanup_result(cache: bool, status: &str, removal: &str) -> (stage: Clean
     } else { CleanupStage::Retained }
 }
 
-pub fn select_cleanup(status: &str, cache_pending: bool, maintenance: bool) -> (selected: bool)
+pub fn select_cleanup(status: &str, cache_pending: bool, maintenance: bool, artifacts_only: bool) -> (selected: bool)
     ensures selected <==> (status@ == "terminal"@
         || (status@ == "active"@ && cache_pending)
-        || (status@ == "retained"@ && maintenance)),
+        || (status@ == "retained"@ && maintenance && !artifacts_only)),
 {
     equal_text(status, "terminal")
         || (equal_text(status, "active") && cache_pending)
-        || (equal_text(status, "retained") && maintenance)
+        || (equal_text(status, "retained") && maintenance && !artifacts_only)
 }
 
 pub fn retain_evidence(disposal_authorized: bool, evidence_present: bool) -> (retain: bool)
