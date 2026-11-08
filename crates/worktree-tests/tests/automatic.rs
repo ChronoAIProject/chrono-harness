@@ -1534,10 +1534,17 @@ fn maintain_original_until_absent(
     let mut rounds = Vec::new();
     for _ in 0..8 {
         let round = inventory.maintain().unwrap();
-        assert!(
-            round["accounting_errors"].as_array().unwrap().is_empty(),
-            "{round}"
-        );
+        // Addressed maintenance can defer busy metadata and retire the same
+        // original later in this round. Keep every other error fatal and still
+        // require verified physical absence within the original eight rounds.
+        for error in round["accounting_errors"].as_array().unwrap() {
+            assert!(
+                error["reason"].as_str().is_some_and(|reason| {
+                    reason.starts_with("retention output metadata is busy: output-")
+                }),
+                "{round}"
+            );
+        }
         rounds.push(round);
         if !path.exists() {
             return;
