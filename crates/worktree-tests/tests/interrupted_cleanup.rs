@@ -2454,7 +2454,10 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     drop(h);
     let reclaimed = maintain_allocation();
     assert!(!cargo_output.exists(), "{reclaimed}");
-    assert!(!allocation.exists(), "released fixture rolls as a whole: {reclaimed}");
+    assert!(
+        !allocation.exists(),
+        "released fixture rolls as a whole: {reclaimed}"
+    );
 }
 
 #[test]
