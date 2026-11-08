@@ -2500,8 +2500,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2515,8 +2515,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2530,8 +2530,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2545,8 +2545,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2560,8 +2560,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2575,8 +2575,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2590,8 +2590,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2605,8 +2605,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2620,8 +2620,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2635,8 +2635,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2650,8 +2650,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2665,8 +2665,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2680,8 +2680,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2695,8 +2695,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2710,8 +2710,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2725,8 +2725,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2740,8 +2740,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2755,8 +2755,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2770,8 +2770,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2785,8 +2785,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2800,8 +2800,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2815,8 +2815,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2830,8 +2830,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2845,8 +2845,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2860,8 +2860,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2875,8 +2875,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2890,8 +2890,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2905,8 +2905,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2920,8 +2920,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2935,8 +2935,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2950,8 +2950,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2965,8 +2965,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2980,8 +2980,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -2995,8 +2995,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3010,8 +3010,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3025,8 +3025,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3040,8 +3040,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3055,8 +3055,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3070,8 +3070,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3085,8 +3085,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3100,8 +3100,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3115,8 +3115,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3130,8 +3130,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3145,8 +3145,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3160,8 +3160,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3175,8 +3175,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3190,8 +3190,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3205,8 +3205,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3220,8 +3220,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3235,8 +3235,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3250,8 +3250,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3265,8 +3265,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3280,8 +3280,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3295,8 +3295,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3310,8 +3310,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3325,8 +3325,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3340,8 +3340,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3355,8 +3355,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3370,8 +3370,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3385,8 +3385,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3400,8 +3400,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3415,8 +3415,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3430,8 +3430,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3445,8 +3445,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3460,8 +3460,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],
@@ -3475,8 +3475,8 @@
         "need": "This existing native release unit recompiles its registered project on a fresh macos-26 runner.",
         "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
         "prepare": [
-          "python3",
-          ".chrono-harness/ci/bootstrap.py",
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
           ".",
           ".chrono-harness/ci/bootstrap-cache.json"
         ],

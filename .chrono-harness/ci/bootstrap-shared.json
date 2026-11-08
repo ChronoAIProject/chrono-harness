@@ -105,5 +105,9 @@
     "aggregate": [
       "core"
     ]
+  },
+  "installer": {
+    "profile": "core",
+    "destination": ".chrono-harness/bin/chrono-host-bootstrap"
   }
 }

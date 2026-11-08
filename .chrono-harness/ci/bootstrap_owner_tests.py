@@ -1,6 +1,7 @@
 """Behavioral checks for bootstrap qualification and owner phase consumers."""
 import json
 import hashlib
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -10,9 +11,15 @@ import unittest
 import sys
 import zlib
 from unittest import mock
+from types import SimpleNamespace
 
 import bootstrap
 import bootstrap_owner as owner
+
+_fixture_spec = importlib.util.spec_from_file_location(
+    "bootstrap_owner_fixture", Path(__file__).with_name("bootstrap-tests.py"))
+_fixture_module = importlib.util.module_from_spec(_fixture_spec)
+_fixture_spec.loader.exec_module(_fixture_module)
 
 
 def retained_process(stdout=b"", stderr=b"", **metadata):
@@ -320,12 +327,19 @@ class ProducerSource(unittest.TestCase):
             owner.qualified_selected_original(fixture.root, ".chrono-harness/state/bootstrap.json", selected)
 
     def selected_original_fixture(self):
-        from bootstrap_shared_tests import SharedStartup
-        fixture = SharedStartup()
-        fixture.setUp()
-        self.addCleanup(fixture.doCleanups)
-        fixture.produce()
-        selected = fixture.root / fixture.host.config["install"][0]["destination"]
+        host = _fixture_module.Bootstrap()
+        host.setUp()
+        self.addCleanup(host.doCleanups)
+        (host.root / ".gitignore").write_text(
+            "/built-*\n/.chrono-harness/bin/\n/.chrono-harness/state/\n/mock-tools/\n")
+        host.git("init", "-q")
+        host.git("config", "user.email", "fixture@example.invalid")
+        host.git("config", "user.name", "Fixture")
+        host.git("add", ".")
+        host.git("commit", "-qm", "source producer")
+        host.succeeded(host.invoke())
+        fixture = SimpleNamespace(root=host.root, host=host)
+        selected = fixture.root / host.config["install"][0]["destination"]
         return fixture, selected
 
     def upgrade_fixture(self, published=False):
@@ -345,9 +359,6 @@ class ProducerSource(unittest.TestCase):
         fixture.host.write_json(fixture.root / config_path, config)
         fixture.host.git("add", ".")
         fixture.host.git("commit", "-qm", "current upgrade consumer")
-        # Installed-owner qualification uses its actual retained producer, even
-        # when the unrelated shared-startup transfer has already been reclaimed.
-        shutil.rmtree(fixture.transfer)
         return fixture, selected, config_path, config
 
     def test_upgrade_constructs_with_actual_qualified_owner_without_old_supply(self):
