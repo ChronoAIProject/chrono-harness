@@ -888,7 +888,7 @@
     },
     "bootstrap.script": {
       "kind": "file",
-      "path": ".chrono-harness/ci/bootstrap.py",
+      "path": ".chrono-harness/ci/bootstrap-native.sh",
       "presence": "present"
     },
     "bootstrap.config": {

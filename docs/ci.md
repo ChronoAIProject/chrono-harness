@@ -34,7 +34,7 @@
 
 CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选择 Git。准备命令和绑定 Git 消费者使用同一原生执行物，故障适配器在输入登记保留所选路径。平台缺登记就失败，不从环境 PATH 回退。这不改变消费宿主 Git 政策，也不证明 Git 输入完整。
 
-从仓库根运行。core、Verus 准备和所有者阶段构建由 Rust 执行，薄 shell 入口需要 Git、rustup；首次前端编译使用固定 Rust 1.95.0，已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。其他仍使用 Python 的 profile 和测试继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
+从仓库根运行。core、缓存、detector、单元准备、共享启动、Verus 准备和所有者阶段构建由 Rust 执行，统一通过薄 shell 入口启动。首次前端编译需要 Git、rustup 和固定 Rust 1.95.0；已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。尚未迁移的所有者验证 profile 和 Python 测试继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
 
 它按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap 操作，再复制声明二进制，不复制 Cargo 配方或发现项目。工具链操作明确点名版本，不改全局默认。专属 CI 测试的复制宿主回归消费已安装候选工具，须先 bootstrap：
 
@@ -53,7 +53,7 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 本宿主只维护当前采用的安装 profile。Python 入口省略配置时也选择现有 `bootstrap-core.json`；
 旧的全工具 `bootstrap.json` 与未被执行计划调用的 `host.bootstrap` 操作已退役。
 detector、缓存和各单元仍消费各自显式登记的 profile，不因默认安装而取得额外工具。
-共享启动当前仍由 Python 编排，但 produce 按所选 profile 的 `entrypoint` 和工具声明调用真实生产者，因此 core 产物来自 Rust。其余 Python profile 和测试仍待迁移，外部宿主不运行本仓这项源码构建。
+共享启动的 produce／install／verify 已登记到同一个 Rust 前端；produce 按所选 profile 的 `entrypoint` 和工具声明调用真实生产者。缓存、detector 和单元 profile 同样选择原生入口，操作 ID、原始回执、产物绑定及失败合同保留。消费者首次从源码准备前端的构建与存储成本仍须实测，不能把语言迁移算作性能收益。所有者验证的 Python 入口、伴生 Python 实现和测试，以及发布编排仍待迁移；外部宿主不运行本仓这项源码构建。
 **实现与宿主政策同时变更：**本批修改 core／Verus 的正式方法及所属登记，增加前端安装和共享生产入口的行为验证；原生构建、真实升级及受影响标准／CI 消费分别验收。新增前端构建、验证和存储总成本未测。
 
 提交修改、确保候选检出干净后，本地和生成 CI 使用同一标准判断命令：

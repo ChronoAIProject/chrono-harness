@@ -143,7 +143,7 @@ lineage、chrono-ci／inputs 二进制、bootstrap 输入、provider、组合原
   "detector": {
     "runs_on": "macos-26",
     "timeout_minutes": 45,
-    "bootstrap": ["/usr/bin/python3", ".chrono-harness/ci/bootstrap.py", ".", ".chrono-harness/ci/bootstrap-detector.json"],
+    "bootstrap": ["/bin/bash", ".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-detector.json"],
     "sparse_checkout": [".chrono-harness/", "crates/", "assets/", ".github/workflows/chrono-ci.yml", ".gitignore"]
   }
 }
@@ -175,7 +175,7 @@ provider 在检测前上传声明目录，将生产 binding 和真实上传 arti
 
 本仓 bootstrap 可写工具链 home 也在已有 `.chrono-harness/cache/` 产物根，是可重建执行输入，不属于上传的 `.chrono-harness/state/`。原身份及生产回执留在 state。共享来源验证同一缓存位置，不要求为汇总报告传递编译器文件，见[bootstrap 边界](ci.md#this-repository)。
 
-宿主 Python 实现绑定干净主源码 commit／tree、平台、配置／profile 字节、原 bootstrap 报告、文件摘要／大小／执行模式。替换工具前验证整份传递，恢复传输丢失的执行位，在明确导入来源旁保留精确生产报告。安装不是本地构建；使用时验证拒绝已安装内容变化。
+本仓的共享启动实现由 Rust 维护，produce／install／verify 均从登记的 `bootstrap-native.sh` 进入，复用已有前端与所有者保护。它绑定干净主源码 commit／tree、平台、配置／profile 字节、原 bootstrap 报告、文件摘要／大小／执行模式。替换工具前验证整份传递，恢复传输丢失的执行位，在明确导入来源旁保留精确生产报告。工具导入不冒称本地构建；前端自身的源码准备另有真实构建报告，使用时仍拒绝已安装内容变化。
 
 绑定缺失／改变、源码／配置／平台不符、符号链接、内容损坏或发布失败都会停止 job。这只覆盖登记启动输出，不证明编译器／SDK 输入完整、对抗性认证、linked 所有权或多文件断电原子性。真实传递／重跑验收与 fixture 验证分开。上传／下载／安装有明确资源类别，实测成本计入复用评估。
 
@@ -199,7 +199,7 @@ API job 身份和 `run_attempt` 可能描述沿用工作，不能据此造产物
 
 Rust 行为回归验证单／多／零单元及重复汇总的请求次数，跨页末个产物缺失、歧义或错误绑定，以及最后下载后父 attempt 漂移时拒绝发布，并保留已下载报告原字节。这里只约束显式启动的传输进程；CLI 内部网络请求、完整执行耗时和计费成本仍需实际观察。
 
-按范围 provider 在生产环境登记 `CHRONO_CI_DETECTION`、`CHRONO_CI_NEEDS`、`GITHUB_RUN_ID`、`GITHUB_RUN_ATTEMPT`、`GITHUB_JOB`。可选完整原生适配器则记录真实获取值，在业务继承外转发，保留独立 job 差异。生成汇总传精确 `needs` 对象，Rust provider 独自拥有接受条件，YAML／bootstrap Python 没有第二套白名单或选择算法。
+按范围 provider 在生产环境登记 `CHRONO_CI_DETECTION`、`CHRONO_CI_NEEDS`、`GITHUB_RUN_ID`、`GITHUB_RUN_ATTEMPT`、`GITHUB_JOB`。可选完整原生适配器则记录真实获取值，在业务继承外转发，保留独立 job 差异。生成汇总传精确 `needs` 对象，Rust provider 独自拥有接受条件，YAML 和 bootstrap 不另设白名单或选择算法。
 
 ### 拓扑迁移
 
