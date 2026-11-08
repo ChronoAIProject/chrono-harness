@@ -15,8 +15,7 @@ use std::{
     io::Write,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::Command,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 pub type Environment = BTreeMap<OsString, OsString>;
@@ -86,6 +85,7 @@ struct Execution<'a> {
     report: Value,
     phase: String,
     child_failure: Option<(String, i32, String)>,
+    started: Instant,
 }
 
 impl<'a> Execution<'a> {
@@ -96,6 +96,7 @@ impl<'a> Execution<'a> {
         scope: Scope<'a>,
         mut environment: Environment,
     ) -> Result<Self, String> {
+        let started = Instant::now();
         let root = fs::canonicalize(root).map_err(error)?;
         let output = if output.is_absolute() {
             output.to_owned()
@@ -192,6 +193,7 @@ impl<'a> Execution<'a> {
             report,
             phase: "source-identity".into(),
             child_failure: None,
+            started,
         })
     }
 
@@ -221,20 +223,31 @@ impl<'a> Execution<'a> {
         let (program, args) = argv
             .split_first()
             .ok_or_else(|| error("empty release command"))?;
-        let mut command = Command::new(program);
-        command.args(args).current_dir(&self.root);
-        // 不把继承能力伪装成新的手填绑定；唯一所有者随后转交自己的副本。
-        command.envs(self.environment.iter().filter(|(key, _)| {
+        let timeout = Duration::from_secs(
+            self.loaded.recipe.limits.unit_seconds.min(self.loaded.recipe.limits.platform_seconds),
+        ).checked_sub(self.started.elapsed()).filter(|remaining| !remaining.is_zero())
+            .ok_or_else(|| error("registered release unit span exhausted"))?;
+        let environment = self.environment.iter().filter(|(key, _)| {
             key.as_os_str() != std::ffi::OsStr::new(chrono_harness::process_fds::ENV)
-        }));
+        }).map(|(key, value)| Ok((
+            key.to_str().ok_or_else(|| error("non UTF-8 release environment key"))?.to_owned(),
+            value.to_str().ok_or_else(|| error("non UTF-8 release environment value"))?.to_owned(),
+        ))).collect::<Result<BTreeMap<_, _>, String>>()?;
+        let command = chrono_harness::CommandSpec {
+            program: program.clone(), args: args.to_vec(), env: environment,
+            timeout_seconds: timeout.as_secs().saturating_add(u64::from(timeout.subsec_nanos() != 0)),
+            output_limit_bytes: chrono_harness::verified_limits::MAX_OUTPUT_BYTES,
+        };
         let index = self.report["processes"]
             .as_array()
             .expect("producer-owned processes")
             .len();
         let captured = process::execute(
-            &mut command,
+            &self.root,
+            &command,
             &self.output,
             index,
+            timeout,
             std::io::stdout(),
             std::io::stderr(),
         )?;

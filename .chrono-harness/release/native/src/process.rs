@@ -3,11 +3,8 @@ use crate::verified_recipe as policy;
 use serde_json::{Value, json};
 use std::{
     fs::{self, OpenOptions},
-    io::{self, Read, Write},
-    os::unix::process::ExitStatusExt,
+    io::{self, Write},
     path::Path,
-    process::{Command, Stdio},
-    thread,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -53,6 +50,7 @@ pub struct CapturedProcess {
     pub stdout: CapturedStream,
     pub stderr: CapturedStream,
     pub failures: Vec<String>,
+    pub observation: Value,
 }
 
 impl CapturedProcess {
@@ -77,6 +75,7 @@ impl CapturedProcess {
             "started_ns": self.started_ns, "finished_ns": self.finished_ns,
             "exit_code": self.child_exit,
             "stdout": self.stdout.receipt(), "stderr": self.stderr.receipt(),
+            "observation": self.observation,
         })
     }
 }
@@ -88,177 +87,103 @@ fn timestamp() -> Result<u128, String> {
         .map_err(|error| error.to_string())
 }
 
-fn capture(
-    output: &Path,
+struct StreamWriter<W> {
+    file: Option<std::fs::File>,
     relative: String,
-    mut input: impl Read,
-    mut forward: impl Write,
-) -> CapturedStream {
-    let mut failures = Vec::new();
-    let path = output.join(&relative);
-    let mut file = match fs::create_dir_all(output.join("processes"))
-        .and_then(|()| OpenOptions::new().create_new(true).write(true).open(&path))
-    {
-        Ok(file) => Some(file),
-        Err(error) => {
-            failures.push(format!("retention: {error}"));
-            None
-        }
-    };
-    let mut forwarding = true;
-    let mut bytes = Vec::new();
-    let mut buffer = [0u8; 65536];
-    let complete = loop {
-        let size = match input.read(&mut buffer) {
-            Ok(0) => break true,
-            Ok(size) => size,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => {
-                failures.push(format!("read original pipe: {error}"));
-                break false;
-            }
+    forward: Option<W>,
+    failures: Vec<String>,
+}
+
+impl<W: Write> StreamWriter<W> {
+    fn new(output: &Path, relative: String, forward: W) -> Self {
+        let mut failures = Vec::new();
+        let file = match fs::create_dir_all(output.join("processes"))
+            .and_then(|()| OpenOptions::new().create_new(true).write(true).open(output.join(&relative)))
+        {
+            Ok(file) => Some(file),
+            Err(error) => { failures.push(format!("retention: {error}")); None }
         };
-        let raw = &buffer[..size];
-        bytes.extend_from_slice(raw);
-        if let Some(destination) = file.as_mut() {
-            if let Err(error) = destination.write_all(raw) {
-                failures.push(format!("retention: {error}"));
-                file = None;
-            }
-        }
-        if forwarding {
-            if let Err(error) = forward.write_all(raw).and_then(|()| forward.flush()) {
-                failures.push(format!("forwarding: {error}"));
-                forwarding = false;
-            }
-        }
-    };
-    if let Some(destination) = file.as_mut() {
-        if let Err(error) = destination.flush() {
-            failures.push(format!("retention flush: {error}"));
-            file = None;
-        }
+        Self { file, relative, forward: Some(forward), failures }
     }
-    CapturedStream {
-        bytes,
-        path: if file.is_some() && complete {
-            Some(relative)
-        } else {
-            None
-        },
-        failures,
-        complete,
+
+    fn finish(mut self, bytes: Vec<u8>, complete: bool) -> CapturedStream {
+        if let Some(file) = self.file.as_mut() {
+            if let Err(error) = file.flush() {
+                self.failures.push(format!("retention flush: {error}"));
+                self.file = None;
+            }
+        }
+        CapturedStream {
+            bytes,
+            path: (self.file.is_some() && complete).then_some(self.relative),
+            failures: self.failures,
+            complete,
+        }
     }
 }
 
-fn joined_stream(result: thread::Result<CapturedStream>, name: &str) -> CapturedStream {
-    result.unwrap_or_else(|_| CapturedStream {
-        bytes: Vec::new(),
-        path: None,
-        complete: false,
-        failures: vec![format!(
-            "{name} worker panicked; original stream is incomplete"
-        )],
-    })
+impl<W: Write> Write for StreamWriter<W> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if let Some(file) = self.file.as_mut() {
+            if let Err(error) = file.write_all(bytes) {
+                self.failures.push(format!("retention: {error}"));
+                self.file = None;
+            }
+        }
+        if let Some(forward) = self.forward.as_mut() {
+            if let Err(error) = forward.write_all(bytes).and_then(|()| forward.flush()) {
+                self.failures.push(format!("forwarding: {error}"));
+                self.forward = None;
+            }
+        }
+        // Auxiliary errors must not interrupt either original reader or replace child failure.
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
 
-/// Command 由发布单元按明确登记构造。本函数不安装、探测或选择任何 SDK。
-/// output 可以在源码／clone 根外；所有流路径相对该输出目录。
-/// 沿用旧配方的内存原流，用于小命令返回值及文件保留失败时的原字节。
-/// executable.tar 的大执行物不经过这里或 JSON，由独立的流式归档边界处理。
+/// Reuse the runner's bounded process owner, deadline, inherited capabilities and stream readers.
+/// Output paths remain relative to the release output, which may lie outside the source clone.
 pub fn execute(
-    command: &mut Command,
+    root: &Path,
+    spec: &chrono_harness::CommandSpec,
     output: &Path,
     index: usize,
+    timeout: std::time::Duration,
     stdout: impl Write + Send,
     stderr: impl Write + Send,
 ) -> Result<CapturedProcess, String> {
-    let mut argv = Vec::new();
-    for argument in std::iter::once(command.get_program()).chain(command.get_args()) {
-        argv.push(
-            argument
-                .to_str()
-                .ok_or("non UTF-8 release argument")?
-                .to_owned(),
-        );
-    }
-    let cwd = match command.get_current_dir() {
-        Some(path) => path.to_owned(),
-        None => std::env::current_dir().map_err(|error| error.to_string())?,
-    };
-    let cwd = fs::canonicalize(cwd).map_err(|error| error.to_string())?;
-    command.current_dir(&cwd);
-    let cwd = cwd.to_str().ok_or("non UTF-8 release cwd")?.to_owned();
-    chrono_harness::process_fds::forward_command(command, &[])?;
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let digest = chrono_harness::file_identity(Path::new(&spec.program))?.0;
+    let mut stdout = StreamWriter::new(output, format!("processes/{index}.stdout"), stdout);
+    let mut stderr = StreamWriter::new(output, format!("processes/{index}.stderr"), stderr);
     let started_ns = timestamp()?;
     let started = Instant::now();
-    let mut child = command.spawn().map_err(|error| error.to_string())?;
-    let pid = child.id();
-    let original_stdout = child.stdout.take().expect("piped child stdout");
-    let original_stderr = child.stderr.take().expect("piped child stderr");
-    let (status, captured_stdout, captured_stderr) = thread::scope(|scope| {
-        let stdout = scope.spawn(|| {
-            capture(
-                output,
-                format!("processes/{index}.stdout"),
-                original_stdout,
-                stdout,
-            )
-        });
-        let stderr = scope.spawn(|| {
-            capture(
-                output,
-                format!("processes/{index}.stderr"),
-                original_stderr,
-                stderr,
-            )
-        });
-        let status = loop {
-            match child.wait() {
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                result => break result,
-            }
-        };
-        // 两个 worker 全部加入，才处理任何等待、转交或保留错误。
-        (status, stdout.join(), stderr.join())
-    });
-    let mut failures = Vec::new();
-    let child_exit = match status {
-        Ok(status) => {
-            let code = status
-                .code()
-                .or_else(|| status.signal().map(|signal| -signal));
-            match code {
-                Some(code) if (-127..=255).contains(&code) => Some(code),
-                _ => {
-                    failures.push("unavailable terminal child status".into());
-                    None
-                }
-            }
-        }
-        Err(error) => {
-            failures.push(format!("wait original child: {error}"));
-            None
-        }
-    };
+    let original = chrono_harness::run_process_observed_forwarded_for(
+        root, spec, b"", &digest, timeout,
+        chrono_harness::ProcessForward { stdout: &mut stdout, stderr: &mut stderr },
+    )?;
+    let child_exit = if let Some(signal) = original.exit_signal {
+        Some(-signal)
+    } else if original.exit_code >= 0 {
+        Some(original.exit_code)
+    } else { None };
+    let observation = json!({"launcher_pid":original.launcher_pid,"executable":original.executable,"sha256":original.sha256,"environment_digest":original.environment_digest,"exit_signal":original.exit_signal,"engine_exit_code":original.exit_code,"failure":original.failure,"timeout_ns":timeout.as_nanos(),"output_limit_bytes":spec.output_limit_bytes});
+    let mut failures: Vec<String> = original.failure.into_iter().collect();
+    if child_exit.is_none() { failures.push("unavailable terminal child status".into()); }
     let finished_ns = match timestamp() {
         Ok(time) => Some(time),
-        Err(error) => {
-            failures.push(format!("finish timestamp: {error}"));
-            None
-        }
+        Err(error) => { failures.push(format!("finish timestamp: {error}")); None }
     };
     Ok(CapturedProcess {
-        pid,
-        argv,
-        cwd,
-        started_ns,
-        finished_ns,
+        pid: original.child_pid.ok_or("missing original child identity")?,
+        argv: original.argv,
+        cwd: original.cwd.to_str().ok_or("non UTF-8 release cwd")?.to_owned(),
+        started_ns, finished_ns,
         duration_seconds: started.elapsed().as_secs_f64(),
         child_exit,
-        stdout: joined_stream(captured_stdout, "stdout"),
-        stderr: joined_stream(captured_stderr, "stderr"),
+        stdout: stdout.finish(original.stdout_bytes, original.stdout_complete),
+        stderr: stderr.finish(original.stderr_bytes, original.stderr_complete),
         failures,
+        observation,
     })
 }

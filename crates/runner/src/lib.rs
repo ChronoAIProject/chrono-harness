@@ -129,6 +129,10 @@ pub struct ProcessResult {
     pub stdin_sha256: String,
     pub stdout_bytes: Vec<u8>,
     pub stderr_bytes: Vec<u8>,
+    #[serde(default)]
+    pub stdout_complete: bool,
+    #[serde(default)]
+    pub stderr_complete: bool,
     pub stdout_sha256: String,
     pub stderr_sha256: String,
     pub failure: Option<String>,
@@ -139,6 +143,9 @@ pub struct ProcessResult {
     #[serde(skip)]
     pub(crate) failure_cause: Option<Arc<ProcessFailure>>,
     pub exit_code: i32,
+    /// Actual terminal signal, including cancellation; exit_code keeps its wire meaning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_signal: Option<i32>,
     pub stdout: String,
     pub stderr: String,
     pub executable: PathBuf,
@@ -685,6 +692,28 @@ pub fn run_process_observed_for(
     ))
 }
 
+/// Optional live consumers of the same bounded original stream readers.
+/// Writers must return from IO; a failed writer is detached while both pipes drain.
+pub struct ProcessForward<'a> {
+    pub stdout: &'a mut (dyn Write + Send),
+    pub stderr: &'a mut (dyn Write + Send),
+}
+
+/// Same owned process engine and acquisition deadline, with live output forwarding.
+/// A forwarding failure is retained alongside the actual child status.
+pub fn run_process_observed_forwarded_for(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    timeout: Duration,
+    forward: ProcessForward<'_>,
+) -> Result<ProcessResult, String> {
+    finish_detailed(run_process_inner_with_stdout(
+        root, s, input, Some(digest), timeout, s.output_limit_bytes, None, Some(forward),
+    ))
+}
+
 /// Runner-owned wire callers use this variant to retain prelaunch causes.
 pub(crate) fn run_process_observed_detailed(
     root: &Path,
@@ -1001,6 +1030,7 @@ pub fn run_process_observed_data(
         Duration::from_secs(s.timeout_seconds),
         stdout_limit,
         None,
+        None,
     ))
 }
 fn run_process_inner(
@@ -1019,6 +1049,7 @@ fn run_process_inner(
         timeout,
         s.output_limit_bytes,
         evidence,
+        None,
     )
     .map_err(|mut failure| {
         failure.error = failure
@@ -1046,6 +1077,7 @@ fn run_process_inner_with_stdout(
     timeout: Duration,
     stdout_limit: usize,
     evidence: Option<&ProcessEvidence<'_>>,
+    forward: Option<ProcessForward<'_>>,
 ) -> Result<ProcessResult, ProcessFailure> {
     let span = tracing::info_span!(
         "process",
@@ -1341,6 +1373,7 @@ fn run_process_inner_with_stdout(
         struct StreamResult {
             bytes: Vec<u8>,
             failures: Vec<Failure>,
+            complete: bool,
         }
         fn reader<'scope, R: Read + Send + 'scope, W: Fn() + Send + 'scope>(
             scope: &'scope std::thread::Scope<'scope, '_>,
@@ -1351,11 +1384,13 @@ fn run_process_inner_with_stdout(
             mut original: Option<fs::File>,
             stream: &'static str,
             ready: Arc<Barrier>,
+            mut forward: Option<&'scope mut (dyn Write + Send)>,
         ) -> std::thread::ScopedJoinHandle<'scope, StreamResult> {
             scope.spawn(move || {
                 let mut result = StreamResult {
                     bytes: Vec::new(),
                     failures: Vec::new(),
+                    complete: true,
                 };
                 ready.wait();
                 let mut buf = [0u8; 8192];
@@ -1363,6 +1398,7 @@ fn run_process_inner_with_stdout(
                     let n = match r.read(&mut buf) {
                         Ok(n) => n,
                         Err(e) => {
+                            result.complete = false;
                             result.failures.push(
                                 Failure::wrap(
                                     "E_PROCESS_STREAM_READ",
@@ -1382,9 +1418,19 @@ fn run_process_inner_with_stdout(
                         monitor();
                     }
                     let keep = n.min(limit.saturating_sub(result.bytes.len()));
+                    if keep != n { result.complete = false; }
                     // Publication errors cannot discard bytes already read or
                     // prevent collection of the child's remaining bounded output.
                     result.bytes.extend_from_slice(&buf[..keep]);
+                    if let Some(writer) = forward.as_mut() {
+                        if let Err(error) = writer.write_all(&buf[..keep]).and_then(|()| writer.flush()) {
+                            result.failures.push(
+                                Failure::wrap("E_PROCESS_FORWARD", format!("{stream} forwarding: {error}"), NativeIoError::new(error))
+                                    .at("stream", stream).at("phase", "forward"),
+                            );
+                            forward = None;
+                        }
+                    }
                     if let Some(file) = &mut original {
                         // File is unbuffered: enclosing termination cannot discard
                         // bytes already retained by a completed write.
@@ -1409,6 +1455,10 @@ fn run_process_inner_with_stdout(
             })
         }
         let readers_ready = Arc::new(Barrier::new(3));
+        let (stdout_forward, stderr_forward) = match forward {
+            Some(forward) => (Some(forward.stdout), Some(forward.stderr)),
+            None => (None, None),
+        };
         tracing::debug!(
             event_id = "process.readers_start",
             "starting original stream readers"
@@ -1422,6 +1472,7 @@ fn run_process_inner_with_stdout(
             stdout_original,
             "stdout",
             readers_ready.clone(),
+            stdout_forward,
         );
         let stderr = reader(
             scope,
@@ -1432,6 +1483,7 @@ fn run_process_inner_with_stdout(
             stderr_original,
             "stderr",
             readers_ready.clone(),
+            stderr_forward,
         );
         tracing::debug!(
             event_id = "process.readers_ready_wait",
@@ -1628,6 +1680,8 @@ fn run_process_inner_with_stdout(
                 None => error,
             });
         }
+        let stdout_complete = a.complete;
+        let stderr_complete = b.complete;
         let a = a.bytes;
         let b = b.bytes;
         let failure_cause = failure_detail.map(|error| {
@@ -1654,8 +1708,16 @@ fn run_process_inner_with_stdout(
             stderr: String::from_utf8_lossy(&b).into_owned(),
             stdout_bytes: a,
             stderr_bytes: b,
+            stdout_complete,
+            stderr_complete,
             failure: failure.clone(),
             exit_code: status.and_then(|s| s.code()).unwrap_or(-1),
+            exit_signal: {
+                #[cfg(unix)]
+                { use std::os::unix::process::ExitStatusExt; status.and_then(|s| s.signal()) }
+                #[cfg(not(unix))]
+                { None }
+            },
             executable,
             sha256: hash,
             launcher_pid: Some(launcher_pid),

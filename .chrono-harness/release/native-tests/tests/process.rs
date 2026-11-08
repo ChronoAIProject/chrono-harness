@@ -4,16 +4,19 @@ use std::{
     fs,
     io::{self, Write},
     net::{TcpListener, TcpStream},
-    process::Command,
     sync::mpsc,
     thread,
     time::Duration,
 };
 
-fn command(root: &std::path::Path, steps: Value) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-release-operation"));
-    command.current_dir(root).arg("run").arg(steps.to_string());
-    command
+fn command(_root: &std::path::Path, steps: Value) -> chrono_harness::CommandSpec {
+    chrono_harness::CommandSpec {
+        program: env!("CARGO_BIN_EXE_chrono-test-release-operation").into(),
+        args: vec!["run".into(), steps.to_string()],
+        env: std::env::vars().collect(),
+        timeout_seconds: 10,
+        output_limit_bytes: chrono_harness::verified_limits::MAX_OUTPUT_BYTES,
+    }
 }
 
 struct Forward(mpsc::Sender<Vec<u8>>);
@@ -46,13 +49,48 @@ impl Write for BrokenForward {
 fn original_parent_exit_does_not_leave_a_descendant_running_into_the_next_phase() {
     let source = tempfile::tempdir().unwrap();
     let output = tempfile::tempdir().unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-release-tool"));
-    command.current_dir(source.path()).arg("--process-parent");
-    let captured = execute(&mut command, output.path(), 0, io::sink(), io::sink()).unwrap();
+    let mut command = command(source.path(), json!([]));
+    command.program = env!("CARGO_BIN_EXE_chrono-test-release-tool").into();
+    command.args = vec!["--process-parent".into()];
+    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), io::sink(), io::sink()).unwrap();
     assert_eq!(captured.child_exit, Some(0));
     assert!(!source.path().join("late-descendant").exists());
     assert!(!String::from_utf8_lossy(&captured.stdout.bytes).contains("late descendant tail"));
     assert!(captured.passed(), "{:?}", captured.failures);
+}
+
+#[test]
+fn deadline_keeps_original_prefix_and_actual_termination_signal() {
+    let source = tempfile::tempdir().unwrap();
+    let output = tempfile::tempdir().unwrap();
+    let command = command(source.path(), json!([
+        {"Stdout":[0,255,10]}, {"Stderr":[254,0,10]}, {"SleepMillis":2000},
+        {"Create":{"path":"too-late","bytes":[1]}}
+    ]));
+    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_millis(250), io::sink(), io::sink()).unwrap();
+    assert!(!captured.passed());
+    assert_eq!(captured.child_exit, Some(-9));
+    assert!(captured.failures.iter().any(|s| s.contains("timed out")));
+    assert_eq!(captured.stdout.bytes, [0,255,10]);
+    assert_eq!(captured.stderr.bytes, [254,0,10]);
+    assert!(!source.path().join("too-late").exists());
+    assert_eq!(captured.observation["exit_signal"], 9);
+    assert_eq!(captured.observation["timeout_ns"], 250_000_000);
+}
+
+#[test]
+fn output_bound_keeps_only_original_prefix_and_reports_incomplete_stream() {
+    let source = tempfile::tempdir().unwrap();
+    let output = tempfile::tempdir().unwrap();
+    let mut command = command(source.path(), json!([{"Stdout":vec![7u8;100000]}]));
+    command.output_limit_bytes = 1024;
+    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), io::sink(), io::sink()).unwrap();
+    assert!(!captured.passed());
+    assert!(captured.failures.iter().any(|s| s.contains("output limit exceeded")));
+    assert_eq!(captured.stdout.bytes, vec![7u8;1024]);
+    assert!(!captured.stdout.complete);
+    assert_eq!(captured.stdout.receipt()["status"], "incomplete");
+    assert_eq!(fs::read(output.path().join("processes/0.stdout")).unwrap(), captured.stdout.bytes);
 }
 
 #[test]
@@ -63,7 +101,7 @@ fn both_original_streams_are_live_before_child_exit_and_output_can_be_outside_so
     let address = listener.local_addr().unwrap();
     let stdout = vec![0u8, 255, 10];
     let stderr = vec![254u8, 0, 10];
-    let mut command = command(
+    let command = command(
         source.path(),
         json!([
             {"Stdout":stdout}, {"Stderr":stderr},
@@ -75,9 +113,11 @@ fn both_original_streams_are_live_before_child_exit_and_output_can_be_outside_so
     let captured = thread::scope(|scope| {
         let running = scope.spawn(|| {
             let result = execute(
-                &mut command,
+                source.path(),
+                &command,
                 output.path(),
                 0,
+                Duration::from_secs(10),
                 Forward(out_tx),
                 Forward(err_tx),
             );
@@ -119,13 +159,13 @@ fn forwarding_failure_drains_the_original_tail_and_keeps_actual_child_failure() 
     let output = tempfile::tempdir().unwrap();
     let first = vec![1u8; 20000];
     let last = vec![2u8; 28000];
-    let mut command = command(
+    let command = command(
         source.path(),
         json!([
             {"Stdout":first}, {"Stderr":[0,255,10]}, {"Stdout":last}, {"Exit":41}
         ]),
     );
-    let captured = execute(&mut command, output.path(), 0, BrokenForward, io::sink()).unwrap();
+    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), BrokenForward, io::sink()).unwrap();
     assert_eq!(captured.child_exit, Some(41));
     assert_eq!(captured.exit_code(), 41);
     assert!(captured.auxiliary_failed());
@@ -148,8 +188,8 @@ fn forwarding_failure_drains_the_original_tail_and_keeps_actual_child_failure() 
 fn child_success_is_failure_when_live_forwarding_failed() {
     let source = tempfile::tempdir().unwrap();
     let output = tempfile::tempdir().unwrap();
-    let mut command = command(source.path(), json!([{"Stdout":[1,2,3]},{"Exit":0}]));
-    let captured = execute(&mut command, output.path(), 0, BrokenForward, io::sink()).unwrap();
+    let command = command(source.path(), json!([{"Stdout":[1,2,3]},{"Exit":0}]));
+    let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), BrokenForward, io::sink()).unwrap();
     assert_eq!(captured.child_exit, Some(0));
     assert_eq!(captured.exit_code(), 2);
     assert!(!captured.passed());
@@ -166,13 +206,13 @@ fn retention_failure_keeps_original_bytes_without_inventing_files_or_overwriting
             b"independent existing file",
         )
         .unwrap();
-        let mut command = command(
+        let command = command(
             source.path(),
             json!([
                 {"Stdout":[0,255,10]}, {"Stderr":[254,0,10]}, {"Exit":child}
             ]),
         );
-        let captured = execute(&mut command, output.path(), 0, io::sink(), io::sink()).unwrap();
+        let captured = execute(source.path(), &command, output.path(), 0, Duration::from_secs(10), io::sink(), io::sink()).unwrap();
         assert_eq!(captured.child_exit, Some(child));
         assert_eq!(captured.exit_code(), expected_exit);
         assert!(!captured.passed());
