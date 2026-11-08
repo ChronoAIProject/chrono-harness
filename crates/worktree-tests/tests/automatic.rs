@@ -1219,10 +1219,53 @@ fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_r
     assert!(remaining["entries"][0]["terminal"].is_null());
     assert!(active.join("payload").is_file());
     assert!(!target.exists());
+    assert!(
+        !h.root.join(disposed["ownership"]["path"].as_str().unwrap()).exists(),
+        "retired attachment capabilities must not outlive their final responsibility"
+    );
+    assert!(
+        !h.record_directory(&target).exists(),
+        "an empty retired address must release its metadata and directory"
+    );
     assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
     let (code, again, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{again} {error}");
     assert_eq!(h.ledger()["entries"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn retired_address_preserves_directory_consumers_and_unknown_members() {
+    use chrono_harness::ownership::DirectoryLease;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("retirement-boundaries");
+    let (code, created, error) = h.invoke("integration", "retirement-boundaries", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let directory = h.record_directory(&target);
+    let before = fs::read(directory.join("ledger.json")).unwrap();
+    let reader = DirectoryLease::acquire(&directory, false, None).unwrap().unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert_eq!(fs::read(directory.join("ledger.json")).unwrap(), before);
+    drop(reader);
+    let foreign = directory.join("unknown-work");
+    fs::write(&foreign, b"retain this independent work").unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 1, "{maintained} {error}");
+    assert_eq!(fs::read(&foreign).unwrap(), b"retain this independent work");
+    assert!(directory.join("owner.json").is_file());
+    fs::remove_file(foreign).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!directory.exists());
 }
 
 #[test]
