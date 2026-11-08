@@ -435,6 +435,18 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "runtime_logging": {
+          "operation": "test.runner.runtime-logging",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--test",
+            "runtime_logging"
+          ]
         }
       },
       "language": "rust"
