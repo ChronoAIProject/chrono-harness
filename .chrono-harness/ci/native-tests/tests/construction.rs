@@ -174,7 +174,6 @@ fn incomplete_construction_cannot_publish_success_even_if_the_caller_returns_ok(
 #[test]
 fn installer_failure_and_secondary_report_io_failure_preserve_the_actual_original_exit() {
     let mut fixture = Fixture::new();
-    fixture.config["toolchain_provision"] = json!({"profile":"default","rustup_home":".chrono-harness/state/sdk/rustup","cargo_home":".chrono-harness/state/sdk/cargo"});
     fs::write(fixture.tools.join("fail-install"), b"").unwrap();
     let mut build = fixture.begin();
     build.prerequisites(&mut vec![], &mut vec![]).unwrap();

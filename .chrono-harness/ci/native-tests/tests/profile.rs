@@ -102,6 +102,10 @@ fn invalid_profile_sequences_modes_paths_and_environment_fail_before_process_eff
         ("tool_bindings", json!({})),
         ("native_platform", json!({})),
         (
+            "toolchain_provision",
+            json!({"profile":"default","rustup_home":".chrono-harness/state/rustup","cargo_home":".chrono-harness/state/cargo"}),
+        ),
+        (
             "install",
             json!([{"source":"out/product","destination":".chrono-harness/bin/p"},{"source":"out/second","destination":".chrono-harness/bin/p"}]),
         ),

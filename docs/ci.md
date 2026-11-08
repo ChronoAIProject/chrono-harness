@@ -36,6 +36,8 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 
 从仓库根运行。core、缓存、detector、单元准备、共享启动、Verus 准备和所有者阶段构建由 Rust 执行，统一通过薄 shell 入口启动。首次前端编译需要 Git、rustup 和固定 Rust 1.95.0；已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。尚未迁移的所有者验证 profile 和 Python 测试继续绑定本 macOS 宿主的 `/usr/bin/python3` 和精确 `Python 3.9.6`。
 
+没有现役 profile 使用的私有工具链安装分支及专属测试已退役。bootstrap 沿当前工具链选择：Cargo 不可用时安装指定版本的 minimal 加 rustfmt，缺格式化组件时只补该组件；可写构建目录仍由 `host_environment` 的缓存路径声明。工具身份、编译器选择及失败原件继续由原入口核验和保留，不为主机盘点另装完整 SDK。
+
 它按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap 操作，再复制声明二进制，不复制 Cargo 配方或发现项目。工具链操作明确点名版本，不改全局默认。专属 CI 测试的复制宿主回归消费已安装候选工具，须先 bootstrap：
 
 ```sh
