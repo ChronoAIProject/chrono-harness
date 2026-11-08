@@ -736,7 +736,7 @@ source／index 回归覆盖同长度内容漂移和成员保管；不证明原�
 
 `migrate --path WORKTREE --adopt-fixtures STATE_PATH` 通过已有迁移模块消费有限 `chrono-fixture-body-custody/v1`，绑定当前 HEAD、allocation／intent／物理身份、精确成员字节、配方、Git 根、嵌套 registry／lease 引用及真实当前消费者释放。保留历史结果，不处置。
 
-外层成员回收前，嵌套诊断引用及真实持有者也须释放。不扫描成员或根。真实 worktree Cargo／hook／full-native、CI short／full fixture 和共享 projects Host 使用此模块。共享 Host 的 FILEMAP、inputs、Cargo、workflow 消费者都依赖同一 worktree 库。
+外层成员回收前，嵌套诊断引用及真实持有者也须释放。不扫描成员或根。真实 worktree Cargo／hook／full-native、CI short／full fixture 和共享 projects Host 使用此模块。共享 Host 的 FILEMAP、inputs、workflow 消费者都依赖同一 worktree 库。
 
 workflow 原生工具、历史迁移各有有限声明，源码、外部输入、manifest／lock、离线原件仍保留。复制／硬链接／原生捕获适配器保持真实操作。panic／明确请求诊断在 allocation 保管释放前取得持久 `fixture-diagnostic` 引用，真实诊断保管者消费后经 RetainedArtifact 释放，不加整范围 TMPDIR 或并行登记／清理服务。
 
