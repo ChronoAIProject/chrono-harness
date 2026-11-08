@@ -4,6 +4,149 @@ fn main_host() -> Host {
     main_host_mode("rebuild-evidence")
 }
 
+fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
+    let h = main_host();
+    adopt_lifecycle_retention(&h);
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["cache_history"] = value!({
+        "keep_seconds":keep_seconds,"max_entries":max_entries,"max_bytes":1048576
+    });
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let path = h.root.join(".chrono-harness/retention.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["producers"]["lifecycle-state-original"] =
+        value!([".chrono-harness/state/automatic-cleanup/"]);
+    policy["diagnostic_keep_seconds"] = value!(0);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    h
+}
+
+#[test]
+fn cache_history_releases_old_generations_and_their_owned_originals() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = cache_history_host(0, 2);
+    let index = fs::read(h.root.join(".git/index")).unwrap();
+    let refs = git(&h.root, &["show-ref"]);
+    let mut old = None;
+    for round in 0..3 {
+        let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
+        assert_eq!(code, 0, "{used} {error}");
+        if round == 1 {
+            let entry = h.ledger()["entries"][0].clone();
+            let attempt = entry["cache_attempts"][0].clone();
+            assert!(attempt["completed_at"].as_u64().is_some());
+            assert!(
+                h.root
+                    .join(attempt["intent"]["path"].as_str().unwrap())
+                    .is_file()
+            );
+            old = Some(attempt);
+        }
+    }
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    let attempts = entry["cache_attempts"].as_array().unwrap();
+    assert_eq!(attempts.len(), 1, "{entry}");
+    assert_eq!(attempts[0]["generation"], entry["ownership"]["generation"]);
+    assert!(attempts[0]["receipt"].is_object());
+    assert!(entry["terminal"].is_null());
+    let old = old.unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    let state = retention_state::snapshot(&h.root);
+    if let Some(original) = state["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == old["intent"]["path"])
+    {
+        inventory
+            .maintain_originals(&[original["id"].as_str().unwrap().to_owned()])
+            .unwrap();
+    }
+    assert!(
+        !h.root
+            .join(old["intent"]["path"].as_str().unwrap())
+            .exists()
+    );
+    assert!(
+        h.root
+            .join(attempts[0]["intent"]["path"].as_str().unwrap())
+            .exists()
+    );
+    assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
+    assert_eq!(git(&h.root, &["show-ref"]), refs);
+    assert!(h.root.join("payload").is_file());
+}
+
+#[test]
+fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
+    let h = cache_history_host(86400, 64);
+    for _ in 0..3 {
+        let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
+        assert_eq!(code, 0, "{used} {error}");
+    }
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    let mut ledger = h.ledger();
+    assert_eq!(
+        ledger["entries"][0]["cache_attempts"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    // Capacity pressure cannot retire an unknown completion time or bypass a
+    // live capability. These are explicit fault inputs, never inferred mtimes.
+    ledger["entries"][0]["cache_attempts"][0]["completed_at"] = Value::Null;
+    h.set_ledger(&ledger);
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["cache_history"]["max_entries"] = value!(1);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (code, migrated, error) = h.auto("migrate", &["--path", h.root.to_str().unwrap()]);
+    assert_eq!(code, 0, "{migrated} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    let lease = chrono_harness::ownership::Lease::acquire(
+        &h.root.join(entry["ownership"]["path"].as_str().unwrap()),
+        Some(entry["ownership"]["id"].as_str().unwrap()),
+        false,
+        false,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let (_, _, _) = h.auto("maintain", &[]);
+    assert_eq!(
+        h.ledger()["entries"][0]["cache_attempts"],
+        entry["cache_attempts"]
+    );
+    drop(lease);
+    let result_path = h.root.join(
+        entry["cache_attempts"][1]["receipt"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let original = fs::read(&result_path).unwrap();
+    fs::write(&result_path, b"changed cache cleanup original").unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{maintained} {error}");
+    assert_eq!(
+        h.ledger()["entries"][0]["cache_attempts"],
+        entry["cache_attempts"]
+    );
+    fs::write(&result_path, original).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    let remaining = h.ledger()["entries"][0]["cache_attempts"].clone();
+    assert_eq!(remaining.as_array().unwrap().len(), 2);
+    assert_eq!(remaining[0], entry["cache_attempts"][0]);
+    assert_eq!(remaining[1], entry["cache_attempts"][2]);
+}
+
 pub(super) fn main_host_mode(mode: &str) -> Host {
     configure_main(Host::new("payload"), mode)
 }
