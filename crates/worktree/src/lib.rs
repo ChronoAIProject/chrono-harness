@@ -16,6 +16,8 @@ mod recovery;
 mod remote;
 mod start;
 #[allow(unexpected_cfgs)]
+pub mod verified_attention;
+#[allow(unexpected_cfgs)]
 pub mod verified_lifecycle;
 #[allow(unexpected_cfgs)]
 pub mod verified_owner_publication;
@@ -159,7 +161,7 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote|retire-evidence --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree import --path WORKTREE\nchrono-worktree migrate --path WORKTREE [--adopt-cache STATE_PATH] [--adopt-fixtures STATE_PATH] [--partition-producer ID]\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. No idle scheduler or PR/merge verdict.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote|retire-evidence --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree status [--path WORKTREE]\nchrono-worktree import --path WORKTREE\nchrono-worktree migrate --path WORKTREE [--adopt-cache STATE_PATH] [--adopt-fixtures STATE_PATH] [--partition-producer ID]\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. No idle scheduler or PR/merge verdict.\n".into(), stderr: String::new() };
     }
     if args.first().map(String::as_str) == Some("check-inputs") {
         return match check_inputs::dispatch(args) {
@@ -180,6 +182,7 @@ pub fn run(args: &[String]) -> CliOutput {
         Some(
             "finish"
                 | "maintain"
+                | "status"
                 | "import"
                 | "migrate"
                 | "use"
@@ -235,7 +238,7 @@ pub fn run(args: &[String]) -> CliOutput {
                 2
             },
             stdout: format!("{}\n", serde_json::to_string(&report).unwrap()),
-            stderr: String::new(),
+            stderr: automatic::attention_reminder(&report),
         },
         Err(error) => CliOutput {
             exit_code: 2,

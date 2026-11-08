@@ -326,6 +326,28 @@ struct Entry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     disposed_at: Option<u64>,
 }
+impl Entry {
+    fn check_agents(&self) -> Result<(), String> {
+        if self.creator_agent.as_ref().is_some_and(|a| !a.valid())
+            || self.custodian_agent.as_ref().is_some_and(|a| !a.valid())
+        {
+            return Err("invalid recorded agent identity".into());
+        }
+        if self.enrollment["kind"] == "birth"
+            && self.creator_agent
+                != serde_json::from_value::<Option<crate::AgentIdentity>>(
+                    self.enrollment["receipt"]["creator_agent"].clone(),
+                )
+                .map_err(|error| format!("invalid recorded creator identity: {error}"))?
+        {
+            return Err("enrollment creator differs from its original creation input".into());
+        }
+        if self.enrollment["kind"] != "birth" && self.creator_agent.is_some() {
+            return Err("imported worktree cannot claim a historical creator".into());
+        }
+        Ok(())
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CleanupProgress {
@@ -851,15 +873,7 @@ impl Manager {
             if e.path != scope {
                 return Err("enrollment record contains another worktree".into());
             }
-            if e.enrollment["kind"] == "birth"
-                && e.creator_agent
-                    != serde_json::from_value::<Option<crate::AgentIdentity>>(
-                        e.enrollment["receipt"]["creator_agent"].clone(),
-                    )
-                    .map_err(|error| format!("invalid recorded creator identity: {error}"))?
-            {
-                return Err("enrollment creator differs from its original creation input".into());
-            }
+            e.check_agents()?;
             if e.cache_only && (e.path != *anchor || e.status != "active" || e.terminal.is_some()) {
                 return Err(
                     "main cache enrollment cannot authorize terminal worktree disposal".into(),
@@ -1923,11 +1937,12 @@ impl Manager {
         exclude: &[PathBuf],
         report: &mut Value,
         all: bool,
+        selected: &BTreeSet<PathBuf>,
     ) -> Result<(), String> {
         report["worktree_inventory"] = value!([]);
         for git in r.inventory(&self.inputs.policy.coordinator_root)? {
             let path = PathBuf::from(&git["worktree"]);
-            if !all && path != self.scope && !exclude.contains(&path) {
+            if !all && path != self.scope && !exclude.contains(&path) && !selected.contains(&path) {
                 continue;
             }
             let snapshot = self.enrollment_snapshot(&path);
@@ -2039,7 +2054,7 @@ impl Manager {
         } else {
             value!({"kind":"worktree","path":self.scope})
         };
-        self.observe_inventory(r, exclude, report, all)?;
+        self.observe_inventory(r, exclude, report, all, &BTreeSet::new())?;
         let mut failures = self.drain_entries(r, exclude, report, all)?;
         if !all {
             report["cleanup_failures"] = value!(failures);
@@ -2558,123 +2573,172 @@ impl Manager {
         {
             return Err("enrollment snapshot belongs to a different owner".into());
         }
+        for entry in &ledger.entries {
+            entry.check_agents()?;
+        }
         Ok(Some(ledger))
     }
-    fn remind_agent(&self, r: &mut Runner, report: &mut Value) {
-        let current = match crate::AgentIdentity::from_report(report) {
-            Ok(Some(agent)) => agent,
-            result => {
-                report["agent_reminders"] = value!({"observation":"unknown-current-agent",
-                    "agent":report["agent"],"pending":null,"pending_count":null,
-                    "reason":result.err().unwrap_or_else(|| "current agent identity is unavailable".into())});
-                return;
-            }
-        };
-        let mut pending = Vec::new();
-        let mut pending_count = 0usize;
-        let mut unknown = 0usize;
-        let mut errors = Vec::new();
-        let mut current_paths = BTreeSet::new();
-        match self.enrollment_paths() {
-            Ok(paths) => {
-                for path in paths {
-                    match self.enrollment_snapshot(&path) {
-                        Ok(Some(ledger)) => {
-                            for entry in ledger.entries {
-                                if entry.status == "disposed" {
-                                    continue;
-                                }
-                                current_paths.insert(entry.path.clone());
-                                let Some(creator) = &entry.creator_agent else {
-                                    unknown += 1;
-                                    continue;
-                                };
-                                if !creator.valid() {
-                                    errors.push(value!({"path":entry.path,"error":"recorded creator identity is invalid"}));
-                                    continue;
-                                }
-                                if !crate::verified_lifecycle::pending_for_agent(
-                                    &creator.id,
-                                    &current.id,
-                                    entry.status == "disposed",
-                                ) {
-                                    continue;
-                                }
-                                pending_count += 1;
-                                if pending.len() >= 64 {
-                                    continue;
-                                }
-                                let action = match entry.status.as_str() {
-                                    "active" => {
-                                        "继续维护工作；确认完成、保全工作并加入自有任务后执行 finish"
+    /// Project existing local state and Git inventory; never enroll or dispose.
+    fn observe_attention(
+        &self,
+        r: &mut Runner,
+        report: &mut Value,
+        all: bool,
+    ) -> Result<(), String> {
+        use crate::verified_attention::{Attention, classify, needs_attention, pending_for_agent};
+        let current = crate::AgentIdentity::from_report(report)?;
+        let mut selected = BTreeSet::new();
+        let mut unknown_creators = 0;
+        let mut unreadable_records = 0;
+        let mut namespace_error = None;
+        // Read only the declared enrollment metadata to select this agent's work.
+        // Other agents' physical checkouts are observed only by explicit all-status.
+        if all || current.is_some() {
+            match self.enrollment_paths() {
+                Ok(paths) => {
+                    for path in paths {
+                        match self.enrollment_snapshot(&path) {
+                            Ok(Some(ledger)) => {
+                                let entry = ledger
+                                    .entries
+                                    .iter()
+                                    .find(|e| e.status != "disposed")
+                                    .or_else(|| ledger.entries.last());
+                                if let Some(entry) = entry {
+                                    if entry.creator_agent.is_none() {
+                                        unknown_creators += 1;
                                     }
-                                    "terminal" => {
-                                        "执行 maintain，沿原清理尝试接续；先解决已登记阻碍"
+                                    if all
+                                        || pending_for_agent(
+                                            entry
+                                                .creator_agent
+                                                .as_ref()
+                                                .map(|a| a.id.as_str())
+                                                .unwrap_or(""),
+                                            current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
+                                            true,
+                                        )
+                                    {
+                                        selected.insert(path);
                                     }
-                                    "retained" => {
-                                        "核对保留原因；必要使用方释放后执行 maintain，或明确继续保留"
-                                    }
-                                    _ => "状态未知；核对原记录与结果，保全工作后恢复维护",
-                                };
-                                let cleanup = entry.cleanup.as_ref().map(|progress| {
-                                    let preview: String =
-                                        progress.detail.chars().take(512).collect();
-                                    value!({"stage":progress.stage,"detail_preview":preview,
-                                        "preview_truncated":preview.len() < progress.detail.len(),
-                                        "report_path":progress.report_path})
-                                });
-                                let row = value!({"path":entry.path,"branch":entry.branch,
-                            "creator_agent":creator,"work_status":entry.status,
-                            "cleanup":cleanup,"next_action":action});
-                                eprintln!(
-                                    "W_WORKTREE_PENDING agent={} path={} status={}：{}",
-                                    current.id,
-                                    entry.path.display(),
-                                    entry.status,
-                                    action
-                                );
-                                pending.push(row);
+                                }
                             }
-                        }
-                        Ok(None) => errors
-                            .push(value!({"path":path,"error":"enrollment record unavailable"})),
-                        Err(error) => errors.push(value!({"path":path,"error":error})),
-                    }
-                }
-            }
-            Err(error) => errors.push(value!({"error":error})),
-        }
-        let mut unregistered = Vec::new();
-        match r.inventory(&self.inputs.policy.coordinator_root) {
-            Ok(rows) => {
-                for row in rows {
-                    if let Some(path) = row.get("worktree").map(PathBuf::from) {
-                        if path != self.inputs.policy.coordinator_root
-                            && !current_paths.contains(&path)
-                        {
-                            unknown += 1;
-                            if unregistered.len() < 64 {
-                                unregistered.push(path);
+                            Ok(None) => {
+                                unknown_creators += 1;
+                                if all {
+                                    selected.insert(path);
+                                }
+                            }
+                            Err(_) => {
+                                unreadable_records += 1;
+                                if all {
+                                    selected.insert(path);
+                                }
                             }
                         }
                     }
                 }
+                Err(error) => namespace_error = Some(error),
             }
-            Err(error) => errors.push(value!({"error":error})),
         }
-        if unknown > 0 || !errors.is_empty() {
-            eprintln!(
-                "W_WORKTREE_AGENT_SCOPE agent={}：有 {} 个创建者未知的对象，{} 项观察错误；不能据此确认没有待维护工作树",
-                current.id,
-                unknown,
-                errors.len()
+        let mut inventory = value!({});
+        self.observe_inventory(r, &[], &mut inventory, all, &selected)?;
+        let git_rows: BTreeMap<PathBuf, Value> = inventory["worktree_inventory"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| (PathBuf::from(row["path"].as_str().unwrap()), row.clone()))
+            .collect();
+        let mut paths: BTreeSet<PathBuf> = git_rows.keys().cloned().collect();
+        let mut rows = Vec::new();
+        paths.extend(selected);
+        paths.insert(self.scope.clone());
+        if let Some(error) = &namespace_error {
+            rows.push(value!({"path":null,"work_state":"unknown",
+                "cleanup_state":"unknown","attention_required":true,
+                "agent_attention_required":false,
+                "next_action":"inspect-enrollment-namespace","error":error}));
+        }
+        for path in paths {
+            let snapshot = self.enrollment_snapshot(&path);
+            let entry = snapshot
+                .as_ref()
+                .ok()
+                .and_then(Option::as_ref)
+                .and_then(|ledger| {
+                    ledger
+                        .entries
+                        .iter()
+                        .find(|e| e.status != "disposed")
+                        .or_else(|| ledger.entries.last())
+                });
+            let physical = fs::symlink_metadata(&path);
+            let physical_readable = physical
+                .as_ref()
+                .map(|_| true)
+                .unwrap_or_else(|e| e.kind() == std::io::ErrorKind::NotFound);
+            let git = git_rows.get(&path);
+            let error = snapshot
+                .as_ref()
+                .err()
+                .cloned()
+                .or_else(|| {
+                    physical
+                        .as_ref()
+                        .err()
+                        .filter(|e| e.kind() != std::io::ErrorKind::NotFound)
+                        .map(ToString::to_string)
+                })
+                .or_else(|| {
+                    git.and_then(|g| g["attachment_error"].as_str())
+                        .map(str::to_owned)
+                });
+            let cleanup = entry.map(|e| e.status.as_str()).unwrap_or("unregistered");
+            let view = classify(
+                cleanup,
+                path == self.inputs.policy.coordinator_root,
+                snapshot.is_ok() && physical_readable && error.is_none(),
+                entry.is_some(),
+                physical.is_ok(),
+                git.is_some(),
+                git.is_some_and(|g| g["enrollment_match"] == true),
+                entry.is_some_and(|e| e.terminal.is_some()),
             );
+            // This match only encodes the proved classification for JSON/CLI.
+            let (work, action) = match &view {
+                Attention::Coordinator => ("coordinator", "none"),
+                Attention::Active => ("active", "complete-work-and-finish"),
+                Attention::TerminalPending => ("terminal", "maintain"),
+                Attention::Retained => ("terminal", "resolve-retention-and-finish"),
+                Attention::Disposed => ("terminal", "none"),
+                Attention::Unregistered => ("unregistered", "inspect-and-import"),
+                Attention::Unknown => ("unknown", "inspect-original-state"),
+            };
+            let creator = entry.and_then(|e| e.creator_agent.as_ref());
+            let agent_attention = pending_for_agent(
+                creator.map(|a| a.id.as_str()).unwrap_or(""),
+                current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
+                needs_attention(&view),
+            );
+            rows.push(value!({"path":path,"work_state":work,"cleanup_state":cleanup,
+                "branch":entry.map(|e| &e.branch),"creator_agent":creator,
+                "custodian_agent":entry.and_then(|e| e.custodian_agent.as_ref()),
+                "cleanup_progress":entry.and_then(|e| e.cleanup.as_ref()),
+                "agent_attention_required":agent_attention,
+                "attention_required":needs_attention(&view),"next_action":action,
+                "ledger_path":record_directory(&self.directory, &path)?.join("ledger.json"),
+                "physical_present":physical.is_ok(),"git_registered":git.is_some(),
+                "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
+                "cleanup_receipt":entry.and_then(|e| e.attempts.last()).and_then(|a| a.receipt.as_ref()),
+                "error":error}));
         }
-        report["agent_reminders"] = value!({"phase":"before-operation","agent":current,
-            "observation":if errors.is_empty() && unregistered.is_empty() {"registered-records-observed"} else {"partial"},
-            "pending":pending,"pending_count":pending_count,"truncated":pending_count > 64,
-            "unknown_creator_records":unknown,"unregistered_worktrees":unregistered,"errors":errors,
-            "effects":"reminder-only; no task completion or cleanup authorization"});
+        report["worktree_status"] = value!({"schema":"chrono-worktree-status/v1",
+            "scope":if all {"coordinator"} else if current.is_some() {"target-and-current-agent"} else {"target"},
+            "agent":report["agent"],"unknown_creator_records":unknown_creators,
+            "unreadable_records":unreadable_records,"namespace_error":namespace_error,
+            "agent_observation_complete":current.is_some() && unknown_creators == 0
+                && unreadable_records == 0 && namespace_error.is_none(),"worktrees":rows});
+        Ok(())
     }
     /// Entry-local refusals remain in the drain report and immutable receipts.
     /// Coordinator/state publication failures still prevent admission.
@@ -2945,7 +3009,6 @@ pub(crate) fn create(
         return create(r, report);
     };
     manager.protect_reports(r, &o.root)?;
-    manager.remind_agent(r, report);
     manager.preflight_birth(r, &destination)?;
     manager.drain_for_admission(r, &[o.root.clone(), destination.clone()], report)?;
     manager.stable(r)?;
@@ -2954,6 +3017,7 @@ pub(crate) fn create(
     manager.stable(r)?;
     manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"],"creator_agent":crate::AgentIdentity::from_report(report)?}))?;
     report["cleanup_enrollment"] = value!({"coordinator_root":manager.inputs.policy.coordinator_root,"state_directory":manager.inputs.policy.state_directory,"kind":"birth"});
+    manager.observe_attention(r, report, false)?;
     Ok(())
 }
 
@@ -3075,14 +3139,16 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         .get("--path")
         .map(|p| invoking.join(p))
         .unwrap_or_else(|| invoking.clone());
-    let target = if operation == "maintain" {
-        None
-    } else {
-        Some(absolute(&target, false)?)
-    };
+    let target =
+        if operation == "maintain" || (operation == "status" && !values.contains_key("--path")) {
+            None
+        } else {
+            Some(absolute(&target, operation == "status")?)
+        };
     let success = match operation.as_str() {
         "finish" => "finished",
         "maintain" => "maintained",
+        "status" => "observed",
         "import" => "imported",
         "migrate" => "migrated",
         "deploy-owner" => "owner-deployed",
@@ -3112,7 +3178,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             )?
             .ok_or("automatic cleanup is not opted in")?;
             manager.protect_reports(r, &invoking)?;
-            manager.remind_agent(r, report);
             report["source_root"] = value!(manager.inputs.policy.coordinator_root);
             report["lifecycle_coordinator_root"] = value!(manager.inputs.policy.coordinator_root);
             report["source_commit"] = value!(manager.inputs.anchor_head);
@@ -3125,8 +3190,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     values["--stage-sha256"],
                     report,
                 ),
-                "maintain" => manager.drain(r, &[invoking.clone()], report, true),
-                "import" => manager.enroll(
+                "status" => manager.observe_attention(r, report, target.is_none()),
+                "maintain" => {
+                    let result = manager.drain(r, &[invoking.clone()], report, true);
+                    manager.observe_attention(r, report, true)?;
+                    result
+                }
+                "import" => {
+                    manager.enroll(
                     r,
                     target.as_ref().unwrap(),
                     if manager.inputs.policy.main_cache_only
@@ -3136,8 +3207,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     } else {
                         "import"
                     },
-                    value!({"report_path":report["report_path"],"historical_birth":"not-claimed","custodian_agent":crate::AgentIdentity::from_report(report)?}),
-                ),
+                    value!({"report_path":report["report_path"],"historical_birth":"not-claimed",
+                        "custodian_agent":crate::AgentIdentity::from_report(report)?}),
+                    )?;
+                    manager.observe_attention(r, report, false)
+                }
                 "migrate" => {
                     let target = target.as_ref().unwrap();
                     manager.migrate(r, target, report)?;
@@ -3150,7 +3224,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if let Some(plan) = values.get("--adopt-fixtures") {
                         manager.adopt_fixture_bodies(r, target, plan, report)?;
                     }
-                    Ok(())
+                    manager.observe_attention(r, report, false)
                 }
                 "finish" => {
                     manager.finish(
@@ -3162,7 +3236,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         token,
                         report,
                     )?;
-                    manager.drain(r, &[invoking.clone()], report, false)
+                    let result = manager.drain(r, &[invoking.clone()], report, false);
+                    manager.observe_attention(r, report, false)?;
+                    result
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
@@ -3298,6 +3374,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
                     let coordinator = manager.inputs.policy.coordinator_root.clone();
+                    manager.observe_attention(r, report, false)?;
                     drop(manager);
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
                     let process = chrono_harness::prepared::process_identities(
@@ -3353,6 +3430,42 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         },
     )
 }
+
+/// Warnings are a projection of the already-persisted report, never new state.
+pub(crate) fn attention_reminder(report: &Value) -> String {
+    let mut text = String::new();
+    let status = &report["worktree_status"];
+    let known = status["agent"]["status"] == "known";
+    if let Some(rows) = status["worktrees"].as_array() {
+        let mut total = 0;
+        for row in rows {
+            let required = if known {
+                row["agent_attention_required"] == true
+            } else {
+                row["attention_required"] == true
+            };
+            if required {
+                total += 1;
+                if total <= 64 {
+                    text.push_str(&format!(
+                        "W_WORKTREE_ATTENTION: creator={} path={} branch={} work_state={} cleanup_state={} detail={} next_action={}; inspect chrono-worktree status and maintain unfinished work.\n",
+                        row["creator_agent"], row["path"], row["branch"], row["work_state"],
+                        row["cleanup_state"], row["cleanup_progress"], row["next_action"]
+                    ));
+                }
+            }
+        }
+        if total > 64 {
+            text.push_str(&format!("W_WORKTREE_ATTENTION: {total} pending objects; showing 64; inspect chrono-worktree status for all rows.\n"));
+        }
+        if status["agent_observation_complete"] != true {
+            text.push_str(&format!("W_WORKTREE_AGENT_SCOPE: agent={} unknown_creator_records={} unreadable_records={} namespace_error={}; observation is incomplete; unknown ownership is preserved.\n",
+                status["agent"], status["unknown_creator_records"], status["unreadable_records"], status["namespace_error"]));
+        }
+    }
+    text
+}
+
 fn registered_command(
     root: &Path,
     registrations: &Registrations,

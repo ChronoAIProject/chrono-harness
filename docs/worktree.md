@@ -480,9 +480,23 @@ cleanup 把明确生成目录处置与有限时 Git 检出移除分开。删任�
 chrono-worktree use --path /exact/worktree --operation test.example
 chrono-worktree finish --path /exact/worktree
 chrono-worktree maintain
+chrono-worktree status
+chrono-worktree status --path /exact/worktree
 chrono-worktree import --path /exact/existing-worktree
 chrono-worktree migrate --path /exact/enrolled-worktree
 ```
+
+### 本地状态与 AI 提醒
+
+`status` 从协调者已有的逐工作树账本和 Git inventory 观察本地状态。默认查看该协调者全部登记地址，包括物理检出已缺失的地址；`--path` 只查看指定地址。查询不导入、清理或补写任务终态。结果沿用生命周期报告及其现役保留政策，不另建成员清单或永久快照。
+
+报告的 `worktree_status.worktrees` 分别给出 `work_state`、`cleanup_state`、`attention_required`、`next_action`，并引用已有终态和清理原件。`active` 表示任务尚未交接，不能由空闲、缓存已清或构建成功推断完成。`terminal` 配合 `retained` 仍有保留事项；只有已有终态交接、账本记为 `disposed`，且物理路径与 Git 登记都已核实缺失，才停止该对象的清理提醒。长驻协调主检出正常时无需终结。
+
+无当前登记、记录损坏、附件变化和记录与检出不一致分别显示 `unregistered` 或 `unknown`，保留原件并提醒检查。单个损坏账本不会遮住其他可观察工作树；namespace 本身无法完整枚举时，结果另列未知项，不能据此声称清单完整。观察是本次快照，不授予之后删除或清理的资格。
+
+采用 automatic_cleanup 后，start／reconstruct、use／check／bootstrap、import／migrate／finish 在原报告中附当前目标状态；maintain 附协调者范围状态。未完成或清理待办以 `W_WORKTREE_ATTENTION` 写 stderr，stdout 仍为与存盘原件相同的完整 JSON，提醒本身不改变退出码。普通入口不读取其他工作树账本。AI 开始及交接工作时运行 `status`，根据下一步提示保全工作、解决保留条件，并在实际完成及加入消费者后执行 finish；提醒不代替这些义务。
+
+提醒分类由 `verified_attention.rs` 同源 Verus 判断，真实 Git／文件系统／JSON 适配与行为测试另验；证明范围见 [Verus 说明](verus.md#本地工作树提醒)。
 
 ### use 与 finish
 
@@ -620,7 +634,9 @@ birth 在登记和回执封存期间持关联租约。生产者中断后，普�
 
 start／reconstruct 的原报告和创建前 intent 保存 agent；同一地址的 birth 登记保存 `creator_agent`。后续 use、finish、maintain 和其他 agent 的操作保持该创建者。显式 import 仅保存 `custodian_agent`；历史创建者未知时仍为 null。旧记录也保持 unknown，不根据当前调用方补写历史。
 
-相关自动生命周期入口在操作前从现役 enrollment 记录产生 `agent_reminders`，并把本 agent 创建、尚未完成清理的对象写到调用方 stderr。每项包含路径、分支、工作／清理状态、保留原因及后续动作；active 提醒继续维护并在真实完成后 finish，terminal／retained 提醒沿原责任维护。最多显示 64 项，另报实际已知项数和截短标志。未知创建者、漏登和读取失败单列观察范围；当前 agent 未知时 pending 为 null，不能解释为空清单。提醒不设置终态，不删除对象，不增加后台扫描器或人审门。
+相关自动生命周期入口复用 `worktree_status`。已知 agent 的普通操作读取同一协调宿主的显式 enrollment 元数据，观察目标及该 agent 创建的地址；不为提醒检查其他 agent 的物理检出。status／maintain 仍提供全部状态。每行保存 `creator_agent`、`custodian_agent`、分支、工作／清理状态、清理详情、后续动作及 `agent_attention_required`；stderr 只提醒当前已知 agent 自己的未完对象，最多显示 64 项，超出时报实际项数，完整清单保存在原报告。完成工作仍须加入自有任务并执行 finish；已交接但 retained 的对象继续提醒。
+
+`worktree_status.agent`、`unknown_creator_records`、`unreadable_records`、`namespace_error` 和 `agent_observation_complete` 明确观察范围。身份未知时保留通用目标／全量状态提醒，并报 `W_WORKTREE_AGENT_SCOPE`；不能把这些对象认作当前 agent 创建，或把未知范围解释为没有待办。损坏记录保留错误，独立合法操作继续。提醒不设置终态、不授权删除，也不增加后台扫描器或人审门。
 
 **产品与宿主配置同改：**这批新增身份输入和即时提醒，宿主显式选择身份来源，使用现有 ledger 和原报告，不另建 agent 状态索引。相关读数和提示的总成本待实测；旧协调宿主仍须按原配套部署／迁移边界切换。它不补齐历史创建者，也不证明终态历史、租约及空地址目录已全部有限回收。
 

@@ -42,7 +42,9 @@
     "host-bootstrap-launcher",
     "host-bootstrap-launcher-tests",
     "cache",
-    "cache-tests"
+    "cache-tests",
+    "pr",
+    "pr-tests"
   ],
   "projects": [
     {
@@ -1943,6 +1945,28 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "verify_attention": {
+          "operation": "verify.worktree-attention",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.worktree-attention.rlib,dep-info=.chrono-harness/state/verify.worktree-attention.rlib.d",
+            "crates/worktree/src/verified_attention.rs",
+            "-o",
+            ".chrono-harness/state/verify.worktree-attention.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "test_project": "worktree-tests",
@@ -2084,6 +2108,28 @@
             "crates/worktree-tests/tests/verified_lifecycle.rs",
             "-o",
             ".chrono-harness/state/verify.worktree-lifecycle-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_attention": {
+          "operation": "verify.worktree-attention-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.worktree-attention-tests.rlib,dep-info=.chrono-harness/state/verify.worktree-attention-tests.rlib.d",
+            "crates/worktree-tests/tests/verified_attention.rs",
+            "-o",
+            ".chrono-harness/state/verify.worktree-attention-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -2501,6 +2547,135 @@
       },
       "language": "rust",
       "tests_for": "host-bootstrap-native"
+    },
+    {
+      "id": "pr",
+      "kind": "production",
+      "manifest": "crates/pr/Cargo.toml",
+      "lockfile": "crates/pr/Cargo.lock",
+      "root": "crates/pr",
+      "language": "rust",
+      "actions": {
+        "build": {
+          "operation": "build.pr",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/pr/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.pr",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/pr/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.pr",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/pr/Cargo.toml"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.pr",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--manifest-path",
+            "crates/pr/Cargo.toml"
+          ]
+        },
+        "lockfile": {
+          "operation": "lockfile.pr",
+          "tool": "cargo",
+          "argv": [
+            "generate-lockfile",
+            "--manifest-path",
+            "crates/pr/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "pr-tests"
+    },
+    {
+      "id": "pr-tests",
+      "kind": "test",
+      "manifest": "crates/pr-tests/Cargo.toml",
+      "lockfile": "crates/pr-tests/Cargo.lock",
+      "root": "crates/pr-tests",
+      "language": "rust",
+      "actions": {
+        "build": {
+          "operation": "build.pr-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/pr-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.pr-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/pr-tests/Cargo.toml"
+          ]
+        },
+        "format": {
+          "operation": "format.pr-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/pr-tests/Cargo.toml"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.pr-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--manifest-path",
+            "crates/pr-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.pr-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/pr-tests/Cargo.toml"
+          ]
+        },
+        "lockfile": {
+          "operation": "lockfile.pr-tests",
+          "tool": "cargo",
+          "argv": [
+            "generate-lockfile",
+            "--manifest-path",
+            "crates/pr-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "pr"
     }
   ],
   "scripts": [
@@ -2944,30 +3119,21 @@
             ".chrono-harness/ci/bootstrap-tests.py"
           ]
         },
-        "real-consumer": {
-          "operation": "host.bootstrap-real-consumer",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py",
-            "--real-consumer"
-          ]
-        },
-        "real-fixture": {
-          "operation": "host.bootstrap-real-fixture",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py",
-            "--real-fixture"
-          ]
-        },
         "provision": {
           "operation": "host.bootstrap-provision-tests",
           "tool": "python3",
           "argv": [
             "-B",
             ".chrono-harness/ci/provision_tests.py"
+          ]
+        },
+        "command-mocks": {
+          "operation": "host.bootstrap-command-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap-tests.py",
+            "--command-mocks"
           ]
         }
       }

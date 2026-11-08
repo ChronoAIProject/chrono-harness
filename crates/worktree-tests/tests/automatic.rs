@@ -701,6 +701,169 @@ fn automatic_birth_enrollment_and_active_retained_checkout_survives_start() {
     assert!(first.join("output λ/data").exists());
 }
 
+fn attention_row<'a>(report: &'a Value, path: &Path) -> &'a Value {
+    report["worktree_status"]["worktrees"]
+        .as_array()
+        .expect("persistent lifecycle status must be observable")
+        .iter()
+        .find(|row| row["path"] == value!(path))
+        .expect("status must include the addressed worktree")
+}
+
+#[test]
+fn automatic_attention_persists_across_commands_and_stops_after_verified_removal() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    native_consumer(&h, "finished");
+    let target = h.parent.join("attention active");
+    let (code, birth, stderr) = h.invoke("integration", "attention", &target);
+    assert_eq!(code, 0, "{birth} {stderr}");
+    assert_eq!(attention_row(&birth, &target)["work_state"], "active");
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    assert_eq!(attention_row(&status, &target)["attention_required"], true);
+    assert_eq!(attention_row(&status, &h.root)["attention_required"], false);
+    let (code, used, stderr) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {stderr}");
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+    let (code, finished, stderr) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+    );
+    assert_eq!(code, 0, "{finished} {stderr}");
+    assert!(!target.exists());
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    let row = attention_row(&status, &target);
+    assert_eq!(row["cleanup_state"], "disposed");
+    assert_eq!(row["work_state"], "terminal");
+    assert_eq!(row["attention_required"], false);
+    assert!(!stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+}
+
+#[test]
+fn automatic_attention_linked_query_publishes_its_original_at_the_coordinator() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let target = h.parent.join("linked status");
+    assert_eq!(h.invoke("feature", "linked-status", &target).0, 0);
+    let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+    command
+        .current_dir(&target)
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .args([
+            "status",
+            "--host-root",
+            target.to_str().unwrap(),
+            "--config",
+            POLICY,
+        ]);
+    // received checks exact stdout against the original at source_root/report_path.
+    let output = h.native_output(&mut command);
+    let (code, report, stderr) = h.received(output);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(report["source_root"], value!(h.root));
+    assert_eq!(attention_row(&report, &target)["attention_required"], true);
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+}
+
+#[test]
+fn automatic_attention_preserves_unregistered_dirty_and_corrupt_worktrees() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let healthy = h.parent.join("healthy");
+    let corrupt = h.parent.join("corrupt");
+    assert_eq!(h.invoke("feature", "healthy", &healthy).0, 0);
+    assert_eq!(h.invoke("feature", "corrupt", &corrupt).0, 0);
+    let unknown = h.parent.join("unknown");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            unknown.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    fs::write(unknown.join("unique-work"), "keep this source").unwrap();
+    fs::write(h.ledger_path(&corrupt), b"broken original ledger").unwrap();
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    assert_eq!(attention_row(&status, &healthy)["work_state"], "active");
+    assert_eq!(attention_row(&status, &corrupt)["work_state"], "unknown");
+    assert_eq!(
+        attention_row(&status, &unknown)["work_state"],
+        "unregistered"
+    );
+    assert_eq!(
+        fs::read(unknown.join("unique-work")).unwrap(),
+        b"keep this source"
+    );
+    assert_eq!(
+        fs::read(h.ledger_path(&corrupt)).unwrap(),
+        b"broken original ledger"
+    );
+    assert!(
+        !h.ledger_path(&unknown).exists(),
+        "observation must not import work"
+    );
+}
+
+#[test]
+fn automatic_attention_keeps_retained_terminal_work_visible_and_scopes_ordinary_commands() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let target = h.parent.join("retained");
+    let other = h.parent.join("other");
+    assert_eq!(h.invoke("feature", "retained", &target).0, 0);
+    fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();
+    fs::write(
+        target.join(".chrono-harness/state/evidence"),
+        "required evidence",
+    )
+    .unwrap();
+    let (code, report, stderr) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert!(target.exists());
+    let row = attention_row(&report, &target);
+    assert_eq!(row["work_state"], "terminal");
+    assert_eq!(row["cleanup_state"], "retained");
+    assert_eq!(row["attention_required"], true);
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+    let (code, report, stderr) = h.invoke("feature", "other", &other);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(
+        report["worktree_status"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(attention_row(&report, &other)["work_state"], "active");
+    let (code, report, stderr) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(
+        report["worktree_status"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(attention_row(&report, &target)["attention_required"], true);
+}
+
 #[test]
 fn automatic_finish_absent_evidence_does_not_retain_the_whole_checkout() {
     let h = Host::new("payload");
@@ -928,18 +1091,44 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
     assert_eq!(imported_entry["custodian_agent"]["id"], "agent-B");
     let (code, maintained, error) = invoke("maintain", &[], Some("agent-A"));
     assert_eq!(code, 0, "{maintained} {error}");
-    let reminders = maintained["agent_reminders"]["pending"].as_array().unwrap();
+    let reminders: Vec<_> = maintained["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["agent_attention_required"] == true)
+        .collect();
     assert_eq!(reminders.len(), 1, "{maintained}");
     assert_eq!(reminders[0]["path"], value!(a));
-    assert_eq!(reminders[0]["work_status"], "active");
+    assert_eq!(reminders[0]["work_state"], "active");
     assert!(error.contains(a.to_str().unwrap()), "{error}");
     assert!(!error.contains(b.to_str().unwrap()), "{error}");
     assert!(
-        maintained["agent_reminders"]["unknown_creator_records"]
+        maintained["worktree_status"]["unknown_creator_records"]
             .as_u64()
             .unwrap()
             >= 1
     );
+    // A related operation on B must also remind A about its own outstanding A.
+    let (code, scoped, error) = invoke("status", &["--path", b.to_str().unwrap()], Some("agent-A"));
+    assert_eq!(code, 0, "{scoped} {error}");
+    assert_eq!(attention_row(&scoped, &a)["agent_attention_required"], true);
+    assert_eq!(
+        attention_row(&scoped, &b)["agent_attention_required"],
+        false
+    );
+    assert!(error.contains(a.to_str().unwrap()), "{error}");
+    assert!(!error.contains(b.to_str().unwrap()), "{error}");
+    assert_eq!(
+        scoped["worktree_status"]["agent_observation_complete"],
+        false
+    );
+    let (code, unknown_scope, error) = invoke("status", &["--path", b.to_str().unwrap()], None);
+    assert_eq!(code, 0, "{unknown_scope} {error}");
+    assert_eq!(
+        unknown_scope["worktree_status"]["agent"]["status"],
+        "unknown"
+    );
+    assert!(error.contains("W_WORKTREE_AGENT_SCOPE"), "{error}");
     let (code, finished, error) =
         invoke("finish", &["--path", a.to_str().unwrap()], Some("agent-B"));
     assert_eq!(code, 0, "{finished} {error}");
@@ -955,10 +1144,11 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
     let (code, maintained, error) = invoke("maintain", &[], Some("agent-A"));
     assert_eq!(code, 0, "{maintained} {error}");
     assert!(
-        maintained["agent_reminders"]["pending"]
+        maintained["worktree_status"]["worktrees"]
             .as_array()
             .unwrap()
-            .is_empty()
+            .iter()
+            .all(|row| row["agent_attention_required"] != true)
     );
     assert!(b.join("payload").is_file());
     assert!(unknown.join("payload").is_file());
@@ -1707,6 +1897,14 @@ pub(super) fn native_consumer_actions(h: &Host, mode: &str, test_mode: &str) {
         "id":"consumer", "program":env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
         "resolution":"PATH-once", "version_argv":["--version"], "expected_version":"fixture"
     }));
+    if matches!(mode, "bounded-cargo" | "cargo-run") {
+        // Capture the actual Cargo selection before auto_command clears its environment.
+        for name in ["HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
+            if let Ok(value) = std::env::var(name) {
+                config["environment"]["values"][name] = value!(value);
+            }
+        }
+    }
     fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
     consuming_scripts(
         h,
