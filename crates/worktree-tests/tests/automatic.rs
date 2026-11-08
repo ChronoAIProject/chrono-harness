@@ -1220,7 +1220,9 @@ fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_r
     assert!(active.join("payload").is_file());
     assert!(!target.exists());
     assert!(
-        !h.root.join(disposed["ownership"]["path"].as_str().unwrap()).exists(),
+        !h.root
+            .join(disposed["ownership"]["path"].as_str().unwrap())
+            .exists(),
         "retired attachment capabilities must not outlive their final responsibility"
     );
     assert!(
@@ -1251,7 +1253,9 @@ fn retired_address_preserves_directory_consumers_and_unknown_members() {
     assert_eq!(code, 0, "{finished} {error}");
     let directory = h.record_directory(&target);
     let before = fs::read(directory.join("ledger.json")).unwrap();
-    let reader = DirectoryLease::acquire(&directory, false, None).unwrap().unwrap();
+    let reader = DirectoryLease::acquire(&directory, false, None)
+        .unwrap()
+        .unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
     assert_eq!(fs::read(directory.join("ledger.json")).unwrap(), before);
@@ -1289,17 +1293,24 @@ fn interrupted_address_retirement_preserves_changed_members_then_resumes_origina
     assert_eq!(code, 1, "{maintained} {error}");
     assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
     fs::remove_file(directory.join("fixture-consumer")).unwrap();
-    let members: Vec<_> = ["ledger.json", "owner.json", "metadata.lease"].iter().map(|name| {
-        let path = directory.join(name);
-        let bytes = fs::read(&path).unwrap();
-        value!({"name":name,"identity":chrono_harness::ownership::identity(&path).unwrap(),
+    let members: Vec<_> = ["ledger.json", "owner.json", "metadata.lease"]
+        .iter()
+        .map(|name| {
+            let path = directory.join(name);
+            let bytes = fs::read(&path).unwrap();
+            value!({"name":name,"identity":chrono_harness::ownership::identity(&path).unwrap(),
             "sha256":sha256(&bytes),"length":bytes.len()})
-    }).collect();
+        })
+        .collect();
     let declaration = value!({"schema":"chrono-worktree-address-retirement/v1",
         "coordinator_root":h.root,"common":h.root.join(".git"),"path":target,
         "directory_identity":chrono_harness::artifact_disposal::identity(&directory).unwrap(),
         "admission_id":members[2]["identity"],"members":members});
-    fs::write(directory.join("retirement.json"), serde_json::to_vec(&declaration).unwrap()).unwrap();
+    fs::write(
+        directory.join("retirement.json"),
+        serde_json::to_vec(&declaration).unwrap(),
+    )
+    .unwrap();
     // A real unlink happened before interruption. Recovery must accept this
     // partial effect without accepting another member's changed bytes.
     fs::remove_file(directory.join("ledger.json")).unwrap();
@@ -1310,7 +1321,10 @@ fn interrupted_address_retirement_preserves_changed_members_then_resumes_origina
     assert_eq!(code, 1, "{maintained} {error}");
     assert!(directory.join("retirement.json").is_file());
     assert!(directory.join("metadata.lease").is_file());
-    assert_eq!(fs::read(&owner).unwrap(), [original.as_slice(), b" "].concat());
+    assert_eq!(
+        fs::read(&owner).unwrap(),
+        [original.as_slice(), b" "].concat()
+    );
     fs::write(&owner, original).unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
@@ -1325,7 +1339,10 @@ fn retired_capability_failure_keeps_the_creators_original_responsibility_visible
     h.kernel_cleanup();
     h.policy(|policy| {
         policy["agent_identity_env"] = value!("CHRONO_TEST_AGENT_ID");
-        policy["environment"]["inherit"].as_array_mut().unwrap().push(value!("CHRONO_TEST_AGENT_ID"));
+        policy["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(value!("CHRONO_TEST_AGENT_ID"));
     });
     let policy_path = h.root.join(AUTO_POLICY);
     let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
@@ -1339,9 +1356,23 @@ fn retired_capability_failure_keeps_the_creators_original_responsibility_visible
         h.received(h._dir.capture_bound(&mut command))
     };
     let target = h.parent.join("retired-capability");
-    let (code, created, error) = invoke("start", &["--kind", "integration", "--name", "retired-capability", "--path", target.to_str().unwrap()]);
+    let (code, created, error) = invoke(
+        "start",
+        &[
+            "--kind",
+            "integration",
+            "--name",
+            "retired-capability",
+            "--path",
+            target.to_str().unwrap(),
+        ],
+    );
     assert_eq!(code, 0, "{created} {error}");
-    let lease = h.root.join(h.ledger()["entries"][0]["ownership"]["path"].as_str().unwrap());
+    let lease = h.root.join(
+        h.ledger()["entries"][0]["ownership"]["path"]
+            .as_str()
+            .unwrap(),
+    );
     let (code, finished, error) = invoke("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
     let identity = chrono_harness::ownership::identity(&lease).unwrap();
@@ -1350,8 +1381,12 @@ fn retired_capability_failure_keeps_the_creators_original_responsibility_visible
     assert_eq!(code, 1, "{maintained} {error}");
     let (code, status, error) = invoke("status", &["--path", h.root.to_str().unwrap()]);
     assert_eq!(code, 0, "{status} {error}");
-    let pending = status["worktree_status"]["worktrees"].as_array().unwrap().iter()
-        .find(|row| row["record_kind"] == "retired-lease").unwrap();
+    let pending = status["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["record_kind"] == "retired-lease")
+        .unwrap();
     assert_eq!(pending["creator_agent"]["id"], "retirement-agent-A");
     assert_eq!(pending["branch"], "integration/retired-capability");
     assert_eq!(pending["agent_attention_required"], true);
@@ -1359,7 +1394,10 @@ fn retired_capability_failure_keeps_the_creators_original_responsibility_visible
     assert!(pending["error"].as_str().unwrap().contains("unknown bytes"));
     assert!(error.contains(target.to_str().unwrap()), "{error}");
     assert_eq!(fs::read(&lease).unwrap(), b"unknown capability bytes");
-    assert_eq!(chrono_harness::ownership::identity(&lease).unwrap(), identity);
+    assert_eq!(
+        chrono_harness::ownership::identity(&lease).unwrap(),
+        identity
+    );
     fs::write(&lease, b"").unwrap();
     let (code, maintained, error) = invoke("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");

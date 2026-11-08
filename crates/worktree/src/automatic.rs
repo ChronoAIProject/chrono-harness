@@ -389,8 +389,12 @@ struct Gate {
 }
 impl Gate {
     fn stable(&self) -> Result<(), String> {
-        if let Some(directory) = &self.directory { directory.stable()?; }
-        if let Some(lease) = &self.lease { lease.stable()?; }
+        if let Some(directory) = &self.directory {
+            directory.stable()?;
+        }
+        if let Some(lease) = &self.lease {
+            lease.stable()?;
+        }
         Ok(())
     }
 }
@@ -882,11 +886,17 @@ impl Manager {
         fs::create_dir_all(&record_directory).map_err(|e| e.to_string())?;
         let kernel = policy.schema == "chrono-worktree-automatic-cleanup/v2";
         let directory_lease = if kernel {
-            Some(chrono_harness::ownership::DirectoryLease::acquire(
-                &record_directory, true,
-                wait.then_some(std::time::Duration::from_secs(r.config.timeout_seconds)),
-            )?.ok_or("enrollment metadata is busy")?)
-        } else { None };
+            Some(
+                chrono_harness::ownership::DirectoryLease::acquire(
+                    &record_directory,
+                    true,
+                    wait.then_some(std::time::Duration::from_secs(r.config.timeout_seconds)),
+                )?
+                .ok_or("enrollment metadata is busy")?,
+            )
+        } else {
+            None
+        };
         if record_directory.join("retirement.json").exists() {
             return Err("enrollment metadata retirement is pending; resume maintain".into());
         }
@@ -1005,7 +1015,9 @@ impl Manager {
         let mut paths = BTreeMap::new();
         for pending in &ledger.retired_leases {
             pending.check_agent()?;
-            if !kernel { return Err("retired capabilities require kernel ownership".into()); }
+            if !kernel {
+                return Err("retired capabilities require kernel ownership".into());
+            }
         }
         for e in &ledger.entries {
             if e.path != scope {
@@ -2433,7 +2445,11 @@ impl Manager {
         } else {
             value!({"kind":"worktree","path":self.scope})
         };
-        let mut failures = if all { self.resume_retired_addresses(r, report)? } else { vec![] };
+        let mut failures = if all {
+            self.resume_retired_addresses(r, report)?
+        } else {
+            vec![]
+        };
         self.observe_inventory(r, exclude, report, all, &BTreeSet::new())?;
         failures.extend(self.drain_entries(r, exclude, report, all)?);
         if !all {
@@ -2467,7 +2483,10 @@ impl Manager {
                     Ok(Some(mut owner)) => {
                         match owner.drain_entries(r, exclude, report, true) {
                             Ok(pending) => failures.extend(pending),
-                            Err(error) => { failures.push(format!("{}: {error}", path.display())); continue; }
+                            Err(error) => {
+                                failures.push(format!("{}: {error}", path.display()));
+                                continue;
+                            }
                         }
                         if let Err(error) = owner.retire_empty_address(r, report) {
                             failures.push(format!("{}: {error}", path.display()));
@@ -2882,7 +2901,9 @@ impl Manager {
                     removed.insert(i);
                     self.ledger.retired_leases.push(retirement::RetiredLease {
                         ownership: entry.ownership.clone().unwrap(),
-                        creator_agent: entry.creator_agent.clone(), branch: entry.branch.clone(), error: None,
+                        creator_agent: entry.creator_agent.clone(),
+                        branch: entry.branch.clone(),
+                        error: None,
                     });
                     count -= 1;
                     bytes -= sizes[i];
@@ -2972,7 +2993,9 @@ impl Manager {
         for entry in &ledger.entries {
             entry.check_agents()?;
         }
-        for pending in &ledger.retired_leases { pending.check_agent()?; }
+        for pending in &ledger.retired_leases {
+            pending.check_agent()?;
+        }
         Ok(Some(ledger))
     }
     /// Project existing local state and Git inventory; never enroll or dispose.
@@ -3000,11 +3023,22 @@ impl Manager {
                         match self.enrollment_snapshot(&path) {
                             Ok(Some(ledger)) => {
                                 for pending in &ledger.retired_leases {
-                                    if pending.creator_agent.is_none() { unknown_creators.insert(path.clone()); }
-                                    if all || pending_for_agent(
-                                        pending.creator_agent.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
-                                        current.as_ref().map(|a| a.id.as_str()).unwrap_or(""), true,
-                                    ) { selected.insert(path.clone()); }
+                                    if pending.creator_agent.is_none() {
+                                        unknown_creators.insert(path.clone());
+                                    }
+                                    if all
+                                        || pending_for_agent(
+                                            pending
+                                                .creator_agent
+                                                .as_ref()
+                                                .map(|a| a.id.as_str())
+                                                .unwrap_or(""),
+                                            current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
+                                            true,
+                                        )
+                                    {
+                                        selected.insert(path.clone());
+                                    }
                                 }
                                 let entry = ledger
                                     .entries
@@ -3032,7 +3066,9 @@ impl Manager {
                                         selected.insert(path);
                                     }
                                 } else {
-                                    if all { selected.insert(path.clone()); }
+                                    if all {
+                                        selected.insert(path.clone());
+                                    }
                                     empty_records.insert(path);
                                 }
                             }
@@ -3137,10 +3173,22 @@ impl Manager {
             let creator = entry.and_then(|e| e.creator_agent.as_ref());
             let report_handoff_pending = entry.is_some_and(Entry::report_handoff_pending);
             let metadata_retirement_pending = path != self.inputs.policy.coordinator_root
-                && entry.is_none() && physical.as_ref().err().is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) && git.is_none()
+                && entry.is_none()
+                && physical
+                    .as_ref()
+                    .err()
+                    .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+                && git.is_none()
                 && snapshot.as_ref().ok().and_then(Option::as_ref).is_some();
-            if metadata_retirement_pending && snapshot.as_ref().ok().and_then(Option::as_ref)
-                .is_some_and(|ledger| ledger.retired_leases.is_empty()) { unknown_creators.insert(path.clone()); }
+            if metadata_retirement_pending
+                && snapshot
+                    .as_ref()
+                    .ok()
+                    .and_then(Option::as_ref)
+                    .is_some_and(|ledger| ledger.retired_leases.is_empty())
+            {
+                unknown_creators.insert(path.clone());
+            }
             let attention_required = needs_attention(&view) || report_handoff_pending;
             let action = if report_handoff_pending {
                 "recover-result-handoff"
@@ -3170,8 +3218,13 @@ impl Manager {
             if let Some(ledger) = snapshot.as_ref().ok().and_then(Option::as_ref) {
                 for pending in &ledger.retired_leases {
                     let agent_attention = pending_for_agent(
-                        pending.creator_agent.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
-                        current.as_ref().map(|a| a.id.as_str()).unwrap_or(""), true,
+                        pending
+                            .creator_agent
+                            .as_ref()
+                            .map(|a| a.id.as_str())
+                            .unwrap_or(""),
+                        current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
+                        true,
                     );
                     rows.push(value!({"path":path,"record_kind":"retired-lease",
                         "work_state":"terminal","cleanup_state":"capability-retirement-pending",
