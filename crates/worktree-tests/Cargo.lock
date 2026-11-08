@@ -69,6 +69,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-host-bootstrap"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-registration",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "chrono-identifiers"
 version = "0.1.0"
 dependencies = [
@@ -162,6 +173,7 @@ name = "chrono-worktree-tests"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
+ "chrono-host-bootstrap",
  "chrono-judge-registration",
  "chrono-worktree",
  "libc",

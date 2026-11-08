@@ -25,6 +25,166 @@ fn expect_identifier_true(actual: bool)
     }
 }
 
+fn expect_inventory_error(out: Result<(), String>, expected: &str)
+    requires match out { Err(message) => message@ == expected@, _ => false },
+{
+    match out {
+        Ok(()) => { panic!(); },
+        Err(message) => {
+            let same = policy::equal_text(message.as_str(), expected);
+            expect_identifier_true(same);
+        },
+    }
+}
+
+fn expect_inventory_success(out: Result<(), String>)
+    requires out.is_ok(),
+{
+    match out {
+        Ok(()) => {},
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_inventory_termination_checks_only_the_final_byte() {
+    let empty: [u8; 0] = [];
+    expect_inventory_success(policy::git_inventory_termination(&empty));
+    let empty_rows = [0u8, 0];
+    expect_inventory_success(policy::git_inventory_termination(&empty_rows));
+    let invalid_utf8_but_terminated = [255u8, 0];
+    expect_inventory_success(policy::git_inventory_termination(&invalid_utf8_but_terminated));
+    let no_nul = [97u8];
+    expect_inventory_error(policy::git_inventory_termination(&no_nul), "incomplete Git inventory");
+    let embedded_nul = [97u8, 0, 98];
+    expect_inventory_error(policy::git_inventory_termination(&embedded_nul), "incomplete Git inventory");
+}
+
+// 对任意解码文本核完整借用；解码失败必须保持原诊断。
+fn git_inventory_decoding_preserves_the_entire_text(text: &str) {
+    match policy::git_inventory_text(Some(text)) {
+        Ok(actual) => {
+            let same = policy::equal_text(actual, text);
+            expect_identifier_true(same);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_inventory_decoding_boundaries() {
+    git_inventory_decoding_preserves_the_entire_text("");
+    git_inventory_decoding_preserves_the_entire_text("路径\t\0\r\n");
+    match policy::git_inventory_text(None) {
+        Ok(_) => { panic!(); },
+        Err(message) => {
+            let same = policy::equal_text(message.as_str(), "non UTF-8 Git inventory");
+            expect_identifier_true(same);
+        },
+    }
+}
+
+// 首个 TAB 拆分结果是接口输入；该层不能截取、改写或交换任一字段。
+fn git_inventory_row_preserves_both_complete_fields(meta: &str, path: &str) {
+    match policy::git_inventory_row(Some((meta, path)), "invalid Git tree row") {
+        Ok((actual_meta, actual_path)) => {
+            let same_meta = policy::equal_text(actual_meta, meta);
+            let same_path = policy::equal_text(actual_path, path);
+            expect_identifier_true(same_meta && same_path);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+fn expect_missing_inventory_row(expected: &str) {
+    match policy::git_inventory_row(None, expected) {
+        Ok(_) => { panic!(); },
+        Err(message) => {
+            let same = policy::equal_text(message.as_str(), expected);
+            expect_identifier_true(same);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_inventory_row_boundaries() {
+    git_inventory_row_preserves_both_complete_fields("", "");
+    git_inventory_row_preserves_both_complete_fields("100644 blob oid", "路径\t剩余\r\n");
+    expect_missing_inventory_row("invalid Git tree row");
+    expect_missing_inventory_row("invalid Git index row");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_tree_metadata_accepts_exactly_three_fields_including_empty_fields() {
+    let empty: [&str; 0] = [];
+    expect_inventory_error(policy::git_tree_metadata(&empty), "invalid Git tree metadata");
+    let two = ["100644", "blob"];
+    expect_inventory_error(policy::git_tree_metadata(&two), "invalid Git tree metadata");
+    let three = ["", "", ""];
+    expect_inventory_success(policy::git_tree_metadata(&three));
+    let four = ["100644", "blob", "oid", ""];
+    expect_inventory_error(policy::git_tree_metadata(&four), "invalid Git tree metadata");
+}
+
+// stage 必须恰为一个 ASCII 字节，任意其余字段的内容不在此层加强校验。
+fn git_index_metadata_stage(stage: &str, expected: bool)
+    requires expected == (stage.spec_bytes().len() == 1
+        && 48 <= stage.spec_bytes()[0] <= 51),
+{
+    let fields = ["", "", stage];
+    let out = policy::git_index_metadata(&fields);
+    if expected {
+        expect_inventory_success(out);
+    } else {
+        expect_inventory_error(out, "invalid Git index metadata");
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_index_metadata_rejects_wrong_count_and_nonexact_stages() {
+    proof {
+        reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2"); reveal_strlit("3");
+        reveal_strlit(""); reveal_strlit("/"); reveal_strlit("4"); reveal_strlit("00");
+        reveal_strlit("0\0"); reveal_strlit("0\n");
+        assert(vstd::string::is_ascii("0"));
+        assert(vstd::string::is_ascii("1"));
+        assert(vstd::string::is_ascii("2"));
+        assert(vstd::string::is_ascii("3"));
+        assert(vstd::string::is_ascii(""));
+        assert(vstd::string::is_ascii("/"));
+        assert(vstd::string::is_ascii("4"));
+        assert(vstd::string::is_ascii("00"));
+        assert(vstd::string::is_ascii("0\0"));
+        assert(vstd::string::is_ascii("0\n"));
+        vstd::string::is_ascii_spec_bytes("0");
+        vstd::string::is_ascii_spec_bytes("1");
+        vstd::string::is_ascii_spec_bytes("2");
+        vstd::string::is_ascii_spec_bytes("3");
+        vstd::string::is_ascii_spec_bytes("");
+        vstd::string::is_ascii_spec_bytes("/");
+        vstd::string::is_ascii_spec_bytes("4");
+        vstd::string::is_ascii_spec_bytes("00");
+        vstd::string::is_ascii_spec_bytes("0\0");
+        vstd::string::is_ascii_spec_bytes("0\n");
+    }
+    git_index_metadata_stage("0", true);
+    git_index_metadata_stage("1", true);
+    git_index_metadata_stage("2", true);
+    git_index_metadata_stage("3", true);
+    git_index_metadata_stage("", false);
+    git_index_metadata_stage("/", false);
+    git_index_metadata_stage("4", false);
+    git_index_metadata_stage("00", false);
+    git_index_metadata_stage("0\0", false);
+    git_index_metadata_stage("0\n", false);
+    let empty: [&str; 0] = [];
+    expect_inventory_error(policy::git_index_metadata(&empty), "invalid Git index metadata");
+    let short = ["100644", "oid"];
+    expect_inventory_error(policy::git_index_metadata(&short), "invalid Git index metadata");
+    let long = ["100644", "oid", "0", ""];
+    expect_inventory_error(policy::git_index_metadata(&long), "invalid Git index metadata");
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn request_header_profiles_and_empty_judge() {
     proof {

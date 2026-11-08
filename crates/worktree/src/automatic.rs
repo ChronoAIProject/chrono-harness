@@ -1341,11 +1341,14 @@ impl Manager {
             return Err("main cache ownership is not explicitly adopted".into());
         }
         if !cache_only
-            && !["feature_prefix", "integration_prefix"].iter().any(|k| {
-                self.inputs.registrations.workflow()[k]
-                    .as_str()
-                    .is_some_and(|p| branch.starts_with(p))
-            })
+            && !crate::verified_lifecycle::accepts_enrollment_branch(
+                kind,
+                ["feature_prefix", "integration_prefix"].iter().any(|k| {
+                    self.inputs.registrations.workflow()[k]
+                        .as_str()
+                        .is_some_and(|p| branch.starts_with(p))
+                }),
+            )
         {
             return Err("enrollment branch is not a registered work branch".into());
         }
@@ -2648,6 +2651,7 @@ impl Manager {
                     &manager.inputs.registrations,
                     token,
                     report,
+                    e.enrollment["kind"].as_str().unwrap_or(""),
                     |r| {
                         manager.stable(r)?;
                         manager.git_locks(&e, None)?;
