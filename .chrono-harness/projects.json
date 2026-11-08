@@ -2808,7 +2808,6 @@
           "tool": "cargo",
           "argv": [
             "update",
-            "--offline",
             "--workspace",
             "--manifest-path",
             ".chrono-harness/release/native/Cargo.toml"
@@ -2883,7 +2882,6 @@
           "tool": "cargo",
           "argv": [
             "update",
-            "--offline",
             "--workspace",
             "--manifest-path",
             ".chrono-harness/release/native-tests/Cargo.toml"
