@@ -1227,7 +1227,19 @@ fn tree_parser_keeps_first_error_and_exact_path() {
     expect_tree_parse_error(&[good, "missing", bad_path], 1, "invalid Git tree row");
     expect_tree_parse_error(&["bad\t", "missing"], 0, "invalid Git tree metadata");
     expect_tree_path_error(&[good, bad_path, "missing"], 1, "a/../b\0tail");
-    expect_tree_parse_error(&[good, good, "missing"], 1, "duplicate Git tree path");
+    let duplicate = [good, good, "missing"];
+    proof {
+        assert(policy::git_tree_row_at(duplicate@, 0).is_ok());
+        assert(policy::git_tree_row_at(duplicate@, 0) == policy::git_tree_row_at(duplicate@, 1));
+        assert(exists|j: int| 0 <= j < 1 && (policy::git_tree_row_at(duplicate@, j)->Ok_0).0
+            == (policy::git_tree_row_at(duplicate@, 1)->Ok_0).0) by {
+            assert((policy::git_tree_row_at(duplicate@, 0)->Ok_0).0
+                == (policy::git_tree_row_at(duplicate@, 1)->Ok_0).0);
+        }
+        assert(policy::git_tree_error_at(duplicate@, 1,
+            policy::GitTreeErrorView::Message("duplicate Git tree path"@)));
+    }
+    expect_tree_parse_error(&duplicate, 1, "duplicate Git tree path");
     expect_tree_parse_error(&[good, "missing", good], 1, "invalid Git tree row");
     expect_tree_path_error(&["  \t", good], 0, "");
     expect_tree_path_error(&["  \t/", "missing"], 0, "/");
