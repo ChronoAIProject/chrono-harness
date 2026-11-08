@@ -903,12 +903,9 @@ pub(super) fn gather(
     units::validate(c)?;
     let parts: Vec<_> = repository.split('/').collect();
     if parts.len() != 2
-        || parts.iter().any(|p| {
-            p.is_empty()
-                || !p
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
-        })
+        || parts
+            .iter()
+            .any(|p| !chrono_harness::verified_identifiers::valid_id(p.as_bytes()))
     {
         return Err("repository must be explicit owner/name".into());
     }
