@@ -1938,10 +1938,12 @@ impl Manager {
         report: &mut Value,
         all: bool,
         selected: &BTreeSet<PathBuf>,
-    ) -> Result<(), String> {
+    ) -> Result<BTreeSet<PathBuf>, String> {
         report["worktree_inventory"] = value!([]);
+        let mut addresses = BTreeSet::new();
         for git in r.inventory(&self.inputs.policy.coordinator_root)? {
             let path = PathBuf::from(&git["worktree"]);
+            addresses.insert(path.clone());
             if !all && path != self.scope && !exclude.contains(&path) && !selected.contains(&path) {
                 continue;
             }
@@ -2028,7 +2030,7 @@ impl Manager {
                 .unwrap()
                 .push(row);
         }
-        Ok(())
+        Ok(addresses)
     }
     fn drain(
         &mut self,
@@ -2588,7 +2590,9 @@ impl Manager {
         use crate::verified_attention::{Attention, classify, needs_attention, pending_for_agent};
         let current = crate::AgentIdentity::from_report(report)?;
         let mut selected = BTreeSet::new();
-        let mut unknown_creators = 0;
+        let mut unknown_creators = BTreeSet::new();
+        let mut declared = BTreeSet::new();
+        let mut empty_records = BTreeSet::new();
         let mut unreadable_records = 0;
         let mut namespace_error = None;
         // Read only the declared enrollment metadata to select this agent's work.
@@ -2597,6 +2601,7 @@ impl Manager {
             match self.enrollment_paths() {
                 Ok(paths) => {
                     for path in paths {
+                        declared.insert(path.clone());
                         match self.enrollment_snapshot(&path) {
                             Ok(Some(ledger)) => {
                                 let entry = ledger
@@ -2609,7 +2614,7 @@ impl Manager {
                                         && entry.status != "disposed"
                                         && entry.creator_agent.is_none()
                                     {
-                                        unknown_creators += 1;
+                                        unknown_creators.insert(path.clone());
                                     }
                                     if all
                                         || pending_for_agent(
@@ -2624,10 +2629,12 @@ impl Manager {
                                     {
                                         selected.insert(path);
                                     }
+                                } else {
+                                    empty_records.insert(path);
                                 }
                             }
                             Ok(None) => {
-                                unknown_creators += 1;
+                                unknown_creators.insert(path.clone());
                                 if all {
                                     selected.insert(path);
                                 }
@@ -2645,7 +2652,14 @@ impl Manager {
             }
         }
         let mut inventory = value!({});
-        self.observe_inventory(r, &[], &mut inventory, all, &selected)?;
+        let git_addresses = self.observe_inventory(r, &[], &mut inventory, all, &selected)?;
+        for path in git_addresses {
+            if path != self.inputs.policy.coordinator_root
+                && (!declared.contains(&path) || empty_records.contains(&path))
+            {
+                unknown_creators.insert(path);
+            }
+        }
         let git_rows: BTreeMap<PathBuf, Value> = inventory["worktree_inventory"]
             .as_array()
             .unwrap()
@@ -2737,9 +2751,9 @@ impl Manager {
         }
         report["worktree_status"] = value!({"schema":"chrono-worktree-status/v1",
             "scope":if all {"coordinator"} else if current.is_some() {"target-and-current-agent"} else {"target"},
-            "agent":report["agent"],"unknown_creator_records":unknown_creators,
+            "agent":report["agent"],"unknown_creator_records":unknown_creators.len(),
             "unreadable_records":unreadable_records,"namespace_error":namespace_error,
-            "agent_observation_complete":current.is_some() && unknown_creators == 0
+            "agent_observation_complete":current.is_some() && unknown_creators.is_empty()
                 && unreadable_records == 0 && namespace_error.is_none(),"worktrees":rows});
         Ok(())
     }

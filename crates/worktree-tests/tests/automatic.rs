@@ -1110,7 +1110,19 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
             .unwrap()
             >= 1
     );
+    let unregistered = h.parent.join("agent-unregistered");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            unregistered.to_str().unwrap(),
+            "dev",
+        ],
+    );
     // A related operation on B must also remind A about its own outstanding A.
+    // Git addresses without any enrollment keep the observation incomplete.
     let (code, scoped, error) = invoke("status", &["--path", b.to_str().unwrap()], Some("agent-A"));
     assert_eq!(code, 0, "{scoped} {error}");
     assert_eq!(attention_row(&scoped, &a)["agent_attention_required"], true);
@@ -1123,6 +1135,15 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
     assert_eq!(
         scoped["worktree_status"]["agent_observation_complete"],
         false
+    );
+    assert_eq!(
+        scoped["worktree_status"]["unknown_creator_records"]
+            .as_u64()
+            .unwrap(),
+        maintained["worktree_status"]["unknown_creator_records"]
+            .as_u64()
+            .unwrap()
+            + 1
     );
     let (code, unknown_scope, error) = invoke("status", &["--path", b.to_str().unwrap()], None);
     assert_eq!(code, 0, "{unknown_scope} {error}");
