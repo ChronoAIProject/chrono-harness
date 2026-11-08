@@ -32,6 +32,8 @@ pub struct Detector {
     pub runs_on: String,
     pub timeout_minutes: u32,
     pub bootstrap: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bootstrap_github_token: bool,
     /// Literal source/registration paths chosen by the host, not unit inference.
     pub sparse_checkout: Vec<String>,
     /// Explicit retained originals; omitted preserves the previous detector.
@@ -56,6 +58,7 @@ pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
     detector.runs_on = g.detector.runs_on.clone();
     detector.timeout_minutes = g.detector.timeout_minutes;
     detector.bootstrap = g.detector.bootstrap.clone();
+    detector.bootstrap_github_token = g.detector.bootstrap_github_token;
     super::validate_policy(&detector, c.schema == units::FULL_SCHEMA)?;
     if let Some(directory) = &g.detector.evidence_directory {
         relative_path(directory.trim_end_matches('/'))?;
@@ -264,7 +267,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
 {sparse}          persist-credentials: true
       - name: Bootstrap registered detector tools
         shell: bash
-        run: |
+{bootstrap_credentials}        run: |
           {bootstrap}
       - name: Detect required units from fixed Git endpoints
         id: detect
@@ -277,6 +280,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         detector_depth = if c.native_adoption.is_some() { 0 } else { 2 },
         runner = scalar(&g.detector.runs_on),
         timeout = g.detector.timeout_minutes,
+        bootstrap_credentials = bootstrap_credentials(g.detector.bootstrap_github_token),
         checkout = c.collection.checkout_action,
         generator = shell(&c.collection.generator),
         config = shell(path)

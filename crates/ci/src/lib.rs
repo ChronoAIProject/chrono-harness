@@ -39,6 +39,8 @@ pub struct Config {
     pub retention_delivery: bool,
     pub timeout_minutes: u32,
     pub bootstrap: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bootstrap_github_token: bool,
     pub runner: String,
     pub generator: String,
     pub check_config: String,
@@ -89,6 +91,13 @@ fn scalar(s: &str) -> String {
 fn artifact_hidden_files(enabled: bool) -> &'static str {
     if enabled {
         "          include-hidden-files: true\n"
+    } else {
+        ""
+    }
+}
+fn bootstrap_credentials(enabled: bool) -> &'static str {
+    if enabled {
+        "        env:\n          GH_TOKEN: ${{ github.token }}\n"
     } else {
         ""
     }
@@ -390,7 +399,7 @@ fn render_job(
           persist-credentials: true
       - name: Bootstrap registered tools
         shell: bash
-        run: |
+{bootstrap_credentials}        run: |
           {bootstrap}
 {check}      - name: Preserve actual check evidence
         id: chrono_evidence_upload
@@ -403,6 +412,7 @@ fn render_job(
 {hidden_files}"#,
         runs_on = scalar(&c.runs_on),
         timeout = c.timeout_minutes,
+        bootstrap_credentials = bootstrap_credentials(c.bootstrap_github_token),
         checkout = c.checkout_action,
         upload = c.upload_artifact_action,
         hidden_files = artifact_hidden_files(c.include_hidden_files),

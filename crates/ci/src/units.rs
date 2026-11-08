@@ -88,6 +88,8 @@ pub struct Workflow {
     pub runs_on: String,
     pub timeout_minutes: u32,
     pub bootstrap: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bootstrap_github_token: bool,
     pub context_path: String,
     pub artifact_directory: String,
 }
@@ -138,6 +140,7 @@ impl Config {
             c.runs_on = u.runs_on.clone();
             c.timeout_minutes = u.timeout_minutes;
             c.bootstrap = u.bootstrap.clone();
+            c.bootstrap_github_token = u.bootstrap_github_token;
             c.context_path = u.context_path.clone();
             c.artifact_directory = u.artifact_directory.clone();
         }
@@ -540,6 +543,7 @@ pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
                 runs_on: c.collection.runs_on.clone(),
                 timeout_minutes: c.collection.timeout_minutes,
                 bootstrap: c.collection.bootstrap.clone(),
+                bootstrap_github_token: c.collection.bootstrap_github_token,
                 sparse_checkout: vec![
                     ".chrono-harness/".into(),
                     c.collection.workflow_path.clone(),
