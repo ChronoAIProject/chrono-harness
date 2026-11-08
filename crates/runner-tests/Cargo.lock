@@ -72,6 +72,7 @@ dependencies = [
 name = "chrono-harness-tests"
 version = "0.1.0"
 dependencies = [
+ "chrono-diagnostics",
  "chrono-harness",
  "libc",
  "serde_json",

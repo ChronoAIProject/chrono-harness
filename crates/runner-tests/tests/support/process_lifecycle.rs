@@ -40,8 +40,13 @@ fn await_file(path: &str, seconds: f64, interval_ms: u64) {
 
 fn child() {
     let mut stream = UnixStream::connect("child.sock").unwrap();
-    stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-    writeln!(stream, "{},{}", std::process::id(), unsafe { libc::getppid() }).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    writeln!(stream, "{},{}", std::process::id(), unsafe {
+        libc::getppid()
+    })
+    .unwrap();
     let mut release = String::new();
     BufReader::new(stream).read_line(&mut release).unwrap();
     let (delay, overflow) = release.trim().split_once(',').unwrap();
@@ -156,10 +161,16 @@ fn controller(case: &str) {
     println!("ready");
     std::io::stdout().flush().unwrap();
     let accept = |listener: &UnixListener| {
-        let mut event = libc::pollfd { fd: listener.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+        let mut event = libc::pollfd {
+            fd: listener.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
         assert_eq!(unsafe { libc::poll(&mut event, 1, 5000) }, 1);
         let (stream, _) = listener.accept().unwrap();
-        stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
         stream
     };
     let mut child = accept(&children);
@@ -175,9 +186,15 @@ fn controller(case: &str) {
     let mut original = File::create_new("monitor.original").unwrap();
     let monitor = loop {
         let mut line = Vec::new();
-        assert!(trace.read_until(b'\n', &mut line).unwrap() > 0, "missing monitor event");
+        assert!(
+            trace.read_until(b'\n', &mut line).unwrap() > 0,
+            "missing monitor event"
+        );
         original.write_all(&line).unwrap();
-        assert!(original.metadata().unwrap().len() <= 65536, "monitor log exceeded bound");
+        assert!(
+            original.metadata().unwrap().len() <= 65536,
+            "monitor log exceeded bound"
+        );
         let observed: serde_json::Value = serde_json::from_slice(&line).unwrap();
         if observed["event"] == "process.monitor_wait" && observed["context"]["child_pid"] == pid {
             break observed;
@@ -197,10 +214,11 @@ fn controller(case: &str) {
     let resume = Resume(launcher_pid);
     writeln!(
         child,
-            "{},{}",
-            if case == "late" { "1.3" } else { ".05" },
-            if case == "overflow" { "yes" } else { "no" }
-    ).unwrap();
+        "{},{}",
+        if case == "late" { "1.3" } else { ".05" },
+        if case == "overflow" { "yes" } else { "no" }
+    )
+    .unwrap();
     exit.wait(pid, 3);
     let terminal = now();
     if case == "late" {
@@ -226,7 +244,10 @@ fn controller(case: &str) {
     .unwrap();
     drop(resume);
     std::io::copy(&mut trace, &mut original).unwrap();
-    assert!(original.metadata().unwrap().len() <= 65536, "monitor log exceeded bound");
+    assert!(
+        original.metadata().unwrap().len() <= 65536,
+        "monitor log exceeded bound"
+    );
 }
 
 fn marker(path: &str) {

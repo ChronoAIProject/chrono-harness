@@ -2602,12 +2602,12 @@ fn delayed_monitor_helper() {
         stream,
     );
     logger.run(|| {
-            let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
-            fs::write(
-                root.join("result.json"),
-                serde_json::to_vec(&result).unwrap(),
-            )
-            .unwrap();
+        let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
+        fs::write(
+            root.join("result.json"),
+            serde_json::to_vec(&result).unwrap(),
+        )
+        .unwrap();
     });
     logger.finish().unwrap();
 }
@@ -2634,9 +2634,16 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         .unwrap();
     // The independent observer publishes readiness before the timed launch and
     // reads that launch's actual monitor deadline from the existing logger.
-    use std::{io::{BufRead, BufReader}, os::fd::AsRawFd};
+    use std::{
+        io::{BufRead, BufReader},
+        os::fd::AsRawFd,
+    };
     let ready = controller.stdout.take().unwrap();
-    let mut event = libc::pollfd { fd: ready.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+    let mut event = libc::pollfd {
+        fd: ready.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
     if unsafe { libc::poll(&mut event, 1, 5000) } != 1 {
         let _ = controller.kill();
         let original = controller.wait_with_output().unwrap();
