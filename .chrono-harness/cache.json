@@ -6240,16 +6240,7 @@
       "owner": "repository",
       "producer": "host.verus-download",
       "consumers": [
-        "check.detect",
-        "check.unit_runner",
-        "check.unit_judge-ci",
-        "check.unit_ci",
-        "check.unit_judge-registration",
-        "check.unit_judge-filemap",
-        "check.unit_judge-projects",
-        "check.unit_worktree",
-        "check.unit_host-bootstrap",
-        "check.unit_cache"
+        "check.detect"
       ],
       "artifacts": [
         "verus.archive"
@@ -6278,10 +6269,6 @@
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:runner-tests/operations"
-      },
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ],
     "check.unit_instructions": [
@@ -6294,40 +6281,24 @@
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-ci-tests/operations"
-      },
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ],
     "check.unit_ci": [
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:ci-tests/operations"
-      },
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ],
     "check.unit_judge-registration": [
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-registration-tests/operations"
-      },
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ],
     "check.unit_judge-filemap": [
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-filemap-tests/operations"
-      },
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ],
     "check.unit_judge-routes": [
@@ -6340,10 +6311,6 @@
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-projects-tests/operations"
-      },
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ],
     "check.unit_judge-cost": [
@@ -6380,10 +6347,6 @@
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:worktree-tests/operations"
-      },
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ],
     "check.unit_judge-workflow-units": [
@@ -6420,10 +6383,6 @@
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:cache-tests/operations"
-      },
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ],
     "release.linux_build_runner": [
@@ -6796,12 +6755,6 @@
       {
         "registry": ".chrono-harness/release/build.json",
         "pointer": "/units/33/operation"
-      }
-    ],
-    "check.unit_host-bootstrap": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-verus.json",
-        "pointer": "/operations"
       }
     ]
   },

@@ -685,7 +685,7 @@ Rust 测试另外验证真实消费者，不替代证明。
 下载失败保留原退出和响应头，校验失败不覆盖原包。临时下载字节随本次操作回收。
 后续独立校验仍读取同一份 SHA-256 声明，校验通过后才解包。
 原响应头保留在 `.chrono-harness/state/verus-download.headers`，由现有失败工件上传供下载故障排查。
-CI 对实际准备 Verus 的 job 登记归档恢复，由 detector 在启动成功后保存；
+CI 由 detector 恢复归档并在启动成功后保存，检查单元复用已有共享原包；
 包身份及成本边界见[缓存说明](ci-cache.md#verus-archive)。
 含证明操作的单元先核共享 core，再安装工具；无证明操作的消费单元只核共享 core。
 启动参数由 units.json 维护，工作流由登记的 ci.generate 产生。

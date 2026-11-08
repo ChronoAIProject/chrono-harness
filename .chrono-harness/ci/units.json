@@ -759,8 +759,7 @@
         "consumer": "check.unit_runner",
         "caches": [
           "check.runner",
-          "check.runner-tests",
-          "verus.archive"
+          "check.runner-tests"
         ],
         "save_caches": [
           "check.runner-tests",
@@ -803,8 +802,7 @@
         "caches": [
           "check.judge-ci",
           "check.judge-ci-tests",
-          "check.runner",
-          "verus.archive"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-ci-tests",
@@ -829,8 +827,7 @@
           "check.judge-ci",
           "check.judge-registration",
           "check.runner",
-          "check.worktree",
-          "verus.archive"
+          "check.worktree"
         ],
         "save_caches": [
           "check.ci-tests",
@@ -852,8 +849,7 @@
         "caches": [
           "check.judge-registration",
           "check.judge-registration-tests",
-          "check.runner",
-          "verus.archive"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-registration",
@@ -878,8 +874,7 @@
           "check.judge-projects",
           "check.judge-registration",
           "check.judge-routes",
-          "check.runner",
-          "verus.archive"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-filemap",
@@ -926,8 +921,7 @@
           "check.judge-projects-tests",
           "check.judge-registration",
           "check.judge-routes",
-          "check.runner",
-          "verus.archive"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-projects",
@@ -1080,8 +1074,7 @@
           "check.ci",
           "check.runner",
           "check.worktree",
-          "check.worktree-tests",
-          "verus.archive"
+          "check.worktree-tests"
         ],
         "save_caches": [
           "check.worktree-tests",
@@ -1222,30 +1215,12 @@
         "consumer": "check.unit_cache",
         "caches": [
           "check.cache",
-          "check.cache-tests",
-          "verus.archive"
+          "check.cache-tests"
         ],
         "save_caches": [
           "check.cache",
           "check.cache-tests"
         ]
-      },
-      "unit_host-bootstrap": {
-        "need": "Prepare Verus for the registered proof operations.",
-        "output_use": "Restore the fixed archive before bootstrap; the registered download action verifies SHA256 before reuse.",
-        "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap_shared.py",
-          ".",
-          ".chrono-harness/ci/bootstrap-shared.json",
-          "verify",
-          "cache"
-        ],
-        "consumer": "check.unit_host-bootstrap",
-        "caches": [
-          "verus.archive"
-        ],
-        "save_caches": []
       }
     }
   }

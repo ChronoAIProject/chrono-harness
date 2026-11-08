@@ -92,7 +92,6 @@
       "core"
     ],
     "unit_host-bootstrap": [
-      "cache",
       "core"
     ],
     "unit_cache": [

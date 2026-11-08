@@ -1187,14 +1187,10 @@ fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() 
             fs::write(&checks, serde_json::to_vec(&changed).unwrap()).unwrap();
             let after = plan(root.path(), &config, consumer).unwrap();
             for (id, cache) in first["caches"].as_object().unwrap() {
-                if id == "verus.archive" {
-                    assert_eq!(cache, &after["caches"][id], "{consumer} {id} {pointer}");
-                } else {
-                    assert_ne!(
-                        cache["restore_keys"], after["caches"][id]["restore_keys"],
-                        "{consumer} {id} {pointer}"
-                    );
-                }
+                assert_ne!(
+                    cache["restore_keys"], after["caches"][id]["restore_keys"],
+                    "{consumer} {id} {pointer}"
+                );
             }
         }
         fs::remove_file(&checks).unwrap();
