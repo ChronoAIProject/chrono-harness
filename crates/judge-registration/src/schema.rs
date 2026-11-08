@@ -509,6 +509,7 @@ pub fn projects(v: &Value) -> Result {
     Ok(())
 }
 pub fn filemap(v: &Value) -> Result {
+    let mut plan_operations = Vec::new();
     if v["schema_version"] == 2 {
         object(
             v,
@@ -524,7 +525,10 @@ pub fn filemap(v: &Value) -> Result {
             &["execution_scheduling", "configuration_edges"],
         )?;
         choice(&v["status"], &["active", "proposed"])?;
-        crate::execution::plans(v)?;
+        let plans = crate::execution::plans(v)?;
+        for plan in plans.values() {
+            plan_operations.extend(plan.operations.iter().cloned());
+        }
         if let Some(policy) = v.get("execution_scheduling") {
             let policy: crate::execution::Scheduling =
                 serde_json::from_value(policy.clone()).map_err(|e| e.to_string())?;
@@ -555,8 +559,21 @@ pub fn filemap(v: &Value) -> Result {
         object(
             f,
             &["path", "owner", "surface", "cost", "edges"],
-            &["symlink", "projection"],
+            &["symlink", "projection", "verification"],
         )?;
+        let source: chrono_harness::verified_verifier::sources::SourceFile =
+            serde_json::from_value(f.clone()).map_err(|e| e.to_string())?;
+        chrono_harness::verified_verifier::sources::validate_source_declaration(&source)
+            .map_err(|error| format!("{}: {error}", source.path))?;
+        if !chrono_harness::verified_verifier::sources::proof_roots_have_registered_operations(
+            &source,
+            &plan_operations,
+        ) {
+            return Err(format!(
+                "{}: E_VERUS_COVERAGE: proof root operation is not registered",
+                source.path
+            ));
+        }
         path(&f["path"])?;
         string(&f["owner"])?;
         string(&f["cost"])?;

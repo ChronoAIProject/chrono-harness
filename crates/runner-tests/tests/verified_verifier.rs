@@ -9,6 +9,7 @@ use chrono_harness::verified_identifiers as identifiers;
 use chrono_harness::verified_verifier as policy;
 #[cfg(verus_keep_ghost)]
 use policy::identifiers;
+use policy::sources::SourceRole;
 use policy::{CompilerReport, CompilerVersion, OutputContract, Verification};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
@@ -549,7 +550,7 @@ fn explicit_file_membership_uses_full_original_text() {
         vstd::string::is_ascii_spec_bytes("a"); vstd::string::is_ascii_spec_bytes("A");
         vstd::string::is_ascii_spec_bytes("a\0");
     }
-    let files = vec![policy::sources::SourceFile { path: "a".to_string() }];
+    let files = vec![policy::sources::SourceFile { path: "a".to_string(), verification: None }];
     assert(files.len() == 1 && files[0].path@ == "a"@);
     assert(vstd::utf8::encode_utf8(files[0].path@) =~= seq![97u8]);
     assert(policy::sources::registered_source(files@, seq![97u8]));
@@ -578,6 +579,108 @@ fn explicit_file_membership_uses_full_original_text() {
     expect_verifier_true(!suffix);
 }
 
+
+fn declared_source_root(path: &str, operation: &str) -> (root: policy::sources::SourceProofRoot)
+    ensures root.path@ == path@, root.operation@ == operation@,
+{
+    policy::sources::SourceProofRoot { path: path.to_string(), operation: operation.to_string() }
+}
+
+fn source_declaration(role: policy::sources::SourceRole, roots: Vec<policy::sources::SourceProofRoot>)
+    -> (file: policy::sources::SourceFile)
+    ensures file.path@ == "file"@, file.verification.is_some(),
+{
+    policy::sources::SourceFile { path: "file".to_string(),
+        verification: Some(policy::sources::SourceVerification { role, roots }) }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn explicit_program_specification_and_data_have_distinct_root_obligations() {
+    let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
+    expect_verifier_true(unknown.verification.is_none());
+    let absent = policy::sources::validate_source_declaration(&unknown);
+    expect_verifier_true(absent.is_ok());
+    let data = source_declaration(SourceRole::Data, Vec::new());
+    let data_result = policy::sources::validate_source_declaration(&data);
+    expect_verifier_true(data_result.is_ok());
+    let program = source_declaration(SourceRole::Program, Vec::new());
+    let program_result = policy::sources::validate_source_declaration(&program);
+    expect_verifier_true(program_result.is_err());
+    let specification = source_declaration(SourceRole::Specification, Vec::new());
+    let specification_result = policy::sources::validate_source_declaration(&specification);
+    expect_verifier_true(specification_result.is_err());
+    let data_with_root = source_declaration(SourceRole::Data,
+        vec![declared_source_root("r", "verify.r")]);
+    let invalid_data = policy::sources::validate_source_declaration(&data_with_root);
+    expect_verifier_true(invalid_data.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn declared_roots_require_canonical_paths_and_nonempty_operation_text() {
+    proof {
+        reveal_strlit("r"); reveal_strlit("verify.r"); reveal_strlit("./r");
+        vstd::string::is_ascii_spec_bytes("r"); vstd::string::is_ascii_spec_bytes("./r");
+        reveal_with_fuel(policy::sources::path_scan, 5);
+        reveal_with_fuel(policy::sources::joined_components, 2);
+    }
+    let program = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "verify.r")]);
+    assert(policy::sources::canonical_source_path(vstd::utf8::encode_utf8("r"@)));
+    let valid_program = policy::sources::validate_source_declaration(&program);
+    expect_verifier_true(valid_program.is_ok());
+    let specification = source_declaration(SourceRole::Specification,
+        vec![declared_source_root("r", "verify.r")]);
+    let valid_specification = policy::sources::validate_source_declaration(&specification);
+    expect_verifier_true(valid_specification.is_ok());
+    let noncanonical = source_declaration(SourceRole::Program,
+        vec![declared_source_root("./r", "verify.r")]);
+    assert(!policy::sources::canonical_source_path(vstd::utf8::encode_utf8("./r"@)));
+    let rejected_path = policy::sources::validate_source_declaration(&noncanonical);
+    expect_verifier_true(rejected_path.is_err());
+    let empty_operation = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "")]);
+    let rejected_operation = policy::sources::validate_source_declaration(&empty_operation);
+    expect_verifier_true(rejected_operation.is_err());
+    let empty_path = source_declaration(SourceRole::Program,
+        vec![declared_source_root("", "verify.r")]);
+    let rejected_empty_path = policy::sources::validate_source_declaration(&empty_path);
+    expect_verifier_true(rejected_empty_path.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn duplicate_root_paths_are_rejected_even_with_different_operations() {
+    proof {
+        reveal_strlit("r"); reveal_strlit("R"); reveal_strlit("verify.r");
+        vstd::string::is_ascii_spec_bytes("r"); vstd::string::is_ascii_spec_bytes("R");
+        reveal_with_fuel(policy::sources::path_scan, 2);
+        reveal_with_fuel(policy::sources::joined_components, 2);
+    }
+    let duplicate = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "verify.r"), declared_source_root("r", "other")]);
+    assert(!policy::sources::distinct_proof_root(duplicate.verification.unwrap().roots@, 1));
+    let rejected_duplicate = policy::sources::validate_source_declaration(&duplicate);
+    expect_verifier_true(rejected_duplicate.is_err());
+    let different_case = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "verify.r"), declared_source_root("R", "verify.R")]);
+    assert("r"@[0] != "R"@[0]);
+    assert("r"@ != "R"@);
+    let distinct = policy::sources::validate_source_declaration(&different_case);
+    expect_verifier_true(distinct.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn proof_roots_must_name_registered_execution_operations() {
+    let valid = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "verify.r")]);
+    let operations = vec!["other".to_string(), "verify.r".to_string()];
+    let accepted = policy::sources::proof_roots_have_registered_operations(&valid, &operations);
+    expect_verifier_true(accepted);
+    let missing = vec!["other".to_string()];
+    let rejected = policy::sources::proof_roots_have_registered_operations(&valid, &missing);
+    expect_verifier_true(!rejected);
+    let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
+    expect_verifier_true(policy::sources::proof_roots_have_registered_operations(&unknown, &missing));
+}
 
 fn metadata_fixture(path: Vec<u8>, length: u64) -> (source: policy::sources::SourceBinding)
     ensures source.path@ == path@, source.length == length,

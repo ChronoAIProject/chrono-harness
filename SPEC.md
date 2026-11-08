@@ -158,6 +158,8 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 沿用宿主现役工具、项目操作与 FILEMAP 登记，明确固定 Verus 版本／commit、编译器和宏版本、证明根、参数、输入、外部接口与实际使用方。每个受治理的 program／specification 文件须有非空证明根、唯一登记的 Verus invocation 和真实生产调用。默认使用 `--no-cheating`、`--no-external-by-default` 和整 crate 检查；源码根、候选摘要、编译结果、原证明报告及真实调用必须互相绑定。不得另建重复权威来源。
 
+FILEMAP 的文件可显式声明 `verification`：`role` 为 `program`、`specification` 或 `data`，并列出证明根的相对路径及登记操作。program／specification 必须至少有一个规范化根，根路径不能重复，且每个操作必须出现在现役 execution plan；data 不得列证明根。该字段由 runner 的 Verus 同源谓词解析和判定，登记层只转发结果。缺少声明的存量文件保持未知，不取得证明资格；新增或修改的受治理逻辑必须在同一 DELTA 登记声明并由真实生产调用消费。
+
 全仓覆盖检查（coverage gate）的目标失败码为 `E_VERUS_COVERAGE`：证明缺失、未执行或与实际生产调用不符时，保持 `proposed`／`incomplete`，不能退回未证明判断后宣称已通过本节验收。只改语言声明、只编译证明根、普通测试或一次 CI 通过，都不能建立完整对应。当前已有局部证明和结果合同，全仓覆盖门仍未实现；普通 scoped 检查只证明现役登记的实际范围，不冒充全仓证明。当前实施范围见本文末尾及 [Verus 实施范围](docs/verus.md)。
 
 ### 2.2 实现与测试使用同一种语言
