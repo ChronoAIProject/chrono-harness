@@ -1304,6 +1304,15 @@
             "--manifest-path",
             "crates/judge-routes-tests/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"

@@ -35,12 +35,7 @@ pub fn stream_publication(config: &CheckConfig) -> bool {
     config.policy["report_publication"] == "retained-reference/v2"
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
-pub enum Scope {
-    Unit { unit: String },
-    Collect { manifest: String },
-}
+pub use crate::verified_status::scopes::Scope;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -337,24 +332,11 @@ pub fn artifact_path(path: &str) -> Result<(), String> {
 }
 
 impl Scope {
-    pub fn short_argv(&self) -> Vec<String> {
-        match self {
-            Self::Unit { unit } => vec!["--unit".into(), unit.clone()],
-            Self::Collect { .. } => vec!["--collect".into()],
-        }
-    }
     pub fn contract_argv(&self, profile: &serde_json::Value) -> Vec<String> {
         if profile["schema_version"] == 4 {
             self.short_argv()
         } else {
             self.argv().to_vec()
-        }
-    }
-
-    pub fn argv(&self) -> [String; 2] {
-        match self {
-            Self::Unit { unit } => ["--unit".into(), unit.clone()],
-            Self::Collect { manifest } => ["--collect".into(), manifest.clone()],
         }
     }
 
