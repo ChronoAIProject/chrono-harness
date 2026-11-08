@@ -641,25 +641,6 @@ pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<Process
         .map_err(|failure| failure.message)?,
     )
 }
-/// v1 uses the same bounded engine with a cleared environment and prelaunch binding.
-pub fn run_process_bound(
-    root: &Path,
-    s: &CommandSpec,
-    input: &[u8],
-    digest: &str,
-) -> Result<ProcessResult, String> {
-    finish_process(
-        run_process_inner(
-            root,
-            s,
-            input,
-            Some(digest),
-            Duration::from_secs(s.timeout_seconds),
-            None,
-        )
-        .map_err(|failure| failure.message)?,
-    )
-}
 fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
     if let Some(error) = &p.failure {
         return Err(error.clone());

@@ -75,6 +75,76 @@ fn ledger(root: &Path) -> Value {
 }
 
 #[test]
+fn materialized_originals_extend_the_owners_reference_before_content_and_release_by_scope() {
+    let h = host(256, 16);
+    let role = "fixture-domain:address";
+    let first = ".chrono-harness/state/fixtures/first";
+    let second = ".chrono-harness/state/fixtures/second";
+    for path in [first, second] {
+        let publication = inventory(h.path())
+            .plan("fixture", path, false, json!({"status":"unknown"}))
+            .unwrap();
+        publication.materialize_for_reference(role).unwrap();
+        let state = ledger(h.path());
+        assert!(
+            state["roots"][role]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|id| id == publication.id())
+        );
+        publication
+            .replace_file(&h.path().join(path), path.as_bytes())
+            .unwrap();
+        assert!(
+            !inventory(h.path())
+                .published_original(
+                    path,
+                    &chrono_harness::sha256(path.as_bytes()),
+                    path.len() as u64
+                )
+                .unwrap()
+        );
+        publication.complete(json!({"status":"published"})).unwrap();
+        assert!(
+            inventory(h.path())
+                .published_original(
+                    path,
+                    &chrono_harness::sha256(path.as_bytes()),
+                    path.len() as u64
+                )
+                .unwrap()
+        );
+        assert!(
+            !inventory(h.path())
+                .published_original(path, &chrono_harness::sha256(b"changed"), 7)
+                .unwrap()
+        );
+    }
+    assert_eq!(ledger(h.path())["roots"][role].as_array().unwrap().len(), 2);
+    inventory(h.path()).maintain().unwrap();
+    assert_eq!(fs::read(h.path().join(first)).unwrap(), first.as_bytes());
+    assert_eq!(fs::read(h.path().join(second)).unwrap(), second.as_bytes());
+    inventory(h.path())
+        .reference_paths(role, &[second.into()])
+        .unwrap();
+    let activity = retained_artifacts::retention::read_scope(h.path()).unwrap();
+    drop(retained_artifacts::retention::read_guard(h.path(), first).unwrap());
+    inventory(h.path()).maintain().unwrap();
+    assert!(
+        h.path().join(first).is_file(),
+        "returning caller still consumes the released original"
+    );
+    drop(activity);
+    inventory(h.path()).maintain().unwrap();
+    assert!(!h.path().join(first).exists());
+    assert!(h.path().join(second).is_file());
+    inventory(h.path()).reference_paths(role, &[]).unwrap();
+    inventory(h.path()).maintain().unwrap();
+    assert!(!h.path().join(second).exists());
+}
+
+#[test]
 fn diagnostic_window_expires_without_releasing_an_actual_consumer() {
     if !isolated_capability_test("diagnostic_window_expires_without_releasing_an_actual_consumer") {
         return;
