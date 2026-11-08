@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
 pub fn fixture_git() -> PathBuf {
+    if let Some(program) = std::env::var_os("CHRONO_CI_FIXTURE_GIT") {
+        return program.into();
+    }
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     chrono_harness::resolve_program(&source, "git", None).expect("Git fixture tool on PATH")
 }
