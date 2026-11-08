@@ -224,18 +224,40 @@ impl<'a> Execution<'a> {
             .split_first()
             .ok_or_else(|| error("empty release command"))?;
         let timeout = Duration::from_secs(
-            self.loaded.recipe.limits.unit_seconds.min(self.loaded.recipe.limits.platform_seconds),
-        ).checked_sub(self.started.elapsed()).filter(|remaining| !remaining.is_zero())
-            .ok_or_else(|| error("registered release unit span exhausted"))?;
-        let environment = self.environment.iter().filter(|(key, _)| {
-            key.as_os_str() != std::ffi::OsStr::new(chrono_harness::process_fds::ENV)
-        }).map(|(key, value)| Ok((
-            key.to_str().ok_or_else(|| error("non UTF-8 release environment key"))?.to_owned(),
-            value.to_str().ok_or_else(|| error("non UTF-8 release environment value"))?.to_owned(),
-        ))).collect::<Result<BTreeMap<_, _>, String>>()?;
+            self.loaded
+                .recipe
+                .limits
+                .unit_seconds
+                .min(self.loaded.recipe.limits.platform_seconds),
+        )
+        .checked_sub(self.started.elapsed())
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| error("registered release unit span exhausted"))?;
+        let environment = self
+            .environment
+            .iter()
+            .filter(|(key, _)| {
+                key.as_os_str() != std::ffi::OsStr::new(chrono_harness::process_fds::ENV)
+            })
+            .map(|(key, value)| {
+                Ok((
+                    key.to_str()
+                        .ok_or_else(|| error("non UTF-8 release environment key"))?
+                        .to_owned(),
+                    value
+                        .to_str()
+                        .ok_or_else(|| error("non UTF-8 release environment value"))?
+                        .to_owned(),
+                ))
+            })
+            .collect::<Result<BTreeMap<_, _>, String>>()?;
         let command = chrono_harness::CommandSpec {
-            program: program.clone(), args: args.to_vec(), env: environment,
-            timeout_seconds: timeout.as_secs().saturating_add(u64::from(timeout.subsec_nanos() != 0)),
+            program: program.clone(),
+            args: args.to_vec(),
+            env: environment,
+            timeout_seconds: timeout
+                .as_secs()
+                .saturating_add(u64::from(timeout.subsec_nanos() != 0)),
             output_limit_bytes: chrono_harness::verified_limits::MAX_OUTPUT_BYTES,
         };
         let index = self.report["processes"]

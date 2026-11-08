@@ -97,13 +97,24 @@ struct StreamWriter<W> {
 impl<W: Write> StreamWriter<W> {
     fn new(output: &Path, relative: String, forward: W) -> Self {
         let mut failures = Vec::new();
-        let file = match fs::create_dir_all(output.join("processes"))
-            .and_then(|()| OpenOptions::new().create_new(true).write(true).open(output.join(&relative)))
-        {
+        let file = match fs::create_dir_all(output.join("processes")).and_then(|()| {
+            OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(output.join(&relative))
+        }) {
             Ok(file) => Some(file),
-            Err(error) => { failures.push(format!("retention: {error}")); None }
+            Err(error) => {
+                failures.push(format!("retention: {error}"));
+                None
+            }
         };
-        Self { file, relative, forward: Some(forward), failures }
+        Self {
+            file,
+            relative,
+            forward: Some(forward),
+            failures,
+        }
     }
 
     fn finish(mut self, bytes: Vec<u8>, complete: bool) -> CapturedStream {
@@ -139,7 +150,9 @@ impl<W: Write> Write for StreamWriter<W> {
         // Auxiliary errors must not interrupt either original reader or replace child failure.
         Ok(bytes.len())
     }
-    fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// Reuse the runner's bounded process owner, deadline, inherited capabilities and stream readers.
@@ -159,26 +172,47 @@ pub fn execute(
     let started_ns = timestamp()?;
     let started = Instant::now();
     let original = chrono_harness::run_process_observed_forwarded_for(
-        root, spec, b"", &digest, timeout,
-        chrono_harness::ProcessForward { stdout: &mut stdout, stderr: &mut stderr },
+        root,
+        spec,
+        b"",
+        &digest,
+        timeout,
+        chrono_harness::ProcessForward {
+            stdout: &mut stdout,
+            stderr: &mut stderr,
+        },
     )?;
     let child_exit = if let Some(signal) = original.exit_signal {
         Some(-signal)
     } else if original.exit_code >= 0 {
         Some(original.exit_code)
-    } else { None };
+    } else {
+        None
+    };
     let observation = json!({"launcher_pid":original.launcher_pid,"executable":original.executable,"sha256":original.sha256,"environment_digest":original.environment_digest,"exit_signal":original.exit_signal,"engine_exit_code":original.exit_code,"failure":original.failure,"timeout_ns":timeout.as_nanos(),"output_limit_bytes":spec.output_limit_bytes});
     let mut failures: Vec<String> = original.failure.into_iter().collect();
-    if child_exit.is_none() { failures.push("unavailable terminal child status".into()); }
+    if child_exit.is_none() {
+        failures.push("unavailable terminal child status".into());
+    }
     let finished_ns = match timestamp() {
         Ok(time) => Some(time),
-        Err(error) => { failures.push(format!("finish timestamp: {error}")); None }
+        Err(error) => {
+            failures.push(format!("finish timestamp: {error}"));
+            None
+        }
     };
     Ok(CapturedProcess {
-        pid: original.child_pid.ok_or("missing original child identity")?,
+        pid: original
+            .child_pid
+            .ok_or("missing original child identity")?,
         argv: original.argv,
-        cwd: original.cwd.to_str().ok_or("non UTF-8 release cwd")?.to_owned(),
-        started_ns, finished_ns,
+        cwd: original
+            .cwd
+            .to_str()
+            .ok_or("non UTF-8 release cwd")?
+            .to_owned(),
+        started_ns,
+        finished_ns,
         duration_seconds: started.elapsed().as_secs_f64(),
         child_exit,
         stdout: stdout.finish(original.stdout_bytes, original.stdout_complete),
