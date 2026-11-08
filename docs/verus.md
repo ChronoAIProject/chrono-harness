@@ -151,6 +151,11 @@ CI 生成器及其事件输入、汇总、detector 和 full 上下文，以及 C
 CI 的布尔适配和 action 固定 40 位限制保留；判官保留原 `Result` 接口及包含完整输入的错误文本。
 这只收敛格式判断，未覆盖调用方全部控制流，也不扩大上文 runner 编译产物的局部证明绑定。
 
+CI 判官的 ID、共享启动产物名和汇总仓库的 owner／name 各部分，
+也通过同一重导出使用 `valid_id`，不再重复字符判断。
+产物名原有的 128 字节上限、仓库恰为两部分、各自完整错误文本及其他准入条件保持；
+不把这一字节判断的证明扩大为调用方整体已证明。复用原登记和测试，无新增依赖或证明操作。
+
 同根的 `git_inventory_records`、`git_inventory_fields`、`git_inventory_row`、
 `git_inventory_termination`、`git_inventory_text`、
 `git_tree_metadata` 和 `git_index_metadata` 拥有 Git 库存的局部准入和错误分类。
