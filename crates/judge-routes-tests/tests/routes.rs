@@ -310,7 +310,10 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
             .chain(startup_operations)
             .collect::<Vec<_>>()
     );
-    assert_eq!(plans["test:host-bootstrap-native-tests"].timeout_seconds, 900);
+    assert_eq!(
+        plans["test:host-bootstrap-native-tests"].timeout_seconds,
+        900
+    );
     for test in ["test:distribution-tests", "test:release-build-integration"] {
         assert_eq!(plans[test].timeout_seconds, 600);
         assert!(plans[test].operation_bounds.is_empty());
