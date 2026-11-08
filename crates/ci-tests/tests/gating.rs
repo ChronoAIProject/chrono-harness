@@ -9,17 +9,10 @@ fn gating() -> Value {
 
 #[test]
 fn bootstrap_credentials_follow_each_explicit_consumer() {
-    for (detector, alpha, collection) in [
-        (false, false, false),
-        (true, false, false),
-        (false, true, false),
-        (false, false, true),
-    ] {
+    for detector in [false, true] {
         let mut source = config_value();
         source["job_gating"] = gating();
         source["job_gating"]["detector"]["bootstrap_github_token"] = json!(detector);
-        source["units"]["alpha"]["bootstrap_github_token"] = json!(alpha);
-        source["collection"]["bootstrap_github_token"] = json!(collection);
         let config = serde_json::from_value(source).unwrap();
         let rendered = chrono_ci::units::render(&config, PROVIDER).unwrap();
         let workflow: Value =
@@ -28,9 +21,9 @@ fn bootstrap_credentials_follow_each_explicit_consumer() {
         assert_eq!(workflow["permissions"]["contents"], "read");
         for (job, enabled) in [
             ("detect", detector),
-            ("unit_alpha", alpha),
+            ("unit_alpha", false),
             ("unit_beta", false),
-            ("aggregate", collection),
+            ("aggregate", false),
         ] {
             let job = &workflow["jobs"][job];
             assert!(job.get("env").is_none());

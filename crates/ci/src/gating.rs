@@ -58,7 +58,6 @@ pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
     detector.runs_on = g.detector.runs_on.clone();
     detector.timeout_minutes = g.detector.timeout_minutes;
     detector.bootstrap = g.detector.bootstrap.clone();
-    detector.bootstrap_github_token = g.detector.bootstrap_github_token;
     super::validate_policy(&detector, c.schema == units::FULL_SCHEMA)?;
     if let Some(directory) = &g.detector.evidence_directory {
         relative_path(directory.trim_end_matches('/'))?;
@@ -280,7 +279,11 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         detector_depth = if c.native_adoption.is_some() { 0 } else { 2 },
         runner = scalar(&g.detector.runs_on),
         timeout = g.detector.timeout_minutes,
-        bootstrap_credentials = bootstrap_credentials(g.detector.bootstrap_github_token),
+        bootstrap_credentials = if g.detector.bootstrap_github_token {
+            "        env:\n          GH_TOKEN: ${{ github.token }}\n"
+        } else {
+            ""
+        },
         checkout = c.collection.checkout_action,
         generator = shell(&c.collection.generator),
         config = shell(path)

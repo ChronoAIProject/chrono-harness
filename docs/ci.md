@@ -52,7 +52,7 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 
 Verus 的下载由 `projects.json` 的 `host.verus-download` 操作负责：curl 向 GitHub 官方 Releases 资产 API 请求固定资产 ID，并用 `Accept: application/octet-stream` 获取文件。版本、输出路径及 SHA-256 校验仍由现役登记固定；更新资产时同步核对发行版本、文件名、大小和摘要，再执行原有下载、校验与解压流程。
 
-该下载要求环境中有 `GH_TOKEN`，curl 8.3 及以上通过 `--variable`／`--expand-header` 在进程内展开认证头，登记参数和执行回执不包含凭据值。本地沿用已有 GitHub 认证向 bootstrap 提供环境变量。CI 的 detector、单元及 collection 配置可分别用 `bootstrap_github_token: true` 选择向该 bootstrap 步骤传递已有的只读 `github.token`；默认不传，不增加权限或扩大到缓存、业务检查步骤。本仓只为实际下载 Verus 的 detector 和 `bootstrap-unit.json` 使用方启用。
+该下载要求环境中有 `GH_TOKEN`，curl 8.3 及以上通过 `--variable`／`--expand-header` 在进程内展开认证头，登记参数和执行回执不包含凭据值。本地沿用已有 GitHub 认证向 bootstrap 提供环境变量。CI 的 detector 配置用 `bootstrap_github_token: true` 选择向其 bootstrap 步骤传递已有的只读 `github.token`；默认不传，不增加权限或扩大到单元、缓存、业务检查步骤。单元从共享启动包解压 Verus，不再下载。
 
 **实现与宿主政策同时变更：**生成器增加上述显式选择，宿主下载改用现有凭据，避免匿名 API 配额耗尽。验证包括 Rust 的独立选择／步骤边界测试、候选生成器、真实下载及摘要和受影响标准／CI 检查；额外验证总成本未测。
 
