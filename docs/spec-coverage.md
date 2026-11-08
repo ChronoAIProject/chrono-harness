@@ -40,7 +40,7 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 | 2.1.1 Verus 规范性权威 | 规范已明确；实现部分完成 | SPEC 统一定义真实使用方、证明与生产调用绑定及 `E_VERUS_COVERAGE`；现役局部证明和结果合同见 Verus 实施说明 | 全仓覆盖门、源码／编译结果／实际调用完整绑定、其余逻辑与 SPEC 对应仍未完成；不以当前 scoped 成功宣称本节已验收 |
 | 2.2 实现／测试语言 | 部分：指令、full／scoped projects v2 配对、原生 helper | 中英文 test.same-language 原子用于新宿主默认及本仓指南；项目／脚本明确语言，受影响配对须同 ID 或 shell→python。实际配对准入已由同源 Verus 定义，独立预期核完整字面相等、shell→python 的方向及非法边界。Rust schema／配对／语言 metadata DELTA 用例及登记 CI transport、context judge、protocol judge、CLI child、生命周期、Cargo、Git fault helper；本仓 v2、Rust 显式 workflow 清单及配对测试、worktree 核心／采用分组及完整覆盖。固定历史支持退役后 projects 保留原未过滤 action；owner 字节发布与 stage 原件核验迁入现有 Rust worktree 所有者，Python 保留构建／资格读取；Rust 用例覆盖原回调义务，候选验收另记。Python 构建配方／测试对不需 manifest，单元／真实二进制集成组独立 | 完整候选验收、示例采用；迁移剩余内嵌跨语言测试／helper，真实外部接口 fixture 单独登记。声明不能证明实际源码语言 |
 | 2.2 routes 回归 helper 迁移 | 已实现，范围有限 | 八项 judge-routes-tests 回归改用 Rust 测试自有子进程 helper。`tests/support/tool.rs` 是明确 Cargo binary 和 FILEMAP compile 输入，原 test:judge-routes-tests 计划沿用 Cargo test。保留字面／空／换行 argv、cwd／环境、回执篡改、错版本／执行物替换、PATH、版本观察复用、循环／预检拒绝、标准调用、汇总身份。真实标准 DELTA 消费沿原报告验证，运行事实不在表内复制 | 仅限此测试所有者。其余跨语言逻辑／helper、外部接口 fixture 登记、完整输入、启用、同判仍缺 |
-| 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入；有限配对、routes、迁移、快照、v5 工具链清单已实现 |
+| 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入仍缺；有限配对、routes、迁移和快照已实现 |
 | 4 固定快照／上下文／CI | 部分 | runner facts.rs、registration lib.rs；G `context_and_config_identity_mismatch`、`ignored_untracked_staged_and_wrong_checkout_fail` | config v3 已为完整／初始消费者、明确 scoped v2、当前 provider v4 事件读取／fetch 绑定 Git，见 git-facts.md。完整原生 CI／同判及 Git／委托／Cargo／SDK 输入仍缺 |
 | 4.2 CI 缓存及增量构建 | 部分：两项采用编译缓存已有键、生产／内容绑定及有限原生冷／保存、兼容源码重建、健康精确命中、不兼容环境分域／重建 | 独立 Rust chrono-cache plan 消费明确消费者／输入／产物，分开源码／兼容键；JSON pointer 只绑定所选值，整文件来源在键外，回归区分单元 metadata／构建参数。v2 探测前解析消费操作引用，只改消费者不改生产键。引用原输出登记，拒绝重叠或缓存证据／源码。Rust 失效、选择、缺失、路径、真实 CLI 环境、planner 不符回归；check.unit_cache 两项绑定真实 action／Cargo，消费命中前核 producer manifest。真实 Cargo 重建／恢复仍属本地证据，见[缓存合同](ci-cache.md)。bootstrap／check／release 明确增量，发布汇总核值。provider 为 main 消费者生成固定 restore／save，保存成功不确认后端；持续后端查询及额外传输报告、CLI、上传目录政策已退役，排障直接查原生日志与线上 API。普通 CI 复用失败原件上传，发布以独立失败 artifact 保留 state，正式发布根和 collector 合同保持。声明启动缓存可在后续失败后保存，每键至多一保存 job，冲突在生成前拒绝。[有限原生验收](ci-cache.md#bounded-native-acceptance)保留两项原标准操作／汇总 | 不可用内容恢复及修复后健康精确命中的完整原生验收仍缺。Variables／PR 正文控制和专用 fixture 已退役。并发、完整后端生命周期、依赖／当前判官／bootstrap／逐项目输入仍缺，须扩大真实消费者验收 |
 | 5 DELTA 图 | 部分 | 实际 Tree DELTA 已由同源 Verus 完整枚举并线性合并两棵原树，逐路径结果与完整 UTF-8 严格顺序均有证明；独立预期核完整长度、六字段、顺序、空／Unicode／NUL 及反向变化。Git 原始事实获取／解析仍待证明。filemap 类型化合并／记录／传递及 CI 适配；F 全部，P actual_runner_registration_filemap_*。SPEC §5.1 固定两态局部性及定理 6 有条件节点集结论（trureturing PR #10868 已合），复用冻结 ConsequenceClosure，保留先前精确应用编译和旧 execution-edge 反例 | 同源 Verus 图内核覆盖类型并集、名称／槽位索引、FIFO 最短前驱、有限原因链、行投影、原因集合、逐 seed 迭代状态／根对应及真实遍历记录选测；两处诊断按完整 seed ID 查找首个原记录也由同源根证明。返回集合沿用明确列出的外部标准库转换。外层原因关联与合并、seed-ID 生产及关联完整性、JSON 适配、额外选测和完整 SPEC 对应仍待证明；完整宿主输入及原生启用未完成 |
@@ -79,8 +79,8 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 | 7 合法退役 | 有限实现：W 共同移除生产／测试、明确别名修复 | 完整原生启用 |
 | 8 移除必需测试 | 有限实现：W 明确成功替换或已验共同退役 | 完整原生启用 |
 | 9 配对不唯一／缺失 | 有限实现：projects 和真实消费者负例 | 完整原生启用 |
-| 10 manifest 依赖未声明 | 有限实现：可选 Cargo 明确政策、TOML 路径依赖、缺边拒绝；v4 绑定 Cargo／编译器，v5 增 sysroot／后端／链接器／SDK／脚本清单，有直接／完整／scoped 真实消费者；diagnostics 的额外保护采用及专属运行时来源输入模式已退役，保留普通文件的显式摘要、快照与漂移检查 | 编译器库／后端／链接器／SDK 语义输入完整；其余输入声明的必要性、受保护 registry／Git 解析、完整宿主启用 |
-| 11 已知缺输入／必需依赖未解决 | 有限实现：明确外部节点、必需项目边、declared-complete v3 回归、v5 清单、可选版本化输入范围，以及 proposed_and_incomplete_never_receive_governance_success | 本仓 Cargo／SDK／配置仍未完整，不发现依赖或证明普遍完整 |
+| 10 manifest 依赖未声明 | 部分：通用登记检查显式引用、必需依赖边及已声明输入；普通 Cargo 操作仍实际执行。无当前终端使用方的 Cargo 适配器及其专属断言已退役，不能以其历史测试或剩余 Cargo 执行声称语言语义已覆盖 | 当前没有产品内的 Cargo manifest／TOML 路径依赖语义检查；编译器库／后端／链接器／SDK 输入完整及完整宿主启用仍未完成。已知缺依赖／输入仍须按现役合同拒绝 |
+| 11 已知缺输入／必需依赖未解决 | 有限实现：明确外部节点、必需项目边、declared-complete v3 回归、可选版本化输入范围，以及 proposed_and_incomplete_never_receive_governance_success | 本仓 Cargo／SDK／配置仍未完整，不发现依赖或证明普遍完整 |
 | 12 README 不全测 | 有限实现：F、C、projects 真实不执行无关历史缺陷 | 完整原生启用 |
 | 13 独立脚本测试 | 有限实现：真实完整链脚本对 | 完整原生启用 |
 | 14 重复操作 | 已实现：routes 预检／完整消费者 | 已测范围无剩余 |
@@ -152,7 +152,7 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 | 范围 | 当前生产者及负责文档 | 验收边界 |
 | --- | --- | --- |
 | 登记、操作及测试配对 | registration、routes、projects；[执行合同](execution.md) | 显式登记和实际回执检查已实现；不发现隐藏依赖、不判断产品价值，完整宿主输入与其余跨语言 helper 迁移尚未完成 |
-| 固定端点与输入 | runner、inputs；[Git 事实](git-facts.md)、[输入](inputs.md)、[Cargo](cargo-projects.md) | 当前候选读取固定端点数据；快照、摘要和配置选择只绑定已声明输入，不证明完整输入或本地／CI 同判 |
+| 固定端点与输入 | runner、inputs；[Git 事实](git-facts.md)、[输入](inputs.md) | 当前候选读取固定端点数据；快照、摘要和配置选择只绑定已声明输入，不证明完整输入或本地／CI 同判 |
 | DELTA 和实际选测 | filemap、routes、projects；[影响闭包](filemap-impact.md) | 使用两端显式登记和实际遍历结果；完整图／SPEC 对应及外围转换仍有未证明部分，不按目录或语言推断选测 |
 | CI 与汇总 | ci、judge-ci；[CI](ci.md)、[单元](ci-units.md)、[完整上下文](full-ci.md) | scoped 短命令和原件汇总有现役使用方；full 宿主采用、完整来源与普遍同判尚未完成 |
 | 缓存 | cache、CI／release provider；[缓存](ci-cache.md) | 现役检查／发布使用所选键、恢复、实际构建、封存和保存；有限原生观察不证明全消费者、并发或完整输入正确性 |
@@ -169,7 +169,7 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 
 全对象“为什么”链是 AI 对真实使用方、替代方案、失败影响和验收终点负责的方法。产品默认和本宿主指南已呈现该规则；现有判官继续检查明确登记、引用、输入及实际回执。没有独立价值台账或机器价值门，规则文字也不证明全仓审计已经完成。
 
-已退役的 runner／diagnostics 额外 guard、专属主机观察、运行时来源模式和旧分支原生初始盘点，不再列为待激活的宿主义务。旧盘点的工作流、安装／观察声明、探测 helper、专属动作和测试同步退役；core／所有者 bootstrap 实际使用的 fetch 保留。普通锁定 Cargo 构建和行为测试继续执行，通用输入／Cargo 产品仍须分别核对当前消费者。现役完整宿主登记仍为 proposed／not-implemented／incomplete。
+已退役的 runner／diagnostics 额外 guard、专属主机观察、运行时来源模式和旧分支原生初始盘点，不再列为待激活的宿主义务。旧盘点的工作流、安装／观察声明、探测 helper、专属动作和测试同步退役；core／所有者 bootstrap 实际使用的 fetch 保留。普通锁定 Cargo 构建和行为测试继续执行，通用输入产品仍须核对当前使用方。现役完整宿主登记仍为 proposed／not-implemented／incomplete。
 
 旧安装身份、无人调用的本机观察声明和旧仓库审计快照已移除。四份宿主政策已去除无直接操作的编译器／rustup 重复项；本机 Cargo 通过调用环境解析，bootstrap 继续核官方组件字节，选择合同归[输入所有者](inputs.md#工具链入口与本机路径)。其余 host policy、完整安装及全部对象必要性仍须逐项验收。线上 CI 运行事实不在本表复制；当前仍需的来源／未完成工作由[输入保管者](input-source-custody.md)负责，历史失败和独有工作不能因本表收敛而被删除。
 

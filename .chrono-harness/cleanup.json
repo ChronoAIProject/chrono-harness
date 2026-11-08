@@ -124,14 +124,6 @@
       "disposition": "dispose"
     },
     {
-      "path": "crates/judge-cargo/target/",
-      "disposition": "dispose"
-    },
-    {
-      "path": "crates/judge-cargo-tests/target/",
-      "disposition": "dispose"
-    },
-    {
       "path": "crates/worktree/target/",
       "disposition": "dispose"
     },

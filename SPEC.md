@@ -186,8 +186,6 @@ projects schema v2 要求每个 project／script 显式登记非空 `language`�
 
 “固定主机／构建环境”只有在存在真实消费者且能改善可观察结果时才允许：登记最小的 OS／架构、镜像 digest、工具链版本、锁文件和命令即可；完整安装清单、SDK 目录、个人环境变量和 Cargo home 内容属于运行时输入，不能整体入库。每个额外绑定须说明消费者、失败时的裁决、owner、更新方式和退役条件。没有真实消费者、只供解释或只复制 CI 信息的 host policy，由 AI 按本节与 §1.1 审计，在同一迁移中删除其引用、FILEMAP 边和专属检查；未知用途先保留并报告，不能凭目录名或年龄批量删除。
 
-通用核心不因仓库出现 Cargo 文件而启用 Cargo 规则。Cargo／Rust guard 只能由真实 Cargo 消费者显式采用；非 Rust 项目使用通用的工具／输入合同，不承担 Cargo home、sysroot 或 Rust SDK 快照。若 Cargo guard 的唯一用途是记录当前 CI 主机，应退役 guard 并移除其 policy、selector、输入观察和测试边，而不是继续压缩快照。
-
 跟踪的源政策须有有限的记录／字节预算和增长原因；超过预算时先消除重复事实、拆出运行时证据或迁移到更小的可移植合同。压缩不能替代删除无消费者的事实，也不能以“大文件”本身推断必要源政策可删。任何无法证明来源、消费者、预算和生命周期的跟踪 JSON 均不得转为 active；现存历史文件在迁移完成前只能保持 proposed/incomplete，并列入 §14 的未完成边界。
 
 审计或迁移按以下顺序处理既有 host JSON：确认实际生产者和消费者；保留最小可移植合同；把本机／CI 观察移到 `state` 或在线 artifact；更新 FILEMAP、projects、routes 和测试边；再通过现役入口验证并删除已无消费者的文件。只删大文件而留下悬空引用不构成清理，也不能把 CI 绿色状态当作仓库政策的替代来源。
@@ -246,7 +244,7 @@ Config v3 可在 facts_git 中采用 `guard: {schema: "chrono-git-inputs/v1", in
 
 具名 inputs 观察使用 chrono-git-inputs-result/v1，保留实际文件身份／缺失与completeness_proven=false；前后观察不证明瞬时并发隔离、完整输入或确定性同判。
 
-当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备Cargo／SDK 输入及其依赖的完整性。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。可选 `chrono-cargo-inputs/v5` 进一步登记 sysroot、backend、linker、SDK 与 build-script 输入，但仍只证明登记的有限边界。`argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
+当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备 Cargo／SDK 输入及其依赖的完整性。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。`argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
 
 没有 shell 插值、模板语言或依据当前目录猜测 manifest 的行为。只继承 environment.inherit 逐个列出的变量，缺值记录为 absent，values 显式覆盖。inputs 为逐文件登记的有效输入，ID 唯一。v1 及 v2 present 的摘要 null 仍仅表示未绑定草稿；不得解释为缺失。v2 absent 禁止携带摘要；缺失不同于空文件。v2 快照保留实际 `{absent:true}` 或文件内容身份，判官核对登记与两端快照，并在操作前后核候选路径。
 
@@ -282,17 +280,7 @@ Config v3 可显式采用版本化 `input_closure.coverage`，合同为`{schema:
 
 每个 production 与一个 test 双向一一对应，test 不再要求递归配一个 test。脚本以同样的一对一关系单独登记，不为它创建虚假的编译项目。operation 在全部 actions 与 canonical_check 中唯一；同名不同参数也属于重复方法。宿主可以没有 manifest、lockfile、统一 source root 或编译输出目录。可选 legacy manifest/lockfile 只是显式归属的 opaque 文件引用；root 不授予内容或输出推断权。
 
-通用 projects 判官检查一对一配对、显式测试边、实际文件归属与声明产物目录的隔离，不解析语言文件，也不根据路径猜 `target/`。产物登记变更与删除按两端显式 owner 唤醒对应 project/script，再沿 FILEMAP 边选择测试。构建、测试依赖只由 FILEMAP 提供。语言工具可作为可选一致性判官，例如 [chrono-judge-cargo](docs/cargo-projects.md)；适配器消费显式语言政策与既有边，不能补登记或选测试。
-
-可选 Cargo guard 的配置合同必须显式登记每个查找位置的存在／缺失、命令行配置与递归 include；文件内容沿既有输入 ID 和 FILEMAP 边连接消费者。缺失也是有效输入，不能以未发现文件替代缺失声明。登记表按 Cargo 的固定版本查找规则核完整性，不因此取得自动补登记权。配置及其依赖完整不代表编译器、SDK、构建脚本或外部服务输入及其依赖的完整性。当前范围有限的实现及 v1→v2 迁移见同文档。
-
-Cargo guard 的输入范围沿当前消费者的 `compile` 源码依赖及各自直接登记的输入展开。project 的 `runtime-input`／`build-input` 关系消费其产物，不把该生产项目自身的构建输入递归并入本次 Cargo 输入范围；产物、工具及前置执行仍由其显式登记和实际回执核验。源码编译依赖、所选配置／工具链／包输入及操作前后身份核验继续适用。
-
-可选 guard v4 进一步显式绑定 Cargo 与 `RUSTC` 的输入 ID、文件身份、路径和版本，要求宿主登记唯一编译器选择环境，拒绝另一套 Cargo 配置／wrapper 选择来源。这只绑定被传给 Cargo 的执行入口，不证明其委托程序、编译器库、链接器或 SDK 闭包。v2/v3 保持原解释；v4 的支持命令与边界见同文档，不由通用 projects 判官推断语言工具链。
-
-可选 guard v5 保留 v4 字段并增加显式 `toolchain`：sysroot 使用`chrono-input-directory/v1` 文件清单且只能由精确 `RUSTFLAGS=--sysroot=...` 选择；backend 与 build-script 输入逐项连接 FILEMAP；linker 以独立工具、输入 ID 和环境变量绑定；每个 SDK 以目录清单和精确环境根绑定。目录文件、选择路径和外部输入在 Cargo前后重核，递归配置不得提供第二套 linker/sysroot 来源。
-
-v5 报告使用`chrono-cargo-run/v3`，仍保持 `input_closure_complete: false`；它不推断未登记的编译器库、委托进程、SDK 元数据、构建脚本读取、OS 或网络输入。v2/v3/v4 的解释保持不变。
+通用 projects 判官检查一对一配对、显式测试边、实际文件归属与声明产物目录的隔离，不解析语言文件，也不根据路径猜 `target/`。产物登记变更与删除按两端显式 owner 唤醒对应 project/script，再沿 FILEMAP 边选择测试。构建、测试依赖只由 FILEMAP 提供。宿主采用的语言工具须消费显式政策与既有边，不能补登记或选测试。
 
 v3 可显式选择逐项祖先清单，或断言宿主根的所有严格祖先都没有 Cargo 配置；后一种只核验具名范围的缺失，发现文件即失败，不推断登记或依赖。Cargo home 可显式相对同一宿主根解释，避免将 checkout 深度或个人绝对路径写死进可搬移政策。根、Cargo home、命令行与 include 输入仍逐项登记；v2 合同保留原义。适用迁移与观测边界见同文档，不能由配置可搬移推断整个宿主或完整输入已可移植。脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。
 
@@ -467,7 +455,7 @@ unit 的 live 文件输入由 registration/input 单一实现按显式 unit plan
 
 CI 必须实际恢复和保存可重建缓存，覆盖启动工具、当前判官及所选生产／测试项目的编译工作。检查与发布 CI 均适用；检测、单元及汇总 job 按各自登记的消费者取缓存，不默认构建或缓存全仓项目。仅有名为 cache 的本地目录或 artifact 上传不算跨运行缓存已启用。
 
-缓存政策与 provider 源由宿主在 `.chrono-harness/` 显式登记，沿现有 generate/verify 入口生成与核验 CI 投影；不得独立手改生成 YAML。逐项登记缓存 ID、所有者、生产／消费操作、准确路径、兼容输入、键的构造、允许的恢复前缀、恢复／保存时机和处置方式。路径引用已有登记产物或显式外部工具缓存，不按目录、语言或文件扫描发现缓存。执行与选测仍只消费 FILEMAP 的声明。
+缓存政策与 provider 源由宿主在 `.chrono-harness/` 显式登记，沿现有 generate/verify 入口生成与核验 CI 投影；不得独立手改生成 YAML。逐项登记缓存 ID、所有者、生产／消费操作、准确路径、兼容输入、键的构造、允许的恢复前缀、恢复／保存时机和处置方式。缓存产物使用相对宿主的字面路径，精确引用已有登记中的同所有者、未跟踪且非执行证据产物；依赖下载缓存也须登记在宿主内。不按目录、语言或文件扫描发现缓存。执行与选测仍只消费 FILEMAP 的声明。
 
 同一 provider 配置中的一个缓存 ID 至多登记一个保存 job。`save_caches` 显式选择各 job 的保存子集；省略表示保存全部所选缓存，空数组表示只恢复。生成／校验预检在写投影前拒绝多个保存者，报 `E_CACHE_SAVE_OWNERSHIP` 并列出缓存与冲突 job；不自动选择保存者、不增加 job 或跨单元等待。允许全部消费者只恢复；指定保存者被跳过或未满足保存条件时，本轮没有新归档。独立生产域（如不同发布平台）须各有显式缓存身份，不由程序推断拆分。
 
@@ -1109,7 +1097,7 @@ checkout 的 source 是请求修订，生成器不认证其为不可变 OID；�
 
 runner 负责 Git／输入事实传输、真实入口 argv／cwd、有限进程观察、候选执行物绑定、协议和具名输出汇总。启动后证据发布失败时，仍将已捕获流、退出和进程身份保为失败证据。绑定 Git facts 使用 `chrono-git-facts/v2`；消费者在 Git 执行前拒绝 v1、缺失或未知 schema。能解码历史进程不代表兼容 v1 facts 请求，见 [Git 事实](docs/git-facts.md)。
 
-registration 负责严格当前 schema、受影响引用、固定快照、登记就绪、所供保留输入验证及有限历史解码；filemap 负责显式类型化 DELTA 并集、记录、因果影响及必需测试事实；routes 负责唯一登记方法、有序计划、单次工具绑定和回执比较；projects 负责受影响双向配对、显式所有权／输出隔离、真实执行、依赖阻断和必需替代执行。可选 chrono-judge-cargo 负责明确采用的 Cargo workspace／路径依赖一致性和受保护包／metadata 验证。通用核心没有语言或目录专用语义。这些项目及专属测试各有独立 manifest、lockfile、target。
+registration 负责严格当前 schema、受影响引用、固定快照、登记就绪、所供保留输入验证及有限历史解码；filemap 负责显式类型化 DELTA 并集、记录、因果影响及必需测试事实；routes 负责唯一登记方法、有序计划、单次工具绑定和回执比较；projects 负责受影响双向配对、显式所有权／输出隔离、真实执行、依赖阻断和必需替代执行。通用核心没有语言或目录专用语义。这些项目及专属测试各有独立 manifest、lockfile、target。
 
 当前 FILEMAP v2 执行及 workflow v2／v3 历史 profile 约定见[执行说明](docs/execution.md)。Config 支持 v1 及明确存在状态的 v2／v3／v4，projects 支持 v1／v2，judges 用 v1。Workflow v3 按两端精确 schema 版本选择登记的宿主 decoder，含保留旧输入语义的 config v1→v2 兼容验证；它不自动写宿主配置，严格旧 v1 Reader 会拒绝新字段。
 
@@ -1125,7 +1113,7 @@ scoped `chrono-ci-check/v2` 必须明确 `policy.facts_config` 为 `.chrono-harn
 
 context 可通过 retained_inputs 引用两固定端点的外部文件原字节、按内容寻址的 blob 及环境快照。独立 chrono-inputs capture／pair 生产者和流式验证见[输入说明](docs/inputs.md)。registration 核摘要、当前候选字节、缺失／空变量及候选观察；哈希和声明不证明未披露输入完整。正向项目 fixture 在无 manifest／lock／root、自定义 action 和任意文件位置下执行登记方法。
 
-可选 Cargo 消费者保留 workspace／路径依赖检查，在登记操作前跑 locked／offline metadata；同一 full／scoped action 路径核保留 registry／Git 输入、精确解析和有序配置参数，见 docs/cargo-projects.md。两者均不认证 compiler／SDK 或未披露输入完整。仓库 ci-tests 的真实 Cargo 执行由 scoped 迁移消费者覆盖。本宿主仍 proposed／incomplete，full 治理仍非零。
+仓库 ci-tests 的真实 Cargo 执行由 scoped 迁移消费者覆盖。本宿主仍 proposed／incomplete，full 治理仍非零；普通 Cargo 执行不证明 compiler／SDK 或未披露输入完整。
 
 当前 scoped CI provider v4 必须明确 `facts_config`，为每次事件准备读取／fetch 选择候选 full config v3 的 Git 绑定。网络观察前核候选政策字节和检出身份。有限 batch probe 只接受精确请求 commit 或精确缺对象响应；只有后者允许 fetch。畸形输出、错误对象类型、执行失败都保留原进程证据且不 fetch；fetch 成功后再探测并核 commit。context 携 `git_facts`，准备失败保留观察、不虚构完成 context。
 

@@ -31,7 +31,6 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 | 收集外部输入、核对 Git 实际状态 | [输入快照](docs/inputs.md)、[Git 状态核对](docs/git-facts.md) |
 | 管理缓存、日志和保留文件 | [CI 缓存](docs/ci-cache.md)、[诊断](docs/diagnostics.md)、[文件保留](docs/artifact-retention.md) |
 | 接入发布或完整检查流程 | [发布 CI](docs/release-ci.md)、[完整 CI](docs/full-ci.md) |
-| 增加 Cargo 专用检查 | [Cargo 项目检查](docs/cargo-projects.md) |
 
 ## 生成 AI 工作指南
 
@@ -105,7 +104,6 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 | `runner` | 调用外部检查程序，提供统一 `check` 入口并保存报告 |
 | `judge-registration`、`judge-filemap` | 核对登记和输入，计算变更影响范围 |
 | `judge-routes`、`judge-projects` | 制定操作计划，执行并核对原始结果 |
-| `judge-cargo` | 可选的 Cargo 一致性检查 |
 | `judge-cost`、`judge-mixed`、`judge-workflow` | 报告成本、混合修改、集成和迁移结果 |
 | `judge-ci`、`ci` | 执行按范围选择的 CI 检查，生成工作流和事件输入 |
 | `cache`、`inputs` | 规划缓存，收集并保留明确登记的输入 |
