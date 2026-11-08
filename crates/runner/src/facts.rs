@@ -1,21 +1,20 @@
 //! Immutable Git facts. Admissibility belongs to the consuming judge.
+pub use crate::facts_binding::{
+    OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
+    declaration as git_declaration,
+};
 pub use crate::facts_configs::Identity as ConfigIdentity;
+pub use crate::verified_status::TreeEntry as Entry;
 use crate::{
     json, no_symlink_parents, relative_path,
     wire::{Checkout, Delta, IndexFlag},
 };
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::Path,
     process::Command,
-};
-pub use crate::verified_status::TreeEntry as Entry;
-pub use crate::facts_binding::{
-    OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
-    declaration as git_declaration,
 };
 
 pub type Tree = BTreeMap<String, Entry>;
