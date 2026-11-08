@@ -12,6 +12,15 @@ use vstd::prelude::*;
 
 verus! {
 
+// The native workflow test checks the emitted guard at runtime.
+#[cfg(verus_keep_ghost)]
+fn push_only_cache_saving_has_an_exact_native_event_guard() {
+    let push = policy::cache_save_event_guard(true);
+    let every_event = policy::cache_save_event_guard(false);
+    assert(push@ == "github.event_name == 'push' && "@);
+    assert(every_event@ == ""@);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn download_contracts_reject_each_missing_obligation() {
     let good = policy::valid_download_entry(1, 1, 1, 1, true, true, true, true);

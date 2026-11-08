@@ -121,15 +121,6 @@ fn validate_stage(
         .as_str()
         .ok_or("owner stage producer entrypoint")?;
     let mut paths = vec![profile, projects_path, entrypoint];
-    if chrono_harness::verified_identifiers::equal_text(
-        entrypoint,
-        ".chrono-harness/ci/bootstrap.py",
-    ) {
-        paths.extend([
-            ".chrono-harness/ci/bootstrap_owner.py",
-            ".chrono-harness/ci/bootstrap_shared.py",
-        ]);
-    }
     if let Some(path) = policy.get("tool_bindings_registry") {
         paths.push(path.as_str().ok_or("owner stage toolchain registry path")?);
     }

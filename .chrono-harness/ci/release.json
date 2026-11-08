@@ -831,7 +831,6 @@
         "linux_verify_release_build_tests",
         "linux_verify_release_build_integration",
         "linux_verify_diagnostics_tests",
-        "linux_verify_host_bootstrap_tests",
         "linux_build_cache",
         "linux_verify_cache_tests",
         "linux_verify_host_bootstrap_native_tests",
@@ -966,10 +965,6 @@
         {
           "job": "linux_verify_diagnostics_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests/"
-        },
-        {
-          "job": "linux_verify_host_bootstrap_tests",
-          "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
         },
         {
           "job": "linux_build_cache",
@@ -1816,7 +1811,6 @@
         "macos_verify_release_build_tests",
         "macos_verify_release_build_integration",
         "macos_verify_diagnostics_tests",
-        "macos_verify_host_bootstrap_tests",
         "macos_build_cache",
         "macos_verify_cache_tests",
         "macos_verify_host_bootstrap_native_tests",
@@ -1951,10 +1945,6 @@
         {
           "job": "macos_verify_diagnostics_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests/"
-        },
-        {
-          "job": "macos_verify_host_bootstrap_tests",
-          "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
         },
         {
           "job": "macos_build_cache",
@@ -2105,64 +2095,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/",
       "needs": [],
       "downloads": []
-    },
-    {
-      "id": "linux_verify_host_bootstrap_tests",
-      "runs_on": "ubuntu-24.04",
-      "timeout_minutes": 45,
-      "command": [
-        "python3",
-        ".chrono-harness/release/build.py",
-        ".",
-        ".chrono-harness/cache/release-results/verify_host_bootstrap_tests",
-        "--unit",
-        "verify_host_bootstrap_tests"
-      ],
-      "artifact_name": "chrono-release-linux-verify_host_bootstrap_tests",
-      "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
-      "needs": [
-        "linux_build_worktree",
-        "linux_build_runner"
-      ],
-      "downloads": [
-        {
-          "job": "linux_build_worktree",
-          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
-        },
-        {
-          "job": "linux_build_runner",
-          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
-        }
-      ]
-    },
-    {
-      "id": "macos_verify_host_bootstrap_tests",
-      "runs_on": "macos-26",
-      "timeout_minutes": 45,
-      "command": [
-        "python3",
-        ".chrono-harness/release/build.py",
-        ".",
-        ".chrono-harness/cache/release-results/verify_host_bootstrap_tests",
-        "--unit",
-        "verify_host_bootstrap_tests"
-      ],
-      "artifact_name": "chrono-release-macos-verify_host_bootstrap_tests",
-      "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
-      "needs": [
-        "macos_build_worktree",
-        "macos_build_runner"
-      ],
-      "downloads": [
-        {
-          "job": "macos_build_worktree",
-          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
-        },
-        {
-          "job": "macos_build_runner",
-          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
-        }
-      ]
     },
     {
       "id": "linux_build_cache",
@@ -2391,6 +2323,7 @@
     "config": ".chrono-harness/cache.json",
     "restore_action": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
     "save_action": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+    "save_on_push_only": false,
     "jobs": {
       "linux_build_runner": {
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",

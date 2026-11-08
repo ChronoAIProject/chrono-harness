@@ -28,7 +28,7 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 
 **判官与宿主政策同时变更：**增加上述普通数据文件关系及成功／拒绝回归，保留当前工具角色、两端选择和真实消费证据要求。新增关系读取和完整验证成本未测。
 
-`host.bootstrap-command-tests` 在进程边界 mock 外部命令，核对 bootstrap 调用及成功／失败／超时／源码变化时的发布行为。旧真实消费者测试入口已退役；mock 不证明真实工具或后续 runner 测试通过。实际启动清单、安装及 runner 检查仍由正式 CI 生产链提供原始结果，registration 核对声明，projects 与汇总核对实际执行。
+`test.host-bootstrap-native-tests` 用 Rust mock 隔离外部命令，核对 bootstrap 调用、委托／拒绝、原报告与输出、阶段复用及源码变化时的拒绝。旧真实消费者测试入口已退役；mock 不证明真实工具或后续 runner 测试通过。实际启动清单、安装及 runner 检查仍由正式 CI 生产链提供原始结果，registration 核对声明，projects 与汇总核对实际执行。
 
 **按新测试规则迁移：**消费证据测试在外部命令边界使用 mock。判官继续要求证据操作、测试配对、执行计划和输出声明完整；输出声明允许空数组，原始测试 stdout／stderr 由现有检查回执保留。缺失声明仍失败，mock 不证明生产工具行为。
 

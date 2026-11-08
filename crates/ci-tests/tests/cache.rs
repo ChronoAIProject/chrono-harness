@@ -17,6 +17,7 @@ fn adoption(job: &str) -> Value {
         "program":".chrono-harness/bin/chrono-cache", "config":".chrono-harness/cache.json",
         "restore_action":"actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
         "save_action":"actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+        "save_on_push_only":false,
         "jobs":{job:{"need":"Reuse this existing job's compilation outputs between runners", "output_use":"The original registered build revalidates the restored target before checking", "prepare":["/usr/bin/printf","%s","literal ' argument $(printf unsafe)"], "consumer":"host.build", "caches":["core.target"]}}})
 }
 
@@ -36,6 +37,49 @@ fn download_adoption() -> Value {
         "environment":{"CARGO_HOME":".chrono-harness/cache/cargo","RUSTUP_HOME":".chrono-harness/cache/rustup"},
         "entries":{"seed":entry,"unit":consumer}});
     value
+}
+
+#[test]
+fn push_only_target_saving_preserves_downloads_and_pr_restores() {
+    let mut value = download_adoption();
+    value["persistent_cache"]["save_on_push_only"] = json!(true);
+    let config = serde_json::from_value(value).unwrap();
+    let output = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&output[".github/workflows/chrono-ci.yml"]).unwrap();
+    let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
+    let target_save = steps
+        .iter()
+        .find(|s| s["name"] == "Save registered cache core.target")
+        .unwrap();
+    assert!(
+        target_save["if"]
+            .as_str()
+            .unwrap()
+            .starts_with("${{ github.event_name == 'push' && ")
+    );
+    assert!(
+        steps
+            .iter()
+            .any(|s| s["name"] == "Restore registered cache core.target" && s.get("if").is_none())
+    );
+    let seal = steps
+        .iter()
+        .find(|s| s["name"] == "Seal producer cache contents")
+        .unwrap();
+    assert!(
+        seal["if"]
+            .as_str()
+            .unwrap()
+            .starts_with("${{ github.event_name == 'push' && ")
+    );
+    let download_save = steps
+        .iter()
+        .find(|s| s["name"] == "Save download cache unit")
+        .unwrap();
+    assert_eq!(
+        download_save["if"],
+        "${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
+    );
 }
 
 #[test]

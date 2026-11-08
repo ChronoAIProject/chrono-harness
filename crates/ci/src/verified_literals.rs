@@ -12,6 +12,12 @@ use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
 
+pub fn cache_save_event_guard(push_only: bool) -> (guard: &'static str)
+    ensures guard@ == if push_only { "github.event_name == 'push' && "@ } else { ""@ },
+{
+    if push_only { "github.event_name == 'push' && " } else { "" }
+}
+
 pub fn valid_download_config(schema: &str, entries: usize, environment: usize) -> (valid: bool)
     ensures valid == (schema@ == "chrono-github-downloads/v1"@ && entries > 0 && environment > 0),
 {

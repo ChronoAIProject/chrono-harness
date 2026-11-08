@@ -3,6 +3,7 @@ mod cache_adoption;
 mod migration;
 mod owner_deployment;
 mod producer;
+mod retirement;
 // Explicit file custody uses these same admission/enrollment capabilities, without
 // draining unrelated entries or migrating a historical checkout's policy.
 #[derive(Deserialize)]
@@ -377,11 +378,25 @@ struct Ledger {
     entries: Vec<Entry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     admission_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    retired_leases: Vec<retirement::RetiredLease>,
 }
 struct Gate {
     path: PathBuf,
     token: String,
     lease: Option<Lease>,
+    directory: Option<chrono_harness::ownership::DirectoryLease>,
+}
+impl Gate {
+    fn stable(&self) -> Result<(), String> {
+        if let Some(directory) = &self.directory {
+            directory.stable()?;
+        }
+        if let Some(lease) = &self.lease {
+            lease.stable()?;
+        }
+        Ok(())
+    }
 }
 impl Drop for Gate {
     fn drop(&mut self) {
@@ -870,6 +885,21 @@ impl Manager {
         let record_directory = record_directory(&directory, &scope)?;
         fs::create_dir_all(&record_directory).map_err(|e| e.to_string())?;
         let kernel = policy.schema == "chrono-worktree-automatic-cleanup/v2";
+        let directory_lease = if kernel {
+            Some(
+                chrono_harness::ownership::DirectoryLease::acquire(
+                    &record_directory,
+                    true,
+                    wait.then_some(std::time::Duration::from_secs(r.config.timeout_seconds)),
+                )?
+                .ok_or("enrollment metadata is busy")?,
+            )
+        } else {
+            None
+        };
+        if record_directory.join("retirement.json").exists() {
+            return Err("enrollment metadata retirement is pending; resume maintain".into());
+        }
         let ledger_path = no_symlink_parents(&record_directory, "ledger.json")?;
         let marker = no_symlink_parents(&record_directory, "owner.json")?;
         let gate_path = record_directory.join("gate.lock");
@@ -903,6 +933,7 @@ impl Manager {
                 path,
                 token: token.into(),
                 lease: Some(lease),
+                directory: directory_lease,
             }
         } else {
             let waiting = std::time::Instant::now();
@@ -925,6 +956,7 @@ impl Manager {
                 path: gate_path,
                 token: token.into(),
                 lease: None,
+                directory: None,
             };
             fs::write(gate.path.join("owner"), token).map_err(|e| e.to_string())?;
             gate
@@ -949,6 +981,7 @@ impl Manager {
                     common: common.clone(),
                     entries: vec![],
                     admission_id: admission_id.clone(),
+                    retired_leases: vec![],
                 };
                 if !kernel {
                     write_json(&marker, &expected_owner, true)?;
@@ -980,6 +1013,12 @@ impl Manager {
         // Entries are successive physical attachments, with disposed generations
         // retained in order. A pathname may have only one unresolved generation.
         let mut paths = BTreeMap::new();
+        for pending in &ledger.retired_leases {
+            pending.check_agent()?;
+            if !kernel {
+                return Err("retired capabilities require kernel ownership".into());
+            }
+        }
         for e in &ledger.entries {
             if e.path != scope {
                 return Err("enrollment record contains another worktree".into());
@@ -1291,9 +1330,7 @@ impl Manager {
             return Err("enrollment update cannot write another worktree".into());
         }
         self._namespace.stable()?;
-        if let Some(lease) = &self._gate.lease {
-            lease.stable()?;
-        }
+        self._gate.stable()?;
         let path = no_symlink_parents(&self.record_directory, "ledger.json")?;
         let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(
             &self.inputs.policy.coordinator_root,
@@ -1323,9 +1360,7 @@ impl Manager {
     }
     fn stable(&self, r: &mut Runner) -> Result<(), String> {
         self._namespace.stable()?;
-        if let Some(lease) = &self._gate.lease {
-            lease.stable()?;
-        }
+        self._gate.stable()?;
         self.inputs.stable(r)
     }
     // Only this worktree's metadata is excluded. Independent report owners
@@ -2410,8 +2445,13 @@ impl Manager {
         } else {
             value!({"kind":"worktree","path":self.scope})
         };
+        let mut failures = if all {
+            self.resume_retired_addresses(r, report)?
+        } else {
+            vec![]
+        };
         self.observe_inventory(r, exclude, report, all, &BTreeSet::new())?;
-        let mut failures = self.drain_entries(r, exclude, report, all)?;
+        failures.extend(self.drain_entries(r, exclude, report, all)?);
         if !all {
             report["cleanup_failures"] = value!(failures);
             return if failures.is_empty() {
@@ -2441,7 +2481,16 @@ impl Manager {
                 );
                 match opened {
                     Ok(Some(mut owner)) => {
-                        failures.extend(owner.drain_entries(r, exclude, report, true)?)
+                        match owner.drain_entries(r, exclude, report, true) {
+                            Ok(pending) => failures.extend(pending),
+                            Err(error) => {
+                                failures.push(format!("{}: {error}", path.display()));
+                                continue;
+                            }
+                        }
+                        if let Err(error) = owner.retire_empty_address(r, report) {
+                            failures.push(format!("{}: {error}", path.display()));
+                        }
                     }
                     Ok(None) => return Err("cleanup policy disappeared during maintenance".into()),
                     Err(error)
@@ -2517,6 +2566,7 @@ impl Manager {
     ) -> Result<Vec<String>, String> {
         self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
+        failures.extend(self.retire_leases(r, report)?);
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
             let cache =
@@ -2849,6 +2899,12 @@ impl Manager {
             match verified {
                 Ok(lease) => {
                     removed.insert(i);
+                    self.ledger.retired_leases.push(retirement::RetiredLease {
+                        ownership: entry.ownership.clone().unwrap(),
+                        creator_agent: entry.creator_agent.clone(),
+                        branch: entry.branch.clone(),
+                        error: None,
+                    });
                     count -= 1;
                     bytes -= sizes[i];
                     // Keep exclusion through publication of the replacement ledger.
@@ -2937,6 +2993,9 @@ impl Manager {
         for entry in &ledger.entries {
             entry.check_agents()?;
         }
+        for pending in &ledger.retired_leases {
+            pending.check_agent()?;
+        }
         Ok(Some(ledger))
     }
     /// Project existing local state and Git inventory; never enroll or dispose.
@@ -2963,6 +3022,24 @@ impl Manager {
                         declared.insert(path.clone());
                         match self.enrollment_snapshot(&path) {
                             Ok(Some(ledger)) => {
+                                for pending in &ledger.retired_leases {
+                                    if pending.creator_agent.is_none() {
+                                        unknown_creators.insert(path.clone());
+                                    }
+                                    if all
+                                        || pending_for_agent(
+                                            pending
+                                                .creator_agent
+                                                .as_ref()
+                                                .map(|a| a.id.as_str())
+                                                .unwrap_or(""),
+                                            current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
+                                            true,
+                                        )
+                                    {
+                                        selected.insert(path.clone());
+                                    }
+                                }
                                 let entry = ledger
                                     .entries
                                     .iter()
@@ -2989,6 +3066,9 @@ impl Manager {
                                         selected.insert(path);
                                     }
                                 } else {
+                                    if all {
+                                        selected.insert(path.clone());
+                                    }
                                     empty_records.insert(path);
                                 }
                             }
@@ -3092,9 +3172,28 @@ impl Manager {
             };
             let creator = entry.and_then(|e| e.creator_agent.as_ref());
             let report_handoff_pending = entry.is_some_and(Entry::report_handoff_pending);
+            let metadata_retirement_pending = path != self.inputs.policy.coordinator_root
+                && entry.is_none()
+                && physical
+                    .as_ref()
+                    .err()
+                    .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+                && git.is_none()
+                && snapshot.as_ref().ok().and_then(Option::as_ref).is_some();
+            if metadata_retirement_pending
+                && snapshot
+                    .as_ref()
+                    .ok()
+                    .and_then(Option::as_ref)
+                    .is_some_and(|ledger| ledger.retired_leases.is_empty())
+            {
+                unknown_creators.insert(path.clone());
+            }
             let attention_required = needs_attention(&view) || report_handoff_pending;
             let action = if report_handoff_pending {
                 "recover-result-handoff"
+            } else if metadata_retirement_pending {
+                "maintain-metadata"
             } else {
                 action
             };
@@ -3110,11 +3209,31 @@ impl Manager {
                 "agent_attention_required":agent_attention,
                 "attention_required":attention_required,"next_action":action,
                 "report_handoff_pending":report_handoff_pending,
+                "metadata_retirement_pending":metadata_retirement_pending,
                 "ledger_path":record_directory(&self.directory, &path)?.join("ledger.json"),
                 "physical_present":physical.is_ok(),"git_registered":git.is_some(),
                 "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
                 "cleanup_receipt":entry.and_then(|e| e.attempts.last()).and_then(|a| a.receipt.as_ref()),
                 "error":error}));
+            if let Some(ledger) = snapshot.as_ref().ok().and_then(Option::as_ref) {
+                for pending in &ledger.retired_leases {
+                    let agent_attention = pending_for_agent(
+                        pending
+                            .creator_agent
+                            .as_ref()
+                            .map(|a| a.id.as_str())
+                            .unwrap_or(""),
+                        current.as_ref().map(|a| a.id.as_str()).unwrap_or(""),
+                        true,
+                    );
+                    rows.push(value!({"path":path,"record_kind":"retired-lease",
+                        "work_state":"terminal","cleanup_state":"capability-retirement-pending",
+                        "branch":pending.branch,"creator_agent":pending.creator_agent,
+                        "retired_lease_path":pending.ownership.path,"error":pending.error,
+                        "attention_required":true,"agent_attention_required":agent_attention,
+                        "next_action":"maintain-retired-lease"}));
+                }
+            }
         }
         report["worktree_status"] = value!({"schema":"chrono-worktree-status/v1",
             "scope":if all {"coordinator"} else if current.is_some() {"target-and-current-agent"} else {"target"},

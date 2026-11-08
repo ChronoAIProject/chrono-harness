@@ -356,6 +356,18 @@
       "id": "judge-cargo-tests",
       "replacement": null,
       "reason": "与 judge-cargo 同时退役，其 guard／metadata 专属行为不再作为当前支持接口。保留其他项目的真实构建和未过滤行为测试；不宣称它们替代被删除的断言。"
+    },
+    {
+      "kind": "script",
+      "id": "host-bootstrap",
+      "replacement": null,
+      "reason": "本仓源码启动、共享安装和所有者阶段均已由 Rust 前端承担；Verus 操作迁入现役 shell 入口，退役旧 Python 启动栈及其专属接口。"
+    },
+    {
+      "kind": "test",
+      "id": "host-bootstrap-tests",
+      "replacement": "host-bootstrap-native-tests",
+      "reason": "Rust 专属测试承接配置、SDK 调用、构建安装、原报告、共享产物、所有者资格和生命周期交接的当前合同。Python 导入／字节码及旧测试保管实现的专属断言随实现退役；工作树保护由 Rust 工作树测试负责，不声称逐条保留已退役实现的断言。"
     }
   ],
   "migrations": [],

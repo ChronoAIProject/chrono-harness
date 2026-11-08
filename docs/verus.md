@@ -18,6 +18,10 @@ core bootstrap 先准备同一 Verus，再调用此登记操作；调用前端�
 在原检查前解包共享 Verus ZIP，不另下载，也不因该单元自身没有独立证明而省略编译器。
 没有自研编译器包装器，也不解析终端上的成功文字。
 
+该官方 Cargo 调用显式使用 `--jobs 1`，使未带 crate 身份的证明记录与目标库产物保持相邻，
+避免其他并行编译任务的产物插入其间。Verus 仍使用登记的两条证明线程。
+实际命令由 Rust mock 核对；冷构建耗时的变化尚未测量。
+
 `verified_cargo.rs` 负责完整 Cargo JSON 记录的顺序判断。冷构建必须依次出现
 当前版本的整 crate 成功证明、点名库、点名二进制和唯一成功终态；
 暖构建可以省去新证明，但必须引用保留的原成功证明。
@@ -148,6 +152,11 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 文本借用和诊断字符串构造沿用固定 vstd 的 `str::as_bytes`／`ToString` 外部合同，
 没有新增仓内受信函数、操作、依赖或证明预算。`units::id` 继续消费同一字节判断。
 最多扫描 64 字节，拒绝时构造固定长度的原诊断；完整构建、证明及 CI 成本未测。
+
+CI 生成器及其事件输入、汇总、detector 和 full 上下文，以及 CI 判官，
+通过 runner 的重导出使用同一 `valid_oid`，不再维护各自的格式算法。
+CI 的布尔适配和 action 固定 40 位限制保留；判官保留原 `Result` 接口及包含完整输入的错误文本。
+这只收敛格式判断，未覆盖调用方全部控制流，也不扩大上文 runner 编译产物的局部证明绑定。
 
 同根的 `git_inventory_records`、`git_inventory_fields`、`git_inventory_row`、
 `git_inventory_termination`、`git_inventory_text`、

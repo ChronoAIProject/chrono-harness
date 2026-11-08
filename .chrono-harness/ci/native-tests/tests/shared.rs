@@ -134,7 +134,6 @@ fn configured(build_at_export: bool) -> Fixture {
         env!("CARGO_BIN_EXE_chrono-test-bootstrap-native").into(),
     );
     fixture.config["tools"]["sh"] = json!("/bin/sh");
-    fixture.config["participation"]["git"] = json!("/usr/bin/git");
     fs::write(fixture.root.join("out/bundle.zip"), b"archive bytes").unwrap();
     fs::set_permissions(
         fixture.root.join("out/bundle.zip"),
@@ -232,21 +231,21 @@ fn copy_tree(source: &Path, destination: &Path) {
 
 fn consumer(fixture: &Fixture) -> (tempfile::TempDir, Environment) {
     let directory = tempfile::tempdir().unwrap();
-    let mut command = Command::new("git");
-    command
-        .args(["clone", "--quiet", "--no-hardlinks"])
-        .arg(&fixture.root)
-        .arg(directory.path());
-    for key in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
-        command.env_remove(key);
-    }
-    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-    passed(command.output().unwrap());
+    copy_tree(
+        &fixture.root.join(".chrono-harness/ci"),
+        &directory.path().join(".chrono-harness/ci"),
+    );
+    fs::copy(
+        fixture.root.join(".chrono-harness/projects.json"),
+        directory.path().join(".chrono-harness/projects.json"),
+    )
+    .unwrap();
     copy_tree(
         &fixture.root.join(TRANSFER),
         &directory.path().join(TRANSFER),
     );
     copy_tree(&fixture.tools, &directory.path().join("native tools"));
+    Fixture::rebind_git(directory.path());
     let mut environment = fixture.environment.clone();
     let mut search = directory.path().join("native tools").into_os_string();
     search.push(":");
@@ -583,6 +582,7 @@ fn invalid_registration_and_dirty_source_fail_before_transfer_publication() {
         b"dirty source",
     )
     .unwrap();
+    fixture.dirty(true);
     let mut environment = fixture.environment.clone();
     environment.insert(
         "GITHUB_OUTPUT".into(),
