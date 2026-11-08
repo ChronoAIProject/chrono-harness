@@ -1635,7 +1635,13 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         &fs::read(root.path().join(".chrono-harness/projects.json")).unwrap(),
     )
     .unwrap();
-    let action = &registrations["projects"][34]["actions"]["build"];
+    let owner = registrations["projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == "cache")
+        .unwrap();
+    let action = &owner["actions"]["build"];
     let argv: Vec<String> = serde_json::from_value(action["argv"].clone()).unwrap();
     let build = || {
         let result = Command::new(action["tool"].as_str().unwrap())
@@ -1686,7 +1692,12 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
             .is_some()
     );
     let mut incompatible = registrations;
-    incompatible["projects"][34]["actions"]["build"]["argv"]
+    incompatible["projects"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|p| p["id"] == "cache")
+        .unwrap()["actions"]["build"]["argv"]
         .as_array_mut()
         .unwrap()
         .push(json!("--release"));
