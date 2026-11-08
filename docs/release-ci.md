@@ -84,11 +84,11 @@ v5 的 `verification_consumers` 为验证登记 `need`（实际调用位置、�
 
 Python 发布 integration 组保留真实 distribution pack，并加入真实 cache CLI 的 plan→recover→stage→consumer→report 回归。该组明确增加 `build_cache`，本地 FILEMAP、shared_operations、两原生 job 的 needs／downloads 同步登记，未新增独立单元。回归用同字节真实 CLI 检出 inode 替换，核传输摘要及 recovery／report；它不模拟原生后端、不同编译配置或完整外围 workflow。失败时将逐进程原 stdout／stderr／argv／退出及配置保留到登记 release-test-failures；原生 collector 仍要求全部真实单元成功。新增构建、下载、回归成本应分别实测，其他登记成本仍为 unmeasured。
 
-当前发布 macOS runner 采用主 CI 已使用的 `macos-26`；旧 `macos-14` 配置已被原生服务拒绝。Linux 发布中的缓存探测通过 `.chrono-harness/config.json` 选择 `.chrono-harness/git/linux-release.json`，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。该 Git 2.56.0 的精确摘要来自失败运行 `42183603167/1` 的原始 build receipt，原过程流已核摘要；工作树所有者同步登记此身份。未知 Git 字节继续在执行前拒绝，后续原生验证才证明候选可用。
+发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。版本和摘要以该登记及[工作树政策](../.chrono-harness/worktree.json)为准，不在操作说明复制本轮主机读数。未知 Git 字节继续在执行前拒绝，候选是否可用仍须实际验证。
 
 编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。`host.bootstrap-tests` 的断言输入释放实际调用 `chrono-harness retention`，因此两平台发布验证同步补登记 `build_runner` 与 `chrono-harness` 暂存依赖；没有跳过原测试。
 
-Linux 发行政策也保留工作树所有者读取登记所需的完整结构，以及真实 custody fixture 使用的 Python 工具槽；Python 版本保持未知（`null`），fixture 自行绑定实际解释器。该登记不声称完成 Linux canonical/full 采用。原生 `42222842930/1` 已暴露并保留最小 Git 配置不能满足这些实际消费者的失败。
+Linux 发行政策也保留工作树所有者读取登记所需的完整结构，以及真实 custody fixture 使用的 Python 工具槽；Python 版本保持未知（`null`），fixture 自行绑定实际解释器。该登记不声称完成 Linux canonical/full 采用。
 
 Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时仍由现有入口选择 local。`host.bootstrap-tests` 失败时沿用已有有界采集，保留登记的 `bootstrap-custody-tests/` 原件；目录缺失或容量省略仍如实报告。断言同时显示真实退出码和 stdout／stderr 尾部及原路径，不把空 stderr 当作完整错误。
 
